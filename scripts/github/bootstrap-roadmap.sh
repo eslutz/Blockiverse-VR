@@ -2,7 +2,10 @@
 set -euo pipefail
 
 PROJECT_TITLE="${PROJECT_TITLE:-Blockiverse VR Roadmap}"
+PROJECT_NUMBER="${PROJECT_NUMBER:-}"
 SKIP_PROJECT="${SKIP_PROJECT:-0}"
+SKIP_PROJECT_FIELD_SETUP="${SKIP_PROJECT_FIELD_SETUP:-0}"
+ENSURE_PROJECT_LINK="${ENSURE_PROJECT_LINK:-1}"
 SET_PROJECT_FIELDS="${SET_PROJECT_FIELDS:-0}"
 REPO_DESCRIPTION="VR voxel sandbox prototype for Meta Quest 3/3S built with Unity and C#."
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -104,17 +107,23 @@ create_milestone "M4 Multiplayer"
 create_milestone "M5 Store Candidate"
 create_milestone "M6 Full Survival"
 
-project_number=""
+project_number="$PROJECT_NUMBER"
 project_id=""
 
 if [ "$SKIP_PROJECT" != "1" ]; then
-  project_number="$(gh project list --owner "$OWNER" --limit 100 --format json --jq ".projects[]? | select(.title == \"$PROJECT_TITLE\") | .number" | head -n 1)"
+  if [ -z "$project_number" ]; then
+    project_number="$(gh project list --owner "$OWNER" --limit 100 --format json --jq ".projects[]? | select(.title == \"$PROJECT_TITLE\") | .number" | head -n 1)"
+  fi
   if [ -z "$project_number" ]; then
     project_number="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json --jq '.number')"
   fi
 
-  project_id="$(gh project view "$project_number" --owner "$OWNER" --format json --jq '.id')"
-  gh project link "$project_number" --owner "$OWNER" --repo "$REPO_NAME" >/dev/null || true
+  if [ "$SET_PROJECT_FIELDS" = "1" ]; then
+    project_id="$(gh project view "$project_number" --owner "$OWNER" --format json --jq '.id')"
+  fi
+  if [ "$ENSURE_PROJECT_LINK" = "1" ]; then
+    gh project link "$project_number" --owner "$OWNER" --repo "$REPO_NAME" >/dev/null || true
+  fi
 fi
 
 single_select_options_graphql() {
@@ -161,7 +170,7 @@ ensure_select_field() {
   fi
 }
 
-if [ "$SKIP_PROJECT" != "1" ]; then
+if [ "$SKIP_PROJECT" != "1" ] && [ "$SKIP_PROJECT_FIELD_SETUP" != "1" ]; then
   echo "Creating project fields"
   ensure_select_field "Status" "Backlog,Ready,In Progress,In Review,Blocked,Done"
   ensure_select_field "Type" "Epic,Feature,Story,Task,Bug,Tech Debt,Spike"
@@ -177,7 +186,11 @@ if [ "$SKIP_PROJECT" != "1" ]; then
     echo "Project items will be added, but per-item custom field values are skipped because SET_PROJECT_FIELDS is not 1."
   fi
 else
-  echo "Skipping GitHub Project setup because SKIP_PROJECT=1."
+  if [ "$SKIP_PROJECT" = "1" ]; then
+    echo "Skipping GitHub Project setup because SKIP_PROJECT=1."
+  else
+    echo "Skipping Project field reconciliation because SKIP_PROJECT_FIELD_SETUP=1."
+  fi
 fi
 
 tmp_dir="$(mktemp -d)"
@@ -479,7 +492,11 @@ create_or_update_issue() {
 refresh_milestones
 refresh_existing_issues
 if [ "$SKIP_PROJECT" != "1" ]; then
-  refresh_fields
+  if [ "$SET_PROJECT_FIELDS" = "1" ]; then
+    refresh_fields
+  else
+    touch "$fields_file"
+  fi
   refresh_existing_project_items
 else
   touch "$fields_file" "$existing_items_file"
