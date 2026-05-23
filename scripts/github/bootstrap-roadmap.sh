@@ -110,24 +110,44 @@ fi
 project_id="$(gh project view "$project_number" --owner "$OWNER" --format json --jq '.id')"
 gh project link "$project_number" --owner "$OWNER" --repo "$REPO_NAME" >/dev/null || true
 
+single_select_options_graphql() {
+  local options="$1"
+  local result=""
+  local option
+  local sep=""
+
+  IFS=',' read -ra option_names <<< "$options"
+  for option in "${option_names[@]}"; do
+    result="${result}${sep}{name:\"${option}\",color:GRAY,description:\"${option}\"}"
+    sep=","
+  done
+
+  printf '%s' "$result"
+}
+
+update_select_field_options() {
+  local field_id="$1"
+  local options="$2"
+  local options_graphql
+  options_graphql="$(single_select_options_graphql "$options")"
+
+  gh api graphql -f query="mutation { updateProjectV2Field(input:{fieldId:\"$field_id\",singleSelectOptions:[$options_graphql]}) { projectV2Field { ... on ProjectV2SingleSelectField { id } } } }" >/dev/null
+}
+
 ensure_select_field() {
   local field="$1"
   local options="$2"
   local existing
   existing="$(gh project field-list "$project_number" --owner "$OWNER" --format json --jq ".fields[]? | select(.name == \"$field\") | .id" | head -n 1)"
-  if [ "$field" = "Status" ] && [ -n "$existing" ]; then
-    if ! gh project field-list "$project_number" --owner "$OWNER" --format json \
-      --jq ".fields[]? | select(.name == \"Status\") | .options[]?.name" | grep -qx "Backlog"; then
-      gh project field-delete --id "$existing" >/dev/null || true
-      existing=""
-    fi
-  fi
   if [ -z "$existing" ]; then
     gh project field-create "$project_number" \
       --owner "$OWNER" \
       --name "$field" \
       --data-type SINGLE_SELECT \
       --single-select-options "$options" >/dev/null
+  elif ! gh project field-list "$project_number" --owner "$OWNER" --format json \
+    --jq ".fields[]? | select(.name == \"$field\") | .options[]?.name" | grep -qx "$(printf '%s' "$options" | cut -d, -f1)"; then
+    update_select_field_options "$existing" "$options"
   fi
 }
 
