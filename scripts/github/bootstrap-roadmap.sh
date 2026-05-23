@@ -3,6 +3,7 @@ set -euo pipefail
 
 PROJECT_TITLE="${PROJECT_TITLE:-Blockiverse VR Roadmap}"
 SKIP_PROJECT="${SKIP_PROJECT:-0}"
+SET_PROJECT_FIELDS="${SET_PROJECT_FIELDS:-0}"
 REPO_DESCRIPTION="VR voxel sandbox prototype for Meta Quest 3/3S built with Unity and C#."
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROADMAP_FILE="$ROOT_DIR/scripts/github/roadmap.tsv"
@@ -172,6 +173,9 @@ if [ "$SKIP_PROJECT" != "1" ]; then
   ensure_select_field "Risk" "Low,Medium,High"
   ensure_select_field "Target Release" "Prototype,Alpha,Beta,RC,Store"
   ensure_select_field "Effort" "XS,S,M,L,XL"
+  if [ "$SET_PROJECT_FIELDS" != "1" ]; then
+    echo "Project items will be added, but per-item custom field values are skipped because SET_PROJECT_FIELDS is not 1."
+  fi
 else
   echo "Skipping GitHub Project setup because SKIP_PROJECT=1."
 fi
@@ -466,7 +470,7 @@ create_or_update_issue() {
   if [ "$SKIP_PROJECT" != "1" ]; then
     local item_id
     item_id="$(add_issue_to_project "$url")"
-    if [ -n "$item_id" ]; then
+    if [ -n "$item_id" ] && [ "$SET_PROJECT_FIELDS" = "1" ]; then
       set_project_values "$item_id" "$type" "$phase" "$priority" "$area" "$milestone" "$risk" "$target" "$effort"
     fi
   fi
