@@ -145,6 +145,8 @@ ensure_select_field() {
       --name "$field" \
       --data-type SINGLE_SELECT \
       --single-select-options "$options" >/dev/null
+  elif [ "$field" = "Status" ]; then
+    echo "Using GitHub's built-in Status field; requested workflow states are stored in Roadmap Status."
   elif ! gh project field-list "$project_number" --owner "$OWNER" --format json \
     --jq ".fields[]? | select(.name == \"$field\") | .options[]?.name" | grep -qx "$(printf '%s' "$options" | cut -d, -f1)"; then
     update_select_field_options "$existing" "$options"
@@ -153,6 +155,7 @@ ensure_select_field() {
 
 echo "Creating project fields"
 ensure_select_field "Status" "Backlog,Ready,In Progress,In Review,Blocked,Done"
+ensure_select_field "Roadmap Status" "Backlog,Ready,In Progress,In Review,Blocked,Done"
 ensure_select_field "Type" "Epic,Feature,Story,Task,Bug,Tech Debt,Spike"
 ensure_select_field "Phase" "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20"
 ensure_select_field "Priority" "P0,P1,P2,P3"
@@ -228,7 +231,8 @@ set_project_values() {
     echo "mutation {"
   } > "$mutation_file"
 
-  add_project_field_mutation "$mutation_file" "status" "$item_id" "Status" "Backlog"
+  add_project_field_mutation "$mutation_file" "status" "$item_id" "Status" "Todo"
+  add_project_field_mutation "$mutation_file" "roadmapStatus" "$item_id" "Roadmap Status" "Backlog"
   add_project_field_mutation "$mutation_file" "type" "$item_id" "Type" "$type"
   add_project_field_mutation "$mutation_file" "phase" "$item_id" "Phase" "$phase"
   add_project_field_mutation "$mutation_file" "priority" "$item_id" "Priority" "$priority"
