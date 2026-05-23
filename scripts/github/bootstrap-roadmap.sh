@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PROJECT_TITLE="${PROJECT_TITLE:-Blockiverse VR Roadmap}"
+SKIP_PROJECT="${SKIP_PROJECT:-0}"
 REPO_DESCRIPTION="VR voxel sandbox prototype for Meta Quest 3/3S built with Unity and C#."
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROADMAP_FILE="$ROOT_DIR/scripts/github/roadmap.tsv"
@@ -102,13 +103,18 @@ create_milestone "M4 Multiplayer"
 create_milestone "M5 Store Candidate"
 create_milestone "M6 Full Survival"
 
-project_number="$(gh project list --owner "$OWNER" --limit 100 --format json --jq ".projects[]? | select(.title == \"$PROJECT_TITLE\") | .number" | head -n 1)"
-if [ -z "$project_number" ]; then
-  project_number="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json --jq '.number')"
-fi
+project_number=""
+project_id=""
 
-project_id="$(gh project view "$project_number" --owner "$OWNER" --format json --jq '.id')"
-gh project link "$project_number" --owner "$OWNER" --repo "$REPO_NAME" >/dev/null || true
+if [ "$SKIP_PROJECT" != "1" ]; then
+  project_number="$(gh project list --owner "$OWNER" --limit 100 --format json --jq ".projects[]? | select(.title == \"$PROJECT_TITLE\") | .number" | head -n 1)"
+  if [ -z "$project_number" ]; then
+    project_number="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json --jq '.number')"
+  fi
+
+  project_id="$(gh project view "$project_number" --owner "$OWNER" --format json --jq '.id')"
+  gh project link "$project_number" --owner "$OWNER" --repo "$REPO_NAME" >/dev/null || true
+fi
 
 single_select_options_graphql() {
   local options="$1"
@@ -154,17 +160,21 @@ ensure_select_field() {
   fi
 }
 
-echo "Creating project fields"
-ensure_select_field "Status" "Backlog,Ready,In Progress,In Review,Blocked,Done"
-ensure_select_field "Type" "Epic,Feature,Story,Task,Bug,Tech Debt,Spike"
-ensure_select_field "Phase" "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20"
-ensure_select_field "Priority" "P0,P1,P2,P3"
-ensure_select_field "Area" "Repo,Engine,VR,Voxel,Terrain,Creative,Survival,Multiplayer,Art,Audio,UI,CI/CD,Store,QA"
-ensure_select_field "Milestone" "M0 Bootstrap,M1 VR Slice,M2 Creative,M3 Survival-Lite,M4 Multiplayer,M5 Store Candidate,M6 Full Survival"
-ensure_select_field "Roadmap Milestone" "M0 Bootstrap,M1 VR Slice,M2 Creative,M3 Survival-Lite,M4 Multiplayer,M5 Store Candidate,M6 Full Survival"
-ensure_select_field "Risk" "Low,Medium,High"
-ensure_select_field "Target Release" "Prototype,Alpha,Beta,RC,Store"
-ensure_select_field "Effort" "XS,S,M,L,XL"
+if [ "$SKIP_PROJECT" != "1" ]; then
+  echo "Creating project fields"
+  ensure_select_field "Status" "Backlog,Ready,In Progress,In Review,Blocked,Done"
+  ensure_select_field "Type" "Epic,Feature,Story,Task,Bug,Tech Debt,Spike"
+  ensure_select_field "Phase" "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20"
+  ensure_select_field "Priority" "P0,P1,P2,P3"
+  ensure_select_field "Area" "Repo,Engine,VR,Voxel,Terrain,Creative,Survival,Multiplayer,Art,Audio,UI,CI/CD,Store,QA"
+  ensure_select_field "Milestone" "M0 Bootstrap,M1 VR Slice,M2 Creative,M3 Survival-Lite,M4 Multiplayer,M5 Store Candidate,M6 Full Survival"
+  ensure_select_field "Roadmap Milestone" "M0 Bootstrap,M1 VR Slice,M2 Creative,M3 Survival-Lite,M4 Multiplayer,M5 Store Candidate,M6 Full Survival"
+  ensure_select_field "Risk" "Low,Medium,High"
+  ensure_select_field "Target Release" "Prototype,Alpha,Beta,RC,Store"
+  ensure_select_field "Effort" "XS,S,M,L,XL"
+else
+  echo "Skipping GitHub Project setup because SKIP_PROJECT=1."
+fi
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -172,6 +182,7 @@ map_file="$tmp_dir/issues.tsv"
 fields_file="$tmp_dir/project-fields.json"
 existing_issues_file="$tmp_dir/existing-issues.tsv"
 existing_items_file="$tmp_dir/existing-project-items.tsv"
+milestones_file="$tmp_dir/milestones.tsv"
 touch "$map_file"
 
 refresh_fields() {
@@ -179,13 +190,23 @@ refresh_fields() {
 }
 
 refresh_existing_issues() {
-  gh issue list -R "$REPO" --state all --limit 300 --json number,title,url \
-    --jq '.[] | [.title, .number, .url] | @tsv' > "$existing_issues_file"
+  gh api --paginate "repos/$REPO/issues?state=all&per_page=100" \
+    --jq '.[] | select(.pull_request | not) | [.title, .number, .html_url] | @tsv' > "$existing_issues_file"
 }
 
 refresh_existing_project_items() {
   gh project item-list "$project_number" --owner "$OWNER" --limit 300 --format json \
     --jq '.items[]? | select(.content.url != null) | [.content.url, .id] | @tsv' > "$existing_items_file"
+}
+
+refresh_milestones() {
+  gh api --paginate "repos/$REPO/milestones?state=all&per_page=100" \
+    --jq '.[] | [.title, .number] | @tsv' > "$milestones_file"
+}
+
+milestone_number() {
+  local title="$1"
+  awk -F '\t' -v title="$title" '$1 == title { print $2; exit }' "$milestones_file"
 }
 
 field_id() {
@@ -330,6 +351,47 @@ write_issue_body() {
   } > "$path"
 }
 
+write_issue_payload() {
+  local path="$1"
+  local title="$2"
+  local body_file="$3"
+  local milestone="$4"
+  local labels_csv="$5"
+  local milestone_num
+  milestone_num="$(milestone_number "$milestone")"
+
+  jq -n \
+    --arg title "$title" \
+    --rawfile body "$body_file" \
+    --arg labels "$labels_csv" \
+    --arg milestone "$milestone_num" \
+    '{title: $title, body: $body, labels: ($labels | split(","))}
+      + (if $milestone == "" then {} else {milestone: ($milestone | tonumber)} end)' > "$path"
+}
+
+create_issue_rest() {
+  local title="$1"
+  local body_file="$2"
+  local milestone="$3"
+  local labels_csv="$4"
+  local payload_file="$tmp_dir/create-issue.json"
+
+  write_issue_payload "$payload_file" "$title" "$body_file" "$milestone" "$labels_csv"
+  gh api "repos/$REPO/issues" -X POST --input "$payload_file"
+}
+
+update_issue_rest() {
+  local number="$1"
+  local title="$2"
+  local body_file="$3"
+  local milestone="$4"
+  local labels_csv="$5"
+  local payload_file="$tmp_dir/update-issue-$number.json"
+
+  write_issue_payload "$payload_file" "$title" "$body_file" "$milestone" "$labels_csv"
+  gh api "repos/$REPO/issues/$number" -X PATCH --input "$payload_file" >/dev/null
+}
+
 add_issue_to_project() {
   local url="$1"
   local item_id
@@ -386,10 +448,12 @@ create_or_update_issue() {
   if [ -n "$existing" ]; then
     number="$(printf '%s' "$existing" | cut -f1)"
     url="$(printf '%s' "$existing" | cut -f2)"
-    gh issue edit "$number" -R "$REPO" --body-file "$body_file" --milestone "$milestone" --add-label "$labels_csv" >/dev/null
+    update_issue_rest "$number" "$title" "$body_file" "$milestone" "$labels_csv"
   else
-    url="$(gh issue create -R "$REPO" --title "$title" --body-file "$body_file" --milestone "$milestone" --label "$labels_csv")"
-    number="${url##*/}"
+    local response
+    response="$(create_issue_rest "$title" "$body_file" "$milestone" "$labels_csv")"
+    number="$(printf '%s' "$response" | jq -r '.number')"
+    url="$(printf '%s' "$response" | jq -r '.html_url')"
     printf '%s\t%s\t%s\n' "$title" "$number" "$url" >> "$existing_issues_file"
   fi
 
@@ -399,16 +463,23 @@ create_or_update_issue() {
     printf -- "- [ ] #%s %s\n" "$number" "$title" >> "$tmp_dir/children-$parent.md"
   fi
 
-  local item_id
-  item_id="$(add_issue_to_project "$url")"
-  if [ -n "$item_id" ]; then
-    set_project_values "$item_id" "$type" "$phase" "$priority" "$area" "$milestone" "$risk" "$target" "$effort"
+  if [ "$SKIP_PROJECT" != "1" ]; then
+    local item_id
+    item_id="$(add_issue_to_project "$url")"
+    if [ -n "$item_id" ]; then
+      set_project_values "$item_id" "$type" "$phase" "$priority" "$area" "$milestone" "$risk" "$target" "$effort"
+    fi
   fi
 }
 
-refresh_fields
+refresh_milestones
 refresh_existing_issues
-refresh_existing_project_items
+if [ "$SKIP_PROJECT" != "1" ]; then
+  refresh_fields
+  refresh_existing_project_items
+else
+  touch "$fields_file" "$existing_items_file"
+fi
 
 echo "Creating roadmap issues"
 tail -n +2 "$ROADMAP_FILE" | while IFS='|' read -r key type title parent phase milestone area priority risk target effort; do
@@ -423,7 +494,7 @@ while IFS=$'\t' read -r key number url title; do
   current_body="$tmp_dir/current-$key.md"
   base_body="$tmp_dir/base-$key.md"
   updated_body="$tmp_dir/updated-$key.md"
-  gh issue view "$number" -R "$REPO" --json body --jq '.body' > "$current_body"
+  gh api "repos/$REPO/issues/$number" --jq '.body // ""' > "$current_body"
   awk 'BEGIN { skip = 0 } /^## Children$/ { skip = 1; next } skip == 0 { print }' "$current_body" > "$base_body"
   {
     cat "$base_body"
@@ -431,7 +502,8 @@ while IFS=$'\t' read -r key number url title; do
     echo "## Children"
     cat "$children_file"
   } > "$updated_body"
-  gh issue edit "$number" -R "$REPO" --body-file "$updated_body" >/dev/null
+  jq -n --rawfile body "$updated_body" '{body: $body}' > "$tmp_dir/parent-link-$key.json"
+  gh api "repos/$REPO/issues/$number" -X PATCH --input "$tmp_dir/parent-link-$key.json" >/dev/null
 done < "$map_file"
 
 echo "Applying best-effort main branch protection"
