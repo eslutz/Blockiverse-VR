@@ -7,6 +7,7 @@ SKIP_PROJECT="${SKIP_PROJECT:-0}"
 SKIP_PROJECT_FIELD_SETUP="${SKIP_PROJECT_FIELD_SETUP:-0}"
 ENSURE_PROJECT_LINK="${ENSURE_PROJECT_LINK:-1}"
 SET_PROJECT_FIELDS="${SET_PROJECT_FIELDS:-0}"
+DIRECT_PROJECT_ADD="${DIRECT_PROJECT_ADD:-1}"
 REPO_DESCRIPTION="VR voxel sandbox prototype for Meta Quest 3/3S built with Unity and C#."
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROADMAP_FILE="$ROOT_DIR/scripts/github/roadmap.tsv"
@@ -118,7 +119,7 @@ if [ "$SKIP_PROJECT" != "1" ]; then
     project_number="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json --jq '.number')"
   fi
 
-  if [ "$SET_PROJECT_FIELDS" = "1" ]; then
+  if [ "$SET_PROJECT_FIELDS" = "1" ] || [ "$DIRECT_PROJECT_ADD" = "1" ]; then
     project_id="$(gh project view "$project_number" --owner "$OWNER" --format json --jq '.id')"
   fi
   if [ "$ENSURE_PROJECT_LINK" = "1" ]; then
@@ -208,7 +209,7 @@ refresh_fields() {
 
 refresh_existing_issues() {
   gh api --paginate "repos/$REPO/issues?state=all&per_page=100" \
-    --jq '.[] | select(.pull_request | not) | [.title, .number, .html_url] | @tsv' > "$existing_issues_file"
+    --jq '.[] | select(.pull_request | not) | [.title, .number, .html_url, .node_id] | @tsv' > "$existing_issues_file"
 }
 
 refresh_existing_project_items() {
@@ -299,7 +300,7 @@ lookup_issue_url() {
 
 find_issue_by_title() {
   local title="$1"
-  awk -F '\t' -v title="$title" '$1 == title { print $2 "\t" $3; exit }' "$existing_issues_file"
+  awk -F '\t' -v title="$title" '$1 == title { print $2 "\t" $3 "\t" $4; exit }' "$existing_issues_file"
 }
 
 write_issue_body() {
@@ -424,6 +425,15 @@ add_issue_to_project() {
   echo "$item_id"
 }
 
+add_issue_to_project_direct() {
+  local node_id="$1"
+  [ -z "$node_id" ] && return 0
+
+  gh api graphql \
+    -f query="mutation { addProjectV2ItemById(input:{projectId:\"$project_id\",contentId:\"$node_id\"}) { item { id } } }" \
+    --jq '.data.addProjectV2ItemById.item.id'
+}
+
 create_or_update_issue() {
   local key="$1"
   local type="$2"
@@ -460,21 +470,23 @@ create_or_update_issue() {
   local labels_csv
   labels_csv="$(IFS=,; echo "${labels[*]}")"
 
-  local number url existing
+  local number url node_id existing
   existing="$(find_issue_by_title "$title")"
   if [ -n "$existing" ]; then
     number="$(printf '%s' "$existing" | cut -f1)"
     url="$(printf '%s' "$existing" | cut -f2)"
+    node_id="$(printf '%s' "$existing" | cut -f3)"
     update_issue_rest "$number" "$title" "$body_file" "$milestone" "$labels_csv"
   else
     local response
     response="$(create_issue_rest "$title" "$body_file" "$milestone" "$labels_csv")"
     number="$(printf '%s' "$response" | jq -r '.number')"
     url="$(printf '%s' "$response" | jq -r '.html_url')"
-    printf '%s\t%s\t%s\n' "$title" "$number" "$url" >> "$existing_issues_file"
+    node_id="$(printf '%s' "$response" | jq -r '.node_id')"
+    printf '%s\t%s\t%s\t%s\n' "$title" "$number" "$url" "$node_id" >> "$existing_issues_file"
   fi
 
-  printf '%s\t%s\t%s\t%s\n' "$key" "$number" "$url" "$title" >> "$map_file"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$key" "$number" "$url" "$node_id" "$title" >> "$map_file"
 
   if [ -n "$parent" ] && [ -n "$parent_number" ]; then
     printf -- "- [ ] #%s %s\n" "$number" "$title" >> "$tmp_dir/children-$parent.md"
@@ -482,7 +494,11 @@ create_or_update_issue() {
 
   if [ "$SKIP_PROJECT" != "1" ]; then
     local item_id
-    item_id="$(add_issue_to_project "$url")"
+    if [ "$DIRECT_PROJECT_ADD" = "1" ]; then
+      item_id="$(add_issue_to_project_direct "$node_id")"
+    else
+      item_id="$(add_issue_to_project "$url")"
+    fi
     if [ -n "$item_id" ] && [ "$SET_PROJECT_FIELDS" = "1" ]; then
       set_project_values "$item_id" "$type" "$phase" "$priority" "$area" "$milestone" "$risk" "$target" "$effort"
     fi
@@ -497,7 +513,11 @@ if [ "$SKIP_PROJECT" != "1" ]; then
   else
     touch "$fields_file"
   fi
-  refresh_existing_project_items
+  if [ "$DIRECT_PROJECT_ADD" = "1" ]; then
+    touch "$existing_items_file"
+  else
+    refresh_existing_project_items
+  fi
 else
   touch "$fields_file" "$existing_items_file"
 fi
@@ -509,7 +529,7 @@ tail -n +2 "$ROADMAP_FILE" | while IFS='|' read -r key type title parent phase m
 done
 
 echo "Linking parent issue bodies"
-while IFS=$'\t' read -r key number url title; do
+while IFS=$'\t' read -r key number url node_id title; do
   children_file="$tmp_dir/children-$key.md"
   [ -f "$children_file" ] || continue
   current_body="$tmp_dir/current-$key.md"
