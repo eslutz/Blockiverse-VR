@@ -5,7 +5,7 @@
 [Bb]uild/
 [Bb]uilds/
 [Ll]ogs/
-[Uu]ser[Ss]ettings/
+/[Uu]ser[Ss]ettings/
 [Mm]emoryCaptures/
 
 # Unity generated files
@@ -51,8 +51,23 @@ Thumbs.db
 .worktrees/
 worktrees/
 .tmp/
+.utmp/
+.ci-artifacts/
 coverage/
 TestResults/
 
+# Local one-off setup scripts kept out of the repository
+/scripts/ci/repository-foundation.sh
+/scripts/ci/test-repository-foundation.sh
+/scripts/github/README.md
+/scripts/github/bootstrap-roadmap.sh
+/scripts/github/link-subissues.sh
+/scripts/github/roadmap.tsv
+/scripts/github/verify-subissues.sh
+
 # Unity asset store tools
 [Aa]ssets/AssetStoreTools*
+
+# Unity package project settings under Assets
+![Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/
+![Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/**

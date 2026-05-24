@@ -1,0 +1,14 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Blockiverse/Scenes/Boot.unity
+    guid: 796da010c629c46268ea14e899e24287
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: 52573fd551899459ba48d5ef447c3dc0, type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: d7198e16c72524c69b9446f9227d3718, type: 2}
+  m_UseUCBPForAssetBundles: 0

@@ -3,7 +3,6 @@
 
 # High-risk project areas require maintainer review.
 /.github/ @eslutz
-/scripts/github/ @eslutz
 /docs/store-submission/ @eslutz
 /Assets/Blockiverse/Scripts/Networking/ @eslutz
 /Assets/Blockiverse/Scripts/Persistence/ @eslutz

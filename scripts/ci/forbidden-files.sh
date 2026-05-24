@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-forbidden_regex='(^|/)(Library|Temp|Logs|UserSettings)/|\.env(\.|$)|\.(jks|keystore|p12)$'
+forbidden_regex='^(Library|Temp|Logs|UserSettings)/|(^|/)(\.utmp|\.ci-artifacts)/|\.env(\.|$)|\.(jks|keystore|p12)$'
 
 if git ls-files | grep -E "$forbidden_regex" >/dev/null; then
   echo "Forbidden generated, secret, or signing files are tracked:" >&2

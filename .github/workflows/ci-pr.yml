@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   repository-checks:
     name: Repository checks
@@ -12,34 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check shell script syntax
-        run: bash -n scripts/ci/*.sh scripts/github/*.sh
-      - name: Test repository foundation checks
-        run: scripts/ci/test-repository-foundation.sh
-      - name: Check repository foundation
-        run: scripts/ci/repository-foundation.sh
+        run: bash -n scripts/ci/forbidden-files.sh scripts/unity/*.sh
       - name: Check forbidden files
         run: scripts/ci/forbidden-files.sh
       - name: Check release policy docs
         run: test -f docs/architecture/branching-and-release.md
-
-  unity-tests:
-    name: Unity tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Detect Unity project
-        id: unity
-        run: |
-          if [ -f ProjectSettings/ProjectVersion.txt ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Placeholder until Unity bootstrap
-        if: steps.unity.outputs.exists == 'false'
-        run: echo "Unity project not bootstrapped yet; skipping Unity tests."
-      - name: Run Unity tests
-        if: steps.unity.outputs.exists == 'true'
-        run: |
-          echo "Run first-party Unity command-line EditMode and PlayMode tests here."
-          echo "This step is intentionally scaffolded until Unity is installed in CI."

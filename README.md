@@ -47,5 +47,3 @@ The roadmap is managed through GitHub Projects and linked GitHub issues:
 - M4 Multiplayer
 - M5 Store Candidate
 - M6 Full Survival
-
-Run `scripts/github/bootstrap-roadmap.sh` after authenticating `gh` with the `project` scope to create the GitHub repository, project fields, labels, milestones, and issue hierarchy.

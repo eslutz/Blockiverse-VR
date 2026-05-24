@@ -289,17 +289,18 @@ Use draft PRs for work in progress.
 Prefer squash merge or rebase merge to keep main readable.
 ```
 
-Recommended branch protection for `main`:
+Recommended repository ruleset for `main`:
 
 ```text
 Require pull request before merge
 Require passing CI
-Require status checks for tests and build smoke
+Require Repository checks status
 Require no unresolved review comments
 Require linear history or squash merge
 Disallow force pushes
-Disallow direct pushes except emergency admin override
-Require CODEOWNERS review for CI, signing, store, networking, and save-system files
+Disallow branch deletion
+Do not use classic branch protection for main
+Do not require approving reviews or CODEOWNERS review while Eric is the only human maintainer
 ```
 
 Release flow:
@@ -496,29 +497,28 @@ CI test job runs at least one EditMode and one PlayMode test.
 
 ### Deliverable
 
-GitHub Actions validates pull requests and creates development/release artifacts from `main`.
+GitHub Actions validates pull requests and keeps release/store artifact workflow contracts in place. Development APK smoke builds are produced locally while the project uses Unity Personal.
 
 ### Preferred approach
 
-Use **first-party Unity command-line test execution** where practical, with GitHub Actions as the orchestrator. Use **Unity Build Automation** for Android release builds if you want to stay as first-party as possible.
+Use **GitHub-hosted runners** for CI by default. Local developer machines can keep globally installed Unity tooling for convenience, but GitHub Actions should not depend on Eric's workstation or a self-hosted runner.
 
-Use **GameCI** only as a fallback or accelerator if first-party tooling becomes too cumbersome. GameCI is widely used, but it is community tooling, not first-party Unity.
+Use a hybrid validation model while the project is on Unity Personal:
+
+- GitHub-hosted runners validate repository policy, shell syntax, forbidden files, and release workflow contracts.
+- Unity tests and development APK build smoke checks run locally with Unity Hub Personal and globally installed developer tooling.
+- Pull requests that touch Unity behavior must include local validation evidence before review or merge.
+
+Hosted Unity test/build jobs can be added later through a separate issue if the project adopts a CI-compatible Unity license, Unity Build Automation, or a self-hosted runner with an accepted local license.
 
 ### Workflows
 
 ```text
 .github/workflows/ci-pr.yml
   Runs on pull requests targeting main
-  Validates formatting
-  Runs EditMode tests
-  Runs PlayMode tests
-  Uploads test results
-
-.github/workflows/build-main-dev-apk.yml
-  Runs on main after merge
-  Builds unsigned or debug-signed development APK
-  Uploads artifact
-  Does not create a public release
+  Validates repository shell script syntax
+  Runs forbidden tracked-file checks
+  Verifies release policy docs exist
 
 .github/workflows/release-apk.yml
   Runs on tags v*
@@ -537,9 +537,6 @@ Use **GameCI** only as a fallback or accelerator if first-party tooling becomes 
 ### Secrets
 
 ```text
-UNITY_LICENSE
-UNITY_EMAIL
-UNITY_PASSWORD
 ANDROID_KEYSTORE_BASE64
 ANDROID_KEYSTORE_PASSWORD
 ANDROID_KEY_ALIAS
@@ -548,21 +545,24 @@ META_APP_ID
 UNITY_CLOUD_PROJECT_ID
 ```
 
+Current GitHub Actions workflows do not use `UNITY_LICENSE`, `UNITY_EMAIL`, or `UNITY_PASSWORD`. Local Unity validation uses the Unity Personal license accepted in Unity Hub on the developer machine.
+
 ### Tests
 
 ```text
-CI fails if Unity tests fail.
-CI fails if project cannot build.
 CI fails if release tag is not on main.
 CI fails if forbidden files are committed: keystore, .env, credentials, local Unity Library, Temp, Logs.
-CI publishes JUnit/XML test output.
+CI fails if tracked shell scripts have syntax errors.
+Local validation fails if Unity tests fail.
+Local validation fails if the project cannot build a development APK.
 ```
 
 ### Validation
 
 ```text
-Opening a PR to main runs tests.
-Merging to main builds a development APK artifact.
+Opening a PR to main runs GitHub-hosted repository checks.
+Before review or merge, run scripts/unity/run-tests.sh locally and post the result.
+Before review or merge, run scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk locally and post the result.
 Tagging v0.1.0 from main creates a GitHub Release with a signed APK.
 Tagging from a non-main commit fails.
 No production signing occurs on PRs from forks.
@@ -1992,7 +1992,6 @@ These references were used to form the plan. Re-check them before implementation
 - Unity Multiplayer Play Mode / sessions quickstart: <https://docs.unity.com/en-us/mps-sdk/build-your-first-session>
 - Unity Relay: <https://docs.unity.com/en-us/relay/get-started>
 - Unity Lobby cost information: <https://support.unity.com/hc/en-us/articles/4410130452628-What-are-the-costs-associated-with-using-the-Lobby-service>
-- GameCI Unity Builder: <https://github.com/game-ci/unity-builder>
 - GitHub CLI repo creation: <https://cli.github.com/manual/gh_repo_create>
 - GitHub CLI project creation: <https://cli.github.com/manual/gh_project>
 - GitHub Projects and Issues: <https://github.com/features/issues>

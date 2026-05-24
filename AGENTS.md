@@ -16,8 +16,8 @@ This file defines standing workflow instructions for AI agents and automation wo
 - When work begins on an issue, assign that issue to `eslutz` unless Eric explicitly says otherwise.
 - Eric must provide final approval for complex, high-risk, product-facing, or pull-request-backed work during the `In Review` phase.
 - Simple administrative or repository-configuration issues may be validated, moved to `Done`, and closed by an agent without additional Eric approval when all acceptance criteria are objectively satisfied and evidence is posted to the issue before closing.
-- Eric is currently the only human on the project. Because automation-created pull requests are created under `eslutz`, GitHub branch protection must not require approving PR reviews or Code Owners review. Otherwise Eric cannot approve his own PR and the repository deadlocks.
-- Keep `main` protected with required status checks, linear history, conversation resolution, and force-push protection. Do not configure a required approving review count or required Code Owners review unless another human reviewer is added to the project.
+- Eric is currently the only human on the project. Because automation-created pull requests are created under `eslutz`, GitHub repository rulesets must not require approving PR reviews or Code Owners review. Otherwise Eric cannot approve his own PR and the repository deadlocks.
+- Keep `main` protected with a repository ruleset that requires status checks, linear history, conversation resolution, and force-push protection. Do not configure a required approving review count or required Code Owners review unless another human reviewer is added to the project.
 
 ## GitHub Issue And Project Workflow
 
@@ -70,7 +70,7 @@ Agents may move issues to `Done` and close them without additional Eric approval
 Autonomous closure is appropriate for tasks such as:
 
 - Creating or verifying repository files, labels, milestones, issue templates, project fields, or folders.
-- Updating repository settings or branch protection when Eric has directly requested the setting change.
+- Updating repository settings or rulesets when Eric has directly requested the setting change.
 - Documentation-only policy changes that Eric explicitly requested and that do not change product behavior.
 - Scripted roadmap/bootstrap bookkeeping where command output proves the requested state.
 
@@ -181,4 +181,4 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 - Add completed work to the `Unreleased` section unless the change is being documented directly under a release version.
 - Keep issue bodies and PR descriptions useful enough for a human developer to resume the work.
 - Record important technical decisions under `docs/adr/`.
-- Keep the execution plan and roadmap scripts aligned when roadmap structure changes.
+- Keep the execution plan, GitHub Project, and linked issues aligned when roadmap structure changes.

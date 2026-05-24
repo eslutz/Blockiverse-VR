@@ -1,0 +1,17 @@
+{
+  "name": "Blockiverse.Persistence",
+  "rootNamespace": "Blockiverse.Persistence",
+  "references": [
+    "Blockiverse.Core",
+    "Blockiverse.Voxel"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
