@@ -4,8 +4,7 @@ Blockiverse VR is a VR voxel sandbox prototype for Meta Quest 3 and Quest 3S, bu
 
 ## Target
 
-- Primary platform: Meta Quest 3
-- Secondary platform: Meta Quest 3S
+- Primary platforms: Meta Quest 3 and Meta Quest 3S
 - Input: Quest controllers
 - Unsupported initially: hand-tracking-only mode, non-VR desktop mode, mobile, and PC VR
 
@@ -17,7 +16,7 @@ Blockiverse VR is a VR voxel sandbox prototype for Meta Quest 3 and Quest 3S, bu
 - Inventory, hotbar, and crafting
 - Health and survival-lite resource loop
 - Save/load with world versioning
-- Basic two-player co-op
+- Basic two-player co-op with private voice chat
 
 Full survival mode, mobs, day/night, combat, and deeper progression are planned after the MVP.
 
@@ -33,7 +32,7 @@ This repository uses trunk-based development:
 
 ## Licensing
 
-This repository starts as source-available / All Rights Reserved. See [LICENSE.md](LICENSE.md) and [NOTICE.md](NOTICE.md).
+Current licensing state: source-available / All Rights Reserved. See [LICENSE.md](LICENSE.md) and [NOTICE.md](NOTICE.md).
 
 Third-party assets may only be committed when redistribution is allowed. Secrets, keystores, API credentials, `.env` files, and local Unity generated folders must never be committed.
 
