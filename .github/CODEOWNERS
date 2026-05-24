@@ -1,3 +1,6 @@
+# Default repository owner.
+* @eslutz
+
 # High-risk project areas require maintainer review.
 /.github/ @eslutz
 /scripts/github/ @eslutz
