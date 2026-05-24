@@ -158,6 +158,16 @@ write_foundation_fixture() {
   git -C "$fixture" add .
 }
 
+commit_foundation_fixture() {
+  local fixture="$1"
+
+  git -C "$fixture" \
+    -c user.name="Blockiverse Test" \
+    -c user.email="blockiverse-test@example.invalid" \
+    -c commit.gpgsign=false \
+    commit -q -m "fixture"
+}
+
 valid_fixture="$tmp_dir/valid"
 write_foundation_fixture "$valid_fixture"
 
@@ -187,6 +197,22 @@ if "$SCRIPT" "$forbidden_fixture" > "$forbidden_output" 2>&1; then
   exit 1
 fi
 assert_contains "$forbidden_output" "Forbidden generated, secret, or signing files are tracked:"
+
+remote_develop_fixture="$tmp_dir/remote-develop"
+remote_develop_origin="$tmp_dir/remote-develop.git"
+write_foundation_fixture "$remote_develop_fixture"
+commit_foundation_fixture "$remote_develop_fixture"
+git init --bare -q "$remote_develop_origin"
+git -C "$remote_develop_fixture" remote add origin "$remote_develop_origin"
+git -C "$remote_develop_fixture" push -q origin HEAD:refs/heads/develop
+git -C "$remote_develop_fixture" update-ref -d refs/remotes/origin/develop 2>/dev/null || true
+
+remote_develop_output="$tmp_dir/remote-develop.out"
+if "$SCRIPT" "$remote_develop_fixture" > "$remote_develop_output" 2>&1; then
+  echo "Expected unfetched remote develop branch fixture to fail." >&2
+  exit 1
+fi
+assert_contains "$remote_develop_output" "Forbidden long-lived remote branch exists: origin/develop"
 
 missing_dev_artifact_fixture="$tmp_dir/missing-dev-artifact"
 write_foundation_fixture "$missing_dev_artifact_fixture"

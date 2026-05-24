@@ -183,8 +183,15 @@ require_no_develop_branch() {
     record_failure "Forbidden long-lived branch exists: develop"
   fi
 
-  if git -C "$root_dir" show-ref --verify --quiet refs/remotes/origin/develop; then
-    record_failure "Forbidden long-lived remote branch exists: origin/develop"
+  if git -C "$root_dir" remote get-url origin >/dev/null 2>&1; then
+    if git -C "$root_dir" ls-remote --exit-code --heads origin develop >/dev/null 2>&1; then
+      record_failure "Forbidden long-lived remote branch exists: origin/develop"
+    else
+      remote_status="$?"
+      if [ "$remote_status" -ne 2 ]; then
+        record_failure "Unable to query origin for forbidden develop branch."
+      fi
+    fi
   fi
 }
 

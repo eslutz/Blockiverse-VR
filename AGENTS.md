@@ -138,6 +138,7 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
   - `spike/*`
   - `hotfix/*`
 - Name branches so the linked issue is obvious, for example `feature/53-block-registry`.
+- Keep GitHub repository settings configured to automatically delete head branches after pull requests merge.
 - All production releases must be cut from `main`.
 - Release tags must match `v*` and point to commits reachable from `origin/main`.
 - Prefer pull requests into `main` after CI passes. Direct pushes to `main` should be rare and explicit.
