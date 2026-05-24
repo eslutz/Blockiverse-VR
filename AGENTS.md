@@ -15,6 +15,8 @@ This file defines standing workflow instructions for AI agents and automation wo
 - The GitHub username for assignment and review is `eslutz`.
 - When work begins on an issue, assign that issue to `eslutz` unless Eric explicitly says otherwise.
 - Eric must provide final approval for all work during the `In Review` phase.
+- Eric is currently the only human on the project. Because automation-created pull requests are created under `eslutz`, GitHub branch protection must not require approving PR reviews or Code Owners review. Otherwise Eric cannot approve his own PR and the repository deadlocks.
+- Keep `main` protected with required status checks, linear history, conversation resolution, and force-push protection. Do not configure a required approving review count or required Code Owners review unless another human reviewer is added to the project.
 
 ## GitHub Issue And Project Workflow
 
@@ -37,7 +39,56 @@ This file defines standing workflow instructions for AI agents and automation wo
   - `Blocked` when progress is waiting on an external dependency or decision.
   - `In Review` when a pull request is open or review is needed.
   - `Done` only after implementation, validation, documentation, and Eric's approval are complete.
+- Keep parent and child issue statuses coherent:
+  - When a story starts, move that story and its active parent feature or epic to `In Progress`.
+  - When completed work is ready for Eric review, move the completed story to `In Review`.
+  - Move a parent feature to `In Review` when its relevant child stories are in `In Review` or `Done` and no child is still active.
+  - Keep an epic `In Progress` while any of its features remain active or review is still pending.
+  - Move completed pre-existing cards to `In Review`, not `Done`, when Eric still needs to approve them.
+- Leave a useful issue comment whenever status changes materially:
+  - Start comment: branch name, implementation scope, linked parent or children, and expected validation.
+  - Progress comment: decisions, blockers, or scope changes.
+  - Review comment: PR link, validation commands, manual validation notes, and residual risk.
 - Do not close an issue unless the acceptance criteria and relevant validation steps are satisfied.
+- Do not move an issue to `Done` unless Eric has explicitly approved the completed work.
+
+### GitHub Project Update Procedure
+
+- Prefer GitHub CLI for ProjectV2 lane updates because the GitHub connector may not expose project field mutations.
+- Before changing project lanes, verify authentication and project access:
+
+```sh
+gh auth status
+gh project list --owner eslutz --limit 100
+```
+
+- Resolve the `Blockiverse VR Roadmap` project number and field option IDs instead of hard-coding them:
+
+```sh
+gh project list --owner eslutz --limit 100 --format json
+gh project field-list <PROJECT_NUMBER> --owner eslutz --format json
+```
+
+- Resolve item IDs from the project before editing a lane:
+
+```sh
+gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
+```
+
+- Update the `Status` field with `gh project item-edit` using the resolved project ID, item ID, Status field ID, and single-select option ID.
+- Verify the lane after every batch update with `gh project item-list` or `gh issue view --json projectItems`.
+- If `gh auth status` fails, try the same command outside the sandbox if available. If authentication is still missing, start `gh auth login -h github.com`, give Eric the one-time code and URL, then retry after he completes the flow.
+- If project updates cannot be completed, still assign/update/comment on the issue and explicitly report the project-lane blocker.
+
+### Issue And Pull Request Linking
+
+- Name branches so the issue relationship is obvious, for example `feature/20-ci-foundation-checks` or `feature/53-block-registry`.
+- Link pull requests to issues in the PR body.
+- Use non-closing references such as `Related to #20` unless Eric has explicitly asked for merge to close the issue.
+- Use closing keywords such as `Closes #20` only when all acceptance criteria are complete and Eric has approved closing on merge.
+- Add reciprocal issue comments with the PR link for every linked issue and important parent issue.
+- When a PR covers multiple issues, list all of them in the PR body and move each review-ready issue to `In Review`.
+- Keep PR descriptions useful enough for a human to resume work: include scope, linked issues, validation commands, manual validation, risk notes, and known follow-ups.
 
 ## Branching, Pull Requests, And Reviews
 
@@ -58,8 +109,8 @@ This file defines standing workflow instructions for AI agents and automation wo
 - When a pull request is opened:
   - Link the associated issue if one exists.
   - Move linked issues to `In Review`.
-  - Assign the review to `eslutz`.
-  - Request Eric's final approval.
+  - Request Eric's final approval in the PR or linked issue comments.
+  - Do not require GitHub approving reviews while Eric is the sole human maintainer.
 - Do not merge a pull request, close the linked issue, or move the linked issue to `Done` until Eric has approved the work.
 - PRs must include:
   - Linked issue, when one exists.
