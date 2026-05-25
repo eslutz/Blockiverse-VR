@@ -22,7 +22,7 @@ namespace Blockiverse.VR
                 return;
 
             float degrees = settings != null ? settings.SnapTurnDegrees : DefaultSnapTurnDegrees;
-            origin.transform.Rotate(Vector3.up, Mathf.Sign(direction) * degrees, Space.World);
+            origin.RotateAroundCameraPosition(Vector3.up, Mathf.Sign(direction) * degrees);
         }
     }
 }

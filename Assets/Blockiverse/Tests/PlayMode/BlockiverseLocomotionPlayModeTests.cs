@@ -15,7 +15,7 @@ namespace Blockiverse.Tests.PlayMode
     public sealed class BlockiverseLocomotionPlayModeTests
     {
         [Test]
-        public void TeleportMovesXrOriginToRequestedWorldPosition()
+        public void TeleportMovesCameraToRequestedWorldPosition()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
@@ -26,7 +26,31 @@ namespace Blockiverse.Tests.PlayMode
                 teleport.Configure(origin, settings);
 
                 Assert.That(teleport.TryTeleportTo(new Vector3(2.0f, 0.0f, 3.0f)), Is.True);
-                Assert.That(Vector3.Distance(origin.transform.position, new Vector3(2.0f, 0.0f, 3.0f)), Is.LessThan(0.01f));
+                Assert.That(Vector3.Distance(origin.Camera.transform.position, new Vector3(2.0f, 0.0f, 3.0f)), Is.LessThan(0.01f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+            }
+        }
+
+        [Test]
+        public void TeleportMovesOffsetCameraToRequestedWorldPosition()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+
+            try
+            {
+                origin.Camera.transform.localPosition = new Vector3(0.75f, 0.0f, -0.25f);
+
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
+                teleport.Configure(origin, settings);
+
+                Vector3 target = new(2.0f, 0.0f, 3.0f);
+
+                Assert.That(teleport.TryTeleportTo(target), Is.True);
+                Assert.That(Vector3.Distance(origin.Camera.transform.position, target), Is.LessThan(0.01f));
             }
             finally
             {
@@ -47,6 +71,33 @@ namespace Blockiverse.Tests.PlayMode
 
                 snapTurn.ApplySnapTurn(1);
                 Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+            }
+        }
+
+        [Test]
+        public void SnapTurnRotatesAroundOffsetCameraPosition()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+
+            try
+            {
+                origin.Camera.transform.localPosition = new Vector3(0.5f, 0.0f, 1.0f);
+                Vector3 cameraPosition = origin.Camera.transform.position;
+
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.SnapTurnDegrees = 60.0f;
+
+                var snapTurn = rigObject.AddComponent<BlockiverseSnapTurnLocomotion>();
+                snapTurn.Configure(origin, settings);
+
+                snapTurn.ApplySnapTurn(1);
+
+                Assert.That(Vector3.Distance(origin.Camera.transform.position, cameraPosition), Is.LessThan(0.01f));
+                Assert.That(Mathf.DeltaAngle(origin.Camera.transform.eulerAngles.y, 60.0f), Is.EqualTo(0.0f).Within(0.1f));
             }
             finally
             {

@@ -22,8 +22,7 @@ namespace Blockiverse.VR
             if (settings != null && !settings.TeleportEnabled)
                 return false;
 
-            origin.transform.position = worldPosition;
-            return true;
+            return origin.MoveCameraToWorldLocation(worldPosition);
         }
     }
 }
