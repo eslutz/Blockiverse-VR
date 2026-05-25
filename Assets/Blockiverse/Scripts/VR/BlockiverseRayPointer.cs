@@ -87,6 +87,7 @@ namespace Blockiverse.VR
         void OnDisable()
         {
             SetHighlightedTarget(null);
+            SetPointerLineVisible(false);
         }
 
         void Update()

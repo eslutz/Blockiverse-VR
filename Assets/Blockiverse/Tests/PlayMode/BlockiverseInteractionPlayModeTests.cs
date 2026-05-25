@@ -129,6 +129,73 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator RayPointerHidesLineAndClearsHighlightWhenDisabled()
+        {
+            GameObject rigObject = new("Test Input Rig");
+            GameObject pointerObject = new("Test Ray Pointer");
+            GameObject targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject pointerLineObject = new("Pointer Line");
+            InputActionAsset actions = CreateTrackingActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            Material originalMaterial = new(Shader.Find("Sprites/Default"));
+            Material highlightMaterial = new(Shader.Find("Sprites/Default"));
+
+            try
+            {
+                BlockiverseInputRig inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+
+                BlockiverseControllerAnchor anchor = pointerObject.AddComponent<BlockiverseControllerAnchor>();
+                anchor.Configure(inputRig, BlockiverseControllerRole.Right);
+
+                pointerLineObject.transform.SetParent(pointerObject.transform, false);
+                pointerObject.transform.position = Vector3.zero;
+                pointerObject.transform.rotation = Quaternion.identity;
+                targetObject.transform.position = new Vector3(0.0f, 0.0f, 2.0f);
+
+                MeshRenderer renderer = targetObject.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = originalMaterial;
+                BlockiverseHighlightTarget target = targetObject.AddComponent<BlockiverseHighlightTarget>();
+                target.Configure(renderer, highlightMaterial);
+
+                LineRenderer lineRenderer = pointerLineObject.AddComponent<LineRenderer>();
+                lineRenderer.useWorldSpace = true;
+                lineRenderer.positionCount = 2;
+
+                BlockiverseRayPointer pointer = pointerObject.AddComponent<BlockiverseRayPointer>();
+                pointer.Configure(pointerObject.transform, lineRenderer, Physics.DefaultRaycastLayers, 4.0f, anchor);
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+
+                Physics.SyncTransforms();
+                pointer.Refresh();
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.True);
+                Assert.That(pointer.HighlightedTarget, Is.SameAs(target));
+                Assert.That(renderer.sharedMaterial, Is.SameAs(highlightMaterial));
+
+                pointer.enabled = false;
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.False);
+                Assert.That(pointer.HighlightedTarget, Is.Null);
+                Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
+            }
+            finally
+            {
+                Object.DestroyImmediate(pointerLineObject);
+                Object.DestroyImmediate(pointerObject);
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+                Object.DestroyImmediate(originalMaterial);
+                Object.DestroyImmediate(highlightMaterial);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator HighlightTargetReconfigurationRestoresTheNewRendererMaterials()
         {
             GameObject firstObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
