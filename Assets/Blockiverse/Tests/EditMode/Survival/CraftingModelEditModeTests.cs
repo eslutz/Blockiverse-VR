@@ -79,6 +79,27 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(inventory.CountOf(ItemId.Mallet), Is.Zero);
         }
 
+        [Test]
+        public void CraftingAggregatesDuplicateIngredientsBeforeConsumingInventory()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            Inventory inventory = new(itemRegistry);
+            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 2));
+            CraftingRecipe recipe = new(
+                new ItemStack(ItemId.Torchbud, 1),
+                CraftingStation.Workbench,
+                new ItemStack(ItemId.Timber, 2),
+                new ItemStack(ItemId.Timber, 2));
+
+            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.Workbench);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.MissingIngredient));
+            Assert.That(result.FailedItemId, Is.EqualTo(ItemId.Timber));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Timber, 2)));
+            Assert.That(inventory.CountOf(ItemId.Torchbud), Is.Zero);
+        }
+
         static void AssertRecipe(CraftingRecipeBook recipeBook, ItemId outputItemId, CraftingStation requiredStation, ItemStack output, params ItemStack[] ingredients)
         {
             CraftingRecipe recipe = recipeBook.GetByOutput(outputItemId);

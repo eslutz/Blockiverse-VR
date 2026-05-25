@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Blockiverse.Survival
 {
@@ -50,15 +51,22 @@ namespace Blockiverse.Survival
             if (recipe.RequiredStation != CraftingStation.None && recipe.RequiredStation != availableStation)
                 return CraftingResult.Failure(CraftingFailureReason.MissingStation);
 
-            foreach (ItemStack ingredient in recipe.Ingredients)
+            ItemStack[] requiredIngredients = AggregateIngredients(recipe.Ingredients);
+            foreach (ItemStack ingredient in requiredIngredients)
             {
                 if (inventory.CountOf(ingredient.ItemId) < ingredient.Count)
                     return CraftingResult.Failure(CraftingFailureReason.MissingIngredient, ingredient.ItemId);
             }
 
             ItemStack[] snapshot = CaptureSnapshot(inventory);
-            foreach (ItemStack ingredient in recipe.Ingredients)
-                inventory.Remove(ingredient.ItemId, ingredient.Count);
+            foreach (ItemStack ingredient in requiredIngredients)
+            {
+                if (!inventory.Remove(ingredient.ItemId, ingredient.Count))
+                {
+                    RestoreSnapshot(inventory, snapshot);
+                    return CraftingResult.Failure(CraftingFailureReason.MissingIngredient, ingredient.ItemId);
+                }
+            }
 
             if (!inventory.TryAddAll(recipe.Output))
             {
@@ -67,6 +75,27 @@ namespace Blockiverse.Survival
             }
 
             return CraftingResult.Success();
+        }
+
+        static ItemStack[] AggregateIngredients(IReadOnlyList<ItemStack> ingredients)
+        {
+            var aggregate = new List<ItemStack>(ingredients.Count);
+            var indexes = new Dictionary<ItemId, int>();
+
+            foreach (ItemStack ingredient in ingredients)
+            {
+                if (indexes.TryGetValue(ingredient.ItemId, out int index))
+                {
+                    ItemStack existing = aggregate[index];
+                    aggregate[index] = new ItemStack(existing.ItemId, existing.Count + ingredient.Count);
+                    continue;
+                }
+
+                indexes.Add(ingredient.ItemId, aggregate.Count);
+                aggregate.Add(ingredient);
+            }
+
+            return aggregate.ToArray();
         }
 
         static ItemStack[] CaptureSnapshot(Inventory inventory)
