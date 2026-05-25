@@ -10,5 +10,10 @@ namespace Blockiverse.Core
         public const string XrRigPrefabPath = "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab";
         public const string AndroidUrpAssetPath = "Assets/Blockiverse/Settings/BlockiverseAndroidURPAsset.asset";
         public const string AndroidUrpRendererPath = "Assets/Blockiverse/Settings/BlockiverseAndroidUniversalRenderer.asset";
+        public const string InputActionsAssetPath = "Assets/Blockiverse/Settings/BlockiverseInputActions.inputactions";
+        public const string PointerLineMaterialPath = "Assets/Blockiverse/Materials/BlockiversePointerLine.mat";
+        public const string HighlightMaterialPath = "Assets/Blockiverse/Materials/BlockiverseHighlight.mat";
+        public const string TestBlockMaterialPath = "Assets/Blockiverse/Materials/BlockiverseTestBlock.mat";
+        public const string InteractionLayerName = "BlockiverseInteractable";
     }
 }

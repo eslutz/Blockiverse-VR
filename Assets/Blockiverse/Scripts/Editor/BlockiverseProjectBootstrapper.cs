@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using Blockiverse.Core;
@@ -10,6 +11,7 @@ using UnityEditor.XR.Management;
 using UnityEditor.XR.Management.Metadata;
 using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -56,6 +58,7 @@ namespace Blockiverse.Editor
             ConfigureMetaRuntimeSettings();
             ConfigureUniversalRenderPipeline();
             ConfigureOpenXrForAndroid();
+            EnsureInputActions();
             EnsureXrRigPrefab();
             EnsureBootScene();
 
@@ -242,6 +245,60 @@ namespace Blockiverse.Editor
             }
 
             EditorUtility.SetDirty(openXrSettings);
+        }
+
+        static InputActionAsset EnsureInputActions()
+        {
+            var existingAsset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                BlockiverseProject.InputActionsAssetPath);
+
+            if (existingAsset != null)
+                return existingAsset;
+
+            var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+            AddControllerMap(asset, BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}");
+            AddControllerMap(asset, BlockiverseInputActionNames.RightHandMap, "<XRController>{RightHand}");
+            AddGameplayMap(asset);
+
+            File.WriteAllText(BlockiverseProject.InputActionsAssetPath, asset.ToJson());
+            UnityEngine.Object.DestroyImmediate(asset);
+
+            AssetDatabase.ImportAsset(
+                BlockiverseProject.InputActionsAssetPath,
+                ImportAssetOptions.ForceSynchronousImport);
+
+            var importedAsset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                BlockiverseProject.InputActionsAssetPath);
+
+            if (importedAsset == null)
+                throw new InvalidOperationException("Unable to create Blockiverse input actions asset.");
+
+            return importedAsset;
+        }
+
+        static void AddControllerMap(InputActionAsset asset, string mapName, string controllerPath)
+        {
+            InputActionMap map = asset.AddActionMap(mapName);
+            map.AddAction(BlockiverseInputActionNames.Position, InputActionType.PassThrough, $"{controllerPath}/devicePosition", expectedControlLayout: "Vector3");
+            map.AddAction(BlockiverseInputActionNames.Rotation, InputActionType.PassThrough, $"{controllerPath}/deviceRotation", expectedControlLayout: "Quaternion");
+            map.AddAction(BlockiverseInputActionNames.IsTracked, InputActionType.Button, $"{controllerPath}/isTracked");
+            map.AddAction(BlockiverseInputActionNames.TrackingState, InputActionType.PassThrough, $"{controllerPath}/trackingState", expectedControlLayout: "Integer");
+            map.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, $"{controllerPath}/triggerPressed");
+            map.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, $"{controllerPath}/gripPressed");
+            map.AddAction(BlockiverseInputActionNames.UiPress, InputActionType.Button, $"{controllerPath}/triggerPressed");
+            map.AddAction(BlockiverseInputActionNames.UiScroll, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
+            map.AddAction(BlockiverseInputActionNames.HapticDevice, InputActionType.PassThrough, $"{controllerPath}/device");
+            map.AddAction(BlockiverseInputActionNames.Move, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
+            map.AddAction(BlockiverseInputActionNames.Turn, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
+            map.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, $"{controllerPath}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, $"{controllerPath}/triggerPressed");
+        }
+
+        static void AddGameplayMap(InputActionAsset asset)
+        {
+            InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
+            map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
+            map.AddAction(BlockiverseInputActionNames.HeightReset, InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)

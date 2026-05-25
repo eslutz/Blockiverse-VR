@@ -2,6 +2,9 @@
   "name": "Blockiverse.Tests.EditMode",
   "rootNamespace": "Blockiverse.Tests.EditMode",
   "references": [
+    "Blockiverse.Core",
+    "Blockiverse.VR",
+    "Unity.InputSystem",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
     "Unity.XR.OpenXR"
