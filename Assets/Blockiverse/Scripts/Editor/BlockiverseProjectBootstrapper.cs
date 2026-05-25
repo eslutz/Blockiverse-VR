@@ -52,10 +52,20 @@ namespace Blockiverse.Editor
         };
 
         const string ComfortMenuName = "Comfort Settings Menu";
+        const string BlockMenuName = "Block Menu Placeholder";
+        const string PointerLineName = "Ray Pointer Line";
+        const string InteractionTestBlockName = "Interaction Test Block";
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
+        static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
         static readonly Color ComfortMenuPanelColor = new(0.07f, 0.08f, 0.09f, 0.92f);
         static readonly Color ComfortMenuControlColor = new(0.18f, 0.21f, 0.24f, 1.0f);
         static readonly Color ComfortMenuAccentColor = new(0.19f, 0.72f, 0.54f, 1.0f);
+        static readonly Color BlockMenuPanelColor = new(0.05f, 0.12f, 0.16f, 0.94f);
+        static readonly Color BlockMenuControlColor = new(0.18f, 0.31f, 0.36f, 1.0f);
+        static readonly Color BlockMenuAccentColor = new(0.94f, 0.72f, 0.26f, 1.0f);
+        static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
+        static readonly Color HighlightColor = new(1.0f, 0.85f, 0.18f, 1.0f);
+        static readonly Color TestBlockColor = new(0.22f, 0.56f, 0.43f, 1.0f);
 
         [MenuItem("Blockiverse/Bootstrap Unity Quest Project")]
         public static void Run()
@@ -68,6 +78,8 @@ namespace Blockiverse.Editor
             ConfigureMetaRuntimeSettings();
             ConfigureUniversalRenderPipeline();
             ConfigureOpenXrForAndroid();
+            EnsureInteractionLayer();
+            EnsureInteractionMaterials();
             EnsureInputActions();
             EnsureXrRigPrefab();
             EnsureBootScene();
@@ -286,6 +298,98 @@ namespace Blockiverse.Editor
             return importedAsset;
         }
 
+        static void EnsureInteractionMaterials()
+        {
+            EnsureMaterial(BlockiverseProject.PointerLineMaterialPath, PointerLineColor, preferUnlit: true);
+            EnsureMaterial(BlockiverseProject.HighlightMaterialPath, HighlightColor, preferUnlit: false);
+            EnsureMaterial(BlockiverseProject.TestBlockMaterialPath, TestBlockColor, preferUnlit: false);
+        }
+
+        static Material EnsureMaterial(string path, Color color, bool preferUnlit)
+        {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+
+            if (material == null)
+            {
+                material = new Material(FindShader(preferUnlit));
+                material.name = Path.GetFileNameWithoutExtension(path);
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            SetMaterialColor(material, color);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
+        static Shader FindShader(bool preferUnlit)
+        {
+            string[] shaderNames = preferUnlit
+                ? new[] { "Universal Render Pipeline/Unlit", "Unlit/Color", "Sprites/Default", "Standard" }
+                : new[] { "Universal Render Pipeline/Lit", "Standard", "Sprites/Default" };
+
+            foreach (string shaderName in shaderNames)
+            {
+                Shader shader = Shader.Find(shaderName);
+
+                if (shader != null)
+                    return shader;
+            }
+
+            throw new InvalidOperationException("Unable to find a built-in shader for Blockiverse material creation.");
+        }
+
+        static void SetMaterialColor(Material material, Color color)
+        {
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", color);
+            else if (material.HasProperty("_Color"))
+                material.SetColor("_Color", color);
+            else
+                material.color = color;
+        }
+
+        static int EnsureInteractionLayer()
+        {
+            int existingLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+
+            if (existingLayer >= 0)
+                return existingLayer;
+
+            UnityEngine.Object tagManagerAsset = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")
+                .FirstOrDefault();
+
+            if (tagManagerAsset == null)
+                return -1;
+
+            var tagManager = new SerializedObject(tagManagerAsset);
+            SerializedProperty layers = tagManager.FindProperty("layers");
+
+            if (layers == null)
+                return -1;
+
+            for (int layer = 8; layer < layers.arraySize; layer++)
+            {
+                SerializedProperty layerName = layers.GetArrayElementAtIndex(layer);
+
+                if (!string.IsNullOrEmpty(layerName.stringValue))
+                    continue;
+
+                layerName.stringValue = BlockiverseProject.InteractionLayerName;
+                tagManager.ApplyModifiedProperties();
+                EditorUtility.SetDirty(tagManagerAsset);
+                return layer;
+            }
+
+            Debug.LogWarning($"No available Unity layer slot for {BlockiverseProject.InteractionLayerName}; interaction objects will stay on their current layer.");
+            return -1;
+        }
+
+        static LayerMask GetInteractionLayerMask()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+            return layer >= 0 ? (LayerMask)(1 << layer) : Physics.DefaultRaycastLayers;
+        }
+
         static void AddControllerMap(InputActionAsset asset, string mapName, string controllerPath)
         {
             InputActionMap map = asset.AddActionMap(mapName);
@@ -362,27 +466,101 @@ namespace Blockiverse.Editor
         static void EnsureBootScene()
         {
             GameObject rigPrefab = EnsureXrRigPrefab();
+            bool sceneExists = AssetDatabase.LoadAssetAtPath<SceneAsset>(BlockiverseProject.BootScenePath) != null;
+            Scene scene = sceneExists
+                ? EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single)
+                : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(BlockiverseProject.BootScenePath) == null)
-            {
-                Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            EnsureBootSceneRig(scene, rigPrefab);
+            EnsureBootSceneLight(scene);
+            EnsureBootSceneInteractionTestBlock(scene);
 
-                PrefabUtility.InstantiatePrefab(rigPrefab, scene);
-
-                GameObject lightObject = new("Bootstrap Directional Light");
-                SceneManager.MoveGameObjectToScene(lightObject, scene);
-                Light light = lightObject.AddComponent<Light>();
-                light.type = LightType.Directional;
-                light.intensity = 1.0f;
-                lightObject.transform.rotation = Quaternion.Euler(50.0f, -30.0f, 0.0f);
-
-                EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
-            }
+            EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
 
             EditorBuildSettings.scenes = new[]
             {
                 new EditorBuildSettingsScene(BlockiverseProject.BootScenePath, true)
             };
+        }
+
+        static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
+        {
+            GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
+
+            if (rig == null)
+            {
+                PrefabUtility.InstantiatePrefab(rigPrefab, scene);
+                return;
+            }
+
+            if (rig.GetComponent<BlockiverseXRRigMarker>() == null)
+                rig.AddComponent<BlockiverseXRRigMarker>();
+
+            EnsureXrRigControllerBindings(rig);
+        }
+
+        static void EnsureBootSceneLight(Scene scene)
+        {
+            GameObject lightObject = FindRootGameObject(scene, "Bootstrap Directional Light");
+
+            if (lightObject == null)
+            {
+                lightObject = new GameObject("Bootstrap Directional Light");
+                SceneManager.MoveGameObjectToScene(lightObject, scene);
+            }
+
+            Light light = EnsureComponent<Light>(lightObject);
+            light.type = LightType.Directional;
+            light.intensity = 1.0f;
+            lightObject.transform.rotation = Quaternion.Euler(50.0f, -30.0f, 0.0f);
+            EditorUtility.SetDirty(lightObject);
+        }
+
+        static void EnsureBootSceneInteractionTestBlock(Scene scene)
+        {
+            GameObject blockObject = FindRootGameObject(scene, InteractionTestBlockName);
+
+            if (blockObject == null)
+            {
+                blockObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                blockObject.name = InteractionTestBlockName;
+                SceneManager.MoveGameObjectToScene(blockObject, scene);
+            }
+
+            blockObject.transform.position = new Vector3(0.25f, 1.25f, 2.5f);
+            blockObject.transform.rotation = Quaternion.identity;
+            blockObject.transform.localScale = Vector3.one * 0.45f;
+
+            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+
+            if (interactionLayer >= 0)
+                blockObject.layer = interactionLayer;
+
+            MeshRenderer renderer = EnsureComponent<MeshRenderer>(blockObject);
+            EnsureComponent<BoxCollider>(blockObject);
+
+            Material testBlockMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.TestBlockMaterialPath);
+            Material highlightMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.HighlightMaterialPath);
+
+            if (testBlockMaterial != null)
+                renderer.sharedMaterial = testBlockMaterial;
+
+            BlockiverseHighlightTarget target = EnsureComponent<BlockiverseHighlightTarget>(blockObject);
+            target.Configure(renderer, highlightMaterial);
+
+            EditorUtility.SetDirty(blockObject);
+            EditorUtility.SetDirty(target);
+        }
+
+        static GameObject FindRootGameObject(Scene scene, string name)
+        {
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+            {
+                if (rootObject.name == name)
+                    return rootObject;
+            }
+
+            return null;
         }
 
         static GameObject CreateXrRigInstance()
@@ -427,6 +605,7 @@ namespace Blockiverse.Editor
                 BlockiverseControllerRole.Right);
 
             EnsureXrRigComfortMenu(rig, inputRig);
+            EnsureXrRigInteraction(rig, inputRig);
             return rig;
         }
 
@@ -477,6 +656,7 @@ namespace Blockiverse.Editor
                 BlockiverseControllerRole.Right);
 
             EnsureXrRigComfortMenu(rig, inputRig);
+            EnsureXrRigInteraction(rig, inputRig);
         }
 
         static void EnsureControllerAnchor(
@@ -631,6 +811,146 @@ namespace Blockiverse.Editor
 
             EditorUtility.SetDirty(menuObject);
             EditorUtility.SetDirty(menu);
+        }
+
+        static void EnsureXrRigInteraction(GameObject rig, BlockiverseInputRig inputRig)
+        {
+            Transform rightController = rig.transform.Find("Camera Offset/Right Controller");
+            Transform leftController = rig.transform.Find("Camera Offset/Left Controller");
+
+            if (rightController != null)
+                EnsureRayPointer(rightController);
+
+            if (leftController != null)
+                EnsureBlockMenuPlaceholder(leftController, inputRig);
+        }
+
+        static void EnsureRayPointer(Transform rightController)
+        {
+            Material pointerMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.PointerLineMaterialPath);
+            GameObject lineObject = EnsureChild(rightController, PointerLineName);
+            lineObject.transform.localPosition = Vector3.zero;
+            lineObject.transform.localRotation = Quaternion.identity;
+            lineObject.transform.localScale = Vector3.one;
+
+            LineRenderer lineRenderer = EnsureComponent<LineRenderer>(lineObject);
+            lineRenderer.useWorldSpace = true;
+            lineRenderer.positionCount = 2;
+            lineRenderer.startWidth = 0.012f;
+            lineRenderer.endWidth = 0.006f;
+            lineRenderer.numCapVertices = 4;
+            lineRenderer.numCornerVertices = 2;
+            lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            lineRenderer.receiveShadows = false;
+
+            if (pointerMaterial != null)
+                lineRenderer.sharedMaterial = pointerMaterial;
+
+            lineRenderer.SetPosition(0, rightController.position);
+            lineRenderer.SetPosition(1, rightController.position + rightController.forward * 5.0f);
+
+            BlockiverseRayPointer pointer = EnsureComponent<BlockiverseRayPointer>(rightController.gameObject);
+            pointer.Configure(rightController, lineRenderer, GetInteractionLayerMask(), 5.0f);
+
+            EditorUtility.SetDirty(lineObject);
+            EditorUtility.SetDirty(pointer);
+        }
+
+        static void EnsureBlockMenuPlaceholder(Transform leftController, BlockiverseInputRig inputRig)
+        {
+            GameObject menuObject = EnsureRectChild(leftController, BlockMenuName);
+            menuObject.transform.localPosition = new Vector3(-0.18f, -0.08f, 0.42f);
+            menuObject.transform.localRotation = Quaternion.Euler(18.0f, 24.0f, 0.0f);
+            menuObject.transform.localScale = Vector3.one * 0.002f;
+
+            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, BlockMenuSize.x);
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, BlockMenuSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(menuObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 12;
+            canvas.enabled = false;
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureComponent<GraphicRaycaster>(menuObject);
+
+            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            panelImage.color = BlockMenuPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "Blocks",
+                34,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(24.0f, -32.0f),
+                new Vector2(300.0f, 48.0f));
+
+            EnsureBlockMenuSwatch(panelObject.transform, "Swatch A", "Stone", BlockMenuAccentColor, new Vector2(24.0f, -92.0f));
+            EnsureBlockMenuSwatch(panelObject.transform, "Swatch B", "Earth", new Color(0.50f, 0.33f, 0.22f, 1.0f), new Vector2(24.0f, -146.0f));
+            EnsureBlockMenuSwatch(panelObject.transform, "Swatch C", "Glow", new Color(0.32f, 0.74f, 0.95f, 1.0f), new Vector2(24.0f, -200.0f));
+
+            BlockiverseQuickMenuPlaceholder menu = EnsureComponent<BlockiverseQuickMenuPlaceholder>(menuObject);
+            menu.Configure(canvas);
+
+            if (inputRig != null)
+            {
+                RemovePersistentListeners(
+                    inputRig.QuickMenuPressed,
+                    menu,
+                    nameof(BlockiverseQuickMenuPlaceholder.ToggleVisible));
+                UnityEventTools.AddPersistentListener(inputRig.QuickMenuPressed, menu.ToggleVisible);
+                EditorUtility.SetDirty(inputRig);
+            }
+
+            EditorUtility.SetDirty(menuObject);
+            EditorUtility.SetDirty(menu);
+        }
+
+        static void EnsureBlockMenuSwatch(
+            Transform parent,
+            string name,
+            string label,
+            Color color,
+            Vector2 anchoredPosition)
+        {
+            GameObject rowObject = EnsureRectChild(parent, name);
+            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(rowRect, anchoredPosition, new Vector2(300.0f, 42.0f));
+
+            GameObject swatchObject = EnsureRectChild(rowObject.transform, "Swatch");
+            RectTransform swatchRect = swatchObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(swatchRect, Vector2.zero, new Vector2(38.0f, 38.0f));
+            Image swatchImage = EnsureComponent<Image>(swatchObject);
+            swatchImage.color = color;
+
+            Image rowImage = EnsureComponent<Image>(rowObject);
+            rowImage.color = BlockMenuControlColor;
+
+            EnsureLabel(
+                rowObject.transform,
+                "Label",
+                label,
+                24,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 0.0f),
+                new Vector2(1.0f, 1.0f),
+                new Vector2(0.0f, 0.5f),
+                new Vector2(52.0f, 0.0f),
+                new Vector2(228.0f, 42.0f));
         }
 
         static Toggle EnsureToggleControl(
@@ -823,6 +1143,18 @@ namespace Blockiverse.Editor
                 return existing.gameObject;
 
             GameObject child = new(name, typeof(RectTransform));
+            child.transform.SetParent(parent, false);
+            return child;
+        }
+
+        static GameObject EnsureChild(Transform parent, string name)
+        {
+            Transform existing = parent.Find(name);
+
+            if (existing != null)
+                return existing.gameObject;
+
+            GameObject child = new(name);
             child.transform.SetParent(parent, false);
             return child;
         }

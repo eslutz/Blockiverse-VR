@@ -6,6 +6,7 @@ using NUnit.Framework;
 using Unity.XR.CoreUtils;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -66,6 +67,42 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(1));
             Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(menu));
             Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseComfortMenu.ToggleVisible)));
+        }
+
+        [Test]
+        public void XrRigPrefabIsWiredForInteractionPointerAndBlockMenu()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
+            Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
+            Transform pointerLine = rightController?.Find("Ray Pointer Line");
+            Transform blockMenu = leftController?.Find("Block Menu Placeholder");
+            BlockiverseRayPointer pointer = rightController?.GetComponent<BlockiverseRayPointer>();
+            BlockiverseQuickMenuPlaceholder quickMenu = blockMenu?.GetComponent<BlockiverseQuickMenuPlaceholder>();
+            Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
+            LineRenderer lineRenderer = pointerLine?.GetComponent<LineRenderer>();
+
+            Assert.That(rightController, Is.Not.Null);
+            Assert.That(leftController, Is.Not.Null);
+            Assert.That(pointer, Is.Not.Null);
+            Assert.That(pointerLine, Is.Not.Null);
+            Assert.That(lineRenderer, Is.Not.Null);
+            Assert.That(lineRenderer.shadowCastingMode, Is.EqualTo(ShadowCastingMode.Off));
+            Assert.That(lineRenderer.receiveShadows, Is.False);
+            Assert.That(blockMenu, Is.Not.Null);
+            Assert.That(quickMenu, Is.Not.Null);
+            Assert.That(blockMenuCanvas, Is.Not.Null);
+            Assert.That(blockMenuCanvas.enabled, Is.False);
+
+            BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
+            UnityEngine.Events.UnityEvent quickMenuEvent = inputRig.QuickMenuPressed;
+            Assert.That(quickMenuEvent, Is.Not.Null);
+            Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(1));
+            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(quickMenu));
+            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseQuickMenuPlaceholder.ToggleVisible)));
         }
 
         static void AssertController(GameObject prefab, string controllerName, BlockiverseControllerRole expectedRole)

@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added the M1 VR interaction foundation with a dominant-hand ray pointer, highlightable test block, and left-hand block menu placeholder.
 - Added M1 VR comfort locomotion with teleport movement, snap turning, height reset, comfort settings, and a VR comfort settings menu used by the XR rig.
 - Added the M1 VR controller input action map, Quest controller anchor bindings, haptics abstraction, and input smoke tests.
 - Updated GitHub Actions workflow pins to current stable major versions and documented dependency-currency guidance for agents.
