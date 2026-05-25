@@ -5,25 +5,35 @@ using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 
 namespace Blockiverse.Tests.PlayMode
 {
-    public sealed class BlockiverseInteractionPlayModeTests
+    public sealed class BlockiverseInteractionPlayModeTests : InputTestFixture
     {
         [UnityTest]
         public IEnumerator RayPointerHighlightsTargetAndRestoresWhenAimChanges()
         {
+            GameObject rigObject = new("Test Input Rig");
             GameObject pointerObject = new("Test Ray Pointer");
             GameObject targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             var pointerLineObject = new GameObject("Pointer Line");
+            InputActionAsset actions = CreateTrackingActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
             Material originalMaterial = new(Shader.Find("Sprites/Default"));
             Material highlightMaterial = new(Shader.Find("Sprites/Default"));
             LineRenderer lineRenderer = pointerLineObject.AddComponent<LineRenderer>();
 
             try
             {
+                BlockiverseInputRig inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+
+                BlockiverseControllerAnchor anchor = pointerObject.AddComponent<BlockiverseControllerAnchor>();
+                anchor.Configure(inputRig, BlockiverseControllerRole.Right);
+
                 pointerLineObject.transform.SetParent(pointerObject.transform, false);
                 pointerObject.transform.position = Vector3.zero;
                 pointerObject.transform.rotation = Quaternion.identity;
@@ -39,7 +49,13 @@ namespace Blockiverse.Tests.PlayMode
                 lineRenderer.positionCount = 2;
 
                 BlockiverseRayPointer pointer = pointerObject.AddComponent<BlockiverseRayPointer>();
-                pointer.Configure(pointerObject.transform, lineRenderer, Physics.DefaultRaycastLayers, 4.0f);
+                pointer.Configure(pointerObject.transform, lineRenderer, Physics.DefaultRaycastLayers, 4.0f, anchor);
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+
+                Assert.That(lineRenderer.shadowCastingMode, Is.EqualTo(ShadowCastingMode.Off));
+                Assert.That(lineRenderer.receiveShadows, Is.False);
 
                 Physics.SyncTransforms();
                 pointer.Refresh();
@@ -58,8 +74,57 @@ namespace Blockiverse.Tests.PlayMode
             {
                 UnityEngine.Object.DestroyImmediate(pointerObject);
                 UnityEngine.Object.DestroyImmediate(targetObject);
+                UnityEngine.Object.DestroyImmediate(rigObject);
+                UnityEngine.Object.DestroyImmediate(actions);
                 UnityEngine.Object.DestroyImmediate(originalMaterial);
                 UnityEngine.Object.DestroyImmediate(highlightMaterial);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RayPointerClearsHighlightAndHidesLineWhenTrackingSourceIsMissing()
+        {
+            GameObject pointerObject = new("Test Ray Pointer");
+            GameObject targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject pointerLineObject = new("Pointer Line");
+            Material originalMaterial = new(Shader.Find("Sprites/Default"));
+            Material highlightMaterial = new(Shader.Find("Sprites/Default"));
+
+            try
+            {
+                pointerLineObject.transform.SetParent(pointerObject.transform, false);
+                pointerObject.transform.position = Vector3.zero;
+                pointerObject.transform.rotation = Quaternion.identity;
+                targetObject.transform.position = new Vector3(0.0f, 0.0f, 2.0f);
+
+                MeshRenderer renderer = targetObject.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = originalMaterial;
+                BlockiverseHighlightTarget target = targetObject.AddComponent<BlockiverseHighlightTarget>();
+                target.Configure(renderer, highlightMaterial);
+
+                LineRenderer lineRenderer = pointerLineObject.AddComponent<LineRenderer>();
+                lineRenderer.useWorldSpace = true;
+                lineRenderer.positionCount = 2;
+                lineRenderer.enabled = true;
+
+                BlockiverseRayPointer pointer = pointerObject.AddComponent<BlockiverseRayPointer>();
+                pointer.Configure(pointerObject.transform, lineRenderer, Physics.DefaultRaycastLayers, 4.0f);
+
+                Physics.SyncTransforms();
+                pointer.Refresh();
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.False);
+                Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
+                Assert.That(pointer.HighlightedTarget, Is.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(pointerLineObject);
+                Object.DestroyImmediate(pointerObject);
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(originalMaterial);
+                Object.DestroyImmediate(highlightMaterial);
             }
         }
 
@@ -137,6 +202,14 @@ namespace Blockiverse.Tests.PlayMode
 
             target.SetHighlighted(false);
             Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
+        }
+
+        static InputActionAsset CreateTrackingActions()
+        {
+            var actions = ScriptableObject.CreateInstance<InputActionAsset>();
+            InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
+            rightHand.AddAction(BlockiverseInputActionNames.IsTracked, InputActionType.Button, "<Gamepad>/rightShoulder");
+            return actions;
         }
     }
 

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Blockiverse.VR
 {
@@ -35,7 +36,7 @@ namespace Blockiverse.VR
         {
             RefreshTrackingSource();
 
-            if (trackingSource != null && !trackingSource.IsTracked)
+            if (trackingSource == null || !trackingSource.IsTracked)
             {
                 SetHighlightedTarget(null);
                 SetPointerLineVisible(false);
@@ -114,6 +115,8 @@ namespace Blockiverse.VR
 
             pointerLine.useWorldSpace = true;
             pointerLine.positionCount = 2;
+            pointerLine.shadowCastingMode = ShadowCastingMode.Off;
+            pointerLine.receiveShadows = false;
         }
 
         void RefreshTrackingSource()
