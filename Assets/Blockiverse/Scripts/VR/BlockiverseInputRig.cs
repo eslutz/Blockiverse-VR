@@ -16,11 +16,13 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseSnapTurnLocomotion snapTurnLocomotion;
         [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] UnityEvent menuPressed = new();
+        [SerializeField] UnityEvent quickMenuPressed = new();
 
         bool snapTurnReady = true;
 
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
+        public UnityEvent QuickMenuPressed => quickMenuPressed;
 
         public void Configure(InputActionAsset actions)
         {
@@ -65,6 +67,7 @@ namespace Blockiverse.VR
             UpdateTeleport();
             UpdateHeightReset();
             UpdateMenu();
+            UpdateQuickMenu();
         }
 
         void UpdateSnapTurn()
@@ -127,6 +130,17 @@ namespace Blockiverse.VR
             }
 
             menuPressed?.Invoke();
+        }
+
+        void UpdateQuickMenu()
+        {
+            if (!TryFindAction(BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Activate, out InputAction quickMenuAction) ||
+                !quickMenuAction.WasPressedThisFrame())
+            {
+                return;
+            }
+
+            quickMenuPressed?.Invoke();
         }
 
         bool TryFindAction(string mapName, string actionName, out InputAction action)
