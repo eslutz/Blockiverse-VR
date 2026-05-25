@@ -236,8 +236,8 @@ LineRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 299764309070692465}
   m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
   m_MotionVectors: 0
@@ -458,6 +458,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseRayPointer
   rayOrigin: {fileID: 6989568263850087154}
   pointerLine: {fileID: 5390180600806767058}
+  trackingSource: {fileID: 6783649790512326716}
   interactionLayers:
     serializedVersion: 2
     m_Bits: 256

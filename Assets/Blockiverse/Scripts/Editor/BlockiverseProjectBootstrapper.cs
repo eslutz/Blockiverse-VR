@@ -840,6 +840,8 @@ namespace Blockiverse.Editor
             lineRenderer.endWidth = 0.006f;
             lineRenderer.numCapVertices = 4;
             lineRenderer.numCornerVertices = 2;
+            lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            lineRenderer.receiveShadows = false;
 
             if (pointerMaterial != null)
                 lineRenderer.sharedMaterial = pointerMaterial;

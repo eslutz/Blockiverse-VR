@@ -15,6 +15,15 @@ namespace Blockiverse.VR
 
         public void Configure(Renderer renderer, Material material)
         {
+            if (targetRenderer != renderer)
+            {
+                if (isHighlighted)
+                    RestoreOriginalMaterials();
+
+                originalMaterials = null;
+                hasOriginalMaterials = false;
+            }
+
             targetRenderer = renderer;
             highlightMaterial = material;
             CaptureOriginalMaterials();

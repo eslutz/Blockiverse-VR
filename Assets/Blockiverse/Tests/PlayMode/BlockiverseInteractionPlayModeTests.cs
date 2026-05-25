@@ -1,11 +1,9 @@
-using System;
 using System.Collections;
-using System.Reflection;
+using Blockiverse.Core;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -17,12 +15,6 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator RayPointerHighlightsTargetAndRestoresWhenAimChanges()
         {
-            Type pointerType = Type.GetType("Blockiverse.VR.BlockiverseRayPointer, Blockiverse.VR");
-            Type targetType = Type.GetType("Blockiverse.VR.BlockiverseHighlightTarget, Blockiverse.VR");
-
-            Assert.That(pointerType, Is.Not.Null);
-            Assert.That(targetType, Is.Not.Null);
-
             GameObject pointerObject = new("Test Ray Pointer");
             GameObject targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             var pointerLineObject = new GameObject("Pointer Line");
@@ -40,26 +32,24 @@ namespace Blockiverse.Tests.PlayMode
                 MeshRenderer renderer = targetObject.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial = originalMaterial;
 
-                Component target = targetObject.AddComponent(targetType);
-                targetType.GetMethod("Configure")?.Invoke(target, new object[] { renderer, highlightMaterial });
+                BlockiverseHighlightTarget target = targetObject.AddComponent<BlockiverseHighlightTarget>();
+                target.Configure(renderer, highlightMaterial);
 
                 lineRenderer.useWorldSpace = true;
                 lineRenderer.positionCount = 2;
 
-                Component pointer = pointerObject.AddComponent(pointerType);
-                pointerType.GetMethod("Configure")?.Invoke(
-                    pointer,
-                    new object[] { pointerObject.transform, lineRenderer, (LayerMask)Physics.DefaultRaycastLayers, 4.0f });
+                BlockiverseRayPointer pointer = pointerObject.AddComponent<BlockiverseRayPointer>();
+                pointer.Configure(pointerObject.transform, lineRenderer, Physics.DefaultRaycastLayers, 4.0f);
 
                 Physics.SyncTransforms();
-                pointerType.GetMethod("Refresh")?.Invoke(pointer, null);
+                pointer.Refresh();
                 yield return null;
 
                 Assert.That(renderer.sharedMaterial, Is.SameAs(highlightMaterial));
 
                 pointerObject.transform.rotation = Quaternion.Euler(0.0f, 90.0f, 0.0f);
                 Physics.SyncTransforms();
-                pointerType.GetMethod("Refresh")?.Invoke(pointer, null);
+                pointer.Refresh();
                 yield return null;
 
                 Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
@@ -74,6 +64,47 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator HighlightTargetReconfigurationRestoresTheNewRendererMaterials()
+        {
+            GameObject firstObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject secondObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Material firstMaterial = new(Shader.Find("Sprites/Default"));
+            Material secondMaterial = new(Shader.Find("Sprites/Default"));
+            Material highlightMaterial = new(Shader.Find("Sprites/Default"));
+
+            try
+            {
+                MeshRenderer firstRenderer = firstObject.GetComponent<MeshRenderer>();
+                MeshRenderer secondRenderer = secondObject.GetComponent<MeshRenderer>();
+                firstRenderer.sharedMaterial = firstMaterial;
+                secondRenderer.sharedMaterial = secondMaterial;
+
+                BlockiverseHighlightTarget target = firstObject.AddComponent<BlockiverseHighlightTarget>();
+                target.Configure(firstRenderer, highlightMaterial);
+                target.SetHighlighted(true);
+                target.SetHighlighted(false);
+
+                Assert.That(firstRenderer.sharedMaterial, Is.SameAs(firstMaterial));
+
+                target.Configure(secondRenderer, highlightMaterial);
+                target.SetHighlighted(true);
+                target.SetHighlighted(false);
+
+                yield return null;
+
+                Assert.That(secondRenderer.sharedMaterial, Is.SameAs(secondMaterial));
+            }
+            finally
+            {
+                Object.DestroyImmediate(firstObject);
+                Object.DestroyImmediate(secondObject);
+                Object.DestroyImmediate(firstMaterial);
+                Object.DestroyImmediate(secondMaterial);
+                Object.DestroyImmediate(highlightMaterial);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator BootSceneContainsInteractionTestBlock()
         {
             AsyncOperation operation = SceneManager.LoadSceneAsync("Boot", LoadSceneMode.Single);
@@ -81,10 +112,31 @@ namespace Blockiverse.Tests.PlayMode
             while (!operation.isDone)
                 yield return null;
 
-            Type targetType = Type.GetType("Blockiverse.VR.BlockiverseHighlightTarget, Blockiverse.VR");
+            GameObject blockObject = GameObject.Find("Interaction Test Block");
+            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
 
-            Assert.That(targetType, Is.Not.Null);
-            Assert.That(UnityEngine.Object.FindFirstObjectByType(targetType, FindObjectsInactive.Include), Is.Not.Null);
+            Assert.That(blockObject, Is.Not.Null);
+            Assert.That(interactionLayer, Is.GreaterThanOrEqualTo(0));
+            Assert.That(blockObject.layer, Is.EqualTo(interactionLayer));
+
+            BoxCollider collider = blockObject.GetComponent<BoxCollider>();
+            MeshRenderer renderer = blockObject.GetComponent<MeshRenderer>();
+            BlockiverseHighlightTarget target = blockObject.GetComponent<BlockiverseHighlightTarget>();
+            Material originalMaterial = renderer?.sharedMaterial;
+
+            Assert.That(collider, Is.Not.Null);
+            Assert.That(collider.enabled, Is.True);
+            Assert.That(renderer, Is.Not.Null);
+            Assert.That(originalMaterial, Is.Not.Null);
+            Assert.That(originalMaterial.name, Does.Contain("BlockiverseTestBlock"));
+            Assert.That(target, Is.Not.Null);
+
+            target.SetHighlighted(true);
+            Assert.That(renderer.sharedMaterial, Is.Not.Null);
+            Assert.That(renderer.sharedMaterial.name, Does.Contain("BlockiverseHighlight"));
+
+            target.SetHighlighted(false);
+            Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
         }
     }
 
@@ -93,12 +145,6 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
         {
-            Type quickMenuType = Type.GetType("Blockiverse.VR.BlockiverseQuickMenuPlaceholder, Blockiverse.VR");
-            PropertyInfo quickMenuPressedProperty = typeof(BlockiverseInputRig).GetProperty("QuickMenuPressed");
-
-            Assert.That(quickMenuType, Is.Not.Null);
-            Assert.That(quickMenuPressedProperty, Is.Not.Null);
-
             GameObject rigObject = new("Test Input Rig");
             GameObject comfortMenuObject = new("Comfort Menu");
             GameObject blockMenuObject = new("Block Menu Placeholder");
@@ -117,17 +163,15 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.MenuPressed.AddListener(comfortMenu.ToggleVisible);
 
                 var blockCanvas = blockMenuObject.AddComponent<Canvas>();
-                Component blockMenu = blockMenuObject.AddComponent(quickMenuType);
-                quickMenuType.GetMethod("Configure")?.Invoke(blockMenu, new object[] { blockCanvas });
+                BlockiverseQuickMenuPlaceholder blockMenu = blockMenuObject.AddComponent<BlockiverseQuickMenuPlaceholder>();
+                blockMenu.Configure(blockCanvas);
 
-                UnityEvent quickMenuPressed = quickMenuPressedProperty.GetValue(inputRig) as UnityEvent;
-                MethodInfo toggleVisible = quickMenuType.GetMethod("ToggleVisible");
-                quickMenuPressed.AddListener(() => toggleVisible.Invoke(blockMenu, null));
+                inputRig.QuickMenuPressed.AddListener(blockMenu.ToggleVisible);
 
                 Press(gamepad.leftShoulder);
                 yield return null;
 
-                Assert.That(ReadBoolProperty(quickMenuType, blockMenu, "IsVisible"), Is.True);
+                Assert.That(blockMenu.IsVisible, Is.True);
                 Assert.That(comfortMenu.IsVisible, Is.False);
 
                 Release(gamepad.leftShoulder);
@@ -135,7 +179,7 @@ namespace Blockiverse.Tests.PlayMode
                 Press(gamepad.startButton);
                 yield return null;
 
-                Assert.That(ReadBoolProperty(quickMenuType, blockMenu, "IsVisible"), Is.True);
+                Assert.That(blockMenu.IsVisible, Is.True);
                 Assert.That(comfortMenu.IsVisible, Is.True);
             }
             finally
@@ -147,12 +191,75 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
-        static bool ReadBoolProperty(Type type, object instance, string propertyName)
+        [UnityTest]
+        public IEnumerator RayPointerClearsHighlightAndHidesLineWhenControllerLosesTracking()
         {
-            PropertyInfo property = type.GetProperty(propertyName);
+            GameObject rigObject = new("Test Input Rig");
+            GameObject pointerObject = new("Right Controller");
+            GameObject targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject pointerLineObject = new("Pointer Line");
+            InputActionAsset actions = CreateTrackingActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            Material originalMaterial = new(Shader.Find("Sprites/Default"));
+            Material highlightMaterial = new(Shader.Find("Sprites/Default"));
 
-            Assert.That(property, Is.Not.Null);
-            return (bool)property.GetValue(instance);
+            try
+            {
+                BlockiverseInputRig inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+
+                BlockiverseControllerAnchor anchor = pointerObject.AddComponent<BlockiverseControllerAnchor>();
+                anchor.Configure(inputRig, BlockiverseControllerRole.Right);
+
+                pointerObject.transform.position = Vector3.zero;
+                pointerObject.transform.rotation = Quaternion.identity;
+                targetObject.transform.position = new Vector3(0.0f, 0.0f, 2.0f);
+
+                MeshRenderer renderer = targetObject.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = originalMaterial;
+                BlockiverseHighlightTarget target = targetObject.AddComponent<BlockiverseHighlightTarget>();
+                target.Configure(renderer, highlightMaterial);
+
+                pointerLineObject.transform.SetParent(pointerObject.transform, false);
+                LineRenderer lineRenderer = pointerLineObject.AddComponent<LineRenderer>();
+                lineRenderer.useWorldSpace = true;
+                lineRenderer.positionCount = 2;
+
+                BlockiverseRayPointer pointer = pointerObject.AddComponent<BlockiverseRayPointer>();
+                pointer.Configure(pointerObject.transform, lineRenderer, Physics.DefaultRaycastLayers, 4.0f);
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+
+                Physics.SyncTransforms();
+                pointer.Refresh();
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.True);
+                Assert.That(renderer.sharedMaterial, Is.SameAs(highlightMaterial));
+                Assert.That(pointer.HighlightedTarget, Is.SameAs(target));
+
+                Release(gamepad.rightShoulder);
+                yield return null;
+
+                Physics.SyncTransforms();
+                pointer.Refresh();
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.False);
+                Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
+                Assert.That(pointer.HighlightedTarget, Is.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(pointerLineObject);
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pointerObject);
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+                Object.DestroyImmediate(originalMaterial);
+                Object.DestroyImmediate(highlightMaterial);
+            }
         }
 
         static InputActionAsset CreateTestActions()
@@ -165,6 +272,14 @@ namespace Blockiverse.Tests.PlayMode
             InputActionMap gameplay = actions.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             gameplay.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<Gamepad>/start");
 
+            return actions;
+        }
+
+        static InputActionAsset CreateTrackingActions()
+        {
+            var actions = ScriptableObject.CreateInstance<InputActionAsset>();
+            InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
+            rightHand.AddAction(BlockiverseInputActionNames.IsTracked, InputActionType.Button, "<Gamepad>/rightShoulder");
             return actions;
         }
     }

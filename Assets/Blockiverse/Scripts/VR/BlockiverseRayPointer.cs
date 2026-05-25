@@ -6,6 +6,7 @@ namespace Blockiverse.VR
     {
         [SerializeField] Transform rayOrigin;
         [SerializeField] LineRenderer pointerLine;
+        [SerializeField] BlockiverseControllerAnchor trackingSource;
         [SerializeField] LayerMask interactionLayers = Physics.DefaultRaycastLayers;
         [SerializeField] float maxDistance = 5.0f;
 
@@ -14,17 +15,33 @@ namespace Blockiverse.VR
         public BlockiverseHighlightTarget HighlightedTarget => highlightedTarget;
         public float MaxDistance => maxDistance;
 
-        public void Configure(Transform origin, LineRenderer lineRenderer, LayerMask layerMask, float distance)
+        public void Configure(
+            Transform origin,
+            LineRenderer lineRenderer,
+            LayerMask layerMask,
+            float distance,
+            BlockiverseControllerAnchor controllerAnchor = null)
         {
             rayOrigin = origin;
             pointerLine = lineRenderer;
+            trackingSource = controllerAnchor != null ? controllerAnchor : trackingSource;
             interactionLayers = layerMask;
             maxDistance = Mathf.Max(0.01f, distance);
             ConfigureLineRenderer();
+            RefreshTrackingSource();
         }
 
         public void Refresh()
         {
+            RefreshTrackingSource();
+
+            if (trackingSource != null && !trackingSource.IsTracked)
+            {
+                SetHighlightedTarget(null);
+                SetPointerLineVisible(false);
+                return;
+            }
+
             Transform origin = rayOrigin != null ? rayOrigin : transform;
             Vector3 start = origin.position;
             Vector3 direction = origin.forward.sqrMagnitude > Mathf.Epsilon ? origin.forward.normalized : Vector3.forward;
@@ -44,6 +61,7 @@ namespace Blockiverse.VR
             }
 
             SetHighlightedTarget(hitTarget);
+            SetPointerLineVisible(true);
             UpdateLine(start, end);
         }
 
@@ -55,6 +73,7 @@ namespace Blockiverse.VR
             if (pointerLine == null)
                 pointerLine = GetComponentInChildren<LineRenderer>(true);
 
+            RefreshTrackingSource();
             ConfigureLineRenderer();
         }
 
@@ -97,6 +116,12 @@ namespace Blockiverse.VR
             pointerLine.positionCount = 2;
         }
 
+        void RefreshTrackingSource()
+        {
+            if (trackingSource == null)
+                trackingSource = GetComponentInParent<BlockiverseControllerAnchor>();
+        }
+
         void UpdateLine(Vector3 start, Vector3 end)
         {
             if (pointerLine == null)
@@ -104,6 +129,12 @@ namespace Blockiverse.VR
 
             pointerLine.SetPosition(0, start);
             pointerLine.SetPosition(1, end);
+        }
+
+        void SetPointerLineVisible(bool visible)
+        {
+            if (pointerLine != null)
+                pointerLine.enabled = visible;
         }
     }
 }
