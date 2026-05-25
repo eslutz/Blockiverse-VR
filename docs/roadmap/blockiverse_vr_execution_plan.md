@@ -8,6 +8,8 @@
 **Primary gameplay scope:** Creative-mode voxel building + survival-lite with health, resources, crafting, inventory, terrain, and caves
 **Later expansion:** Full survival mode with mobs and day/night
 **Multiplayer:** Basic co-op for two players
+**Player representation:** Use each player's Meta Horizon avatar for local and remote players; do not build a game-specific custom avatar creator
+**NPC representation:** Use original blocky voxel characters for in-game NPCs/mobs; do not use player Meta Horizon avatars for NPCs
 **World model:** Bounded test world first; no infinite terrain initially
 **Primary release path:** Meta Horizon Store / Early Access / release channels
 **Fallback release path:** Signed APKs through GitHub Releases for sideloading if store submission is blocked or delayed
@@ -45,11 +47,13 @@ Universal Render Pipeline (URP)
 OpenXR
 Unity OpenXR: Meta
 Meta XR Core SDK
+Meta Avatars SDK when multiplayer player representation starts
 Unity Input System
 XR Interaction Toolkit, if it fits the final interaction model
 Netcode for GameObjects
 Unity Transport
 Optional later: Unity Relay and Lobby for easier remote multiplayer
+Meta XR Platform SDK when Meta Horizon Avatars, entitlement, identity, or store platform features are needed
 ```
 
 ### Why not Godot for this version?
@@ -128,6 +132,27 @@ Save/load
 Original placeholder-to-polished voxel art
 ```
 
+### Player and character representation
+
+Player identity and representation should come from Meta Horizon:
+
+```text
+Local player uses their Meta Horizon avatar
+Remote multiplayer players are shown as their Meta Horizon avatars
+No custom Blockiverse-only player avatar creator
+No custom player profile/identity system unless required later for non-Meta platforms
+Development-only fallback proxies are allowed before Meta Horizon Avatar integration is complete
+```
+
+In-world non-player characters remain part of Blockiverse's original voxel art direction:
+
+```text
+Friendly NPCs use original blocky voxel character designs
+Hostile mobs use original blocky voxel creature designs
+NPCs/mobs do not use Meta Horizon avatars
+NPCs/mobs must not copy Minecraft-protected names, silhouettes, sounds, or behavior identities
+```
+
 Later expansion:
 
 ```text
@@ -171,7 +196,8 @@ The GitHub Release APK fallback should not be used to broadly bypass legitimate 
 3. **Treat VR performance as a feature.** Target stable 72 FPS minimum on Quest 3/3S, with 90 FPS as an optimization goal where feasible.
 4. **Design for multiplayer early.** Even single-player block edits should use command objects that can later be synchronized over the network.
 5. **Keep assets original.** The game can be blocky and voxel-based, but not a Minecraft asset or branding clone.
-6. **Use trunk-based development.** Keep `main` releasable. Use short-lived feature branches only. Cut releases from `main`.
+6. **Use platform identity for players.** Player bodies should be Meta Horizon avatars in multiplayer; reserve original voxel character design for NPCs and mobs.
+7. **Use trunk-based development.** Keep `main` releasable. Use short-lived feature branches only. Cut releases from `main`.
 
 ---
 
@@ -397,9 +423,9 @@ Dependencies
 | M1 VR Slice | Player can stand in VR, move, point, select, and interact | Quest 3/3S vertical slice |
 | M2 Creative | Bounded voxel world, break/place blocks, save/load | Playable creative prototype |
 | M3 Survival-Lite | Terrain, caves, resources, inventory, crafting, health | Solo survival-lite loop |
-| M4 Multiplayer | Two players can join, see each other, and edit world | Father/daughter co-op |
+| M4 Multiplayer | Two players can join, see each other's Meta Horizon avatars, and edit world | Father/daughter co-op |
 | M5 Store Candidate | Performance, privacy, signing, release channels, metadata | Meta submission candidate |
-| M6 Full Survival Later | Mobs, day/night, hostile encounters, progression | Later expansion |
+| M6 Full Survival Later | Original voxel NPCs/mobs, day/night, hostile encounters, progression | Later expansion |
 
 ---
 
@@ -422,7 +448,8 @@ C#
 OpenXR
 Unity OpenXR: Meta
 Meta XR Core SDK
-Meta XR Platform SDK later, when entitlement/multiplayer platform features are needed
+Meta Avatars SDK later, when multiplayer player representation starts
+Meta XR Platform SDK later, when Meta Horizon Avatars, entitlement, identity, or store platform features are needed
 Input System
 XR Interaction Toolkit, if it fits the controller interaction model
 ```
@@ -957,13 +984,15 @@ Host-authoritative model
 One player hosts
 Second player joins by LAN/IP first
 Join code via Relay later
-Networked player avatar
+Networked Meta Horizon player avatar
 Head/controller transform sync
-Player name/color
+Player display name/identity from Meta platform data where allowed
+Development-only fallback proxy while Meta Horizon Avatar integration is unavailable
 Disconnect handling
 No public matchmaking initially
 Private voice chat for basic co-op
 No open text chat initially
+No game-specific custom avatar creator
 ```
 
 ### Tests
@@ -974,14 +1003,16 @@ PlayMode: host starts successfully.
 PlayMode: client connects to host.
 PlayMode: two simulated players spawn with unique IDs.
 PlayMode: disconnect cleans up player object.
+PlayMode: avatar sync layer tolerates missing Meta Horizon Avatar data by using a development fallback proxy.
 Manual: two Quest devices join same LAN session.
+Manual: each Quest user sees the other player as that user's Meta Horizon avatar.
 ```
 
 ### Validation
 
 ```text
 You and your daughter can stand in the same bounded test scene.
-Each player sees the other player's head/controller proxy.
+Each player sees the other player's Meta Horizon avatar.
 Disconnect/rejoin does not crash the host.
 ```
 
@@ -1345,6 +1376,8 @@ The game is testable by invited users through Meta release channels before publi
 Create Meta developer app
 Configure package name
 Configure app ID
+Configure Meta Platform settings required for Meta Horizon Avatars
+Complete or explicitly defer Data Use Checkup requirements for any Platform SDK APIs used by avatars, identity, entitlement, voice, or multiplayer platform features
 Upload signed build from a main release tag
 Create Alpha/Beta/RC channels
 Invite private testers
@@ -1359,6 +1392,7 @@ Track bugs in GitHub
 Store upload accepts APK.
 Alpha channel installs on Quest.
 Entitlement behavior is understood.
+Meta Horizon Avatar and Platform SDK requirements are understood and documented.
 Private tester can launch app.
 Crash/log collection path documented.
 ```
@@ -1410,6 +1444,8 @@ Private voice chat only for invited/join-code multiplayer
 No user-generated text
 No analytics beyond essential crash/performance diagnostics unless explicitly documented
 No account system beyond Meta/Unity services required for multiplayer
+Meta Horizon Avatar/profile data use is disclosed when avatar integration ships
+No custom player avatar/profile data is collected for a Blockiverse-only avatar system
 Private invite/join-code multiplayer
 Clear privacy policy
 ```
@@ -1449,6 +1485,7 @@ Day/night cycle
 Lighting changes
 Friendly creatures
 Hostile mobs
+Original blocky voxel NPC/creature visual language
 Mob pathfinding
 Combat
 Armor/tools progression
@@ -1466,6 +1503,7 @@ Creeper-like mobs
 Minecraft mob names
 Minecraft item names
 Minecraft sounds/music
+Meta Horizon avatars for NPCs or mobs
 Public matchmaking
 Infinite terrain
 Marketplace/modding support
@@ -1488,6 +1526,7 @@ Survival mode feels distinct from creative.
 Mobs and day/night do not break VR comfort.
 Multiplayer remains stable.
 No Minecraft-protected characters or names are introduced.
+NPCs/mobs are original voxel characters and do not use player Meta Horizon avatars.
 ```
 
 ---
@@ -1772,7 +1811,7 @@ FEATURE: Host/client setup
   STORY: Add NetworkManager prefab
   STORY: Add LAN host flow
   STORY: Add LAN join flow
-  STORY: Add player avatar sync
+  STORY: Add Meta Horizon Avatar sync
 
 FEATURE: Multiplayer tests
   STORY: Add Multiplayer Play Mode test scene
@@ -1949,7 +1988,7 @@ No mobs/day-night yet.
 
 ```text
 Two Quest devices can connect.
-Players can see each other.
+Players can see each other's Meta Horizon avatars.
 Players can edit the same world.
 World edits stay synchronized.
 Basic multiplayer save/load works.
