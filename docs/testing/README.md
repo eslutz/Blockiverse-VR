@@ -4,6 +4,7 @@ Testing is split into:
 
 - Repository safety checks for shell syntax, release policy docs, and forbidden tracked files
 - Local Unity validation for tests and development APK build smoke checks
+- Meta XR Simulator and MCP-driven manual validation for M3 survival-lite flows
 - Release APK workflow checks that publish CI artifacts
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
@@ -13,6 +14,8 @@ Testing is split into:
 - Store-readiness validation before submission
 
 Performance reports belong in `docs/testing/performance/`.
+
+M3 Meta XR Simulator setup, MCP configuration, and survival-lite smoke scripts are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md).
 
 Run the repository checks locally with:
 
