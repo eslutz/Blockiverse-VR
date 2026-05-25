@@ -16,6 +16,17 @@ namespace Blockiverse.WorldGen
                 groundHeight: 2);
         }
 
+        public static WorldGenerationSettings CreateDefaultSurvivalLite(int seed = 6401)
+        {
+            return new WorldGenerationSettings(
+                width: 128,
+                height: 64,
+                depth: 128,
+                chunkSize: 16,
+                seed: seed,
+                groundHeight: 32);
+        }
+
         public WorldGenerationSettings(int width, int height, int depth, int chunkSize, int seed, int groundHeight)
         {
             if (groundHeight < 1 || groundHeight >= height)
