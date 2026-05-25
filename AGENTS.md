@@ -174,6 +174,27 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 - Keystores and production signing material must remain outside the repo and be stored in GitHub Actions secrets when needed.
 - Current licensing state: source-available / All Rights Reserved. Keep `LICENSE.md`, `NOTICE.md`, and relevant docs aligned with current project intent.
 
+## Local Unity Validation
+
+- Run local Unity EditMode and PlayMode tests with:
+
+```sh
+scripts/unity/run-tests.sh
+```
+
+- The test script writes NUnit XML results to `TestResults/Unity/EditMode.xml` and `TestResults/Unity/PlayMode.xml`.
+- If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`, or waits on `LicenseClient-ericslutz-6000.3.16`, the Unity Hub licensing client is likely stale or protocol-incompatible with the editor batchmode client. Reset the local Unity/Hub process state, then rerun the test script:
+
+```sh
+osascript -e 'tell application "Unity Hub" to quit'
+pkill -f 'Unity.Licensing.Client|Unity Hub Helper|Unity Hub.app' || true
+pgrep -afil 'Unity|Licensing|UnityPackageManager'
+scripts/unity/run-tests.sh
+```
+
+- The `pgrep` command should return no Unity editor, Unity Hub, UnityPackageManager, or Unity licensing processes before the retry. A successful retry starts a fresh editor licensing client and logs `Licensing is initialized` before compiling scripts.
+- Do not leave stuck Unity batchmode processes running. If a test or build command is trapped in a licensing retry loop, stop the Unity process, verify with `pgrep -x Unity`, and record the blocker or retry from a clean process state.
+
 ## Documentation Discipline
 
 - Update documentation when behavior, workflow, architecture, or project policy changes.
