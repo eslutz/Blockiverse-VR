@@ -3,7 +3,9 @@
   "rootNamespace": "Blockiverse.UI",
   "references": [
     "Blockiverse.Core",
-    "Blockiverse.Gameplay"
+    "Blockiverse.Gameplay",
+    "Blockiverse.VR",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

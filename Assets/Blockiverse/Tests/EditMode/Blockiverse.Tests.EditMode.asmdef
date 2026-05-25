@@ -3,8 +3,10 @@
   "rootNamespace": "Blockiverse.Tests.EditMode",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.UI",
     "Blockiverse.VR",
     "Unity.InputSystem",
+    "Unity.XR.CoreUtils",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
     "Unity.XR.OpenXR"

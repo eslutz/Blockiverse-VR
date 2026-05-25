@@ -1,7 +1,9 @@
 using System.Linq;
 using Blockiverse.Core;
+using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
+using Unity.XR.CoreUtils;
 using UnityEditor;
 using UnityEngine;
 
@@ -39,6 +41,31 @@ namespace Blockiverse.Tests.EditMode
 
             AssertController(prefab, "Left Controller", BlockiverseControllerRole.Left);
             AssertController(prefab, "Right Controller", BlockiverseControllerRole.Right);
+        }
+
+        [Test]
+        public void XrRigPrefabIsWiredForComfortSettingsMenu()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
+            XROrigin origin = prefab.GetComponent<XROrigin>();
+            BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
+            Transform menuTransform = prefab.transform.Find("Camera Offset/Left Controller/Comfort Settings Menu");
+            BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
+
+            Assert.That(inputRig, Is.Not.Null);
+            Assert.That(origin, Is.Not.Null);
+            Assert.That(settings, Is.Not.Null);
+            Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
+            Assert.That(menuTransform, Is.Not.Null);
+            Assert.That(menu, Is.Not.Null);
+            Assert.That(menu.IsVisible, Is.False);
+            Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(1));
+            Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(menu));
+            Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseComfortMenu.ToggleVisible)));
         }
 
         static void AssertController(GameObject prefab, string controllerName, BlockiverseControllerRole expectedRole)
