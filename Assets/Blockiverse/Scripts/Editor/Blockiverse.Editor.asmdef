@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.Editor",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.UI",
     "Blockiverse.VR",
     "Oculus.VR.Editor",
     "Unity.InputSystem",
@@ -12,7 +13,8 @@
     "Unity.XR.Management",
     "Unity.XR.Management.Editor",
     "Unity.XR.OpenXR",
-    "Unity.XR.OpenXR.Editor"
+    "Unity.XR.OpenXR.Editor",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [
     "Editor"

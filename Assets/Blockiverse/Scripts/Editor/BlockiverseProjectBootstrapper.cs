@@ -3,19 +3,23 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Blockiverse.Core;
+using Blockiverse.UI;
 using Blockiverse.VR;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEditor.XR.Management;
 using UnityEditor.XR.Management.Metadata;
 using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using Unity.XR.CoreUtils;
@@ -46,6 +50,12 @@ namespace Blockiverse.Editor
             "com.meta.openxr.feature.metaxr",
             "com.meta.openxr.feature.foveation"
         };
+
+        const string ComfortMenuName = "Comfort Settings Menu";
+        static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
+        static readonly Color ComfortMenuPanelColor = new(0.07f, 0.08f, 0.09f, 0.92f);
+        static readonly Color ComfortMenuControlColor = new(0.18f, 0.21f, 0.24f, 1.0f);
+        static readonly Color ComfortMenuAccentColor = new(0.19f, 0.72f, 0.54f, 1.0f);
 
         [MenuItem("Blockiverse/Bootstrap Unity Quest Project")]
         public static void Run()
@@ -416,6 +426,7 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
+            EnsureXrRigComfortMenu(rig, inputRig);
             return rig;
         }
 
@@ -464,6 +475,8 @@ namespace Blockiverse.Editor
                 new Vector3(0.25f, 1.25f, 0.35f),
                 inputRig,
                 BlockiverseControllerRole.Right);
+
+            EnsureXrRigComfortMenu(rig, inputRig);
         }
 
         static void EnsureControllerAnchor(
@@ -517,12 +530,343 @@ namespace Blockiverse.Editor
             haptics.Configure(role);
         }
 
+        static void EnsureXrRigComfortMenu(GameObject rig, BlockiverseInputRig inputRig)
+        {
+            Transform leftController = rig.transform.Find("Camera Offset/Left Controller");
+
+            if (leftController == null)
+                return;
+
+            BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
+            BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
+            GameObject menuObject = EnsureRectChild(leftController, ComfortMenuName);
+            menuObject.transform.localPosition = new Vector3(0.0f, 0.12f, 0.45f);
+            menuObject.transform.localRotation = Quaternion.Euler(18.0f, 0.0f, 0.0f);
+            menuObject.transform.localScale = Vector3.one * 0.002f;
+
+            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ComfortMenuSize.x);
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, ComfortMenuSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(menuObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 10;
+            canvas.enabled = false;
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureComponent<GraphicRaycaster>(menuObject);
+
+            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            panelImage.color = ComfortMenuPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "Comfort Settings",
+                40,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(32.0f, -36.0f),
+                new Vector2(460.0f, 56.0f));
+
+            Toggle teleportToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Teleport Toggle",
+                "Teleport",
+                settings == null || settings.TeleportEnabled,
+                new Vector2(32.0f, -104.0f));
+
+            Toggle smoothTurnToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Smooth Turn Toggle",
+                "Smooth Turn",
+                settings != null && settings.SmoothTurnEnabled,
+                new Vector2(32.0f, -176.0f));
+
+            Slider snapTurnSlider = EnsureSnapTurnSlider(
+                panelObject.transform,
+                settings != null ? settings.SnapTurnDegrees : 45.0f,
+                new Vector2(32.0f, -254.0f));
+
+            Button heightResetButton = EnsureButtonControl(
+                panelObject.transform,
+                "Height Reset Button",
+                "Reset Height",
+                new Vector2(32.0f, -356.0f));
+
+            if (heightReset != null)
+            {
+                RemovePersistentListeners(
+                    heightResetButton.onClick,
+                    heightReset,
+                    nameof(BlockiverseHeightReset.ResetHeight));
+                UnityEventTools.AddPersistentListener(heightResetButton.onClick, heightReset.ResetHeight);
+                EditorUtility.SetDirty(heightResetButton);
+            }
+
+            BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
+            menu.Configure(canvas, settings);
+            menu.ConfigureControls(teleportToggle, smoothTurnToggle, snapTurnSlider);
+
+            if (inputRig != null)
+            {
+                RemovePersistentListeners(
+                    inputRig.MenuPressed,
+                    menu,
+                    nameof(BlockiverseComfortMenu.ToggleVisible));
+                UnityEventTools.AddPersistentListener(inputRig.MenuPressed, menu.ToggleVisible);
+                EditorUtility.SetDirty(inputRig);
+            }
+
+            EditorUtility.SetDirty(menuObject);
+            EditorUtility.SetDirty(menu);
+        }
+
+        static Toggle EnsureToggleControl(
+            Transform parent,
+            string name,
+            string label,
+            bool isOn,
+            Vector2 anchoredPosition)
+        {
+            GameObject toggleObject = EnsureRectChild(parent, name);
+            RectTransform toggleRect = toggleObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(toggleRect, anchoredPosition, new Vector2(456.0f, 64.0f));
+
+            Toggle toggle = EnsureComponent<Toggle>(toggleObject);
+
+            GameObject backgroundObject = EnsureRectChild(toggleObject.transform, "Background");
+            RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(backgroundRect, new Vector2(0.0f, -10.0f), new Vector2(44.0f, 44.0f));
+            Image background = EnsureComponent<Image>(backgroundObject);
+            background.color = ComfortMenuControlColor;
+
+            GameObject checkmarkObject = EnsureRectChild(backgroundObject.transform, "Checkmark");
+            RectTransform checkmarkRect = checkmarkObject.GetComponent<RectTransform>();
+            checkmarkRect.anchorMin = Vector2.zero;
+            checkmarkRect.anchorMax = Vector2.one;
+            checkmarkRect.offsetMin = new Vector2(8.0f, 8.0f);
+            checkmarkRect.offsetMax = new Vector2(-8.0f, -8.0f);
+            Image checkmark = EnsureComponent<Image>(checkmarkObject);
+            checkmark.color = ComfortMenuAccentColor;
+
+            EnsureLabel(
+                toggleObject.transform,
+                "Label",
+                label,
+                34,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(64.0f, -4.0f),
+                new Vector2(360.0f, 56.0f));
+
+            toggle.targetGraphic = background;
+            toggle.graphic = checkmark;
+            toggle.isOn = isOn;
+            return toggle;
+        }
+
+        static Slider EnsureSnapTurnSlider(Transform parent, float value, Vector2 anchoredPosition)
+        {
+            GameObject rowObject = EnsureRectChild(parent, "Snap Turn Slider");
+            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(rowRect, anchoredPosition, new Vector2(456.0f, 88.0f));
+
+            EnsureLabel(
+                rowObject.transform,
+                "Label",
+                "Snap Turn",
+                32,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 0.0f),
+                new Vector2(220.0f, 40.0f));
+
+            GameObject sliderObject = EnsureRectChild(rowObject.transform, "Slider");
+            RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(sliderRect, new Vector2(0.0f, -48.0f), new Vector2(420.0f, 32.0f));
+            Slider slider = EnsureComponent<Slider>(sliderObject);
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = 15.0f;
+            slider.maxValue = 90.0f;
+            slider.wholeNumbers = true;
+
+            GameObject backgroundObject = EnsureRectChild(sliderObject.transform, "Background");
+            RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+            backgroundRect.anchorMin = new Vector2(0.0f, 0.35f);
+            backgroundRect.anchorMax = new Vector2(1.0f, 0.65f);
+            backgroundRect.offsetMin = Vector2.zero;
+            backgroundRect.offsetMax = Vector2.zero;
+            Image background = EnsureComponent<Image>(backgroundObject);
+            background.color = ComfortMenuControlColor;
+
+            GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
+            RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
+            fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one;
+            fillAreaRect.offsetMin = new Vector2(8.0f, 0.0f);
+            fillAreaRect.offsetMax = new Vector2(-8.0f, 0.0f);
+
+            GameObject fillObject = EnsureRectChild(fillAreaObject.transform, "Fill");
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.anchorMin = new Vector2(0.0f, 0.35f);
+            fillRect.anchorMax = new Vector2(1.0f, 0.65f);
+            fillRect.offsetMin = Vector2.zero;
+            fillRect.offsetMax = Vector2.zero;
+            Image fill = EnsureComponent<Image>(fillObject);
+            fill.color = ComfortMenuAccentColor;
+
+            GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
+            RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
+            handleAreaRect.anchorMin = Vector2.zero;
+            handleAreaRect.anchorMax = Vector2.one;
+            handleAreaRect.offsetMin = new Vector2(8.0f, 0.0f);
+            handleAreaRect.offsetMax = new Vector2(-8.0f, 0.0f);
+
+            GameObject handleObject = EnsureRectChild(handleAreaObject.transform, "Handle");
+            RectTransform handleRect = handleObject.GetComponent<RectTransform>();
+            handleRect.anchorMin = new Vector2(0.0f, 0.5f);
+            handleRect.anchorMax = new Vector2(0.0f, 0.5f);
+            handleRect.sizeDelta = new Vector2(32.0f, 32.0f);
+            Image handle = EnsureComponent<Image>(handleObject);
+            handle.color = Color.white;
+
+            slider.fillRect = fillRect;
+            slider.handleRect = handleRect;
+            slider.targetGraphic = handle;
+            slider.value = value;
+            return slider;
+        }
+
+        static Button EnsureButtonControl(Transform parent, string name, string label, Vector2 anchoredPosition)
+        {
+            GameObject buttonObject = EnsureRectChild(parent, name);
+            RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(buttonRect, anchoredPosition, new Vector2(220.0f, 54.0f));
+
+            Image image = EnsureComponent<Image>(buttonObject);
+            image.color = ComfortMenuControlColor;
+
+            Button button = EnsureComponent<Button>(buttonObject);
+            button.targetGraphic = image;
+
+            EnsureLabel(
+                buttonObject.transform,
+                "Label",
+                label,
+                28,
+                TextAnchor.MiddleCenter,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(0.5f, 0.5f),
+                Vector2.zero,
+                Vector2.zero);
+
+            Text buttonLabel = buttonObject.transform.Find("Label").GetComponent<Text>();
+            RectTransform labelRect = buttonLabel.GetComponent<RectTransform>();
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = Vector2.zero;
+            return button;
+        }
+
+        static Text EnsureLabel(
+            Transform parent,
+            string name,
+            string label,
+            int fontSize,
+            TextAnchor alignment,
+            Vector2 anchorMin,
+            Vector2 anchorMax,
+            Vector2 pivot,
+            Vector2 anchoredPosition,
+            Vector2 size)
+        {
+            GameObject labelObject = EnsureRectChild(parent, name);
+            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+            labelRect.anchorMin = anchorMin;
+            labelRect.anchorMax = anchorMax;
+            labelRect.pivot = pivot;
+            labelRect.anchoredPosition = anchoredPosition;
+            labelRect.sizeDelta = size;
+
+            Text text = EnsureComponent<Text>(labelObject);
+            text.text = label;
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = fontSize;
+            text.alignment = alignment;
+            text.color = Color.white;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            return text;
+        }
+
+        static GameObject EnsureRectChild(Transform parent, string name)
+        {
+            Transform existing = parent.Find(name);
+
+            if (existing != null)
+                return existing.gameObject;
+
+            GameObject child = new(name, typeof(RectTransform));
+            child.transform.SetParent(parent, false);
+            return child;
+        }
+
+        static T EnsureComponent<T>(GameObject gameObject) where T : Component
+        {
+            T component = gameObject.GetComponent<T>();
+
+            if (component == null)
+                component = gameObject.AddComponent<T>();
+
+            return component;
+        }
+
+        static void ConfigureTopLeftRect(RectTransform rectTransform, Vector2 anchoredPosition, Vector2 size)
+        {
+            rectTransform.anchorMin = new Vector2(0.0f, 1.0f);
+            rectTransform.anchorMax = new Vector2(0.0f, 1.0f);
+            rectTransform.pivot = new Vector2(0.0f, 1.0f);
+            rectTransform.anchoredPosition = anchoredPosition;
+            rectTransform.sizeDelta = size;
+        }
+
+        static void RemovePersistentListeners(UnityEvent unityEvent, UnityEngine.Object target, string methodName)
+        {
+            for (int index = unityEvent.GetPersistentEventCount() - 1; index >= 0; index--)
+            {
+                if (unityEvent.GetPersistentTarget(index) == target &&
+                    unityEvent.GetPersistentMethodName(index) == methodName)
+                {
+                    UnityEventTools.RemovePersistentListener(unityEvent, index);
+                }
+            }
+        }
+
         static void EnsureXrRigLocomotion(GameObject rig, BlockiverseInputRig inputRig, XROrigin origin)
         {
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
 
             if (settings == null)
                 settings = rig.AddComponent<BlockiverseComfortSettings>();
+
+            if (origin != null)
+                origin.CameraYOffset = settings.StandingEyeHeight;
 
             BlockiverseTeleportLocomotion teleport = rig.GetComponent<BlockiverseTeleportLocomotion>();
 

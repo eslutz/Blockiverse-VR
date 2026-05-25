@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
 namespace Blockiverse.VR
@@ -14,14 +15,19 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseTeleportLocomotion teleportLocomotion;
         [SerializeField] BlockiverseSnapTurnLocomotion snapTurnLocomotion;
         [SerializeField] BlockiverseHeightReset heightReset;
+        [SerializeField] UnityEvent menuPressed = new();
 
         bool snapTurnReady = true;
 
         public InputActionAsset InputActions => inputActions;
+        public UnityEvent MenuPressed => menuPressed;
 
         public void Configure(InputActionAsset actions)
         {
             inputActions = actions;
+
+            if (isActiveAndEnabled)
+                inputActions?.Enable();
         }
 
         public void ConfigureLocomotion(
@@ -58,6 +64,7 @@ namespace Blockiverse.VR
             UpdateSnapTurn();
             UpdateTeleport();
             UpdateHeightReset();
+            UpdateMenu();
         }
 
         void UpdateSnapTurn()
@@ -109,6 +116,17 @@ namespace Blockiverse.VR
             }
 
             heightReset.ResetHeight();
+        }
+
+        void UpdateMenu()
+        {
+            if (!TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, out InputAction menuAction) ||
+                !menuAction.WasPressedThisFrame())
+            {
+                return;
+            }
+
+            menuPressed?.Invoke();
         }
 
         bool TryFindAction(string mapName, string actionName, out InputAction action)
