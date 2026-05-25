@@ -1,5 +1,6 @@
 using System.Linq;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
@@ -79,21 +80,23 @@ namespace Blockiverse.Tests.EditMode
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
             Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
             Transform pointerLine = rightController?.Find("Ray Pointer Line");
-            Transform blockMenu = leftController?.Find("Block Menu Placeholder");
+            Transform blockMenu = leftController?.Find("Block Menu");
             BlockiverseRayPointer pointer = rightController?.GetComponent<BlockiverseRayPointer>();
-            BlockiverseQuickMenuPlaceholder quickMenu = blockMenu?.GetComponent<BlockiverseQuickMenuPlaceholder>();
+            BlockiverseCreativeInputBridge creativeInputBridge = prefab.GetComponent<BlockiverseCreativeInputBridge>();
+            CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
             Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
             LineRenderer lineRenderer = pointerLine?.GetComponent<LineRenderer>();
 
             Assert.That(rightController, Is.Not.Null);
             Assert.That(leftController, Is.Not.Null);
             Assert.That(pointer, Is.Not.Null);
+            Assert.That(creativeInputBridge, Is.Not.Null);
             Assert.That(pointerLine, Is.Not.Null);
             Assert.That(lineRenderer, Is.Not.Null);
             Assert.That(lineRenderer.shadowCastingMode, Is.EqualTo(ShadowCastingMode.Off));
             Assert.That(lineRenderer.receiveShadows, Is.False);
             Assert.That(blockMenu, Is.Not.Null);
-            Assert.That(quickMenu, Is.Not.Null);
+            Assert.That(hotbar, Is.Not.Null);
             Assert.That(blockMenuCanvas, Is.Not.Null);
             Assert.That(blockMenuCanvas.enabled, Is.False);
 
@@ -101,8 +104,8 @@ namespace Blockiverse.Tests.EditMode
             UnityEngine.Events.UnityEvent quickMenuEvent = inputRig.QuickMenuPressed;
             Assert.That(quickMenuEvent, Is.Not.Null);
             Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(1));
-            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(quickMenu));
-            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseQuickMenuPlaceholder.ToggleVisible)));
+            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(hotbar));
+            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(CreativeHotbar.ToggleVisible)));
         }
 
         static void AssertController(GameObject prefab, string controllerName, BlockiverseControllerRole expectedRole)

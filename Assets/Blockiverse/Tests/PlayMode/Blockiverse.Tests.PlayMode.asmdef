@@ -3,11 +3,15 @@
   "rootNamespace": "Blockiverse.Tests.PlayMode",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Gameplay",
+    "Blockiverse.Voxel",
+    "Blockiverse.WorldGen",
     "Blockiverse.UI",
     "Blockiverse.VR",
     "Unity.InputSystem",
     "Unity.InputSystem.TestFramework",
     "Unity.XR.CoreUtils",
+    "UnityEngine.UI",
     "UnityEngine.TestRunner"
   ],
   "includePlatforms": [],

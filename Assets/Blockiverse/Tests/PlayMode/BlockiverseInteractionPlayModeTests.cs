@@ -1,5 +1,6 @@
 using System.Collections;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
@@ -237,38 +238,33 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator BootSceneContainsInteractionTestBlock()
+        public IEnumerator BootSceneContainsCreativeWorld()
         {
             AsyncOperation operation = SceneManager.LoadSceneAsync("Boot", LoadSceneMode.Single);
 
             while (!operation.isDone)
                 yield return null;
 
-            GameObject blockObject = GameObject.Find("Interaction Test Block");
+            yield return null;
+
+            GameObject worldObject = GameObject.Find("Creative World");
             int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
 
-            Assert.That(blockObject, Is.Not.Null);
+            Assert.That(worldObject, Is.Not.Null);
             Assert.That(interactionLayer, Is.GreaterThanOrEqualTo(0));
-            Assert.That(blockObject.layer, Is.EqualTo(interactionLayer));
 
-            BoxCollider collider = blockObject.GetComponent<BoxCollider>();
-            MeshRenderer renderer = blockObject.GetComponent<MeshRenderer>();
-            BlockiverseHighlightTarget target = blockObject.GetComponent<BlockiverseHighlightTarget>();
-            Material originalMaterial = renderer?.sharedMaterial;
+            CreativeWorldManager manager = worldObject.GetComponent<CreativeWorldManager>();
+            VoxelWorldRenderer renderer = worldObject.GetComponent<VoxelWorldRenderer>();
+            MeshFilter[] chunkFilters = worldObject.GetComponentsInChildren<MeshFilter>();
 
-            Assert.That(collider, Is.Not.Null);
-            Assert.That(collider.enabled, Is.True);
+            Assert.That(manager, Is.Not.Null);
             Assert.That(renderer, Is.Not.Null);
-            Assert.That(originalMaterial, Is.Not.Null);
-            Assert.That(originalMaterial.name, Does.Contain("BlockiverseTestBlock"));
-            Assert.That(target, Is.Not.Null);
-
-            target.SetHighlighted(true);
-            Assert.That(renderer.sharedMaterial, Is.Not.Null);
-            Assert.That(renderer.sharedMaterial.name, Does.Contain("BlockiverseHighlight"));
-
-            target.SetHighlighted(false);
-            Assert.That(renderer.sharedMaterial, Is.SameAs(originalMaterial));
+            Assert.That(manager.World, Is.Not.Null);
+            Assert.That(manager.World.Bounds.Width, Is.GreaterThan(0));
+            Assert.That(renderer.Stats.ChunkCount, Is.GreaterThan(0));
+            Assert.That(renderer.Stats.TriangleCount, Is.GreaterThan(0));
+            Assert.That(chunkFilters, Has.Length.GreaterThan(0));
+            Assert.That(GameObject.Find("Interaction Test Block"), Is.Null);
         }
 
         static InputActionAsset CreateTrackingActions()
@@ -402,6 +398,48 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        [UnityTest]
+        public IEnumerator RightSelectRightActivateAndUndoRaiseCreativeEvents()
+        {
+            GameObject rigObject = new("Test Input Rig");
+            InputActionAsset actions = CreateCreativeBindingActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            int breakPresses = 0;
+            int placePresses = 0;
+            int undoPresses = 0;
+
+            try
+            {
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.BreakPressed.AddListener(() => breakPresses++);
+                inputRig.PlacePressed.AddListener(() => placePresses++);
+                inputRig.UndoPressed.AddListener(() => undoPresses++);
+
+                Press(gamepad.rightTrigger);
+                yield return null;
+                Release(gamepad.rightTrigger);
+                yield return null;
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+                Release(gamepad.rightShoulder);
+                yield return null;
+
+                Press(gamepad.buttonEast);
+                yield return null;
+
+                Assert.That(breakPresses, Is.EqualTo(1));
+                Assert.That(placePresses, Is.EqualTo(1));
+                Assert.That(undoPresses, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
         static InputActionAsset CreateTestActions()
         {
             var actions = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -420,6 +458,20 @@ namespace Blockiverse.Tests.PlayMode
             var actions = ScriptableObject.CreateInstance<InputActionAsset>();
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
             rightHand.AddAction(BlockiverseInputActionNames.IsTracked, InputActionType.Button, "<Gamepad>/rightShoulder");
+            return actions;
+        }
+
+        static InputActionAsset CreateCreativeBindingActions()
+        {
+            var actions = ScriptableObject.CreateInstance<InputActionAsset>();
+
+            InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
+            rightHand.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, "<Gamepad>/rightTrigger");
+            rightHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/rightShoulder");
+
+            InputActionMap gameplay = actions.AddActionMap(BlockiverseInputActionNames.GameplayMap);
+            gameplay.AddAction(BlockiverseInputActionNames.Undo, InputActionType.Button, "<Gamepad>/buttonEast");
+
             return actions;
         }
     }

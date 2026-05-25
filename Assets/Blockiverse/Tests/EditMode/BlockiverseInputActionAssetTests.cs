@@ -30,6 +30,7 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, "<XRController>{LeftHand}/secondaryButton");
         }
 
         static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)

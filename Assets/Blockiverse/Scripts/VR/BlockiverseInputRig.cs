@@ -17,12 +17,18 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
+        [SerializeField] UnityEvent breakPressed = new();
+        [SerializeField] UnityEvent placePressed = new();
+        [SerializeField] UnityEvent undoPressed = new();
 
         bool snapTurnReady = true;
 
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
         public UnityEvent QuickMenuPressed => quickMenuPressed;
+        public UnityEvent BreakPressed => breakPressed;
+        public UnityEvent PlacePressed => placePressed;
+        public UnityEvent UndoPressed => undoPressed;
 
         public void Configure(InputActionAsset actions)
         {
@@ -68,6 +74,7 @@ namespace Blockiverse.VR
             UpdateHeightReset();
             UpdateMenu();
             UpdateQuickMenu();
+            UpdateCreativeBindings();
         }
 
         void UpdateSnapTurn()
@@ -141,6 +148,27 @@ namespace Blockiverse.VR
             }
 
             quickMenuPressed?.Invoke();
+        }
+
+        void UpdateCreativeBindings()
+        {
+            if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Select, out InputAction breakAction) &&
+                breakAction.WasPressedThisFrame())
+            {
+                breakPressed?.Invoke();
+            }
+
+            if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Activate, out InputAction placeAction) &&
+                placeAction.WasPressedThisFrame())
+            {
+                placePressed?.Invoke();
+            }
+
+            if (TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, out InputAction undoAction) &&
+                undoAction.WasPressedThisFrame())
+            {
+                undoPressed?.Invoke();
+            }
         }
 
         bool TryFindAction(string mapName, string actionName, out InputAction action)

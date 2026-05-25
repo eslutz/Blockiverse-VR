@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.Editor",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Gameplay",
     "Blockiverse.UI",
     "Blockiverse.VR",
     "Oculus.VR.Editor",

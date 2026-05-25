@@ -21,5 +21,6 @@ namespace Blockiverse.VR
         public const string TeleportSelect = "Teleport Select";
         public const string Menu = "Menu";
         public const string HeightReset = "Height Reset";
+        public const string Undo = "Undo";
     }
 }

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using UnityEditor;
@@ -52,7 +53,7 @@ namespace Blockiverse.Editor
         };
 
         const string ComfortMenuName = "Comfort Settings Menu";
-        const string BlockMenuName = "Block Menu Placeholder";
+        const string BlockMenuName = "Block Menu";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionTestBlockName = "Interaction Test Block";
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
@@ -275,7 +276,10 @@ namespace Blockiverse.Editor
                 BlockiverseProject.InputActionsAssetPath);
 
             if (existingAsset != null)
+            {
+                EnsureInputActionSchema(existingAsset);
                 return existingAsset;
+            }
 
             var asset = ScriptableObject.CreateInstance<InputActionAsset>();
             AddControllerMap(asset, BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}");
@@ -296,6 +300,45 @@ namespace Blockiverse.Editor
                 throw new InvalidOperationException("Unable to create Blockiverse input actions asset.");
 
             return importedAsset;
+        }
+
+        static void EnsureInputActionSchema(InputActionAsset asset)
+        {
+            InputActionMap gameplayMap = asset.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
+
+            if (gameplayMap == null)
+            {
+                AddGameplayMap(asset);
+                EditorUtility.SetDirty(asset);
+                return;
+            }
+
+            EnsureButtonAction(
+                gameplayMap,
+                BlockiverseInputActionNames.Menu,
+                "<XRController>{LeftHand}/menuButton");
+            EnsureButtonAction(
+                gameplayMap,
+                BlockiverseInputActionNames.HeightReset,
+                "<XRController>{LeftHand}/primaryButton");
+            EnsureButtonAction(
+                gameplayMap,
+                BlockiverseInputActionNames.Undo,
+                "<XRController>{LeftHand}/secondaryButton");
+            EditorUtility.SetDirty(asset);
+        }
+
+        static void EnsureButtonAction(InputActionMap map, string actionName, string bindingPath)
+        {
+            InputAction action = map.FindAction(actionName, throwIfNotFound: false);
+
+            if (action == null)
+                action = map.AddAction(actionName, InputActionType.Button, bindingPath);
+
+            bool hasBinding = action.bindings.Any(binding => binding.path == bindingPath);
+
+            if (!hasBinding)
+                action.AddBinding(bindingPath);
         }
 
         static void EnsureInteractionMaterials()
@@ -413,6 +456,7 @@ namespace Blockiverse.Editor
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
             map.AddAction(BlockiverseInputActionNames.HeightReset, InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.Undo, InputActionType.Button, "<XRController>{LeftHand}/secondaryButton");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)
@@ -473,7 +517,8 @@ namespace Blockiverse.Editor
 
             EnsureBootSceneRig(scene, rigPrefab);
             EnsureBootSceneLight(scene);
-            EnsureBootSceneInteractionTestBlock(scene);
+            EnsureBootSceneCreativeWorld(scene);
+            RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
 
@@ -552,6 +597,72 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(target);
         }
 
+        static void EnsureBootSceneCreativeWorld(Scene scene)
+        {
+            GameObject worldObject = FindRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
+
+            if (worldObject == null)
+            {
+                worldObject = new GameObject(BlockiverseProject.CreativeWorldRootName);
+                SceneManager.MoveGameObjectToScene(worldObject, scene);
+            }
+
+            worldObject.transform.position = Vector3.zero;
+            worldObject.transform.rotation = Quaternion.identity;
+            worldObject.transform.localScale = Vector3.one;
+
+            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+
+            if (interactionLayer >= 0)
+                worldObject.layer = interactionLayer;
+
+            Material worldMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.TestBlockMaterialPath);
+            VoxelWorldRenderer renderer = EnsureComponent<VoxelWorldRenderer>(worldObject);
+            CreativeInteractionController controller = EnsureComponent<CreativeInteractionController>(worldObject);
+            CreativeWorldManager manager = EnsureComponent<CreativeWorldManager>(worldObject);
+            CreativeHotbar hotbar = FindBootSceneHotbar(scene);
+            manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
+            EnsureCreativeInputBridge(scene, worldObject, controller);
+
+            EditorUtility.SetDirty(worldObject);
+            EditorUtility.SetDirty(renderer);
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(manager);
+        }
+
+        static CreativeHotbar FindBootSceneHotbar(Scene scene)
+        {
+            GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
+            Transform hotbarTransform = rig != null ? rig.transform.Find("Camera Offset/Left Controller/" + BlockMenuName) : null;
+            return hotbarTransform != null ? hotbarTransform.GetComponent<CreativeHotbar>() : null;
+        }
+
+        static void EnsureCreativeInputBridge(Scene scene, GameObject worldObject, CreativeInteractionController controller)
+        {
+            GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
+
+            if (rig == null)
+                return;
+
+            BlockiverseInputRig inputRig = rig.GetComponent<BlockiverseInputRig>();
+            BlockiverseRayPointer pointer = rig.GetComponentInChildren<BlockiverseRayPointer>(true);
+
+            if (inputRig == null || pointer == null)
+                return;
+
+            BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(worldObject);
+            bridge.Configure(inputRig, pointer, controller);
+            EditorUtility.SetDirty(bridge);
+        }
+
+        static void RemoveRootGameObject(Scene scene, string name)
+        {
+            GameObject existing = FindRootGameObject(scene, name);
+
+            if (existing != null)
+                UnityEngine.Object.DestroyImmediate(existing);
+        }
+
         static GameObject FindRootGameObject(Scene scene, string name)
         {
             foreach (GameObject rootObject in scene.GetRootGameObjects())
@@ -606,6 +717,7 @@ namespace Blockiverse.Editor
 
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigCreativeInputBridge(rig, inputRig);
             return rig;
         }
 
@@ -657,6 +769,7 @@ namespace Blockiverse.Editor
 
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigCreativeInputBridge(rig, inputRig);
         }
 
         static void EnsureControllerAnchor(
@@ -856,6 +969,14 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(pointer);
         }
 
+        static void EnsureXrRigCreativeInputBridge(GameObject rig, BlockiverseInputRig inputRig)
+        {
+            BlockiverseRayPointer pointer = rig.GetComponentInChildren<BlockiverseRayPointer>(true);
+            BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
+            bridge.Configure(inputRig, pointer, null);
+            EditorUtility.SetDirty(bridge);
+        }
+
         static void EnsureBlockMenuPlaceholder(Transform leftController, BlockiverseInputRig inputRig)
         {
             GameObject menuObject = EnsureRectChild(leftController, BlockMenuName);
@@ -899,19 +1020,32 @@ namespace Blockiverse.Editor
                 new Vector2(24.0f, -32.0f),
                 new Vector2(300.0f, 48.0f));
 
-            EnsureBlockMenuSwatch(panelObject.transform, "Swatch A", "Stone", BlockMenuAccentColor, new Vector2(24.0f, -92.0f));
-            EnsureBlockMenuSwatch(panelObject.transform, "Swatch B", "Earth", new Color(0.50f, 0.33f, 0.22f, 1.0f), new Vector2(24.0f, -146.0f));
-            EnsureBlockMenuSwatch(panelObject.transform, "Swatch C", "Glow", new Color(0.32f, 0.74f, 0.95f, 1.0f), new Vector2(24.0f, -200.0f));
+            Text selectedLabel = EnsureLabel(
+                panelObject.transform,
+                "Selected Block",
+                "Meadow Turf",
+                24,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(24.0f, -82.0f),
+                new Vector2(300.0f, 34.0f));
 
-            BlockiverseQuickMenuPlaceholder menu = EnsureComponent<BlockiverseQuickMenuPlaceholder>(menuObject);
-            menu.Configure(canvas);
+            EnsureBlockMenuSwatch(panelObject.transform, "Swatch A", "Meadow Turf", BlockMenuAccentColor, new Vector2(24.0f, -128.0f));
+            EnsureBlockMenuSwatch(panelObject.transform, "Swatch B", "Loam", new Color(0.50f, 0.33f, 0.22f, 1.0f), new Vector2(24.0f, -182.0f));
+            EnsureBlockMenuSwatch(panelObject.transform, "Swatch C", "Clearstone", new Color(0.32f, 0.74f, 0.95f, 1.0f), new Vector2(24.0f, -236.0f));
+
+            CreativeHotbar menu = EnsureComponent<CreativeHotbar>(menuObject);
+            menu.ConfigureDefault(selectedLabel);
+            menu.ConfigureCanvas(canvas);
 
             if (inputRig != null)
             {
                 RemovePersistentListeners(
                     inputRig.QuickMenuPressed,
                     menu,
-                    nameof(BlockiverseQuickMenuPlaceholder.ToggleVisible));
+                    nameof(CreativeHotbar.ToggleVisible));
                 UnityEventTools.AddPersistentListener(inputRig.QuickMenuPressed, menu.ToggleVisible);
                 EditorUtility.SetDirty(inputRig);
             }

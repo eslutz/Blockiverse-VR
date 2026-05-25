@@ -4,7 +4,8 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Voxel",
-    "Blockiverse.WorldGen"
+    "Blockiverse.WorldGen",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

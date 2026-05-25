@@ -12,9 +12,12 @@ namespace Blockiverse.VR
         [SerializeField] float maxDistance = 5.0f;
 
         BlockiverseHighlightTarget highlightedTarget;
+        RaycastHit currentHit;
+        bool hasHit;
 
         public BlockiverseHighlightTarget HighlightedTarget => highlightedTarget;
         public float MaxDistance => maxDistance;
+        public bool HasHit => hasHit;
 
         public void Configure(
             Transform origin,
@@ -38,6 +41,7 @@ namespace Blockiverse.VR
 
             if (trackingSource == null || !trackingSource.IsTracked)
             {
+                hasHit = false;
                 SetHighlightedTarget(null);
                 SetPointerLineVisible(false);
                 return;
@@ -48,6 +52,7 @@ namespace Blockiverse.VR
             Vector3 direction = origin.forward.sqrMagnitude > Mathf.Epsilon ? origin.forward.normalized : Vector3.forward;
             Vector3 end = start + direction * maxDistance;
             BlockiverseHighlightTarget hitTarget = null;
+            hasHit = false;
 
             if (Physics.Raycast(
                     start,
@@ -58,12 +63,20 @@ namespace Blockiverse.VR
                     QueryTriggerInteraction.Collide))
             {
                 end = hit.point;
+                currentHit = hit;
+                hasHit = true;
                 hitTarget = hit.collider.GetComponentInParent<BlockiverseHighlightTarget>();
             }
 
             SetHighlightedTarget(hitTarget);
             SetPointerLineVisible(true);
             UpdateLine(start, end);
+        }
+
+        public bool TryGetHit(out RaycastHit hit)
+        {
+            hit = currentHit;
+            return hasHit;
         }
 
         void Awake()
@@ -86,6 +99,7 @@ namespace Blockiverse.VR
 
         void OnDisable()
         {
+            hasHit = false;
             SetHighlightedTarget(null);
             SetPointerLineVisible(false);
         }

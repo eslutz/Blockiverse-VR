@@ -3,6 +3,8 @@
   "rootNamespace": "Blockiverse.VR",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Gameplay",
+    "Blockiverse.Voxel",
     "Unity.InputSystem",
     "Unity.XR.CoreUtils",
     "Unity.XR.Interaction.Toolkit"
