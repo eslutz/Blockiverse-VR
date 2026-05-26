@@ -174,6 +174,26 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 - Keystores and production signing material must remain outside the repo and be stored in GitHub Actions secrets when needed.
 - Current licensing state: source-available / All Rights Reserved. Keep `LICENSE.md`, `NOTICE.md`, and relevant docs aligned with current project intent.
 
+## Project Tooling
+
+- Prefer reproducible command-line tooling over GUI-only actions whenever the command output is useful validation evidence.
+- Use the Unity MCP server for interactive Unity Editor inspection, simulator-oriented editor workflows, scene or object checks, and Unity-specific automation that is exposed through MCP.
+- Use the committed local scripts as the source of truth for repeatable Unity validation. In particular, `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command even when Unity MCP is available.
+- Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config while the MCP server advertises schemas that can trigger `invalid_function_parameters` errors.
+- Verify hzdb availability before device work with:
+
+```sh
+hzdb --version
+hzdb device list
+```
+
+- Prefer hzdb commands for Quest-device validation tasks such as device discovery, app install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. Record the exact hzdb commands and relevant output in issue or PR validation notes.
+- Use `adb` directly only when hzdb does not expose the needed operation or when comparing behavior against lower-level Android tooling. Document why the fallback was needed.
+- Do not commit local device logs, screenshots, recordings, Perfetto traces, APKs, or other large/generated validation artifacts unless a tracked artifact is explicitly required. Store them outside the repo or attach them to the relevant GitHub issue, pull request, or workflow artifact instead.
+- Keep experimental or unstable MCP servers out of the base Codex config. If a server is needed for testing but can break prompt execution, put it in a separate Codex profile, validate it with `codex mcp list` and a fresh Codex session, and remove or disable it immediately if it blocks normal prompts.
+- Use GitHub CLI for ProjectV2 lane/status updates, because GitHub MCP/connector tools may not expose all project field mutations.
+- Use browser automation tools for local web targets only when the task involves browser-visible UI, screenshots, or interaction checks.
+
 ## Local Unity Validation
 
 - Run local Unity EditMode and PlayMode tests with:
