@@ -391,7 +391,7 @@ namespace Blockiverse.Persistence
                 return false;
             }
 
-            if (inventory.SlotCount <= 0)
+            if (inventory.SlotCount <= 0 || inventory.SlotCount > Inventory.MaxSlotCount)
             {
                 error = "player inventory slot count is invalid";
                 return false;

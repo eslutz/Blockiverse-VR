@@ -211,6 +211,44 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void OversizedInventorySlotCountReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+
+            try
+            {
+                var data = new WorldSaveData
+                {
+                    SchemaVersion = WorldSaveService.CurrentSchemaVersion,
+                    WorldName = "oversized-inventory",
+                    Width = 4,
+                    Height = 4,
+                    Depth = 4,
+                    ChunkSize = 16,
+                    Seed = 1,
+                    ChangedBlocks = new SavedBlockDelta[0],
+                    PlayerInventory = new SavedPlayerInventory
+                    {
+                        SlotCount = 1_000_000,
+                        HotbarSlotCount = 1,
+                        SelectedHotbarSlotIndex = 0,
+                        Slots = new SavedInventorySlot[0]
+                    }
+                };
+                File.WriteAllText(path, JsonUtility.ToJson(data, prettyPrint: true));
+
+                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("slot count"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void OldSchemaMigratesToCurrentSchema()
         {
             string path = CreateTempSavePath();
