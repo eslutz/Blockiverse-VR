@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Documented repository tooling guidance for Unity MCP, global `hzdb` CLI Quest-device validation, unstable MCP server isolation, and generated validation artifacts.
 - Added the M3 survival crafting model with default recipe definitions, workbench-gated validation, and inventory-backed crafting tests.
 - Added the M3 Meta XR Simulator, Horizon Debug Bridge, Unity MCP, and Meta XR Unity MCP Extension validation workflow documentation.
 - Documented the requirement to use Meta Horizon avatars for multiplayer players while keeping NPCs and mobs as original blocky voxel characters.
