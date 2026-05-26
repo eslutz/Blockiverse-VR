@@ -271,6 +271,7 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(activeSceneBridgeCount, Is.EqualTo(1));
             Assert.That(manager.World, Is.Not.Null);
             Assert.That(manager.World.Bounds.Width, Is.GreaterThan(0));
+            Assert.That(renderer.TextureSource, Is.EqualTo(BlockTextureSource.AuthoredAtlas));
             Assert.That(renderer.Stats.ChunkCount, Is.GreaterThan(0));
             Assert.That(renderer.Stats.TriangleCount, Is.GreaterThan(0));
             Assert.That(chunkFilters, Has.Length.GreaterThan(0));

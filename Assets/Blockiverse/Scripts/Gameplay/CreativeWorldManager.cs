@@ -22,6 +22,7 @@ namespace Blockiverse.Gameplay
     public sealed class CreativeWorldManager : MonoBehaviour
     {
         [SerializeField] Material chunkMaterial;
+        [SerializeField] bool allowProceduralBlockAtlasFallback = true;
         [SerializeField] int interactionLayer = -1;
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeHotbar hotbar;
@@ -36,9 +37,11 @@ namespace Blockiverse.Gameplay
             int layer,
             CreativeInteractionController controller = null,
             CreativeHotbar creativeHotbar = null,
-            PlacementPreview preview = null)
+            PlacementPreview preview = null,
+            bool allowProceduralFallback = true)
         {
             chunkMaterial = material;
+            allowProceduralBlockAtlasFallback = allowProceduralFallback;
             interactionLayer = layer;
             interactionController = controller;
             hotbar = creativeHotbar;
@@ -57,7 +60,12 @@ namespace Blockiverse.Gameplay
             if (Renderer == null)
                 Renderer = gameObject.AddComponent<VoxelWorldRenderer>();
 
-            Renderer.Configure(World, Registry, chunkMaterial != null ? chunkMaterial : CreateFallbackMaterial(), interactionLayer);
+            Renderer.Configure(
+                World,
+                Registry,
+                chunkMaterial != null ? chunkMaterial : CreateFallbackMaterial(),
+                interactionLayer,
+                allowProceduralBlockAtlasFallback);
 
             if (interactionController != null)
             {

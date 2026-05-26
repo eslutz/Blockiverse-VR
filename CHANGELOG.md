@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added committed M4 block textures, item icons, UI sprites, texture import metadata, authored-atlas renderer integration, and asset validation coverage.
 - Created the M4 Art and Texture Assets milestone in the roadmap for authored block textures, renderer integration, procedural fallback behavior, provenance, and Quest visual validation.
 - Moved early block art/readability work into M4 Art and Texture Assets and documented generated terrain as the default creative validation world.
 - Added an original procedural block texture atlas for renderable blocks so headset validation can visually distinguish terrain, resource, crafting, storage, and lighting blocks.

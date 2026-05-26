@@ -5,11 +5,31 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
+    public enum BlockTextureSource
+    {
+        None,
+        AuthoredAtlas,
+        ProceduralFallback
+    }
+
+    public readonly struct BlockVisualMaterialResult
+    {
+        public BlockVisualMaterialResult(Material material, BlockTextureSource source)
+        {
+            Material = material;
+            Source = source;
+        }
+
+        public Material Material { get; }
+        public BlockTextureSource Source { get; }
+    }
+
     public static class BlockVisualAtlas
     {
         public const int Columns = 4;
         public const int Rows = 4;
         public const int TilePixels = 16;
+        public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
 
         const float UvInset = 0.001f;
 
@@ -66,28 +86,7 @@ namespace Blockiverse.Gameplay
 
         public static Material CreateMaterial(Material sourceMaterial)
         {
-            Shader shader = sourceMaterial != null
-                ? sourceMaterial.shader
-                : Shader.Find("Universal Render Pipeline/Lit") ??
-                  Shader.Find("Standard") ??
-                  Shader.Find("Sprites/Default");
-
-            Material material = sourceMaterial != null ? new Material(sourceMaterial) : new Material(shader);
-            material.name = "Blockiverse Generated Block Atlas Material";
-            Texture2D texture = CreateTexture();
-
-            if (material.HasProperty("_BaseMap"))
-                material.SetTexture("_BaseMap", texture);
-
-            if (material.HasProperty("_MainTex"))
-                material.SetTexture("_MainTex", texture);
-
-            if (material.HasProperty("_BaseColor"))
-                material.SetColor("_BaseColor", Color.white);
-            else if (material.HasProperty("_Color"))
-                material.SetColor("_Color", Color.white);
-
-            return material;
+            return CreateMaterial(sourceMaterial, allowProceduralFallback: true).Material;
         }
 
         static TilePaint GetPaint(BlockId blockId)
@@ -98,6 +97,60 @@ namespace Blockiverse.Gameplay
             throw new ArgumentException($"No visual atlas tile is registered for block ID {blockId}.", nameof(blockId));
         }
 
+        public static bool HasAuthoredTile(BlockId blockId)
+        {
+            return PaintByBlockId.ContainsKey(blockId.Value);
+        }
+
+        public static bool TryGetBaseTexture(Material material, out Texture texture)
+        {
+            texture = null;
+
+            if (material == null)
+                return false;
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                texture = material.GetTexture("_BaseMap");
+
+                if (texture != null)
+                    return true;
+            }
+
+            if (material.HasProperty("_MainTex"))
+            {
+                texture = material.GetTexture("_MainTex");
+                return texture != null;
+            }
+
+            return false;
+        }
+
+        public static BlockVisualMaterialResult CreateMaterial(Material sourceMaterial, bool allowProceduralFallback)
+        {
+            Material material = CreateBaseMaterial(sourceMaterial);
+
+            if (TryGetBaseTexture(material, out _))
+            {
+                material.name = "Blockiverse Authored Block Atlas Material";
+                SetBaseColor(material, Color.white);
+                return new BlockVisualMaterialResult(material, BlockTextureSource.AuthoredAtlas);
+            }
+
+            if (!allowProceduralFallback)
+                throw new InvalidOperationException(
+                    $"Authored block atlas is missing from the source material. Assign {AuthoredAtlasPath} or explicitly allow the procedural fallback.");
+
+            Debug.LogWarning(
+                $"Blockiverse authored block atlas is missing; using procedural development/test fallback atlas. Expected authored atlas path: {AuthoredAtlasPath}");
+
+            Texture2D texture = CreateTexture();
+            SetBaseTexture(material, texture);
+            SetBaseColor(material, Color.white);
+            material.name = "Blockiverse Generated Block Atlas Material";
+            return new BlockVisualMaterialResult(material, BlockTextureSource.ProceduralFallback);
+        }
+
         static void Fill(Texture2D texture, Color color)
         {
             for (int y = 0; y < texture.height; y++)
@@ -105,6 +158,34 @@ namespace Blockiverse.Gameplay
                 for (int x = 0; x < texture.width; x++)
                     texture.SetPixel(x, y, color);
             }
+        }
+
+        static Material CreateBaseMaterial(Material sourceMaterial)
+        {
+            Shader shader = sourceMaterial != null
+                ? sourceMaterial.shader
+                : Shader.Find("Universal Render Pipeline/Lit") ??
+                  Shader.Find("Standard") ??
+                  Shader.Find("Sprites/Default");
+
+            return sourceMaterial != null ? new Material(sourceMaterial) : new Material(shader);
+        }
+
+        static void SetBaseTexture(Material material, Texture texture)
+        {
+            if (material.HasProperty("_BaseMap"))
+                material.SetTexture("_BaseMap", texture);
+
+            if (material.HasProperty("_MainTex"))
+                material.SetTexture("_MainTex", texture);
+        }
+
+        static void SetBaseColor(Material material, Color color)
+        {
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", color);
+            else if (material.HasProperty("_Color"))
+                material.SetColor("_Color", color);
         }
 
         static void PaintTile(Texture2D texture, TilePaint paint)
