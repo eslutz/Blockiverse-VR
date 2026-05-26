@@ -164,6 +164,7 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             Assert.Throws<ArgumentOutOfRangeException>(() => new ItemStack(ItemId.Timber, 0));
             Assert.Throws<ArgumentException>(() => new ItemStack(ItemId.None, 1));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new Inventory(ItemRegistry.CreateDefault(), Inventory.MaxSlotCount + 1, hotbarSlotCount: 1));
             Assert.Throws<ArgumentOutOfRangeException>(() => inventory.Remove(ItemId.Timber, 0));
             Assert.Throws<KeyNotFoundException>(() => inventory.Add(new ItemStack((ItemId)999, 1)));
             Assert.Throws<InvalidOperationException>(() => inventory.SetSlot(0, new ItemStack(ItemId.Pick, 2)));

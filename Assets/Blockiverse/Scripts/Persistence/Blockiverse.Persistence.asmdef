@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.Persistence",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Survival",
     "Blockiverse.Voxel"
   ],
   "includePlatforms": [],

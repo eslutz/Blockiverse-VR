@@ -6,14 +6,15 @@ namespace Blockiverse.Survival
     {
         public const int DefaultSlotCount = 24;
         public const int DefaultHotbarSlotCount = 6;
+        public const int MaxSlotCount = 128;
 
         readonly ItemRegistry registry;
         readonly ItemStack[] slots;
 
         public Inventory(ItemRegistry registry = null, int slotCount = DefaultSlotCount, int hotbarSlotCount = DefaultHotbarSlotCount)
         {
-            if (slotCount <= 0)
-                throw new ArgumentOutOfRangeException(nameof(slotCount), "Inventory must have at least one slot.");
+            if (slotCount <= 0 || slotCount > MaxSlotCount)
+                throw new ArgumentOutOfRangeException(nameof(slotCount), $"Inventory must have between 1 and {MaxSlotCount} slots.");
 
             if (hotbarSlotCount < 0 || hotbarSlotCount > slotCount)
                 throw new ArgumentOutOfRangeException(nameof(hotbarSlotCount), "Hotbar slots must fit inside the inventory.");

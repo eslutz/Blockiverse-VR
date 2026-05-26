@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added M3 player inventory persistence to the world save schema with version migration and validation.
+- Added M3 survival resource harvesting rules for block drops, basic tool effectiveness, and explicit resource scarcity tuning.
+- Added M3 survival UI binders for inventory slots, crafting recipes/actions, and player health state.
 - Documented repository tooling guidance for Unity MCP, global `hzdb` CLI Quest-device validation, unstable MCP server isolation, and generated validation artifacts.
 - Added the M3 survival crafting model with default recipe definitions, workbench-gated validation, and inventory-backed crafting tests.
 - Added the M3 Meta XR Simulator, Horizon Debug Bridge, Unity MCP, and Meta XR Unity MCP Extension validation workflow documentation.

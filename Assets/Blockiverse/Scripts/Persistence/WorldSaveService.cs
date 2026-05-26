@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -16,6 +17,23 @@ namespace Blockiverse.Persistence
     }
 
     [Serializable]
+    public sealed class SavedInventorySlot
+    {
+        public int SlotIndex;
+        public int ItemId;
+        public int Count;
+    }
+
+    [Serializable]
+    public sealed class SavedPlayerInventory
+    {
+        public int SlotCount;
+        public int HotbarSlotCount;
+        public int SelectedHotbarSlotIndex;
+        public SavedInventorySlot[] Slots;
+    }
+
+    [Serializable]
     public sealed class WorldSaveData
     {
         public int SchemaVersion;
@@ -26,6 +44,7 @@ namespace Blockiverse.Persistence
         public int ChunkSize;
         public int Seed;
         public SavedBlockDelta[] ChangedBlocks;
+        public SavedPlayerInventory PlayerInventory;
     }
 
     public sealed class WorldLoadResult
@@ -67,6 +86,20 @@ namespace Blockiverse.Persistence
             }
 
             world.ClearChangedBlocks();
+        }
+
+        public Inventory CreateInventory(ItemRegistry itemRegistry = null)
+        {
+            if (!Success)
+                throw new InvalidOperationException("Cannot create an inventory from a failed save load result.");
+
+            SavedPlayerInventory savedInventory = Data.PlayerInventory ?? WorldSaveService.CreateEmptyInventoryData();
+            var inventory = new Inventory(itemRegistry, savedInventory.SlotCount, savedInventory.HotbarSlotCount);
+
+            foreach (SavedInventorySlot slot in savedInventory.Slots ?? Array.Empty<SavedInventorySlot>())
+                inventory.SetSlot(slot.SlotIndex, new ItemStack((ItemId)slot.ItemId, slot.Count));
+
+            return inventory;
         }
     }
 
@@ -118,22 +151,31 @@ namespace Blockiverse.Persistence
     public sealed class WorldSaveService
     {
         readonly WorldSaveMigrationRegistry migrationRegistry;
+        readonly ItemRegistry itemRegistry;
 
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
-        public WorldSaveService(WorldSaveMigrationRegistry migrations)
+        public WorldSaveService(WorldSaveMigrationRegistry migrations, ItemRegistry items = null)
         {
             migrationRegistry = migrations ?? throw new ArgumentNullException(nameof(migrations));
+            itemRegistry = items ?? ItemRegistry.CreateDefault();
         }
 
         public void Save(string path, string worldName, VoxelWorld world)
         {
+            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0);
+        }
+
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0)
+        {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
+            if (inventory == null)
+                throw new ArgumentNullException(nameof(inventory));
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Save path must be non-empty.", nameof(path));
 
-            WorldSaveData data = CreateSaveData(worldName, world);
+            WorldSaveData data = CreateSaveData(worldName, world, inventory, selectedHotbarSlotIndex);
             string directory = Path.GetDirectoryName(path);
 
             if (!string.IsNullOrEmpty(directory))
@@ -158,8 +200,10 @@ namespace Blockiverse.Persistence
 
                 WorldSaveData data = JsonUtility.FromJson<WorldSaveData>(json);
 
-                if (!IsValid(data, out string validationError))
+                if (!IsValid(data, validateInventory: false, out string validationError))
                     return WorldLoadResult.Failed($"World save is corrupt: {validationError}");
+
+                data = ApplyBuiltInMigrations(data);
 
                 if (data.SchemaVersion != CurrentSchemaVersion &&
                     !migrationRegistry.TryMigrateToCurrent(data, CurrentSchemaVersion, out data, out string migrationError))
@@ -167,7 +211,10 @@ namespace Blockiverse.Persistence
                     return WorldLoadResult.Failed(migrationError);
                 }
 
-                if (!IsValid(data, out validationError))
+                data = ApplyBuiltInMigrations(data);
+                EnsurePlayerInventoryDefaults(data);
+
+                if (!IsValid(data, validateInventory: true, out validationError))
                     return WorldLoadResult.Failed($"World save is corrupt: {validationError}");
 
                 return WorldLoadResult.Loaded(data);
@@ -178,7 +225,7 @@ namespace Blockiverse.Persistence
             }
         }
 
-        static WorldSaveData CreateSaveData(string worldName, VoxelWorld world)
+        WorldSaveData CreateSaveData(string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex)
         {
             var deltas = new List<SavedBlockDelta>();
 
@@ -202,11 +249,86 @@ namespace Blockiverse.Persistence
                 Depth = world.Bounds.Depth,
                 ChunkSize = world.ChunkSize,
                 Seed = world.Seed,
-                ChangedBlocks = deltas.ToArray()
+                ChangedBlocks = deltas.ToArray(),
+                PlayerInventory = CreateSavedInventory(inventory, selectedHotbarSlotIndex)
             };
         }
 
-        static bool IsValid(WorldSaveData data, out string error)
+        SavedPlayerInventory CreateSavedInventory(Inventory inventory, int selectedHotbarSlotIndex)
+        {
+            if (!IsValidSelectedHotbarSlotIndex(selectedHotbarSlotIndex, inventory.HotbarSlotCount))
+                throw new ArgumentOutOfRangeException(nameof(selectedHotbarSlotIndex), "Selected hotbar slot must fit inside the inventory hotbar.");
+
+            var slots = new List<SavedInventorySlot>();
+            for (int i = 0; i < inventory.SlotCount; i++)
+            {
+                ItemStack stack = inventory.GetSlot(i);
+                if (stack.IsEmpty)
+                    continue;
+
+                if (!itemRegistry.TryGet(stack.ItemId, out ItemDefinition definition))
+                    throw new InvalidOperationException($"Inventory item is not registered: {stack.ItemId}.");
+
+                if (stack.Count > definition.MaxStackSize)
+                    throw new InvalidOperationException($"Inventory stack count {stack.Count} exceeds max stack size {definition.MaxStackSize} for {stack.ItemId}.");
+
+                slots.Add(new SavedInventorySlot
+                {
+                    SlotIndex = i,
+                    ItemId = (int)stack.ItemId,
+                    Count = stack.Count
+                });
+            }
+
+            return new SavedPlayerInventory
+            {
+                SlotCount = inventory.SlotCount,
+                HotbarSlotCount = inventory.HotbarSlotCount,
+                SelectedHotbarSlotIndex = selectedHotbarSlotIndex,
+                Slots = slots.ToArray()
+            };
+        }
+
+        static WorldSaveData ApplyBuiltInMigrations(WorldSaveData data)
+        {
+            if (data != null && data.SchemaVersion == 1)
+            {
+                data.SchemaVersion = CurrentSchemaVersion;
+                data.PlayerInventory = CreateEmptyInventoryData();
+            }
+
+            return data;
+        }
+
+        static void EnsurePlayerInventoryDefaults(WorldSaveData data)
+        {
+            if (data.PlayerInventory == null || IsMissingInventoryData(data.PlayerInventory))
+                data.PlayerInventory = CreateEmptyInventoryData();
+
+            if (data.PlayerInventory.Slots == null)
+                data.PlayerInventory.Slots = Array.Empty<SavedInventorySlot>();
+        }
+
+        static bool IsMissingInventoryData(SavedPlayerInventory inventory)
+        {
+            return inventory.SlotCount == 0 &&
+                   inventory.HotbarSlotCount == 0 &&
+                   inventory.SelectedHotbarSlotIndex == 0 &&
+                   (inventory.Slots == null || inventory.Slots.Length == 0);
+        }
+
+        internal static SavedPlayerInventory CreateEmptyInventoryData()
+        {
+            return new SavedPlayerInventory
+            {
+                SlotCount = Inventory.DefaultSlotCount,
+                HotbarSlotCount = Inventory.DefaultHotbarSlotCount,
+                SelectedHotbarSlotIndex = 0,
+                Slots = Array.Empty<SavedInventorySlot>()
+            };
+        }
+
+        bool IsValid(WorldSaveData data, bool validateInventory, out string error)
         {
             if (data == null)
             {
@@ -254,8 +376,93 @@ namespace Blockiverse.Persistence
                 }
             }
 
+            if (validateInventory && !IsValidInventory(data.PlayerInventory, out error))
+                return false;
+
             error = string.Empty;
             return true;
+        }
+
+        bool IsValidInventory(SavedPlayerInventory inventory, out string error)
+        {
+            if (inventory == null)
+            {
+                error = "missing player inventory";
+                return false;
+            }
+
+            if (inventory.SlotCount <= 0 || inventory.SlotCount > Inventory.MaxSlotCount)
+            {
+                error = "player inventory slot count is invalid";
+                return false;
+            }
+
+            if (inventory.HotbarSlotCount < 0 || inventory.HotbarSlotCount > inventory.SlotCount)
+            {
+                error = "player inventory hotbar count is invalid";
+                return false;
+            }
+
+            if (!IsValidSelectedHotbarSlotIndex(inventory.SelectedHotbarSlotIndex, inventory.HotbarSlotCount))
+            {
+                error = "player inventory selected hotbar slot is invalid";
+                return false;
+            }
+
+            if (inventory.Slots == null)
+                inventory.Slots = Array.Empty<SavedInventorySlot>();
+
+            var occupiedSlots = new HashSet<int>();
+            foreach (SavedInventorySlot slot in inventory.Slots)
+            {
+                if (slot == null)
+                {
+                    error = "missing player inventory slot";
+                    return false;
+                }
+
+                if (slot.SlotIndex < 0 || slot.SlotIndex >= inventory.SlotCount)
+                {
+                    error = "player inventory slot index is outside inventory bounds";
+                    return false;
+                }
+
+                if (!occupiedSlots.Add(slot.SlotIndex))
+                {
+                    error = "player inventory has duplicate slot indexes";
+                    return false;
+                }
+
+                if (slot.Count <= 0)
+                {
+                    error = "player inventory stack count is invalid";
+                    return false;
+                }
+
+                ItemId itemId = (ItemId)slot.ItemId;
+                if (itemId == ItemId.None || !itemRegistry.TryGet(itemId, out ItemDefinition definition))
+                {
+                    error = "player inventory item id is invalid";
+                    return false;
+                }
+
+                if (slot.Count > definition.MaxStackSize)
+                {
+                    error = "player inventory stack count exceeds item max stack size";
+                    return false;
+                }
+            }
+
+            error = string.Empty;
+            return true;
+        }
+
+        static bool IsValidSelectedHotbarSlotIndex(int selectedHotbarSlotIndex, int hotbarSlotCount)
+        {
+            if (hotbarSlotCount == 0)
+                return selectedHotbarSlotIndex == 0;
+
+            return selectedHotbarSlotIndex >= 0 && selectedHotbarSlotIndex < hotbarSlotCount;
         }
 
         static void ReplaceWithTempFile(string tempPath, string path)
