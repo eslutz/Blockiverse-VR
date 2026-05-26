@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Survival",
     "Blockiverse.Voxel",
+    "Blockiverse.WorldGen",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
   ],

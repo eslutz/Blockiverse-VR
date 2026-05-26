@@ -11,11 +11,13 @@ namespace Blockiverse.WorldGen
 
         readonly BlockRegistry registry;
         readonly WorldGenerationSettings settings;
+        readonly SurvivalResourceTuning resourceTuning;
 
-        public SurvivalLiteWorldPreset(BlockRegistry registry, WorldGenerationSettings settings)
+        public SurvivalLiteWorldPreset(BlockRegistry registry, WorldGenerationSettings settings, SurvivalResourceTuning resourceTuning = null)
         {
             this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.resourceTuning = resourceTuning ?? SurvivalResourceTuning.CreateDefault();
         }
 
         public VoxelWorld Generate()
@@ -52,9 +54,9 @@ namespace Blockiverse.WorldGen
             registry.Get(BlockRegistry.MeadowTurf);
             registry.Get(BlockRegistry.Loam);
             registry.Get(BlockRegistry.Slate);
-            registry.Get(BlockRegistry.Coalstone);
-            registry.Get(BlockRegistry.Copperstone);
-            registry.Get(BlockRegistry.Ironstone);
+
+            foreach (ResourceVeinTuning vein in resourceTuning.ResourceVeins)
+                registry.Get(vein.ResourceBlock);
         }
 
         int[] BuildSurfaceHeights()
@@ -238,9 +240,19 @@ namespace Blockiverse.WorldGen
 
         void PlaceResourceVeins(VoxelWorld world, int[] surfaceHeights)
         {
-            PlaceResourceVeins(world, surfaceHeights, BlockRegistry.Coalstone, salt: 701, minY: 6, maxY: 46, chancePermille: 270, radius: 2, verticalRadius: 2);
-            PlaceResourceVeins(world, surfaceHeights, BlockRegistry.Copperstone, salt: 809, minY: 5, maxY: 36, chancePermille: 145, radius: 2, verticalRadius: 1);
-            PlaceResourceVeins(world, surfaceHeights, BlockRegistry.Ironstone, salt: 907, minY: 3, maxY: 26, chancePermille: 80, radius: 2, verticalRadius: 1);
+            foreach (ResourceVeinTuning vein in resourceTuning.ResourceVeins)
+            {
+                PlaceResourceVeins(
+                    world,
+                    surfaceHeights,
+                    vein.ResourceBlock,
+                    vein.Salt,
+                    vein.MinY,
+                    vein.MaxY,
+                    vein.ChancePermille,
+                    vein.Radius,
+                    vein.VerticalRadius);
+            }
         }
 
         void PlaceResourceVeins(
