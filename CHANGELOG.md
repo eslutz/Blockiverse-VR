@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 ## Unreleased
 
 - Added a Boot-scene survival HUD that binds inventory, crafting, and health panels to runtime M3 survival state for simulator/headset validation.
+- Added the matching Meta XR Interaction SDK package and removed committed Unity MCP/AI Assistant editor packages from the clean validation baseline to eliminate non-gameplay Unity package warnings.
 - Added committed M4 block textures, item icons, UI sprites, texture import metadata, authored-atlas renderer integration, and asset validation coverage.
 - Removed the runtime procedural block-atlas fallback so missing or unrelated block textures fail validation instead of silently rendering incorrect visuals.
 - Created the M4 Art and Texture Assets milestone in the roadmap for authored block textures, renderer integration, provenance, and Quest visual validation.
