@@ -350,10 +350,10 @@ Create fields:
 ```text
 Status: Backlog, Ready, In Progress, In Review, Blocked, Done
 Type: Epic, Feature, Story, Task, Bug, Tech Debt, Spike
-Phase: 0-17
+Phase: 0-20
 Priority: P0, P1, P2, P3
 Area: Repo, Engine, VR, Voxel, Terrain, Creative, Survival, Multiplayer, Art, Audio, UI, CI/CD, Store, QA
-Milestone: M0 Bootstrap, M1 VR Slice, M2 Creative, M3 Survival-Lite, M4 Multiplayer, M5 Store Candidate, M6 Full Survival
+Milestone: M0 Bootstrap, M1 VR Slice, M2 Creative, M3 Survival-Lite, M4 Art and Texture Assets, M5 Multiplayer, M6 Store Candidate, M7 Full Survival
 Risk: Low, Medium, High
 Target Release: Prototype, Alpha, Beta, RC, Store
 Effort: XS, S, M, L, XL
@@ -423,9 +423,10 @@ Dependencies
 | M1 VR Slice | Player can stand in VR, move, point, select, and interact | Quest 3/3S vertical slice |
 | M2 Creative | Bounded voxel world, break/place blocks, save/load | Playable creative prototype |
 | M3 Survival-Lite | Terrain, caves, resources, inventory, crafting, health | Solo survival-lite loop |
-| M4 Multiplayer | Early readable block visuals, generated creative validation terrain, and two-player join/edit foundation | Father/daughter co-op on a visually distinguishable world |
-| M5 Store Candidate | Performance, privacy, signing, release channels, metadata | Meta submission candidate |
-| M6 Full Survival Later | Original voxel NPCs/mobs, day/night, hostile encounters, progression | Later expansion |
+| M4 Art and Texture Assets | Authored art/texture assets, renderer integration, fallback behavior, provenance, and Quest visual validation | Visually readable world using original committed assets |
+| M5 Multiplayer | Two-player join/edit foundation | Father/daughter co-op |
+| M6 Store Candidate | Performance, privacy, signing, release channels, metadata | Meta submission candidate |
+| M7 Full Survival | Original voxel NPCs/mobs, day/night, hostile encounters, progression | Later expansion |
 
 ---
 
@@ -962,19 +963,22 @@ No full survival mobs or day/night are included yet.
 
 ### Deliverable
 
-The current headset validation build renders generated terrain with distinct original block visuals before multiplayer work begins.
+The current headset validation build renders generated terrain with distinct original block visuals before multiplayer work begins, then the M4 Art and Texture Assets milestone replaces validation-only runtime visuals with committed authored texture assets and an explicit fallback path.
 
 ### Scope
 
-This is a moved-up subset of EPIC-12 so in-headset validation is not blocked by flat terrain or indistinguishable placeholder blocks.
+This is a moved-up art subset of EPIC-12 so in-headset validation is not blocked by flat terrain or indistinguishable placeholder blocks.
 
 ```text
 Generated survival-lite terrain remains the default validation world.
 Creative editing still works against generated terrain.
 Renderable block types use distinct original visual treatments.
+Committed authored texture assets become the default rendering source once created.
+The runtime-generated atlas remains only as a development/test fallback.
 The first block visual pass is documented in the art direction and provenance logs.
 The implementation must not use copied Minecraft textures, names, prompts, or references.
-Full item icons, UI panel art, audio, haptics, and final polish remain later EPIC-12 work.
+Audio and haptics remain later EPIC-12 art/audio/UI polish work.
+Store screenshots and final store polish remain EPIC-14/M6 Store Candidate work.
 ```
 
 ### Tests
@@ -1143,7 +1147,7 @@ Crafting does not duplicate or lose items under normal latency.
 
 The moved-up block readability pass expands into a coherent voxel art, item, UI, audio, and haptics style.
 
-The first block visual pass now begins in Phase 10.5/M4 for validation readability. Phase 14 remains responsible for final production-ready art, item icons, UI panels, audio, haptics, store-facing polish, and any replacement of procedural validation textures with reviewed final assets.
+The first block visual pass now begins in the M4 Art and Texture Assets milestone for validation readability. That milestone is responsible for committed original block texture assets, renderer integration, explicit procedural fallback behavior, provenance, asset validation, and Quest headset visual validation. Phase 14 remains responsible for broader production-ready item icons, UI panels, audio, haptics, store-facing polish, and any later replacement or refinement of reviewed assets.
 
 ### Art direction
 
@@ -1169,6 +1173,8 @@ Assets/Blockiverse/Art/Sprites/UI/
 Assets/Blockiverse/Audio/SFX/
 Assets/Blockiverse/Materials/
 ```
+
+The runtime-generated `BlockVisualAtlas` is a validation fallback only. Production-facing development builds should load committed authored texture assets first, and fallback use must be explicit, logged or test-visible, and blocked or accepted before store-candidate builds.
 
 ### Generated asset rules
 
@@ -1226,6 +1232,8 @@ Editor test: all block textures are expected dimensions.
 Editor test: all BlockDefinitions reference valid texture atlas entries.
 Editor test: no missing materials.
 Editor test: no forbidden asset names or Minecraft references.
+Editor test: authored texture assets are selected before the procedural fallback.
+Editor test: fallback behavior is covered when authored assets are unavailable.
 PlayMode: all registered blocks render with non-placeholder textures.
 ```
 
@@ -1682,7 +1690,7 @@ FEATURE: Create public repo and baseline docs
 FEATURE: Configure GitHub Project
   STORY: Create Roadmap project
   STORY: Add fields: Phase, Priority, Area, Risk, Target Release, Effort
-  STORY: Add milestones M0-M6
+  STORY: Add milestones M0-M7
   STORY: Add labels for area/type/priority
   STORY: Add issue templates
 
@@ -1879,16 +1887,20 @@ FEATURE: Networked survival-lite
 
 ```text
 FEATURE: Art style guide
-  STORY: Define palette (moved-up M4 subset)
-  STORY: Define block texture rules (moved-up M4 subset)
-  STORY: Define naming rules
-  STORY: Add AI/procedural asset provenance log (moved-up M4 subset)
+  STORY: Define palette (M4)
+  STORY: Define block texture rules (M4)
+  STORY: Define naming rules (M4)
+  STORY: Add AI/procedural asset provenance log (M4)
 
 FEATURE: First art pass
-  STORY: Generate original block textures (moved-up M4 subset)
-  STORY: Generate original item icons
-  STORY: Generate UI panels
-  STORY: Add asset validation tests (moved-up M4 subset for block visuals)
+  STORY: Generate original block textures (M4)
+  STORY: Generate original item icons (M4)
+  STORY: Generate UI panels (M4)
+  STORY: Add asset validation tests (M4)
+  STORY: Integrate authored block texture atlas (M4)
+  STORY: Keep procedural block atlas as fallback (M4)
+  STORY: Configure Quest texture import settings (M4)
+  STORY: Validate authored art assets in headset (M4)
 
 FEATURE: Audio/haptics
   STORY: Add break/place sounds
@@ -1966,7 +1978,7 @@ Build in this order:
 8. Procedural bounded terrain
 9. Inventory/crafting/resources
 10. Survival-lite health loop
-11. Early block visual differentiation and generated creative validation terrain
+11. M4 Art and Texture Assets, authored texture integration, fallback behavior, and generated creative validation terrain
 12. Multiplayer host/client movement
 13. Multiplayer block synchronization
 14. Multiplayer inventory/crafting sync
@@ -2026,11 +2038,22 @@ Health loop works.
 No mobs/day-night yet.
 ```
 
-## M4 Multiplayer
+## M4 Art and Texture Assets
 
 ```text
 Generated terrain is visible in the default validation world.
-Renderable blocks have distinct original visual treatments for headset validation.
+Committed original block texture assets exist with Unity .meta files.
+Renderable blocks use authored texture assets by default.
+Runtime-generated block atlas is limited to an explicit development/test fallback.
+Texture import settings are appropriate for Quest 3/3S validation.
+Asset provenance is recorded.
+Asset validation tests cover dimensions, mappings, missing materials, and fallback behavior.
+Quest headset validation confirms block readability and no magenta/missing-material surfaces.
+```
+
+## M5 Multiplayer
+
+```text
 Two Quest devices can connect.
 Players can see each other's Meta Horizon avatars.
 Players can edit the same world.
@@ -2038,7 +2061,7 @@ World edits stay synchronized.
 Basic multiplayer save/load works.
 ```
 
-## M5 Store Candidate
+## M6 Store Candidate
 
 ```text
 Signed release APK is built from a main tag.
@@ -2048,7 +2071,7 @@ Privacy/store metadata is ready.
 Submission package is complete.
 ```
 
-## M6 Full Survival Later
+## M7 Full Survival
 
 ```text
 Day/night exists.

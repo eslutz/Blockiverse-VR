@@ -6,7 +6,8 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
-- Moved early block art/readability work into M4 and documented generated terrain as the default creative validation world.
+- Created the M4 Art and Texture Assets milestone in the roadmap for authored block textures, renderer integration, procedural fallback behavior, provenance, and Quest visual validation.
+- Moved early block art/readability work into M4 Art and Texture Assets and documented generated terrain as the default creative validation world.
 - Added an original procedural block texture atlas for renderable blocks so headset validation can visually distinguish terrain, resource, crafting, storage, and lighting blocks.
 - Replaced the flat default creative validation world with generated survival-lite terrain while preserving creative break/place editing.
 - Added M3 player inventory persistence to the world save schema with version migration and validation.

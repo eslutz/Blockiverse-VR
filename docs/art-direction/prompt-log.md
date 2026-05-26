@@ -20,4 +20,4 @@ Each generated asset entry should include:
 - Prompt: Not applicable
 - Negative prompt or exclusions: No Minecraft names, textures, screenshots, logos, fonts, mobs, characters, item names, or protected visual references
 - Post-processing steps: Texture is generated at runtime as a point-filtered 4x4 atlas of 16x16 pixel tiles and assigned to the chunk rendering material
-- Reviewer notes: Moved up for M4 headset validation readability. Covers Meadow Turf, Loam, Slate, Timber, Leafmass, Clearstone, Coalstone, Copperstone, Ironstone, Workbench, Storage Crate, and Torchbud. This is a functional original validation pass and may be replaced by final authored textures later.
+- Reviewer notes: Moved up for M4 Art and Texture Assets headset validation readability. Covers Meadow Turf, Loam, Slate, Timber, Leafmass, Clearstone, Coalstone, Copperstone, Ironstone, Workbench, Storage Crate, and Torchbud. This is a functional original validation pass; committed authored texture assets should become the default rendering path, with this runtime atlas retained only as an explicit development/test fallback.

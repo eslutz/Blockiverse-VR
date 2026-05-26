@@ -44,6 +44,7 @@ The roadmap is managed through GitHub Projects and linked GitHub issues:
 - M1 VR Slice
 - M2 Creative
 - M3 Survival-Lite
-- M4 Multiplayer
-- M5 Store Candidate
-- M6 Full Survival
+- M4 Art and Texture Assets
+- M5 Multiplayer
+- M6 Store Candidate
+- M7 Full Survival
