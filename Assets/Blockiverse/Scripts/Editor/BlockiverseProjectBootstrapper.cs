@@ -54,16 +54,21 @@ namespace Blockiverse.Editor
 
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
+        const string SurvivalHudName = "Survival HUD";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionTestBlockName = "Interaction Test Block";
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
+        static readonly Vector2 SurvivalHudSize = new(720.0f, 420.0f);
         static readonly Color ComfortMenuPanelColor = new(0.07f, 0.08f, 0.09f, 0.92f);
         static readonly Color ComfortMenuControlColor = new(0.18f, 0.21f, 0.24f, 1.0f);
         static readonly Color ComfortMenuAccentColor = new(0.19f, 0.72f, 0.54f, 1.0f);
         static readonly Color BlockMenuPanelColor = new(0.05f, 0.12f, 0.16f, 0.94f);
         static readonly Color BlockMenuControlColor = new(0.18f, 0.31f, 0.36f, 1.0f);
         static readonly Color BlockMenuAccentColor = new(0.94f, 0.72f, 0.26f, 1.0f);
+        static readonly Color SurvivalHudPanelColor = new(0.06f, 0.08f, 0.10f, 0.90f);
+        static readonly Color SurvivalHudSectionColor = new(0.13f, 0.18f, 0.20f, 0.95f);
+        static readonly Color SurvivalHudAccentColor = new(0.21f, 0.75f, 0.57f, 1.0f);
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
         static readonly Color HighlightColor = new(1.0f, 0.85f, 0.18f, 1.0f);
         static readonly Color TestBlockColor = new(0.22f, 0.56f, 0.43f, 1.0f);
@@ -750,6 +755,7 @@ namespace Blockiverse.Editor
 
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             return rig;
         }
@@ -802,6 +808,7 @@ namespace Blockiverse.Editor
 
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
         }
 
@@ -1085,6 +1092,267 @@ namespace Blockiverse.Editor
 
             EditorUtility.SetDirty(menuObject);
             EditorUtility.SetDirty(menu);
+        }
+
+        static void EnsureXrRigSurvivalHud(GameObject rig)
+        {
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+
+            if (cameraOffset == null)
+                return;
+
+            GameObject hudObject = EnsureRectChild(cameraOffset, SurvivalHudName);
+            hudObject.transform.localPosition = new Vector3(0.0f, 1.38f, 1.15f);
+            hudObject.transform.localRotation = Quaternion.Euler(10.0f, 0.0f, 0.0f);
+            hudObject.transform.localScale = Vector3.one * 0.0016f;
+
+            RectTransform hudRect = hudObject.GetComponent<RectTransform>();
+            hudRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, SurvivalHudSize.x);
+            hudRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, SurvivalHudSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(hudObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 9;
+            canvas.enabled = true;
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(hudObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureComponent<GraphicRaycaster>(hudObject);
+
+            GameObject panelObject = EnsureRectChild(hudObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            panelImage.color = SurvivalHudPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "Survival",
+                34,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(24.0f, -24.0f),
+                new Vector2(280.0f, 48.0f));
+
+            SurvivalHealthPanel healthPanel = EnsureSurvivalHealthSection(panelObject.transform);
+            SurvivalInventoryPanel inventoryPanel = EnsureSurvivalInventorySection(panelObject.transform);
+            SurvivalCraftingPanel craftingPanel = EnsureSurvivalCraftingSection(panelObject.transform);
+
+            SurvivalHudController controller = EnsureComponent<SurvivalHudController>(hudObject);
+            controller.Configure(inventoryPanel, craftingPanel, healthPanel);
+
+            EditorUtility.SetDirty(hudObject);
+            EditorUtility.SetDirty(controller);
+        }
+
+        static SurvivalHealthPanel EnsureSurvivalHealthSection(Transform parent)
+        {
+            GameObject sectionObject = EnsureHudSection(parent, "Health", new Vector2(24.0f, -82.0f), new Vector2(206.0f, 150.0f));
+
+            EnsureLabel(
+                sectionObject.transform,
+                "Label",
+                "Health",
+                24,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -10.0f),
+                new Vector2(170.0f, 34.0f));
+
+            Text valueLabel = EnsureLabel(
+                sectionObject.transform,
+                "Value",
+                "100 / 100",
+                28,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -48.0f),
+                new Vector2(170.0f, 38.0f));
+
+            Slider slider = EnsureHudSlider(sectionObject.transform, "Health Slider", new Vector2(16.0f, -92.0f), new Vector2(170.0f, 20.0f));
+
+            Text stateLabel = EnsureLabel(
+                sectionObject.transform,
+                "State",
+                "Stable",
+                22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -116.0f),
+                new Vector2(170.0f, 28.0f));
+
+            SurvivalHealthPanel panel = EnsureComponent<SurvivalHealthPanel>(sectionObject);
+            panel.Configure(valueLabel, slider, stateLabel);
+            EditorUtility.SetDirty(panel);
+            return panel;
+        }
+
+        static SurvivalInventoryPanel EnsureSurvivalInventorySection(Transform parent)
+        {
+            GameObject sectionObject = EnsureHudSection(parent, "Inventory", new Vector2(250.0f, -82.0f), new Vector2(206.0f, 300.0f));
+
+            EnsureLabel(
+                sectionObject.transform,
+                "Label",
+                "Inventory",
+                24,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -10.0f),
+                new Vector2(170.0f, 34.0f));
+
+            Text selectedHotbarLabel = EnsureLabel(
+                sectionObject.transform,
+                "Selected Hotbar",
+                "Hotbar 1 / 8",
+                20,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -44.0f),
+                new Vector2(170.0f, 28.0f));
+
+            Text[] slotLabels = new Text[6];
+
+            for (int index = 0; index < slotLabels.Length; index++)
+            {
+                slotLabels[index] = EnsureLabel(
+                    sectionObject.transform,
+                    $"Slot {index + 1}",
+                    "Empty",
+                    18,
+                    TextAnchor.MiddleLeft,
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(16.0f, -82.0f - index * 34.0f),
+                    new Vector2(170.0f, 28.0f));
+            }
+
+            SurvivalInventoryPanel panel = EnsureComponent<SurvivalInventoryPanel>(sectionObject);
+            panel.Configure(slotLabels, selectedHotbarLabel);
+            EditorUtility.SetDirty(panel);
+            return panel;
+        }
+
+        static SurvivalCraftingPanel EnsureSurvivalCraftingSection(Transform parent)
+        {
+            GameObject sectionObject = EnsureHudSection(parent, "Crafting", new Vector2(480.0f, -82.0f), new Vector2(216.0f, 300.0f));
+
+            EnsureLabel(
+                sectionObject.transform,
+                "Label",
+                "Crafting",
+                24,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -10.0f),
+                new Vector2(180.0f, 34.0f));
+
+            Text statusLabel = EnsureLabel(
+                sectionObject.transform,
+                "Status",
+                "Ready",
+                20,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -44.0f),
+                new Vector2(180.0f, 28.0f));
+
+            Text[] recipeLabels = new Text[5];
+
+            for (int index = 0; index < recipeLabels.Length; index++)
+            {
+                recipeLabels[index] = EnsureLabel(
+                    sectionObject.transform,
+                    $"Recipe {index + 1}",
+                    string.Empty,
+                    15,
+                    TextAnchor.MiddleLeft,
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(16.0f, -82.0f - index * 40.0f),
+                    new Vector2(180.0f, 36.0f));
+            }
+
+            SurvivalCraftingPanel panel = EnsureComponent<SurvivalCraftingPanel>(sectionObject);
+            panel.Configure(recipeLabels, statusLabel);
+            EditorUtility.SetDirty(panel);
+            return panel;
+        }
+
+        static GameObject EnsureHudSection(Transform parent, string name, Vector2 anchoredPosition, Vector2 size)
+        {
+            GameObject sectionObject = EnsureRectChild(parent, name);
+            RectTransform sectionRect = sectionObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(sectionRect, anchoredPosition, size);
+            Image sectionImage = EnsureComponent<Image>(sectionObject);
+            sectionImage.color = SurvivalHudSectionColor;
+            return sectionObject;
+        }
+
+        static Slider EnsureHudSlider(Transform parent, string name, Vector2 anchoredPosition, Vector2 size)
+        {
+            GameObject sliderObject = EnsureRectChild(parent, name);
+            RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(sliderRect, anchoredPosition, size);
+
+            Slider slider = EnsureComponent<Slider>(sliderObject);
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = 0.0f;
+            slider.maxValue = 100.0f;
+            slider.value = 100.0f;
+
+            GameObject backgroundObject = EnsureRectChild(sliderObject.transform, "Background");
+            RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+            backgroundRect.anchorMin = Vector2.zero;
+            backgroundRect.anchorMax = Vector2.one;
+            backgroundRect.offsetMin = Vector2.zero;
+            backgroundRect.offsetMax = Vector2.zero;
+            Image background = EnsureComponent<Image>(backgroundObject);
+            background.color = ComfortMenuControlColor;
+
+            GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
+            RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
+            fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one;
+            fillAreaRect.offsetMin = Vector2.zero;
+            fillAreaRect.offsetMax = Vector2.zero;
+
+            GameObject fillObject = EnsureRectChild(fillAreaObject.transform, "Fill");
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.offsetMin = Vector2.zero;
+            fillRect.offsetMax = Vector2.zero;
+            Image fill = EnsureComponent<Image>(fillObject);
+            fill.color = SurvivalHudAccentColor;
+
+            slider.fillRect = fillRect;
+            slider.targetGraphic = background;
+            return slider;
         }
 
         static void EnsureBlockMenuSwatch(
