@@ -66,11 +66,14 @@ namespace Blockiverse.Tests.PlayMode
 
             var worldObject = new GameObject("Creative World");
             var hotbarObject = new GameObject("Hotbar");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
 
             try
             {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
                 VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
-                renderer.Configure(world, registry, null, -1);
+                renderer.Configure(world, registry, blockMaterial, -1);
 
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
                 hotbar.Configure(registry, new[] { BlockRegistry.Loam }, null);
@@ -90,6 +93,8 @@ namespace Blockiverse.Tests.PlayMode
             {
                 Object.DestroyImmediate(worldObject);
                 Object.DestroyImmediate(hotbarObject);
+                Object.DestroyImmediate(blockMaterial);
+                Object.DestroyImmediate(atlasTexture);
             }
         }
 
@@ -174,6 +179,22 @@ namespace Blockiverse.Tests.PlayMode
             {
                 Object.DestroyImmediate(previewObject);
             }
+        }
+
+        static Material CreateBlockAtlasMaterial(out Texture2D atlasTexture)
+        {
+            atlasTexture = new Texture2D(
+                BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels,
+                BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels,
+                TextureFormat.RGBA32,
+                mipChain: false)
+            {
+                name = BlockVisualAtlas.AuthoredAtlasName
+            };
+
+            Material material = new(Shader.Find("Sprites/Default"));
+            material.mainTexture = atlasTexture;
+            return material;
         }
     }
 }

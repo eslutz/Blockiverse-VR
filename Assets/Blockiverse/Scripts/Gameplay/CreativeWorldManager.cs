@@ -22,7 +22,6 @@ namespace Blockiverse.Gameplay
     public sealed class CreativeWorldManager : MonoBehaviour
     {
         [SerializeField] Material chunkMaterial;
-        [SerializeField] bool allowProceduralBlockAtlasFallback = true;
         [SerializeField] int interactionLayer = -1;
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeHotbar hotbar;
@@ -37,11 +36,9 @@ namespace Blockiverse.Gameplay
             int layer,
             CreativeInteractionController controller = null,
             CreativeHotbar creativeHotbar = null,
-            PlacementPreview preview = null,
-            bool allowProceduralFallback = true)
+            PlacementPreview preview = null)
         {
             chunkMaterial = material;
-            allowProceduralBlockAtlasFallback = allowProceduralFallback;
             interactionLayer = layer;
             interactionController = controller;
             hotbar = creativeHotbar;
@@ -63,9 +60,8 @@ namespace Blockiverse.Gameplay
             Renderer.Configure(
                 World,
                 Registry,
-                chunkMaterial != null ? chunkMaterial : CreateFallbackMaterial(),
-                interactionLayer,
-                allowProceduralBlockAtlasFallback);
+                chunkMaterial,
+                interactionLayer);
 
             if (interactionController != null)
             {
@@ -111,21 +107,6 @@ namespace Blockiverse.Gameplay
                 return;
 
             rigObject.transform.position = new Vector3(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
-        }
-
-        static Material CreateFallbackMaterial()
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ??
-                            Shader.Find("Standard") ??
-                            Shader.Find("Sprites/Default");
-            var material = new Material(shader);
-
-            if (material.HasProperty("_BaseColor"))
-                material.SetColor("_BaseColor", new Color(0.32f, 0.55f, 0.38f, 1.0f));
-            else
-                material.color = new Color(0.32f, 0.55f, 0.38f, 1.0f);
-
-            return material;
         }
 
         PlacementPreview CreatePlacementPreview()

@@ -166,7 +166,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeWorldManager
   chunkMaterial: {fileID: 2100000, guid: 4d5cd674d4ec742bfa27f01c9b1f16fe, type: 2}
-  allowProceduralBlockAtlasFallback: 1
   interactionLayer: 8
   interactionController: {fileID: 200000004}
   hotbar: {fileID: 1420024871}
@@ -183,7 +182,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df0c8c8e05f54c27995b3631d01d2508, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.VoxelWorldRenderer
-  allowProceduralBlockAtlasFallback: 1
 --- !u!114 &200000004
 MonoBehaviour:
   m_ObjectHideFlags: 0

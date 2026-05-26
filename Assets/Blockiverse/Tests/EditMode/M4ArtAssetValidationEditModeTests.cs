@@ -103,37 +103,60 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void AuthoredAtlasIsSelectedBeforeProceduralFallback()
+        public void AuthoredAtlasMaterialUsesExpectedTexture()
         {
             Material sourceMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.TestBlockMaterialPath);
 
-            BlockVisualMaterialResult result = BlockVisualAtlas.CreateMaterial(sourceMaterial, allowProceduralFallback: false);
+            Material material = BlockVisualAtlas.CreateMaterial(sourceMaterial);
 
-            Assert.That(result.Source, Is.EqualTo(BlockTextureSource.AuthoredAtlas));
-            Assert.That(result.Material, Is.Not.Null);
-            Assert.That(BlockVisualAtlas.TryGetBaseTexture(result.Material, out Texture texture), Is.True);
+            Assert.That(material, Is.Not.Null);
+            Assert.That(BlockVisualAtlas.TryGetBaseTexture(material, out Texture texture), Is.True);
             Assert.That(texture, Is.SameAs(AssetDatabase.LoadAssetAtPath<Texture2D>(BlockVisualAtlas.AuthoredAtlasPath)));
+            Assert.That(BlockVisualAtlas.IsAuthoredAtlasTexture(texture), Is.True);
         }
 
         [Test]
-        public void ProceduralFallbackRequiresExplicitPermission()
+        public void MissingAuthoredAtlasFailsFast()
         {
             Material sourceMaterial = new(Shader.Find("Sprites/Default"));
 
             try
             {
-                Assert.Throws<InvalidOperationException>(() => BlockVisualAtlas.CreateMaterial(sourceMaterial, allowProceduralFallback: false));
-
-                BlockVisualMaterialResult result = BlockVisualAtlas.CreateMaterial(sourceMaterial, allowProceduralFallback: true);
-
-                Assert.That(result.Source, Is.EqualTo(BlockTextureSource.ProceduralFallback));
-                Assert.That(result.Material, Is.Not.Null);
-                Assert.That(BlockVisualAtlas.TryGetBaseTexture(result.Material, out Texture texture), Is.True);
-                Assert.That(texture.name, Does.Contain("Generated Block Atlas"));
+                InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => BlockVisualAtlas.CreateMaterial(sourceMaterial));
+                Assert.That(exception.Message, Does.Contain(BlockVisualAtlas.AuthoredAtlasPath));
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(sourceMaterial);
+            }
+        }
+
+        [Test]
+        public void UnrelatedTextureIsRejectedAsAuthoredAtlas()
+        {
+            Material sourceMaterial = new(Shader.Find("Sprites/Default"));
+            Texture2D unrelatedTexture = new(
+                BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels,
+                BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels,
+                TextureFormat.RGBA32,
+                mipChain: false)
+            {
+                name = "unrelated_texture"
+            };
+
+            try
+            {
+                sourceMaterial.mainTexture = unrelatedTexture;
+
+                InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => BlockVisualAtlas.CreateMaterial(sourceMaterial));
+
+                Assert.That(exception.Message, Does.Contain("not the expected authored atlas"));
+                Assert.That(BlockVisualAtlas.IsAuthoredAtlasTexture(unrelatedTexture), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(sourceMaterial);
+                UnityEngine.Object.DestroyImmediate(unrelatedTexture);
             }
         }
 

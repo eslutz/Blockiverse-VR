@@ -257,6 +257,7 @@ namespace Blockiverse.Tests.PlayMode
             VoxelWorldRenderer renderer = worldObject.GetComponent<VoxelWorldRenderer>();
             BlockiverseCreativeInputBridge[] bridges = Object.FindObjectsByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             MeshFilter[] chunkFilters = worldObject.GetComponentsInChildren<MeshFilter>();
+            MeshRenderer chunkRenderer = null;
             int activeSceneBridgeCount = 0;
 
             foreach (BlockiverseCreativeInputBridge bridge in bridges)
@@ -265,16 +266,27 @@ namespace Blockiverse.Tests.PlayMode
                     activeSceneBridgeCount++;
             }
 
+            foreach (MeshRenderer candidate in worldObject.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (candidate.gameObject.name.StartsWith("Chunk "))
+                {
+                    chunkRenderer = candidate;
+                    break;
+                }
+            }
+
             Assert.That(manager, Is.Not.Null);
             Assert.That(renderer, Is.Not.Null);
             Assert.That(worldObject.GetComponent<BlockiverseCreativeInputBridge>(), Is.Null);
             Assert.That(activeSceneBridgeCount, Is.EqualTo(1));
             Assert.That(manager.World, Is.Not.Null);
             Assert.That(manager.World.Bounds.Width, Is.GreaterThan(0));
-            Assert.That(renderer.TextureSource, Is.EqualTo(BlockTextureSource.AuthoredAtlas));
             Assert.That(renderer.Stats.ChunkCount, Is.GreaterThan(0));
             Assert.That(renderer.Stats.TriangleCount, Is.GreaterThan(0));
             Assert.That(chunkFilters, Has.Length.GreaterThan(0));
+            Assert.That(chunkRenderer, Is.Not.Null);
+            Assert.That(BlockVisualAtlas.TryGetBaseTexture(chunkRenderer.sharedMaterial, out Texture texture), Is.True);
+            Assert.That(BlockVisualAtlas.IsAuthoredAtlasTexture(texture), Is.True);
             Assert.That(GameObject.Find("Interaction Test Block"), Is.Null);
         }
 

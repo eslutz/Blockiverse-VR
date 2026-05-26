@@ -13,27 +13,21 @@ namespace Blockiverse.Gameplay
         BlockRegistry registry;
         ChunkRebuildQueue rebuildQueue;
         Material chunkMaterial;
-        [SerializeField] bool allowProceduralBlockAtlasFallback = true;
         int interactionLayer = -1;
         VoxelRenderStats stats;
 
         public VoxelWorld World => world;
         public VoxelRenderStats Stats => stats;
-        public BlockTextureSource TextureSource { get; private set; } = BlockTextureSource.None;
 
         public void Configure(
             VoxelWorld voxelWorld,
             BlockRegistry blockRegistry,
             Material material,
-            int layer,
-            bool allowProceduralFallback = true)
+            int layer)
         {
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
-            allowProceduralBlockAtlasFallback = allowProceduralFallback;
-            BlockVisualMaterialResult materialResult = BlockVisualAtlas.CreateMaterial(material, allowProceduralBlockAtlasFallback);
-            chunkMaterial = materialResult.Material;
-            TextureSource = materialResult.Source;
+            chunkMaterial = BlockVisualAtlas.CreateMaterial(material);
             interactionLayer = layer;
             rebuildQueue = new ChunkRebuildQueue(world);
             RebuildAll();

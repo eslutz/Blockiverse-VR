@@ -11,9 +11,9 @@ Use a readable, blocky, colorful voxel style with a distinct identity:
 - Original UI panels
 - VR-readable contrast and silhouettes
 
-## Early Validation Visual Pass
+## M4 Authored Visual Pass
 
-The M4 Art and Texture Assets milestone uses committed authored texture assets as the default rendering path. The original procedural block atlas remains available only as an explicit development/test fallback so missing authored assets do not turn into magenta or invisible surfaces during local validation.
+The M4 Art and Texture Assets milestone uses committed authored texture assets as the rendering path. Missing or incorrectly wired block atlases should fail validation instead of silently falling back to runtime-generated visuals.
 
 This pass is intentionally functional and VR-readable:
 
@@ -23,7 +23,7 @@ This pass is intentionally functional and VR-readable:
 - Distinct color families for grass, soil, stone, wood, leaves, glass, ores, crafted blocks, and light sources
 - Original names and visual motifs only
 
-The current procedural atlas covers:
+The committed block atlas covers:
 
 - Meadow Turf
 - Loam
@@ -81,9 +81,9 @@ Quest import policy:
 - Android overrides stay enabled for M4 assets with max texture size matching the authored asset dimensions.
 - Compression remains disabled for this first readability pass; revisit compression only with headset evidence that readability is preserved.
 
-## Fallback Policy
+## Atlas Validation Policy
 
-Runtime rendering must select the committed authored block atlas first. `BlockVisualAtlas` procedural generation is allowed only when fallback is explicitly enabled for development or tests. Fallback use must be visible through logs or test-visible state and must not silently replace authored assets in release-candidate validation.
+Runtime rendering must use the committed authored block atlas. `BlockVisualAtlas` validates that the material texture is the expected atlas name and dimensions before rendering chunks. Missing, unrelated, or incorrectly sized textures should fail fast in development and release-candidate validation.
 
 ## Prohibited References
 
