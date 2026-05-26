@@ -11,11 +11,11 @@ Use a readable, blocky, colorful voxel style with a distinct identity:
 - Original UI panels
 - VR-readable contrast and silhouettes
 
-## Early Validation Visual Pass
+## M4 Authored Visual Pass
 
-The M4 Art and Texture Assets milestone uses an original procedural block atlas as the temporary fallback so headset testing can distinguish terrain, resource, crafting, storage, and lighting blocks before committed authored texture assets replace it as the default rendering path.
+The M4 Art and Texture Assets milestone uses committed authored texture assets as the rendering path. Missing or incorrectly wired block atlases should fail validation instead of silently falling back to runtime-generated visuals.
 
-This pass is intentionally functional:
+This pass is intentionally functional and VR-readable:
 
 - 16x16 source tiles
 - Point-filtered pixels
@@ -23,7 +23,7 @@ This pass is intentionally functional:
 - Distinct color families for grass, soil, stone, wood, leaves, glass, ores, crafted blocks, and light sources
 - Original names and visual motifs only
 
-The current procedural atlas covers:
+The committed block atlas covers:
 
 - Meadow Turf
 - Loam
@@ -38,7 +38,52 @@ The current procedural atlas covers:
 - Storage Crate
 - Torchbud
 
-Final authored textures should replace the procedural atlas as the default rendering path. The procedural atlas should remain available only as an explicit development/test fallback, and authored textures must preserve VR readability and the original visual identity established here.
+Committed authored texture assets now live under:
+
+- `Assets/Blockiverse/Art/Textures/Blocks/Source/`
+- `Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png`
+- `Assets/Blockiverse/Art/Textures/Items/`
+- `Assets/Blockiverse/Art/Sprites/UI/`
+
+## M4 Palette And Naming Rules
+
+Use original Blockiverse names in filenames, issue text, UI labels, prompts, and provenance notes. Filenames are lowercase snake_case and should match the block, item, or UI sprite name without third-party references.
+
+The M4 palette should stay bright, readable, and varied:
+
+- Terrain: meadow greens, warm loam browns, cool slate grays
+- Organic: amber timber and saturated leaf greens
+- Clearstone: cyan glass/crystal tones
+- Resources: dark coal contrast, orange copper accents, pale iron accents
+- Crafted blocks: warm utility browns with distinct crate/workbench construction marks
+- Torchbud: green stem tones with warm yellow light
+- UI: dark translucent work surfaces with green, gold, red, and blue accents
+
+## Texture Rules
+
+Block textures:
+
+- Source tiles are 16x16 RGBA PNG files.
+- The runtime atlas is a committed 4x4, 64x64 RGBA PNG.
+- Tile order follows `BlockVisualAtlas`: Meadow Turf, Loam, Slate, Timber, Leafmass, Clearstone, Coalstone, Copperstone, Ironstone, Workbench, Torchbud, Storage Crate.
+- Use point filtering, clamp wrapping, and no mipmaps for the first M4 validation pass.
+- Keep silhouettes and color families distinct enough to read in Quest headset validation.
+
+Item and UI textures:
+
+- Item icons are transparent 64x64 PNG sprites.
+- UI sprites are transparent PNG sprites sized for their immediate use: hotbar frame, selected slot, health pip, inventory panel, crafting panel, and multiplayer status badge.
+- Do not embed text in icon or UI sprites.
+
+Quest import policy:
+
+- Commit Unity `.meta` files with texture import settings.
+- Android overrides stay enabled for M4 assets with max texture size matching the authored asset dimensions.
+- Compression remains disabled for this first readability pass; revisit compression only with headset evidence that readability is preserved.
+
+## Atlas Validation Policy
+
+Runtime rendering must use the committed authored block atlas. `BlockVisualAtlas` validates that the material texture is the expected atlas name and dimensions before rendering chunks. Missing, unrelated, or incorrectly sized textures should fail fast in development and release-candidate validation.
 
 ## Prohibited References
 

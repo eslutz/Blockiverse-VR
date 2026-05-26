@@ -257,12 +257,22 @@ namespace Blockiverse.Tests.PlayMode
             VoxelWorldRenderer renderer = worldObject.GetComponent<VoxelWorldRenderer>();
             BlockiverseCreativeInputBridge[] bridges = Object.FindObjectsByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             MeshFilter[] chunkFilters = worldObject.GetComponentsInChildren<MeshFilter>();
+            MeshRenderer chunkRenderer = null;
             int activeSceneBridgeCount = 0;
 
             foreach (BlockiverseCreativeInputBridge bridge in bridges)
             {
                 if (bridge.gameObject.scene == SceneManager.GetActiveScene())
                     activeSceneBridgeCount++;
+            }
+
+            foreach (MeshRenderer candidate in worldObject.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (candidate.gameObject.name.StartsWith("Chunk "))
+                {
+                    chunkRenderer = candidate;
+                    break;
+                }
             }
 
             Assert.That(manager, Is.Not.Null);
@@ -274,6 +284,9 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(renderer.Stats.ChunkCount, Is.GreaterThan(0));
             Assert.That(renderer.Stats.TriangleCount, Is.GreaterThan(0));
             Assert.That(chunkFilters, Has.Length.GreaterThan(0));
+            Assert.That(chunkRenderer, Is.Not.Null);
+            Assert.That(BlockVisualAtlas.TryGetBaseTexture(chunkRenderer.sharedMaterial, out Texture texture), Is.True);
+            Assert.That(BlockVisualAtlas.IsAuthoredAtlasTexture(texture), Is.True);
             Assert.That(GameObject.Find("Interaction Test Block"), Is.Null);
         }
 

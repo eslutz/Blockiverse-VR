@@ -345,7 +345,25 @@ namespace Blockiverse.Editor
         {
             EnsureMaterial(BlockiverseProject.PointerLineMaterialPath, PointerLineColor, preferUnlit: true);
             EnsureMaterial(BlockiverseProject.HighlightMaterialPath, HighlightColor, preferUnlit: false);
-            EnsureMaterial(BlockiverseProject.TestBlockMaterialPath, TestBlockColor, preferUnlit: false);
+            EnsureBlockTextureMaterial();
+        }
+
+        static void EnsureBlockTextureMaterial()
+        {
+            Material material = EnsureMaterial(BlockiverseProject.TestBlockMaterialPath, Color.white, preferUnlit: false);
+            Texture2D authoredAtlas = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockVisualAtlas.AuthoredAtlasPath);
+
+            if (authoredAtlas != null)
+            {
+                SetMaterialTexture(material, authoredAtlas);
+                SetMaterialColor(material, Color.white);
+            }
+            else
+            {
+                SetMaterialColor(material, TestBlockColor);
+            }
+
+            EditorUtility.SetDirty(material);
         }
 
         static Material EnsureMaterial(string path, Color color, bool preferUnlit)
@@ -389,6 +407,15 @@ namespace Blockiverse.Editor
                 material.SetColor("_Color", color);
             else
                 material.color = color;
+        }
+
+        static void SetMaterialTexture(Material material, Texture texture)
+        {
+            if (material.HasProperty("_BaseMap"))
+                material.SetTexture("_BaseMap", texture);
+
+            if (material.HasProperty("_MainTex"))
+                material.SetTexture("_MainTex", texture);
         }
 
         static int EnsureInteractionLayer()

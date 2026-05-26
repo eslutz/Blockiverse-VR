@@ -19,7 +19,11 @@ namespace Blockiverse.Gameplay
         public VoxelWorld World => world;
         public VoxelRenderStats Stats => stats;
 
-        public void Configure(VoxelWorld voxelWorld, BlockRegistry blockRegistry, Material material, int layer)
+        public void Configure(
+            VoxelWorld voxelWorld,
+            BlockRegistry blockRegistry,
+            Material material,
+            int layer)
         {
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));

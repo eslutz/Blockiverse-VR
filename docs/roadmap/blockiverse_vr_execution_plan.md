@@ -423,7 +423,7 @@ Dependencies
 | M1 VR Slice | Player can stand in VR, move, point, select, and interact | Quest 3/3S vertical slice |
 | M2 Creative | Bounded voxel world, break/place blocks, save/load | Playable creative prototype |
 | M3 Survival-Lite | Terrain, caves, resources, inventory, crafting, health | Solo survival-lite loop |
-| M4 Art and Texture Assets | Authored art/texture assets, renderer integration, fallback behavior, provenance, and Quest visual validation | Visually readable world using original committed assets |
+| M4 Art and Texture Assets | Authored art/texture assets, renderer integration, provenance, and Quest visual validation | Visually readable world using original committed assets |
 | M5 Multiplayer | Two-player join/edit foundation | Father/daughter co-op |
 | M6 Store Candidate | Performance, privacy, signing, release channels, metadata | Meta submission candidate |
 | M7 Full Survival | Original voxel NPCs/mobs, day/night, hostile encounters, progression | Later expansion |
@@ -963,7 +963,7 @@ No full survival mobs or day/night are included yet.
 
 ### Deliverable
 
-The current headset validation build renders generated terrain with distinct original block visuals before multiplayer work begins, then the M4 Art and Texture Assets milestone replaces validation-only runtime visuals with committed authored texture assets and an explicit fallback path.
+The current headset validation build renders generated terrain with distinct original block visuals before multiplayer work begins, then the M4 Art and Texture Assets milestone replaces validation-only runtime visuals with committed authored texture assets and fail-fast atlas validation.
 
 ### Scope
 
@@ -974,7 +974,7 @@ Generated survival-lite terrain remains the default validation world.
 Creative editing still works against generated terrain.
 Renderable block types use distinct original visual treatments.
 Committed authored texture assets become the default rendering source once created.
-The runtime-generated atlas remains only as a development/test fallback.
+Missing or unrelated atlas textures fail validation instead of falling back to generated runtime visuals.
 The first block visual pass is documented in the art direction and provenance logs.
 The implementation must not use copied Minecraft textures, names, prompts, or references.
 Audio and haptics remain later EPIC-12 art/audio/UI polish work.
@@ -1147,7 +1147,7 @@ Crafting does not duplicate or lose items under normal latency.
 
 The moved-up block readability pass expands into a coherent voxel art, item, UI, audio, and haptics style.
 
-The first block visual pass now begins in the M4 Art and Texture Assets milestone for validation readability. That milestone is responsible for committed original block texture assets, renderer integration, explicit procedural fallback behavior, provenance, asset validation, and Quest headset visual validation. Phase 14 remains responsible for broader production-ready item icons, UI panels, audio, haptics, store-facing polish, and any later replacement or refinement of reviewed assets.
+The first block visual pass now begins in the M4 Art and Texture Assets milestone for validation readability. That milestone is responsible for committed original block texture assets, renderer integration, provenance, asset validation, and Quest headset visual validation. Phase 14 remains responsible for broader production-ready item icons, UI panels, audio, haptics, store-facing polish, and any later replacement or refinement of reviewed assets.
 
 ### Art direction
 
@@ -1174,7 +1174,7 @@ Assets/Blockiverse/Audio/SFX/
 Assets/Blockiverse/Materials/
 ```
 
-The runtime-generated `BlockVisualAtlas` is a validation fallback only. Production-facing development builds should load committed authored texture assets first, and fallback use must be explicit, logged or test-visible, and blocked or accepted before store-candidate builds.
+`BlockVisualAtlas` owns atlas tile layout and validation only. Production-facing development builds must use committed authored texture assets, and missing or unrelated atlas textures should fail fast before store-candidate validation.
 
 ### Generated asset rules
 
@@ -1232,8 +1232,8 @@ Editor test: all block textures are expected dimensions.
 Editor test: all BlockDefinitions reference valid texture atlas entries.
 Editor test: no missing materials.
 Editor test: no forbidden asset names or Minecraft references.
-Editor test: authored texture assets are selected before the procedural fallback.
-Editor test: fallback behavior is covered when authored assets are unavailable.
+Editor test: authored atlas texture name and dimensions are validated.
+Editor test: missing or unrelated atlas textures are rejected.
 PlayMode: all registered blocks render with non-placeholder textures.
 ```
 
@@ -1898,7 +1898,6 @@ FEATURE: First art pass
   STORY: Generate UI panels (M4)
   STORY: Add asset validation tests (M4)
   STORY: Integrate authored block texture atlas (M4)
-  STORY: Keep procedural block atlas as fallback (M4)
   STORY: Configure Quest texture import settings (M4)
   STORY: Validate authored art assets in headset (M4)
 
@@ -1978,7 +1977,7 @@ Build in this order:
 8. Procedural bounded terrain
 9. Inventory/crafting/resources
 10. Survival-lite health loop
-11. M4 Art and Texture Assets, authored texture integration, fallback behavior, and generated creative validation terrain
+11. M4 Art and Texture Assets, authored texture integration, atlas validation, and generated creative validation terrain
 12. Multiplayer host/client movement
 13. Multiplayer block synchronization
 14. Multiplayer inventory/crafting sync
@@ -2044,10 +2043,10 @@ No mobs/day-night yet.
 Generated terrain is visible in the default validation world.
 Committed original block texture assets exist with Unity .meta files.
 Renderable blocks use authored texture assets by default.
-Runtime-generated block atlas is limited to an explicit development/test fallback.
+Missing or unrelated atlas textures fail validation instead of falling back to generated runtime visuals.
 Texture import settings are appropriate for Quest 3/3S validation.
 Asset provenance is recorded.
-Asset validation tests cover dimensions, mappings, missing materials, and fallback behavior.
+Asset validation tests cover dimensions, mappings, missing materials, and unrelated atlas rejection.
 Quest headset validation confirms block readability and no magenta/missing-material surfaces.
 ```
 
