@@ -2,12 +2,6 @@
   "name": "Blockiverse.Networking",
   "rootNamespace": "Blockiverse.Networking",
   "references": [
-    "Blockiverse.Core",
-    "Blockiverse.Gameplay",
-    "Blockiverse.Persistence",
-    "Blockiverse.Survival",
-    "Blockiverse.Voxel",
-    "Blockiverse.WorldGen",
     "Unity.Netcode.Runtime",
     "Unity.Networking.Transport"
   ],

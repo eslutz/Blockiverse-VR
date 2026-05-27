@@ -62,6 +62,7 @@ namespace Blockiverse.Editor
         const string SurvivalHudName = "Survival HUD";
         const string NetworkManagerRootName = "Blockiverse Network Manager";
         const string NetworkPlayerPrefabName = "Blockiverse Network Player";
+        const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionTestBlockName = "Interaction Test Block";
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
@@ -674,7 +675,7 @@ namespace Blockiverse.Editor
             networkManager.NetworkConfig ??= new NetworkConfig();
             networkManager.NetworkConfig.NetworkTransport = transport;
             networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
-            networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Clear();
+            RemoveGeneratedNetworkPrefabLists(networkManager.NetworkConfig);
             networkManager.NetworkConfig.EnableSceneManagement = false;
             networkManager.NetworkConfig.ConnectionApproval = false;
             networkManager.NetworkConfig.TickRate = 30;
@@ -708,24 +709,37 @@ namespace Blockiverse.Editor
 
         static void EnsureBuildScenes()
         {
-            var scenes = new[]
+            var requiredScenes = new[]
             {
                 BlockiverseProject.BootScenePath,
                 BlockiverseProject.MultiplayerTestScenePath
             }
                 .Where(path => AssetDatabase.LoadAssetAtPath<SceneAsset>(path) != null)
                 .Select(path => new EditorBuildSettingsScene(path, true))
-                .ToArray();
+                .ToList();
 
-            EditorBuildSettings.scenes = scenes;
+            var existingNonRequiredScenes = EditorBuildSettings.scenes
+                .Where(scene => !string.IsNullOrWhiteSpace(scene.path))
+                .Where(scene => requiredScenes.All(requiredScene => requiredScene.path != scene.path))
+                .GroupBy(scene => scene.path)
+                .Select(group => group.First())
+                .ToList();
+
+            EditorBuildSettings.scenes = requiredScenes
+                .Concat(existingNonRequiredScenes)
+                .ToArray();
+        }
+
+        static void RemoveGeneratedNetworkPrefabLists(NetworkConfig networkConfig)
+        {
+            networkConfig.Prefabs.NetworkPrefabsLists.RemoveAll(prefabsList =>
+                prefabsList == null || AssetDatabase.GetAssetPath(prefabsList) == DefaultNetworkPrefabsPath);
         }
 
         static void RemoveGeneratedDefaultNetworkPrefabs()
         {
-            const string defaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
-
-            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(defaultNetworkPrefabsPath) != null)
-                AssetDatabase.DeleteAsset(defaultNetworkPrefabsPath);
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(DefaultNetworkPrefabsPath) != null)
+                AssetDatabase.DeleteAsset(DefaultNetworkPrefabsPath);
         }
 
         static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)

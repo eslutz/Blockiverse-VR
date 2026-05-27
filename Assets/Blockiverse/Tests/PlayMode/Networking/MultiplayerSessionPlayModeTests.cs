@@ -60,6 +60,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 () => !hostSession.NetworkManager.IsListening && !clientSession.NetworkManager.IsListening,
                 "Host shutdown did not stop all local session managers.");
 
+            Assert.That(hostSession.CurrentState, Is.EqualTo(BlockiverseConnectionState.Stopped));
+            Assert.That(clientSession.CurrentState, Is.EqualTo(BlockiverseConnectionState.Disconnected));
             AssertNoSpawnedObjects(hostSession.NetworkManager);
             AssertNoSpawnedObjects(clientSession.NetworkManager);
         }

@@ -20,6 +20,7 @@ namespace Blockiverse.Networking
         UnityTransport unityTransport;
 
         bool subscribed;
+        bool stopRequestedByLocalSession;
 
         public BlockiverseConnectionState CurrentState { get; private set; } = BlockiverseConnectionState.Stopped;
         public NetworkSessionMode CurrentMode { get; private set; } = NetworkSessionMode.Offline;
@@ -97,10 +98,12 @@ namespace Blockiverse.Networking
             {
                 CurrentMode = NetworkSessionMode.Offline;
                 CurrentState = BlockiverseConnectionState.Stopped;
+                stopRequestedByLocalSession = false;
                 return;
             }
 
             CurrentState = BlockiverseConnectionState.Disconnecting;
+            stopRequestedByLocalSession = true;
             networkManager.Shutdown();
         }
 
@@ -114,6 +117,7 @@ namespace Blockiverse.Networking
 
             LastDisconnectReason = string.Empty;
             CurrentMode = mode;
+            stopRequestedByLocalSession = false;
             return true;
         }
 
@@ -128,6 +132,7 @@ namespace Blockiverse.Networking
             LastDisconnectReason = reason;
             CurrentMode = NetworkSessionMode.Offline;
             CurrentState = BlockiverseConnectionState.Failed;
+            stopRequestedByLocalSession = false;
         }
 
         void HandleServerStarted()
@@ -154,24 +159,37 @@ namespace Blockiverse.Networking
 
         void HandleClientDisconnected(ulong clientId)
         {
-            if (networkManager == null || networkManager.IsServer && clientId != networkManager.LocalClientId)
+            if (networkManager == null || (networkManager.IsServer && clientId != networkManager.LocalClientId))
+                return;
+
+            if (CurrentState == BlockiverseConnectionState.Failed)
                 return;
 
             LastDisconnectReason = ResolveDisconnectReason();
 
-            if (CurrentState != BlockiverseConnectionState.Disconnecting)
+            if (CurrentState != BlockiverseConnectionState.Disconnecting || !stopRequestedByLocalSession)
                 CurrentState = BlockiverseConnectionState.Disconnected;
         }
 
         void HandleServerStopped(bool wasHost)
         {
-            CurrentMode = NetworkSessionMode.Offline;
-            CurrentState = BlockiverseConnectionState.Stopped;
+            MarkStopped();
         }
 
         void HandleClientStopped(bool wasHost)
         {
+            MarkStopped();
+        }
+
+        void MarkStopped()
+        {
             CurrentMode = NetworkSessionMode.Offline;
+            stopRequestedByLocalSession = false;
+
+            if (CurrentState == BlockiverseConnectionState.Disconnected ||
+                CurrentState == BlockiverseConnectionState.Failed)
+                return;
+
             CurrentState = BlockiverseConnectionState.Stopped;
         }
 
