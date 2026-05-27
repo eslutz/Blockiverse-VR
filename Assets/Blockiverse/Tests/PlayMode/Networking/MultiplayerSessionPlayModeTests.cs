@@ -126,6 +126,165 @@ namespace Blockiverse.Tests.Networking.PlayMode
             AssertNoSpawnedObjects(clientSession.NetworkManager);
         }
 
+        [UnityTest]
+        public IEnumerator ClientMenuShowsSessionEndedAndReconnectsAfterLanHostRestarts()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            BlockiverseMultiplayerSessionMenu hostMenu = UnityEngine.Object.FindFirstObjectByType<BlockiverseMultiplayerSessionMenu>();
+            Assert.That(hostSession, Is.Not.Null);
+            Assert.That(hostMenu, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+            clientMenu.AddressInput.text = BlockiverseNetworkConfig.DefaultAddress;
+
+            hostMenu.HostButton.onClick.Invoke();
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host menu did not start host.");
+
+            clientMenu.JoinButton.onClick.Invoke();
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client menu did not connect before host shutdown.");
+
+            GameObject hiddenMenuRoot = CreateDisabledMenuRoot(clientMenu.transform);
+            Canvas recoveryCanvas = hiddenMenuRoot.GetComponent<Canvas>();
+            GraphicRaycaster recoveryRaycaster = hiddenMenuRoot.GetComponent<GraphicRaycaster>();
+
+            hostMenu.StopButton.onClick.Invoke();
+            yield return WaitFor(
+                () => hostSession.CurrentState == BlockiverseConnectionState.Stopped &&
+                      clientSession.CurrentState == BlockiverseConnectionState.Disconnected &&
+                      !hostSession.NetworkManager.IsListening &&
+                      !clientSession.NetworkManager.IsListening &&
+                      !hostSession.NetworkManager.ShutdownInProgress &&
+                      !clientSession.NetworkManager.ShutdownInProgress,
+                "Host shutdown did not return the client to a disconnected menu state.");
+
+            clientMenu.RefreshStatus();
+            Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.True);
+            Assert.That(clientMenu.gameObject.activeInHierarchy, Is.True);
+            Assert.That(recoveryCanvas.enabled, Is.True);
+            Assert.That(recoveryRaycaster.enabled, Is.True);
+            StringAssert.Contains("LAN session ended because the host disconnected", clientMenu.StatusText.text);
+            StringAssert.Contains($"Use Join to reconnect to {BlockiverseNetworkConfig.DefaultAddress}:{port}", clientMenu.StatusText.text);
+            string lowerStatusText = clientMenu.StatusText.text.ToLowerInvariant();
+            Assert.That(lowerStatusText, Does.Not.Contain("matchmaking"));
+            Assert.That(lowerStatusText, Does.Not.Contain("relay"));
+            Assert.That(lowerStatusText, Does.Not.Contain("lobby"));
+            Assert.That(clientMenu.JoinButton.interactable, Is.True);
+            Assert.That(clientMenu.StopButton.interactable, Is.False);
+
+            hostMenu.HostButton.onClick.Invoke();
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host menu did not restart host.");
+
+            clientMenu.JoinButton.onClick.Invoke();
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      clientSession.CurrentState == BlockiverseConnectionState.ConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client menu did not reconnect after the LAN host restarted.");
+
+            clientMenu.RefreshStatus();
+            Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.False);
+            StringAssert.Contains("Connected to LAN session", clientMenu.StatusText.text);
+        }
+
+        [UnityTest]
+        public IEnumerator ClientMenuShowsJoinFailedInsteadOfSessionEndedWhenHostUnavailable()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            clientSession.Configure(testConfig);
+            clientSession.UnityTransport.ConnectTimeoutMS = 50;
+            clientSession.UnityTransport.MaxConnectAttempts = 1;
+            clientMenu.AddressInput.text = BlockiverseNetworkConfig.DefaultAddress;
+
+            LogAssert.Expect(LogType.Error, "Failed to connect to server.");
+            clientMenu.JoinButton.onClick.Invoke();
+            yield return WaitFor(
+                () => clientSession.CurrentState == BlockiverseConnectionState.Disconnected &&
+                      !clientSession.NetworkManager.IsListening &&
+                      !clientSession.NetworkManager.ShutdownInProgress,
+                "Client did not return to a disconnected state after joining an unavailable LAN host.",
+                timeoutSeconds: 5.0f);
+
+            clientMenu.RefreshStatus();
+            Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.False);
+            StringAssert.Contains("Unable to reach LAN session", clientMenu.StatusText.text);
+            Assert.That(clientMenu.StatusText.text, Does.Not.Contain("host disconnected"));
+            Assert.That(clientMenu.JoinButton.interactable, Is.True);
+            Assert.That(clientMenu.StopButton.interactable, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ClientStopSessionDoesNotShowHostDisconnectedUx()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect to host.");
+
+            clientMenu.StopButton.onClick.Invoke();
+            yield return WaitFor(
+                () => clientSession.CurrentState == BlockiverseConnectionState.Stopped &&
+                      !clientSession.NetworkManager.IsListening &&
+                      !clientSession.NetworkManager.ShutdownInProgress,
+                "Client stop did not finish as a local stopped session.");
+
+            clientMenu.RefreshStatus();
+            Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.False);
+            StringAssert.Contains("LAN session stopped", clientMenu.StatusText.text);
+            Assert.That(clientMenu.StatusText.text, Does.Not.Contain("host disconnected"));
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -185,6 +344,17 @@ namespace Blockiverse.Tests.Networking.PlayMode
             menu.Configure(session);
             menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
             return menu;
+        }
+
+        static GameObject CreateDisabledMenuRoot(Transform child)
+        {
+            GameObject rootObject = new("Disabled Menu Root", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
+            Canvas canvas = rootObject.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.enabled = false;
+            rootObject.GetComponent<GraphicRaycaster>().enabled = false;
+            child.SetParent(rootObject.transform, false);
+            return rootObject;
         }
 
         static Button CreateButton(string name, Transform parent)
