@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
+using Blockiverse.Persistence;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using Blockiverse.UI;
@@ -486,6 +487,27 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 Assert.That(persistence.LastHostLoadAttempted, Is.True);
                 Assert.That(persistence.LastHostLoadSucceeded, Is.True);
                 Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(
+                    worldManager.World.GetChangedBlocks().Any(change =>
+                        change.Position == editPosition &&
+                        change.NewBlock == BlockRegistry.Clearstone),
+                    Is.True);
+
+                hostSession.StopSession();
+                yield return WaitFor(
+                    () => hostSession.CurrentState == BlockiverseConnectionState.Stopped &&
+                          !hostSession.NetworkManager.IsListening,
+                    "Restarted host did not stop after re-saving loaded multiplayer deltas.");
+
+                WorldLoadResult reloadedResult = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(savePath);
+                Assert.That(reloadedResult.Success, Is.True, reloadedResult.Error);
+                Assert.That(
+                    reloadedResult.Data.ChangedBlocks.Any(delta =>
+                        delta.X == editPosition.X &&
+                        delta.Y == editPosition.Y &&
+                        delta.Z == editPosition.Z &&
+                        delta.BlockId == BlockRegistry.Clearstone.Value),
+                    Is.True);
             }
             finally
             {
@@ -546,6 +568,135 @@ namespace Blockiverse.Tests.Networking.PlayMode
             hostMenu.RefreshStatus();
             StringAssert.Contains("Unable to stop LAN session", hostMenu.StatusText.text);
             StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostMenu.StatusText.text);
+        }
+
+        [UnityTest]
+        public IEnumerator ClientBlockMutationRequestsAreHostValidatedBroadcastAndLateJoinSynced()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession lateJoinClientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Chunk Authority World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Chunk Authority World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1220, groundHeight: 2));
+            CreativeWorldManager lateJoinWorldManager = CreateCreativeWorldManager(
+                "Late Join Chunk Authority World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1221, groundHeight: 2));
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerChunkAuthoritySync lateJoinSync = ConfigureChunkSync(lateJoinClientSession, lateJoinWorldManager);
+            var editPosition = new BlockPosition(2, 2, 2);
+            var stalePosition = new BlockPosition(3, 2, 2);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+            lateJoinClientSession.Configure(testConfig);
+            hostWorldManager.World.SetBlock(stalePosition, BlockRegistry.Loam);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for chunk authority sync.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for chunk authority sync.");
+
+            yield return WaitFor(
+                () => clientSync.AppliedGenerationSnapshotCount >= 1 &&
+                      clientWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
+                      clientWorldManager.World.Seed == hostWorldManager.World.Seed &&
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                "Client did not replace local generation with the host-owned world snapshot.");
+
+            BlockMutationResult requestResult = clientSync.TrySubmitMutation(
+                editPosition,
+                BlockRegistry.Clearstone,
+                out SetBlockCommand clientCommand,
+                out bool requestSentToHost);
+
+            Assert.That(requestSentToHost, Is.True);
+            Assert.That(requestResult.PendingHostValidation, Is.True);
+            Assert.That(clientCommand, Is.Null);
+            Assert.That(clientWorldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Air));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                "Host did not validate and broadcast the client block mutation.");
+
+            Assert.That(hostSync.CurrentBoundary.OwnsMutationValidation, Is.True);
+            Assert.That(hostSync.CurrentBoundary.CanBroadcastDeltas, Is.True);
+            Assert.That(clientSync.CurrentBoundary.MustRequestMutations, Is.True);
+            Assert.That(clientSync.CurrentBoundary.CanBroadcastDeltas, Is.False);
+            Assert.That(hostSync.ReceivedMutationRequestCount, Is.EqualTo(1));
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(1));
+            Assert.That(clientSync.SentMutationRequestCount, Is.EqualTo(1));
+            Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+
+            BlockMutationResult rejectedRequest = clientSync.TrySubmitMutation(
+                new BlockPosition(-1, 2, 2),
+                BlockRegistry.Slate,
+                out SetBlockCommand rejectedClientCommand,
+                out bool rejectedRequestSentToHost);
+
+            Assert.That(rejectedRequestSentToHost, Is.True);
+            Assert.That(rejectedRequest.PendingHostValidation, Is.True);
+            Assert.That(rejectedClientCommand, Is.Null);
+
+            yield return WaitFor(
+                () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.PositionOutOfBounds,
+                "Host did not report deterministic rejection for an invalid client mutation request.");
+
+            Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(1));
+
+            clientWorldManager.World.SetBlock(stalePosition, BlockRegistry.Air, trackChange: false);
+            BlockMutationResult staleRequest = clientSync.TrySubmitMutation(
+                stalePosition,
+                BlockRegistry.Slate,
+                out SetBlockCommand staleClientCommand,
+                out bool staleRequestSentToHost);
+
+            Assert.That(staleRequestSentToHost, Is.True);
+            Assert.That(staleRequest.PendingHostValidation, Is.True);
+            Assert.That(staleClientCommand, Is.Null);
+
+            yield return WaitFor(
+                () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.ExpectedBlockMismatch &&
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                "Host did not reject and correct a stale client mutation request.");
+
+            Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(2));
+
+            Assert.That(lateJoinClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => lateJoinClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Late join client did not connect for chunk authority sync.");
+
+            yield return WaitFor(
+                () => lateJoinWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                "Late join client did not receive the host chunk snapshot.");
+
+            Assert.That(hostSync.CurrentBoundary.CanServeLateJoinSync, Is.True);
+            Assert.That(hostSync.SentLateJoinSnapshotCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinSync.AppliedGenerationSnapshotCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinSync.AppliedSnapshotBlockCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinWorldManager.World.Bounds, Is.EqualTo(hostWorldManager.World.Bounds));
+            Assert.That(lateJoinWorldManager.World.Seed, Is.EqualTo(hostWorldManager.World.Seed));
+            Assert.That(lateJoinWorldManager.GenerationPreset, Is.EqualTo(hostWorldManager.GenerationPreset));
         }
 
         [UnityTearDown]
@@ -619,22 +770,39 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return persistence;
         }
 
-        static CreativeWorldManager CreateCreativeWorldManager(string name)
+        static MultiplayerChunkAuthoritySync ConfigureChunkSync(
+            BlockiverseNetworkSession session,
+            CreativeWorldManager worldManager)
+        {
+            MultiplayerChunkAuthoritySync sync = session.GetComponent<MultiplayerChunkAuthoritySync>();
+
+            if (sync == null)
+                sync = session.gameObject.AddComponent<MultiplayerChunkAuthoritySync>();
+
+            sync.Configure(session, worldManager);
+            return sync;
+        }
+
+        static CreativeWorldManager CreateCreativeWorldManager(string name, WorldGenerationSettings settings = null)
         {
             GameObject worldObject = new(name);
             worldObject.SetActive(false);
             CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
             manager.Configure(CreateBlockAtlasMaterial(), -1);
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            var settings = new WorldGenerationSettings(
-                width: 16,
-                height: 8,
-                depth: 16,
-                chunkSize: 16,
-                seed: 9901,
-                groundHeight: 2);
+            settings ??= new WorldGenerationSettings(
+                    width: 16,
+                    height: 8,
+                    depth: 16,
+                    chunkSize: 16,
+                    seed: 9901,
+                    groundHeight: 2);
             VoxelWorld world = new FlatCreativeWorldPreset(registry, settings).Generate();
-            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world));
+            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(
+                registry,
+                settings,
+                world,
+                CreativeWorldGenerationPreset.FlatCreative));
             return manager;
         }
 

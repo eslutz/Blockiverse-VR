@@ -5,6 +5,8 @@
     "Blockiverse.Core",
     "Blockiverse.Networking",
     "Blockiverse.Gameplay",
+    "Blockiverse.Persistence",
+    "Blockiverse.Survival",
     "Blockiverse.UI",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",

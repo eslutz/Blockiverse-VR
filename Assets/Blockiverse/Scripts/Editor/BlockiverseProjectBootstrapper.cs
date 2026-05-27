@@ -692,6 +692,7 @@ namespace Blockiverse.Editor
 
             EnsureComponent<BlockiverseNetworkSession>(managerObject);
             EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
+            EnsureComponent<MultiplayerChunkAuthoritySync>(managerObject);
             EnsureComponent<MultiplayerWorldPersistence>(managerObject);
 
             EditorUtility.SetDirty(transport);

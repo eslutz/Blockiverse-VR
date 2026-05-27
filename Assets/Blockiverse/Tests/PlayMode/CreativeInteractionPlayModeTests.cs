@@ -132,6 +132,79 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [Test]
+        public void ClientProxyInteractionCannotCommitAuthoritativeMutation()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 6);
+            var breakPosition = new BlockPosition(1, 1, 1);
+            var placePosition = new BlockPosition(2, 1, 1);
+            world.SetBlock(breakPosition, BlockRegistry.Slate, trackChange: false);
+
+            var controllerObject = new GameObject("Creative Controller");
+            var hotbarObject = new GameObject("Hotbar");
+
+            try
+            {
+                CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
+                hotbar.Configure(registry, new[] { BlockRegistry.Loam }, null);
+
+                BlockMutationAuthority clientAuthority = BlockMutationAuthority.CreateClientProxy(
+                    world,
+                    registry,
+                    localClientId: 7);
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, registry, hotbar, null, null, authority: clientAuthority);
+
+                Assert.That(controller.TryBreakBlock(breakPosition), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
+                Assert.That(world.GetBlock(breakPosition), Is.EqualTo(BlockRegistry.Slate));
+
+                Assert.That(controller.TryPlaceAt(placePosition), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
+                Assert.That(world.GetBlock(placePosition), Is.EqualTo(BlockRegistry.Air));
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(hotbarObject);
+            }
+        }
+
+        [Test]
+        public void ClientProxyInteractionCannotUndoAuthoritativeMutationHistory()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 7);
+            var position = new BlockPosition(1, 1, 1);
+            world.SetBlock(position, BlockRegistry.Slate, trackChange: false);
+
+            var controllerObject = new GameObject("Creative Controller");
+
+            try
+            {
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, registry, null, null, null);
+
+                Assert.That(controller.TryBreakBlock(position), Is.True);
+                Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Air));
+
+                BlockMutationAuthority clientAuthority = BlockMutationAuthority.CreateClientProxy(
+                    world,
+                    registry,
+                    localClientId: 7);
+                controller.Configure(world, registry, null, null, null, authority: clientAuthority);
+
+                Assert.That(controller.UndoLast(), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
+                Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Air));
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [Test]
         public void HotbarSelectionUpdatesSelectedBlockLabel()
         {
             var hotbarObject = new GameObject("Hotbar");

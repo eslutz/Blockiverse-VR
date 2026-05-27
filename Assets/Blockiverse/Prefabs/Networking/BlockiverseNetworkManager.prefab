@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 7599022737421249666}
   - component: {fileID: 9132188728343531670}
   - component: {fileID: 6213910669066858669}
+  - component: {fileID: 2253992077840423001}
   - component: {fileID: 8842103972451178240}
   m_Layer: 0
   m_Name: BlockiverseNetworkManager
@@ -139,6 +140,20 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseNetworkBootstrap
   session: {fileID: 0}
+--- !u!114 &2253992077840423001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ac3f8d1e4b9477d9f6a74c3b6151a82, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.MultiplayerChunkAuthoritySync
+  session: {fileID: 9132188728343531670}
+  worldManager: {fileID: 0}
 --- !u!114 &8842103972451178240
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -153,5 +168,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.MultiplayerWorldPersistence
   session: {fileID: 0}
   worldManager: {fileID: 0}
+  chunkAuthoritySync: {fileID: 2253992077840423001}
   saveFileName: multiplayer-world.json
   worldName: Multiplayer World

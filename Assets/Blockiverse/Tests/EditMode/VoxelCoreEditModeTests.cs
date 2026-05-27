@@ -122,6 +122,103 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void HostBoundaryOwnsChunkAuthorityResponsibilities()
+        {
+            ChunkAuthorityBoundary host = ChunkAuthorityBoundary.ForHost(hostClientId: 0);
+            ChunkAuthorityBoundary client = ChunkAuthorityBoundary.ForClient(localClientId: 7, hostClientId: 0);
+
+            Assert.That(host.OwnsChunkGeneration, Is.True);
+            Assert.That(host.OwnsMutationValidation, Is.True);
+            Assert.That(host.CanCommitMutations, Is.True);
+            Assert.That(host.CanBroadcastDeltas, Is.True);
+            Assert.That(host.CanServeLateJoinSync, Is.True);
+            Assert.That(host.CanSaveMultiplayerWorld, Is.True);
+            Assert.That(host.MustRequestMutations, Is.False);
+
+            Assert.That(client.OwnsChunkGeneration, Is.False);
+            Assert.That(client.OwnsMutationValidation, Is.False);
+            Assert.That(client.CanCommitMutations, Is.False);
+            Assert.That(client.CanBroadcastDeltas, Is.False);
+            Assert.That(client.CanServeLateJoinSync, Is.False);
+            Assert.That(client.CanSaveMultiplayerWorld, Is.False);
+            Assert.That(client.MustRequestMutations, Is.True);
+        }
+
+        [Test]
+        public void HostAuthorityValidatesAndCommitsClientMutationRequest()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 17);
+            var position = new BlockPosition(3, 1, 1);
+            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            BlockMutationAuthority authority = BlockMutationAuthority.CreateHost(world, registry);
+            var request = new BlockMutationRequest(
+                requestingClientId: 7,
+                position,
+                BlockRegistry.Clearstone,
+                expectedCurrentBlock: BlockRegistry.Loam);
+
+            BlockMutationResult result = authority.TryCommit(request, out SetBlockCommand command);
+
+            Assert.That(result.Accepted, Is.True);
+            Assert.That(result.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.None));
+            Assert.That(result.Change.Position, Is.EqualTo(position));
+            Assert.That(result.Change.PreviousBlock, Is.EqualTo(BlockRegistry.Loam));
+            Assert.That(result.Change.NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(result.Chunk, Is.EqualTo(new ChunkCoordinate(1, 0, 0)));
+            Assert.That(command, Is.Not.Null);
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Clearstone));
+        }
+
+        [Test]
+        public void ClientProxyCannotCommitAuthoritativeMutation()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 18);
+            var position = new BlockPosition(1, 1, 1);
+            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            BlockMutationAuthority authority = BlockMutationAuthority.CreateClientProxy(world, registry, localClientId: 7);
+
+            BlockMutationResult result = authority.TryCommit(
+                new BlockMutationRequest(7, position, BlockRegistry.Clearstone),
+                out SetBlockCommand command);
+
+            Assert.That(result.Accepted, Is.False);
+            Assert.That(result.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
+            Assert.That(command, Is.Null);
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Loam));
+
+            BlockMutationResult validationResult = authority.ValidateHostMutation(
+                new BlockMutationRequest(7, position, BlockRegistry.Clearstone));
+            Assert.That(validationResult.Accepted, Is.False);
+            Assert.That(validationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.HostOnlyAuthorityOperation));
+        }
+
+        [Test]
+        public void HostAuthorityRejectsInvalidMutationRequestsPredictably()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 19);
+            var position = new BlockPosition(1, 1, 1);
+            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            BlockMutationAuthority authority = BlockMutationAuthority.CreateHost(world, registry);
+
+            Assert.That(
+                authority.TryCommit(new BlockMutationRequest(7, new BlockPosition(-1, 1, 1), BlockRegistry.Slate)).RejectionReason,
+                Is.EqualTo(BlockMutationRejectionReason.PositionOutOfBounds));
+            Assert.That(
+                authority.TryCommit(new BlockMutationRequest(7, position, new BlockId(999))).RejectionReason,
+                Is.EqualTo(BlockMutationRejectionReason.UnknownBlock));
+            Assert.That(
+                authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Slate, expectedCurrentBlock: BlockRegistry.Clearstone)).RejectionReason,
+                Is.EqualTo(BlockMutationRejectionReason.ExpectedBlockMismatch));
+            Assert.That(
+                authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Loam)).RejectionReason,
+                Is.EqualTo(BlockMutationRejectionReason.NoChange));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Loam));
+        }
+
+        [Test]
         public void FlatCreativePresetCreatesBoundedSpawnSafeWorld()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

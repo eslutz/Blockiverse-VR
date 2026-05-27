@@ -86,6 +86,12 @@ namespace Blockiverse.Voxel
             changedBlocks.Clear();
         }
 
+        public void TrackChangedBlock(BlockChange change)
+        {
+            EnsureInBounds(change.Position);
+            changedBlocks[change.Position] = change;
+        }
+
         int ToIndex(BlockPosition position)
         {
             return position.X + Bounds.Width * (position.Z + Bounds.Depth * position.Y);
@@ -110,6 +116,8 @@ namespace Blockiverse.Voxel
 
         public BlockPosition Position { get; }
         public BlockId NewBlock { get; }
+        public bool HasAppliedChange => appliedChange.HasValue;
+        public BlockChange AppliedChange => appliedChange ?? throw new InvalidOperationException("Block command has not executed.");
 
         public BlockChange Execute(VoxelWorld world)
         {

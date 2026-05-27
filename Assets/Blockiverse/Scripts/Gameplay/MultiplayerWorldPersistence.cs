@@ -3,6 +3,8 @@ using System.IO;
 using Blockiverse.Core;
 using Blockiverse.Networking;
 using Blockiverse.Persistence;
+using Blockiverse.Voxel;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -15,6 +17,7 @@ namespace Blockiverse.Gameplay
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
+        [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
         [SerializeField] string saveFileName = DefaultSaveFileName;
         [SerializeField] string worldName = DefaultWorldName;
 
@@ -75,6 +78,12 @@ namespace Blockiverse.Gameplay
 
             LastHostLoadAttempted = true;
 
+            if (!TryEnsureHostSaveAuthority(out failureReason, "load saved multiplayer world before hosting"))
+            {
+                LastFailureReason = failureReason;
+                return false;
+            }
+
             if (!TryResolveWorldManager(out failureReason, "load saved multiplayer world before hosting"))
             {
                 LastFailureReason = failureReason;
@@ -99,6 +108,7 @@ namespace Blockiverse.Gameplay
             }
 
             result.ApplyTo(worldManager.World);
+            TrackLoadedHostDeltas(result.Data);
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
@@ -113,6 +123,12 @@ namespace Blockiverse.Gameplay
             LastShutdownSaveAttempted = true;
             LastShutdownSaveSucceeded = false;
             LastFailureReason = string.Empty;
+
+            if (!TryEnsureHostSaveAuthority(out failureReason, "save multiplayer world before host shutdown"))
+            {
+                LastFailureReason = failureReason;
+                return false;
+            }
 
             if (!TryResolveWorldManager(out failureReason, "save multiplayer world before host shutdown"))
             {
@@ -154,6 +170,9 @@ namespace Blockiverse.Gameplay
 
             if (worldManager == null)
                 worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+
+            if (chunkAuthoritySync == null)
+                chunkAuthoritySync = GetComponent<MultiplayerChunkAuthoritySync>();
         }
 
         bool TryResolveWorldManager(out string failureReason, string operation)
@@ -185,6 +204,55 @@ namespace Blockiverse.Gameplay
 
             failureReason = $"Unable to {operation} because the host world is unavailable.";
             return false;
+        }
+
+        void TrackLoadedHostDeltas(WorldSaveData data)
+        {
+            if (data?.ChangedBlocks == null)
+                return;
+
+            foreach (SavedBlockDelta delta in data.ChangedBlocks)
+            {
+                var position = new BlockPosition(delta.X, delta.Y, delta.Z);
+                var block = new BlockId(delta.BlockId);
+                worldManager.World.TrackChangedBlock(new BlockChange(position, block, block));
+            }
+        }
+
+        bool TryEnsureHostSaveAuthority(out string failureReason, string operation)
+        {
+            failureReason = string.Empty;
+            ChunkAuthorityBoundary boundary = ResolveAuthorityBoundary();
+
+            if (boundary.CanSaveMultiplayerWorld)
+                return true;
+
+            failureReason = $"Unable to {operation} because only the host owns multiplayer world save state.";
+            BlockiverseLog.Error(
+                BlockiverseLogCategory.Persistence,
+                $"Rejected multiplayer world save operation role={boundary.Role} operation={operation}",
+                context: this);
+            return false;
+        }
+
+        ChunkAuthorityBoundary ResolveAuthorityBoundary()
+        {
+            ResolveReferences();
+
+            if (chunkAuthoritySync != null)
+                return chunkAuthoritySync.CurrentBoundary;
+
+            if (session != null &&
+                session.NetworkManager.IsListening &&
+                session.CurrentMode == NetworkSessionMode.Client)
+            {
+                return ChunkAuthorityBoundary.ForClient(
+                    session.NetworkManager.LocalClientId,
+                    NetworkManager.ServerClientId);
+            }
+
+            ulong hostClientId = session != null ? session.NetworkManager.LocalClientId : 0;
+            return ChunkAuthorityBoundary.ForHost(hostClientId);
         }
 
         void Subscribe()

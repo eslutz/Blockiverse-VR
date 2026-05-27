@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added host-owned multiplayer chunk authority boundaries with client block-edit requests, host validation, delta broadcast, late-join changed-block snapshots, save ownership checks, and client-side direct mutation rejection.
 - Added a fallback proxy avatar rig to the multiplayer network player prefab so local editor multiplayer remains usable when Meta Horizon Avatar data is unavailable.
 - Added multiplayer host world persistence hooks so graceful LAN host shutdown saves the host world before disconnecting clients and reloads saved edits before the next hosted session.
 - Added LAN-scoped session-ended and reconnect UX when clients lose the host, with local editor coverage for host restart and client rejoin.

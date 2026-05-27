@@ -6,18 +6,42 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
+    public enum CreativeWorldGenerationPreset
+    {
+        SurvivalLite,
+        FlatCreative
+    }
+
     public readonly struct GeneratedCreativeWorld
     {
         public GeneratedCreativeWorld(BlockRegistry registry, WorldGenerationSettings settings, VoxelWorld world)
+            : this(registry, settings, world, InferGenerationPreset(settings))
+        {
+        }
+
+        public GeneratedCreativeWorld(
+            BlockRegistry registry,
+            WorldGenerationSettings settings,
+            VoxelWorld world,
+            CreativeWorldGenerationPreset generationPreset)
         {
             Registry = registry;
             Settings = settings;
             World = world;
+            GenerationPreset = generationPreset;
         }
 
         public BlockRegistry Registry { get; }
         public WorldGenerationSettings Settings { get; }
         public VoxelWorld World { get; }
+        public CreativeWorldGenerationPreset GenerationPreset { get; }
+
+        static CreativeWorldGenerationPreset InferGenerationPreset(WorldGenerationSettings settings)
+        {
+            return settings != null && settings.Bounds.Height >= 32
+                ? CreativeWorldGenerationPreset.SurvivalLite
+                : CreativeWorldGenerationPreset.FlatCreative;
+        }
     }
 
     public sealed class CreativeWorldManager : MonoBehaviour
@@ -27,8 +51,11 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeHotbar hotbar;
         [SerializeField] PlacementPreview placementPreview;
+        MultiplayerChunkAuthoritySync authoritySync;
 
         public BlockRegistry Registry { get; private set; }
+        public WorldGenerationSettings Settings { get; private set; }
+        public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
 
@@ -51,7 +78,9 @@ namespace Blockiverse.Gameplay
             InitializeGeneratedWorld(CreateDefaultGeneratedWorld());
         }
 
-        public void InitializeGeneratedWorld(GeneratedCreativeWorld generatedWorld)
+        public void InitializeGeneratedWorld(
+            GeneratedCreativeWorld generatedWorld,
+            MultiplayerChunkAuthoritySync authoritySyncOverride = null)
         {
             if (generatedWorld.Registry == null)
                 throw new ArgumentException("Generated world requires a block registry.", nameof(generatedWorld));
@@ -62,7 +91,42 @@ namespace Blockiverse.Gameplay
 
             Registry = generatedWorld.Registry;
             WorldGenerationSettings settings = generatedWorld.Settings;
+            Settings = settings;
+            GenerationPreset = generatedWorld.GenerationPreset;
             World = generatedWorld.World;
+            ConfigureWorldRuntime(settings, authoritySyncOverride);
+            PositionRigAtSpawn(settings.SpawnPosition);
+        }
+
+        public void InitializeAuthoritativeWorldSnapshot(
+            BlockRegistry registry,
+            VoxelWorld world,
+            MultiplayerChunkAuthoritySync authoritySyncOverride = null)
+        {
+            Registry = registry ?? throw new ArgumentNullException(nameof(registry));
+            Settings = null;
+            GenerationPreset = CreativeWorldGenerationPreset.SurvivalLite;
+            World = world ?? throw new ArgumentNullException(nameof(world));
+            ConfigureWorldRuntime(null, authoritySyncOverride);
+        }
+
+        public void ConfigureAuthoritySync(MultiplayerChunkAuthoritySync sync)
+        {
+            if (authoritySync == sync)
+                return;
+
+            authoritySync = sync;
+
+            if (World != null && Registry != null)
+                ConfigureInteractionController(Settings);
+        }
+
+        void ConfigureWorldRuntime(
+            WorldGenerationSettings settings,
+            MultiplayerChunkAuthoritySync authoritySyncOverride = null)
+        {
+            if (World == null)
+                throw new InvalidOperationException("Creative world runtime requires voxel data.");
 
             Renderer = GetComponent<VoxelWorldRenderer>();
 
@@ -75,27 +139,36 @@ namespace Blockiverse.Gameplay
                 chunkMaterial,
                 interactionLayer);
 
-            if (interactionController != null)
-            {
-                if (hotbar == null)
-                    hotbar = FindFirstObjectByType<CreativeHotbar>();
+            if (authoritySyncOverride != null)
+                authoritySync = authoritySyncOverride;
 
-                if (placementPreview == null)
-                    placementPreview = FindFirstObjectByType<PlacementPreview>();
+            ConfigureInteractionController(settings);
+        }
 
-                if (placementPreview == null)
-                    placementPreview = CreatePlacementPreview();
+        void ConfigureInteractionController(WorldGenerationSettings settings)
+        {
+            if (interactionController == null)
+                return;
 
-                interactionController.Configure(
-                    World,
-                    Registry,
-                    hotbar,
-                    placementPreview,
-                    new Bounds(new Vector3(settings.SpawnPosition.X + 0.5f, settings.SpawnPosition.Y + 0.5f, settings.SpawnPosition.Z + 0.5f), Vector3.one),
-                    Renderer);
-            }
+            if (hotbar == null)
+                hotbar = FindFirstObjectByType<CreativeHotbar>();
 
-            PositionRigAtSpawn(settings.SpawnPosition);
+            if (placementPreview == null)
+                placementPreview = FindFirstObjectByType<PlacementPreview>();
+
+            if (placementPreview == null)
+                placementPreview = CreatePlacementPreview();
+
+            interactionController.Configure(
+                World,
+                Registry,
+                hotbar,
+                placementPreview,
+                settings != null
+                    ? new Bounds(new Vector3(settings.SpawnPosition.X + 0.5f, settings.SpawnPosition.Y + 0.5f, settings.SpawnPosition.Z + 0.5f), Vector3.one)
+                    : null,
+                Renderer,
+                authoritySync: authoritySync);
         }
 
         public static GeneratedCreativeWorld CreateDefaultGeneratedWorld(int seed = 6401)
@@ -103,7 +176,7 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry = BlockRegistry.CreateDefault();
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
             VoxelWorld world = new SurvivalLiteWorldPreset(registry, settings).Generate();
-            return new GeneratedCreativeWorld(registry, settings, world);
+            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite);
         }
 
         void Awake()
