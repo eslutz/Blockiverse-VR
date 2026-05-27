@@ -6,8 +6,8 @@
 **Engine:** Unity 6 Personal
 **Language:** C#
 **Primary gameplay scope:** Creative-mode voxel building + survival-lite with health, resources, crafting, inventory, terrain, and caves
-**Later expansion:** Full survival mode with mobs and day/night
-**Multiplayer:** Basic co-op for two players
+**Later expansion:** Full survival mode with mobs/day-night and cloud-hosted persistent private worlds
+**Multiplayer:** Basic LAN co-op for two players first; cloud-hosted persistent private worlds are a post-release upgrade
 **Player representation:** Use each player's Meta Horizon avatar for local and remote players; do not build a game-specific custom avatar creator
 **NPC representation:** Use original blocky voxel characters for in-game NPCs/mobs; do not use player Meta Horizon avatars for NPCs
 **World model:** Bounded test world first; no infinite terrain initially
@@ -52,7 +52,7 @@ Unity Input System
 XR Interaction Toolkit, if it fits the final interaction model
 Netcode for GameObjects
 Unity Transport
-Optional later: Unity Relay and Lobby for easier remote multiplayer
+Optional later: cloud-hosted private world service for persistent online worlds
 Meta XR Platform SDK when Meta Horizon Avatars, entitlement, identity, or store platform features are needed
 ```
 
@@ -127,7 +127,7 @@ Inventory
 Crafting
 Health
 Basic survival-lite resource loop
-Two-player co-op multiplayer
+Two-player LAN co-op multiplayer
 Save/load
 Original placeholder-to-polished voxel art
 ```
@@ -164,6 +164,9 @@ Combat
 Biome expansion
 More recipes
 More multiplayer survival interactions
+Cloud-hosted persistent private worlds
+Owner-scoped member-only invite access
+Automatic cloud world spin-up/spin-down
 ```
 
 ### Distribution path
@@ -398,6 +401,7 @@ EPIC-12 Art generation, audio, and UI polish
 EPIC-13 Performance, profiling, and Quest validation
 EPIC-14 Meta release pipeline and store readiness
 EPIC-15 Full survival expansion: mobs, day/night, progression
+EPIC-16 Cloud-hosted persistent private worlds
 ```
 
 Each issue should include:
@@ -427,6 +431,7 @@ Dependencies
 | M5 Multiplayer | Two-player join/edit foundation | Father/daughter co-op |
 | M6 Store Candidate | Performance, privacy, signing, release channels, metadata | Meta submission candidate |
 | M7 Full Survival | Original voxel NPCs/mobs, day/night, hostile encounters, progression | Later expansion |
+| M8 Cloud Private Worlds | Cloud-hosted persistent owner/member private worlds | Post-release online multiplayer upgrade |
 
 ---
 
@@ -1512,7 +1517,7 @@ No analytics beyond essential crash/performance diagnostics unless explicitly do
 No account system beyond Meta/Unity services required for multiplayer
 Meta Horizon Avatar/profile data use is disclosed when avatar integration ships
 No custom player avatar/profile data is collected for a Blockiverse-only avatar system
-Private invite/join-code multiplayer
+Private LAN multiplayer for the first release; cloud-hosted invite-code private worlds are post-release M8 scope
 Clear privacy policy
 ```
 
@@ -1597,6 +1602,88 @@ NPCs/mobs are original voxel characters and do not use player Meta Horizon avata
 
 ---
 
+## Phase 21 — Cloud-hosted persistent private worlds, post-release upgrade
+
+### Deliverable
+
+Cloud-hosted, owner-scoped private worlds that persist when nobody is connected and can be joined by invited members over the internet while local LAN multiplayer remains available as a separate low-cost mode.
+
+### Scope
+
+```text
+Cloud-hosted dedicated/private world runtime
+Server-authoritative world simulation and command validation
+Stable cloud world IDs and owner identity
+Durable member list for each world
+Owner-only invite code generation and regeneration
+One active reusable invite code per world
+Invite codes expire 48 hours after generation
+Auto-accept invite redemption by default
+Owner-approval-required invite mode as an owner-configurable setting
+Pending member requests when approval is required
+Permanent membership until owner removal or member self-removal
+Owner member management: remove, block, approve, deny, regenerate invite
+Meta identity, entitlement, active membership, and access-state validation on every join
+Cloud persistent storage for terrain, structures, inventories, and world metadata
+Save versioning, atomic writes, restore validation, and corruption recovery
+Automatic idle spin-down with final save
+Automatic spin-up on authorized reconnect/join
+Session registry and routing to active or starting world servers
+Lifecycle, access, crash, startup, quota, and cost diagnostics
+Quest internet multiplayer validation
+Privacy, data-use, and store-readiness documentation for cloud-hosted private worlds
+```
+
+### Out of scope
+
+```text
+Public matchmaking
+Public/community world browser
+Community world discovery
+Public moderation/reporting surfaces
+Marketplace or mod distribution
+In-app voice chat
+Members generating or regenerating invite codes
+User-configurable invite-code expiration windows
+Single-use per-recipient invite codes
+Replacing local LAN multiplayer
+```
+
+### Tests
+
+```text
+Unit: invite code generation prevents collisions and rejects expired codes.
+Unit: membership remains active after invite code expiration.
+Unit: removed or blocked members cannot rejoin through a fresh code.
+Unit: owner approval mode creates pending requests instead of membership.
+Integration: session registry routes authorized players to the active or starting world server.
+Integration: cloud save/load restores terrain, structures, inventories, and world metadata.
+Integration: idle spin-down performs a final save before teardown.
+Integration: on-demand spin-up restores the latest persisted world state before admitting players.
+PlayMode: unauthorized, expired-code, non-member, removed, and blocked join attempts fail cleanly.
+PlayMode: LAN mode remains usable without cloud service availability.
+Network simulation: cloud private world join, edit, save, spin-down, and reconnect remain stable under expected internet latency.
+```
+
+### Validation
+
+```text
+Owner can create a cloud private world.
+Owner can share a 48-hour reusable invite code.
+Default auto-accept mode adds entitled signed-in redeemers as members.
+Owner can switch future invite redemptions to approval-required mode.
+Owner can approve, deny, remove, and block members.
+Existing members keep access after invite-code expiration.
+Cloud world saves when empty and spins down cleanly.
+Authorized members can later reconnect and trigger spin-up.
+Two Quest devices can join over the internet and resume a persisted world.
+Local LAN multiplayer still works without cloud dependencies.
+No public matchmaking, public browsing, community discovery, or in-app voice scope is introduced.
+Cloud cost, quota, privacy, and diagnostic evidence is documented.
+```
+
+---
+
 # 9. Testing strategy
 
 ## Unit tests
@@ -1613,6 +1700,8 @@ Crafting recipes
 Inventory
 Save/load serialization
 Network command validation
+Cloud invite and membership validation
+Cloud world lifecycle state transitions
 Settings persistence
 ```
 
@@ -1630,6 +1719,8 @@ Crafting UI
 Save/load in scene
 Multiplayer host/client scene
 Late join world sync
+Cloud session registry routing
+Cloud world save/restore
 ```
 
 ## Multiplayer tests
@@ -1643,7 +1734,7 @@ Manual two-Quest LAN tests
 Network simulation for 100ms latency
 Packet loss resilience checks for chunk sync
 Bandwidth measurement during active block editing
-Relay smoke tests later
+Cloud private world integration smoke tests later
 ```
 
 ## VR/device smoke tests
@@ -1664,6 +1755,9 @@ Reload world
 Start host session
 Join second headset
 Build together for 5 minutes
+Create cloud private world
+Join cloud private world over the internet
+Verify cloud save, spin-down, spin-up, and reconnect
 Collect logs
 ```
 
@@ -1989,6 +2083,49 @@ FEATURE: Mobs
   STORY: Add multiplayer combat sync
 ```
 
+## EPIC-16 — Cloud-hosted persistent private worlds
+
+```text
+FEATURE: Cloud hosting architecture and provider foundation
+  SPIKE: Choose cloud-hosting architecture for private worlds
+  STORY: Define cloud cost, quota, region, and privacy guardrails
+  STORY: Document post-release cloud-world privacy and data-use requirements
+
+FEATURE: Dedicated cloud world server runtime
+  STORY: Add headless cloud world server build
+  STORY: Enforce server-authoritative simulation and command validation
+
+FEATURE: Private world identity and ownership
+  STORY: Add stable cloud world metadata and owner model
+  STORY: Add durable member model with self-leave, removal, and block state
+
+FEATURE: Invite codes and membership policy
+  STORY: Add owner-only 48-hour reusable invite codes
+  STORY: Add auto-accept default and owner-approval invite mode
+
+FEATURE: Cloud world UI and owner management
+  STORY: Add LAN vs cloud multiplayer mode selection
+  STORY: Add create, join, and manage cloud world UI
+
+FEATURE: Session registry and routing
+  STORY: Add service-backed world/session registry
+  STORY: Route clients to active or starting cloud world servers
+
+FEATURE: Cloud persistence and lifecycle
+  STORY: Persist cloud world state with versioning and corruption recovery
+  STORY: Implement idle spin-down with final save
+  STORY: Implement on-demand spin-up and reconnect synchronization
+
+FEATURE: Observability, security, and operational guardrails
+  STORY: Validate Meta entitlement, identity, and membership on every join
+  STORY: Add invite redemption rate limiting and access audit logs
+  STORY: Add lifecycle diagnostics, crash tracking, quota, and cost guardrails
+
+FEATURE: Quest, network, and release validation
+  STORY: Add cloud private world automated integration tests
+  STORY: Validate two Quest devices over internet with save, spin-down, and reconnect
+```
+
 ---
 
 # 11. Recommended build order
@@ -2114,6 +2251,22 @@ Original mobs exist.
 Combat/progression exists.
 Multiplayer survival remains stable.
 Quest performance remains acceptable.
+```
+
+## M8 Cloud Private Worlds
+
+```text
+Local LAN multiplayer remains available.
+Owner can create a cloud-hosted private world.
+Owner-only reusable invite codes expire after 48 hours.
+Default auto-accept mode adds entitled signed-in redeemers as members.
+Owner can switch future invite redemptions to approval-required mode.
+Membership remains permanent until owner removal or member self-removal.
+Owner can remove, block, approve, deny, and regenerate invite access.
+Cloud worlds persist when empty, spin down, and spin up for authorized members.
+Two Quest devices can join over the internet and resume a persisted world.
+No public matchmaking, community world browser, public discovery, or in-app voice scope is introduced.
+Cloud cost, quota, privacy, diagnostics, and store-readiness notes are recorded.
 ```
 
 ---

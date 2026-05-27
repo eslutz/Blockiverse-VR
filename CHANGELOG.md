@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added the M8 Cloud Private Worlds roadmap milestone for post-release cloud-hosted persistent private worlds while preserving local LAN multiplayer as a separate mode.
 - Updated the M5 multiplayer roadmap to clarify host-authoritative LAN co-op, host disconnect/save behavior, fallback avatars, chunk authority, network resilience checks, and Meta Quest party chat instead of in-app voice chat.
 - Added a local-only diagnostics logging foundation for Alpha validation, including categorized Unity/player log routing, sanitized save/render diagnostics, and Quest log capture documentation.
 - Fixed external review findings in voxel renderer mesh lifecycle, placement preview material overrides, world-load change events, save validation, atlas coverage checks, and survival inventory UI fallbacks.
