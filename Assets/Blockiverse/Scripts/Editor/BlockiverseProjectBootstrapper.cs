@@ -634,8 +634,10 @@ namespace Blockiverse.Editor
             playerObject.transform.localScale = Vector3.one;
 
             NetworkObject networkObject = EnsureComponent<NetworkObject>(playerObject);
+            BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(playerObject);
 
             EditorUtility.SetDirty(networkObject);
+            EditorUtility.SetDirty(avatarRig);
             EditorUtility.SetDirty(playerObject);
         }
 

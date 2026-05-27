@@ -9,6 +9,7 @@
     "Blockiverse.Persistence",
     "Blockiverse.UI",
     "UnityEngine.UI",
+    "Unity.Netcode.Runtime",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
   ],

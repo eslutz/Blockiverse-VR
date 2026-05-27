@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2373100832013435619}
   - component: {fileID: 9014985143307194936}
+  - component: {fileID: 7759416061770130042}
   m_Layer: 0
   m_Name: BlockiverseNetworkPlayer
   m_TagString: Untagged
@@ -42,7 +43,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 0
   InScenePlacedSourceGlobalObjectIdHash: 0
@@ -57,3 +58,27 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
+--- !u!114 &7759416061770130042
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7905951144484321277}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44b2c1b7d98f4a0a9f2a5e1b7c3d9e10, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseNetworkAvatarRig
+  fallbackProxyEnabled: 1
+  metaAvatarAvailable: 0
+  poseSendRateHz: 30
+  headTrackingSource: {fileID: 0}
+  leftHandTrackingSource: {fileID: 0}
+  rightHandTrackingSource: {fileID: 0}
+  fallbackRoot: {fileID: 0}
+  headAnchor: {fileID: 0}
+  leftHandAnchor: {fileID: 0}
+  rightHandAnchor: {fileID: 0}
+  ownerFallbackColor: {r: 0.2, g: 0.68, b: 0.94, a: 1}
+  remoteFallbackColor: {r: 0.94, g: 0.62, b: 0.22, a: 1}
