@@ -4,8 +4,12 @@ using System.Linq;
 using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.UI;
 using Blockiverse.VR;
+using Unity.Netcode;
+using Unity.Netcode.Editor.Configuration;
+using Unity.Netcode.Transports.UTP;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Events;
@@ -35,6 +39,7 @@ namespace Blockiverse.Editor
             "Assets/Blockiverse/Audio",
             "Assets/Blockiverse/Materials",
             "Assets/Blockiverse/Prefabs",
+            "Assets/Blockiverse/Prefabs/Networking",
             "Assets/Blockiverse/Scenes",
             "Assets/Blockiverse/Scripts",
             "Assets/Blockiverse/Settings",
@@ -55,6 +60,8 @@ namespace Blockiverse.Editor
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
         const string SurvivalHudName = "Survival HUD";
+        const string NetworkManagerRootName = "Blockiverse Network Manager";
+        const string NetworkPlayerPrefabName = "Blockiverse Network Player";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionTestBlockName = "Interaction Test Block";
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
@@ -88,11 +95,38 @@ namespace Blockiverse.Editor
             EnsureInteractionMaterials();
             EnsureInputActions();
             EnsureXrRigPrefab();
+            EnsureNetworkFoundationAssets();
             EnsureBootScene();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Blockiverse Unity/Quest bootstrap complete.");
+        }
+
+        [MenuItem("Blockiverse/Bootstrap M5 Network Foundation")]
+        public static void EnsureNetworkFoundationAssets()
+        {
+            EnsureFolders();
+            DisableNetcodeDefaultNetworkPrefabs();
+            GameObject playerPrefab = EnsureNetworkPlayerPrefab();
+            GameObject networkManagerPrefab = EnsureNetworkManagerPrefab(playerPrefab);
+            EnsureMultiplayerTestScene(networkManagerPrefab);
+            EnsureBuildScenes();
+            RemoveGeneratedDefaultNetworkPrefabs();
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        static void DisableNetcodeDefaultNetworkPrefabs()
+        {
+            NetcodeForGameObjectsProjectSettings settings = NetcodeForGameObjectsProjectSettings.instance;
+            settings.GenerateDefaultNetworkPrefabs = false;
+
+            MethodInfo saveSettings = typeof(NetcodeForGameObjectsProjectSettings).GetMethod(
+                "SaveSettings",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            saveSettings?.Invoke(settings, null);
         }
 
         static void EnsureFolders()
@@ -553,11 +587,145 @@ namespace Blockiverse.Editor
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
+            EnsureBuildScenes();
+        }
 
-            EditorBuildSettings.scenes = new[]
+        static GameObject EnsureNetworkPlayerPrefab()
+        {
+            GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkPlayerPrefabPath);
+
+            if (existingPrefab != null)
             {
-                new EditorBuildSettingsScene(BlockiverseProject.BootScenePath, true)
-            };
+                GameObject prefabContents = PrefabUtility.LoadPrefabContents(BlockiverseProject.NetworkPlayerPrefabPath);
+
+                try
+                {
+                    ConfigureNetworkPlayerObject(prefabContents);
+                    PrefabUtility.SaveAsPrefabAsset(prefabContents, BlockiverseProject.NetworkPlayerPrefabPath);
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(prefabContents);
+                }
+
+                return AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkPlayerPrefabPath);
+            }
+
+            GameObject player = new(NetworkPlayerPrefabName);
+            ConfigureNetworkPlayerObject(player);
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(player, BlockiverseProject.NetworkPlayerPrefabPath);
+            UnityEngine.Object.DestroyImmediate(player);
+            return prefab;
+        }
+
+        static void ConfigureNetworkPlayerObject(GameObject playerObject)
+        {
+            playerObject.name = NetworkPlayerPrefabName;
+            playerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            playerObject.transform.localScale = Vector3.one;
+
+            NetworkObject networkObject = EnsureComponent<NetworkObject>(playerObject);
+
+            EditorUtility.SetDirty(networkObject);
+            EditorUtility.SetDirty(playerObject);
+        }
+
+        static GameObject EnsureNetworkManagerPrefab(GameObject playerPrefab)
+        {
+            GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkManagerPrefabPath);
+
+            if (existingPrefab != null)
+            {
+                GameObject prefabContents = PrefabUtility.LoadPrefabContents(BlockiverseProject.NetworkManagerPrefabPath);
+
+                try
+                {
+                    ConfigureNetworkManagerObject(prefabContents, playerPrefab);
+                    PrefabUtility.SaveAsPrefabAsset(prefabContents, BlockiverseProject.NetworkManagerPrefabPath);
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(prefabContents);
+                }
+
+                return AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkManagerPrefabPath);
+            }
+
+            GameObject managerObject = new(NetworkManagerRootName);
+            ConfigureNetworkManagerObject(managerObject, playerPrefab);
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(managerObject, BlockiverseProject.NetworkManagerPrefabPath);
+            UnityEngine.Object.DestroyImmediate(managerObject);
+            return prefab;
+        }
+
+        static void ConfigureNetworkManagerObject(GameObject managerObject, GameObject playerPrefab)
+        {
+            managerObject.name = NetworkManagerRootName;
+            managerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            managerObject.transform.localScale = Vector3.one;
+
+            UnityTransport transport = EnsureComponent<UnityTransport>(managerObject);
+            transport.SetConnectionData(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultPort,
+                BlockiverseNetworkConfig.DefaultListenAddress);
+
+            NetworkManager networkManager = EnsureComponent<NetworkManager>(managerObject);
+            networkManager.NetworkConfig ??= new NetworkConfig();
+            networkManager.NetworkConfig.NetworkTransport = transport;
+            networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
+            networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Clear();
+            networkManager.NetworkConfig.EnableSceneManagement = false;
+            networkManager.NetworkConfig.ConnectionApproval = false;
+            networkManager.NetworkConfig.TickRate = 30;
+
+            EnsureComponent<BlockiverseNetworkSession>(managerObject);
+            EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
+
+            EditorUtility.SetDirty(transport);
+            EditorUtility.SetDirty(networkManager);
+            EditorUtility.SetDirty(managerObject);
+        }
+
+        static void EnsureMultiplayerTestScene(GameObject networkManagerPrefab)
+        {
+            bool sceneExists = AssetDatabase.LoadAssetAtPath<SceneAsset>(BlockiverseProject.MultiplayerTestScenePath) != null;
+            Scene scene = sceneExists
+                ? EditorSceneManager.OpenScene(BlockiverseProject.MultiplayerTestScenePath, OpenSceneMode.Single)
+                : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            GameObject managerObject = FindRootGameObject(scene, NetworkManagerRootName);
+
+            if (managerObject == null)
+                managerObject = (GameObject)PrefabUtility.InstantiatePrefab(networkManagerPrefab, scene);
+
+            GameObject playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkPlayerPrefabPath);
+            ConfigureNetworkManagerObject(managerObject, playerPrefab);
+            EnsureBootSceneLight(scene);
+
+            EditorSceneManager.SaveScene(scene, BlockiverseProject.MultiplayerTestScenePath);
+        }
+
+        static void EnsureBuildScenes()
+        {
+            var scenes = new[]
+            {
+                BlockiverseProject.BootScenePath,
+                BlockiverseProject.MultiplayerTestScenePath
+            }
+                .Where(path => AssetDatabase.LoadAssetAtPath<SceneAsset>(path) != null)
+                .Select(path => new EditorBuildSettingsScene(path, true))
+                .ToArray();
+
+            EditorBuildSettings.scenes = scenes;
+        }
+
+        static void RemoveGeneratedDefaultNetworkPrefabs()
+        {
+            const string defaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
+
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(defaultNetworkPrefabsPath) != null)
+                AssetDatabase.DeleteAsset(defaultNetworkPrefabsPath);
         }
 
         static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
