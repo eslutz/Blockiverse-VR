@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added multiplayer host world persistence hooks so graceful LAN host shutdown saves the host world before disconnecting clients and reloads saved edits before the next hosted session.
 - Added LAN-scoped session-ended and reconnect UX when clients lose the host, with local editor coverage for host restart and client rejoin.
 - Added an M5 LAN multiplayer session menu for hosting, joining by IP address, stopping sessions, and validating the MultiplayerTest scene flow through Unity UI controls.
 - Added the M8 Cloud Private Worlds roadmap milestone for post-release cloud-hosted persistent private worlds while preserving local LAN multiplayer as a separate mode.

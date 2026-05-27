@@ -690,6 +690,7 @@ namespace Blockiverse.Editor
 
             EnsureComponent<BlockiverseNetworkSession>(managerObject);
             EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
+            EnsureComponent<MultiplayerWorldPersistence>(managerObject);
 
             EditorUtility.SetDirty(transport);
             EditorUtility.SetDirty(networkManager);
@@ -710,6 +711,7 @@ namespace Blockiverse.Editor
 
             GameObject playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkPlayerPrefabPath);
             ConfigureNetworkManagerObject(managerObject, playerPrefab);
+            EnsureBootSceneCreativeWorld(scene);
             EnsureBootSceneLight(scene);
             EnsureMultiplayerTestCamera(scene);
             EnsureMultiplayerEventSystem(scene);

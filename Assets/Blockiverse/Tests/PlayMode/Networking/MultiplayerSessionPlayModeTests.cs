@@ -1,9 +1,14 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.Networking;
+using Blockiverse.Voxel;
+using Blockiverse.WorldGen;
 using Blockiverse.UI;
 using NUnit.Framework;
 using Unity.Netcode;
@@ -19,6 +24,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
     public sealed class MultiplayerSessionPlayModeTests
     {
         static ushort nextPort = 7810;
+        static readonly List<string> TempSavePaths = new();
 
         [UnityTest]
         public IEnumerator MultiplayerTestSceneSessionMenuHostsAndJoinsLocalClient()
@@ -285,6 +291,139 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientMenu.StatusText.text, Does.Not.Contain("host disconnected"));
         }
 
+        [UnityTest]
+        public IEnumerator HostShutdownPersistsWorldBeforeClientDisconnectAndRestoresOnRestart()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            string savePath = CreateTempSavePath();
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Save World");
+            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
+            var editPosition = new BlockPosition(2, 2, 2);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+            bool clientWasListeningDuringShutdownPreparation = false;
+
+            bool CaptureShutdownPreparation(out string failureReason)
+            {
+                failureReason = string.Empty;
+                clientWasListeningDuringShutdownPreparation = clientSession.NetworkManager.IsListening;
+                return true;
+            }
+
+            try
+            {
+                hostSession.Configure(testConfig);
+                clientSession.Configure(testConfig);
+                hostSession.HostShutdownPreparing += CaptureShutdownPreparation;
+
+                Assert.That(hostSession.StartHost(), Is.True);
+                yield return WaitFor(
+                    () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                    "Host did not start.");
+
+                Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+                yield return WaitFor(
+                    () => clientSession.NetworkManager.IsConnectedClient &&
+                          hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                    "Client did not connect to host.");
+
+                worldManager.World.SetBlock(editPosition, BlockRegistry.Clearstone);
+                hostSession.StopSession();
+
+                Assert.That(hostSession.LastStopRequestSucceeded, Is.True);
+                Assert.That(persistence.LastShutdownSaveAttempted, Is.True);
+                Assert.That(persistence.LastShutdownSaveSucceeded, Is.True);
+                Assert.That(clientWasListeningDuringShutdownPreparation, Is.True);
+
+                yield return WaitFor(
+                    () => hostSession.CurrentState == BlockiverseConnectionState.Stopped &&
+                          clientSession.CurrentState == BlockiverseConnectionState.Disconnected &&
+                          !hostSession.NetworkManager.IsListening &&
+                          !clientSession.NetworkManager.IsListening,
+                    "Host shutdown did not stop after saving the world.");
+
+                Assert.That(File.Exists(savePath), Is.True);
+
+                worldManager.World.SetBlock(editPosition, BlockRegistry.Air);
+
+                Assert.That(hostSession.StartHost(), Is.True);
+                yield return WaitFor(
+                    () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                    "Host did not restart.");
+
+                Assert.That(persistence.LastHostLoadAttempted, Is.True);
+                Assert.That(persistence.LastHostLoadSucceeded, Is.True);
+                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
+            }
+            finally
+            {
+                hostSession.HostShutdownPreparing -= CaptureShutdownPreparation;
+                DeleteIfExists(savePath);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator HostShutdownSaveFailureAbortsShutdownAndKeepsClientsConnected()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseMultiplayerSessionMenu hostMenu = UnityEngine.Object.FindFirstObjectByType<BlockiverseMultiplayerSessionMenu>();
+            Assert.That(hostMenu, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Save Failure World");
+            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, "invalid\0save");
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect to host.");
+
+            LogAssert.Expect(
+                LogType.Error,
+                new Regex(@"\[Blockiverse\]\[Persistence\] Failed to save multiplayer host world before shutdown.*exception=(ArgumentException|NotSupportedException)"));
+
+            hostMenu.StopButton.onClick.Invoke();
+            yield return null;
+
+            Assert.That(hostSession.LastStopRequestSucceeded, Is.False);
+            Assert.That(hostSession.CurrentState, Is.EqualTo(BlockiverseConnectionState.Hosting));
+            Assert.That(hostSession.NetworkManager.IsListening, Is.True);
+            Assert.That(clientSession.NetworkManager.IsListening, Is.True);
+            Assert.That(clientSession.NetworkManager.IsConnectedClient, Is.True);
+            Assert.That(persistence.LastShutdownSaveAttempted, Is.True);
+            Assert.That(persistence.LastShutdownSaveSucceeded, Is.False);
+            StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostSession.LastDisconnectReason);
+            hostMenu.RefreshStatus();
+            StringAssert.Contains("Unable to stop LAN session", hostMenu.StatusText.text);
+            StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostMenu.StatusText.text);
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -307,6 +446,11 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 if (manager != null)
                     UnityEngine.Object.DestroyImmediate(manager.gameObject);
             }
+
+            foreach (string tempSavePath in TempSavePaths)
+                DeleteIfExists(tempSavePath);
+
+            TempSavePaths.Clear();
         }
 
         static IEnumerator LoadMultiplayerTestScene()
@@ -318,6 +462,12 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             while (!operation.isDone)
                 yield return null;
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            CreativeWorldManager worldManager = UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+
+            if (hostSession != null && worldManager != null)
+                ConfigurePersistence(hostSession, worldManager, CreateTempSavePath());
         }
 
         static BlockiverseNetworkSession CreateClientSession(BlockiverseNetworkSession hostSession)
@@ -329,6 +479,55 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientSession, Is.Not.Null);
             Assert.That(clientSession.NetworkManager, Is.Not.SameAs(hostSession.NetworkManager));
             return clientSession;
+        }
+
+        static MultiplayerWorldPersistence ConfigurePersistence(
+            BlockiverseNetworkSession session,
+            CreativeWorldManager worldManager,
+            string savePath)
+        {
+            MultiplayerWorldPersistence persistence = session.GetComponent<MultiplayerWorldPersistence>();
+
+            if (persistence == null)
+                persistence = session.gameObject.AddComponent<MultiplayerWorldPersistence>();
+
+            persistence.Configure(session, worldManager, savePath, "playmode-multiplayer");
+            return persistence;
+        }
+
+        static CreativeWorldManager CreateCreativeWorldManager(string name)
+        {
+            GameObject worldObject = new(name);
+            worldObject.SetActive(false);
+            CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
+            manager.Configure(CreateBlockAtlasMaterial(), -1);
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(
+                width: 16,
+                height: 8,
+                depth: 16,
+                chunkSize: 16,
+                seed: 9901,
+                groundHeight: 2);
+            VoxelWorld world = new FlatCreativeWorldPreset(registry, settings).Generate();
+            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world));
+            return manager;
+        }
+
+        static Material CreateBlockAtlasMaterial()
+        {
+            var atlasTexture = new Texture2D(
+                BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels,
+                BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels,
+                TextureFormat.RGBA32,
+                mipChain: false)
+            {
+                name = BlockVisualAtlas.AuthoredAtlasName
+            };
+
+            Material material = new(Shader.Find("Sprites/Default"));
+            material.mainTexture = atlasTexture;
+            return material;
         }
 
         static BlockiverseMultiplayerSessionMenu CreateSessionMenu(string name, BlockiverseNetworkSession session)
@@ -383,6 +582,19 @@ namespace Blockiverse.Tests.Networking.PlayMode
         static ushort NextPort()
         {
             return nextPort++;
+        }
+
+        static string CreateTempSavePath()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"blockiverse-multiplayer-{Guid.NewGuid():N}.json");
+            TempSavePaths.Add(path);
+            return path;
+        }
+
+        static void DeleteIfExists(string path)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
         }
 
         static IEnumerator WaitFor(Func<bool> condition, string failureMessage, float timeoutSeconds = 5.0f)

@@ -5,6 +5,8 @@ using UnityEngine;
 
 namespace Blockiverse.Networking
 {
+    public delegate bool BlockiverseNetworkSessionPreparationHandler(out string failureReason);
+
     [DisallowMultipleComponent]
     [RequireComponent(typeof(NetworkManager))]
     [RequireComponent(typeof(UnityTransport))]
@@ -26,9 +28,13 @@ namespace Blockiverse.Networking
         public NetworkSessionMode CurrentMode { get; private set; } = NetworkSessionMode.Offline;
         public string LastDisconnectReason { get; private set; } = string.Empty;
         public bool HasConnectedAsClient { get; private set; }
+        public bool LastStopRequestSucceeded { get; private set; } = true;
         public NetworkManager NetworkManager => ResolveNetworkManager();
         public UnityTransport UnityTransport => ResolveUnityTransport();
         public BlockiverseNetworkConfig Config => config;
+
+        public event BlockiverseNetworkSessionPreparationHandler HostStartPreparing;
+        public event BlockiverseNetworkSessionPreparationHandler HostShutdownPreparing;
 
         void Awake()
         {
@@ -65,6 +71,12 @@ namespace Blockiverse.Networking
             if (!PrepareToStart(NetworkSessionMode.Host))
                 return false;
 
+            if (!RunPreparation(HostStartPreparing, "Unable to prepare LAN host session."))
+            {
+                MarkFailed(LastDisconnectReason);
+                return false;
+            }
+
             CurrentState = BlockiverseConnectionState.StartingHost;
             ApplyConnectionData(config.Address, config.ListenAddress);
 
@@ -94,12 +106,23 @@ namespace Blockiverse.Networking
         public void StopSession()
         {
             ResolveDependencies();
+            LastStopRequestSucceeded = true;
 
             if (!networkManager.IsListening && !networkManager.ShutdownInProgress)
             {
                 CurrentMode = NetworkSessionMode.Offline;
                 CurrentState = BlockiverseConnectionState.Stopped;
                 HasConnectedAsClient = false;
+                stopRequestedByLocalSession = false;
+                return;
+            }
+
+            if (CurrentMode == NetworkSessionMode.Host &&
+                networkManager.IsListening &&
+                !RunPreparation(HostShutdownPreparing, "Unable to prepare LAN host shutdown."))
+            {
+                LastStopRequestSucceeded = false;
+                CurrentState = BlockiverseConnectionState.Hosting;
                 stopRequestedByLocalSession = false;
                 return;
             }
@@ -120,7 +143,37 @@ namespace Blockiverse.Networking
             LastDisconnectReason = string.Empty;
             CurrentMode = mode;
             HasConnectedAsClient = false;
+            LastStopRequestSucceeded = true;
             stopRequestedByLocalSession = false;
+            return true;
+        }
+
+        bool RunPreparation(
+            BlockiverseNetworkSessionPreparationHandler preparationHandlers,
+            string defaultFailureReason)
+        {
+            if (preparationHandlers == null)
+                return true;
+
+            foreach (BlockiverseNetworkSessionPreparationHandler handler in preparationHandlers.GetInvocationList())
+            {
+                try
+                {
+                    if (handler(out string failureReason))
+                        continue;
+
+                    LastDisconnectReason = string.IsNullOrWhiteSpace(failureReason)
+                        ? defaultFailureReason
+                        : failureReason;
+                    return false;
+                }
+                catch (Exception exception)
+                {
+                    LastDisconnectReason = $"{defaultFailureReason} exception={exception.GetType().Name}";
+                    return false;
+                }
+            }
+
             return true;
         }
 

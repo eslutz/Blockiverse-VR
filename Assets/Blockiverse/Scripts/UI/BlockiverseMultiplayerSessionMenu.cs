@@ -98,7 +98,7 @@ namespace Blockiverse.UI
 
             bool wasActive = session.NetworkManager.IsListening || session.NetworkManager.ShutdownInProgress;
             session.StopSession();
-            SetStatus(wasActive ? "Stopping LAN session..." : "LAN session stopped.");
+            SetStatus(DescribeStopSessionResult(wasActive));
             RefreshControls();
         }
 
@@ -168,7 +168,9 @@ namespace Blockiverse.UI
             return session.CurrentState switch
             {
                 BlockiverseConnectionState.StartingHost => "Starting LAN host...",
-                BlockiverseConnectionState.Hosting => $"Hosting LAN session on {session.Config.ListenAddress}:{session.Config.Port}.",
+                BlockiverseConnectionState.Hosting => session.LastStopRequestSucceeded
+                    ? $"Hosting LAN session on {session.Config.ListenAddress}:{session.Config.Port}."
+                    : DescribeStopSessionResult(wasActive: true),
                 BlockiverseConnectionState.StartingClient => $"Joining LAN session at {ResolveJoinAddress()}:{session.Config.Port}...",
                 BlockiverseConnectionState.ConnectedClient => $"Connected to LAN session at {ResolveJoinAddress()}:{session.Config.Port}.",
                 BlockiverseConnectionState.Disconnecting => "Stopping LAN session...",
@@ -176,6 +178,21 @@ namespace Blockiverse.UI
                 BlockiverseConnectionState.Failed => DescribeFailedState(),
                 _ => $"LAN session stopped. Join address defaults to {BlockiverseNetworkConfig.DefaultAddress}.",
             };
+        }
+
+        string DescribeStopSessionResult(bool wasActive)
+        {
+            if (session == null)
+                return "LAN session is unavailable.";
+
+            if (!session.LastStopRequestSucceeded)
+            {
+                return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
+                    ? "Unable to stop LAN session."
+                    : $"Unable to stop LAN session. {session.LastDisconnectReason}";
+            }
+
+            return wasActive ? "Stopping LAN session..." : "LAN session stopped.";
         }
 
         string DescribeDisconnectedState()
