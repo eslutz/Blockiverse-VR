@@ -17,15 +17,17 @@ namespace Blockiverse.Gameplay
         const string ChunkSnapshotMessage = "Blockiverse.ChunkAuthority.ChunkSnapshot";
         const string MutationResultMessage = "Blockiverse.ChunkAuthority.MutationResult";
         const int MutationRequestMessageBytes = 128;
-        const int MutationDeltaMessageBytes = 128;
+        const int MutationDeltaMessageBytes = 160;
         const int MutationResultMessageBytes = 128;
-        const int SnapshotHeaderBytes = 64;
+        const int SnapshotHeaderBytes = 80;
         const int SnapshotBlockBytes = 32;
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
 
         readonly Dictionary<uint, BlockMutationRequest> pendingMutationRequests = new();
+        readonly List<PendingChunkDeltaMessage> bufferedChunkDeltas = new();
+        readonly ChunkDeltaLog chunkDeltaLog = new();
         NetworkManager subscribedNetworkManager;
         BlockMutationAuthority mutationAuthority;
         uint nextMutationRequestId = 1;
@@ -40,6 +42,8 @@ namespace Blockiverse.Gameplay
         public int ReceivedMutationRequestCount { get; private set; }
         public int BroadcastDeltaCount { get; private set; }
         public int AppliedRemoteDeltaCount { get; private set; }
+        public int AppliedChunkDeltaCount { get; private set; }
+        public int IgnoredOutOfOrderChunkDeltaCount { get; private set; }
         public int SentLateJoinSnapshotCount { get; private set; }
         public int AppliedGenerationSnapshotCount { get; private set; }
         public int AppliedSnapshotBlockCount { get; private set; }
@@ -49,7 +53,17 @@ namespace Blockiverse.Gameplay
         public uint LastSentMutationRequestId { get; private set; }
         public uint LastReceivedMutationRequestId { get; private set; }
         public uint LastCompletedMutationRequestId { get; private set; }
+        public uint LastBroadcastChunkDeltaSequence { get; private set; }
+        public uint LastAppliedChunkDeltaSequence { get; private set; }
+        public IReadOnlyList<ChunkDelta> RecordedChunkDeltas => chunkDeltaLog.Deltas;
         public bool HasHostGenerationSnapshotForSession => hasHostGenerationSnapshotForSession;
+
+        enum ChunkDeltaApplyState
+        {
+            Applied,
+            IgnoredStale,
+            WaitingForEarlierDelta
+        }
 
         public void Configure(BlockiverseNetworkSession targetSession, CreativeWorldManager targetWorldManager)
         {
@@ -156,6 +170,7 @@ namespace Blockiverse.Gameplay
         void HandleServerStarted()
         {
             RefreshAuthorityBoundary();
+            ResetHostChunkDeltaLog();
             RegisterMessageHandlers();
         }
 
@@ -166,6 +181,7 @@ namespace Blockiverse.Gameplay
             if (CurrentBoundary.MustRequestMutations)
             {
                 hasHostGenerationSnapshotForSession = false;
+                ResetClientChunkDeltaState();
                 ResetPendingMutationRequests();
             }
 
@@ -199,6 +215,7 @@ namespace Blockiverse.Gameplay
         void HandleClientStopped(bool wasHost)
         {
             hasHostGenerationSnapshotForSession = false;
+            ResetClientChunkDeltaState();
             ResetPendingMutationRequests();
             UnregisterMessageHandlers();
             RefreshAuthorityBoundary();
@@ -240,16 +257,16 @@ namespace Blockiverse.Gameplay
             if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
                 return;
 
-            BlockChange change = ReadMutationDelta(ref reader, out ulong requestingClientId, out uint requestId);
-            ApplyAuthoritativeBlock(change.Position, change.NewBlock, trackChange: false);
-            LastMutationResult = BlockMutationResult.Accept(
-                change,
-                ChunkCoordinate.FromBlockPosition(change.Position, ResolveWorld().ChunkSize),
-                requestId);
-            AppliedRemoteDeltaCount++;
+            ChunkDelta delta = ReadMutationDelta(ref reader, out ulong requestingClientId, out uint requestId);
 
-            if (TryCompletePendingMutationRequest(requestingClientId, requestId))
-                AcceptedMutationResponseCount++;
+            if (!hasHostGenerationSnapshotForSession)
+            {
+                BufferChunkDeltaMessage(new PendingChunkDeltaMessage(requestingClientId, requestId, delta));
+                return;
+            }
+
+            ApplyChunkDeltaMessageOrBuffer(new PendingChunkDeltaMessage(requestingClientId, requestId, delta));
+            ApplyBufferedChunkDeltas();
         }
 
         void HandleChunkSnapshotMessage(ulong senderClientId, FastBufferReader reader)
@@ -268,6 +285,8 @@ namespace Blockiverse.Gameplay
                 ApplyAuthoritativeBlock(position, new BlockId(blockId), trackChange: false);
                 AppliedSnapshotBlockCount++;
             }
+
+            ApplyBufferedChunkDeltas();
         }
 
         void HandleMutationResultMessage(ulong senderClientId, FastBufferReader reader)
@@ -342,9 +361,11 @@ namespace Blockiverse.Gameplay
 
             try
             {
+                ChunkDelta delta = chunkDeltaLog.Record(change, ResolveWorld().ChunkSize);
+                LastBroadcastChunkDeltaSequence = delta.SequenceId;
                 writer.WriteValueSafe(requestingClientId);
                 writer.WriteValueSafe(requestId);
-                WriteBlockChange(ref writer, change);
+                WriteChunkDelta(ref writer, delta);
                 SendToRemoteClients(MutationDeltaMessage, writer);
                 BroadcastDeltaCount++;
             }
@@ -417,6 +438,18 @@ namespace Blockiverse.Gameplay
             LastCompletedMutationRequestId = 0;
         }
 
+        void ResetClientChunkDeltaState()
+        {
+            bufferedChunkDeltas.Clear();
+            LastAppliedChunkDeltaSequence = 0;
+        }
+
+        void ResetHostChunkDeltaLog()
+        {
+            chunkDeltaLog.Clear();
+            LastBroadcastChunkDeltaSequence = 0;
+        }
+
         void SendLateJoinSnapshot(ulong clientId)
         {
             IReadOnlyCollection<BlockChange> changedBlocks = ResolveWorld().GetChangedBlocks();
@@ -454,6 +487,97 @@ namespace Blockiverse.Gameplay
 
             world.SetBlock(position, block, trackChange);
             worldManager.Renderer?.RebuildDirty();
+        }
+
+        ChunkDeltaApplyState TryApplyChunkDelta(ChunkDelta delta)
+        {
+            if (delta.SequenceId == NextChunkDeltaSequence(LastAppliedChunkDeltaSequence))
+            {
+                ApplyAuthoritativeBlock(delta.Change.Position, delta.Change.NewBlock, trackChange: false);
+                LastAppliedChunkDeltaSequence = delta.SequenceId;
+                AppliedChunkDeltaCount++;
+                return ChunkDeltaApplyState.Applied;
+            }
+
+            if (delta.SequenceId == LastAppliedChunkDeltaSequence ||
+                (LastAppliedChunkDeltaSequence != uint.MaxValue &&
+                 delta.SequenceId < LastAppliedChunkDeltaSequence))
+            {
+                IgnoredOutOfOrderChunkDeltaCount++;
+                return ChunkDeltaApplyState.IgnoredStale;
+            }
+
+            return ChunkDeltaApplyState.WaitingForEarlierDelta;
+        }
+
+        void ApplyChunkDeltaMessageOrBuffer(PendingChunkDeltaMessage message)
+        {
+            ChunkDeltaApplyState applyState = TryApplyChunkDelta(message.Delta);
+
+            if (applyState == ChunkDeltaApplyState.WaitingForEarlierDelta)
+            {
+                BufferChunkDeltaMessage(message);
+                return;
+            }
+
+            if (applyState == ChunkDeltaApplyState.IgnoredStale)
+                return;
+
+            CompleteAppliedChunkDeltaMessage(message);
+        }
+
+        void CompleteAppliedChunkDeltaMessage(PendingChunkDeltaMessage message)
+        {
+            LastMutationResult = BlockMutationResult.Accept(
+                message.Delta.Change,
+                message.Delta.Chunk,
+                message.RequestId);
+            AppliedRemoteDeltaCount++;
+
+            if (TryCompletePendingMutationRequest(message.RequestingClientId, message.RequestId))
+                AcceptedMutationResponseCount++;
+        }
+
+        void ApplyBufferedChunkDeltas()
+        {
+            if (bufferedChunkDeltas.Count == 0)
+                return;
+
+            bool madeProgress;
+
+            do
+            {
+                madeProgress = false;
+
+                for (int index = 0; index < bufferedChunkDeltas.Count; index++)
+                {
+                    PendingChunkDeltaMessage message = bufferedChunkDeltas[index];
+                    ChunkDeltaApplyState applyState = TryApplyChunkDelta(message.Delta);
+
+                    if (applyState == ChunkDeltaApplyState.WaitingForEarlierDelta)
+                        continue;
+
+                    bufferedChunkDeltas.RemoveAt(index);
+                    madeProgress = true;
+
+                    if (applyState == ChunkDeltaApplyState.Applied)
+                        CompleteAppliedChunkDeltaMessage(message);
+
+                    break;
+                }
+            }
+            while (madeProgress && bufferedChunkDeltas.Count > 0);
+        }
+
+        void BufferChunkDeltaMessage(PendingChunkDeltaMessage message)
+        {
+            for (int index = 0; index < bufferedChunkDeltas.Count; index++)
+            {
+                if (bufferedChunkDeltas[index].Delta.SequenceId == message.Delta.SequenceId)
+                    return;
+            }
+
+            bufferedChunkDeltas.Add(message);
         }
 
         void SendToRemoteClients(string messageName, FastBufferWriter writer)
@@ -660,6 +784,12 @@ namespace Blockiverse.Gameplay
             writer.WriteValueSafe(change.NewBlock.Value);
         }
 
+        static uint NextChunkDeltaSequence(uint sequenceId)
+        {
+            uint nextSequenceId = sequenceId + 1;
+            return nextSequenceId == 0 ? 1 : nextSequenceId;
+        }
+
         void WriteWorldSnapshotHeader(ref FastBufferWriter writer, int changedBlockCount)
         {
             VoxelWorld world = ResolveWorld();
@@ -675,6 +805,7 @@ namespace Blockiverse.Gameplay
             writer.WriteValueSafe(world.ChunkSize);
             writer.WriteValueSafe(world.Seed);
             writer.WriteValueSafe(groundHeight);
+            writer.WriteValueSafe(chunkDeltaLog.LastSequenceId);
             writer.WriteValueSafe(changedBlockCount);
         }
 
@@ -687,6 +818,7 @@ namespace Blockiverse.Gameplay
             reader.ReadValueSafe(out int chunkSize);
             reader.ReadValueSafe(out int seed);
             reader.ReadValueSafe(out int groundHeight);
+            reader.ReadValueSafe(out uint hostDeltaSequence);
             reader.ReadValueSafe(out changedBlockCount);
 
             var preset = (CreativeWorldGenerationPreset)generationPreset;
@@ -696,15 +828,46 @@ namespace Blockiverse.Gameplay
                 ? new FlatCreativeWorldPreset(registry, settings).Generate()
                 : new SurvivalLiteWorldPreset(registry, settings).Generate();
             worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset), this);
+            LastAppliedChunkDeltaSequence = hostDeltaSequence;
             hasHostGenerationSnapshotForSession = true;
             AppliedGenerationSnapshotCount++;
         }
 
-        static BlockChange ReadMutationDelta(ref FastBufferReader reader, out ulong requestingClientId, out uint requestId)
+        static ChunkDelta ReadMutationDelta(ref FastBufferReader reader, out ulong requestingClientId, out uint requestId)
         {
             reader.ReadValueSafe(out requestingClientId);
             reader.ReadValueSafe(out requestId);
-            return ReadBlockChange(ref reader);
+            return ReadChunkDelta(ref reader);
+        }
+
+        static void WriteChunkCoordinate(ref FastBufferWriter writer, ChunkCoordinate chunk)
+        {
+            writer.WriteValueSafe(chunk.X);
+            writer.WriteValueSafe(chunk.Y);
+            writer.WriteValueSafe(chunk.Z);
+        }
+
+        static ChunkCoordinate ReadChunkCoordinate(ref FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out int x);
+            reader.ReadValueSafe(out int y);
+            reader.ReadValueSafe(out int z);
+            return new ChunkCoordinate(x, y, z);
+        }
+
+        static void WriteChunkDelta(ref FastBufferWriter writer, ChunkDelta delta)
+        {
+            writer.WriteValueSafe(delta.SequenceId);
+            WriteChunkCoordinate(ref writer, delta.Chunk);
+            WriteBlockChange(ref writer, delta.Change);
+        }
+
+        static ChunkDelta ReadChunkDelta(ref FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out uint sequenceId);
+            ChunkCoordinate chunk = ReadChunkCoordinate(ref reader);
+            BlockChange change = ReadBlockChange(ref reader);
+            return new ChunkDelta(sequenceId, chunk, change);
         }
 
         static BlockChange ReadBlockChange(ref FastBufferReader reader)
@@ -727,6 +890,20 @@ namespace Blockiverse.Gameplay
                 return new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock), new BlockId(expectedCurrentBlock));
 
             return new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock));
+        }
+
+        readonly struct PendingChunkDeltaMessage
+        {
+            public PendingChunkDeltaMessage(ulong requestingClientId, uint requestId, ChunkDelta delta)
+            {
+                RequestingClientId = requestingClientId;
+                RequestId = requestId;
+                Delta = delta;
+            }
+
+            public ulong RequestingClientId { get; }
+            public uint RequestId { get; }
+            public ChunkDelta Delta { get; }
         }
     }
 }
