@@ -8,11 +8,11 @@ This document records the local M3 validation tooling for Blockiverse VR. The se
 - Horizon Debug Bridge npm package: `@meta-quest/hzdb@1.2.1`
 - Verified `hzdb` CLI version: `hzdb 1.2.1.2.140`
 - `hzdb` install prefix: `/Users/ericslutz/.nvm/versions/node/v22.12.0`
-- Unity MCP package: `com.unity.ai.assistant@2.0.0-pre.1`
-- Meta XR Unity MCP Extension package: `com.meta.xr.unity-mcp.extension` from `https://github.com/meta-quest/Unity-MCP-Extensions.git#2.0.0-pre.2`
+- Meta XR Core SDK package: `com.meta.xr.sdk.core@201.0.0`
+- Meta XR Interaction SDK package: `com.meta.xr.sdk.interaction.ovr@201.0.0`
 - Unity MCP relay: `/Users/ericslutz/.unity/relay/relay_mac_arm64.app/Contents/MacOS/relay_mac_arm64`
 
-The Meta extension is a Unity MCP extension surfaced through `unity-mcp`. It is not configured as a standalone Codex MCP server.
+The stable validation package set does not commit `com.unity.ai.assistant` or `com.meta.xr.unity-mcp.extension`. Those editor tooling packages previously produced non-gameplay Unity warnings in batchmode validation: the Meta MCP extension referenced Interaction SDK assemblies when Interaction SDK was absent, and Unity AI Assistant bundled a duplicate `System.Runtime.CompilerServices.Unsafe.dll`. Keep Unity MCP/AI Assistant packages isolated to a local tooling profile or temporary branch when editor MCP work requires them, then re-run clean package validation before treating simulator/headset logs as stable signal.
 
 ## Global Codex MCP Servers
 
@@ -58,18 +58,18 @@ Use `hzdb mcp server` to smoke-test Horizon Debug Bridge MCP startup. If run out
 
 ## Unity Package Notes
 
-The Unity MCP package stores a relay payload under `Packages/com.unity.ai.assistant/RelayApp~`. On macOS Apple Silicon the payload is a zip named `relay_mac_arm64`. Unity normally unpacks it into `~/.unity/relay/relay_mac_arm64.app` when the relay service starts. If batchmode only creates `~/.unity/relay/relay.json`, unpack it manually:
+The committed package set includes Meta XR Interaction SDK because the Meta tooling and simulator validation paths reference its `Oculus.Interaction` assemblies. As of May 26, 2026, the official Meta package registry reports `com.meta.xr.sdk.core@201.0.0` and `com.meta.xr.sdk.interaction.ovr@201.0.0` as the current versions, and Interaction OVR depends on `com.meta.xr.sdk.interaction@201.0.0` plus Core `201.0.0`.
+
+If Unity MCP is needed for a local editor automation session, install or restore Unity AI Assistant and the Meta XR Unity MCP Extension outside the clean validation baseline. The Unity MCP package stores a relay payload under `Packages/com.unity.ai.assistant/RelayApp~`. On macOS Apple Silicon the payload is a zip named `relay_mac_arm64`. Unity normally unpacks it into `~/.unity/relay/relay_mac_arm64.app` when the relay service starts. If batchmode only creates `~/.unity/relay/relay.json`, unpack it manually, adjusting the package-cache hash to the locally resolved AI Assistant package:
 
 ```sh
-ditto -x -k Library/PackageCache/com.unity.ai.assistant@09e79445a1a7/RelayApp~/relay_mac_arm64 /Users/ericslutz/.unity/relay
+ditto -x -k Library/PackageCache/com.unity.ai.assistant@<package-cache-hash>/RelayApp~/relay_mac_arm64 /Users/ericslutz/.unity/relay
 /bin/chmod +x /Users/ericslutz/.unity/relay/relay_mac_arm64.app/Contents/MacOS/relay_mac_arm64
 ```
 
-The Meta XR Unity MCP Extension currently logs an optional missing Interaction SDK assembly-reference warning when Interaction SDK is not installed. The warning did not block Unity package import or script compilation during setup.
-
 ## Meta XR Simulator Validation Flow
 
-Use Computer Use or Unity MCP for the editor-facing parts of this flow:
+Use Computer Use for editor-facing validation. Unity MCP may also be used from a local tooling profile when available, but it should not be required for the clean simulator/headset validation signal.
 
 1. Open the Unity project in the target worktree.
 2. Activate the simulator from `Meta > Meta XR Simulator > Activate`.
@@ -102,8 +102,8 @@ Record the worktree branch, linked issue, Unity test commands, APK build command
 
 ## Sources
 
-- [Unity MCP overview](https://docs.unity3d.com/Packages/com.unity.ai.assistant@2.0/manual/unity-mcp-overview.html)
-- [Unity MCP setup](https://docs.unity3d.com/Packages/com.unity.ai.assistant@2.0/manual/unity-mcp-get-started.html)
+- [Unity MCP overview](https://docs.unity3d.com/Packages/com.unity.ai.assistant@2.9/manual/unity-mcp-overview.html)
+- [Unity MCP setup](https://docs.unity3d.com/Packages/com.unity.ai.assistant@2.9/manual/unity-mcp-get-started.html)
 - [Meta AI tooling overview](https://developers.meta.com/horizon/documentation/unity/ts-ai-tooling-overview/)
 - [Horizon Debug Bridge MCP](https://developers.meta.com/horizon/documentation/unity/ts-mqdh-mcp/)
 - [Meta XR Unity MCP Extension](https://developers.meta.com/horizon/documentation/unity/unity-mcp-extension/)
