@@ -1030,10 +1030,12 @@ Join code via Relay later
 Networked Meta Horizon player avatar
 Head/controller transform sync
 Player display name/identity from Meta platform data where allowed
-Development-only fallback proxy while Meta Horizon Avatar integration is unavailable
-Disconnect handling
+Fallback proxy avatar when Meta Horizon Avatar data is unavailable or fails
+Unexpected host disconnect returns clients to a multiplayer session menu or reconnect option
+Graceful host shutdown persists the multiplayer world before disconnecting clients
 No public matchmaking initially
-Private voice chat for basic co-op
+Voice chat relies on Meta Quest party chat outside the app
+No in-app voice chat in M5
 No open text chat initially
 No game-specific custom avatar creator
 ```
@@ -1047,8 +1049,11 @@ PlayMode: client connects to host.
 PlayMode: two simulated players spawn with unique IDs.
 PlayMode: disconnect cleans up player object.
 PlayMode: avatar sync layer tolerates missing Meta Horizon Avatar data by using a development fallback proxy.
+PlayMode: host disconnect notifies clients and returns them to multiplayer menu/reconnect UX.
+PlayMode: graceful host shutdown saves world state before ending the session.
 Manual: two Quest devices join same LAN session.
 Manual: each Quest user sees the other player as that user's Meta Horizon avatar.
+Manual: players use Meta Quest party chat for voice instead of an in-app voice channel.
 ```
 
 ### Validation
@@ -1057,6 +1062,9 @@ Manual: each Quest user sees the other player as that user's Meta Horizon avatar
 You and your daughter can stand in the same bounded test scene.
 Each player sees the other player's Meta Horizon avatar.
 Disconnect/rejoin does not crash the host.
+Host shutdown preserves the shared world.
+Clients receive clear session-ended or reconnect UX when the host is gone.
+No in-app voice chat is required for M5; voice is handled by Meta Quest party chat.
 ```
 
 ---
@@ -1071,7 +1079,8 @@ Two players can cooperatively break/place blocks, and the world stays synchroniz
 
 ```text
 Networked block mutation commands
-Server/host validates world bounds and placement rules
+Host controls chunk generation, mutation validation, and authoritative sync
+Clients only send chunk and block mutation requests
 Client prediction for local placement preview
 Authoritative correction
 Chunk delta broadcast
@@ -1089,6 +1098,9 @@ Integration: command log replay reconstructs world.
 PlayMode: client places block, host and second client observe same block.
 PlayMode: late joiner receives current world deltas.
 PlayMode: simultaneous edits resolve predictably.
+Network simulation: active block editing remains acceptable at 100ms latency.
+Network simulation: chunk synchronization recovers or corrects predictably under packet loss.
+Profiling: average bandwidth during active block editing is measured and recorded.
 ```
 
 ### Validation
@@ -1098,6 +1110,7 @@ Two players can build one shared structure.
 Breaking/placing remains synchronized after 100+ edits.
 Late join shows current world state.
 Host save/load preserves multiplayer edits.
+Chunk authority boundaries are enforced: host owns generation, validation, sync, and save state.
 ```
 
 ---
@@ -1426,7 +1439,8 @@ Create Meta developer app
 Configure package name
 Configure app ID
 Configure Meta Platform settings required for Meta Horizon Avatars
-Complete or explicitly defer Data Use Checkup requirements for any Platform SDK APIs used by avatars, identity, entitlement, voice, or multiplayer platform features
+Complete or explicitly defer Data Use Checkup requirements for any Platform SDK APIs used by avatars, identity, entitlement, or multiplayer platform features
+Document that M5 voice relies on Meta Quest party chat and does not use an in-app voice API
 Upload signed build from a main release tag
 Create Alpha/Beta/RC channels
 Invite private testers
@@ -1489,7 +1503,8 @@ For the first public candidate:
 
 ```text
 No public chat
-Private voice chat only for invited/join-code multiplayer
+Voice chat relies on Meta Quest party chat outside the app
+No in-app voice chat, voice capture, or game-hosted voice transport
 No user-generated text
 No analytics beyond essential crash/performance diagnostics unless explicitly documented
 No account system beyond Meta/Unity services required for multiplayer
@@ -1623,6 +1638,9 @@ Use:
 Unity Multiplayer Play Mode for local editor multi-client tests
 Host/client PlayMode tests
 Manual two-Quest LAN tests
+Network simulation for 100ms latency
+Packet loss resilience checks for chunk sync
+Bandwidth measurement during active block editing
 Relay smoke tests later
 ```
 
@@ -1861,11 +1879,19 @@ FEATURE: Host/client setup
   STORY: Add LAN host flow
   STORY: Add LAN join flow
   STORY: Add Meta Horizon Avatar sync
+  STORY: Add fallback proxy avatar implementation
+  STORY: Handle host disconnect and return clients to multiplayer menu
+  STORY: Persist multiplayer world before host shutdown
+  STORY: Display reconnect/session-ended UX to clients
+  TASK: Clarify voice chat scope (no in-app voice chat)
 
 FEATURE: Multiplayer tests
   STORY: Add Multiplayer Play Mode test scene
   STORY: Add host/client connection test
   STORY: Add disconnect/rejoin test
+  STORY: Measure average bandwidth during active block editing
+  STORY: Test multiplayer under simulated 100ms latency
+  STORY: Validate chunk sync under packet loss
 ```
 
 ## EPIC-11 — Multiplayer world synchronization
@@ -1873,6 +1899,7 @@ FEATURE: Multiplayer tests
 ```text
 FEATURE: Networked voxel edits
   STORY: Add authoritative block mutation RPC
+  STORY: Define and enforce chunk authority boundaries
   STORY: Add chunk delta sync
   STORY: Add late-join sync
   STORY: Add conflict handling
@@ -2058,6 +2085,12 @@ Players can see each other's Meta Horizon avatars.
 Players can edit the same world.
 World edits stay synchronized.
 Basic multiplayer save/load works.
+Host disconnect and host shutdown behavior is defined and validated.
+Clients receive clear reconnect/session-ended UX when the host is gone.
+Host chunk authority boundaries are enforced.
+Fallback proxy avatars keep multiplayer usable when Meta Horizon Avatars are unavailable.
+Bandwidth, 100ms latency, and packet loss checks are recorded for active block editing/chunk sync.
+Voice chat uses Meta Quest party chat; M5 does not build in-app voice chat.
 ```
 
 ## M6 Store Candidate
