@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Core;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -7,6 +8,8 @@ namespace Blockiverse.Gameplay
 {
     public sealed class VoxelWorldRenderer : MonoBehaviour
     {
+        const int LargeDirtyRebuildWarningThreshold = 8;
+
         readonly Dictionary<ChunkCoordinate, GameObject> chunkObjects = new();
         readonly Dictionary<ChunkCoordinate, int> chunkTriangleCounts = new();
 
@@ -58,16 +61,30 @@ namespace Blockiverse.Gameplay
             }
 
             stats = new VoxelRenderStats(chunkCount, totalTriangleCount, rebuildQueue.Count);
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Renderer,
+                $"Rebuilt all chunks: chunks={stats.ChunkCount} triangles={stats.TriangleCount} queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
+                this);
         }
 
         public void RebuildDirty()
         {
             EnsureConfigured();
 
-            foreach (ChunkCoordinate chunk in rebuildQueue.DrainDirtyChunks())
+            IReadOnlyCollection<ChunkCoordinate> dirtyChunks = rebuildQueue.DrainDirtyChunks();
+
+            foreach (ChunkCoordinate chunk in dirtyChunks)
                 RebuildChunk(chunk);
 
             RefreshStats();
+
+            if (dirtyChunks.Count >= LargeDirtyRebuildWarningThreshold)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Renderer,
+                    $"Large dirty chunk rebuild: drainedChunks={dirtyChunks.Count} chunks={stats.ChunkCount} triangles={stats.TriangleCount} queuedRebuilds={stats.QueuedRebuildCount}",
+                    this);
+            }
         }
 
         int RebuildChunk(ChunkCoordinate chunk)

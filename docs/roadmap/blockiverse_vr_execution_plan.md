@@ -1320,6 +1320,8 @@ OVR Metrics manual test pass
 Thermal throttling observation
 ```
 
+The local diagnostics logging foundation is pulled forward into M4/Alpha as issue #225. Full profiler markers, in-game stats panels, OVR Metrics captures, stress scenes, and formal performance reports remain in M6.
+
 ### Tests
 
 ```text
@@ -2047,6 +2049,7 @@ Missing or unrelated atlas textures fail validation instead of falling back to g
 Texture import settings are appropriate for Quest 3/3S validation.
 Asset provenance is recorded.
 Asset validation tests cover dimensions, mappings, missing materials, and unrelated atlas rejection.
+Local diagnostics logging foundation supports Alpha validation for renderer, persistence, and authored asset bootstrap failures.
 Quest headset validation confirms block readability and no magenta/missing-material surfaces.
 ```
 

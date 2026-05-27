@@ -1,4 +1,6 @@
 using System.IO;
+using System.Linq;
+using Blockiverse.Core;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -41,6 +43,43 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SaveLogsSanitizedWorldSummary()
+        {
+            string path = CreateTempSavePath();
+            var sink = new CapturingLogSink();
+            VoxelWorld world = CreateDefaultWorld();
+            var inventory = new Inventory(ItemRegistry.CreateDefault());
+            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
+            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.Clearstone);
+
+            try
+            {
+                BlockiverseLog.SetSinkForTesting(sink);
+                BlockiverseLog.DevelopmentInfoEnabled = true;
+
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "summary-test", world, inventory);
+
+                BlockiverseLogEntry entry = sink.Entries.Single(log =>
+                    log.Category == BlockiverseLogCategory.Persistence &&
+                    log.Level == LogType.Log &&
+                    log.Message.Contains("Saved world"));
+                Assert.That(entry.Message, Does.Contain("world=summary-test"));
+                Assert.That(entry.Message, Does.Contain("schema=2"));
+                Assert.That(entry.Message, Does.Contain("dimensions=32x16x32"));
+                Assert.That(entry.Message, Does.Contain("changedBlocks=1"));
+                Assert.That(entry.Message, Does.Contain("inventorySlots=24"));
+                Assert.That(entry.Message, Does.Contain("occupiedInventorySlots=1"));
+                Assert.That(entry.Message, Does.Contain(Path.GetFileName(path)));
+                Assert.That(entry.Message, Does.Not.Contain(Path.GetDirectoryName(path)));
+            }
+            finally
+            {
+                BlockiverseLog.ResetSinkForTesting();
                 DeleteIfExists(path);
             }
         }
@@ -344,6 +383,36 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void CorruptedSaveLogsSanitizedFailure()
+        {
+            string path = CreateTempSavePath();
+            var sink = new CapturingLogSink();
+
+            try
+            {
+                BlockiverseLog.SetSinkForTesting(sink);
+                BlockiverseLog.DevelopmentInfoEnabled = true;
+                File.WriteAllText(path, "{ definitely not valid json");
+
+                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(path);
+
+                Assert.That(result.Success, Is.False);
+                BlockiverseLogEntry entry = sink.Entries.Single(log =>
+                    log.Category == BlockiverseLogCategory.Persistence &&
+                    log.Level == LogType.Warning &&
+                    log.Message.Contains("Failed to load world save"));
+                Assert.That(entry.Message, Does.Contain(Path.GetFileName(path)));
+                Assert.That(entry.Message, Does.Not.Contain(Path.GetDirectoryName(path)));
+                Assert.That(entry.Message, Does.Contain("corrupt or incomplete"));
+            }
+            finally
+            {
+                BlockiverseLog.ResetSinkForTesting();
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void PartiallyWrittenSaveEndingInNestedObjectReturnsControlledFailure()
         {
             string path = CreateTempSavePath();
@@ -414,6 +483,16 @@ namespace Blockiverse.Tests.EditMode
         {
             if (File.Exists(path))
                 File.Delete(path);
+        }
+
+        sealed class CapturingLogSink : IBlockiverseLogSink
+        {
+            public readonly System.Collections.Generic.List<BlockiverseLogEntry> Entries = new();
+
+            public void Log(BlockiverseLogEntry entry)
+            {
+                Entries.Add(entry);
+            }
         }
     }
 }

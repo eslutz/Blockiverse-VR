@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added a local-only diagnostics logging foundation for Alpha validation, including categorized Unity/player log routing, sanitized save/render diagnostics, and Quest log capture documentation.
 - Fixed external review findings in voxel renderer mesh lifecycle, placement preview material overrides, world-load change events, save validation, atlas coverage checks, and survival inventory UI fallbacks.
 - Added a Boot-scene survival HUD that binds inventory, crafting, and health panels to runtime M3 survival state for simulator/headset validation.
 - Added committed M4 block textures, item icons, UI sprites, texture import metadata, authored-atlas renderer integration, and asset validation coverage.

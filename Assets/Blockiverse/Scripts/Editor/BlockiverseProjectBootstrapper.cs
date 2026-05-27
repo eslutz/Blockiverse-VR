@@ -92,7 +92,7 @@ namespace Blockiverse.Editor
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            Debug.Log("Blockiverse Unity/Quest bootstrap complete.");
+            BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Blockiverse Unity/Quest bootstrap complete.");
         }
 
         static void EnsureFolders()
@@ -248,7 +248,7 @@ namespace Blockiverse.Editor
                     "UnityEngine.XR.OpenXR.OpenXRLoader",
                     BuildTargetGroup.Android))
             {
-                Debug.LogWarning("OpenXR loader was already assigned or could not be reassigned for Android.");
+                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "OpenXR loader was already assigned or could not be reassigned for Android.");
             }
 
             FeatureHelpers.RefreshFeatures(BuildTargetGroup.Android);
@@ -264,7 +264,7 @@ namespace Blockiverse.Editor
 
                 if (feature == null)
                 {
-                    Debug.LogWarning($"OpenXR feature was not found for Android: {featureId}");
+                    BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"OpenXR feature was not found for Android: {featureId}");
                     continue;
                 }
 
@@ -455,7 +455,7 @@ namespace Blockiverse.Editor
                 return layer;
             }
 
-            Debug.LogWarning($"No available Unity layer slot for {BlockiverseProject.InteractionLayerName}; interaction objects will stay on their current layer.");
+            BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"No available Unity layer slot for {BlockiverseProject.InteractionLayerName}; interaction objects will stay on their current layer.");
             return -1;
         }
 

@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using NUnit.Framework;
@@ -111,6 +113,43 @@ namespace Blockiverse.Tests.EditMode
 
                 if (firstMesh != null)
                     UnityEngine.Object.DestroyImmediate(firstMesh);
+            }
+        }
+
+        [Test]
+        public void RendererConfigureLogsOneDevelopmentRebuildSummary()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            var sink = new CapturingLogSink();
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                BlockiverseLog.SetSinkForTesting(sink);
+                BlockiverseLog.DevelopmentInfoEnabled = true;
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                BlockiverseLogEntry entry = sink.Entries.Single(log =>
+                    log.Category == BlockiverseLogCategory.Renderer &&
+                    log.Level == LogType.Log &&
+                    log.Message.Contains("Rebuilt all chunks"));
+                Assert.That(entry.Message, Does.Contain("chunks=1"));
+                Assert.That(entry.Message, Does.Contain("triangles=12"));
+                Assert.That(entry.Message, Does.Contain("queuedRebuilds=0"));
+            }
+            finally
+            {
+                BlockiverseLog.ResetSinkForTesting();
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
             }
         }
 
@@ -255,6 +294,16 @@ namespace Blockiverse.Tests.EditMode
             Material material = new(Shader.Find("Sprites/Default"));
             material.mainTexture = atlasTexture;
             return material;
+        }
+
+        sealed class CapturingLogSink : IBlockiverseLogSink
+        {
+            public readonly List<BlockiverseLogEntry> Entries = new();
+
+            public void Log(BlockiverseLogEntry entry)
+            {
+                Entries.Add(entry);
+            }
         }
     }
 }

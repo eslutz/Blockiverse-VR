@@ -17,6 +17,15 @@ Performance reports belong in `docs/testing/performance/`.
 
 M3 Meta XR Simulator setup, MCP configuration, and survival-lite smoke scripts are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md).
 
+Runtime diagnostics use local Unity and player logs only. Capture recent Quest player logs with:
+
+```sh
+hzdb log --tag Unity --level I --lines 200
+hzdb log --tag Unity --level W --lines 200
+```
+
+Attach relevant excerpts to issues or pull requests when they are needed as validation evidence. Do not commit local device logs, screenshots, recordings, traces, APKs, or other generated validation artifacts unless a tracked artifact is explicitly required.
+
 Run the repository checks locally with:
 
 ```sh
