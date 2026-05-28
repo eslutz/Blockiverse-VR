@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
+    "Blockiverse.MetaAvatars",
     "Blockiverse.Networking",
     "Blockiverse.UI",
     "Blockiverse.VR",

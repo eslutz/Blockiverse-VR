@@ -137,7 +137,7 @@ Original placeholder-to-polished voxel art
 Player identity and representation should come from Meta Horizon:
 
 ```text
-Local player uses their Meta Horizon avatar
+Local player uses their Meta Horizon avatar in single-player and multiplayer, including first-person arms, hands, and clothing
 Remote multiplayer players are shown as their Meta Horizon avatars
 No custom Blockiverse-only player avatar creator
 No custom player profile/identity system unless required later for non-Meta platforms
@@ -1033,6 +1033,7 @@ One player hosts
 Second player joins by LAN/IP first
 Join code via Relay later
 Networked Meta Horizon player avatar
+Single-player first-person Meta Horizon avatar body visibility
 Head/controller transform sync
 Player display name/identity from Meta platform data where allowed
 Fallback proxy avatar when Meta Horizon Avatar data is unavailable or fails

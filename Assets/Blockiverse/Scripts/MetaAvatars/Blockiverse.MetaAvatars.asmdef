@@ -1,0 +1,19 @@
+{
+  "name": "Blockiverse.MetaAvatars",
+  "rootNamespace": "Blockiverse.MetaAvatars",
+  "references": [
+    "Blockiverse.Networking",
+    "Oculus.AvatarSDK2",
+    "Oculus.Platform",
+    "Unity.Netcode.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

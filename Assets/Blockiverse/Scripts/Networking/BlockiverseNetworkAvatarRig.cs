@@ -104,12 +104,18 @@ namespace Blockiverse.Networking
 
         public void ConfigureFallbackProxy(bool enabled)
         {
+            if (fallbackProxyEnabled == enabled && fallbackRoot != null)
+                return;
+
             fallbackProxyEnabled = enabled;
             RefreshAvatarMode();
         }
 
         public void SetMetaAvatarAvailable(bool available)
         {
+            if (metaAvatarAvailable == available && fallbackRoot != null)
+                return;
+
             metaAvatarAvailable = available;
             RefreshAvatarMode();
         }

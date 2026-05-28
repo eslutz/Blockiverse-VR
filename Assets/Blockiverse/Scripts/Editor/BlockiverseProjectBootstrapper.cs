@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
 using Blockiverse.UI;
 using Blockiverse.VR;
@@ -635,9 +636,23 @@ namespace Blockiverse.Editor
 
             NetworkObject networkObject = EnsureComponent<NetworkObject>(playerObject);
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(playerObject);
+            MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(playerObject);
+            BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(playerObject);
+            MetaAvatarStreamRelay avatarStreamRelay = EnsureComponent<MetaAvatarStreamRelay>(playerObject);
+
+            avatarPresenter.Configure(
+                avatarProvider,
+                avatarRig,
+                null,
+                null,
+                null,
+                MetaAvatarPresentationMode.RemoteThirdPerson);
 
             EditorUtility.SetDirty(networkObject);
             EditorUtility.SetDirty(avatarRig);
+            EditorUtility.SetDirty(avatarProvider);
+            EditorUtility.SetDirty(avatarPresenter);
+            EditorUtility.SetDirty(avatarStreamRelay);
             EditorUtility.SetDirty(playerObject);
         }
 
@@ -1218,6 +1233,8 @@ namespace Blockiverse.Editor
         static void EnsureXrRigAvatar(GameObject rig)
         {
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
+            MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(rig);
+            BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(rig);
             Transform cameraOffset = rig.transform.Find("Camera Offset");
             Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
             Transform leftHand = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
@@ -1226,7 +1243,16 @@ namespace Blockiverse.Editor
             avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
             avatarRig.SetMetaAvatarAvailable(false);
             avatarRig.ConfigureFallbackProxy(true);
+            avatarPresenter.Configure(
+                avatarProvider,
+                avatarRig,
+                head,
+                leftHand,
+                rightHand,
+                MetaAvatarPresentationMode.LocalFirstPerson);
             EditorUtility.SetDirty(avatarRig);
+            EditorUtility.SetDirty(avatarProvider);
+            EditorUtility.SetDirty(avatarPresenter);
         }
 
         static void EnsureXrRigComfortMenu(GameObject rig, BlockiverseInputRig inputRig)

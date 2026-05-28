@@ -457,6 +457,13 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
+# Meta Avatars SDK generated sample/preset sources. Runtime packages and
+# copied StreamingAssets stay tracked when required by the avatar runtime.
+/[Aa]ssets/[Oo]culus/[Aa]vatar2_[Ss]ample[Aa]ssets.meta
+/[Aa]ssets/[Oo]culus/[Aa]vatar2_[Ss]ample[Aa]ssets/
+/[Aa]ssets/[Ss]treamingAssets/[Rr]untime[Aa]ction[Bb]indings.json
+/[Aa]ssets/[Ss]treamingAssets/[Rr]untime[Aa]ction[Bb]indings.json.meta
+
 ### Blockiverse local/generated files ###
 .env
 .env.*
