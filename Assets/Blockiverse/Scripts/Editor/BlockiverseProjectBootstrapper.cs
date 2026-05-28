@@ -39,6 +39,7 @@ namespace Blockiverse.Editor
         static readonly string[] RequiredFolders =
         {
             "Assets/Blockiverse/Art",
+            BlockiverseProject.BrandingArtFolderPath,
             "Assets/Blockiverse/Audio",
             "Assets/Blockiverse/Materials",
             "Assets/Blockiverse/Prefabs",
@@ -63,7 +64,10 @@ namespace Blockiverse.Editor
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
         const string SurvivalHudName = "Survival HUD";
+        const string ControllerMappingPopupName = "Controller Mapping Popup";
+        const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
+        const string BootEventSystemName = "Boot Event System";
         const string MultiplayerEventSystemName = "Multiplayer Event System";
         const string MultiplayerTestCameraName = "Multiplayer Test Camera";
         const string NetworkManagerRootName = "Blockiverse Network Manager";
@@ -74,6 +78,8 @@ namespace Blockiverse.Editor
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
         static readonly Vector2 SurvivalHudSize = new(720.0f, 420.0f);
+        static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
+        static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
         static readonly Color ComfortMenuPanelColor = new(0.07f, 0.08f, 0.09f, 0.92f);
         static readonly Color ComfortMenuControlColor = new(0.18f, 0.21f, 0.24f, 1.0f);
@@ -84,6 +90,7 @@ namespace Blockiverse.Editor
         static readonly Color SurvivalHudPanelColor = new(0.06f, 0.08f, 0.10f, 0.90f);
         static readonly Color SurvivalHudSectionColor = new(0.13f, 0.18f, 0.20f, 0.95f);
         static readonly Color SurvivalHudAccentColor = new(0.21f, 0.75f, 0.57f, 1.0f);
+        static readonly Color StartupOverlayPanelColor = new(0.02f, 0.04f, 0.05f, 0.96f);
         static readonly Color MultiplayerMenuPanelColor = new(0.07f, 0.09f, 0.10f, 0.94f);
         static readonly Color MultiplayerMenuInputColor = new(0.11f, 0.16f, 0.18f, 1.0f);
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
@@ -96,6 +103,7 @@ namespace Blockiverse.Editor
             EnsureFolders();
             ConfigureEditorSerialization();
             ConfigureAndroidPlayer();
+            ConfigureAppBranding();
             ConfigureMetaProjectSettings();
             ConfigureAndroidManifest();
             ConfigureMetaRuntimeSettings();
@@ -188,6 +196,73 @@ namespace Blockiverse.Editor
 #if UNITY_2023_2_OR_NEWER
             PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.GameActivity;
 #endif
+        }
+
+        static void ConfigureAppBranding()
+        {
+            EnsureAndroidStringResources();
+
+            Texture2D icon = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.AppIconPath);
+
+            if (icon == null)
+            {
+                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"App icon asset is missing: {BlockiverseProject.AppIconPath}");
+                return;
+            }
+
+            PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Android, new[] { icon });
+            PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Unknown, new[] { icon });
+        }
+
+        static void EnsureAndroidStringResources()
+        {
+            string libraryManifestPath = BlockiverseProject.AndroidBrandingLibraryPath + "/AndroidManifest.xml";
+            string libraryGradlePath = BlockiverseProject.AndroidBrandingLibraryPath + "/build.gradle";
+            string valuesDirectory = BlockiverseProject.AndroidBrandingLibraryPath + "/res/values";
+
+            Directory.CreateDirectory(BlockiverseProject.AndroidBrandingLibraryPath);
+            Directory.CreateDirectory(valuesDirectory);
+            File.WriteAllText(
+                libraryManifestPath,
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" />\n");
+            File.WriteAllText(
+                libraryGradlePath,
+                "apply plugin: 'com.android.library'\n\n" +
+                "dependencies {\n" +
+                "    implementation fileTree(dir: 'bin', include: ['*.jar'])\n" +
+                "    implementation fileTree(dir: 'libs', include: ['*.jar'])\n" +
+                "}\n\n" +
+                "android {\n" +
+                "    namespace 'dev.ericslutz.blockiversevr.branding'\n" +
+                "    compileSdk 34\n" +
+                "    buildToolsVersion = '36.0.0'\n\n" +
+                "    defaultConfig {\n" +
+                "        minSdk 32\n" +
+                "        targetSdk 34\n" +
+                "    }\n\n" +
+                "    lint {\n" +
+                "        abortOnError false\n" +
+                "    }\n\n" +
+                "    sourceSets {\n" +
+                "        main {\n" +
+                "            manifest.srcFile 'AndroidManifest.xml'\n" +
+                "            res.srcDirs = ['res']\n" +
+                "            assets.srcDirs = ['assets']\n" +
+                "            jniLibs.srcDirs = ['libs']\n" +
+                "        }\n" +
+                "    }\n" +
+                "}\n");
+            File.WriteAllText(
+                BlockiverseProject.AndroidAppStringsPath,
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<resources>\n" +
+                $"    <string name=\"app_name\">{BlockiverseProject.ProductName}</string>\n" +
+                $"    <string name=\"game_view_content_description\">{BlockiverseProject.ProductName}</string>\n" +
+                "</resources>\n");
+            AssetDatabase.ImportAsset(libraryManifestPath, ImportAssetOptions.ForceSynchronousImport);
+            AssetDatabase.ImportAsset(libraryGradlePath, ImportAssetOptions.ForceSynchronousImport);
+            AssetDatabase.ImportAsset(BlockiverseProject.AndroidAppStringsPath, ImportAssetOptions.ForceSynchronousImport);
         }
 
         static void ConfigureAndroidManifest()
@@ -294,6 +369,10 @@ namespace Blockiverse.Editor
             {
                 BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "OpenXR loader was already assigned or could not be reassigned for Android.");
             }
+
+            androidSettings.Manager.automaticLoading = true;
+            androidSettings.Manager.automaticRunning = true;
+            EditorUtility.SetDirty(androidSettings.Manager);
 
             FeatureHelpers.RefreshFeatures(BuildTargetGroup.Android);
 
@@ -593,6 +672,7 @@ namespace Blockiverse.Editor
 
             EnsureBootSceneRig(scene, rigPrefab);
             EnsureBootSceneLight(scene);
+            EnsureBootEventSystem(scene);
             EnsureBootSceneCreativeWorld(scene);
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
@@ -806,6 +886,11 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(lightObject);
         }
 
+        static void EnsureBootEventSystem(Scene scene)
+        {
+            EnsureEventSystem(scene, BootEventSystemName);
+        }
+
         static void EnsureMultiplayerTestCamera(Scene scene)
         {
             GameObject cameraObject = FindRootGameObject(scene, MultiplayerTestCameraName);
@@ -832,11 +917,16 @@ namespace Blockiverse.Editor
 
         static void EnsureMultiplayerEventSystem(Scene scene)
         {
-            GameObject eventSystemObject = FindRootGameObject(scene, MultiplayerEventSystemName);
+            EnsureEventSystem(scene, MultiplayerEventSystemName);
+        }
+
+        static void EnsureEventSystem(Scene scene, string eventSystemName)
+        {
+            GameObject eventSystemObject = FindRootGameObject(scene, eventSystemName);
 
             if (eventSystemObject == null)
             {
-                eventSystemObject = new GameObject(MultiplayerEventSystemName);
+                eventSystemObject = new GameObject(eventSystemName);
                 SceneManager.MoveGameObjectToScene(eventSystemObject, scene);
             }
 
@@ -1036,7 +1126,7 @@ namespace Blockiverse.Editor
         static CreativeHotbar FindBootSceneHotbar(Scene scene)
         {
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
-            Transform hotbarTransform = rig != null ? rig.transform.Find("Camera Offset/Left Controller/" + BlockMenuName) : null;
+            Transform hotbarTransform = rig != null ? rig.transform.Find("Camera Offset/" + BlockMenuName) : null;
             return hotbarTransform != null ? hotbarTransform.GetComponent<CreativeHotbar>() : null;
         }
 
@@ -1049,12 +1139,13 @@ namespace Blockiverse.Editor
 
             BlockiverseInputRig inputRig = rig.GetComponent<BlockiverseInputRig>();
             BlockiverseRayPointer pointer = rig.GetComponentInChildren<BlockiverseRayPointer>(true);
+            BlockiverseVrUiPointer uiPointer = rig.GetComponent<BlockiverseVrUiPointer>();
 
             if (inputRig == null || pointer == null)
                 return;
 
             BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
-            bridge.Configure(inputRig, pointer, controller);
+            bridge.Configure(inputRig, pointer, controller, uiPointer);
             EditorUtility.SetDirty(bridge);
         }
 
@@ -1118,9 +1209,12 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
+            EnsureXrRigUiPointer(rig, inputRig);
             EnsureXrRigAvatar(rig);
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigStartupLoadingOverlay(rig);
+            EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             return rig;
@@ -1172,9 +1266,12 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
+            EnsureXrRigUiPointer(rig, inputRig);
             EnsureXrRigAvatar(rig);
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigStartupLoadingOverlay(rig);
+            EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
         }
@@ -1230,6 +1327,23 @@ namespace Blockiverse.Editor
             haptics.Configure(role);
         }
 
+        static void EnsureXrRigUiPointer(GameObject rig, BlockiverseInputRig inputRig)
+        {
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform rightController = cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
+            Camera camera = cameraOffset != null ? cameraOffset.GetComponentInChildren<Camera>(true) : null;
+
+            if (rightController == null)
+                return;
+
+            BlockiverseVrUiPointer uiPointer = EnsureComponent<BlockiverseVrUiPointer>(rig);
+            uiPointer.Configure(rightController, camera, 5.0f);
+            inputRig.ConfigureUiPointer(uiPointer);
+
+            EditorUtility.SetDirty(uiPointer);
+            EditorUtility.SetDirty(inputRig);
+        }
+
         static void EnsureXrRigAvatar(GameObject rig)
         {
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
@@ -1257,16 +1371,18 @@ namespace Blockiverse.Editor
 
         static void EnsureXrRigComfortMenu(GameObject rig, BlockiverseInputRig inputRig)
         {
-            Transform leftController = rig.transform.Find("Camera Offset/Left Controller");
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform leftController = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
 
-            if (leftController == null)
+            if (cameraOffset == null)
                 return;
 
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
-            GameObject menuObject = EnsureRectChild(leftController, ComfortMenuName);
-            menuObject.transform.localPosition = new Vector3(0.0f, 0.12f, 0.45f);
-            menuObject.transform.localRotation = Quaternion.Euler(18.0f, 0.0f, 0.0f);
+            GameObject menuObject = EnsureRectChildMigrated(cameraOffset, leftController, ComfortMenuName);
+            menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
+            menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
             menuObject.transform.localScale = Vector3.one * 0.002f;
 
             RectTransform menuRect = menuObject.GetComponent<RectTransform>();
@@ -1277,6 +1393,7 @@ namespace Blockiverse.Editor
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.sortingOrder = 10;
             canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
 
             CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
@@ -1343,6 +1460,8 @@ namespace Blockiverse.Editor
             BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
             menu.Configure(canvas, settings);
             menu.ConfigureControls(teleportToggle, smoothTurnToggle, snapTurnSlider);
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
+            presenter.Configure(canvas, head, 1.18f, 0.0f, -0.1f, 0.0f);
 
             if (inputRig != null)
             {
@@ -1350,24 +1469,27 @@ namespace Blockiverse.Editor
                     inputRig.MenuPressed,
                     menu,
                     nameof(BlockiverseComfortMenu.ToggleVisible));
-                UnityEventTools.AddPersistentListener(inputRig.MenuPressed, menu.ToggleVisible);
+                RemovePersistentListeners(
+                    inputRig.MenuPressed,
+                    presenter,
+                    nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
+                UnityEventTools.AddPersistentListener(inputRig.MenuPressed, presenter.ToggleVisible);
                 EditorUtility.SetDirty(inputRig);
             }
 
             EditorUtility.SetDirty(menuObject);
             EditorUtility.SetDirty(menu);
+            EditorUtility.SetDirty(presenter);
         }
 
         static void EnsureXrRigInteraction(GameObject rig, BlockiverseInputRig inputRig)
         {
             Transform rightController = rig.transform.Find("Camera Offset/Right Controller");
-            Transform leftController = rig.transform.Find("Camera Offset/Left Controller");
 
             if (rightController != null)
                 EnsureRayPointer(rightController);
 
-            if (leftController != null)
-                EnsureBlockMenuPlaceholder(leftController, inputRig);
+            EnsureBlockMenuPlaceholder(rig, inputRig);
         }
 
         static void EnsureRayPointer(Transform rightController)
@@ -1404,16 +1526,24 @@ namespace Blockiverse.Editor
         static void EnsureXrRigCreativeInputBridge(GameObject rig, BlockiverseInputRig inputRig)
         {
             BlockiverseRayPointer pointer = rig.GetComponentInChildren<BlockiverseRayPointer>(true);
+            BlockiverseVrUiPointer uiPointer = rig.GetComponent<BlockiverseVrUiPointer>();
             BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
-            bridge.Configure(inputRig, pointer, null);
+            bridge.Configure(inputRig, pointer, null, uiPointer);
             EditorUtility.SetDirty(bridge);
         }
 
-        static void EnsureBlockMenuPlaceholder(Transform leftController, BlockiverseInputRig inputRig)
+        static void EnsureBlockMenuPlaceholder(GameObject rig, BlockiverseInputRig inputRig)
         {
-            GameObject menuObject = EnsureRectChild(leftController, BlockMenuName);
-            menuObject.transform.localPosition = new Vector3(-0.18f, -0.08f, 0.42f);
-            menuObject.transform.localRotation = Quaternion.Euler(18.0f, 24.0f, 0.0f);
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform leftController = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
+
+            if (cameraOffset == null)
+                return;
+
+            GameObject menuObject = EnsureRectChildMigrated(cameraOffset, leftController, BlockMenuName);
+            menuObject.transform.localPosition = new Vector3(-0.34f, 1.32f, 1.12f);
+            menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
             menuObject.transform.localScale = Vector3.one * 0.002f;
 
             RectTransform menuRect = menuObject.GetComponent<RectTransform>();
@@ -1424,6 +1554,7 @@ namespace Blockiverse.Editor
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.sortingOrder = 12;
             canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
 
             CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
@@ -1471,6 +1602,8 @@ namespace Blockiverse.Editor
             CreativeHotbar menu = EnsureComponent<CreativeHotbar>(menuObject);
             menu.ConfigureDefault(selectedLabel);
             menu.ConfigureCanvas(canvas);
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
+            presenter.Configure(canvas, head, 1.12f, -0.34f, -0.18f, 0.0f);
 
             if (inputRig != null)
             {
@@ -1478,17 +1611,207 @@ namespace Blockiverse.Editor
                     inputRig.QuickMenuPressed,
                     menu,
                     nameof(CreativeHotbar.ToggleVisible));
-                UnityEventTools.AddPersistentListener(inputRig.QuickMenuPressed, menu.ToggleVisible);
+                RemovePersistentListeners(
+                    inputRig.QuickMenuPressed,
+                    presenter,
+                    nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
+                UnityEventTools.AddPersistentListener(inputRig.QuickMenuPressed, presenter.ToggleVisible);
                 EditorUtility.SetDirty(inputRig);
             }
 
             EditorUtility.SetDirty(menuObject);
             EditorUtility.SetDirty(menu);
+            EditorUtility.SetDirty(presenter);
+        }
+
+        static void EnsureXrRigStartupLoadingOverlay(GameObject rig)
+        {
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
+
+            if (cameraOffset == null)
+                return;
+
+            GameObject overlayObject = EnsureRectChild(cameraOffset, StartupLoadingOverlayName);
+            overlayObject.transform.localPosition = new Vector3(0.0f, 1.46f, 1.0f);
+            overlayObject.transform.localRotation = Quaternion.identity;
+            overlayObject.transform.localScale = Vector3.one * 0.00165f;
+
+            RectTransform overlayRect = overlayObject.GetComponent<RectTransform>();
+            overlayRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, StartupLoadingOverlaySize.x);
+            overlayRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, StartupLoadingOverlaySize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(overlayObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 30;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(overlayObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureComponent<GraphicRaycaster>(overlayObject);
+
+            GameObject artworkObject = EnsureRectChild(overlayObject.transform, "Artwork");
+            RectTransform artworkRect = artworkObject.GetComponent<RectTransform>();
+            artworkRect.anchorMin = Vector2.zero;
+            artworkRect.anchorMax = Vector2.one;
+            artworkRect.offsetMin = Vector2.zero;
+            artworkRect.offsetMax = Vector2.zero;
+
+            RawImage artworkImage = EnsureComponent<RawImage>(artworkObject);
+            artworkImage.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            artworkImage.color = Color.white;
+
+            GameObject tintObject = EnsureRectChild(overlayObject.transform, "Title Tint");
+            RectTransform tintRect = tintObject.GetComponent<RectTransform>();
+            tintRect.anchorMin = new Vector2(0.0f, 0.0f);
+            tintRect.anchorMax = new Vector2(1.0f, 0.38f);
+            tintRect.offsetMin = Vector2.zero;
+            tintRect.offsetMax = Vector2.zero;
+            Image tintImage = EnsureComponent<Image>(tintObject);
+            tintImage.color = StartupOverlayPanelColor;
+
+            EnsureLabel(
+                overlayObject.transform,
+                "Title",
+                BlockiverseProject.ProductName,
+                72,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 0.0f),
+                new Vector2(1.0f, 0.0f),
+                new Vector2(0.0f, 0.0f),
+                new Vector2(58.0f, 118.0f),
+                new Vector2(720.0f, 92.0f));
+
+            EnsureLabel(
+                overlayObject.transform,
+                "Subtitle",
+                "Survive, craft, and shape the world.",
+                30,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 0.0f),
+                new Vector2(1.0f, 0.0f),
+                new Vector2(0.0f, 0.0f),
+                new Vector2(62.0f, 72.0f),
+                new Vector2(720.0f, 48.0f));
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(overlayObject);
+            presenter.Configure(
+                canvas,
+                head,
+                1.0f,
+                0.0f,
+                -0.14f,
+                0.0f,
+                0.00165f,
+                showWhenStarted: true);
+
+            BlockiverseStartupOverlay startupOverlay = EnsureComponent<BlockiverseStartupOverlay>(overlayObject);
+            startupOverlay.Configure(canvas, presenter, 2.25f, automaticHide: true);
+
+            EditorUtility.SetDirty(artworkImage);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(startupOverlay);
+            EditorUtility.SetDirty(overlayObject);
+        }
+
+        static void EnsureXrRigControllerMappingPopup(GameObject rig)
+        {
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
+
+            if (cameraOffset == null)
+                return;
+
+            GameObject popupObject = EnsureRectChild(cameraOffset, ControllerMappingPopupName);
+            popupObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.06f);
+            popupObject.transform.localRotation = Quaternion.identity;
+            popupObject.transform.localScale = Vector3.one * 0.00185f;
+
+            RectTransform popupRect = popupObject.GetComponent<RectTransform>();
+            popupRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ControllerMappingPopupSize.x);
+            popupRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, ControllerMappingPopupSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(popupObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 22;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(popupObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureComponent<GraphicRaycaster>(popupObject);
+
+            GameObject panelObject = EnsureRectChild(popupObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            panelImage.color = SurvivalHudPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "Controller Map",
+                40,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(34.0f, -28.0f),
+                new Vector2(420.0f, 58.0f));
+
+            EnsureLabel(
+                panelObject.transform,
+                "Mapping Text",
+                "Right trigger: press UI or break blocks\nRight grip: place blocks\nLeft grip: blocks menu\nMenu: comfort settings\nRight thumbstick: snap turn\nRight A + trigger: teleport\nLeft X: reset height\nLeft Y: undo",
+                24,
+                TextAnchor.UpperLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(34.0f, -102.0f),
+                new Vector2(552.0f, 220.0f));
+
+            Button closeButton = EnsureButtonControl(
+                panelObject.transform,
+                "Close Button",
+                "Close",
+                new Vector2(34.0f, -342.0f),
+                new Vector2(180.0f, 52.0f));
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(popupObject);
+            presenter.Configure(
+                canvas,
+                head,
+                1.06f,
+                0.0f,
+                -0.14f,
+                0.0f,
+                0.00185f,
+                showWhenStarted: true);
+
+            RemovePersistentListeners(
+                closeButton.onClick,
+                presenter,
+                nameof(BlockiverseWorldSpacePanelPresenter.Hide));
+            UnityEventTools.AddPersistentListener(closeButton.onClick, presenter.Hide);
+
+            EditorUtility.SetDirty(closeButton);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(popupObject);
         }
 
         static void EnsureXrRigSurvivalHud(GameObject rig)
         {
             Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
 
             if (cameraOffset == null)
                 return;
@@ -1506,6 +1829,7 @@ namespace Blockiverse.Editor
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.sortingOrder = 9;
             canvas.enabled = true;
+            ConfigureCanvasWorldCamera(canvas, head);
 
             CanvasScaler scaler = EnsureComponent<CanvasScaler>(hudObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
@@ -1622,6 +1946,7 @@ namespace Blockiverse.Editor
                 new Vector2(170.0f, 28.0f));
 
             Text[] slotLabels = new Text[6];
+            Button[] slotButtons = new Button[slotLabels.Length];
 
             for (int index = 0; index < slotLabels.Length; index++)
             {
@@ -1636,10 +1961,11 @@ namespace Blockiverse.Editor
                     new Vector2(0.0f, 1.0f),
                     new Vector2(16.0f, -82.0f - index * 34.0f),
                     new Vector2(170.0f, 28.0f));
+                slotButtons[index] = EnsureTextButton(slotLabels[index]);
             }
 
             SurvivalInventoryPanel panel = EnsureComponent<SurvivalInventoryPanel>(sectionObject);
-            panel.Configure(slotLabels, selectedHotbarLabel);
+            panel.Configure(slotButtons, slotLabels, selectedHotbarLabel);
             EditorUtility.SetDirty(panel);
             return panel;
         }
@@ -1673,6 +1999,7 @@ namespace Blockiverse.Editor
                 new Vector2(180.0f, 28.0f));
 
             Text[] recipeLabels = new Text[5];
+            Button[] recipeButtons = new Button[recipeLabels.Length];
 
             for (int index = 0; index < recipeLabels.Length; index++)
             {
@@ -1687,10 +2014,11 @@ namespace Blockiverse.Editor
                     new Vector2(0.0f, 1.0f),
                     new Vector2(16.0f, -82.0f - index * 40.0f),
                     new Vector2(180.0f, 36.0f));
+                recipeButtons[index] = EnsureTextButton(recipeLabels[index]);
             }
 
             SurvivalCraftingPanel panel = EnsureComponent<SurvivalCraftingPanel>(sectionObject);
-            panel.Configure(recipeLabels, statusLabel);
+            panel.Configure(recipeButtons, recipeLabels, statusLabel);
             EditorUtility.SetDirty(panel);
             return panel;
         }
@@ -1941,6 +2269,14 @@ namespace Blockiverse.Editor
             return button;
         }
 
+        static Button EnsureTextButton(Text label)
+        {
+            Button button = EnsureComponent<Button>(label.gameObject);
+            label.raycastTarget = true;
+            button.targetGraphic = label;
+            return button;
+        }
+
         static InputField EnsureInputFieldControl(
             Transform parent,
             string name,
@@ -2034,6 +2370,31 @@ namespace Blockiverse.Editor
             GameObject child = new(name, typeof(RectTransform));
             child.transform.SetParent(parent, false);
             return child;
+        }
+
+        static GameObject EnsureRectChildMigrated(Transform parent, Transform legacyParent, string name)
+        {
+            Transform existing = parent.Find(name);
+            Transform legacy = legacyParent != null ? legacyParent.Find(name) : null;
+
+            if (existing == null && legacy != null)
+            {
+                legacy.SetParent(parent, false);
+                return legacy.gameObject;
+            }
+
+            if (existing != null && legacy != null && legacy != existing)
+                UnityEngine.Object.DestroyImmediate(legacy.gameObject);
+
+            return EnsureRectChild(parent, name);
+        }
+
+        static void ConfigureCanvasWorldCamera(Canvas canvas, Transform head)
+        {
+            if (canvas == null)
+                return;
+
+            canvas.worldCamera = head != null ? head.GetComponent<Camera>() : null;
         }
 
         static GameObject EnsureChild(Transform parent, string name)

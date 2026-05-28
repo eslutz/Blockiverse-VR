@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using Blockiverse.Core;
 using Blockiverse.UI;
+using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -64,6 +65,36 @@ namespace Blockiverse.Tests.PlayMode
             AssertPanelContainsText(craftingPanel.transform, "Ready");
             AssertPanelContainsText(healthPanel.transform, "100 / 100");
             AssertPanelContainsText(healthPanel.transform, "Stable");
+        }
+
+        [UnityTest]
+        public IEnumerator BootSceneShowsDismissibleControllerMappingPopup()
+        {
+            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
+
+            Assert.That(operation, Is.Not.Null);
+
+            while (!operation.isDone)
+                yield return null;
+
+            GameObject popup = GameObject.Find("Controller Mapping Popup");
+            Assert.That(popup, Is.Not.Null);
+
+            Canvas canvas = popup.GetComponent<Canvas>();
+            Assert.That(canvas, Is.Not.Null);
+            Assert.That(canvas.enabled, Is.True);
+
+            BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(presenter, Is.Not.Null);
+            Assert.That(presenter.IsVisible, Is.True);
+
+            Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
+            Assert.That(closeButton, Is.Not.Null);
+
+            closeButton.onClick.Invoke();
+            yield return null;
+
+            Assert.That(canvas.enabled, Is.False);
         }
 
         static void AssertPanelContainsText(Transform panel, string expectedText)

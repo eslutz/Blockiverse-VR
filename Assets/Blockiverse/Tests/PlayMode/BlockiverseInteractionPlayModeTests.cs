@@ -5,10 +5,12 @@ using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -463,6 +465,77 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        [UnityTest]
+        public IEnumerator RightSelectClicksUiAndSuppressesWorldBreak()
+        {
+            GameObject rigObject = new("Test Input Rig");
+            GameObject pointerObject = new("Right Controller");
+            GameObject cameraObject = new("UI Camera");
+            GameObject eventSystemObject = new("Event System");
+            GameObject canvasObject = new("World Canvas", typeof(RectTransform));
+            GameObject buttonObject = new("Clickable Button", typeof(RectTransform));
+            InputActionAsset actions = CreateUiClickActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            int clicks = 0;
+            int breakPresses = 0;
+
+            try
+            {
+                Camera camera = cameraObject.AddComponent<Camera>();
+                cameraObject.transform.position = Vector3.zero;
+                cameraObject.transform.rotation = Quaternion.identity;
+                camera.nearClipPlane = 0.01f;
+
+                eventSystemObject.AddComponent<EventSystem>();
+
+                Canvas canvas = canvasObject.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.worldCamera = camera;
+                canvasObject.transform.position = new Vector3(0.0f, 0.0f, 2.0f);
+                canvasObject.transform.rotation = Quaternion.identity;
+                canvasObject.transform.localScale = Vector3.one * 0.01f;
+                canvasObject.AddComponent<GraphicRaycaster>();
+
+                RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
+                canvasRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 240.0f);
+                canvasRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 120.0f);
+
+                buttonObject.transform.SetParent(canvasObject.transform, false);
+                RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
+                buttonRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 200.0f);
+                buttonRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 80.0f);
+                buttonObject.AddComponent<Image>();
+                Button button = buttonObject.AddComponent<Button>();
+                button.onClick.AddListener(() => clicks++);
+
+                pointerObject.transform.position = Vector3.zero;
+                pointerObject.transform.rotation = Quaternion.identity;
+
+                BlockiverseVrUiPointer uiPointer = rigObject.AddComponent<BlockiverseVrUiPointer>();
+                uiPointer.Configure(pointerObject.transform, camera, 4.0f);
+
+                BlockiverseInputRig inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureUiPointer(uiPointer);
+                inputRig.BreakPressed.AddListener(() => breakPresses++);
+
+                Press(gamepad.rightTrigger);
+                yield return null;
+
+                Assert.That(clicks, Is.EqualTo(1));
+                Assert.That(breakPresses, Is.EqualTo(0));
+            }
+            finally
+            {
+                Object.DestroyImmediate(canvasObject);
+                Object.DestroyImmediate(eventSystemObject);
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(pointerObject);
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
         static InputActionAsset CreateTestActions()
         {
             var actions = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -495,6 +568,14 @@ namespace Blockiverse.Tests.PlayMode
             InputActionMap gameplay = actions.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             gameplay.AddAction(BlockiverseInputActionNames.Undo, InputActionType.Button, "<Gamepad>/buttonEast");
 
+            return actions;
+        }
+
+        static InputActionAsset CreateUiClickActions()
+        {
+            var actions = ScriptableObject.CreateInstance<InputActionAsset>();
+            InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
+            rightHand.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, "<Gamepad>/rightTrigger");
             return actions;
         }
     }

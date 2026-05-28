@@ -9,8 +9,8 @@
     }
   ],
   "dependencies": {
-    "com.meta.xr.sdk.core": "201.0.0",
     "com.meta.xr.sdk.avatars": "40.0.1",
+    "com.meta.xr.sdk.core": "201.0.0",
     "com.meta.xr.sdk.interaction.ovr": "201.0.0",
     "com.meta.xr.sdk.platform": "201.0.0",
     "com.unity.inputsystem": "1.19.0",
@@ -20,7 +20,7 @@
     "com.unity.test-framework": "1.4.6",
     "com.unity.transport": "2.7.3",
     "com.unity.ugui": "2.0.0",
-    "com.unity.xr.interaction.toolkit": "3.0.11",
+    "com.unity.xr.interaction.toolkit": "3.3.2",
     "com.unity.xr.management": "4.6.0",
     "com.unity.xr.meta-openxr": "2.5.0",
     "com.unity.xr.openxr": "1.17.0",

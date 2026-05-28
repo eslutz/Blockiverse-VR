@@ -81,6 +81,46 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void CraftingPanelCraftsRecipeFromConfiguredButton()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
+            var inventory = new Inventory(itemRegistry);
+            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
+            Text[] recipeLabels = CreateTexts(2);
+            Button[] recipeButtons = CreateButtons(2);
+            Text statusLabel = CreateText("CraftStatus");
+            SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
+
+            panel.Configure(recipeButtons, recipeLabels, statusLabel);
+            panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
+
+            recipeButtons[0].onClick.Invoke();
+
+            Assert.That(inventory.CountOf(ItemId.Workbench), Is.EqualTo(1));
+            Assert.That(statusLabel.text, Is.EqualTo("Crafted Workbench x1"));
+        }
+
+        [Test]
+        public void InventoryPanelSelectsHotbarSlotFromConfiguredButton()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 3);
+            Text[] slotLabels = CreateTexts(4);
+            Button[] slotButtons = CreateButtons(4);
+            Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
+
+            panel.Configure(slotButtons, slotLabels, selectedHotbarLabel);
+            panel.Bind(inventory, itemRegistry);
+
+            slotButtons[2].onClick.Invoke();
+
+            Assert.That(panel.SelectedHotbarSlotIndex, Is.EqualTo(2));
+            Assert.That(selectedHotbarLabel.text, Is.EqualTo("Hotbar 3 / 3"));
+        }
+
+        [Test]
         public void HealthPanelUpdatesFromVitalsChanges()
         {
             var vitals = new PlayerVitals(currentHealth: 75);
@@ -111,6 +151,15 @@ namespace Blockiverse.Tests.EditMode
                 labels[i] = CreateText($"Text{i}");
 
             return labels;
+        }
+
+        Button[] CreateButtons(int count)
+        {
+            var buttons = new Button[count];
+            for (int i = 0; i < count; i++)
+                buttons[i] = CreateComponent<Button>($"Button{i}");
+
+            return buttons;
         }
 
         Text CreateText(string name)

@@ -6,6 +6,7 @@
     "Blockiverse.Gameplay",
     "Blockiverse.Voxel",
     "Unity.InputSystem",
+    "UnityEngine.UI",
     "Unity.XR.CoreUtils",
     "Unity.XR.Interaction.Toolkit"
   ],

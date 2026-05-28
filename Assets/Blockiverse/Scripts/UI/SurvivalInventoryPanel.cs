@@ -9,6 +9,7 @@ namespace Blockiverse.UI
     {
         static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.CreateDefault();
 
+        [SerializeField] Button[] slotButtons;
         [SerializeField] Text[] slotLabels;
         [SerializeField] Text selectedHotbarLabel;
 
@@ -16,10 +17,19 @@ namespace Blockiverse.UI
         ItemRegistry itemRegistry;
         int selectedHotbarSlotIndex;
 
+        public int SelectedHotbarSlotIndex => selectedHotbarSlotIndex;
+
         public void Configure(Text[] targetSlotLabels, Text targetSelectedHotbarLabel)
         {
+            Configure(null, targetSlotLabels, targetSelectedHotbarLabel);
+        }
+
+        public void Configure(Button[] targetSlotButtons, Text[] targetSlotLabels, Text targetSelectedHotbarLabel)
+        {
             slotLabels = targetSlotLabels ?? Array.Empty<Text>();
+            slotButtons = targetSlotButtons ?? Array.Empty<Button>();
             selectedHotbarLabel = targetSelectedHotbarLabel;
+            WireSlotButtons();
             Refresh();
         }
 
@@ -60,6 +70,11 @@ namespace Blockiverse.UI
             }
         }
 
+        void Awake()
+        {
+            WireSlotButtons();
+        }
+
         string FormatSlot(int slotIndex)
         {
             if (inventory == null)
@@ -86,6 +101,28 @@ namespace Blockiverse.UI
                 return slotIndex == 0;
 
             return slotIndex >= 0 && slotIndex < hotbarSlotCount;
+        }
+
+        void WireSlotButtons()
+        {
+            if (slotButtons == null)
+                return;
+
+            for (int index = 0; index < slotButtons.Length; index++)
+            {
+                Button button = slotButtons[index];
+
+                if (button == null)
+                    continue;
+
+                int slotIndex = index;
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(() =>
+                {
+                    if (inventory == null || slotIndex < inventory.HotbarSlotCount)
+                        SetSelectedHotbarSlotIndex(slotIndex);
+                });
+            }
         }
     }
 }

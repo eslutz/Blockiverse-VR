@@ -1,5 +1,7 @@
 using System.IO;
+using System.Linq;
 using System.Xml;
+using Blockiverse.Core;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -14,9 +16,11 @@ namespace Blockiverse.Tests.EditMode
         const string XrRigPrefabPath = "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab";
         const string AndroidUrpAssetPath = "Assets/Blockiverse/Settings/BlockiverseAndroidURPAsset.asset";
         const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
+        const string LegacyAndroidResourcePath = "Assets/Plugins/Android/res";
         const string OculusRuntimeSettingsPath = "Assets/Resources/OculusRuntimeSettings.asset";
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
         const string ManifestPath = "Packages/manifest.json";
+        const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
 
         [Test]
         public void UnityVersionIsPinnedToUnity6()
@@ -73,6 +77,29 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void AndroidXrManagerStartsOpenXrAutomatically()
+        {
+            Object managerSettings = AssetDatabase
+                .LoadAllAssetsAtPath(XrGeneralSettingsPath)
+                .FirstOrDefault(asset => asset.GetType().Name == "XRManagerSettings");
+
+            Assert.That(managerSettings, Is.Not.Null);
+
+            var serializedManager = new SerializedObject(managerSettings);
+            Assert.That(serializedManager.FindProperty("m_AutomaticLoading")?.boolValue, Is.True);
+            Assert.That(serializedManager.FindProperty("m_AutomaticRunning")?.boolValue, Is.True);
+
+            SerializedProperty loaders = serializedManager.FindProperty("m_Loaders");
+            Assert.That(loaders, Is.Not.Null);
+            Assert.That(loaders.arraySize, Is.GreaterThan(0));
+            Assert.That(
+                Enumerable.Range(0, loaders.arraySize)
+                    .Select(index => loaders.GetArrayElementAtIndex(index).objectReferenceValue)
+                    .Any(loader => loader != null && loader.GetType().Name == "OpenXRLoader"),
+                Is.True);
+        }
+
+        [Test]
         public void AndroidManifestUsesSingleGameActivityEntry()
         {
             Assert.That(File.Exists(AndroidManifestPath), Is.True);
@@ -97,6 +124,32 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(
                 supportedDevicesNode.Attributes["android:value"]?.Value,
                 Is.EqualTo("quest3|quest3s"));
+        }
+
+        [Test]
+        public void AndroidAppIdentityAndBrandingAssetsAreConfigured()
+        {
+            Assert.That(PlayerSettings.productName, Is.EqualTo(BlockiverseProject.ProductName));
+            Assert.That(File.Exists(BlockiverseProject.AndroidAppStringsPath), Is.True);
+            Assert.That(File.ReadAllText(BlockiverseProject.AndroidAppStringsPath), Does.Contain(BlockiverseProject.ProductName));
+            Assert.That(File.Exists(BlockiverseProject.AndroidBrandingLibraryPath + "/AndroidManifest.xml"), Is.True);
+            Assert.That(
+                File.ReadAllText(BlockiverseProject.AndroidBrandingLibraryPath + "/build.gradle"),
+                Does.Contain("namespace 'dev.ericslutz.blockiversevr.branding'"));
+            Assert.That(Directory.Exists(LegacyAndroidResourcePath), Is.False);
+
+            string[] requiredBrandingAssets =
+            {
+                BlockiverseProject.AppIconPath,
+                BlockiverseProject.LaunchArtworkPath
+            };
+
+            foreach (string assetPath in requiredBrandingAssets)
+            {
+                Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+                Assert.That(texture, Is.Not.Null, $"Missing branding texture: {assetPath}");
+                Assert.That(File.Exists($"{assetPath}.meta"), Is.True, $"Missing branding texture meta: {assetPath}.meta");
+            }
         }
 
         [Test]

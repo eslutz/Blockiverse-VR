@@ -15,6 +15,7 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseTeleportLocomotion teleportLocomotion;
         [SerializeField] BlockiverseSnapTurnLocomotion snapTurnLocomotion;
         [SerializeField] BlockiverseHeightReset heightReset;
+        [SerializeField] BlockiverseVrUiPointer uiPointer;
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
         [SerializeField] UnityEvent breakPressed = new();
@@ -29,6 +30,7 @@ namespace Blockiverse.VR
         public UnityEvent BreakPressed => breakPressed;
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent UndoPressed => undoPressed;
+        public BlockiverseVrUiPointer UiPointer => uiPointer;
 
         public void Configure(InputActionAsset actions)
         {
@@ -46,6 +48,11 @@ namespace Blockiverse.VR
             teleportLocomotion = teleport;
             snapTurnLocomotion = snapTurn;
             heightReset = reset;
+        }
+
+        public void ConfigureUiPointer(BlockiverseVrUiPointer pointer)
+        {
+            uiPointer = pointer;
         }
 
         public InputAction FindAction(string mapName, string actionName)
@@ -155,12 +162,18 @@ namespace Blockiverse.VR
             if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Select, out InputAction breakAction) &&
                 breakAction.WasPressedThisFrame())
             {
+                if (uiPointer != null && uiPointer.TryClick())
+                    return;
+
                 breakPressed?.Invoke();
             }
 
             if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Activate, out InputAction placeAction) &&
                 placeAction.WasPressedThisFrame())
             {
+                if (uiPointer != null && uiPointer.IsPointerOverUi)
+                    return;
+
                 placePressed?.Invoke();
             }
 

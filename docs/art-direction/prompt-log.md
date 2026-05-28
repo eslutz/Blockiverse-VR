@@ -34,3 +34,15 @@ Each generated asset entry should include:
 - Negative prompt or exclusions: No Minecraft, Creeper, Steve, Enderman, Mojang, copied game texture, copied logo, copyrighted character, protected font, third-party screenshots, or protected item identity
 - Post-processing steps: Pixel assets were normalized into RGBA PNG files, block source tiles were packed into a committed 4x4 atlas, Unity `.meta` import settings were written with point filtering, clamp wrapping, no mipmaps, Android max-size overrides, and sprite import settings for item/UI assets
 - Reviewer notes: This is the first committed M4 art pass for validation readability. It covers twelve renderable blocks, eight survival item icons, and six UI sprites. The authored atlas is now the required renderer path; missing, unrelated, or incorrectly sized atlas textures fail validation instead of using a procedural fallback.
+
+## 2026-05-28 — First-launch branding assets
+
+- Asset path: `Assets/Blockiverse/Art/Sprites/Branding/blockiverse_launch_landscape.png`
+- Asset path: `Assets/Blockiverse/Art/Sprites/Branding/blockiverse_app_icon.png`
+- Asset path: `Assets/Plugins/Android/res/mipmap-*/app_icon.png`
+- Generation date: 2026-05-28
+- Tool/model: Codex built-in image generation for the launch landscape; deterministic Python raster generation in `scripts/art/generate-first-launch-assets.py` for the app icon and Android icon density variants
+- Prompt: `stylized voxel landscape splash artwork for an original Meta Quest voxel survival VR game named Blockiverse VR; bright readable low-poly voxel valley at sunrise with blocky meadow terrain, stepped hills, cubic trees, a simple workbench silhouette, clear sky, no text`
+- Negative prompt or exclusions: No text, logos, UI, watermarks, dark horror mood, copyrighted characters, brand references, photorealism, Minecraft textures, screenshots, mobs, characters, logos, fonts, or protected item identity
+- Post-processing steps: The launch landscape was copied into the Unity branding sprite folder and imported as a texture. The startup overlay renders the exact `Blockiverse VR` title as Unity text for readability. The app icon was generated as a simple original block-font `B` mark over Blockiverse terrain color blocks, with Android mipmap density variants and Unity `.meta` import settings written by script.
+- Reviewer notes: The app icon favors readability over scene detail. The launch art is used behind the in-game startup/loading overlay, while the Unity splash remains in place unless the current Unity license/settings permit removing it later.

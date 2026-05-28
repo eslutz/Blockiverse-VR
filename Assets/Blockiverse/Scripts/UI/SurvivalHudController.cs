@@ -45,6 +45,19 @@ namespace Blockiverse.UI
             inventoryPanel?.Bind(Inventory, itemRegistry, selectedHotbarSlotIndex);
             craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
             healthPanel?.Bind(Vitals);
+
+            if (craftingPanel != null)
+            {
+                craftingPanel.CraftingChanged -= RefreshPanels;
+                craftingPanel.CraftingChanged += RefreshPanels;
+            }
+        }
+
+        void RefreshPanels()
+        {
+            inventoryPanel?.Refresh();
+            craftingPanel?.Refresh();
+            healthPanel?.Refresh();
         }
     }
 }
