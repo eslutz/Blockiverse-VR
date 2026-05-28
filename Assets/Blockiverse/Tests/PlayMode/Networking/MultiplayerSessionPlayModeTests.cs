@@ -304,6 +304,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Save World");
             MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
             var editPosition = new BlockPosition(2, 2, 2);
+            var restartEditPosition = new BlockPosition(3, 2, 2);
             ushort port = NextPort();
             var testConfig = new BlockiverseNetworkConfig(
                 BlockiverseNetworkConfig.DefaultAddress,
@@ -362,6 +363,29 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 Assert.That(persistence.LastHostLoadAttempted, Is.True);
                 Assert.That(persistence.LastHostLoadSucceeded, Is.True);
                 Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
+
+                worldManager.World.SetBlock(restartEditPosition, BlockRegistry.Loam);
+                hostSession.StopSession();
+
+                Assert.That(hostSession.LastStopRequestSucceeded, Is.True);
+                Assert.That(persistence.LastShutdownSaveAttempted, Is.True);
+                Assert.That(persistence.LastShutdownSaveSucceeded, Is.True);
+
+                yield return WaitFor(
+                    () => hostSession.CurrentState == BlockiverseConnectionState.Stopped &&
+                          !hostSession.NetworkManager.IsListening,
+                    "Restarted host did not stop after saving the world.");
+
+                worldManager.World.SetBlock(editPosition, BlockRegistry.Air);
+                worldManager.World.SetBlock(restartEditPosition, BlockRegistry.Air);
+
+                Assert.That(hostSession.StartHost(), Is.True);
+                yield return WaitFor(
+                    () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                    "Host did not restart after the second shutdown save.");
+
+                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(worldManager.World.GetBlock(restartEditPosition), Is.EqualTo(BlockRegistry.Loam));
             }
             finally
             {

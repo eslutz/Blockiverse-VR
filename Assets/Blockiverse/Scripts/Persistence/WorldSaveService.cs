@@ -71,7 +71,7 @@ namespace Blockiverse.Persistence
             return new WorldLoadResult(false, null, error);
         }
 
-        public void ApplyTo(VoxelWorld world)
+        public void ApplyTo(VoxelWorld world, bool preserveLoadedBlockChanges = false)
         {
             if (!Success)
                 throw new InvalidOperationException("Cannot apply a failed save load result.");
@@ -83,10 +83,11 @@ namespace Blockiverse.Persistence
                 world.SetBlock(
                     new BlockPosition(delta.X, delta.Y, delta.Z),
                     new BlockId(delta.BlockId),
-                    trackChange: false);
+                    trackChange: preserveLoadedBlockChanges);
             }
 
-            world.ClearChangedBlocks();
+            if (!preserveLoadedBlockChanges)
+                world.ClearChangedBlocks();
         }
 
         public Inventory CreateInventory(ItemRegistry itemRegistry = null)

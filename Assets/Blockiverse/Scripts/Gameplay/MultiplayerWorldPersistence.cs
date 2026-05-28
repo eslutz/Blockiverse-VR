@@ -98,7 +98,7 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            result.ApplyTo(worldManager.World);
+            result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
