@@ -108,6 +108,34 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(CreativeHotbar.ToggleVisible)));
         }
 
+        [Test]
+        public void XrRigPrefabHasSinglePlayerFallbackAvatarRig()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                Component avatarRig = instance.GetComponent("BlockiverseNetworkAvatarRig");
+
+                Assert.That(avatarRig, Is.Not.Null);
+                avatarRig.GetType().GetMethod("RefreshAvatarMode").Invoke(avatarRig, null);
+                Assert.That(GetAvatarProperty<bool>(avatarRig, "FallbackProxyEnabled"), Is.True);
+                Assert.That(GetAvatarProperty<bool>(avatarRig, "MetaAvatarAvailable"), Is.False);
+                Assert.That(GetAvatarProperty<Transform>(avatarRig, "FallbackRoot"), Is.Not.Null);
+                Assert.That(GetAvatarProperty<Transform>(avatarRig, "HeadAnchor"), Is.Not.Null);
+                Assert.That(GetAvatarProperty<Transform>(avatarRig, "LeftHandAnchor"), Is.Not.Null);
+                Assert.That(GetAvatarProperty<Transform>(avatarRig, "RightHandAnchor"), Is.Not.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
         static void AssertController(GameObject prefab, string controllerName, BlockiverseControllerRole expectedRole)
         {
             Transform controller = prefab.transform.Find($"Camera Offset/{controllerName}");
@@ -115,6 +143,11 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller, Is.Not.Null);
             Assert.That(controller.GetComponent<BlockiverseControllerAnchor>()?.Role, Is.EqualTo(expectedRole));
             Assert.That(controller.GetComponent<BlockiverseControllerHaptics>()?.Role, Is.EqualTo(expectedRole));
+        }
+
+        static T GetAvatarProperty<T>(Component avatarRig, string propertyName)
+        {
+            return (T)avatarRig.GetType().GetProperty(propertyName).GetValue(avatarRig);
         }
     }
 }

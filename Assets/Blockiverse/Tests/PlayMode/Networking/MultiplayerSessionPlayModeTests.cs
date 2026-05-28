@@ -520,6 +520,44 @@ namespace Blockiverse.Tests.Networking.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator HostStartRejectsSavedWorldThatDoesNotMatchInitializedWorld()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            string savePath = CreateTempSavePath();
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Mismatched Save World");
+            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
+            VoxelWorld savedWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 2026);
+            savedWorld.SetBlock(new BlockPosition(3, 3, 3), BlockRegistry.Clearstone);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            try
+            {
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(savePath, "mismatched-save", savedWorld);
+                hostSession.Configure(testConfig);
+
+                Assert.That(hostSession.StartHost(), Is.False);
+                Assert.That(persistence.LastHostLoadAttempted, Is.True);
+                Assert.That(persistence.LastHostLoadSucceeded, Is.False);
+                Assert.That(persistence.LastFailureReason, Does.Contain("does not match the initialized host world"));
+                Assert.That(worldManager.World.Bounds.Width, Is.EqualTo(16));
+                Assert.That(worldManager.World.Bounds.Height, Is.EqualTo(8));
+                Assert.That(worldManager.World.Bounds.Depth, Is.EqualTo(16));
+            }
+            finally
+            {
+                DeleteIfExists(savePath);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator HostShutdownSaveFailureAbortsShutdownAndKeepsClientsConnected()
         {
             yield return LoadMultiplayerTestScene();

@@ -1103,6 +1103,7 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
+            EnsureXrRigAvatar(rig);
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
             EnsureXrRigSurvivalHud(rig);
@@ -1156,6 +1157,7 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
+            EnsureXrRigAvatar(rig);
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
             EnsureXrRigSurvivalHud(rig);
@@ -1211,6 +1213,20 @@ namespace Blockiverse.Editor
                 haptics = controller.AddComponent<BlockiverseControllerHaptics>();
 
             haptics.Configure(role);
+        }
+
+        static void EnsureXrRigAvatar(GameObject rig)
+        {
+            BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
+            Transform leftHand = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
+            Transform rightHand = cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
+
+            avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
+            avatarRig.SetMetaAvatarAvailable(false);
+            avatarRig.ConfigureFallbackProxy(true);
+            EditorUtility.SetDirty(avatarRig);
         }
 
         static void EnsureXrRigComfortMenu(GameObject rig, BlockiverseInputRig inputRig)

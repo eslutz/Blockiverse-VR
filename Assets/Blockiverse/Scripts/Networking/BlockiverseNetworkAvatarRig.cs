@@ -5,7 +5,6 @@ using UnityEngine;
 namespace Blockiverse.Networking
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(NetworkObject))]
     public sealed class BlockiverseNetworkAvatarRig : NetworkBehaviour
     {
         const string FallbackRootName = "Fallback Proxy Avatar";
@@ -79,7 +78,10 @@ namespace Blockiverse.Networking
         void LateUpdate()
         {
             if (!IsSpawned)
+            {
+                RefreshLocalTrackingPose();
                 return;
+            }
 
             if (IsOwner)
             {
@@ -92,10 +94,12 @@ namespace Blockiverse.Networking
             }
         }
 
-        void OnDestroy()
+        public override void OnDestroy()
         {
             if (fallbackMaterial != null)
                 DestroyUnityObject(fallbackMaterial);
+
+            base.OnDestroy();
         }
 
         public void ConfigureFallbackProxy(bool enabled)
@@ -117,6 +121,12 @@ namespace Blockiverse.Networking
 
             if (IsSpawned && IsOwner)
                 PublishPose();
+        }
+
+        public void RefreshLocalTrackingPose()
+        {
+            EnsureFallbackProxy();
+            ApplyTrackingSources();
         }
 
         public void RefreshAvatarMode()
