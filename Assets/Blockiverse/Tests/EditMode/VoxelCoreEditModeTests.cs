@@ -174,6 +174,30 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ChunkDeltaLogReplayReconstructsAcceptedMutations()
+        {
+            var sourceWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 21);
+            var replayWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 21);
+            var firstPosition = new BlockPosition(1, 1, 1);
+            var secondPosition = new BlockPosition(3, 1, 1);
+            var log = new ChunkDeltaLog();
+
+            ChunkDelta firstDelta = log.Record(new SetBlockCommand(firstPosition, BlockRegistry.Clearstone).Execute(sourceWorld), sourceWorld.ChunkSize);
+            ChunkDelta secondDelta = log.Record(new SetBlockCommand(secondPosition, BlockRegistry.Slate).Execute(sourceWorld), sourceWorld.ChunkSize);
+
+            ChunkDeltaLog.Replay(replayWorld, log.Deltas);
+
+            Assert.That(firstDelta.SequenceId, Is.EqualTo(1));
+            Assert.That(firstDelta.Chunk, Is.EqualTo(new ChunkCoordinate(0, 0, 0)));
+            Assert.That(secondDelta.SequenceId, Is.EqualTo(2));
+            Assert.That(secondDelta.Chunk, Is.EqualTo(new ChunkCoordinate(1, 0, 0)));
+            Assert.That(log.LastSequenceId, Is.EqualTo(2));
+            Assert.That(replayWorld.GetBlock(firstPosition), Is.EqualTo(sourceWorld.GetBlock(firstPosition)));
+            Assert.That(replayWorld.GetBlock(secondPosition), Is.EqualTo(sourceWorld.GetBlock(secondPosition)));
+            Assert.That(replayWorld.GetChangedBlocks(), Is.Empty);
+        }
+
+        [Test]
         public void ClientProxyCannotCommitAuthoritativeMutation()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
