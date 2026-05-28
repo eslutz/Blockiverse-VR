@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added late-join multiplayer validation that proves joined clients receive current host state and remain synchronized with subsequent authoritative chunk deltas.
 - Added sequenced chunk delta records and observer-client delta sync coverage for authoritative multiplayer block edits.
 - Added request IDs and pending-response tracking to authoritative multiplayer block mutation RPCs so accepted deltas and host rejections are correlated deterministically.
 - Added host-owned multiplayer chunk authority boundaries with client block-edit requests, host validation, delta broadcast, late-join changed-block snapshots, save ownership checks, and client-side direct mutation rejection.
