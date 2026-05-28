@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added the M6 signed-release APK pipeline path, including a Unity release build entry point,
+  secret-based Android signing script, checksum generation, GitHub Release artifact publishing,
+  store-document validation, and a Quest screenshot/capture plan.
 - Added M6 performance instrumentation: ProfilerMarkers around survival-lite world generation, chunk meshing, and renderer rebuild paths; an engine-free `FrameStatisticsSampler` with EditMode coverage; a local-only in-game performance overlay (FPS, frame time, chunk/triangle counts, rebuild queue) that stays hidden in release builds; and a max-world generation/meshing stress test plus a performance report template.
 - Added M6 store readiness documentation: drafted privacy policy, store listing/metadata, VRC working checklist, data-use and safety declarations, known-issues/support notes, and a release-notes template, with hardware/account-dependent items marked as external follow-ups.
 - Added M6 audio and haptics feedback: a block-mutation event on the creative interaction controller drives an audio cue player (break/place plus UI cues) and dominant-hand haptic patterns, with a generator script for original synthesized placeholder sound effects (Git LFS).

@@ -2,11 +2,13 @@
 
 Working documents for each item live in this folder. Items that require real hardware,
 a Meta account, or design assets are marked **(external)** and tracked as follow-ups.
+No Meta Developer Dashboard action, release-channel upload, tester invite, Data Use Checkup
+submission, or Submit for Review action is performed by this repository checklist.
 
 - App metadata — `store-listing.md`
 - Short description — `store-listing.md`
 - Long description — `store-listing.md`
-- Screenshots — **(external)** capture on Quest 3
+- Screenshots — `screenshots.md`; final assets are **(external)** capture on Quest 3
 - Trailer or capture, if available — **(external)**
 - Comfort rating notes — `store-listing.md`
 - Privacy policy — `privacy-policy.md` (publish at a public URL)
@@ -19,4 +21,5 @@ a Meta account, or design assets are marked **(external)** and tracked as follow
 - Support email or site — `known-issues-and-support.md`
 - Known issues — `known-issues-and-support.md`
 - Release notes — `release-notes-template.md`
-- Signed release APK from a `main` tag — **(out of current scope; release pipeline tracked separately)**
+- Signed release APK from a `main` tag — `.github/workflows/release-apk.yml` after Eric
+  provides production signing material through GitHub Actions secrets

@@ -6,11 +6,15 @@ on:
       - "v*"
 
 jobs:
-  release-apk:
-    name: Signed release APK
+  build-release-apk:
+    name: Build signed release APK
     runs-on: ubuntu-latest
+    container:
+      image: unityci/editor:ubuntu-6000.3.16f1-android-3.2.2
     permissions:
-      contents: write
+      contents: read
+    env:
+      UNITY_EDITOR: /opt/unity/Editor/Unity
     steps:
       - uses: actions/checkout@v6
         with:
@@ -21,38 +25,81 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: Check forbidden files
         run: scripts/ci/forbidden-files.sh
-      - name: Detect Unity project
-        id: unity
-        run: |
-          if [ -f ProjectSettings/ProjectVersion.txt ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Prepare artifact directory
-        run: mkdir -p .ci-artifacts/release-apk
-      - name: Placeholder until Unity bootstrap
-        if: steps.unity.outputs.exists == 'false'
-        run: |
-          {
-            echo "Unity project not bootstrapped yet."
-            echo "Signed release APK build will be enabled after EPIC-01 creates ProjectSettings/ProjectVersion.txt."
-          } > .ci-artifacts/release-apk/unity-not-bootstrapped.txt
-      - name: Build signed APK
-        if: steps.unity.outputs.exists == 'true'
+      - name: Validate signing secrets
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+      - name: Prepare artifact directory
+        run: mkdir -p .ci-artifacts/release-apk .ci-secrets
+      - name: Decode Android signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > .ci-secrets/blockiverse-release.keystore
+      - name: Build signed APK
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/.ci-secrets/blockiverse-release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          version_name="${GITHUB_REF_NAME#v}"
+          version_code="${GITHUB_RUN_NUMBER:-1}"
+          output_path=".ci-artifacts/release-apk/BlockiverseVR-${GITHUB_REF_NAME}-release.apk"
+          UNITY_ANDROID_VERSION_NAME="$version_name" \
+            UNITY_ANDROID_VERSION_CODE="$version_code" \
+            scripts/unity/build-release-apk.sh "$output_path"
+      - name: Generate checksums and release notes
+        run: |
+          cd .ci-artifacts/release-apk
+          sha256sum *.apk > checksums.txt
           {
-            echo "Build signed release APK and generate symbols/checksums here."
-            echo "Expected output path: .ci-artifacts/release-apk/blockiverse-vr-release.apk"
-          } > .ci-artifacts/release-apk/signed-release-apk-build-plan.txt
+            echo "# Blockiverse VR ${GITHUB_REF_NAME}"
+            echo
+            echo "Signed Android release APK built from ${GITHUB_SHA}."
+            echo
+            echo "See CHANGELOG.md for the current release notes source."
+          } > release-notes.md
+      - name: Attach validation artifacts when present
+        run: |
+          if [ -d TestResults/Unity ]; then
+            tar -czf .ci-artifacts/release-apk/test-results.tar.gz TestResults/Unity
+          fi
+          if [ -d docs/testing/performance ]; then
+            tar -czf .ci-artifacts/release-apk/performance-docs.tar.gz docs/testing/performance
+          fi
       - name: Upload signed release APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: signed-release-apk
           path: .ci-artifacts/release-apk/
           if-no-files-found: error
+
+  publish-github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-release-apk
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed release APK artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: signed-release-apk
+          path: .ci-artifacts/release-apk
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" .ci-artifacts/release-apk/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" .ci-artifacts/release-apk/* --title "Blockiverse VR ${GITHUB_REF_NAME}" --notes-file .ci-artifacts/release-apk/release-notes.md
+          fi
