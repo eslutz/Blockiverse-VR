@@ -9,6 +9,7 @@ namespace Blockiverse.VR
     {
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] BlockiverseRayPointer rayPointer;
+        [SerializeField] BlockiverseVrUiPointer uiPointer;
         [SerializeField] CreativeInteractionController interactionController;
 
         UnityAction breakAction;
@@ -18,12 +19,14 @@ namespace Blockiverse.VR
         public void Configure(
             BlockiverseInputRig rig,
             BlockiverseRayPointer pointer,
-            CreativeInteractionController controller)
+            CreativeInteractionController controller,
+            BlockiverseVrUiPointer vrUiPointer = null)
         {
             Unbind();
             inputRig = rig;
             rayPointer = pointer;
             interactionController = controller;
+            uiPointer = vrUiPointer;
             Bind();
         }
 
@@ -91,18 +94,27 @@ namespace Blockiverse.VR
             if (rayPointer == null)
                 rayPointer = GetComponentInChildren<BlockiverseRayPointer>(true) ?? FindFirstObjectByType<BlockiverseRayPointer>();
 
+            if (uiPointer == null)
+                uiPointer = GetComponent<BlockiverseVrUiPointer>() ?? GetComponentInParent<BlockiverseVrUiPointer>() ?? FindFirstObjectByType<BlockiverseVrUiPointer>();
+
             if (interactionController == null && Application.isPlaying)
                 interactionController = FindFirstObjectByType<CreativeInteractionController>();
         }
 
         void TryBreakTarget()
         {
+            if (uiPointer != null && uiPointer.IsPointerOverUi)
+                return;
+
             if (TryGetTarget(out BlockPosition target, out _))
                 interactionController.TryBreakBlock(target);
         }
 
         void TryPlaceTarget()
         {
+            if (uiPointer != null && uiPointer.IsPointerOverUi)
+                return;
+
             if (TryGetTarget(out BlockPosition target, out Vector3 normal))
                 interactionController.TryPlaceBlock(target, normal);
         }
@@ -116,6 +128,9 @@ namespace Blockiverse.VR
         {
             target = default;
             normal = Vector3.up;
+
+            if (uiPointer != null && uiPointer.IsPointerOverUi)
+                return false;
 
             if (rayPointer == null || interactionController == null || !rayPointer.TryGetHit(out RaycastHit hit))
                 return false;

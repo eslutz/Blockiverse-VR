@@ -8,6 +8,7 @@ using Unity.XR.CoreUtils;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -55,7 +56,7 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
-            Transform menuTransform = prefab.transform.Find("Camera Offset/Left Controller/Comfort Settings Menu");
+            Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
             BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
@@ -66,8 +67,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(menu, Is.Not.Null);
             Assert.That(menu.IsVisible, Is.False);
             Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(1));
-            Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(menu));
-            Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseComfortMenu.ToggleVisible)));
+            BlockiverseWorldSpacePanelPresenter presenter = menuTransform.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(presenter, Is.Not.Null);
+            Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(presenter));
+            Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
         }
 
         [Test]
@@ -78,19 +81,21 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefab, Is.Not.Null);
 
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
-            Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
             Transform pointerLine = rightController?.Find("Ray Pointer Line");
-            Transform blockMenu = leftController?.Find("Block Menu");
+            Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
             BlockiverseRayPointer pointer = rightController?.GetComponent<BlockiverseRayPointer>();
             BlockiverseCreativeInputBridge creativeInputBridge = prefab.GetComponent<BlockiverseCreativeInputBridge>();
+            BlockiverseVrUiPointer uiPointer = prefab.GetComponent<BlockiverseVrUiPointer>();
             CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
             Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
+            BlockiverseWorldSpacePanelPresenter blockMenuPresenter = blockMenu?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             LineRenderer lineRenderer = pointerLine?.GetComponent<LineRenderer>();
 
             Assert.That(rightController, Is.Not.Null);
-            Assert.That(leftController, Is.Not.Null);
+            Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
             Assert.That(pointer, Is.Not.Null);
             Assert.That(creativeInputBridge, Is.Not.Null);
+            Assert.That(uiPointer, Is.Not.Null);
             Assert.That(pointerLine, Is.Not.Null);
             Assert.That(lineRenderer, Is.Not.Null);
             Assert.That(lineRenderer.shadowCastingMode, Is.EqualTo(ShadowCastingMode.Off));
@@ -98,14 +103,40 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
             Assert.That(blockMenuCanvas, Is.Not.Null);
+            Assert.That(blockMenuPresenter, Is.Not.Null);
             Assert.That(blockMenuCanvas.enabled, Is.False);
 
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
             UnityEngine.Events.UnityEvent quickMenuEvent = inputRig.QuickMenuPressed;
             Assert.That(quickMenuEvent, Is.Not.Null);
             Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(1));
-            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(hotbar));
-            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(CreativeHotbar.ToggleVisible)));
+            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(blockMenuPresenter));
+            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
+        }
+
+        [Test]
+        public void XrRigPrefabShowsControllerMappingPopupAndInteractiveSurvivalHud()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            Transform popup = prefab.transform.Find("Camera Offset/Controller Mapping Popup");
+            Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
+
+            Assert.That(popup, Is.Not.Null);
+            Assert.That(popup.GetComponent<BlockiverseWorldSpacePanelPresenter>(), Is.Not.Null);
+            Assert.That(popup.GetComponent<Canvas>()?.enabled, Is.True);
+            Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
+            Assert.That(
+                popup.GetComponentsInChildren<Text>(includeInactive: true)
+                    .Any(label => label.text.Contains("Right trigger")),
+                Is.True);
+
+            Assert.That(survivalHud, Is.Not.Null);
+            Assert.That(survivalHud.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(11));
+            Assert.That(survivalHud.GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true), Is.Not.Null);
+            Assert.That(survivalHud.GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true), Is.Not.Null);
         }
 
         [Test]

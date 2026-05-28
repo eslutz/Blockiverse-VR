@@ -15,6 +15,11 @@ namespace Blockiverse.Core
         public const string AndroidUrpAssetPath = "Assets/Blockiverse/Settings/BlockiverseAndroidURPAsset.asset";
         public const string AndroidUrpRendererPath = "Assets/Blockiverse/Settings/BlockiverseAndroidUniversalRenderer.asset";
         public const string InputActionsAssetPath = "Assets/Blockiverse/Settings/BlockiverseInputActions.inputactions";
+        public const string BrandingArtFolderPath = "Assets/Blockiverse/Art/Sprites/Branding";
+        public const string AppIconPath = BrandingArtFolderPath + "/blockiverse_app_icon.png";
+        public const string LaunchArtworkPath = BrandingArtFolderPath + "/blockiverse_launch_landscape.png";
+        public const string AndroidBrandingLibraryPath = "Assets/Plugins/Android/BlockiverseBranding.androidlib";
+        public const string AndroidAppStringsPath = AndroidBrandingLibraryPath + "/res/values/strings.xml";
         public const string PointerLineMaterialPath = "Assets/Blockiverse/Materials/BlockiversePointerLine.mat";
         public const string HighlightMaterialPath = "Assets/Blockiverse/Materials/BlockiverseHighlight.mat";
         public const string TestBlockMaterialPath = "Assets/Blockiverse/Materials/BlockiverseTestBlock.mat";

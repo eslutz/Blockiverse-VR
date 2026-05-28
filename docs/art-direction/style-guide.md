@@ -44,6 +44,15 @@ Committed authored texture assets now live under:
 - `Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png`
 - `Assets/Blockiverse/Art/Textures/Items/`
 - `Assets/Blockiverse/Art/Sprites/UI/`
+- `Assets/Blockiverse/Art/Sprites/Branding/`
+
+## Branding Assets
+
+Branding assets should stay readable at headset distance and in the Quest installed-app grid:
+
+- The app icon should use a simple original mark with strong contrast, not a detailed landscape.
+- Startup/loading artwork can show the voxel landscape direction, but exact game-name text should be rendered by Unity UI unless a reviewed title treatment is committed.
+- Android launcher resources should use the same icon direction across density variants under `Assets/Plugins/Android/res/mipmap-*`.
 
 ## M4 Palette And Naming Rules
 
