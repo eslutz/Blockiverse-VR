@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added M5 multiplayer simulator validation for active block edits under 100ms latency and packet loss, plus recorded bandwidth estimates for host-authoritative chunk mutation messages.
+- Added host-authoritative multiplayer survival-lite sync for resource harvesting, per-player inventory snapshots, shared crate transfers, and crafting validation across two clients.
+- Added deterministic multiplayer conflict handling so stale competing client block mutations are rejected with host-authoritative correction.
 - Fixed Quest first-launch comfort by auto-starting Android OpenXR, opening VR menus headset-relative, adding controller mapping and branded startup overlays, wiring survival HUD buttons for VR ray input, and adding Blockiverse VR app identity assets.
 - Added Meta Horizon Avatar runtime wiring for single-player first-person avatar visibility and multiplayer avatar stream relay with fallback proxy coverage.
 - Added late-join multiplayer validation that proves joined clients receive current host state and remain synchronized with subsequent authoritative chunk deltas.
