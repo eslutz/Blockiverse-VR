@@ -58,10 +58,42 @@ namespace Blockiverse.Tests.Networking.EditMode
             Assert.That(avatarRig.HeadAnchor.localRotation.eulerAngles.y, Is.EqualTo(30.0f).Within(0.01f));
         }
 
+        [Test]
+        public void UnspawnedSinglePlayerRigTracksLocalHeadAndHands()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            GameObject head = CreateTrackingSource("Single Player Head", new Vector3(0.0f, 1.72f, 0.08f));
+            GameObject leftHand = CreateTrackingSource("Single Player Left Hand", new Vector3(-0.42f, 1.16f, 0.32f));
+            GameObject rightHand = CreateTrackingSource("Single Player Right Hand", new Vector3(0.42f, 1.16f, 0.32f));
+
+            try
+            {
+                avatarRig.ConfigureTrackingSources(head.transform, leftHand.transform, rightHand.transform);
+                avatarRig.RefreshLocalTrackingPose();
+
+                Assert.That(avatarRig.HeadAnchor.localPosition, Is.EqualTo(head.transform.position));
+                Assert.That(avatarRig.LeftHandAnchor.localPosition, Is.EqualTo(leftHand.transform.position));
+                Assert.That(avatarRig.RightHandAnchor.localPosition, Is.EqualTo(rightHand.transform.position));
+            }
+            finally
+            {
+                Object.DestroyImmediate(head);
+                Object.DestroyImmediate(leftHand);
+                Object.DestroyImmediate(rightHand);
+            }
+        }
+
         BlockiverseNetworkAvatarRig CreateAvatarRig()
         {
             avatarObject = new GameObject("Network Avatar Test");
             return avatarObject.AddComponent<BlockiverseNetworkAvatarRig>();
+        }
+
+        static GameObject CreateTrackingSource(string name, Vector3 position)
+        {
+            GameObject source = new(name);
+            source.transform.position = position;
+            return source;
         }
     }
 }

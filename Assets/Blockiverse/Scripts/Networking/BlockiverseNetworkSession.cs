@@ -268,7 +268,7 @@ namespace Blockiverse.Networking
             if (!string.IsNullOrWhiteSpace(reason))
                 return reason;
 
-            return networkManager != null ? networkManager.DisconnectEvent.ToString() : string.Empty;
+            return string.Empty;
         }
 
         void ResolveDependencies()

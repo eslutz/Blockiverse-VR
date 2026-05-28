@@ -429,6 +429,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Save World");
             MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
             var editPosition = new BlockPosition(2, 2, 2);
+            var restartEditPosition = new BlockPosition(3, 2, 2);
             ushort port = NextPort();
             var testConfig = new BlockiverseNetworkConfig(
                 BlockiverseNetworkConfig.DefaultAddress,
@@ -487,31 +488,71 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 Assert.That(persistence.LastHostLoadAttempted, Is.True);
                 Assert.That(persistence.LastHostLoadSucceeded, Is.True);
                 Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
-                Assert.That(
-                    worldManager.World.GetChangedBlocks().Any(change =>
-                        change.Position == editPosition &&
-                        change.NewBlock == BlockRegistry.Clearstone),
-                    Is.True);
 
+                worldManager.World.SetBlock(restartEditPosition, BlockRegistry.Loam);
                 hostSession.StopSession();
+
+                Assert.That(hostSession.LastStopRequestSucceeded, Is.True);
+                Assert.That(persistence.LastShutdownSaveAttempted, Is.True);
+                Assert.That(persistence.LastShutdownSaveSucceeded, Is.True);
+
                 yield return WaitFor(
                     () => hostSession.CurrentState == BlockiverseConnectionState.Stopped &&
                           !hostSession.NetworkManager.IsListening,
-                    "Restarted host did not stop after re-saving loaded multiplayer deltas.");
+                    "Restarted host did not stop after saving the world.");
 
-                WorldLoadResult reloadedResult = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(savePath);
-                Assert.That(reloadedResult.Success, Is.True, reloadedResult.Error);
-                Assert.That(
-                    reloadedResult.Data.ChangedBlocks.Any(delta =>
-                        delta.X == editPosition.X &&
-                        delta.Y == editPosition.Y &&
-                        delta.Z == editPosition.Z &&
-                        delta.BlockId == BlockRegistry.Clearstone.Value),
-                    Is.True);
+                worldManager.World.SetBlock(editPosition, BlockRegistry.Air);
+                worldManager.World.SetBlock(restartEditPosition, BlockRegistry.Air);
+
+                Assert.That(hostSession.StartHost(), Is.True);
+                yield return WaitFor(
+                    () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                    "Host did not restart after the second shutdown save.");
+
+                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(worldManager.World.GetBlock(restartEditPosition), Is.EqualTo(BlockRegistry.Loam));
             }
             finally
             {
                 hostSession.HostShutdownPreparing -= CaptureShutdownPreparation;
+                DeleteIfExists(savePath);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator HostStartRejectsSavedWorldThatDoesNotMatchInitializedWorld()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            string savePath = CreateTempSavePath();
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Mismatched Save World");
+            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
+            VoxelWorld savedWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 2026);
+            savedWorld.SetBlock(new BlockPosition(3, 3, 3), BlockRegistry.Clearstone);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            try
+            {
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(savePath, "mismatched-save", savedWorld);
+                hostSession.Configure(testConfig);
+
+                Assert.That(hostSession.StartHost(), Is.False);
+                Assert.That(persistence.LastHostLoadAttempted, Is.True);
+                Assert.That(persistence.LastHostLoadSucceeded, Is.False);
+                Assert.That(persistence.LastFailureReason, Does.Contain("does not match the initialized host world"));
+                Assert.That(worldManager.World.Bounds.Width, Is.EqualTo(16));
+                Assert.That(worldManager.World.Bounds.Height, Is.EqualTo(8));
+                Assert.That(worldManager.World.Bounds.Depth, Is.EqualTo(16));
+            }
+            finally
+            {
                 DeleteIfExists(savePath);
             }
         }

@@ -4034,6 +4034,7 @@ GameObject:
   - component: {fileID: 4545708939108340447}
   - component: {fileID: 5789210142833391915}
   - component: {fileID: 3695208377462190846}
+  - component: {fileID: 5968352841279429918}
   m_Layer: 0
   m_Name: BlockiverseXRRig
   m_TagString: Untagged
@@ -4069,6 +4070,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d7a14e4c89f346cbb594fb02667cd30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseXRRigMarker
+--- !u!114 &5968352841279429918
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44b2c1b7d98f4a0a9f2a5e1b7c3d9e10, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseNetworkAvatarRig
+  fallbackProxyEnabled: 1
+  metaAvatarAvailable: 0
+  poseSendRateHz: 30
+  headTrackingSource: {fileID: 96463171583487156}
+  leftHandTrackingSource: {fileID: 5696114766365827730}
+  rightHandTrackingSource: {fileID: 6989568263850087154}
+  fallbackRoot: {fileID: 0}
+  headAnchor: {fileID: 0}
+  leftHandAnchor: {fileID: 0}
+  rightHandAnchor: {fileID: 0}
+  ownerFallbackColor: {r: 0.2, g: 0.68, b: 0.94, a: 1}
+  remoteFallbackColor: {r: 0.94, g: 0.62, b: 0.22, a: 1}
 --- !u!114 &741549122611035828
 MonoBehaviour:
   m_ObjectHideFlags: 0

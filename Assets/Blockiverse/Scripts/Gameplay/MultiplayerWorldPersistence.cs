@@ -107,8 +107,18 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            result.ApplyTo(worldManager.World);
-            TrackLoadedHostDeltas(result.Data);
+            if (!SavedWorldMatchesInitializedWorld(result.Data, worldManager.World))
+            {
+                failureReason = "Unable to load saved multiplayer world because the save metadata does not match the initialized host world.";
+                LastFailureReason = failureReason;
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to load multiplayer host world before start file={SanitizeSavePath(path)} reason=world-metadata-mismatch",
+                    this);
+                return false;
+            }
+
+            result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
@@ -204,6 +214,18 @@ namespace Blockiverse.Gameplay
 
             failureReason = $"Unable to {operation} because the host world is unavailable.";
             return false;
+        }
+
+        static bool SavedWorldMatchesInitializedWorld(WorldSaveData data, VoxelWorld world)
+        {
+            if (data == null || world == null)
+                return false;
+
+            return data.Width == world.Bounds.Width &&
+                   data.Height == world.Bounds.Height &&
+                   data.Depth == world.Bounds.Depth &&
+                   data.ChunkSize == world.ChunkSize &&
+                   data.Seed == world.Seed;
         }
 
         void TrackLoadedHostDeltas(WorldSaveData data)
