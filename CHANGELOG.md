@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added in-repo M6 store submission prep docs for metadata, privacy, data use, screenshots, VRC checks, known issues, release notes, and support routing, plus validation in the store-candidate workflow.
 - Added M5 multiplayer simulator validation for active block edits under 100ms latency and packet loss, plus recorded bandwidth estimates for host-authoritative chunk mutation messages.
 - Added host-authoritative multiplayer survival-lite sync for resource harvesting, per-player inventory snapshots, shared crate transfers, and crafting validation across two clients.
 - Added deterministic multiplayer conflict handling so stale competing client block mutations are rejected with host-authoritative correction.
