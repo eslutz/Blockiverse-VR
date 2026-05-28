@@ -8,6 +8,7 @@
     "Blockiverse.UI",
     "Blockiverse.Voxel",
     "UnityEngine.UI",
+    "Unity.InputSystem",
     "UnityEngine.TestRunner",
     "Unity.Netcode.Runtime",
     "Unity.Networking.Transport"

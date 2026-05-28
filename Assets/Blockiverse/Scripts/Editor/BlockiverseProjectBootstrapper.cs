@@ -18,8 +18,10 @@ using UnityEditor.XR.Management;
 using UnityEditor.XR.Management.Metadata;
 using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -60,6 +62,9 @@ namespace Blockiverse.Editor
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
         const string SurvivalHudName = "Survival HUD";
+        const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
+        const string MultiplayerEventSystemName = "Multiplayer Event System";
+        const string MultiplayerTestCameraName = "Multiplayer Test Camera";
         const string NetworkManagerRootName = "Blockiverse Network Manager";
         const string NetworkPlayerPrefabName = "Blockiverse Network Player";
         const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
@@ -68,6 +73,7 @@ namespace Blockiverse.Editor
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
         static readonly Vector2 SurvivalHudSize = new(720.0f, 420.0f);
+        static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
         static readonly Color ComfortMenuPanelColor = new(0.07f, 0.08f, 0.09f, 0.92f);
         static readonly Color ComfortMenuControlColor = new(0.18f, 0.21f, 0.24f, 1.0f);
         static readonly Color ComfortMenuAccentColor = new(0.19f, 0.72f, 0.54f, 1.0f);
@@ -77,6 +83,8 @@ namespace Blockiverse.Editor
         static readonly Color SurvivalHudPanelColor = new(0.06f, 0.08f, 0.10f, 0.90f);
         static readonly Color SurvivalHudSectionColor = new(0.13f, 0.18f, 0.20f, 0.95f);
         static readonly Color SurvivalHudAccentColor = new(0.21f, 0.75f, 0.57f, 1.0f);
+        static readonly Color MultiplayerMenuPanelColor = new(0.07f, 0.09f, 0.10f, 0.94f);
+        static readonly Color MultiplayerMenuInputColor = new(0.11f, 0.16f, 0.18f, 1.0f);
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
         static readonly Color HighlightColor = new(1.0f, 0.85f, 0.18f, 1.0f);
         static readonly Color TestBlockColor = new(0.22f, 0.56f, 0.43f, 1.0f);
@@ -703,6 +711,9 @@ namespace Blockiverse.Editor
             GameObject playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.NetworkPlayerPrefabPath);
             ConfigureNetworkManagerObject(managerObject, playerPrefab);
             EnsureBootSceneLight(scene);
+            EnsureMultiplayerTestCamera(scene);
+            EnsureMultiplayerEventSystem(scene);
+            EnsureMultiplayerSessionMenu(scene, managerObject);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.MultiplayerTestScenePath);
         }
@@ -773,6 +784,158 @@ namespace Blockiverse.Editor
             light.intensity = 1.0f;
             lightObject.transform.rotation = Quaternion.Euler(50.0f, -30.0f, 0.0f);
             EditorUtility.SetDirty(lightObject);
+        }
+
+        static void EnsureMultiplayerTestCamera(Scene scene)
+        {
+            GameObject cameraObject = FindRootGameObject(scene, MultiplayerTestCameraName);
+
+            if (cameraObject == null)
+            {
+                cameraObject = new GameObject(MultiplayerTestCameraName);
+                SceneManager.MoveGameObjectToScene(cameraObject, scene);
+            }
+
+            cameraObject.tag = "MainCamera";
+            cameraObject.transform.SetPositionAndRotation(
+                new Vector3(0.0f, 1.45f, -2.5f),
+                Quaternion.identity);
+
+            Camera camera = EnsureComponent<Camera>(cameraObject);
+            camera.clearFlags = CameraClearFlags.Skybox;
+            camera.nearClipPlane = 0.05f;
+            camera.farClipPlane = 100.0f;
+
+            EditorUtility.SetDirty(camera);
+            EditorUtility.SetDirty(cameraObject);
+        }
+
+        static void EnsureMultiplayerEventSystem(Scene scene)
+        {
+            GameObject eventSystemObject = FindRootGameObject(scene, MultiplayerEventSystemName);
+
+            if (eventSystemObject == null)
+            {
+                eventSystemObject = new GameObject(MultiplayerEventSystemName);
+                SceneManager.MoveGameObjectToScene(eventSystemObject, scene);
+            }
+
+            eventSystemObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            eventSystemObject.transform.localScale = Vector3.one;
+
+            EventSystem eventSystem = EnsureComponent<EventSystem>(eventSystemObject);
+            eventSystem.sendNavigationEvents = true;
+
+            StandaloneInputModule legacyInputModule = eventSystemObject.GetComponent<StandaloneInputModule>();
+
+            if (legacyInputModule != null)
+                UnityEngine.Object.DestroyImmediate(legacyInputModule);
+
+            InputSystemUIInputModule inputModule = EnsureComponent<InputSystemUIInputModule>(eventSystemObject);
+
+            EditorUtility.SetDirty(eventSystem);
+            EditorUtility.SetDirty(inputModule);
+            EditorUtility.SetDirty(eventSystemObject);
+        }
+
+        static void EnsureMultiplayerSessionMenu(Scene scene, GameObject managerObject)
+        {
+            GameObject menuObject = FindRootGameObject(scene, MultiplayerSessionMenuName);
+
+            if (menuObject == null)
+            {
+                menuObject = new GameObject(MultiplayerSessionMenuName, typeof(RectTransform));
+                SceneManager.MoveGameObjectToScene(menuObject, scene);
+            }
+
+            menuObject.transform.SetPositionAndRotation(
+                new Vector3(0.0f, 1.4f, 1.8f),
+                Quaternion.Euler(0.0f, 180.0f, 0.0f));
+            menuObject.transform.localScale = Vector3.one * 0.003f;
+
+            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, MultiplayerSessionMenuSize.x);
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, MultiplayerSessionMenuSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(menuObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 20;
+            canvas.enabled = true;
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureComponent<GraphicRaycaster>(menuObject);
+
+            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            panelImage.color = MultiplayerMenuPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "LAN Session",
+                36,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(28.0f, -34.0f),
+                new Vector2(500.0f, 52.0f));
+
+            InputField addressInput = EnsureInputFieldControl(
+                panelObject.transform,
+                "Address Input",
+                "Host address",
+                BlockiverseNetworkConfig.DefaultAddress,
+                new Vector2(28.0f, -102.0f),
+                new Vector2(500.0f, 58.0f));
+
+            Button hostButton = EnsureButtonControl(
+                panelObject.transform,
+                "Host Button",
+                "Host",
+                new Vector2(28.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Button joinButton = EnsureButtonControl(
+                panelObject.transform,
+                "Join Button",
+                "Join",
+                new Vector2(198.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Button stopButton = EnsureButtonControl(
+                panelObject.transform,
+                "Stop Button",
+                "Stop",
+                new Vector2(368.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Text statusText = EnsureLabel(
+                panelObject.transform,
+                "Status",
+                $"LAN session stopped. Join address defaults to {BlockiverseNetworkConfig.DefaultAddress}.",
+                24,
+                TextAnchor.UpperLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(28.0f, -258.0f),
+                new Vector2(500.0f, 88.0f));
+
+            BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(menuObject);
+            menu.Configure(managerObject != null ? managerObject.GetComponent<BlockiverseNetworkSession>() : null);
+            menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
+
+            EditorUtility.SetDirty(menu);
+            EditorUtility.SetDirty(menuObject);
         }
 
         static void EnsureBootSceneInteractionTestBlock(Scene scene)
@@ -1692,9 +1855,19 @@ namespace Blockiverse.Editor
 
         static Button EnsureButtonControl(Transform parent, string name, string label, Vector2 anchoredPosition)
         {
+            return EnsureButtonControl(parent, name, label, anchoredPosition, new Vector2(220.0f, 54.0f));
+        }
+
+        static Button EnsureButtonControl(
+            Transform parent,
+            string name,
+            string label,
+            Vector2 anchoredPosition,
+            Vector2 size)
+        {
             GameObject buttonObject = EnsureRectChild(parent, name);
             RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
-            ConfigureTopLeftRect(buttonRect, anchoredPosition, new Vector2(220.0f, 54.0f));
+            ConfigureTopLeftRect(buttonRect, anchoredPosition, size);
 
             Image image = EnsureComponent<Image>(buttonObject);
             image.color = ComfortMenuControlColor;
@@ -1719,6 +1892,58 @@ namespace Blockiverse.Editor
             labelRect.offsetMin = Vector2.zero;
             labelRect.offsetMax = Vector2.zero;
             return button;
+        }
+
+        static InputField EnsureInputFieldControl(
+            Transform parent,
+            string name,
+            string placeholder,
+            string value,
+            Vector2 anchoredPosition,
+            Vector2 size)
+        {
+            GameObject inputObject = EnsureRectChild(parent, name);
+            RectTransform inputRect = inputObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(inputRect, anchoredPosition, size);
+
+            Image image = EnsureComponent<Image>(inputObject);
+            image.color = MultiplayerMenuInputColor;
+
+            InputField input = EnsureComponent<InputField>(inputObject);
+            input.targetGraphic = image;
+            input.text = value;
+            input.contentType = InputField.ContentType.Standard;
+            input.lineType = InputField.LineType.SingleLine;
+
+            Text text = EnsureLabel(
+                inputObject.transform,
+                "Text",
+                value,
+                24,
+                TextAnchor.MiddleLeft,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(0.0f, 0.5f),
+                new Vector2(18.0f, 0.0f),
+                new Vector2(-36.0f, 0.0f));
+            text.supportRichText = false;
+
+            Text placeholderText = EnsureLabel(
+                inputObject.transform,
+                "Placeholder",
+                placeholder,
+                24,
+                TextAnchor.MiddleLeft,
+                Vector2.zero,
+                Vector2.one,
+                new Vector2(0.0f, 0.5f),
+                new Vector2(18.0f, 0.0f),
+                new Vector2(-36.0f, 0.0f));
+            placeholderText.color = new Color(1.0f, 1.0f, 1.0f, 0.45f);
+
+            input.textComponent = text;
+            input.placeholder = placeholderText;
+            return input;
         }
 
         static Text EnsureLabel(

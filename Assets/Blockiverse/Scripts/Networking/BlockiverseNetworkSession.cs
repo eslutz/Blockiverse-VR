@@ -25,6 +25,7 @@ namespace Blockiverse.Networking
         public BlockiverseConnectionState CurrentState { get; private set; } = BlockiverseConnectionState.Stopped;
         public NetworkSessionMode CurrentMode { get; private set; } = NetworkSessionMode.Offline;
         public string LastDisconnectReason { get; private set; } = string.Empty;
+        public bool HasConnectedAsClient { get; private set; }
         public NetworkManager NetworkManager => ResolveNetworkManager();
         public UnityTransport UnityTransport => ResolveUnityTransport();
         public BlockiverseNetworkConfig Config => config;
@@ -98,6 +99,7 @@ namespace Blockiverse.Networking
             {
                 CurrentMode = NetworkSessionMode.Offline;
                 CurrentState = BlockiverseConnectionState.Stopped;
+                HasConnectedAsClient = false;
                 stopRequestedByLocalSession = false;
                 return;
             }
@@ -117,6 +119,7 @@ namespace Blockiverse.Networking
 
             LastDisconnectReason = string.Empty;
             CurrentMode = mode;
+            HasConnectedAsClient = false;
             stopRequestedByLocalSession = false;
             return true;
         }
@@ -132,6 +135,7 @@ namespace Blockiverse.Networking
             LastDisconnectReason = reason;
             CurrentMode = NetworkSessionMode.Offline;
             CurrentState = BlockiverseConnectionState.Failed;
+            HasConnectedAsClient = false;
             stopRequestedByLocalSession = false;
         }
 
@@ -152,9 +156,14 @@ namespace Blockiverse.Networking
             if (networkManager == null || clientId != networkManager.LocalClientId)
                 return;
 
-            CurrentState = CurrentMode == NetworkSessionMode.Host
-                ? BlockiverseConnectionState.Hosting
-                : BlockiverseConnectionState.ConnectedClient;
+            if (CurrentMode == NetworkSessionMode.Host)
+            {
+                CurrentState = BlockiverseConnectionState.Hosting;
+                return;
+            }
+
+            HasConnectedAsClient = true;
+            CurrentState = BlockiverseConnectionState.ConnectedClient;
         }
 
         void HandleClientDisconnected(ulong clientId)
@@ -190,6 +199,7 @@ namespace Blockiverse.Networking
                 CurrentState == BlockiverseConnectionState.Failed)
                 return;
 
+            HasConnectedAsClient = false;
             CurrentState = BlockiverseConnectionState.Stopped;
         }
 

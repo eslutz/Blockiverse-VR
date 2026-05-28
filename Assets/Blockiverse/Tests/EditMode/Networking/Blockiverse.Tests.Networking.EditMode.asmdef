@@ -7,6 +7,8 @@
     "Blockiverse.Voxel",
     "Blockiverse.Survival",
     "Blockiverse.Persistence",
+    "Blockiverse.UI",
+    "UnityEngine.UI",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"
   ],
