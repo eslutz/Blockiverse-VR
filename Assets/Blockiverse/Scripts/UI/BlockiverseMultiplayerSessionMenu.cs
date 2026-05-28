@@ -22,6 +22,7 @@ namespace Blockiverse.UI
         Button registeredStopButton;
         BlockiverseConnectionState lastDisplayedState;
         NetworkSessionMode lastDisplayedMode;
+        string lastDisplayedDisconnectReason = string.Empty;
 
         public BlockiverseNetworkSession Session => session;
         public Text StatusText => statusText;
@@ -29,6 +30,9 @@ namespace Blockiverse.UI
         public Button HostButton => hostButton;
         public Button JoinButton => joinButton;
         public Button StopButton => stopButton;
+        public bool IsShowingSessionEndedMessage => session != null &&
+            session.CurrentState == BlockiverseConnectionState.Disconnected &&
+            session.HasConnectedAsClient;
 
         public void Configure(BlockiverseNetworkSession targetSession)
         {
@@ -118,9 +122,11 @@ namespace Blockiverse.UI
             }
 
             SetStatus(DescribeSessionState());
+            EnsureSessionEndedMenuAvailable();
             RefreshControls();
             lastDisplayedState = session.CurrentState;
             lastDisplayedMode = session.CurrentMode;
+            lastDisplayedDisconnectReason = session.LastDisconnectReason;
         }
 
         void Awake()
@@ -135,7 +141,9 @@ namespace Blockiverse.UI
             if (session == null)
                 return;
 
-            if (lastDisplayedState != session.CurrentState || lastDisplayedMode != session.CurrentMode)
+            if (lastDisplayedState != session.CurrentState ||
+                lastDisplayedMode != session.CurrentMode ||
+                lastDisplayedDisconnectReason != session.LastDisconnectReason)
                 RefreshStatus();
             else
                 RefreshControls();
@@ -172,9 +180,25 @@ namespace Blockiverse.UI
 
         string DescribeDisconnectedState()
         {
+            if (!IsShowingSessionEndedMessage)
+                return DescribeUnableToReachHostState();
+
+            string reconnectMessage =
+                $"LAN session ended because the host disconnected. Use Join to reconnect to {ResolveJoinAddress()}:{session.Config.Port} when the LAN host is available again.";
+
             return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
-                ? "Disconnected from LAN session."
-                : $"Disconnected from LAN session: {session.LastDisconnectReason}";
+                ? reconnectMessage
+                : $"{reconnectMessage} Last disconnect: {session.LastDisconnectReason}";
+        }
+
+        string DescribeUnableToReachHostState()
+        {
+            string retryMessage =
+                $"Unable to reach LAN session at {ResolveJoinAddress()}:{session.Config.Port}. Check that the host is on the same LAN and try Join again.";
+
+            return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
+                ? retryMessage
+                : $"{retryMessage} Last disconnect: {session.LastDisconnectReason}";
         }
 
         string DescribeFailedState()
@@ -206,6 +230,21 @@ namespace Blockiverse.UI
 
             if (stopButton != null)
                 stopButton.interactable = canStop;
+
+            if (addressInput != null)
+                addressInput.interactable = canStart;
+        }
+
+        void EnsureSessionEndedMenuAvailable()
+        {
+            if (!IsShowingSessionEndedMessage)
+                return;
+
+            foreach (Canvas canvas in GetComponentsInParent<Canvas>(true))
+                canvas.enabled = true;
+
+            foreach (GraphicRaycaster raycaster in GetComponentsInParent<GraphicRaycaster>(true))
+                raycaster.enabled = true;
         }
 
         void RegisterControlCallbacks()
