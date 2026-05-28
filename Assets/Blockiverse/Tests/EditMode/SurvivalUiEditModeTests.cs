@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.UI;
+using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
@@ -121,6 +123,72 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void InventoryPanelSelectionPlaysUiSelectAndHapticTick()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 3);
+            Text[] slotLabels = CreateTexts(4);
+            Button[] slotButtons = CreateButtons(4);
+            Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
+            BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
+            BlockiverseInteractionHaptics haptics = CreateHaptics();
+            var playedCues = new List<BlockiverseAudioCue>();
+            int uiTicks = 0;
+
+            audioCuePlayer.ConfigureClip(BlockiverseAudioCue.UiSelect, CreateClip("ui_select"));
+            audioCuePlayer.CuePlayed += (cue, _) => playedCues.Add(cue);
+            haptics.UiTickRequested += () => uiTicks++;
+
+            panel.Configure(slotButtons, slotLabels, selectedHotbarLabel);
+            panel.ConfigureFeedback(audioCuePlayer, haptics);
+            panel.Bind(inventory, itemRegistry);
+
+            slotButtons[1].onClick.Invoke();
+
+            Assert.That(panel.SelectedHotbarSlotIndex, Is.EqualTo(1));
+            Assert.That(playedCues, Is.EqualTo(new[] { BlockiverseAudioCue.UiSelect }));
+            Assert.That(uiTicks, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void CraftingPanelPlaysSuccessAndFailureFeedback()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
+            var inventory = new Inventory(itemRegistry);
+            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
+            Text[] recipeLabels = CreateTexts(4);
+            Text statusLabel = CreateText("CraftStatus");
+            SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
+            BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
+            BlockiverseInteractionHaptics haptics = CreateHaptics();
+            var playedCues = new List<BlockiverseAudioCue>();
+            int uiTicks = 0;
+
+            audioCuePlayer.ConfigureClip(BlockiverseAudioCue.CraftSuccess, CreateClip("craft_success"));
+            audioCuePlayer.ConfigureClip(BlockiverseAudioCue.CraftFail, CreateClip("craft_fail"));
+            audioCuePlayer.CuePlayed += (cue, _) => playedCues.Add(cue);
+            haptics.UiTickRequested += () => uiTicks++;
+
+            panel.Configure(recipeLabels, statusLabel);
+            panel.ConfigureFeedback(audioCuePlayer, haptics);
+            panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
+
+            CraftingResult success = panel.TryCraftByOutput(ItemId.Workbench);
+            CraftingResult failure = panel.TryCraftByOutput(ItemId.Workbench);
+
+            Assert.That(success.Succeeded, Is.True);
+            Assert.That(failure.Succeeded, Is.False);
+            Assert.That(playedCues, Is.EqualTo(new[]
+            {
+                BlockiverseAudioCue.CraftSuccess,
+                BlockiverseAudioCue.CraftFail
+            }));
+            Assert.That(uiTicks, Is.EqualTo(2));
+        }
+
+        [Test]
         public void HealthPanelUpdatesFromVitalsChanges()
         {
             var vitals = new PlayerVitals(currentHealth: 75);
@@ -172,6 +240,26 @@ namespace Blockiverse.Tests.EditMode
             var gameObject = new GameObject(name);
             objectsToDestroy.Add(gameObject);
             return gameObject.AddComponent<T>();
+        }
+
+        BlockiverseAudioCuePlayer CreateCuePlayer()
+        {
+            GameObject gameObject = new("Audio Cue Player");
+            objectsToDestroy.Add(gameObject);
+            gameObject.AddComponent<AudioSource>();
+            return gameObject.AddComponent<BlockiverseAudioCuePlayer>();
+        }
+
+        BlockiverseInteractionHaptics CreateHaptics()
+        {
+            GameObject gameObject = new("Interaction Haptics");
+            objectsToDestroy.Add(gameObject);
+            return gameObject.AddComponent<BlockiverseInteractionHaptics>();
+        }
+
+        static AudioClip CreateClip(string name)
+        {
+            return AudioClip.Create(name, 16, 1, 44100, false);
         }
 
         static bool CallsMethod(MethodInfo method, Type declaringType, string methodName)

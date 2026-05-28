@@ -15,9 +15,11 @@
   (cloud private worlds are a post-release roadmap item, M8).
 - Worlds are bounded (fixed dimensions), not infinite/streaming terrain.
 - Voice communication uses Meta Quest party chat; there is no in-app voice.
-- Placeholder interaction/UI sounds are synthesized originals pending authored sound design.
-  Generate them into `Assets/Blockiverse/Audio` (Git LFS) by running
-  `python3 scripts/audio/generate-m6-audio.py`, then assign the clips on the audio prefab.
+- Interaction, movement, inventory, and crafting sounds are generated original cues in
+  `Assets/Blockiverse/Audio` (Git LFS). Regenerate the current cue set by running
+  `python3 scripts/audio/generate-m6-audio.py`.
+- Quest headset acceptance for audio timing/output is still pending on the linked audio
+  stories; do not mark the audio stories Done until device evidence is recorded.
 
 ## Resolved / not-an-issue
 

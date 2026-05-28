@@ -1,3 +1,4 @@
+using Blockiverse.Gameplay;
 using Blockiverse.VR;
 using UnityEngine;
 using UnityEngine.Events;
@@ -12,6 +13,8 @@ namespace Blockiverse.UI
         [SerializeField] Toggle smoothTurnToggle;
         [SerializeField] Slider snapTurnSlider;
         [SerializeField] BlockiverseComfortSettings settings;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
         UnityAction<bool> toggleChanged;
         UnityAction<float> sliderChanged;
@@ -25,7 +28,7 @@ namespace Blockiverse.UI
         {
             canvas = targetCanvas;
             settings = comfortSettings;
-            Hide();
+            Hide(playFeedback: false);
         }
 
         public void ConfigureControls(
@@ -40,16 +43,36 @@ namespace Blockiverse.UI
             ApplyControls();
         }
 
+        public void ConfigureFeedback(
+            BlockiverseAudioCuePlayer targetAudioCuePlayer,
+            BlockiverseInteractionHaptics targetInteractionHaptics)
+        {
+            audioCuePlayer = targetAudioCuePlayer;
+            interactionHaptics = targetInteractionHaptics;
+        }
+
         public void Show()
         {
             if (canvas != null)
+            {
                 canvas.enabled = true;
+                PlayFeedback(BlockiverseAudioCue.UiConfirm);
+            }
         }
 
         public void Hide()
         {
+            Hide(playFeedback: true);
+        }
+
+        void Hide(bool playFeedback)
+        {
             if (canvas != null)
+            {
                 canvas.enabled = false;
+                if (playFeedback)
+                    PlayFeedback(BlockiverseAudioCue.UiCancel);
+            }
         }
 
         public void ToggleVisible()
@@ -88,8 +111,8 @@ namespace Blockiverse.UI
 
         void RegisterControlCallbacks()
         {
-            toggleChanged ??= _ => ApplyControls();
-            sliderChanged ??= _ => ApplyControls();
+            toggleChanged ??= _ => ApplyControlsWithFeedback();
+            sliderChanged ??= _ => ApplyControlsWithFeedback();
 
             RegisterToggleCallback(teleportToggle, ref registeredTeleportToggle);
             RegisterToggleCallback(smoothTurnToggle, ref registeredSmoothTurnToggle);
@@ -138,6 +161,31 @@ namespace Blockiverse.UI
             registeredTeleportToggle = null;
             registeredSmoothTurnToggle = null;
             registeredSnapTurnSlider = null;
+        }
+
+        void ApplyControlsWithFeedback()
+        {
+            ApplyControls();
+            PlayFeedback(BlockiverseAudioCue.UiSelect);
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue)
+        {
+            DiscoverFeedback();
+            audioCuePlayer?.PlayCue(cue);
+            interactionHaptics?.PlayUiTick();
+        }
+
+        void DiscoverFeedback()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (audioCuePlayer == null)
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+
+            if (interactionHaptics == null)
+                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
         }
     }
 }

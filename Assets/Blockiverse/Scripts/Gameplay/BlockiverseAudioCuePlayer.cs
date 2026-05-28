@@ -1,3 +1,4 @@
+using System;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -9,13 +10,18 @@ namespace Blockiverse.Gameplay
         BlockPlace,
         UiSelect,
         UiConfirm,
-        UiCancel
+        UiCancel,
+        Footstep,
+        InventoryOpen,
+        InventoryClose,
+        CraftSuccess,
+        CraftFail
     }
 
     /// <summary>
     /// Central one-shot sound player. Auto-plays break/place cues from a creative interaction
     /// controller's mutation events and exposes <see cref="PlayCue"/> for UI feedback. Clips are
-    /// authored placeholders generated under Assets/Blockiverse/Audio and assigned on the prefab.
+    /// generated original cues under Assets/Blockiverse/Audio and assigned on the prefab.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(AudioSource))]
@@ -28,9 +34,18 @@ namespace Blockiverse.Gameplay
         [SerializeField] AudioClip uiSelectClip;
         [SerializeField] AudioClip uiConfirmClip;
         [SerializeField] AudioClip uiCancelClip;
+        [SerializeField] AudioClip[] footstepClips = Array.Empty<AudioClip>();
+        [SerializeField] AudioClip inventoryOpenClip;
+        [SerializeField] AudioClip inventoryCloseClip;
+        [SerializeField] AudioClip craftSuccessClip;
+        [SerializeField] AudioClip craftFailClip;
         [SerializeField, Range(0f, 1f)] float volume = 0.8f;
 
         bool subscribed;
+        int footstepClipIndex;
+
+        public event Action<BlockiverseAudioCue, AudioClip> CuePlayed;
+        public int FootstepClipCount => CountAssignedFootstepClips();
 
         public void Configure(CreativeInteractionController controller)
         {
@@ -41,11 +56,63 @@ namespace Blockiverse.Gameplay
 
         public void PlayCue(BlockiverseAudioCue cue)
         {
+            EnsureReferences();
             AudioClip clip = ResolveClip(cue);
             if (clip == null || audioSource == null)
                 return;
 
             audioSource.PlayOneShot(clip, volume);
+            CuePlayed?.Invoke(cue, clip);
+        }
+
+        public void ConfigureClip(BlockiverseAudioCue cue, AudioClip clip)
+        {
+            switch (cue)
+            {
+                case BlockiverseAudioCue.BlockBreak:
+                    blockBreakClip = clip;
+                    break;
+                case BlockiverseAudioCue.BlockPlace:
+                    blockPlaceClip = clip;
+                    break;
+                case BlockiverseAudioCue.UiSelect:
+                    uiSelectClip = clip;
+                    break;
+                case BlockiverseAudioCue.UiConfirm:
+                    uiConfirmClip = clip;
+                    break;
+                case BlockiverseAudioCue.UiCancel:
+                    uiCancelClip = clip;
+                    break;
+                case BlockiverseAudioCue.Footstep:
+                    ConfigureFootstepClips(clip);
+                    break;
+                case BlockiverseAudioCue.InventoryOpen:
+                    inventoryOpenClip = clip;
+                    break;
+                case BlockiverseAudioCue.InventoryClose:
+                    inventoryCloseClip = clip;
+                    break;
+                case BlockiverseAudioCue.CraftSuccess:
+                    craftSuccessClip = clip;
+                    break;
+                case BlockiverseAudioCue.CraftFail:
+                    craftFailClip = clip;
+                    break;
+            }
+        }
+
+        public void ConfigureFootstepClips(params AudioClip[] clips)
+        {
+            footstepClips = clips ?? Array.Empty<AudioClip>();
+            footstepClipIndex = 0;
+        }
+
+        public bool HasClipForCue(BlockiverseAudioCue cue)
+        {
+            return cue == BlockiverseAudioCue.Footstep
+                ? CountAssignedFootstepClips() > 0
+                : ResolveFixedClip(cue) != null;
         }
 
         void Awake()
@@ -104,6 +171,14 @@ namespace Blockiverse.Gameplay
 
         AudioClip ResolveClip(BlockiverseAudioCue cue)
         {
+            if (cue == BlockiverseAudioCue.Footstep)
+                return ResolveFootstepClip();
+
+            return ResolveFixedClip(cue);
+        }
+
+        AudioClip ResolveFixedClip(BlockiverseAudioCue cue)
+        {
             return cue switch
             {
                 BlockiverseAudioCue.BlockBreak => blockBreakClip,
@@ -111,8 +186,44 @@ namespace Blockiverse.Gameplay
                 BlockiverseAudioCue.UiSelect => uiSelectClip,
                 BlockiverseAudioCue.UiConfirm => uiConfirmClip,
                 BlockiverseAudioCue.UiCancel => uiCancelClip,
+                BlockiverseAudioCue.InventoryOpen => inventoryOpenClip,
+                BlockiverseAudioCue.InventoryClose => inventoryCloseClip,
+                BlockiverseAudioCue.CraftSuccess => craftSuccessClip,
+                BlockiverseAudioCue.CraftFail => craftFailClip,
                 _ => null
             };
+        }
+
+        AudioClip ResolveFootstepClip()
+        {
+            if (footstepClips == null || footstepClips.Length == 0)
+                return null;
+
+            for (int attempts = 0; attempts < footstepClips.Length; attempts++)
+            {
+                int index = footstepClipIndex % footstepClips.Length;
+                footstepClipIndex = (footstepClipIndex + 1) % footstepClips.Length;
+                AudioClip clip = footstepClips[index];
+                if (clip != null)
+                    return clip;
+            }
+
+            return null;
+        }
+
+        int CountAssignedFootstepClips()
+        {
+            if (footstepClips == null)
+                return 0;
+
+            int count = 0;
+            foreach (AudioClip clip in footstepClips)
+            {
+                if (clip != null)
+                    count++;
+            }
+
+            return count;
         }
     }
 }

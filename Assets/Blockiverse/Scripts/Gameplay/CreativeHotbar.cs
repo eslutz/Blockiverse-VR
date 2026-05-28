@@ -15,6 +15,7 @@ namespace Blockiverse.Gameplay
         BlockRegistry registry;
         [SerializeField] Text selectedBlockLabel;
         [SerializeField] Canvas targetCanvas;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         int selectedIndex;
 
         public BlockId SelectedBlockId => blockIds.Count == 0 ? BlockRegistry.Air : blockIds[selectedIndex];
@@ -43,7 +44,12 @@ namespace Blockiverse.Gameplay
         public void ConfigureCanvas(Canvas canvas)
         {
             targetCanvas = canvas;
-            Hide();
+            Hide(playFeedback: false);
+        }
+
+        public void ConfigureFeedback(BlockiverseAudioCuePlayer targetAudioCuePlayer)
+        {
+            audioCuePlayer = targetAudioCuePlayer;
         }
 
         public void ConfigureDefault(Text selectedLabel)
@@ -63,6 +69,7 @@ namespace Blockiverse.Gameplay
             selectedIndex = Mathf.Clamp(index, 0, blockIds.Count - 1);
             RefreshLabel();
             SelectionChanged.Invoke();
+            PlayFeedback(BlockiverseAudioCue.UiSelect);
         }
 
         public void SelectNext()
@@ -92,13 +99,25 @@ namespace Blockiverse.Gameplay
         public void Show()
         {
             if (targetCanvas != null)
+            {
                 targetCanvas.enabled = true;
+                PlayFeedback(BlockiverseAudioCue.InventoryOpen);
+            }
         }
 
         public void Hide()
         {
+            Hide(playFeedback: true);
+        }
+
+        void Hide(bool playFeedback)
+        {
             if (targetCanvas != null)
+            {
                 targetCanvas.enabled = false;
+                if (playFeedback)
+                    PlayFeedback(BlockiverseAudioCue.InventoryClose);
+            }
         }
 
         void RefreshLabel()
@@ -119,7 +138,22 @@ namespace Blockiverse.Gameplay
             if (registry == null)
                 ConfigureDefault(selectedBlockLabel);
 
-            Hide();
+            Hide(playFeedback: false);
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue)
+        {
+            DiscoverFeedback();
+            audioCuePlayer?.PlayCue(cue);
+        }
+
+        void DiscoverFeedback()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (audioCuePlayer == null)
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
         }
     }
 }

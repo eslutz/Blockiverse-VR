@@ -1,5 +1,7 @@
 using System;
+using Blockiverse.Gameplay;
 using Blockiverse.Survival;
+using Blockiverse.VR;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,10 +14,13 @@ namespace Blockiverse.UI
         [SerializeField] Button[] slotButtons;
         [SerializeField] Text[] slotLabels;
         [SerializeField] Text selectedHotbarLabel;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
         Inventory inventory;
         ItemRegistry itemRegistry;
         int selectedHotbarSlotIndex;
+        bool enableFeedbackReady;
 
         public int SelectedHotbarSlotIndex => selectedHotbarSlotIndex;
 
@@ -31,6 +36,14 @@ namespace Blockiverse.UI
             selectedHotbarLabel = targetSelectedHotbarLabel;
             WireSlotButtons();
             Refresh();
+        }
+
+        public void ConfigureFeedback(
+            BlockiverseAudioCuePlayer targetAudioCuePlayer,
+            BlockiverseInteractionHaptics targetInteractionHaptics)
+        {
+            audioCuePlayer = targetAudioCuePlayer;
+            interactionHaptics = targetInteractionHaptics;
         }
 
         public void Bind(Inventory targetInventory, ItemRegistry registry = null, int selectedHotbarSlotIndex = 0)
@@ -120,9 +133,48 @@ namespace Blockiverse.UI
                 button.onClick.AddListener(() =>
                 {
                     if (inventory == null || slotIndex < inventory.HotbarSlotCount)
+                    {
                         SetSelectedHotbarSlotIndex(slotIndex);
+                        PlayFeedback(BlockiverseAudioCue.UiSelect);
+                    }
                 });
             }
+        }
+
+        void Start()
+        {
+            enableFeedbackReady = true;
+        }
+
+        void OnEnable()
+        {
+            if (enableFeedbackReady)
+                PlayFeedback(BlockiverseAudioCue.InventoryOpen);
+        }
+
+        void OnDisable()
+        {
+            if (enableFeedbackReady)
+                PlayFeedback(BlockiverseAudioCue.InventoryClose);
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue)
+        {
+            DiscoverFeedback();
+            audioCuePlayer?.PlayCue(cue);
+            interactionHaptics?.PlayUiTick();
+        }
+
+        void DiscoverFeedback()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (audioCuePlayer == null)
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+
+            if (interactionHaptics == null)
+                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
         }
     }
 }
