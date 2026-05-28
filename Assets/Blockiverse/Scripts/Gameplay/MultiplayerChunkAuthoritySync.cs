@@ -528,13 +528,14 @@ namespace Blockiverse.Gameplay
 
         void CompleteAppliedChunkDeltaMessage(PendingChunkDeltaMessage message)
         {
+            bool completedLocalRequest = TryCompletePendingMutationRequest(message.RequestingClientId, message.RequestId);
             LastMutationResult = BlockMutationResult.Accept(
                 message.Delta.Change,
                 message.Delta.Chunk,
-                message.RequestId);
+                completedLocalRequest ? message.RequestId : 0);
             AppliedRemoteDeltaCount++;
 
-            if (TryCompletePendingMutationRequest(message.RequestingClientId, message.RequestId))
+            if (completedLocalRequest)
                 AcceptedMutationResponseCount++;
         }
 

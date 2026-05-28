@@ -686,6 +686,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(observerSync.LastAppliedChunkDeltaSequence, Is.EqualTo(1));
             Assert.That(observerSync.AcceptedMutationResponseCount, Is.Zero);
             Assert.That(observerSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(observerSync.LastMutationResult.RpcRequestId, Is.Zero);
 
             BlockMutationResult rejectedRequest = clientSync.TrySubmitMutation(
                 new BlockPosition(-1, 2, 2),
