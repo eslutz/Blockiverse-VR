@@ -3,6 +3,9 @@
   "rootNamespace": "Blockiverse.Gameplay",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Networking",
+    "Blockiverse.Persistence",
+    "Blockiverse.Survival",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
     "UnityEngine.UI"

@@ -1,0 +1,30 @@
+{
+  "name": "Blockiverse.Tests.Networking.PlayMode",
+  "rootNamespace": "Blockiverse.Tests.Networking.PlayMode",
+  "references": [
+    "Blockiverse.Core",
+    "Blockiverse.Networking",
+    "Blockiverse.Gameplay",
+    "Blockiverse.UI",
+    "Blockiverse.Voxel",
+    "Blockiverse.WorldGen",
+    "UnityEngine.UI",
+    "Unity.InputSystem",
+    "UnityEngine.TestRunner",
+    "Unity.Netcode.Runtime",
+    "Unity.Networking.Transport"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

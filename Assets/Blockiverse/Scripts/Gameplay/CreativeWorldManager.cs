@@ -1,3 +1,4 @@
+using System;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -47,7 +48,18 @@ namespace Blockiverse.Gameplay
 
         public void InitializeDefaultWorld()
         {
-            GeneratedCreativeWorld generatedWorld = CreateDefaultGeneratedWorld();
+            InitializeGeneratedWorld(CreateDefaultGeneratedWorld());
+        }
+
+        public void InitializeGeneratedWorld(GeneratedCreativeWorld generatedWorld)
+        {
+            if (generatedWorld.Registry == null)
+                throw new ArgumentException("Generated world requires a block registry.", nameof(generatedWorld));
+            if (generatedWorld.Settings == null)
+                throw new ArgumentException("Generated world requires generation settings.", nameof(generatedWorld));
+            if (generatedWorld.World == null)
+                throw new ArgumentException("Generated world requires voxel data.", nameof(generatedWorld));
+
             Registry = generatedWorld.Registry;
             WorldGenerationSettings settings = generatedWorld.Settings;
             World = generatedWorld.World;

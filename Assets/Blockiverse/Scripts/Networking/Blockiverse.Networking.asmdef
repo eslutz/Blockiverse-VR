@@ -2,7 +2,8 @@
   "name": "Blockiverse.Networking",
   "rootNamespace": "Blockiverse.Networking",
   "references": [
-    "Blockiverse.Core"
+    "Unity.Netcode.Runtime",
+    "Unity.Networking.Transport"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

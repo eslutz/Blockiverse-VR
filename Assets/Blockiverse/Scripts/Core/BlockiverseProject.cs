@@ -8,7 +8,10 @@ namespace Blockiverse.Core
         public const string XrRigRootName = "BlockiverseXRRig";
         public const string CreativeWorldRootName = "Creative World";
         public const string BootScenePath = "Assets/Blockiverse/Scenes/Boot.unity";
+        public const string MultiplayerTestScenePath = "Assets/Blockiverse/Scenes/MultiplayerTest.unity";
         public const string XrRigPrefabPath = "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab";
+        public const string NetworkManagerPrefabPath = "Assets/Blockiverse/Prefabs/Networking/BlockiverseNetworkManager.prefab";
+        public const string NetworkPlayerPrefabPath = "Assets/Blockiverse/Prefabs/Networking/BlockiverseNetworkPlayer.prefab";
         public const string AndroidUrpAssetPath = "Assets/Blockiverse/Settings/BlockiverseAndroidURPAsset.asset";
         public const string AndroidUrpRendererPath = "Assets/Blockiverse/Settings/BlockiverseAndroidUniversalRenderer.asset";
         public const string InputActionsAssetPath = "Assets/Blockiverse/Settings/BlockiverseInputActions.inputactions";

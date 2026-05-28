@@ -6,8 +6,10 @@
     "Blockiverse.Gameplay",
     "Blockiverse.Survival",
     "Blockiverse.Survival.Health",
+    "Blockiverse.Networking",
     "Blockiverse.VR",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
