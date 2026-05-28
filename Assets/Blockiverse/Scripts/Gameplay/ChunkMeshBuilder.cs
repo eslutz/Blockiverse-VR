@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Blockiverse.Voxel;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -25,6 +26,8 @@ namespace Blockiverse.Gameplay
 
     public static class ChunkMeshBuilder
     {
+        static readonly ProfilerMarker BuildMarker = new("Blockiverse.ChunkMeshBuilder.Build");
+
         static readonly BlockPosition[] NeighborOffsets =
         {
             new(1, 0, 0),
@@ -51,6 +54,8 @@ namespace Blockiverse.Gameplay
                 throw new ArgumentNullException(nameof(world));
             if (registry == null)
                 throw new ArgumentNullException(nameof(registry));
+
+            using ProfilerMarker.AutoScope buildScope = BuildMarker.Auto();
 
             var vertices = new List<Vector3>();
             var triangles = new List<int>();

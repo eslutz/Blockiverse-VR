@@ -9,7 +9,9 @@ namespace Blockiverse.Core
         Renderer,
         Persistence,
         Assets,
-        Bootstrap
+        Bootstrap,
+        Performance,
+        Audio
     }
 
     public readonly struct BlockiverseLogEntry

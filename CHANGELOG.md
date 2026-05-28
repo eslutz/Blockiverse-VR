@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added M6 performance instrumentation: ProfilerMarkers around survival-lite world generation, chunk meshing, and renderer rebuild paths; an engine-free `FrameStatisticsSampler` with EditMode coverage; a local-only in-game performance overlay (FPS, frame time, chunk/triangle counts, rebuild queue) that stays hidden in release builds; and a max-world generation/meshing stress test plus a performance report template.
+- Added M6 store readiness documentation: drafted privacy policy, store listing/metadata, VRC working checklist, data-use and safety declarations, known-issues/support notes, and a release-notes template, with hardware/account-dependent items marked as external follow-ups.
+- Added M6 audio and haptics feedback: a block-mutation event on the creative interaction controller drives an audio cue player (break/place plus UI cues) and dominant-hand haptic patterns, with a generator script for original synthesized placeholder sound effects (Git LFS).
 - Fixed a codebase analysis pass: corrected the survival-lite spawn headroom clearing so the reserved air column matches the validated headroom, made the world save fallback path keep a recoverable backup if an atomic replace is unavailable, removed the duplicate `ItemId.Air` alias of `ItemId.None`, and deleted the unused multiplayer host delta tracking helper.
 - Added M5 multiplayer simulator validation for active block edits under 100ms latency and packet loss, plus recorded bandwidth estimates for host-authoritative chunk mutation messages.
 - Added host-authoritative multiplayer survival-lite sync for resource harvesting, per-player inventory snapshots, shared crate transfers, and crafting validation across two clients.

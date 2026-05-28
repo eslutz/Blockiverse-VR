@@ -57,6 +57,42 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [Test]
+        public void BlockMutationsRaiseAppliedEventForFeedbackSystems()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+
+            var controllerObject = new GameObject("Creative Controller");
+            var hotbarObject = new GameObject("Hotbar");
+
+            try
+            {
+                CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Clearstone }, null);
+
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
+
+                var observed = new System.Collections.Generic.List<BlockChange>();
+                controller.BlockMutationApplied += change => observed.Add(change);
+
+                Assert.That(controller.TryPlaceBlock(new BlockPosition(1, 0, 1), Vector3.up), Is.True);
+                Assert.That(controller.TryBreakBlock(new BlockPosition(1, 1, 1)), Is.True);
+                Assert.That(controller.UndoLast(), Is.True);
+
+                Assert.That(observed, Has.Count.EqualTo(3));
+                Assert.That(observed[0].NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(observed[1].NewBlock, Is.EqualTo(BlockRegistry.Air));
+                Assert.That(observed[2].NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(hotbarObject);
+            }
+        }
+
+        [Test]
         public void BlockMutationsRebuildDirtyChunkMeshes()
         {
             var registry = BlockRegistry.CreateDefault();

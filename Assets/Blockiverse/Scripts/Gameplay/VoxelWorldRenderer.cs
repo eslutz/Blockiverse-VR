@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -9,6 +10,10 @@ namespace Blockiverse.Gameplay
     public sealed class VoxelWorldRenderer : MonoBehaviour
     {
         const int LargeDirtyRebuildWarningThreshold = 8;
+
+        static readonly ProfilerMarker RebuildAllMarker = new("Blockiverse.VoxelWorldRenderer.RebuildAll");
+        static readonly ProfilerMarker RebuildDirtyMarker = new("Blockiverse.VoxelWorldRenderer.RebuildDirty");
+        static readonly ProfilerMarker RebuildChunkMarker = new("Blockiverse.VoxelWorldRenderer.RebuildChunk");
 
         readonly Dictionary<ChunkCoordinate, GameObject> chunkObjects = new();
         readonly Dictionary<ChunkCoordinate, int> chunkTriangleCounts = new();
@@ -43,6 +48,8 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
+            using ProfilerMarker.AutoScope scope = RebuildAllMarker.Auto();
+
             int chunkCount = 0;
             chunkTriangleCounts.Clear();
             totalTriangleCount = 0;
@@ -71,6 +78,8 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
+            using ProfilerMarker.AutoScope scope = RebuildDirtyMarker.Auto();
+
             IReadOnlyCollection<ChunkCoordinate> dirtyChunks = rebuildQueue.DrainDirtyChunks();
 
             foreach (ChunkCoordinate chunk in dirtyChunks)
@@ -89,6 +98,8 @@ namespace Blockiverse.Gameplay
 
         int RebuildChunk(ChunkCoordinate chunk)
         {
+            using ProfilerMarker.AutoScope scope = RebuildChunkMarker.Auto();
+
             ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk);
             GameObject chunkObject = GetOrCreateChunkObject(chunk);
 

@@ -21,6 +21,9 @@ namespace Blockiverse.Gameplay
         public BlockMutationAuthority MutationAuthority => mutationAuthority;
         public BlockMutationResult LastMutationResult { get; private set; }
 
+        /// <summary>Raised after a block mutation is locally applied so presentation systems (audio, haptics) can react.</summary>
+        public event Action<BlockChange> BlockMutationApplied;
+
         public void Configure(
             VoxelWorld voxelWorld,
             BlockRegistry blockRegistry,
@@ -137,7 +140,7 @@ namespace Blockiverse.Gameplay
                 appliedChange.PreviousBlock,
                 expectedCurrentBlock: appliedChange.NewBlock);
 
-            BlockMutationResult result = SubmitMutation(undoRequest, out _, out bool requestSentToHost);
+            BlockMutationResult result = SubmitMutation(undoRequest, out SetBlockCommand undoCommand, out bool requestSentToHost);
             LastMutationResult = result;
 
             if (!result.Accepted)
@@ -145,6 +148,10 @@ namespace Blockiverse.Gameplay
 
             undoStack.Pop();
             RebuildChangedChunks();
+
+            if (undoCommand.HasAppliedChange)
+                BlockMutationApplied?.Invoke(undoCommand.AppliedChange);
+
             return true;
         }
 
@@ -181,6 +188,10 @@ namespace Blockiverse.Gameplay
                 undoStack.Push(command);
 
             RebuildChangedChunks();
+
+            if (command.HasAppliedChange)
+                BlockMutationApplied?.Invoke(command.AppliedChange);
+
             return true;
         }
 
