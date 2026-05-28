@@ -373,7 +373,7 @@ namespace Blockiverse.WorldGen
 
                     world.SetBlock(new BlockPosition(x, floorY, z), BlockRegistry.MeadowTurf, trackChange: false);
 
-                    for (int y = floorY + 1; y <= floorY + SpawnHeadroom; y++)
+                    for (int y = spawn.Y; y <= spawn.Y + SpawnHeadroom; y++)
                     {
                         if (y < world.Bounds.Height)
                             world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Air, trackChange: false);

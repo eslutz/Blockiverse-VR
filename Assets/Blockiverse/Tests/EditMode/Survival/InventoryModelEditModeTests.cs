@@ -36,7 +36,6 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             CollectionAssert.AreEquivalent(expectedItems, registry.All.Where(item => item.Id != ItemId.None).Select(item => item.Id));
             Assert.That((int)ItemId.None, Is.EqualTo(0));
-            Assert.That((int)ItemId.Air, Is.EqualTo(0));
             Assert.That(registry.TryGetItemForBlock(BlockRegistry.Air, out _), Is.False);
 
             AssertBlockMapsToItem(registry, BlockRegistry.MeadowTurf, ItemId.MeadowTurf);

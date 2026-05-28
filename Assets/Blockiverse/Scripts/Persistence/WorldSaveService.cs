@@ -597,8 +597,12 @@ namespace Blockiverse.Persistence
             }
             catch (Exception exception) when (exception is IOException || exception is PlatformNotSupportedException || exception is UnauthorizedAccessException)
             {
-                File.Delete(path);
+                if (File.Exists(backupPath))
+                    File.Delete(backupPath);
+
+                File.Move(path, backupPath);
                 File.Move(tempPath, path);
+                File.Delete(backupPath);
             }
         }
 

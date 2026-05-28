@@ -228,19 +228,6 @@ namespace Blockiverse.Gameplay
                    data.Seed == world.Seed;
         }
 
-        void TrackLoadedHostDeltas(WorldSaveData data)
-        {
-            if (data?.ChangedBlocks == null)
-                return;
-
-            foreach (SavedBlockDelta delta in data.ChangedBlocks)
-            {
-                var position = new BlockPosition(delta.X, delta.Y, delta.Z);
-                var block = new BlockId(delta.BlockId);
-                worldManager.World.TrackChangedBlock(new BlockChange(position, block, block));
-            }
-        }
-
         bool TryEnsureHostSaveAuthority(out string failureReason, string operation)
         {
             failureReason = string.Empty;

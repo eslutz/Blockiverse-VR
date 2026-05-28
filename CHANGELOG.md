@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Fixed a codebase analysis pass: corrected the survival-lite spawn headroom clearing so the reserved air column matches the validated headroom, made the world save fallback path keep a recoverable backup if an atomic replace is unavailable, removed the duplicate `ItemId.Air` alias of `ItemId.None`, and deleted the unused multiplayer host delta tracking helper.
 - Added M5 multiplayer simulator validation for active block edits under 100ms latency and packet loss, plus recorded bandwidth estimates for host-authoritative chunk mutation messages.
 - Added host-authoritative multiplayer survival-lite sync for resource harvesting, per-player inventory snapshots, shared crate transfers, and crafting validation across two clients.
 - Added deterministic multiplayer conflict handling so stale competing client block mutations are rejected with host-authoritative correction.

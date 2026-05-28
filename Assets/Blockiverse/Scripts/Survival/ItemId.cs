@@ -3,7 +3,6 @@ namespace Blockiverse.Survival
     public enum ItemId
     {
         None = 0,
-        Air = 0,
         MeadowTurf = 1,
         Loam = 2,
         Slate = 3,
