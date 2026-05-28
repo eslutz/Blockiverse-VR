@@ -620,19 +620,25 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession observerClientSession = CreateClientSession(hostSession);
             BlockiverseNetworkSession lateJoinClientSession = CreateClientSession(hostSession);
             CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Chunk Authority World");
             CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
                 "Client Chunk Authority World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1220, groundHeight: 2));
+            CreativeWorldManager observerWorldManager = CreateCreativeWorldManager(
+                "Observer Chunk Authority World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1219, groundHeight: 2));
             CreativeWorldManager lateJoinWorldManager = CreateCreativeWorldManager(
                 "Late Join Chunk Authority World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1221, groundHeight: 2));
             MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
             MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerChunkAuthoritySync observerSync = ConfigureChunkSync(observerClientSession, observerWorldManager);
             MultiplayerChunkAuthoritySync lateJoinSync = ConfigureChunkSync(lateJoinClientSession, lateJoinWorldManager);
             var editPosition = new BlockPosition(2, 2, 2);
             var stalePosition = new BlockPosition(3, 2, 2);
+            var postLateJoinPosition = new BlockPosition(4, 2, 2);
             ushort port = NextPort();
             var testConfig = new BlockiverseNetworkConfig(
                 BlockiverseNetworkConfig.DefaultAddress,
@@ -641,6 +647,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
+            observerClientSession.Configure(testConfig);
             lateJoinClientSession.Configure(testConfig);
             hostWorldManager.World.SetBlock(stalePosition, BlockRegistry.Loam);
 
@@ -655,13 +662,24 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
                 "Client did not connect for chunk authority sync.");
 
+            Assert.That(observerClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => observerClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Observer client did not connect for chunk authority sync.");
+
             yield return WaitFor(
                 () => clientSync.AppliedGenerationSnapshotCount >= 1 &&
                       clientSync.HasHostGenerationSnapshotForSession &&
                       clientWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
                       clientWorldManager.World.Seed == hostWorldManager.World.Seed &&
-                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
-                "Client did not replace local generation with the host-owned world snapshot.");
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam &&
+                      observerSync.AppliedGenerationSnapshotCount >= 1 &&
+                      observerSync.HasHostGenerationSnapshotForSession &&
+                      observerWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
+                      observerWorldManager.World.Seed == hostWorldManager.World.Seed &&
+                      observerWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                "Connected clients did not replace local generation with the host-owned world snapshot.");
 
             BlockMutationResult requestResult = clientSync.TrySubmitMutation(
                 editPosition,
@@ -671,12 +689,16 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             Assert.That(requestSentToHost, Is.True);
             Assert.That(requestResult.PendingHostValidation, Is.True);
+            Assert.That(requestResult.RpcRequestId, Is.EqualTo(1));
             Assert.That(clientCommand, Is.Null);
+            Assert.That(clientSync.LastSentMutationRequestId, Is.EqualTo(1));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
             Assert.That(clientWorldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Air));
 
             yield return WaitFor(
                 () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
-                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                      observerWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
                 "Host did not validate and broadcast the client block mutation.");
 
             Assert.That(hostSync.CurrentBoundary.OwnsMutationValidation, Is.True);
@@ -684,9 +706,29 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientSync.CurrentBoundary.MustRequestMutations, Is.True);
             Assert.That(clientSync.CurrentBoundary.CanBroadcastDeltas, Is.False);
             Assert.That(hostSync.ReceivedMutationRequestCount, Is.EqualTo(1));
+            Assert.That(hostSync.LastReceivedMutationRequestId, Is.EqualTo(1));
             Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(1));
+            Assert.That(hostSync.RecordedChunkDeltas, Has.Count.EqualTo(1));
+            Assert.That(hostSync.LastBroadcastChunkDeltaSequence, Is.EqualTo(1));
+            Assert.That(hostSync.RecordedChunkDeltas[0].SequenceId, Is.EqualTo(1));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Chunk, Is.EqualTo(new ChunkCoordinate(0, 0, 0)));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Change.Position, Is.EqualTo(editPosition));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Change.NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
             Assert.That(clientSync.SentMutationRequestCount, Is.EqualTo(1));
             Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+            Assert.That(clientSync.AppliedChunkDeltaCount, Is.EqualTo(1));
+            Assert.That(clientSync.LastAppliedChunkDeltaSequence, Is.EqualTo(1));
+            Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(1));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(1));
+            Assert.That(clientSync.LastMutationResult.RpcRequestId, Is.EqualTo(1));
+            Assert.That(observerSync.SentMutationRequestCount, Is.Zero);
+            Assert.That(observerSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+            Assert.That(observerSync.AppliedChunkDeltaCount, Is.EqualTo(1));
+            Assert.That(observerSync.LastAppliedChunkDeltaSequence, Is.EqualTo(1));
+            Assert.That(observerSync.AcceptedMutationResponseCount, Is.Zero);
+            Assert.That(observerSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(observerSync.LastMutationResult.RpcRequestId, Is.Zero);
 
             BlockMutationResult rejectedRequest = clientSync.TrySubmitMutation(
                 new BlockPosition(-1, 2, 2),
@@ -696,13 +738,18 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             Assert.That(rejectedRequestSentToHost, Is.True);
             Assert.That(rejectedRequest.PendingHostValidation, Is.True);
+            Assert.That(rejectedRequest.RpcRequestId, Is.EqualTo(2));
             Assert.That(rejectedClientCommand, Is.Null);
+            Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
 
             yield return WaitFor(
                 () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.PositionOutOfBounds,
                 "Host did not report deterministic rejection for an invalid client mutation request.");
 
             Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(1));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(2));
+            Assert.That(clientSync.LastMutationResult.RpcRequestId, Is.EqualTo(2));
 
             clientWorldManager.World.SetBlock(stalePosition, BlockRegistry.Air, trackChange: false);
             BlockMutationResult staleRequest = clientSync.TrySubmitMutation(
@@ -713,6 +760,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             Assert.That(staleRequestSentToHost, Is.True);
             Assert.That(staleRequest.PendingHostValidation, Is.True);
+            Assert.That(staleRequest.RpcRequestId, Is.EqualTo(3));
             Assert.That(staleClientCommand, Is.Null);
 
             yield return WaitFor(
@@ -721,11 +769,15 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Host did not reject and correct a stale client mutation request.");
 
             Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(2));
+            Assert.That(hostSync.LastReceivedMutationRequestId, Is.EqualTo(3));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(3));
+            Assert.That(clientSync.LastMutationResult.RpcRequestId, Is.EqualTo(3));
 
             Assert.That(lateJoinClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
             yield return WaitFor(
                 () => lateJoinClientSession.NetworkManager.IsConnectedClient &&
-                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 4,
                 "Late join client did not connect for chunk authority sync.");
 
             yield return WaitFor(
@@ -737,15 +789,62 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(lateJoinSync.HasHostGenerationSnapshotForSession, Is.True);
             Assert.That(lateJoinSync.AppliedGenerationSnapshotCount, Is.GreaterThanOrEqualTo(1));
             Assert.That(lateJoinSync.AppliedSnapshotBlockCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinSync.LastAppliedChunkDeltaSequence, Is.EqualTo(hostSync.LastBroadcastChunkDeltaSequence));
             Assert.That(lateJoinWorldManager.World.Bounds, Is.EqualTo(hostWorldManager.World.Bounds));
             Assert.That(lateJoinWorldManager.World.Seed, Is.EqualTo(hostWorldManager.World.Seed));
             Assert.That(lateJoinWorldManager.GenerationPreset, Is.EqualTo(hostWorldManager.GenerationPreset));
+
+            BlockMutationResult postLateJoinRequest = clientSync.TrySubmitMutation(
+                postLateJoinPosition,
+                BlockRegistry.Slate,
+                out SetBlockCommand postLateJoinClientCommand,
+                out bool postLateJoinRequestSentToHost);
+
+            Assert.That(postLateJoinRequestSentToHost, Is.True);
+            Assert.That(postLateJoinRequest.PendingHostValidation, Is.True);
+            Assert.That(postLateJoinRequest.RpcRequestId, Is.EqualTo(4));
+            Assert.That(postLateJoinClientCommand, Is.Null);
+            Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
+                      clientWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
+                      observerWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
+                      lateJoinWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate,
+                "Late join client did not remain synchronized with subsequent host chunk deltas.");
+
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(2));
+            Assert.That(hostSync.RecordedChunkDeltas, Has.Count.EqualTo(2));
+            Assert.That(hostSync.LastBroadcastChunkDeltaSequence, Is.EqualTo(2));
+            Assert.That(hostSync.RecordedChunkDeltas[1].SequenceId, Is.EqualTo(2));
+            Assert.That(
+                hostSync.RecordedChunkDeltas[1].Chunk,
+                Is.EqualTo(ChunkCoordinate.FromBlockPosition(postLateJoinPosition, hostWorldManager.World.ChunkSize)));
+            Assert.That(hostSync.RecordedChunkDeltas[1].Change.Position, Is.EqualTo(postLateJoinPosition));
+            Assert.That(hostSync.RecordedChunkDeltas[1].Change.NewBlock, Is.EqualTo(BlockRegistry.Slate));
+            Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(2));
+            Assert.That(clientSync.AppliedChunkDeltaCount, Is.EqualTo(2));
+            Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(2));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(4));
+            Assert.That(clientSync.LastAppliedChunkDeltaSequence, Is.EqualTo(2));
+            Assert.That(observerSync.AppliedRemoteDeltaCount, Is.EqualTo(2));
+            Assert.That(observerSync.AppliedChunkDeltaCount, Is.EqualTo(2));
+            Assert.That(observerSync.LastAppliedChunkDeltaSequence, Is.EqualTo(2));
+            Assert.That(lateJoinSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+            Assert.That(lateJoinSync.AppliedChunkDeltaCount, Is.EqualTo(1));
+            Assert.That(lateJoinSync.AcceptedMutationResponseCount, Is.Zero);
+            Assert.That(lateJoinSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(lateJoinSync.LastAppliedChunkDeltaSequence, Is.EqualTo(2));
 
             clientSession.StopSession();
             yield return WaitFor(
                 () => !clientSession.NetworkManager.IsListening,
                 "Client did not stop after chunk authority sync validation.");
             Assert.That(clientSync.HasHostGenerationSnapshotForSession, Is.False);
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastSentMutationRequestId, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.Zero);
         }
 
         [UnityTearDown]

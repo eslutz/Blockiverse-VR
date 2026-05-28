@@ -142,7 +142,8 @@ namespace Blockiverse.Voxel
             BlockChange change,
             ChunkCoordinate chunk,
             string message,
-            bool pendingHostValidation = false)
+            bool pendingHostValidation = false,
+            uint rpcRequestId = 0)
         {
             Accepted = accepted;
             RejectionReason = rejectionReason;
@@ -150,6 +151,7 @@ namespace Blockiverse.Voxel
             Chunk = chunk;
             Message = message;
             PendingHostValidation = pendingHostValidation;
+            RpcRequestId = rpcRequestId;
         }
 
         public bool Accepted { get; }
@@ -158,18 +160,20 @@ namespace Blockiverse.Voxel
         public ChunkCoordinate Chunk { get; }
         public string Message { get; }
         public bool PendingHostValidation { get; }
+        public uint RpcRequestId { get; }
 
-        public static BlockMutationResult Accept(BlockChange change, ChunkCoordinate chunk)
+        public static BlockMutationResult Accept(BlockChange change, ChunkCoordinate chunk, uint rpcRequestId = 0)
         {
             return new BlockMutationResult(
                 accepted: true,
                 BlockMutationRejectionReason.None,
                 change,
                 chunk,
-                string.Empty);
+                string.Empty,
+                rpcRequestId: rpcRequestId);
         }
 
-        public static BlockMutationResult RequestSent(ChunkCoordinate chunk)
+        public static BlockMutationResult RequestSent(ChunkCoordinate chunk, uint rpcRequestId = 0)
         {
             return new BlockMutationResult(
                 accepted: false,
@@ -177,20 +181,35 @@ namespace Blockiverse.Voxel
                 default,
                 chunk,
                 "Mutation request sent to host for authoritative validation.",
-                pendingHostValidation: true);
+                pendingHostValidation: true,
+                rpcRequestId: rpcRequestId);
         }
 
         public static BlockMutationResult Reject(
             BlockMutationRejectionReason rejectionReason,
             ChunkCoordinate chunk,
-            string message)
+            string message,
+            uint rpcRequestId = 0)
         {
             return new BlockMutationResult(
                 accepted: false,
                 rejectionReason,
                 default,
                 chunk,
-                message);
+                message,
+                rpcRequestId: rpcRequestId);
+        }
+
+        public BlockMutationResult WithRpcRequestId(uint rpcRequestId)
+        {
+            return new BlockMutationResult(
+                Accepted,
+                RejectionReason,
+                Change,
+                Chunk,
+                Message,
+                PendingHostValidation,
+                rpcRequestId);
         }
     }
 
