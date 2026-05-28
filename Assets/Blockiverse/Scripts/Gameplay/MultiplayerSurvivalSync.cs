@@ -464,7 +464,7 @@ namespace Blockiverse.Gameplay
                 return invalidResult;
             }
 
-            if (itemId == ItemId.None || count <= 0)
+            if (!IsValidTransferItem(itemId) || count <= 0)
             {
                 var invalidResult = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.InvalidTransfer, requestId);
                 SendCommandFailure(clientId, invalidResult, sendResponse);
@@ -523,6 +523,11 @@ namespace Blockiverse.Gameplay
             RefreshLocalInventoryReference();
             LastCommandResult = result;
             return result;
+        }
+
+        bool IsValidTransferItem(ItemId itemId)
+        {
+            return itemId != ItemId.None && ResolveItemRegistry().TryGet(itemId, out _);
         }
 
         bool TryRejectDuplicate(
@@ -1042,6 +1047,12 @@ namespace Blockiverse.Gameplay
         {
             ResolveReferences();
             return recipeBook;
+        }
+
+        ItemRegistry ResolveItemRegistry()
+        {
+            ResolveReferences();
+            return itemRegistry;
         }
 
         ResourceHarvestService ResolveHarvestService()

@@ -1277,6 +1277,31 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(secondClientSurvivalSync.PendingCommandRequestCount, Is.Zero);
         }
 
+        [Test]
+        public void HostRejectsUnknownCrateTransferItemWithoutThrowing()
+        {
+            GameObject syncObject = new("Malformed Crate Transfer Survival Sync");
+            MultiplayerSurvivalSync survivalSync = syncObject.AddComponent<MultiplayerSurvivalSync>();
+            survivalSync.Configure(null, null, null);
+            bool requestSentToHost = true;
+            SurvivalCommandResult result = default;
+
+            try
+            {
+                Assert.DoesNotThrow(
+                    () => result = survivalSync.TrySubmitCrateDeposit((ItemId)9999, 1, out requestSentToHost));
+                Assert.That(requestSentToHost, Is.False);
+                Assert.That(result.Accepted, Is.False);
+                Assert.That(result.FailureReason, Is.EqualTo(SurvivalCommandFailureReason.InvalidTransfer));
+                Assert.That(survivalSync.AcceptedCrateTransferCount, Is.Zero);
+                Assert.That(survivalSync.RejectedCommandCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(syncObject);
+            }
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
