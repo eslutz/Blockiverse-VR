@@ -23,7 +23,11 @@ jobs:
           git merge-base --is-ancestor HEAD origin/main
       - name: Check repository safety
         run: scripts/ci/forbidden-files.sh
-      - name: Check store documents exist
-        run: test -f docs/store-submission/checklist.md
-      - name: Placeholder until Unity bootstrap
-        run: echo "Run signed production build and store-readiness checks here."
+      - name: Validate store submission documents
+        run: scripts/store/validate-store-submission-docs.sh
+      - name: Check release workflow contract
+        run: |
+          test -x scripts/unity/build-release-apk.sh
+          grep -q "BuildReleaseAndroid" Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs
+          grep -q "ANDROID_KEYSTORE_BASE64" .github/workflows/release-apk.yml
+          grep -q "gh release" .github/workflows/release-apk.yml
