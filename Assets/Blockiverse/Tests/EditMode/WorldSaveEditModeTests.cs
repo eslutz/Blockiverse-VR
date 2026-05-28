@@ -85,7 +85,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ApplyingLoadedDeltasDoesNotEmitBlockChangeEvents()
+        public void ApplyingLoadedDeltasDoesNotRecordPersistenceDeltasButEmitsRenderEvents()
         {
             var data = new WorldSaveData
             {
@@ -116,7 +116,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Slate));
             Assert.That(world.GetChangedBlocks(), Is.Empty);
-            Assert.That(eventCount, Is.Zero);
+            Assert.That(eventCount, Is.EqualTo(1));
         }
 
         [Test]

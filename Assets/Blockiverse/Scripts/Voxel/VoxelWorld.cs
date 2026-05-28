@@ -64,10 +64,9 @@ namespace Blockiverse.Voxel
             var change = new BlockChange(position, previous, block);
 
             if (trackChange)
-            {
                 changedBlocks[position] = change;
-                BlockChanged?.Invoke(change);
-            }
+
+            BlockChanged?.Invoke(change);
         }
 
         public ChunkCoordinate GetChunkCoordinate(BlockPosition position)
@@ -84,6 +83,12 @@ namespace Blockiverse.Voxel
         public void ClearChangedBlocks()
         {
             changedBlocks.Clear();
+        }
+
+        public void TrackChangedBlock(BlockChange change)
+        {
+            EnsureInBounds(change.Position);
+            changedBlocks[change.Position] = change;
         }
 
         int ToIndex(BlockPosition position)
@@ -110,6 +115,8 @@ namespace Blockiverse.Voxel
 
         public BlockPosition Position { get; }
         public BlockId NewBlock { get; }
+        public bool HasAppliedChange => appliedChange.HasValue;
+        public BlockChange AppliedChange => appliedChange ?? throw new InvalidOperationException("Block command has not executed.");
 
         public BlockChange Execute(VoxelWorld world)
         {

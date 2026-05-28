@@ -6,6 +6,11 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added late-join multiplayer validation that proves joined clients receive current host state and remain synchronized with subsequent authoritative chunk deltas.
+- Added sequenced chunk delta records and observer-client delta sync coverage for authoritative multiplayer block edits.
+- Added request IDs and pending-response tracking to authoritative multiplayer block mutation RPCs so accepted deltas and host rejections are correlated deterministically.
+- Added host-owned multiplayer chunk authority boundaries with client block-edit requests, host validation, delta broadcast, late-join changed-block snapshots, save ownership checks, and client-side direct mutation rejection.
+- Added a fallback proxy avatar rig to the multiplayer network player prefab so local editor multiplayer remains usable when Meta Horizon Avatar data is unavailable.
 - Added multiplayer host world persistence hooks so graceful LAN host shutdown saves the host world before disconnecting clients and reloads saved edits before the next hosted session.
 - Added LAN-scoped session-ended and reconnect UX when clients lose the host, with local editor coverage for host restart and client rejoin.
 - Added an M5 LAN multiplayer session menu for hosting, joining by IP address, stopping sessions, and validating the MultiplayerTest scene flow through Unity UI controls.

@@ -8,6 +8,7 @@
     "Blockiverse.Survival",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
+    "Unity.Netcode.Runtime",
     "UnityEngine.UI"
   ],
   "includePlatforms": [],

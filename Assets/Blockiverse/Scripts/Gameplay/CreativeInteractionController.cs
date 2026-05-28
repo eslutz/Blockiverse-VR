@@ -14,7 +14,12 @@ namespace Blockiverse.Gameplay
         CreativeHotbar hotbar;
         PlacementPreview placementPreview;
         VoxelWorldRenderer worldRenderer;
+        BlockMutationAuthority mutationAuthority;
+        MultiplayerChunkAuthoritySync chunkAuthoritySync;
         Bounds? playerBounds;
+
+        public BlockMutationAuthority MutationAuthority => mutationAuthority;
+        public BlockMutationResult LastMutationResult { get; private set; }
 
         public void Configure(
             VoxelWorld voxelWorld,
@@ -22,7 +27,9 @@ namespace Blockiverse.Gameplay
             CreativeHotbar creativeHotbar,
             PlacementPreview preview,
             Bounds? playerCollisionBounds,
-            VoxelWorldRenderer renderer = null)
+            VoxelWorldRenderer renderer = null,
+            BlockMutationAuthority authority = null,
+            MultiplayerChunkAuthoritySync authoritySync = null)
         {
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
@@ -30,6 +37,8 @@ namespace Blockiverse.Gameplay
             placementPreview = preview;
             playerBounds = playerCollisionBounds;
             worldRenderer = renderer;
+            mutationAuthority = authority ?? BlockMutationAuthority.CreateHost(world, registry);
+            chunkAuthoritySync = authoritySync;
         }
 
         public static BlockPosition ComputePlacementPosition(BlockPosition targetPosition, Vector3 faceNormal)
@@ -61,14 +70,7 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
-            if (!world.Bounds.Contains(position) || world.GetBlock(position) == BlockRegistry.Air)
-                return false;
-
-            var command = new SetBlockCommand(position, BlockRegistry.Air);
-            command.Execute(world);
-            undoStack.Push(command);
-            RebuildChangedChunks();
-            return true;
+            return TryMutate(position, BlockRegistry.Air, pushUndo: true);
         }
 
         public bool TryPlaceBlock(BlockPosition targetPosition, Vector3 faceNormal)
@@ -89,11 +91,7 @@ namespace Blockiverse.Gameplay
                 return false;
 
             registry.Get(selectedBlock);
-            var command = new SetBlockCommand(position, selectedBlock);
-            command.Execute(world);
-            undoStack.Push(command);
-            RebuildChangedChunks();
-            return true;
+            return TryMutate(position, selectedBlock, pushUndo: true);
         }
 
         public bool CanPlaceBlock(BlockPosition position)
@@ -114,11 +112,38 @@ namespace Blockiverse.Gameplay
 
         public bool UndoLast()
         {
+            EnsureConfigured();
+
             if (undoStack.Count == 0)
                 return false;
 
-            SetBlockCommand command = undoStack.Pop();
-            command.Undo(world);
+            SetBlockCommand command = undoStack.Peek();
+
+            ChunkAuthorityBoundary boundary = ResolveEffectiveBoundary();
+
+            if (!boundary.CanCommitMutations)
+            {
+                LastMutationResult = BlockMutationResult.Reject(
+                    BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState,
+                    ChunkCoordinate.FromBlockPosition(command.Position, world.ChunkSize),
+                    "Clients must request host validation instead of undoing authoritative chunk mutations locally.");
+                return false;
+            }
+
+            BlockChange appliedChange = command.AppliedChange;
+            var undoRequest = new BlockMutationRequest(
+                boundary.LocalClientId,
+                appliedChange.Position,
+                appliedChange.PreviousBlock,
+                expectedCurrentBlock: appliedChange.NewBlock);
+
+            BlockMutationResult result = SubmitMutation(undoRequest, out _, out bool requestSentToHost);
+            LastMutationResult = result;
+
+            if (!result.Accepted)
+                return requestSentToHost;
+
+            undoStack.Pop();
             RebuildChangedChunks();
             return true;
         }
@@ -139,8 +164,57 @@ namespace Blockiverse.Gameplay
 
         void EnsureConfigured()
         {
-            if (world == null || registry == null)
+            if (world == null || registry == null || mutationAuthority == null)
                 throw new InvalidOperationException("Creative interaction controller has not been configured.");
+        }
+
+        bool TryMutate(BlockPosition position, BlockId newBlock, bool pushUndo)
+        {
+            BlockMutationRequest request = CreateMutationRequest(position, newBlock);
+            BlockMutationResult result = SubmitMutation(request, out SetBlockCommand command, out bool requestSentToHost);
+            LastMutationResult = result;
+
+            if (!result.Accepted)
+                return requestSentToHost;
+
+            if (pushUndo)
+                undoStack.Push(command);
+
+            RebuildChangedChunks();
+            return true;
+        }
+
+        BlockMutationResult SubmitMutation(
+            BlockMutationRequest request,
+            out SetBlockCommand command,
+            out bool requestSentToHost)
+        {
+            if (chunkAuthoritySync != null)
+                return chunkAuthoritySync.TrySubmitMutation(request, out command, out requestSentToHost);
+
+            requestSentToHost = false;
+            return mutationAuthority.TryCommit(request, out command);
+        }
+
+        BlockMutationRequest CreateMutationRequest(BlockPosition position, BlockId newBlock)
+        {
+            ChunkAuthorityBoundary boundary = ResolveEffectiveBoundary();
+
+            if (world.Bounds.Contains(position))
+            {
+                return new BlockMutationRequest(
+                    boundary.LocalClientId,
+                    position,
+                    newBlock,
+                    expectedCurrentBlock: world.GetBlock(position));
+            }
+
+            return new BlockMutationRequest(boundary.LocalClientId, position, newBlock);
+        }
+
+        ChunkAuthorityBoundary ResolveEffectiveBoundary()
+        {
+            return chunkAuthoritySync != null ? chunkAuthoritySync.CurrentBoundary : mutationAuthority.Boundary;
         }
 
         void RebuildChangedChunks()

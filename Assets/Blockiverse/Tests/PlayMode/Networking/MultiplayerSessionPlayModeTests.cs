@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
+using Blockiverse.Persistence;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using Blockiverse.UI;
@@ -120,6 +121,10 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             AssertPlayerObjectExists(hostSession.NetworkManager, hostSession.NetworkManager.LocalClientId);
             AssertPlayerObjectExists(hostSession.NetworkManager, clientSession.NetworkManager.LocalClientId);
+            AssertFallbackAvatarExists(hostSession.NetworkManager, hostSession.NetworkManager.LocalClientId);
+            AssertFallbackAvatarExists(hostSession.NetworkManager, clientSession.NetworkManager.LocalClientId);
+            AssertFallbackAvatarExists(clientSession.NetworkManager, hostSession.NetworkManager.LocalClientId);
+            AssertFallbackAvatarExists(clientSession.NetworkManager, clientSession.NetworkManager.LocalClientId);
 
             hostSession.StopSession();
             yield return WaitFor(
@@ -130,6 +135,126 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientSession.CurrentState, Is.EqualTo(BlockiverseConnectionState.Disconnected));
             AssertNoSpawnedObjects(hostSession.NetworkManager);
             AssertNoSpawnedObjects(clientSession.NetworkManager);
+        }
+
+        [UnityTest]
+        public IEnumerator FallbackAvatarPoseSyncsBetweenOwnersAndRemoteCopies()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect to host.");
+
+            BlockiverseNetworkAvatarRig hostOwnerAvatar = GetPlayerObject(
+                hostSession.NetworkManager,
+                hostSession.NetworkManager.LocalClientId).GetComponent<BlockiverseNetworkAvatarRig>();
+            BlockiverseNetworkAvatarRig clientCopyOfHostAvatar = GetPlayerObject(
+                clientSession.NetworkManager,
+                hostSession.NetworkManager.LocalClientId).GetComponent<BlockiverseNetworkAvatarRig>();
+            BlockiverseNetworkAvatarRig clientOwnerAvatar = GetPlayerObject(
+                clientSession.NetworkManager,
+                clientSession.NetworkManager.LocalClientId).GetComponent<BlockiverseNetworkAvatarRig>();
+            BlockiverseNetworkAvatarRig hostCopyOfClientAvatar = GetPlayerObject(
+                hostSession.NetworkManager,
+                clientSession.NetworkManager.LocalClientId).GetComponent<BlockiverseNetworkAvatarRig>();
+
+            Assert.That(hostOwnerAvatar, Is.Not.Null);
+            Assert.That(clientCopyOfHostAvatar, Is.Not.Null);
+            Assert.That(clientOwnerAvatar, Is.Not.Null);
+            Assert.That(hostCopyOfClientAvatar, Is.Not.Null);
+
+            GameObject clientHeadSource = CreateTrackingSource(
+                "Client Tracked Head",
+                new Vector3(1.25f, 1.68f, -0.5f),
+                Quaternion.Euler(0.0f, 35.0f, 0.0f));
+            GameObject clientLeftSource = CreateTrackingSource(
+                "Client Tracked Left Hand",
+                new Vector3(0.85f, 1.12f, -0.25f),
+                Quaternion.Euler(0.0f, -15.0f, -20.0f));
+            GameObject clientRightSource = CreateTrackingSource(
+                "Client Tracked Right Hand",
+                new Vector3(1.62f, 1.15f, -0.18f),
+                Quaternion.Euler(0.0f, 15.0f, 20.0f));
+            GameObject hostHeadSource = CreateTrackingSource(
+                "Host Tracked Head",
+                new Vector3(-0.7f, 1.72f, 0.45f),
+                Quaternion.Euler(4.0f, -28.0f, 0.0f));
+            GameObject hostLeftSource = CreateTrackingSource(
+                "Host Tracked Left Hand",
+                new Vector3(-1.08f, 1.18f, 0.62f),
+                Quaternion.Euler(2.0f, -44.0f, -18.0f));
+            GameObject hostRightSource = CreateTrackingSource(
+                "Host Tracked Right Hand",
+                new Vector3(-0.35f, 1.14f, 0.64f),
+                Quaternion.Euler(2.0f, 6.0f, 18.0f));
+            var clientRootPose = new Pose(new Vector3(1.0f, 0.0f, -0.6f), Quaternion.Euler(0.0f, 20.0f, 0.0f));
+            var hostRootPose = new Pose(new Vector3(-0.8f, 0.0f, 0.5f), Quaternion.Euler(0.0f, -15.0f, 0.0f));
+
+            try
+            {
+                clientOwnerAvatar.transform.SetPositionAndRotation(clientRootPose.position, clientRootPose.rotation);
+                hostOwnerAvatar.transform.SetPositionAndRotation(hostRootPose.position, hostRootPose.rotation);
+                clientOwnerAvatar.ConfigureTrackingSources(
+                    clientHeadSource.transform,
+                    clientLeftSource.transform,
+                    clientRightSource.transform);
+                hostOwnerAvatar.ConfigureTrackingSources(
+                    hostHeadSource.transform,
+                    hostLeftSource.transform,
+                    hostRightSource.transform);
+
+                Pose expectedClientHead = ExpectedLocalPose(clientOwnerAvatar.transform, clientHeadSource.transform);
+                Pose expectedClientLeftHand = ExpectedLocalPose(clientOwnerAvatar.transform, clientLeftSource.transform);
+                Pose expectedClientRightHand = ExpectedLocalPose(clientOwnerAvatar.transform, clientRightSource.transform);
+                Pose expectedHostHead = ExpectedLocalPose(hostOwnerAvatar.transform, hostHeadSource.transform);
+                Pose expectedHostLeftHand = ExpectedLocalPose(hostOwnerAvatar.transform, hostLeftSource.transform);
+                Pose expectedHostRightHand = ExpectedLocalPose(hostOwnerAvatar.transform, hostRightSource.transform);
+
+                yield return WaitFor(
+                    () => AvatarPoseMatches(
+                              hostCopyOfClientAvatar,
+                              clientRootPose,
+                              expectedClientHead,
+                              expectedClientLeftHand,
+                              expectedClientRightHand) &&
+                          AvatarPoseMatches(
+                              clientCopyOfHostAvatar,
+                              hostRootPose,
+                              expectedHostHead,
+                              expectedHostLeftHand,
+                              expectedHostRightHand),
+                    "Fallback proxy avatar poses did not synchronize between owners and remote copies.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clientHeadSource);
+                UnityEngine.Object.DestroyImmediate(clientLeftSource);
+                UnityEngine.Object.DestroyImmediate(clientRightSource);
+                UnityEngine.Object.DestroyImmediate(hostHeadSource);
+                UnityEngine.Object.DestroyImmediate(hostLeftSource);
+                UnityEngine.Object.DestroyImmediate(hostRightSource);
+            }
         }
 
         [UnityTest]
@@ -395,6 +520,44 @@ namespace Blockiverse.Tests.Networking.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator HostStartRejectsSavedWorldThatDoesNotMatchInitializedWorld()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            string savePath = CreateTempSavePath();
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Mismatched Save World");
+            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
+            VoxelWorld savedWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 2026);
+            savedWorld.SetBlock(new BlockPosition(3, 3, 3), BlockRegistry.Clearstone);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            try
+            {
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(savePath, "mismatched-save", savedWorld);
+                hostSession.Configure(testConfig);
+
+                Assert.That(hostSession.StartHost(), Is.False);
+                Assert.That(persistence.LastHostLoadAttempted, Is.True);
+                Assert.That(persistence.LastHostLoadSucceeded, Is.False);
+                Assert.That(persistence.LastFailureReason, Does.Contain("does not match the initialized host world"));
+                Assert.That(worldManager.World.Bounds.Width, Is.EqualTo(16));
+                Assert.That(worldManager.World.Bounds.Height, Is.EqualTo(8));
+                Assert.That(worldManager.World.Bounds.Depth, Is.EqualTo(16));
+            }
+            finally
+            {
+                DeleteIfExists(savePath);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator HostShutdownSaveFailureAbortsShutdownAndKeepsClientsConnected()
         {
             yield return LoadMultiplayerTestScene();
@@ -446,6 +609,242 @@ namespace Blockiverse.Tests.Networking.PlayMode
             hostMenu.RefreshStatus();
             StringAssert.Contains("Unable to stop LAN session", hostMenu.StatusText.text);
             StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostMenu.StatusText.text);
+        }
+
+        [UnityTest]
+        public IEnumerator ClientBlockMutationRequestsAreHostValidatedBroadcastAndLateJoinSynced()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession observerClientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession lateJoinClientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Chunk Authority World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Chunk Authority World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1220, groundHeight: 2));
+            CreativeWorldManager observerWorldManager = CreateCreativeWorldManager(
+                "Observer Chunk Authority World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1219, groundHeight: 2));
+            CreativeWorldManager lateJoinWorldManager = CreateCreativeWorldManager(
+                "Late Join Chunk Authority World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1221, groundHeight: 2));
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerChunkAuthoritySync observerSync = ConfigureChunkSync(observerClientSession, observerWorldManager);
+            MultiplayerChunkAuthoritySync lateJoinSync = ConfigureChunkSync(lateJoinClientSession, lateJoinWorldManager);
+            var editPosition = new BlockPosition(2, 2, 2);
+            var stalePosition = new BlockPosition(3, 2, 2);
+            var postLateJoinPosition = new BlockPosition(4, 2, 2);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+            observerClientSession.Configure(testConfig);
+            lateJoinClientSession.Configure(testConfig);
+            hostWorldManager.World.SetBlock(stalePosition, BlockRegistry.Loam);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for chunk authority sync.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for chunk authority sync.");
+
+            Assert.That(observerClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => observerClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Observer client did not connect for chunk authority sync.");
+
+            yield return WaitFor(
+                () => clientSync.AppliedGenerationSnapshotCount >= 1 &&
+                      clientSync.HasHostGenerationSnapshotForSession &&
+                      clientWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
+                      clientWorldManager.World.Seed == hostWorldManager.World.Seed &&
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam &&
+                      observerSync.AppliedGenerationSnapshotCount >= 1 &&
+                      observerSync.HasHostGenerationSnapshotForSession &&
+                      observerWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
+                      observerWorldManager.World.Seed == hostWorldManager.World.Seed &&
+                      observerWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                "Connected clients did not replace local generation with the host-owned world snapshot.");
+
+            BlockMutationResult requestResult = clientSync.TrySubmitMutation(
+                editPosition,
+                BlockRegistry.Clearstone,
+                out SetBlockCommand clientCommand,
+                out bool requestSentToHost);
+
+            Assert.That(requestSentToHost, Is.True);
+            Assert.That(requestResult.PendingHostValidation, Is.True);
+            Assert.That(requestResult.RpcRequestId, Is.EqualTo(1));
+            Assert.That(clientCommand, Is.Null);
+            Assert.That(clientSync.LastSentMutationRequestId, Is.EqualTo(1));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
+            Assert.That(clientWorldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Air));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                      observerWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                "Host did not validate and broadcast the client block mutation.");
+
+            Assert.That(hostSync.CurrentBoundary.OwnsMutationValidation, Is.True);
+            Assert.That(hostSync.CurrentBoundary.CanBroadcastDeltas, Is.True);
+            Assert.That(clientSync.CurrentBoundary.MustRequestMutations, Is.True);
+            Assert.That(clientSync.CurrentBoundary.CanBroadcastDeltas, Is.False);
+            Assert.That(hostSync.ReceivedMutationRequestCount, Is.EqualTo(1));
+            Assert.That(hostSync.LastReceivedMutationRequestId, Is.EqualTo(1));
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(1));
+            Assert.That(hostSync.RecordedChunkDeltas, Has.Count.EqualTo(1));
+            Assert.That(hostSync.LastBroadcastChunkDeltaSequence, Is.EqualTo(1));
+            Assert.That(hostSync.RecordedChunkDeltas[0].SequenceId, Is.EqualTo(1));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Chunk, Is.EqualTo(new ChunkCoordinate(0, 0, 0)));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Change.Position, Is.EqualTo(editPosition));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Change.NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(clientSync.SentMutationRequestCount, Is.EqualTo(1));
+            Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+            Assert.That(clientSync.AppliedChunkDeltaCount, Is.EqualTo(1));
+            Assert.That(clientSync.LastAppliedChunkDeltaSequence, Is.EqualTo(1));
+            Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(1));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(1));
+            Assert.That(clientSync.LastMutationResult.RpcRequestId, Is.EqualTo(1));
+            Assert.That(observerSync.SentMutationRequestCount, Is.Zero);
+            Assert.That(observerSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+            Assert.That(observerSync.AppliedChunkDeltaCount, Is.EqualTo(1));
+            Assert.That(observerSync.LastAppliedChunkDeltaSequence, Is.EqualTo(1));
+            Assert.That(observerSync.AcceptedMutationResponseCount, Is.Zero);
+            Assert.That(observerSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(observerSync.LastMutationResult.RpcRequestId, Is.Zero);
+
+            BlockMutationResult rejectedRequest = clientSync.TrySubmitMutation(
+                new BlockPosition(-1, 2, 2),
+                BlockRegistry.Slate,
+                out SetBlockCommand rejectedClientCommand,
+                out bool rejectedRequestSentToHost);
+
+            Assert.That(rejectedRequestSentToHost, Is.True);
+            Assert.That(rejectedRequest.PendingHostValidation, Is.True);
+            Assert.That(rejectedRequest.RpcRequestId, Is.EqualTo(2));
+            Assert.That(rejectedClientCommand, Is.Null);
+            Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
+
+            yield return WaitFor(
+                () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.PositionOutOfBounds,
+                "Host did not report deterministic rejection for an invalid client mutation request.");
+
+            Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(1));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(2));
+            Assert.That(clientSync.LastMutationResult.RpcRequestId, Is.EqualTo(2));
+
+            clientWorldManager.World.SetBlock(stalePosition, BlockRegistry.Air, trackChange: false);
+            BlockMutationResult staleRequest = clientSync.TrySubmitMutation(
+                stalePosition,
+                BlockRegistry.Slate,
+                out SetBlockCommand staleClientCommand,
+                out bool staleRequestSentToHost);
+
+            Assert.That(staleRequestSentToHost, Is.True);
+            Assert.That(staleRequest.PendingHostValidation, Is.True);
+            Assert.That(staleRequest.RpcRequestId, Is.EqualTo(3));
+            Assert.That(staleClientCommand, Is.Null);
+
+            yield return WaitFor(
+                () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.ExpectedBlockMismatch &&
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                "Host did not reject and correct a stale client mutation request.");
+
+            Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(2));
+            Assert.That(hostSync.LastReceivedMutationRequestId, Is.EqualTo(3));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(3));
+            Assert.That(clientSync.LastMutationResult.RpcRequestId, Is.EqualTo(3));
+
+            Assert.That(lateJoinClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => lateJoinClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 4,
+                "Late join client did not connect for chunk authority sync.");
+
+            yield return WaitFor(
+                () => lateJoinWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                "Late join client did not receive the host chunk snapshot.");
+
+            Assert.That(hostSync.CurrentBoundary.CanServeLateJoinSync, Is.True);
+            Assert.That(hostSync.SentLateJoinSnapshotCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinSync.HasHostGenerationSnapshotForSession, Is.True);
+            Assert.That(lateJoinSync.AppliedGenerationSnapshotCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinSync.AppliedSnapshotBlockCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(lateJoinSync.LastAppliedChunkDeltaSequence, Is.EqualTo(hostSync.LastBroadcastChunkDeltaSequence));
+            Assert.That(lateJoinWorldManager.World.Bounds, Is.EqualTo(hostWorldManager.World.Bounds));
+            Assert.That(lateJoinWorldManager.World.Seed, Is.EqualTo(hostWorldManager.World.Seed));
+            Assert.That(lateJoinWorldManager.GenerationPreset, Is.EqualTo(hostWorldManager.GenerationPreset));
+
+            BlockMutationResult postLateJoinRequest = clientSync.TrySubmitMutation(
+                postLateJoinPosition,
+                BlockRegistry.Slate,
+                out SetBlockCommand postLateJoinClientCommand,
+                out bool postLateJoinRequestSentToHost);
+
+            Assert.That(postLateJoinRequestSentToHost, Is.True);
+            Assert.That(postLateJoinRequest.PendingHostValidation, Is.True);
+            Assert.That(postLateJoinRequest.RpcRequestId, Is.EqualTo(4));
+            Assert.That(postLateJoinClientCommand, Is.Null);
+            Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
+                      clientWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
+                      observerWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
+                      lateJoinWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate,
+                "Late join client did not remain synchronized with subsequent host chunk deltas.");
+
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(2));
+            Assert.That(hostSync.RecordedChunkDeltas, Has.Count.EqualTo(2));
+            Assert.That(hostSync.LastBroadcastChunkDeltaSequence, Is.EqualTo(2));
+            Assert.That(hostSync.RecordedChunkDeltas[1].SequenceId, Is.EqualTo(2));
+            Assert.That(
+                hostSync.RecordedChunkDeltas[1].Chunk,
+                Is.EqualTo(ChunkCoordinate.FromBlockPosition(postLateJoinPosition, hostWorldManager.World.ChunkSize)));
+            Assert.That(hostSync.RecordedChunkDeltas[1].Change.Position, Is.EqualTo(postLateJoinPosition));
+            Assert.That(hostSync.RecordedChunkDeltas[1].Change.NewBlock, Is.EqualTo(BlockRegistry.Slate));
+            Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(2));
+            Assert.That(clientSync.AppliedChunkDeltaCount, Is.EqualTo(2));
+            Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(2));
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.EqualTo(4));
+            Assert.That(clientSync.LastAppliedChunkDeltaSequence, Is.EqualTo(2));
+            Assert.That(observerSync.AppliedRemoteDeltaCount, Is.EqualTo(2));
+            Assert.That(observerSync.AppliedChunkDeltaCount, Is.EqualTo(2));
+            Assert.That(observerSync.LastAppliedChunkDeltaSequence, Is.EqualTo(2));
+            Assert.That(lateJoinSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
+            Assert.That(lateJoinSync.AppliedChunkDeltaCount, Is.EqualTo(1));
+            Assert.That(lateJoinSync.AcceptedMutationResponseCount, Is.Zero);
+            Assert.That(lateJoinSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(lateJoinSync.LastAppliedChunkDeltaSequence, Is.EqualTo(2));
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after chunk authority sync validation.");
+            Assert.That(clientSync.HasHostGenerationSnapshotForSession, Is.False);
+            Assert.That(clientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.LastSentMutationRequestId, Is.Zero);
+            Assert.That(clientSync.LastCompletedMutationRequestId, Is.Zero);
         }
 
         [UnityTearDown]
@@ -519,22 +918,39 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return persistence;
         }
 
-        static CreativeWorldManager CreateCreativeWorldManager(string name)
+        static MultiplayerChunkAuthoritySync ConfigureChunkSync(
+            BlockiverseNetworkSession session,
+            CreativeWorldManager worldManager)
+        {
+            MultiplayerChunkAuthoritySync sync = session.GetComponent<MultiplayerChunkAuthoritySync>();
+
+            if (sync == null)
+                sync = session.gameObject.AddComponent<MultiplayerChunkAuthoritySync>();
+
+            sync.Configure(session, worldManager);
+            return sync;
+        }
+
+        static CreativeWorldManager CreateCreativeWorldManager(string name, WorldGenerationSettings settings = null)
         {
             GameObject worldObject = new(name);
             worldObject.SetActive(false);
             CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
             manager.Configure(CreateBlockAtlasMaterial(), -1);
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            var settings = new WorldGenerationSettings(
-                width: 16,
-                height: 8,
-                depth: 16,
-                chunkSize: 16,
-                seed: 9901,
-                groundHeight: 2);
+            settings ??= new WorldGenerationSettings(
+                    width: 16,
+                    height: 8,
+                    depth: 16,
+                    chunkSize: 16,
+                    seed: 9901,
+                    groundHeight: 2);
             VoxelWorld world = new FlatCreativeWorldPreset(registry, settings).Generate();
-            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world));
+            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(
+                registry,
+                settings,
+                world,
+                CreativeWorldGenerationPreset.FlatCreative));
             return manager;
         }
 
@@ -633,9 +1049,90 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
         static void AssertPlayerObjectExists(NetworkManager networkManager, ulong clientId)
         {
-            Assert.That(networkManager.ConnectedClients.TryGetValue(clientId, out NetworkClient client), Is.True);
-            Assert.That(client.PlayerObject, Is.Not.Null);
-            Assert.That(client.PlayerObject.OwnerClientId, Is.EqualTo(clientId));
+            NetworkObject playerObject = GetPlayerObject(networkManager, clientId);
+
+            Assert.That(playerObject, Is.Not.Null);
+            Assert.That(playerObject.OwnerClientId, Is.EqualTo(clientId));
+        }
+
+        static void AssertFallbackAvatarExists(NetworkManager networkManager, ulong clientId)
+        {
+            NetworkObject playerObject = GetPlayerObject(networkManager, clientId);
+            BlockiverseNetworkAvatarRig avatarRig = playerObject.GetComponent<BlockiverseNetworkAvatarRig>();
+
+            Assert.That(avatarRig, Is.Not.Null);
+            Assert.That(avatarRig.IsUsingFallbackProxy, Is.True);
+            Assert.That(avatarRig.FallbackRoot, Is.Not.Null);
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.True);
+            Assert.That(avatarRig.HeadAnchor, Is.Not.Null);
+            Assert.That(avatarRig.LeftHandAnchor, Is.Not.Null);
+            Assert.That(avatarRig.RightHandAnchor, Is.Not.Null);
+        }
+
+        static NetworkObject GetPlayerObject(NetworkManager networkManager, ulong clientId)
+        {
+            if (networkManager.ConnectedClients.TryGetValue(clientId, out NetworkClient client))
+            {
+                Assert.That(client.PlayerObject, Is.Not.Null);
+                return client.PlayerObject;
+            }
+
+            if (networkManager.SpawnManager != null)
+            {
+                NetworkObject remotePlayer = networkManager.SpawnManager.SpawnedObjectsList
+                    .FirstOrDefault(spawnedObject => spawnedObject != null &&
+                                                     spawnedObject.IsPlayerObject &&
+                                                     spawnedObject.OwnerClientId == clientId);
+
+                if (remotePlayer != null)
+                    return remotePlayer;
+            }
+
+            Assert.That(networkManager.LocalClientId, Is.EqualTo(clientId));
+            Assert.That(networkManager.LocalClient, Is.Not.Null);
+            Assert.That(networkManager.LocalClient.PlayerObject, Is.Not.Null);
+            return networkManager.LocalClient.PlayerObject;
+        }
+
+        static GameObject CreateTrackingSource(string name, Vector3 position, Quaternion rotation)
+        {
+            GameObject source = new(name);
+            source.transform.SetPositionAndRotation(position, rotation);
+            return source;
+        }
+
+        static bool IsClose(Vector3 actual, Vector3 expected)
+        {
+            return (actual - expected).sqrMagnitude <= 0.0025f;
+        }
+
+        static bool IsClose(Quaternion actual, Quaternion expected)
+        {
+            return Quaternion.Angle(actual, expected) <= 0.5f;
+        }
+
+        static Pose ExpectedLocalPose(Transform root, Transform source)
+        {
+            return new Pose(
+                root.InverseTransformPoint(source.position),
+                Quaternion.Inverse(root.rotation) * source.rotation);
+        }
+
+        static bool AvatarPoseMatches(
+            BlockiverseNetworkAvatarRig avatarRig,
+            Pose rootPose,
+            Pose headPose,
+            Pose leftHandPose,
+            Pose rightHandPose)
+        {
+            return IsClose(avatarRig.transform.position, rootPose.position) &&
+                   IsClose(avatarRig.transform.rotation, rootPose.rotation) &&
+                   IsClose(avatarRig.HeadAnchor.localPosition, headPose.position) &&
+                   IsClose(avatarRig.HeadAnchor.localRotation, headPose.rotation) &&
+                   IsClose(avatarRig.LeftHandAnchor.localPosition, leftHandPose.position) &&
+                   IsClose(avatarRig.LeftHandAnchor.localRotation, leftHandPose.rotation) &&
+                   IsClose(avatarRig.RightHandAnchor.localPosition, rightHandPose.position) &&
+                   IsClose(avatarRig.RightHandAnchor.localRotation, rightHandPose.rotation);
         }
 
         static void AssertNoSpawnedObjects(NetworkManager networkManager)
