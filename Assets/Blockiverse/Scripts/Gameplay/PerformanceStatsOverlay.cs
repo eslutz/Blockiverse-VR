@@ -17,7 +17,10 @@ namespace Blockiverse.Gameplay
         [SerializeField, Min(0f)] float logIntervalSeconds = 5f;
 
         FrameStatisticsSampler sampler;
+        GUIStyle overlayStyle;
         float logTimer;
+
+        static readonly Rect OverlayRect = new(12f, 12f, 320f, 96f);
 
         public bool Visible
         {
@@ -85,14 +88,24 @@ namespace Blockiverse.Gameplay
                 $"Chunks {stats.ChunkCount}  Tris {stats.TriangleCount:n0}\n" +
                 $"Rebuild queue {stats.QueuedRebuildCount}";
 
-            var style = new GUIStyle(GUI.skin.box)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 16,
-                padding = new RectOffset(10, 10, 8, 8)
-            };
+            GUI.Label(OverlayRect, text, OverlayStyle);
+        }
 
-            GUI.Label(new Rect(12f, 12f, 320f, 96f), text, style);
+        GUIStyle OverlayStyle
+        {
+            get
+            {
+                if (overlayStyle != null)
+                    return overlayStyle;
+
+                overlayStyle = new GUIStyle(GUI.skin.box)
+                {
+                    alignment = TextAnchor.UpperLeft,
+                    fontSize = 16,
+                    padding = new RectOffset(10, 10, 8, 8)
+                };
+                return overlayStyle;
+            }
         }
     }
 }

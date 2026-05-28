@@ -132,9 +132,9 @@ def write_audio_meta(relative_path):
         "  loadInBackground: 0\n"
         "  ambisonic: 0\n"
         "  3D: 0\n"
-        "  userData: \n"
-        "  assetBundleName: \n"
-        "  assetBundleVariant: \n"
+        "  userData:\n"
+        "  assetBundleName:\n"
+        "  assetBundleVariant:\n"
     )
     with open(os.path.join(ROOT, relative_path + ".meta"), "w", newline="\n") as handle:
         handle.write(meta)

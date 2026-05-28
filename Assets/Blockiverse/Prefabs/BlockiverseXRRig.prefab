@@ -5678,6 +5678,7 @@ GameObject:
   - component: {fileID: 5137572997523883235}
   - component: {fileID: 5176223294892901774}
   - component: {fileID: 955048968464478466}
+  - component: {fileID: 8273465101139274317}
   m_Layer: 0
   m_Name: BlockiverseXRRig
   m_TagString: Untagged
@@ -5941,6 +5942,26 @@ MonoBehaviour:
   rayOrigin: {fileID: 6989568263850087154}
   eventCamera: {fileID: 2498534017811587301}
   maxDistanceMeters: 5
+--- !u!114 &8273465101139274317
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccd7dc81d9389f5dc4f0a49e6e59e497, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.BlockiverseAudioCuePlayer
+  audioSource: {fileID: 0}
+  interactionController: {fileID: 0}
+  blockBreakClip: {fileID: 8300000, guid: 05c6e3f23a1f5bd06570faef8a406fb3, type: 3}
+  blockPlaceClip: {fileID: 8300000, guid: a57e0cf2ce1f5d28f36b03d14d279096, type: 3}
+  uiSelectClip: {fileID: 8300000, guid: 8a993b793a78c2d2e548e23ef84753ac, type: 3}
+  uiConfirmClip: {fileID: 8300000, guid: e1ceeda2e94f25ad579bdeb44587d5ae, type: 3}
+  uiCancelClip: {fileID: 8300000, guid: 14129ebded4cf32231cea2e398ad9de1, type: 3}
+  volume: 0.8
 --- !u!1 &6937898104666057989
 GameObject:
   m_ObjectHideFlags: 0

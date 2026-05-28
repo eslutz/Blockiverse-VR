@@ -66,8 +66,8 @@ namespace Blockiverse.Gameplay
 
         void EnsureReferences()
         {
-            if (audioSource == null)
-                audioSource = GetComponent<AudioSource>();
+            if (audioSource == null && !TryGetComponent(out audioSource) && Application.isPlaying)
+                audioSource = gameObject.AddComponent<AudioSource>();
 
             if (audioSource != null)
             {
