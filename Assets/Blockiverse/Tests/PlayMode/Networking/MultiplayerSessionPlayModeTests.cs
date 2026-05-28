@@ -8,11 +8,15 @@ using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using Blockiverse.Persistence;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using Blockiverse.UI;
 using NUnit.Framework;
 using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
+using Unity.Networking.Transport;
+using Unity.Networking.Transport.Utilities;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -847,6 +851,457 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientSync.LastCompletedMutationRequestId, Is.Zero);
         }
 
+        [UnityTest]
+        public IEnumerator CompetingClientBlockMutationsRejectStaleRequestAndPreserveAuthoritativeWinner()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession firstClientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession competingClientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Conflict World");
+            CreativeWorldManager firstClientWorldManager = CreateCreativeWorldManager(
+                "First Client Conflict World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1222, groundHeight: 2));
+            CreativeWorldManager competingClientWorldManager = CreateCreativeWorldManager(
+                "Competing Client Conflict World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 1223, groundHeight: 2));
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync firstClientSync = ConfigureChunkSync(firstClientSession, firstClientWorldManager);
+            MultiplayerChunkAuthoritySync competingClientSync = ConfigureChunkSync(competingClientSession, competingClientWorldManager);
+            var conflictPosition = new BlockPosition(2, 2, 2);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            firstClientSession.Configure(testConfig);
+            competingClientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for conflict handling.");
+
+            Assert.That(firstClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => firstClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "First client did not connect for conflict handling.");
+
+            Assert.That(competingClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => competingClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Competing client did not connect for conflict handling.");
+
+            yield return WaitFor(
+                () => firstClientSync.HasHostGenerationSnapshotForSession &&
+                      competingClientSync.HasHostGenerationSnapshotForSession,
+                "Clients did not receive host generation snapshots for conflict handling.");
+
+            BlockMutationResult winningRequest = firstClientSync.TrySubmitMutation(
+                new BlockMutationRequest(
+                    firstClientSync.CurrentBoundary.LocalClientId,
+                    conflictPosition,
+                    BlockRegistry.Clearstone,
+                    BlockRegistry.Air),
+                out SetBlockCommand firstClientCommand,
+                out bool winningRequestSentToHost);
+
+            Assert.That(winningRequestSentToHost, Is.True);
+            Assert.That(winningRequest.PendingHostValidation, Is.True);
+            Assert.That(firstClientCommand, Is.Null);
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.Clearstone &&
+                      firstClientWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.Clearstone &&
+                      competingClientWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.Clearstone,
+                "Winning competing mutation did not converge before stale conflict request.");
+
+            BlockMutationResult staleCompetingRequest = competingClientSync.TrySubmitMutation(
+                new BlockMutationRequest(
+                    competingClientSync.CurrentBoundary.LocalClientId,
+                    conflictPosition,
+                    BlockRegistry.Slate,
+                    BlockRegistry.Air),
+                out SetBlockCommand competingClientCommand,
+                out bool staleRequestSentToHost);
+
+            Assert.That(staleRequestSentToHost, Is.True);
+            Assert.That(staleCompetingRequest.PendingHostValidation, Is.True);
+            Assert.That(competingClientCommand, Is.Null);
+
+            yield return WaitFor(
+                () => competingClientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.ExpectedBlockMismatch,
+                "Host did not reject stale competing mutation deterministically.");
+
+            Assert.That(hostSync.ReceivedMutationRequestCount, Is.EqualTo(2));
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(1));
+            Assert.That(hostSync.ConflictRejectedMutationCount, Is.EqualTo(1));
+            Assert.That(competingClientSync.ReceivedMutationRejectionCount, Is.EqualTo(1));
+            Assert.That(competingClientSync.PendingMutationRequestCount, Is.Zero);
+            Assert.That(hostWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(firstClientWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(competingClientWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.Clearstone));
+        }
+
+        [UnityTest]
+        public IEnumerator ActiveBlockEditingConvergesUnderSimulated100MsLatency()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Latency World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Latency World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 5100, groundHeight: 2));
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            var editPosition = new BlockPosition(2, 2, 2);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for latency simulation.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for latency simulation.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive host generation snapshot before latency simulation.");
+
+            SimulatorUtility.Parameters hostSimulator = ApplyTransportSimulator(hostSession, packetDelayMs: 100, packetDropInterval: 0, randomSeed: 5100);
+            SimulatorUtility.Parameters clientSimulator = ApplyTransportSimulator(clientSession, packetDelayMs: 100, packetDropInterval: 0, randomSeed: 5101);
+
+            Assert.That(hostSimulator.PacketDelayMs, Is.EqualTo(100));
+            Assert.That(clientSimulator.PacketDelayMs, Is.EqualTo(100));
+
+            BlockMutationResult requestResult = clientSync.TrySubmitMutation(
+                new BlockMutationRequest(
+                    clientSync.CurrentBoundary.LocalClientId,
+                    editPosition,
+                    BlockRegistry.Clearstone,
+                    BlockRegistry.Air),
+                out SetBlockCommand clientCommand,
+                out bool requestSentToHost);
+
+            Assert.That(requestSentToHost, Is.True);
+            Assert.That(requestResult.PendingHostValidation, Is.True);
+            Assert.That(clientCommand, Is.Null);
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                      clientSync.PendingMutationRequestCount == 0,
+                "Active block edit did not converge under simulated 100ms latency.",
+                timeoutSeconds: 8.0f);
+
+            Assert.That(hostSync.ReceivedMutationRequestCount, Is.EqualTo(1));
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(1));
+            Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(1));
+            Assert.That(clientSync.LastAppliedChunkDeltaSequence, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator ChunkDeltasConvergeUnderSimulatedPacketLoss()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession observerSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Packet Loss World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Packet Loss World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6200, groundHeight: 2));
+            CreativeWorldManager observerWorldManager = CreateCreativeWorldManager(
+                "Observer Packet Loss World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6201, groundHeight: 2));
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerChunkAuthoritySync observerSync = ConfigureChunkSync(observerSession, observerWorldManager);
+            var editPositions = new[]
+            {
+                new BlockPosition(2, 2, 2),
+                new BlockPosition(3, 2, 2),
+                new BlockPosition(4, 2, 2)
+            };
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+            observerSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for packet-loss simulation.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for packet-loss simulation.");
+
+            Assert.That(observerSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => observerSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Observer client did not connect for packet-loss simulation.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession &&
+                      observerSync.HasHostGenerationSnapshotForSession,
+                "Clients did not receive host generation snapshots before packet-loss simulation.");
+
+            SimulatorUtility.Parameters hostSimulator = ApplyTransportSimulator(hostSession, packetDelayMs: 0, packetDropInterval: 5, randomSeed: 6200);
+            SimulatorUtility.Parameters clientSimulator = ApplyTransportSimulator(clientSession, packetDelayMs: 0, packetDropInterval: 5, randomSeed: 6201);
+            SimulatorUtility.Parameters observerSimulator = ApplyTransportSimulator(observerSession, packetDelayMs: 0, packetDropInterval: 5, randomSeed: 6202);
+
+            Assert.That(hostSimulator.PacketDropInterval, Is.EqualTo(5));
+            Assert.That(clientSimulator.PacketDropInterval, Is.EqualTo(5));
+            Assert.That(observerSimulator.PacketDropInterval, Is.EqualTo(5));
+
+            for (int index = 0; index < editPositions.Length; index++)
+            {
+                BlockMutationResult requestResult = clientSync.TrySubmitMutation(
+                    new BlockMutationRequest(
+                        clientSync.CurrentBoundary.LocalClientId,
+                        editPositions[index],
+                        index == 1 ? BlockRegistry.Slate : BlockRegistry.Clearstone,
+                        BlockRegistry.Air),
+                    out SetBlockCommand clientCommand,
+                    out bool requestSentToHost);
+
+                Assert.That(requestSentToHost, Is.True);
+                Assert.That(requestResult.PendingHostValidation, Is.True);
+                Assert.That(clientCommand, Is.Null);
+            }
+
+            yield return WaitFor(
+                () => editPositions.All(position =>
+                          hostWorldManager.World.GetBlock(position) != BlockRegistry.Air &&
+                          clientWorldManager.World.GetBlock(position) == hostWorldManager.World.GetBlock(position) &&
+                          observerWorldManager.World.GetBlock(position) == hostWorldManager.World.GetBlock(position)) &&
+                      clientSync.PendingMutationRequestCount == 0 &&
+                      clientSync.LastAppliedChunkDeltaSequence == 3 &&
+                      observerSync.LastAppliedChunkDeltaSequence == 3,
+                "Chunk deltas did not converge under simulated packet loss.",
+                timeoutSeconds: 10.0f);
+
+            Assert.That(hostSync.ReceivedMutationRequestCount, Is.EqualTo(3));
+            Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(3));
+            Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(3));
+            Assert.That(observerSync.AppliedChunkDeltaCount, Is.EqualTo(3));
+        }
+
+        [UnityTest]
+        public IEnumerator NetworkedSurvivalLiteActionsStayHostAuthoritativeAndPerPlayer()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession firstClientSession = CreateClientSession(hostSession);
+            BlockiverseNetworkSession secondClientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Survival Sync World");
+            CreativeWorldManager firstClientWorldManager = CreateCreativeWorldManager(
+                "First Client Survival Sync World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 3112, groundHeight: 2));
+            CreativeWorldManager secondClientWorldManager = CreateCreativeWorldManager(
+                "Second Client Survival Sync World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 4112, groundHeight: 2));
+            var timberPosition = new BlockPosition(2, 2, 2);
+            var coalstonePosition = new BlockPosition(3, 2, 2);
+            var crateTimberPosition = new BlockPosition(4, 2, 2);
+            hostWorldManager.World.SetBlock(timberPosition, BlockRegistry.Timber);
+            hostWorldManager.World.SetBlock(coalstonePosition, BlockRegistry.Coalstone);
+            hostWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.Timber);
+
+            MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync firstClientChunkSync = ConfigureChunkSync(firstClientSession, firstClientWorldManager);
+            MultiplayerChunkAuthoritySync secondClientChunkSync = ConfigureChunkSync(secondClientSession, secondClientWorldManager);
+            MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
+            MultiplayerSurvivalSync firstClientSurvivalSync = ConfigureSurvivalSync(firstClientSession, firstClientChunkSync, firstClientWorldManager);
+            MultiplayerSurvivalSync secondClientSurvivalSync = ConfigureSurvivalSync(secondClientSession, secondClientChunkSync, secondClientWorldManager);
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+
+            hostSession.Configure(testConfig);
+            firstClientSession.Configure(testConfig);
+            secondClientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for survival sync.");
+
+            Assert.That(firstClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => firstClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "First client did not connect for survival sync.");
+
+            Assert.That(secondClientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => secondClientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Second client did not connect for survival sync.");
+
+            yield return WaitFor(
+                () => firstClientChunkSync.HasHostGenerationSnapshotForSession &&
+                      secondClientChunkSync.HasHostGenerationSnapshotForSession &&
+                      firstClientSurvivalSync.ReceivedInventorySnapshotCount > 0 &&
+                      secondClientSurvivalSync.ReceivedInventorySnapshotCount > 0,
+                "Clients did not receive host-owned survival and world snapshots.");
+
+            SurvivalCommandResult timberHarvest = firstClientSurvivalSync.TrySubmitHarvest(
+                timberPosition,
+                ItemStack.Empty,
+                out bool timberHarvestSentToHost);
+
+            Assert.That(timberHarvestSentToHost, Is.True);
+            Assert.That(timberHarvest.PendingHostValidation, Is.True);
+            Assert.That(timberHarvest.CommandKind, Is.EqualTo(SurvivalCommandKind.HarvestResource));
+
+            yield return WaitFor(
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 1 &&
+                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Timber) == 1 &&
+                      secondClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 0 &&
+                      hostWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air &&
+                      firstClientWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air &&
+                      secondClientWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air,
+                "Host did not grant harvested timber only to the requesting client.");
+
+            SurvivalCommandResult coalHarvest = firstClientSurvivalSync.TrySubmitHarvest(
+                coalstonePosition,
+                ItemStack.Empty,
+                out bool coalHarvestSentToHost);
+
+            Assert.That(coalHarvestSentToHost, Is.True);
+            Assert.That(coalHarvest.PendingHostValidation, Is.True);
+
+            yield return WaitFor(
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Coalstone) == 1,
+                "Host did not grant harvested coalstone to the requesting client.");
+
+            SurvivalCommandResult craftTorchbud = firstClientSurvivalSync.TrySubmitCraft(
+                ItemId.Torchbud,
+                CraftingStation.Workbench,
+                out bool craftSentToHost);
+
+            Assert.That(craftSentToHost, Is.True);
+            Assert.That(craftTorchbud.PendingHostValidation, Is.True);
+
+            yield return WaitFor(
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Torchbud) == 4 &&
+                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 0 &&
+                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Coalstone) == 0 &&
+                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Torchbud) == 4,
+                "Host did not validate crafting consistently for the requesting client.");
+
+            SurvivalCommandResult crateTimberHarvest = firstClientSurvivalSync.TrySubmitHarvest(
+                crateTimberPosition,
+                ItemStack.Empty,
+                out bool crateTimberHarvestSentToHost);
+
+            Assert.That(crateTimberHarvestSentToHost, Is.True);
+            Assert.That(crateTimberHarvest.PendingHostValidation, Is.True);
+
+            yield return WaitFor(
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 1,
+                "Host did not grant timber before crate transfer.");
+
+            SurvivalCommandResult depositTimber = firstClientSurvivalSync.TrySubmitCrateDeposit(
+                ItemId.Timber,
+                1,
+                out bool depositSentToHost);
+
+            Assert.That(depositSentToHost, Is.True);
+            Assert.That(depositTimber.PendingHostValidation, Is.True);
+
+            yield return WaitFor(
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 0 &&
+                      firstClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 1 &&
+                      secondClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 1,
+                "Shared crate deposit did not sync to both clients.");
+
+            SurvivalCommandResult withdrawTimber = secondClientSurvivalSync.TrySubmitCrateWithdraw(
+                ItemId.Timber,
+                1,
+                out bool withdrawSentToHost);
+
+            Assert.That(withdrawSentToHost, Is.True);
+            Assert.That(withdrawTimber.PendingHostValidation, Is.True);
+
+            yield return WaitFor(
+                () => secondClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 1 &&
+                      firstClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 0 &&
+                      secondClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 0,
+                "Shared crate withdrawal did not update the withdrawing client and crate mirrors.");
+
+            Assert.That(hostSurvivalSync.AcceptedHarvestCount, Is.EqualTo(3));
+            Assert.That(hostSurvivalSync.AcceptedCraftCount, Is.EqualTo(1));
+            Assert.That(hostSurvivalSync.AcceptedCrateTransferCount, Is.EqualTo(2));
+            Assert.That(firstClientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+            Assert.That(secondClientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+        }
+
+        [Test]
+        public void HostRejectsUnknownCrateTransferItemWithoutThrowing()
+        {
+            GameObject syncObject = new("Malformed Crate Transfer Survival Sync");
+            MultiplayerSurvivalSync survivalSync = syncObject.AddComponent<MultiplayerSurvivalSync>();
+            survivalSync.Configure(null, null, null);
+            bool requestSentToHost = true;
+            SurvivalCommandResult result = default;
+
+            try
+            {
+                Assert.DoesNotThrow(
+                    () => result = survivalSync.TrySubmitCrateDeposit((ItemId)9999, 1, out requestSentToHost));
+                Assert.That(requestSentToHost, Is.False);
+                Assert.That(result.Accepted, Is.False);
+                Assert.That(result.FailureReason, Is.EqualTo(SurvivalCommandFailureReason.InvalidTransfer));
+                Assert.That(survivalSync.AcceptedCrateTransferCount, Is.Zero);
+                Assert.That(survivalSync.RejectedCommandCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(syncObject);
+            }
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -928,6 +1383,20 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 sync = session.gameObject.AddComponent<MultiplayerChunkAuthoritySync>();
 
             sync.Configure(session, worldManager);
+            return sync;
+        }
+
+        static MultiplayerSurvivalSync ConfigureSurvivalSync(
+            BlockiverseNetworkSession session,
+            MultiplayerChunkAuthoritySync chunkSync,
+            CreativeWorldManager worldManager)
+        {
+            MultiplayerSurvivalSync sync = session.GetComponent<MultiplayerSurvivalSync>();
+
+            if (sync == null)
+                sync = session.gameObject.AddComponent<MultiplayerSurvivalSync>();
+
+            sync.Configure(session, chunkSync, worldManager);
             return sync;
         }
 
@@ -1045,6 +1514,35 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 yield return null;
 
             Assert.That(condition(), Is.True, failureMessage);
+        }
+
+        static SimulatorUtility.Parameters ApplyTransportSimulator(
+            BlockiverseNetworkSession session,
+            int packetDelayMs,
+            int packetDropInterval,
+            uint randomSeed)
+        {
+            UnityTransport transport = session.NetworkManager.NetworkConfig.NetworkTransport as UnityTransport;
+            Assert.That(transport, Is.Not.Null);
+
+            ref NetworkDriver driver = ref transport.GetNetworkDriver();
+            Assert.That(driver.IsCreated, Is.True, "Unity Transport driver must be created before applying simulator settings.");
+
+            NetworkSettings settings = driver.CurrentSettings;
+            SimulatorUtility.Parameters parameters = settings.GetSimulatorStageParameters();
+            Assert.That(parameters.MaxPacketCount, Is.GreaterThan(0), "Unity Transport simulator stage was not initialized.");
+
+            parameters.Mode = ApplyMode.AllPackets;
+            parameters.PacketDelayMs = packetDelayMs;
+            parameters.PacketJitterMs = 0;
+            parameters.PacketDropInterval = packetDropInterval;
+            parameters.PacketDropPercentage = 0;
+            parameters.PacketDuplicationPercentage = 0;
+            parameters.FuzzFactor = 0;
+            parameters.FuzzOffset = 0;
+            parameters.RandomSeed = randomSeed;
+            driver.ModifySimulatorStageParameters(parameters);
+            return parameters;
         }
 
         static void AssertPlayerObjectExists(NetworkManager networkManager, ulong clientId)

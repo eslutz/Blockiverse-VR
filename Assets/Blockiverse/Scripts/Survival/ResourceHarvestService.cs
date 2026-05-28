@@ -89,6 +89,19 @@ namespace Blockiverse.Survival
 
         public BlockHarvestResult TryHarvest(VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem)
         {
+            BlockHarvestResult result = TryPreviewHarvest(world, inventory, position, equippedItem);
+
+            if (!result.Succeeded)
+                return result;
+
+            inventory.TryAddAll(result.Drop);
+
+            world.SetBlock(position, BlockRegistry.Air);
+            return result;
+        }
+
+        public BlockHarvestResult TryPreviewHarvest(VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem)
+        {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
 
@@ -110,7 +123,7 @@ namespace Blockiverse.Survival
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.NoHarvestRule, blockId, usedTool: usedTool);
 
             int workRequired = rule.GetWorkRequired(usedTool);
-            if (!inventory.TryAddAll(rule.Drop))
+            if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.Drop.Count)
             {
                 return BlockHarvestResult.Failure(
                     BlockHarvestFailureReason.InventoryFull,
@@ -121,7 +134,6 @@ namespace Blockiverse.Survival
                     workRequired);
             }
 
-            world.SetBlock(position, BlockRegistry.Air);
             return BlockHarvestResult.Success(rule, usedTool);
         }
     }

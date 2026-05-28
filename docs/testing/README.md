@@ -17,6 +17,8 @@ Performance reports belong in `docs/testing/performance/`.
 
 M3 Meta XR Simulator setup, MCP configuration, and survival-lite smoke scripts are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md).
 
+M5 multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md).
+
 Runtime diagnostics use local Unity and player logs only. Capture recent Quest player logs with:
 
 ```sh

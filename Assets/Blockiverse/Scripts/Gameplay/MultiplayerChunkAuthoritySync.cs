@@ -48,6 +48,7 @@ namespace Blockiverse.Gameplay
         public int AppliedGenerationSnapshotCount { get; private set; }
         public int AppliedSnapshotBlockCount { get; private set; }
         public int ReceivedMutationRejectionCount { get; private set; }
+        public int ConflictRejectedMutationCount { get; private set; }
         public int AcceptedMutationResponseCount { get; private set; }
         public int PendingMutationRequestCount => pendingMutationRequests.Count;
         public uint LastSentMutationRequestId { get; private set; }
@@ -246,6 +247,9 @@ namespace Blockiverse.Gameplay
             }
             else
             {
+                if (result.RejectionReason == BlockMutationRejectionReason.ExpectedBlockMismatch)
+                    ConflictRejectedMutationCount++;
+
                 SendMutationResult(senderClientId, requestId, request, result);
             }
         }
