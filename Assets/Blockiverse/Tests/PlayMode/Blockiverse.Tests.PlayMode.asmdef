@@ -11,6 +11,7 @@
     "Unity.InputSystem",
     "Unity.InputSystem.TestFramework",
     "Unity.XR.CoreUtils",
+    "Unity.XR.Interaction.Toolkit",
     "UnityEngine.UI",
     "UnityEngine.TestRunner"
   ],

@@ -1,14 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using Unity.XR.CoreUtils;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -16,107 +22,108 @@ namespace Blockiverse.Tests.PlayMode
 {
     public sealed class BlockiverseLocomotionPlayModeTests
     {
-        [Test]
-        public void TeleportMovesCameraToRequestedWorldPosition()
+        [UnityTest]
+        public IEnumerator TeleportationProviderMovesBodyToRequestedWorldPosition()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
             try
             {
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
-                teleport.Configure(origin, settings);
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out _,
+                    out _,
+                    out TeleportationProvider teleport,
+                    out _,
+                    out _);
 
-                Assert.That(teleport.TryTeleportTo(new Vector3(2.0f, 0.0f, 3.0f)), Is.True);
-                Assert.That(Vector3.Distance(origin.Camera.transform.position, new Vector3(2.0f, 0.0f, 3.0f)), Is.LessThan(0.01f));
+                Assert.That(teleport.QueueTeleportRequest(new TeleportRequest
+                {
+                    destinationPosition = new Vector3(2.0f, 0.0f, 3.0f),
+                    destinationRotation = Quaternion.identity,
+                    matchOrientation = MatchOrientation.None
+                }), Is.True);
+
+                yield return null;
+
+                Assert.That(Vector3.Distance(origin.transform.position, new Vector3(2.0f, 0.0f, 3.0f)), Is.LessThan(0.01f));
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
-        [Test]
-        public void TeleportPlaysFootstepOnlyAfterSuccessfulMove()
+        [UnityTest]
+        public IEnumerator TeleportationProviderPreservesOffsetCameraWhenMovingBody()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
             try
             {
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
-                var audioObject = new GameObject("Audio Cue Player");
-                audioObject.transform.SetParent(rigObject.transform, false);
-                audioObject.AddComponent<AudioSource>();
-                BlockiverseAudioCuePlayer audioCuePlayer = audioObject.AddComponent<BlockiverseAudioCuePlayer>();
-                var playedClips = new List<string>();
+                Vector3 cameraOffset = new(0.75f, 0.0f, -0.25f);
+                Vector3 destination = new(2.0f, 0.0f, 3.0f);
 
-                audioCuePlayer.ConfigureFootstepClips(
-                    AudioClip.Create("footstep_01", 16, 1, 44100, false),
-                    AudioClip.Create("footstep_02", 16, 1, 44100, false));
-                audioCuePlayer.CuePlayed += (_, clip) => playedClips.Add(clip.name);
+                origin.Camera.transform.localPosition = cameraOffset;
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out _,
+                    out _,
+                    out TeleportationProvider teleport,
+                    out _,
+                    out _);
 
-                teleport.Configure(origin, settings);
-                teleport.ConfigureFeedback(audioCuePlayer);
+                Assert.That(teleport.QueueTeleportRequest(new TeleportRequest
+                {
+                    destinationPosition = destination,
+                    destinationRotation = Quaternion.identity,
+                    matchOrientation = MatchOrientation.None
+                }), Is.True);
 
-                Assert.That(teleport.TryTeleportTo(new Vector3(2.0f, 0.0f, 3.0f)), Is.True);
-                settings.TeleportEnabled = false;
-                Assert.That(teleport.TryTeleportTo(new Vector3(4.0f, 0.0f, 6.0f)), Is.False);
+                yield return null;
 
-                Assert.That(playedClips, Is.EqualTo(new[] { "footstep_01" }));
+                Assert.That(origin.Camera.transform.localPosition, Is.EqualTo(cameraOffset));
+                Assert.That(Vector3.Distance(origin.Camera.transform.position, destination), Is.LessThan(0.01f));
+                Assert.That(Vector3.Distance(origin.transform.position, destination - cameraOffset), Is.LessThan(0.01f));
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
-        [Test]
-        public void TeleportMovesOffsetCameraToRequestedWorldPosition()
+        [UnityTest]
+        public IEnumerator SnapTurnProviderRotatesXrOriginByConfiguredDegrees()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
             try
             {
-                origin.Camera.transform.localPosition = new Vector3(0.75f, 0.0f, -0.25f);
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out _,
+                    out _,
+                    out _,
+                    out _,
+                    out SnapTurnProvider snapTurn);
+                snapTurn.turnAmount = 45.0f;
+                snapTurn.rightHandTurnInput = CreateManualVector2Reader("Right Hand Snap Turn", Vector2.right);
 
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
-                teleport.Configure(origin, settings);
+                yield return null;
 
-                Vector3 target = new(2.0f, 0.0f, 3.0f);
-
-                Assert.That(teleport.TryTeleportTo(target), Is.True);
-                Assert.That(Vector3.Distance(origin.Camera.transform.position, target), Is.LessThan(0.01f));
-            }
-            finally
-            {
-                Object.DestroyImmediate(rigObject);
-            }
-        }
-
-        [Test]
-        public void SnapTurnRotatesXrOriginByConfiguredDegrees()
-        {
-            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
-
-            try
-            {
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var snapTurn = rigObject.AddComponent<BlockiverseSnapTurnLocomotion>();
-                snapTurn.Configure(origin, settings);
-
-                snapTurn.ApplySnapTurn(1);
                 Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
-        [Test]
-        public void SnapTurnRotatesAroundOffsetCameraPosition()
+        [UnityTest]
+        public IEnumerator SnapTurnProviderRotatesAroundOffsetCameraPosition()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
@@ -124,74 +131,91 @@ namespace Blockiverse.Tests.PlayMode
             {
                 origin.Camera.transform.localPosition = new Vector3(0.5f, 0.0f, 1.0f);
                 Vector3 cameraPosition = origin.Camera.transform.position;
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out _,
+                    out _,
+                    out _,
+                    out _,
+                    out SnapTurnProvider snapTurn);
+                snapTurn.turnAmount = 60.0f;
+                snapTurn.rightHandTurnInput = CreateManualVector2Reader("Right Hand Snap Turn", Vector2.right);
 
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                settings.SnapTurnDegrees = 60.0f;
-
-                var snapTurn = rigObject.AddComponent<BlockiverseSnapTurnLocomotion>();
-                snapTurn.Configure(origin, settings);
-
-                snapTurn.ApplySnapTurn(1);
+                yield return null;
 
                 Assert.That(Vector3.Distance(origin.Camera.transform.position, cameraPosition), Is.LessThan(0.01f));
                 Assert.That(Mathf.DeltaAngle(origin.Camera.transform.eulerAngles.y, 60.0f), Is.EqualTo(0.0f).Within(0.1f));
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
-        [Test]
-        public void ContinuousMoveTranslatesOriginRelativeToHeadYaw()
+        [UnityTest]
+        public IEnumerator ContinuousMoveProviderTranslatesOriginRelativeToHeadYaw()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
             try
             {
                 origin.Camera.transform.localRotation = Quaternion.Euler(0.0f, 90.0f, 0.0f);
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out _,
+                    out _,
+                    out _,
+                    out ContinuousMoveProvider continuousMove,
+                    out _);
+                continuousMove.moveSpeed = 2.0f;
+                continuousMove.leftHandMoveInput = CreateManualVector2Reader("Left Hand Move", new Vector2(0.0f, 1.0f));
 
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                settings.ContinuousMoveSpeed = 2.0f;
+                yield return null;
 
-                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
-                continuousMove.Configure(origin, settings);
-
-                Assert.That(continuousMove.TryMove(new Vector2(0.0f, 1.0f), 0.5f), Is.True);
-                Assert.That(origin.transform.position.x, Is.EqualTo(1.0f).Within(0.01f));
-                Assert.That(origin.transform.position.z, Is.EqualTo(0.0f).Within(0.01f));
-
-                Assert.That(continuousMove.TryMove(new Vector2(1.0f, 0.0f), 0.5f), Is.True);
-                Assert.That(origin.transform.position.x, Is.EqualTo(1.0f).Within(0.01f));
-                Assert.That(origin.transform.position.z, Is.EqualTo(-1.0f).Within(0.01f));
+                Assert.That(origin.transform.position.x, Is.GreaterThan(0.0f));
+                Assert.That(Mathf.Abs(origin.transform.position.z), Is.LessThan(0.01f));
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
-        [Test]
-        public void ContinuousMoveRespectsComfortToggleAndDeadzone()
+        [UnityTest]
+        public IEnumerator InputRigDisablesContinuousMoveProviderWhenComfortToggleIsOff()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
 
             try
             {
                 var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
-                continuousMove.Configure(origin, settings);
-
-                Assert.That(continuousMove.TryMove(new Vector2(0.01f, 0.01f), 1.0f), Is.False);
-                Assert.That(origin.transform.position, Is.EqualTo(Vector3.zero));
-
                 settings.ContinuousMoveEnabled = false;
-                Assert.That(continuousMove.TryMove(new Vector2(0.0f, 1.0f), 1.0f), Is.False);
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
+
+                var heightReset = rigObject.AddComponent<BlockiverseHeightReset>();
+                heightReset.Configure(origin, settings);
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings);
+                continuousMove.leftHandMoveInput = CreateManualVector2Reader("Left Hand Move", new Vector2(0.0f, 1.0f));
+
+                yield return null;
+
+                Assert.That(continuousMove.enabled, Is.False);
                 Assert.That(origin.transform.position, Is.EqualTo(Vector3.zero));
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
@@ -213,17 +237,14 @@ namespace Blockiverse.Tests.PlayMode
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
             }
         }
 
         [UnityTest]
         public IEnumerator BootSceneContainsComfortSettingsMenu()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync("Boot", LoadSceneMode.Single);
-
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle("Boot");
 
             BlockiverseComfortMenu menu = Object.FindFirstObjectByType<BlockiverseComfortMenu>(FindObjectsInactive.Include);
             Assert.That(menu, Is.Not.Null);
@@ -292,7 +313,6 @@ namespace Blockiverse.Tests.PlayMode
             GameObject cameraObject = new("Main Camera");
             cameraObject.transform.SetParent(cameraOffset.transform, false);
             Camera camera = cameraObject.AddComponent<Camera>();
-            cameraObject.AddComponent<TrackedPoseDriver>();
 
             origin = rigObject.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
@@ -300,6 +320,72 @@ namespace Blockiverse.Tests.PlayMode
             rigObject.SetActive(true);
 
             return rigObject;
+        }
+
+        static void ConfigureXriLocomotionStack(
+            GameObject rigObject,
+            XROrigin origin,
+            out XRBodyTransformer bodyTransformer,
+            out LocomotionMediator mediator,
+            out TeleportationProvider teleport,
+            out ContinuousMoveProvider continuousMove,
+            out SnapTurnProvider snapTurn)
+        {
+            bodyTransformer = rigObject.AddComponent<XRBodyTransformer>();
+            bodyTransformer.xrOrigin = origin;
+
+            mediator = rigObject.AddComponent<LocomotionMediator>();
+            mediator.xrOrigin = origin;
+
+            teleport = rigObject.AddComponent<TeleportationProvider>();
+            teleport.mediator = mediator;
+            teleport.delayTime = 0.0f;
+
+            continuousMove = rigObject.AddComponent<ContinuousMoveProvider>();
+            continuousMove.mediator = mediator;
+            continuousMove.forwardSource = origin.Camera.transform;
+            continuousMove.enableStrafe = true;
+            continuousMove.enableFly = false;
+            continuousMove.leftHandMoveInput = CreateUnusedVector2Reader("Left Hand Move");
+            continuousMove.rightHandMoveInput = CreateUnusedVector2Reader("Right Hand Move");
+
+            snapTurn = rigObject.AddComponent<SnapTurnProvider>();
+            snapTurn.mediator = mediator;
+            snapTurn.enableTurnLeftRight = true;
+            snapTurn.enableTurnAround = false;
+            snapTurn.delayTime = 0.0f;
+            snapTurn.leftHandTurnInput = CreateUnusedVector2Reader("Left Hand Snap Turn");
+            snapTurn.rightHandTurnInput = CreateUnusedVector2Reader("Right Hand Snap Turn");
+        }
+
+        static void DestroyRigImmediate(GameObject rigObject)
+        {
+            if (rigObject == null)
+                return;
+
+            foreach (TrackedPoseDriver driver in rigObject.GetComponentsInChildren<TrackedPoseDriver>(true))
+                driver.enabled = false;
+
+            Object.DestroyImmediate(rigObject);
+        }
+
+        static XRInputValueReader<Vector2> CreateManualVector2Reader(string name, Vector2 value)
+        {
+            return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.ManualValue)
+            {
+                manualValue = value
+            };
+        }
+
+        static XRInputValueReader<Vector2> CreateUnusedVector2Reader(string name)
+        {
+            return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
+        }
+
+        [UnityTearDown]
+        public IEnumerator CleanupTrackedPoseDriversAfterTest()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
         }
     }
 
@@ -318,54 +404,46 @@ namespace Blockiverse.Tests.PlayMode
                 var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
                 settings.SnapTurnDegrees = 45.0f;
 
-                var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
-                teleport.Configure(origin, settings);
-
-                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
-                continuousMove.Configure(origin, settings);
-
-                var snapTurn = rigObject.AddComponent<BlockiverseSnapTurnLocomotion>();
-                snapTurn.Configure(origin, settings);
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
 
                 var heightReset = rigObject.AddComponent<BlockiverseHeightReset>();
                 heightReset.Configure(origin, settings);
 
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
-                inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings);
 
                 var canvas = menuObject.AddComponent<Canvas>();
                 var menu = menuObject.AddComponent<BlockiverseComfortMenu>();
                 menu.Configure(canvas, settings);
                 inputRig.MenuPressed.AddListener(menu.ToggleVisible);
 
-                Set(gamepad.rightStick, new Vector2(0.50f, 0.0f));
-                yield return null;
-                Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 0.0f), Is.EqualTo(0.0f).Within(0.1f));
-
-                Set(gamepad.rightStick, new Vector2(0.80f, 0.0f));
-                yield return null;
-                Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
-
+                Set(gamepad.rightStick, Vector2.right);
                 yield return null;
                 Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
 
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
-                Set(gamepad.rightStick, new Vector2(-0.80f, 0.0f));
-                yield return null;
-                Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 0.0f), Is.EqualTo(0.0f).Within(0.1f));
 
                 Press(gamepad.leftShoulder);
                 yield return null;
                 Assert.That(Vector3.Distance(origin.transform.position, Vector3.zero), Is.LessThan(0.01f));
 
+                Vector3 teleportTarget = origin.transform.position + origin.transform.forward * 2.0f;
+
                 Press(gamepad.buttonSouth);
                 yield return null;
-                Assert.That(Vector3.Distance(origin.transform.position, new Vector3(0.0f, 0.0f, 2.0f)), Is.LessThan(0.01f));
+                Assert.That(Vector3.Distance(origin.transform.position, teleportTarget), Is.LessThan(0.01f));
 
                 yield return null;
-                Assert.That(Vector3.Distance(origin.transform.position, new Vector3(0.0f, 0.0f, 2.0f)), Is.LessThan(0.01f));
+                Assert.That(Vector3.Distance(origin.transform.position, teleportTarget), Is.LessThan(0.01f));
 
                 origin.CameraYOffset = 1.2f;
                 Press(gamepad.selectButton);
@@ -393,7 +471,7 @@ namespace Blockiverse.Tests.PlayMode
             finally
             {
                 Object.DestroyImmediate(menuObject);
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
                 Object.DestroyImmediate(actions);
             }
         }
@@ -410,12 +488,18 @@ namespace Blockiverse.Tests.PlayMode
                 var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
                 settings.ContinuousMoveSpeed = 2.0f;
 
-                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
-                continuousMove.Configure(origin, settings);
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
 
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
-                inputRig.ConfigureLocomotion(null, null, null, continuousMove);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
 
                 Set(gamepad.leftStick, new Vector2(0.0f, 1.0f));
                 yield return null;
@@ -427,35 +511,45 @@ namespace Blockiverse.Tests.PlayMode
             }
             finally
             {
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
                 Object.DestroyImmediate(actions);
             }
         }
 
         [UnityTest]
-        public IEnumerator HeadPoseTrackerAppliesTrackedHmdPoseFromInputActions()
+        public IEnumerator ConfiguredHeadPoseDriverAppliesTrackedHmdPoseDuringBeforeRenderInputUpdate()
         {
             GameObject cameraObject = new("Head Camera");
-            XRHMD hmd = InputSystem.AddDevice<XRHMD>();
 
-            try
+            InputSystem.RegisterLayout(@"
             {
-                var tracker = cameraObject.AddComponent<BlockiverseHeadPoseTracker>();
-                Vector3 trackedPosition = new(0.1f, 1.55f, 0.25f);
-                Quaternion trackedRotation = Quaternion.Euler(4.0f, 35.0f, 0.0f);
+                ""name"": ""BlockiverseBeforeRenderHMD"",
+                ""extend"": ""XRHMD"",
+                ""beforeRender"": ""Update""
+            }");
+            var hmd = (XRHMD)InputSystem.AddDevice("BlockiverseBeforeRenderHMD");
+            TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
+            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            Vector3 trackedPosition = new(0.2f, 1.62f, 0.35f);
+            Quaternion trackedRotation = Quaternion.Euler(6.0f, 42.0f, 0.0f);
 
-                Set(hmd.trackingState, 3);
-                Set(hmd.centerEyePosition, trackedPosition);
-                Set(hmd.centerEyeRotation, trackedRotation);
-                yield return null;
+            Assert.That(poseDriver.enabled, Is.True);
+            Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
+            Assert.That(hmd.updateBeforeRender, Is.True);
 
-                Assert.That(Vector3.Distance(cameraObject.transform.localPosition, trackedPosition), Is.LessThan(0.0001f));
-                Assert.That(Quaternion.Dot(cameraObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.9999f));
-            }
-            finally
-            {
-                Object.DestroyImmediate(cameraObject);
-            }
+            Set(hmd.trackingState, 3, queueEventOnly: true);
+            Set(hmd.centerEyePosition, trackedPosition, queueEventOnly: true);
+            Set(hmd.centerEyeRotation, trackedRotation, queueEventOnly: true);
+
+            RunInputSystemUpdate(InputUpdateType.BeforeRender);
+
+            Assert.That(Vector3.Distance(cameraObject.transform.localPosition, trackedPosition), Is.LessThan(0.0001f));
+            Assert.That(Quaternion.Dot(cameraObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.9999f));
+
+            InputSystem.RemoveDevice(hmd);
+            poseDriver.enabled = false;
+            Object.DestroyImmediate(cameraObject);
+            yield return null;
         }
 
         [UnityTest]
@@ -507,9 +601,41 @@ namespace Blockiverse.Tests.PlayMode
             finally
             {
                 Object.DestroyImmediate(controllerObject);
-                Object.DestroyImmediate(rigObject);
+                DestroyRigImmediate(rigObject);
                 Object.DestroyImmediate(inputActions);
             }
+        }
+
+        static void ConfigureXriLocomotionStack(
+            GameObject rigObject,
+            XROrigin origin,
+            out XRBodyTransformer bodyTransformer,
+            out LocomotionMediator mediator,
+            out TeleportationProvider teleport,
+            out ContinuousMoveProvider continuousMove,
+            out SnapTurnProvider snapTurn)
+        {
+            bodyTransformer = rigObject.AddComponent<XRBodyTransformer>();
+            bodyTransformer.xrOrigin = origin;
+
+            mediator = rigObject.AddComponent<LocomotionMediator>();
+            mediator.xrOrigin = origin;
+
+            teleport = rigObject.AddComponent<TeleportationProvider>();
+            teleport.mediator = mediator;
+            teleport.delayTime = 0.0f;
+
+            continuousMove = rigObject.AddComponent<ContinuousMoveProvider>();
+            continuousMove.mediator = mediator;
+            continuousMove.forwardSource = origin.Camera.transform;
+            continuousMove.enableStrafe = true;
+            continuousMove.enableFly = false;
+
+            snapTurn = rigObject.AddComponent<SnapTurnProvider>();
+            snapTurn.mediator = mediator;
+            snapTurn.enableTurnLeftRight = true;
+            snapTurn.enableTurnAround = false;
+            snapTurn.delayTime = 0.0f;
         }
 
         static GameObject CreateXrOrigin(out XROrigin origin)
@@ -524,7 +650,6 @@ namespace Blockiverse.Tests.PlayMode
             cameraObject.tag = "MainCamera";
             cameraObject.transform.SetParent(cameraOffset.transform, false);
             Camera camera = cameraObject.AddComponent<Camera>();
-            cameraObject.AddComponent<TrackedPoseDriver>();
 
             origin = rigObject.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
@@ -559,6 +684,36 @@ namespace Blockiverse.Tests.PlayMode
             gameplay.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<Gamepad>/start");
 
             return actions;
+        }
+
+        static void DestroyRigImmediate(GameObject rigObject)
+        {
+            if (rigObject == null)
+                return;
+
+            foreach (TrackedPoseDriver driver in rigObject.GetComponentsInChildren<TrackedPoseDriver>(true))
+                driver.enabled = false;
+
+            Object.DestroyImmediate(rigObject);
+        }
+
+        [UnityTearDown]
+        public IEnumerator CleanupTrackedPoseDriversAfterTest()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
+        }
+
+        static void RunInputSystemUpdate(InputUpdateType updateType)
+        {
+            MethodInfo updateMethod = typeof(InputSystem).GetMethod(
+                "Update",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(InputUpdateType) },
+                null);
+
+            Assert.That(updateMethod, Is.Not.Null);
+            updateMethod.Invoke(null, new object[] { updateType });
         }
     }
 }

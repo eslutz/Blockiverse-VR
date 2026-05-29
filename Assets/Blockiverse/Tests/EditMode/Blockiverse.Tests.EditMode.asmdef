@@ -13,6 +13,7 @@
     "Blockiverse.VR",
     "Unity.InputSystem",
     "Unity.XR.CoreUtils",
+    "Unity.XR.Interaction.Toolkit",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
     "Unity.XR.OpenXR"

@@ -30,6 +30,10 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -1190,16 +1194,12 @@ namespace Blockiverse.Editor
             cameraObject.AddComponent<AudioListener>();
             TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
             BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
-            poseDriver.enabled = false;
-            BlockiverseHeadPoseTracker headPoseTracker = cameraObject.AddComponent<BlockiverseHeadPoseTracker>();
-            headPoseTracker.RepairActions();
 
             XROrigin origin = rig.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
             origin.Camera = camera;
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
             inputRig.ConfigureHeadPoseDriver(poseDriver);
-            inputRig.ConfigureHeadPoseTracker(headPoseTracker);
             EnsureXrRigLocomotion(rig, inputRig, origin);
 
             CreateControllerAnchor(
@@ -1261,22 +1261,11 @@ namespace Blockiverse.Editor
                 ? xrCamera.GetComponent<TrackedPoseDriver>()
                 : rig.GetComponentInChildren<TrackedPoseDriver>(true);
 
-            if (poseDriver != null)
-            {
-                BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
-                poseDriver.enabled = false;
-            }
+            if (poseDriver == null && xrCamera != null)
+                poseDriver = xrCamera.gameObject.AddComponent<TrackedPoseDriver>();
 
-            BlockiverseHeadPoseTracker headPoseTracker = xrCamera != null
-                ? xrCamera.GetComponent<BlockiverseHeadPoseTracker>()
-                : rig.GetComponentInChildren<BlockiverseHeadPoseTracker>(true);
-
-            if (headPoseTracker == null && xrCamera != null)
-                headPoseTracker = xrCamera.gameObject.AddComponent<BlockiverseHeadPoseTracker>();
-
-            headPoseTracker?.RepairActions();
+            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
             inputRig.ConfigureHeadPoseDriver(poseDriver);
-            inputRig.ConfigureHeadPoseTracker(headPoseTracker);
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
             EnsureXrRigLocomotion(rig, inputRig, origin);
 
@@ -2471,6 +2460,8 @@ namespace Blockiverse.Editor
 
         static void EnsureXrRigLocomotion(GameObject rig, BlockiverseInputRig inputRig, XROrigin origin)
         {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(rig);
+
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
 
             if (settings == null)
@@ -2479,26 +2470,47 @@ namespace Blockiverse.Editor
             if (origin != null)
                 origin.CameraYOffset = settings.StandingEyeHeight;
 
-            BlockiverseTeleportLocomotion teleport = rig.GetComponent<BlockiverseTeleportLocomotion>();
+            XRBodyTransformer bodyTransformer = rig.GetComponent<XRBodyTransformer>();
+
+            if (bodyTransformer == null)
+                bodyTransformer = rig.AddComponent<XRBodyTransformer>();
+
+            bodyTransformer.xrOrigin = origin;
+
+            LocomotionMediator mediator = rig.GetComponent<LocomotionMediator>();
+
+            if (mediator == null)
+                mediator = rig.AddComponent<LocomotionMediator>();
+
+            TeleportationProvider teleport = rig.GetComponent<TeleportationProvider>();
 
             if (teleport == null)
-                teleport = rig.AddComponent<BlockiverseTeleportLocomotion>();
+                teleport = rig.AddComponent<TeleportationProvider>();
 
-            teleport.Configure(origin, settings);
+            teleport.mediator = mediator;
+            teleport.delayTime = 0.0f;
 
-            BlockiverseContinuousMoveLocomotion continuousMove = rig.GetComponent<BlockiverseContinuousMoveLocomotion>();
+            ContinuousMoveProvider continuousMove = rig.GetComponent<ContinuousMoveProvider>();
 
             if (continuousMove == null)
-                continuousMove = rig.AddComponent<BlockiverseContinuousMoveLocomotion>();
+                continuousMove = rig.AddComponent<ContinuousMoveProvider>();
 
-            continuousMove.Configure(origin, settings);
+            continuousMove.mediator = mediator;
+            continuousMove.forwardSource = origin != null && origin.Camera != null ? origin.Camera.transform : rig.transform;
+            continuousMove.enableStrafe = true;
+            continuousMove.enableFly = false;
+            continuousMove.moveSpeed = settings.ContinuousMoveSpeed;
 
-            BlockiverseSnapTurnLocomotion snapTurn = rig.GetComponent<BlockiverseSnapTurnLocomotion>();
+            SnapTurnProvider snapTurn = rig.GetComponent<SnapTurnProvider>();
 
             if (snapTurn == null)
-                snapTurn = rig.AddComponent<BlockiverseSnapTurnLocomotion>();
+                snapTurn = rig.AddComponent<SnapTurnProvider>();
 
-            snapTurn.Configure(origin, settings);
+            snapTurn.mediator = mediator;
+            snapTurn.turnAmount = settings.SnapTurnDegrees;
+            snapTurn.enableTurnLeftRight = true;
+            snapTurn.enableTurnAround = false;
+            snapTurn.delayTime = 0.0f;
 
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
 
@@ -2506,7 +2518,10 @@ namespace Blockiverse.Editor
                 heightReset = rig.AddComponent<BlockiverseHeightReset>();
 
             heightReset.Configure(origin, settings);
-            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove);
+            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings);
+
+            BlockiverseAudioCuePlayer audioCuePlayer = rig.GetComponent<BlockiverseAudioCuePlayer>();
+            inputRig.ConfigureTeleportFeedback(audioCuePlayer);
         }
     }
 }

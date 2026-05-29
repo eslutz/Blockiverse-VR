@@ -5,7 +5,6 @@ using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -18,12 +17,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneLoadsWithXrRigAndCamera()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-
-            Assert.That(operation, Is.Not.Null);
-
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             GameObject rig = GameObject.Find(BlockiverseProject.XrRigRootName);
             Assert.That(rig, Is.Not.Null);
@@ -37,12 +31,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneShowsBoundSurvivalHudPanels()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-
-            Assert.That(operation, Is.Not.Null);
-
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             SurvivalInventoryPanel inventoryPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>();
             SurvivalCraftingPanel craftingPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>();
@@ -70,12 +59,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneShowsDismissibleControllerMappingPopup()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-
-            Assert.That(operation, Is.Not.Null);
-
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             GameObject popup = GameObject.Find("Controller Mapping Popup");
             Assert.That(popup, Is.Not.Null);
@@ -105,6 +89,12 @@ namespace Blockiverse.Tests.PlayMode
                 Array.Exists(labels, label => label != null && label.text.Contains(expectedText)),
                 Is.True,
                 $"Expected panel {panel.name} to contain text '{expectedText}'.");
+        }
+
+        [UnityTearDown]
+        public IEnumerator TearDown()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
         }
     }
 }

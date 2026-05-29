@@ -242,10 +242,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneContainsCreativeWorld()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync("Boot", LoadSceneMode.Single);
-
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle("Boot");
 
             yield return null;
 
@@ -298,6 +295,12 @@ namespace Blockiverse.Tests.PlayMode
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
             rightHand.AddAction(BlockiverseInputActionNames.IsTracked, InputActionType.Button, "<Gamepad>/rightShoulder");
             return actions;
+        }
+
+        [UnityTearDown]
+        public IEnumerator CleanupTrackedPoseDriversAfterTest()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
         }
     }
 

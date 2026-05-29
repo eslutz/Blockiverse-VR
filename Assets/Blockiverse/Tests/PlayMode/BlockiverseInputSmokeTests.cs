@@ -3,7 +3,6 @@ using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 
 namespace Blockiverse.Tests.PlayMode
@@ -15,9 +14,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneEnablesInputRig()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             BlockiverseInputRig inputRig = Object.FindFirstObjectByType<BlockiverseInputRig>();
             Assert.That(inputRig, Is.Not.Null);
@@ -28,9 +25,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneHasTrackedControllerAnchors()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             BlockiverseControllerAnchor[] anchors = Object.FindObjectsByType<BlockiverseControllerAnchor>(
                 FindObjectsInactive.Include,
@@ -77,6 +72,12 @@ namespace Blockiverse.Tests.PlayMode
                 Object.DestroyImmediate(rigObject);
                 Object.DestroyImmediate(inputActions);
             }
+        }
+
+        [UnityTearDown]
+        public IEnumerator TearDown()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
         }
     }
 }

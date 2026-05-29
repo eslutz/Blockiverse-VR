@@ -10,6 +10,10 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
@@ -49,7 +53,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigRuntimeRepairsHeadPoseDriverAndContinuousMove()
+        public void XrRigRuntimeRepairsHeadPoseDriverAndXriLocomotionProviders()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
@@ -62,18 +66,34 @@ namespace Blockiverse.Tests.EditMode
                 BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
                 inputRig?.RepairRuntimeTracking();
 
-                BlockiverseContinuousMoveLocomotion continuousMove = instance.GetComponent<BlockiverseContinuousMoveLocomotion>();
+                XRBodyTransformer bodyTransformer = instance.GetComponent<XRBodyTransformer>();
+                LocomotionMediator mediator = instance.GetComponent<LocomotionMediator>();
+                ContinuousMoveProvider continuousMove = instance.GetComponent<ContinuousMoveProvider>();
+                SnapTurnProvider snapTurn = instance.GetComponent<SnapTurnProvider>();
+                TeleportationProvider teleport = instance.GetComponent<TeleportationProvider>();
                 TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
-                BlockiverseHeadPoseTracker poseTracker = inputRig?.HeadPoseTracker;
 
                 Assert.That(inputRig, Is.Not.Null);
+                Assert.That(bodyTransformer, Is.Not.Null);
+                Assert.That(mediator, Is.Not.Null);
                 Assert.That(continuousMove, Is.Not.Null);
+                Assert.That(snapTurn, Is.Not.Null);
+                Assert.That(teleport, Is.Not.Null);
+                Assert.That(inputRig.BodyTransformer, Is.SameAs(bodyTransformer));
+                Assert.That(inputRig.LocomotionMediator, Is.SameAs(mediator));
+                Assert.That(inputRig.ContinuousMoveProvider, Is.SameAs(continuousMove));
+                Assert.That(inputRig.SnapTurnProvider, Is.SameAs(snapTurn));
+                Assert.That(inputRig.TeleportationProvider, Is.SameAs(teleport));
+                Assert.That(continuousMove.mediator, Is.SameAs(mediator));
+                Assert.That(snapTurn.mediator, Is.SameAs(mediator));
+                Assert.That(teleport.mediator, Is.SameAs(mediator));
                 Assert.That(poseDriver, Is.Not.Null);
-                Assert.That(poseDriver.enabled, Is.False);
-                Assert.That(poseTracker, Is.Not.Null);
-                AssertBinding(poseTracker.PositionAction, "<XRHMD>/centerEyePosition");
-                AssertBinding(poseTracker.RotationAction, "<XRHMD>/centerEyeRotation");
-                AssertBinding(poseTracker.TrackingStateAction, "<XRHMD>/trackingState");
+                Assert.That(poseDriver.enabled, Is.True);
+                Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
+                Assert.That(poseDriver.trackingType, Is.EqualTo(TrackedPoseDriver.TrackingType.RotationAndPosition));
+                AssertBinding(poseDriver.positionInput, "<XRHMD>/centerEyePosition");
+                AssertBinding(poseDriver.rotationInput, "<XRHMD>/centerEyeRotation");
+                AssertBinding(poseDriver.trackingStateInput, "<XRHMD>/trackingState");
             }
             finally
             {
@@ -254,13 +274,6 @@ namespace Blockiverse.Tests.EditMode
         {
             Assert.That(property.action, Is.Not.Null);
             Assert.That(property.action.bindings, Has.Some.Matches<InputBinding>(
-                binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
-        }
-
-        static void AssertBinding(InputAction action, string expectedPath)
-        {
-            Assert.That(action, Is.Not.Null);
-            Assert.That(action.bindings, Has.Some.Matches<InputBinding>(
                 binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
         }
 

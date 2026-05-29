@@ -1109,6 +1109,14 @@ MonoBehaviour:
   panelScale: 0.00185
   recenterOnShow: 1
   showOnStart: 1
+  playShowFeedback: 0
+  showFeedbackCue: 3
+  playHideFeedback: 0
+  hideFeedbackCue: 4
+  hapticOnShow: 1
+  hapticOnHide: 1
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!1 &1403614492150186579
 GameObject:
   m_ObjectHideFlags: 0
@@ -3126,6 +3134,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
   selectedBlockLabel: {fileID: 2885347299524065727}
   targetCanvas: {fileID: 2591591107380348662}
+  audioCuePlayer: {fileID: 0}
 --- !u!114 &8377298384913137096
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3715,6 +3724,8 @@ MonoBehaviour:
   - {fileID: 6806077430412830279}
   - {fileID: 6042078189442998194}
   statusLabel: {fileID: 7501550044475630110}
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!1 &4936099106945003404
 GameObject:
   m_ObjectHideFlags: 0
@@ -4017,37 +4028,61 @@ MonoBehaviour:
   m_PositionInput:
     m_UseReference: 0
     m_Action:
-      m_Name: Position
+      m_Name: Head Position
       m_Type: 0
       m_ExpectedControlType: Vector3
-      m_Id: a732ab52-5b61-414a-adc2-999bafcc317c
+      m_Id: 80f98f75-4cba-43fb-bce8-441b625a82a2
       m_Processors:
       m_Interactions:
-      m_SingletonActionBindings: []
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: 314a794f-57a6-45b9-a5db-7884ddcee4a0
+        m_Path: <XRHMD>/centerEyePosition
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Head Position
+        m_Flags: 0
       m_Flags: 0
     m_Reference: {fileID: 0}
   m_RotationInput:
     m_UseReference: 0
     m_Action:
-      m_Name: Rotation
+      m_Name: Head Rotation
       m_Type: 0
       m_ExpectedControlType: Quaternion
-      m_Id: 1aa87635-f3fb-4b12-8a0f-d3b9aad338d7
+      m_Id: aa0ab723-1746-43ce-9430-2c104d109189
       m_Processors:
       m_Interactions:
-      m_SingletonActionBindings: []
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: baa7e7c4-cb3c-40da-a5c8-b5472345f588
+        m_Path: <XRHMD>/centerEyeRotation
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Head Rotation
+        m_Flags: 0
       m_Flags: 0
     m_Reference: {fileID: 0}
   m_TrackingStateInput:
     m_UseReference: 0
     m_Action:
-      m_Name: Tracking State
+      m_Name: Head Tracking State
       m_Type: 0
       m_ExpectedControlType: Integer
-      m_Id: cf1b7ba5-141d-4592-8b47-88bbd1ac6962
+      m_Id: 1384c5fb-ae84-44e9-a8f3-ccc4c7886e2c
       m_Processors:
       m_Interactions:
-      m_SingletonActionBindings: []
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: f4b8c2f5-1cde-4440-8fae-6a0619f4745c
+        m_Path: <XRHMD>/trackingState
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Head Tracking State
+        m_Flags: 0
       m_Flags: 0
     m_Reference: {fileID: 0}
   m_PositionAction:
@@ -4799,6 +4834,14 @@ MonoBehaviour:
   panelScale: 0.00165
   recenterOnShow: 1
   showOnStart: 1
+  playShowFeedback: 0
+  showFeedbackCue: 3
+  playHideFeedback: 0
+  hideFeedbackCue: 4
+  hapticOnShow: 1
+  hapticOnHide: 1
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!1 &5941978321280501403
 GameObject:
   m_ObjectHideFlags: 0
@@ -5678,8 +5721,6 @@ GameObject:
   - component: {fileID: 741549122611035828}
   - component: {fileID: 6464803785323197589}
   - component: {fileID: 4477331920936702979}
-  - component: {fileID: 7170451440076403424}
-  - component: {fileID: 4545708939108340447}
   - component: {fileID: 5789210142833391915}
   - component: {fileID: 3695208377462190846}
   - component: {fileID: 5968352841279429918}
@@ -5687,6 +5728,12 @@ GameObject:
   - component: {fileID: 5176223294892901774}
   - component: {fileID: 955048968464478466}
   - component: {fileID: 8273465101139274317}
+  - component: {fileID: 8939926957299729973}
+  - component: {fileID: 4840948257352445005}
+  - component: {fileID: 8723554337888115654}
+  - component: {fileID: 5169127181023906550}
+  - component: {fileID: 6090993841984651869}
+  - component: {fileID: 2080850676230912890}
   m_Layer: 0
   m_Name: BlockiverseXRRig
   m_TagString: Untagged
@@ -5753,10 +5800,16 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseInputRig
   inputActions: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  teleportLocomotion: {fileID: 7170451440076403424}
-  snapTurnLocomotion: {fileID: 4545708939108340447}
+  headPoseDriver: {fileID: 712124156003914868}
+  bodyTransformer: {fileID: 4840948257352445005}
+  locomotionMediator: {fileID: 8723554337888115654}
+  continuousMoveProvider: {fileID: 6090993841984651869}
+  teleportationProvider: {fileID: 5169127181023906550}
+  snapTurnProvider: {fileID: 2080850676230912890}
+  comfortSettings: {fileID: 4477331920936702979}
   heightReset: {fileID: 5789210142833391915}
   uiPointer: {fileID: 955048968464478466}
+  audioCuePlayer: {fileID: 8273465101139274317}
   menuPressed:
     m_PersistentCalls:
       m_Calls:
@@ -5811,37 +5864,11 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseComfortSettings
   teleportEnabled: 1
+  continuousMoveEnabled: 1
+  continuousMoveSpeed: 1.8
   smoothTurnEnabled: 0
   snapTurnDegrees: 45
   standingEyeHeight: 1.6
---- !u!114 &7170451440076403424
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6788423518949538828}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ee6e3aa44b7de4a4785dd81b6cc09476, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseTeleportLocomotion
-  origin: {fileID: 741549122611035828}
-  settings: {fileID: 4477331920936702979}
---- !u!114 &4545708939108340447
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6788423518949538828}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 97e57b8908d984a60b147d61b9775b47, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseSnapTurnLocomotion
-  origin: {fileID: 741549122611035828}
-  settings: {fileID: 4477331920936702979}
 --- !u!114 &5789210142833391915
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5977,6 +6004,241 @@ MonoBehaviour:
   craftSuccessClip: {fileID: 8300000, guid: d82ac8b5183fa467bfc23a36da36de34, type: 3}
   craftFailClip: {fileID: 8300000, guid: c78c39c6730401a02e6868c75245bb59, type: 3}
   volume: 0.8
+--- !u!82 &8939926957299729973
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!114 &4840948257352445005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a26c941eb8a46f7b6d00416227ab8c0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Locomotion.XRBodyTransformer
+  m_XROrigin: {fileID: 741549122611035828}
+  m_BodyPositionEvaluatorObject: {fileID: 0}
+  m_ConstrainedBodyManipulatorObject: {fileID: 0}
+  m_UseCharacterControllerIfExists: 1
+--- !u!114 &8723554337888115654
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fa7b4195685c3846be746c74f0ab2f8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Locomotion.LocomotionMediator
+--- !u!114 &5169127181023906550
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01f69dc1cb084aa42b2f2f8cd87bc770, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation.TeleportationProvider
+  m_Mediator: {fileID: 8723554337888115654}
+  m_TransformationPriority: 0
+  m_DelayTime: 0
+--- !u!114 &6090993841984651869
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 626a4d6723d6ad24b9aebb811ad5a3dd, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement.ContinuousMoveProvider
+  m_Mediator: {fileID: 8723554337888115654}
+  m_TransformationPriority: 0
+  m_MoveSpeed: 1.8
+  m_InAirControlModifier: 0.5
+  m_EnableStrafe: 1
+  m_EnableFly: 0
+  m_ForwardSource: {fileID: 96463171583487156}
+  m_LeftHandMoveInput:
+    m_InputSourceMode: 1
+    m_InputAction:
+      m_Name: Move
+      m_Type: 2
+      m_ExpectedControlType: Vector2
+      m_Id: 00000000-0000-0000-0000-000000000011
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings: []
+      m_Flags: 1
+    m_InputActionReference: {fileID: 0}
+    m_ObjectReferenceObject: {fileID: 0}
+    m_ManualValue: {x: 0, y: 0}
+  m_RightHandMoveInput:
+    m_InputSourceMode: 0
+    m_InputAction:
+      m_Name: Right Hand Move
+      m_Type: 0
+      m_ExpectedControlType: Vector2
+      m_Id: 831d88a4-72ec-45ae-ac51-4324b76c43ae
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings: []
+      m_Flags: 0
+    m_InputActionReference: {fileID: 0}
+    m_ObjectReferenceObject: {fileID: 0}
+    m_ManualValue: {x: 0, y: 0}
+  m_UseGravity: 1
+--- !u!114 &2080850676230912890
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9f365cf844c03449bc8973eead2c3c1, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning.SnapTurnProvider
+  m_Mediator: {fileID: 8723554337888115654}
+  m_TransformationPriority: 0
+  m_TurnAmount: 45
+  m_DebounceTime: 0.5
+  m_EnableTurnLeftRight: 1
+  m_EnableTurnAround: 0
+  m_DelayTime: 0
+  m_LeftHandTurnInput:
+    m_InputSourceMode: 0
+    m_InputAction:
+      m_Name: Left Hand Snap Turn
+      m_Type: 0
+      m_ExpectedControlType: Vector2
+      m_Id: 043deff2-752f-4641-86b8-3c71768de86a
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings: []
+      m_Flags: 0
+    m_InputActionReference: {fileID: 0}
+    m_ObjectReferenceObject: {fileID: 0}
+    m_ManualValue: {x: 0, y: 0}
+  m_RightHandTurnInput:
+    m_InputSourceMode: 1
+    m_InputAction:
+      m_Name: Turn
+      m_Type: 2
+      m_ExpectedControlType: Vector2
+      m_Id: 00000000-0000-0000-0000-000000000039
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings: []
+      m_Flags: 1
+    m_InputActionReference: {fileID: 0}
+    m_ObjectReferenceObject: {fileID: 0}
+    m_ManualValue: {x: 0, y: 0}
 --- !u!1 &6937898104666057989
 GameObject:
   m_ObjectHideFlags: 0
@@ -6445,6 +6707,8 @@ MonoBehaviour:
   - {fileID: 5828810182128169493}
   - {fileID: 1092184673478286809}
   selectedHotbarLabel: {fileID: 3405241700104723748}
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!1 &7777368766082699013
 GameObject:
   m_ObjectHideFlags: 0
@@ -6898,6 +7162,8 @@ MonoBehaviour:
   smoothTurnToggle: {fileID: 7012880409268347398}
   snapTurnSlider: {fileID: 4318383927800746100}
   settings: {fileID: 4477331920936702979}
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!114 &3940017637420611929
 MonoBehaviour:
   m_ObjectHideFlags: 0
