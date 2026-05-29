@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added the M6 signed-release APK pipeline path, including a Unity release build entry point,
+  secret-based Android signing script, checksum generation, GitHub Release artifact publishing,
+  store-document validation, and a Quest screenshot/capture plan.
 - Expanded and refined the M6 audio generator to cover eleven original WAV cues:
   block break/place, select/confirm/cancel, footstep alternates, inventory open/close,
   and craft success/fail, with layered synthesis and peak-headroom regression checks.

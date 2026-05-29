@@ -53,5 +53,5 @@
 
 ## Release packaging
 
-- [ ] Signed release APK built from a `main` tag (release pipeline — out of current scope,
-      tracked separately).
+- [ ] Signed release APK built from a `main` tag using `.github/workflows/release-apk.yml`
+      after production signing secrets are configured.
