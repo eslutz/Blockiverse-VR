@@ -1,3 +1,4 @@
+using Blockiverse.Gameplay;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,10 +15,25 @@ namespace Blockiverse.VR
         [SerializeField] float panelScale = 0.002f;
         [SerializeField] bool recenterOnShow = true;
         [SerializeField] bool showOnStart;
+        [SerializeField] bool playShowFeedback;
+        [SerializeField] BlockiverseAudioCue showFeedbackCue = BlockiverseAudioCue.UiConfirm;
+        [SerializeField] bool playHideFeedback;
+        [SerializeField] BlockiverseAudioCue hideFeedbackCue = BlockiverseAudioCue.UiCancel;
+        [SerializeField] bool hapticOnShow = true;
+        [SerializeField] bool hapticOnHide = true;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+
+        CreativeHotbar hotbar;
+        bool subscribedToHotbarSelection;
 
         public Canvas TargetCanvas => targetCanvas;
         public bool IsVisible => targetCanvas != null && targetCanvas.enabled;
         public bool ShowOnStart => showOnStart;
+        public bool PlaysShowFeedback => playShowFeedback;
+        public bool PlaysHideFeedback => playHideFeedback;
+        public BlockiverseAudioCue ShowFeedbackCue => showFeedbackCue;
+        public BlockiverseAudioCue HideFeedbackCue => hideFeedbackCue;
 
         public void Configure(
             Canvas canvas,
@@ -39,25 +55,62 @@ namespace Blockiverse.VR
             panelScale = scale;
             recenterOnShow = recenterWhenShown;
             showOnStart = showWhenStarted;
+            DiscoverHotbarSelection();
+            SubscribeHotbarSelectionFeedback();
+        }
+
+        public void ConfigureFeedback(
+            BlockiverseAudioCue targetShowCue,
+            BlockiverseAudioCue targetHideCue,
+            bool enableShowFeedback = true,
+            bool enableHideFeedback = true)
+        {
+            playShowFeedback = enableShowFeedback;
+            playHideFeedback = enableHideFeedback;
+            showFeedbackCue = targetShowCue;
+            hideFeedbackCue = targetHideCue;
+        }
+
+        public void ConfigureFeedback(
+            BlockiverseAudioCuePlayer targetAudioCuePlayer,
+            BlockiverseInteractionHaptics targetInteractionHaptics,
+            BlockiverseAudioCue targetShowCue,
+            BlockiverseAudioCue targetHideCue,
+            bool enableShowFeedback = true,
+            bool enableHideFeedback = true)
+        {
+            audioCuePlayer = targetAudioCuePlayer;
+            interactionHaptics = targetInteractionHaptics;
+            ConfigureFeedback(targetShowCue, targetHideCue, enableShowFeedback, enableHideFeedback);
         }
 
         public void Show()
         {
             EnsureCanvas();
+            bool wasVisible = IsVisible;
 
             if (recenterOnShow)
                 Recenter();
 
             if (targetCanvas != null)
+            {
                 targetCanvas.enabled = true;
+                if (!wasVisible)
+                    PlayFeedback(showFeedbackCue, playShowFeedback, hapticOnShow);
+            }
         }
 
         public void Hide()
         {
             EnsureCanvas();
+            bool wasVisible = IsVisible;
 
             if (targetCanvas != null)
+            {
                 targetCanvas.enabled = false;
+                if (wasVisible)
+                    PlayFeedback(hideFeedbackCue, playHideFeedback, hapticOnHide);
+            }
         }
 
         public void ToggleVisible()
@@ -101,6 +154,18 @@ namespace Blockiverse.VR
         void Awake()
         {
             EnsureCanvas();
+            DiscoverHotbarSelection();
+        }
+
+        void OnEnable()
+        {
+            DiscoverHotbarSelection();
+            SubscribeHotbarSelectionFeedback();
+        }
+
+        void OnDisable()
+        {
+            UnsubscribeHotbarSelectionFeedback();
         }
 
         void Start()
@@ -113,6 +178,62 @@ namespace Blockiverse.VR
         {
             if (targetCanvas == null)
                 targetCanvas = GetComponent<Canvas>();
+        }
+
+        void DiscoverHotbarSelection()
+        {
+            if (hotbar == null)
+                TryGetComponent(out hotbar);
+        }
+
+        void SubscribeHotbarSelectionFeedback()
+        {
+            if (subscribedToHotbarSelection || hotbar == null)
+                return;
+
+            hotbar.SelectionChanged.AddListener(OnHotbarSelectionChanged);
+            subscribedToHotbarSelection = true;
+        }
+
+        void UnsubscribeHotbarSelectionFeedback()
+        {
+            if (!subscribedToHotbarSelection || hotbar == null)
+                return;
+
+            hotbar.SelectionChanged.RemoveListener(OnHotbarSelectionChanged);
+            subscribedToHotbarSelection = false;
+        }
+
+        void OnHotbarSelectionChanged()
+        {
+            if (IsVisible)
+                PlayFeedback(BlockiverseAudioCue.UiSelect, playAudio: false, playHaptic: true);
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue, bool playAudio, bool playHaptic)
+        {
+            if (!playAudio && !playHaptic)
+                return;
+
+            DiscoverFeedback();
+
+            if (playAudio)
+                audioCuePlayer?.PlayCue(cue);
+
+            if (playHaptic)
+                interactionHaptics?.PlayUiTick();
+        }
+
+        void DiscoverFeedback()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (audioCuePlayer == null)
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+
+            if (interactionHaptics == null)
+                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
         }
     }
 }

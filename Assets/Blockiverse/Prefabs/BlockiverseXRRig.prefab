@@ -3147,6 +3147,14 @@ MonoBehaviour:
   panelScale: 0.002
   recenterOnShow: 1
   showOnStart: 0
+  playShowFeedback: 1
+  showFeedbackCue: 6
+  playHideFeedback: 1
+  hideFeedbackCue: 7
+  hapticOnShow: 1
+  hapticOnHide: 1
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!1 &4264771262897812024
 GameObject:
   m_ObjectHideFlags: 0
@@ -5961,6 +5969,13 @@ MonoBehaviour:
   uiSelectClip: {fileID: 8300000, guid: 8a993b793a78c2d2e548e23ef84753ac, type: 3}
   uiConfirmClip: {fileID: 8300000, guid: e1ceeda2e94f25ad579bdeb44587d5ae, type: 3}
   uiCancelClip: {fileID: 8300000, guid: 14129ebded4cf32231cea2e398ad9de1, type: 3}
+  footstepClips:
+  - {fileID: 8300000, guid: e4d976d32720e3a5e6029bfda879783a, type: 3}
+  - {fileID: 8300000, guid: 6f21f8f65dcf3aed36f534dd5151f52e, type: 3}
+  inventoryOpenClip: {fileID: 8300000, guid: 31bc75f9af2ce4290491f5c435c15319, type: 3}
+  inventoryCloseClip: {fileID: 8300000, guid: b3d9697d4bf8b4be82573ee643f285fc, type: 3}
+  craftSuccessClip: {fileID: 8300000, guid: d82ac8b5183fa467bfc23a36da36de34, type: 3}
+  craftFailClip: {fileID: 8300000, guid: c78c39c6730401a02e6868c75245bb59, type: 3}
   volume: 0.8
 --- !u!1 &6937898104666057989
 GameObject:
@@ -6904,6 +6919,14 @@ MonoBehaviour:
   panelScale: 0.002
   recenterOnShow: 1
   showOnStart: 0
+  playShowFeedback: 1
+  showFeedbackCue: 3
+  playHideFeedback: 1
+  hideFeedbackCue: 4
+  hapticOnShow: 1
+  hapticOnHide: 1
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
 --- !u!1 &8091341093449258649
 GameObject:
   m_ObjectHideFlags: 0

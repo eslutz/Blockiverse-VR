@@ -1,4 +1,6 @@
+using Blockiverse.Gameplay;
 using Blockiverse.Networking;
+using Blockiverse.VR;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -13,6 +15,8 @@ namespace Blockiverse.UI
         [SerializeField] Button stopButton;
         [SerializeField] InputField addressInput;
         [SerializeField] Text statusText;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
         UnityAction hostClicked;
         UnityAction joinClicked;
@@ -40,6 +44,14 @@ namespace Blockiverse.UI
             RefreshStatus();
         }
 
+        public void ConfigureFeedback(
+            BlockiverseAudioCuePlayer targetAudioCuePlayer,
+            BlockiverseInteractionHaptics targetInteractionHaptics)
+        {
+            audioCuePlayer = targetAudioCuePlayer;
+            interactionHaptics = targetInteractionHaptics;
+        }
+
         public void ConfigureControls(
             Button targetHostButton,
             Button targetJoinButton,
@@ -62,6 +74,7 @@ namespace Blockiverse.UI
             if (session == null)
             {
                 SetStatus("LAN session is unavailable.");
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return;
             }
 
@@ -69,6 +82,7 @@ namespace Blockiverse.UI
             SetStatus(started
                 ? "Starting LAN host..."
                 : $"Unable to start LAN host. {DescribeSessionState()}");
+            PlayFeedback(started ? BlockiverseAudioCue.UiConfirm : BlockiverseAudioCue.UiCancel);
             RefreshControls();
         }
 
@@ -77,6 +91,7 @@ namespace Blockiverse.UI
             if (session == null)
             {
                 SetStatus("LAN session is unavailable.");
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return;
             }
 
@@ -85,6 +100,7 @@ namespace Blockiverse.UI
             SetStatus(started
                 ? $"Joining LAN session at {address}:{session.Config.Port}..."
                 : $"Unable to join LAN session at {address}:{session.Config.Port}. {DescribeSessionState()}");
+            PlayFeedback(started ? BlockiverseAudioCue.UiConfirm : BlockiverseAudioCue.UiCancel);
             RefreshControls();
         }
 
@@ -93,12 +109,14 @@ namespace Blockiverse.UI
             if (session == null)
             {
                 SetStatus("LAN session is unavailable.");
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return;
             }
 
             bool wasActive = session.NetworkManager.IsListening || session.NetworkManager.ShutdownInProgress;
             session.StopSession();
             SetStatus(DescribeStopSessionResult(wasActive));
+            PlayFeedback(BlockiverseAudioCue.UiCancel);
             RefreshControls();
         }
 
@@ -303,6 +321,25 @@ namespace Blockiverse.UI
             registeredHostButton = null;
             registeredJoinButton = null;
             registeredStopButton = null;
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue)
+        {
+            DiscoverFeedback();
+            audioCuePlayer?.PlayCue(cue);
+            interactionHaptics?.PlayUiTick();
+        }
+
+        void DiscoverFeedback()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (audioCuePlayer == null)
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+
+            if (interactionHaptics == null)
+                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
         }
     }
 }

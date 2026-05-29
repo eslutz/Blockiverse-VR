@@ -69,6 +69,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(1));
             BlockiverseWorldSpacePanelPresenter presenter = menuTransform.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(presenter, Is.Not.Null);
+            Assert.That(presenter.PlaysShowFeedback, Is.True);
+            Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
+            Assert.That(presenter.PlaysHideFeedback, Is.True);
+            Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
             Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(presenter));
             Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
         }
@@ -104,6 +108,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(hotbar, Is.Not.Null);
             Assert.That(blockMenuCanvas, Is.Not.Null);
             Assert.That(blockMenuPresenter, Is.Not.Null);
+            Assert.That(blockMenuPresenter.PlaysShowFeedback, Is.True);
+            Assert.That(blockMenuPresenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.InventoryOpen));
+            Assert.That(blockMenuPresenter.PlaysHideFeedback, Is.True);
+            Assert.That(blockMenuPresenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.InventoryClose));
             Assert.That(blockMenuCanvas.enabled, Is.False);
 
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
@@ -112,6 +120,28 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(1));
             Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(blockMenuPresenter));
             Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
+        }
+
+        [Test]
+        public void XrRigPrefabHasAllM6AudioCueClipsAssigned()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseAudioCuePlayer audioCuePlayer = prefab.GetComponent<BlockiverseAudioCuePlayer>();
+
+            Assert.That(audioCuePlayer, Is.Not.Null);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.BlockBreak), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.BlockPlace), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.UiSelect), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.UiConfirm), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.UiCancel), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.InventoryOpen), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.InventoryClose), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.CraftSuccess), Is.True);
+            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.CraftFail), Is.True);
+            Assert.That(audioCuePlayer.FootstepClipCount, Is.EqualTo(2));
         }
 
         [Test]

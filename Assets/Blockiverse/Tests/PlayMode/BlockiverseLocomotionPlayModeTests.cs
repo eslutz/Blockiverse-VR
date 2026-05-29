@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
@@ -27,6 +29,41 @@ namespace Blockiverse.Tests.PlayMode
 
                 Assert.That(teleport.TryTeleportTo(new Vector3(2.0f, 0.0f, 3.0f)), Is.True);
                 Assert.That(Vector3.Distance(origin.Camera.transform.position, new Vector3(2.0f, 0.0f, 3.0f)), Is.LessThan(0.01f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+            }
+        }
+
+        [Test]
+        public void TeleportPlaysFootstepOnlyAfterSuccessfulMove()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
+                var audioObject = new GameObject("Audio Cue Player");
+                audioObject.transform.SetParent(rigObject.transform, false);
+                audioObject.AddComponent<AudioSource>();
+                BlockiverseAudioCuePlayer audioCuePlayer = audioObject.AddComponent<BlockiverseAudioCuePlayer>();
+                var playedClips = new List<string>();
+
+                audioCuePlayer.ConfigureFootstepClips(
+                    AudioClip.Create("footstep_01", 16, 1, 44100, false),
+                    AudioClip.Create("footstep_02", 16, 1, 44100, false));
+                audioCuePlayer.CuePlayed += (_, clip) => playedClips.Add(clip.name);
+
+                teleport.Configure(origin, settings);
+                teleport.ConfigureFeedback(audioCuePlayer);
+
+                Assert.That(teleport.TryTeleportTo(new Vector3(2.0f, 0.0f, 3.0f)), Is.True);
+                settings.TeleportEnabled = false;
+                Assert.That(teleport.TryTeleportTo(new Vector3(4.0f, 0.0f, 6.0f)), Is.False);
+
+                Assert.That(playedClips, Is.EqualTo(new[] { "footstep_01" }));
             }
             finally
             {

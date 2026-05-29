@@ -1,3 +1,4 @@
+using System;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using UnityEngine;
@@ -16,6 +17,8 @@ namespace Blockiverse.VR
 
         bool subscribed;
 
+        public event Action UiTickRequested;
+
         public void Configure(CreativeInteractionController controller, BlockiverseControllerHaptics haptics)
         {
             Unsubscribe();
@@ -26,6 +29,7 @@ namespace Blockiverse.VR
 
         public void PlayUiTick()
         {
+            UiTickRequested?.Invoke();
             dominantHandHaptics?.SendPattern(BlockiverseHapticPattern.UiTick);
         }
 

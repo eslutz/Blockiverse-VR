@@ -1462,6 +1462,7 @@ namespace Blockiverse.Editor
             menu.ConfigureControls(teleportToggle, smoothTurnToggle, snapTurnSlider);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             presenter.Configure(canvas, head, 1.18f, 0.0f, -0.1f, 0.0f);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             if (inputRig != null)
             {
@@ -1604,6 +1605,7 @@ namespace Blockiverse.Editor
             menu.ConfigureCanvas(canvas);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             presenter.Configure(canvas, head, 1.12f, -0.34f, -0.18f, 0.0f);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.InventoryOpen, BlockiverseAudioCue.InventoryClose);
 
             if (inputRig != null)
             {
