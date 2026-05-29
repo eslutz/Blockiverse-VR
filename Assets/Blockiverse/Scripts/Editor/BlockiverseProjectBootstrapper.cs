@@ -1188,12 +1188,18 @@ namespace Blockiverse.Editor
             camera.nearClipPlane = 0.05f;
             camera.farClipPlane = 500.0f;
             cameraObject.AddComponent<AudioListener>();
-            cameraObject.AddComponent<TrackedPoseDriver>();
+            TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
+            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            poseDriver.enabled = false;
+            BlockiverseHeadPoseTracker headPoseTracker = cameraObject.AddComponent<BlockiverseHeadPoseTracker>();
+            headPoseTracker.RepairActions();
 
             XROrigin origin = rig.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
             origin.Camera = camera;
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
+            inputRig.ConfigureHeadPoseDriver(poseDriver);
+            inputRig.ConfigureHeadPoseTracker(headPoseTracker);
             EnsureXrRigLocomotion(rig, inputRig, origin);
 
             CreateControllerAnchor(
@@ -1250,6 +1256,27 @@ namespace Blockiverse.Editor
             if (origin.Camera == null)
                 origin.Camera = cameraOffset.GetComponentInChildren<Camera>(true);
 
+            Camera xrCamera = origin.Camera;
+            TrackedPoseDriver poseDriver = xrCamera != null
+                ? xrCamera.GetComponent<TrackedPoseDriver>()
+                : rig.GetComponentInChildren<TrackedPoseDriver>(true);
+
+            if (poseDriver != null)
+            {
+                BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+                poseDriver.enabled = false;
+            }
+
+            BlockiverseHeadPoseTracker headPoseTracker = xrCamera != null
+                ? xrCamera.GetComponent<BlockiverseHeadPoseTracker>()
+                : rig.GetComponentInChildren<BlockiverseHeadPoseTracker>(true);
+
+            if (headPoseTracker == null && xrCamera != null)
+                headPoseTracker = xrCamera.gameObject.AddComponent<BlockiverseHeadPoseTracker>();
+
+            headPoseTracker?.RepairActions();
+            inputRig.ConfigureHeadPoseDriver(poseDriver);
+            inputRig.ConfigureHeadPoseTracker(headPoseTracker);
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
             EnsureXrRigLocomotion(rig, inputRig, origin);
 
@@ -2459,6 +2486,13 @@ namespace Blockiverse.Editor
 
             teleport.Configure(origin, settings);
 
+            BlockiverseContinuousMoveLocomotion continuousMove = rig.GetComponent<BlockiverseContinuousMoveLocomotion>();
+
+            if (continuousMove == null)
+                continuousMove = rig.AddComponent<BlockiverseContinuousMoveLocomotion>();
+
+            continuousMove.Configure(origin, settings);
+
             BlockiverseSnapTurnLocomotion snapTurn = rig.GetComponent<BlockiverseSnapTurnLocomotion>();
 
             if (snapTurn == null)
@@ -2472,7 +2506,7 @@ namespace Blockiverse.Editor
                 heightReset = rig.AddComponent<BlockiverseHeightReset>();
 
             heightReset.Configure(origin, settings);
-            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset);
+            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove);
         }
     }
 }

@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Fixed Quest movement tracking by applying live HMD pose input at runtime and adding
+  continuous thumbstick forward/back and strafe locomotion relative to headset yaw.
 - Added the M6 signed-release APK pipeline path, including a Unity release build entry point,
   secret-based Android signing script, checksum generation, GitHub Release artifact publishing,
   store-document validation, and a Quest screenshot/capture plan.

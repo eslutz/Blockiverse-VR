@@ -7,6 +7,8 @@ using NUnit.Framework;
 using Unity.XR.CoreUtils;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
@@ -44,6 +46,39 @@ namespace Blockiverse.Tests.EditMode
 
             AssertController(prefab, "Left Controller", BlockiverseControllerRole.Left);
             AssertController(prefab, "Right Controller", BlockiverseControllerRole.Right);
+        }
+
+        [Test]
+        public void XrRigRuntimeRepairsHeadPoseDriverAndContinuousMove()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+                inputRig?.RepairRuntimeTracking();
+
+                BlockiverseContinuousMoveLocomotion continuousMove = instance.GetComponent<BlockiverseContinuousMoveLocomotion>();
+                TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
+                BlockiverseHeadPoseTracker poseTracker = inputRig?.HeadPoseTracker;
+
+                Assert.That(inputRig, Is.Not.Null);
+                Assert.That(continuousMove, Is.Not.Null);
+                Assert.That(poseDriver, Is.Not.Null);
+                Assert.That(poseDriver.enabled, Is.False);
+                Assert.That(poseTracker, Is.Not.Null);
+                AssertBinding(poseTracker.PositionAction, "<XRHMD>/centerEyePosition");
+                AssertBinding(poseTracker.RotationAction, "<XRHMD>/centerEyeRotation");
+                AssertBinding(poseTracker.TrackingStateAction, "<XRHMD>/trackingState");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
         }
 
         [Test]
@@ -213,6 +248,20 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller, Is.Not.Null);
             Assert.That(controller.GetComponent<BlockiverseControllerAnchor>()?.Role, Is.EqualTo(expectedRole));
             Assert.That(controller.GetComponent<BlockiverseControllerHaptics>()?.Role, Is.EqualTo(expectedRole));
+        }
+
+        static void AssertBinding(InputActionProperty property, string expectedPath)
+        {
+            Assert.That(property.action, Is.Not.Null);
+            Assert.That(property.action.bindings, Has.Some.Matches<InputBinding>(
+                binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
+        }
+
+        static void AssertBinding(InputAction action, string expectedPath)
+        {
+            Assert.That(action, Is.Not.Null);
+            Assert.That(action.bindings, Has.Some.Matches<InputBinding>(
+                binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
         }
 
         static T GetAvatarProperty<T>(Component avatarRig, string propertyName)

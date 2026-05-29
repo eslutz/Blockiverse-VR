@@ -2,6 +2,8 @@ using System;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.XR;
+using Unity.XR.CoreUtils;
 
 namespace Blockiverse.VR
 {
@@ -10,8 +12,14 @@ namespace Blockiverse.VR
         const float SnapTurnActivationThreshold = 0.75f;
         const float SnapTurnResetThreshold = 0.25f;
         const float TeleportDistanceMeters = 2.0f;
+        const string HeadPositionPath = "<XRHMD>/centerEyePosition";
+        const string HeadRotationPath = "<XRHMD>/centerEyeRotation";
+        const string HeadTrackingStatePath = "<XRHMD>/trackingState";
 
         [SerializeField] InputActionAsset inputActions;
+        [SerializeField] TrackedPoseDriver headPoseDriver;
+        [SerializeField] BlockiverseHeadPoseTracker headPoseTracker;
+        [SerializeField] BlockiverseContinuousMoveLocomotion continuousMoveLocomotion;
         [SerializeField] BlockiverseTeleportLocomotion teleportLocomotion;
         [SerializeField] BlockiverseSnapTurnLocomotion snapTurnLocomotion;
         [SerializeField] BlockiverseHeightReset heightReset;
@@ -31,6 +39,8 @@ namespace Blockiverse.VR
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent UndoPressed => undoPressed;
         public BlockiverseVrUiPointer UiPointer => uiPointer;
+        public TrackedPoseDriver HeadPoseDriver => headPoseDriver;
+        public BlockiverseHeadPoseTracker HeadPoseTracker => headPoseTracker;
 
         public void Configure(InputActionAsset actions)
         {
@@ -43,16 +53,37 @@ namespace Blockiverse.VR
         public void ConfigureLocomotion(
             BlockiverseTeleportLocomotion teleport,
             BlockiverseSnapTurnLocomotion snapTurn,
-            BlockiverseHeightReset reset)
+            BlockiverseHeightReset reset,
+            BlockiverseContinuousMoveLocomotion continuousMove = null)
         {
             teleportLocomotion = teleport;
             snapTurnLocomotion = snapTurn;
             heightReset = reset;
+            continuousMoveLocomotion = continuousMove != null ? continuousMove : continuousMoveLocomotion;
         }
 
         public void ConfigureUiPointer(BlockiverseVrUiPointer pointer)
         {
             uiPointer = pointer;
+        }
+
+        public void ConfigureHeadPoseDriver(TrackedPoseDriver driver)
+        {
+            headPoseDriver = driver;
+            ConfigureHeadPoseDriverActions(headPoseDriver);
+            DisableHeadPoseDriverForLifecycle();
+        }
+
+        public void ConfigureHeadPoseTracker(BlockiverseHeadPoseTracker tracker)
+        {
+            headPoseTracker = tracker;
+            headPoseTracker?.RepairActions();
+        }
+
+        public void RepairRuntimeTracking()
+        {
+            EnsureHeadPoseDriver();
+            EnsureContinuousMoveLocomotion();
         }
 
         public InputAction FindAction(string mapName, string actionName)
@@ -64,24 +95,87 @@ namespace Blockiverse.VR
             return map.FindAction(actionName, throwIfNotFound: true);
         }
 
+        public static void ConfigureHeadPoseDriverActions(TrackedPoseDriver driver)
+        {
+            if (driver == null)
+                return;
+
+            if (!HasBinding(driver.positionInput, HeadPositionPath))
+            {
+                driver.positionInput = new InputActionProperty(
+                    new InputAction(
+                        "Head Position",
+                        binding: HeadPositionPath,
+                        expectedControlType: "Vector3"));
+            }
+
+            if (!HasBinding(driver.rotationInput, HeadRotationPath))
+            {
+                driver.rotationInput = new InputActionProperty(
+                    new InputAction(
+                        "Head Rotation",
+                        binding: HeadRotationPath,
+                        expectedControlType: "Quaternion"));
+            }
+
+            if (!HasBinding(driver.trackingStateInput, HeadTrackingStatePath))
+            {
+                driver.trackingStateInput = new InputActionProperty(
+                    new InputAction(
+                        "Head Tracking State",
+                        binding: HeadTrackingStatePath,
+                        expectedControlType: "Integer"));
+            }
+
+            driver.ignoreTrackingState = false;
+        }
+
+        void Awake()
+        {
+            RepairRuntimeTracking();
+        }
+
         void OnEnable()
         {
+            RepairRuntimeTracking();
             inputActions?.Enable();
         }
 
         void OnDisable()
         {
             inputActions?.Disable();
+            DisableHeadPoseDriverForLifecycle();
+        }
+
+        void OnDestroy()
+        {
+            inputActions?.Disable();
+            DisableHeadPoseDriverForLifecycle();
         }
 
         void Update()
         {
+            UpdateContinuousMove();
             UpdateSnapTurn();
             UpdateTeleport();
             UpdateHeightReset();
             UpdateMenu();
             UpdateQuickMenu();
             UpdateCreativeBindings();
+        }
+
+        void UpdateContinuousMove()
+        {
+            if (continuousMoveLocomotion == null)
+                return;
+
+            if (!TryFindAction(BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Move, out InputAction move) &&
+                !TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Move, out move))
+            {
+                return;
+            }
+
+            continuousMoveLocomotion.TryMove(move.ReadValue<Vector2>(), Time.deltaTime);
         }
 
         void UpdateSnapTurn()
@@ -196,6 +290,62 @@ namespace Blockiverse.VR
             return action != null;
         }
 
+        void EnsureHeadPoseDriver()
+        {
+            Camera camera = GetComponent<XROrigin>()?.Camera;
+
+            if (camera == null)
+                camera = GetComponentInChildren<Camera>(true);
+
+            if (headPoseDriver == null)
+            {
+                if (camera != null)
+                    headPoseDriver = camera.GetComponent<TrackedPoseDriver>();
+
+                if (headPoseDriver == null)
+                    headPoseDriver = GetComponentInChildren<TrackedPoseDriver>(true);
+            }
+
+            ConfigureHeadPoseDriverActions(headPoseDriver);
+            DisableHeadPoseDriverForLifecycle();
+            EnsureHeadPoseTracker(camera);
+        }
+
+        void EnsureContinuousMoveLocomotion()
+        {
+            if (continuousMoveLocomotion == null)
+                continuousMoveLocomotion = GetComponent<BlockiverseContinuousMoveLocomotion>();
+
+            if (continuousMoveLocomotion == null)
+                continuousMoveLocomotion = gameObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
+
+            continuousMoveLocomotion.Configure(
+                GetComponent<XROrigin>(),
+                GetComponent<BlockiverseComfortSettings>());
+        }
+
+        void DisableHeadPoseDriverForLifecycle()
+        {
+            if (headPoseDriver == null)
+                return;
+
+            headPoseDriver.enabled = false;
+        }
+
+        void EnsureHeadPoseTracker(Camera camera)
+        {
+            if (headPoseTracker == null && camera != null)
+                headPoseTracker = camera.GetComponent<BlockiverseHeadPoseTracker>();
+
+            if (headPoseTracker == null)
+                headPoseTracker = GetComponentInChildren<BlockiverseHeadPoseTracker>(true);
+
+            if (headPoseTracker == null && camera != null)
+                headPoseTracker = camera.gameObject.AddComponent<BlockiverseHeadPoseTracker>();
+
+            headPoseTracker?.RepairActions();
+        }
+
         Vector3 GetDefaultTeleportDestination()
         {
             Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
@@ -206,6 +356,22 @@ namespace Blockiverse.VR
             Vector3 destination = transform.position + forward.normalized * TeleportDistanceMeters;
             destination.y = transform.position.y;
             return destination;
+        }
+
+        static bool HasBinding(InputActionProperty property, string expectedPath)
+        {
+            InputAction action = property.action;
+
+            if (action == null)
+                return false;
+
+            foreach (InputBinding binding in action.bindings)
+            {
+                if (binding.effectivePath == expectedPath || binding.path == expectedPath)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

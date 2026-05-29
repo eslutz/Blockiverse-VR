@@ -143,6 +143,59 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [Test]
+        public void ContinuousMoveTranslatesOriginRelativeToHeadYaw()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+
+            try
+            {
+                origin.Camera.transform.localRotation = Quaternion.Euler(0.0f, 90.0f, 0.0f);
+
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.ContinuousMoveSpeed = 2.0f;
+
+                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
+                continuousMove.Configure(origin, settings);
+
+                Assert.That(continuousMove.TryMove(new Vector2(0.0f, 1.0f), 0.5f), Is.True);
+                Assert.That(origin.transform.position.x, Is.EqualTo(1.0f).Within(0.01f));
+                Assert.That(origin.transform.position.z, Is.EqualTo(0.0f).Within(0.01f));
+
+                Assert.That(continuousMove.TryMove(new Vector2(1.0f, 0.0f), 0.5f), Is.True);
+                Assert.That(origin.transform.position.x, Is.EqualTo(1.0f).Within(0.01f));
+                Assert.That(origin.transform.position.z, Is.EqualTo(-1.0f).Within(0.01f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+            }
+        }
+
+        [Test]
+        public void ContinuousMoveRespectsComfortToggleAndDeadzone()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
+                continuousMove.Configure(origin, settings);
+
+                Assert.That(continuousMove.TryMove(new Vector2(0.01f, 0.01f), 1.0f), Is.False);
+                Assert.That(origin.transform.position, Is.EqualTo(Vector3.zero));
+
+                settings.ContinuousMoveEnabled = false;
+                Assert.That(continuousMove.TryMove(new Vector2(0.0f, 1.0f), 1.0f), Is.False);
+                Assert.That(origin.transform.position, Is.EqualTo(Vector3.zero));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+            }
+        }
+
+        [Test]
         public void HeightResetRestoresStandingEyeHeight()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
@@ -268,6 +321,9 @@ namespace Blockiverse.Tests.PlayMode
                 var teleport = rigObject.AddComponent<BlockiverseTeleportLocomotion>();
                 teleport.Configure(origin, settings);
 
+                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
+                continuousMove.Configure(origin, settings);
+
                 var snapTurn = rigObject.AddComponent<BlockiverseSnapTurnLocomotion>();
                 snapTurn.Configure(origin, settings);
 
@@ -276,7 +332,7 @@ namespace Blockiverse.Tests.PlayMode
 
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
-                inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove);
 
                 var canvas = menuObject.AddComponent<Canvas>();
                 var menu = menuObject.AddComponent<BlockiverseComfortMenu>();
@@ -342,6 +398,120 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        [UnityTest]
+        public IEnumerator MoveActionDrivesContinuousLocomotion()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+            InputActionAsset actions = CreateTestActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.ContinuousMoveSpeed = 2.0f;
+
+                var continuousMove = rigObject.AddComponent<BlockiverseContinuousMoveLocomotion>();
+                continuousMove.Configure(origin, settings);
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureLocomotion(null, null, null, continuousMove);
+
+                Set(gamepad.leftStick, new Vector2(0.0f, 1.0f));
+                yield return null;
+
+                Assert.That(origin.transform.position.z, Is.GreaterThan(0.0f));
+
+                Set(gamepad.leftStick, Vector2.zero);
+                yield return null;
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator HeadPoseTrackerAppliesTrackedHmdPoseFromInputActions()
+        {
+            GameObject cameraObject = new("Head Camera");
+            XRHMD hmd = InputSystem.AddDevice<XRHMD>();
+
+            try
+            {
+                var tracker = cameraObject.AddComponent<BlockiverseHeadPoseTracker>();
+                Vector3 trackedPosition = new(0.1f, 1.55f, 0.25f);
+                Quaternion trackedRotation = Quaternion.Euler(4.0f, 35.0f, 0.0f);
+
+                Set(hmd.trackingState, 3);
+                Set(hmd.centerEyePosition, trackedPosition);
+                Set(hmd.centerEyeRotation, trackedRotation);
+                yield return null;
+
+                Assert.That(Vector3.Distance(cameraObject.transform.localPosition, trackedPosition), Is.LessThan(0.0001f));
+                Assert.That(Quaternion.Dot(cameraObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.9999f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ControllerAnchorAppliesTrackedPoseFromInputActions()
+        {
+            InputActionAsset inputActions = ScriptableObject.CreateInstance<InputActionAsset>();
+            GameObject rigObject = new("Test Input Rig");
+            GameObject controllerObject = new("Left Controller");
+            XRController controller = InputSystem.AddDevice<XRController>();
+
+            try
+            {
+                InputSystem.SetDeviceUsage(controller, CommonUsages.LeftHand);
+
+                InputActionMap leftHandMap = inputActions.AddActionMap(BlockiverseInputActionNames.LeftHandMap);
+                leftHandMap.AddAction(
+                    BlockiverseInputActionNames.Position,
+                    InputActionType.PassThrough,
+                    "<XRController>{LeftHand}/devicePosition",
+                    expectedControlLayout: "Vector3");
+                leftHandMap.AddAction(
+                    BlockiverseInputActionNames.Rotation,
+                    InputActionType.PassThrough,
+                    "<XRController>{LeftHand}/deviceRotation",
+                    expectedControlLayout: "Quaternion");
+                leftHandMap.AddAction(
+                    BlockiverseInputActionNames.IsTracked,
+                    InputActionType.Button,
+                    "<XRController>{LeftHand}/isTracked");
+
+                BlockiverseInputRig inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(inputActions);
+
+                BlockiverseControllerAnchor anchor = controllerObject.AddComponent<BlockiverseControllerAnchor>();
+                anchor.Configure(inputRig, BlockiverseControllerRole.Left);
+
+                Vector3 trackedPosition = new(0.25f, 1.1f, 0.4f);
+                Quaternion trackedRotation = Quaternion.Euler(10.0f, 20.0f, 30.0f);
+
+                Press(controller.isTracked);
+                Set(controller.devicePosition, trackedPosition);
+                Set(controller.deviceRotation, trackedRotation);
+                yield return null;
+
+                Assert.That(anchor.IsTracked, Is.True);
+                Assert.That(Vector3.Distance(controllerObject.transform.localPosition, trackedPosition), Is.LessThan(0.0001f));
+                Assert.That(Quaternion.Dot(controllerObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.9999f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(inputActions);
+            }
+        }
+
         static GameObject CreateXrOrigin(out XROrigin origin)
         {
             GameObject rigObject = new("Test Action XR Origin");
@@ -367,6 +537,13 @@ namespace Blockiverse.Tests.PlayMode
         static InputActionAsset CreateTestActions()
         {
             var actions = ScriptableObject.CreateInstance<InputActionAsset>();
+
+            InputActionMap leftHand = actions.AddActionMap(BlockiverseInputActionNames.LeftHandMap);
+            leftHand.AddAction(
+                BlockiverseInputActionNames.Move,
+                InputActionType.PassThrough,
+                "<Gamepad>/leftStick",
+                expectedControlLayout: "Vector2");
 
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
             rightHand.AddAction(
