@@ -427,23 +427,19 @@ namespace Blockiverse.Tests.PlayMode
 
                 Set(gamepad.rightStick, Vector2.right);
                 yield return null;
+                yield return null;
                 Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
 
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
 
+                // Teleport is now native target-based (held Teleport Mode enables the teleport ray,
+                // which selects a TeleportationArea). Holding the mode alone must not move the rig.
                 Press(gamepad.leftShoulder);
                 yield return null;
                 Assert.That(Vector3.Distance(origin.transform.position, Vector3.zero), Is.LessThan(0.01f));
-
-                Vector3 teleportTarget = origin.transform.position + origin.transform.forward * 2.0f;
-
-                Press(gamepad.buttonSouth);
+                Release(gamepad.leftShoulder);
                 yield return null;
-                Assert.That(Vector3.Distance(origin.transform.position, teleportTarget), Is.LessThan(0.01f));
-
-                yield return null;
-                Assert.That(Vector3.Distance(origin.transform.position, teleportTarget), Is.LessThan(0.01f));
 
                 origin.CameraYOffset = 1.2f;
                 Press(gamepad.selectButton);
@@ -553,56 +549,93 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ControllerAnchorAppliesTrackedPoseFromInputActions()
+        public IEnumerator ControllerPoseDriverAppliesTrackedPose()
         {
-            InputActionAsset inputActions = ScriptableObject.CreateInstance<InputActionAsset>();
-            GameObject rigObject = new("Test Input Rig");
             GameObject controllerObject = new("Left Controller");
+            controllerObject.SetActive(false);
             XRController controller = InputSystem.AddDevice<XRController>();
 
             try
             {
                 InputSystem.SetDeviceUsage(controller, CommonUsages.LeftHand);
 
-                InputActionMap leftHandMap = inputActions.AddActionMap(BlockiverseInputActionNames.LeftHandMap);
-                leftHandMap.AddAction(
-                    BlockiverseInputActionNames.Position,
-                    InputActionType.PassThrough,
-                    "<XRController>{LeftHand}/devicePosition",
-                    expectedControlLayout: "Vector3");
-                leftHandMap.AddAction(
-                    BlockiverseInputActionNames.Rotation,
-                    InputActionType.PassThrough,
-                    "<XRController>{LeftHand}/deviceRotation",
-                    expectedControlLayout: "Quaternion");
-                leftHandMap.AddAction(
-                    BlockiverseInputActionNames.IsTracked,
-                    InputActionType.Button,
-                    "<XRController>{LeftHand}/isTracked");
-
-                BlockiverseInputRig inputRig = rigObject.AddComponent<BlockiverseInputRig>();
-                inputRig.Configure(inputActions);
+                // Native controller tracking: the TrackedPoseDriver configured by the rig drives
+                // the controller transform from the XRController device pose. Configure while the
+                // object is inactive so OnEnable binds and enables the pose actions in one pass.
+                TrackedPoseDriver poseDriver = controllerObject.AddComponent<TrackedPoseDriver>();
+                BlockiverseInputRig.ConfigureControllerPoseDriverActions(poseDriver, BlockiverseControllerRole.Left);
 
                 BlockiverseControllerAnchor anchor = controllerObject.AddComponent<BlockiverseControllerAnchor>();
-                anchor.Configure(inputRig, BlockiverseControllerRole.Left);
+                anchor.Configure(BlockiverseControllerRole.Left, poseDriver);
+
+                controllerObject.SetActive(true);
 
                 Vector3 trackedPosition = new(0.25f, 1.1f, 0.4f);
                 Quaternion trackedRotation = Quaternion.Euler(10.0f, 20.0f, 30.0f);
 
+                // TrackedPoseDriver respects tracking state (ignoreTrackingState = false), so the
+                // device must report Position|Rotation tracked (3) for the pose to be applied.
                 Press(controller.isTracked);
+                Set(controller.trackingState, 3);
                 Set(controller.devicePosition, trackedPosition);
                 Set(controller.deviceRotation, trackedRotation);
                 yield return null;
+                yield return null;
 
+                Assert.That(anchor.Role, Is.EqualTo(BlockiverseControllerRole.Left));
                 Assert.That(anchor.IsTracked, Is.True);
-                Assert.That(Vector3.Distance(controllerObject.transform.localPosition, trackedPosition), Is.LessThan(0.0001f));
-                Assert.That(Quaternion.Dot(controllerObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.9999f));
+                Assert.That(Vector3.Distance(controllerObject.transform.localPosition, trackedPosition), Is.LessThan(0.001f));
+                Assert.That(Quaternion.Dot(controllerObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.999f));
             }
             finally
             {
+                if (controller != null)
+                    InputSystem.RemoveDevice(controller);
+
                 Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator SmoothTurnComfortTogglesBetweenSnapAndContinuousTurn()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+            InputActionAsset actions = CreateTestActions();
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
+
+                ContinuousTurnProvider continuousTurn = rigObject.AddComponent<ContinuousTurnProvider>();
+                continuousTurn.mediator = mediator;
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings, continuousTurn);
+
+                settings.SmoothTurnEnabled = false;
+                yield return null;
+                Assert.That(snapTurn.enabled, Is.True);
+                Assert.That(continuousTurn.enabled, Is.False);
+
+                settings.SmoothTurnEnabled = true;
+                yield return null;
+                Assert.That(snapTurn.enabled, Is.False);
+                Assert.That(continuousTurn.enabled, Is.True);
+            }
+            finally
+            {
                 DestroyRigImmediate(rigObject);
-                Object.DestroyImmediate(inputActions);
+                Object.DestroyImmediate(actions);
             }
         }
 

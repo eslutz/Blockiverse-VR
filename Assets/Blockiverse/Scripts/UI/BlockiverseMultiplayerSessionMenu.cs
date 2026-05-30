@@ -2,6 +2,7 @@ using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using Blockiverse.VR;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
@@ -278,7 +279,9 @@ namespace Blockiverse.UI
             foreach (Canvas canvas in GetComponentsInParent<Canvas>(true))
                 canvas.enabled = true;
 
-            foreach (GraphicRaycaster raycaster in GetComponentsInParent<GraphicRaycaster>(true))
+            // BaseRaycaster covers both the legacy GraphicRaycaster and XRI's
+            // TrackedDeviceGraphicRaycaster used by the world-space VR menus.
+            foreach (BaseRaycaster raycaster in GetComponentsInParent<BaseRaycaster>(true))
                 raycaster.enabled = true;
         }
 

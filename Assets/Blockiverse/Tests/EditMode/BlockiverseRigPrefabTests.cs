@@ -10,7 +10,10 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
@@ -71,6 +74,7 @@ namespace Blockiverse.Tests.EditMode
                 ContinuousMoveProvider continuousMove = instance.GetComponent<ContinuousMoveProvider>();
                 SnapTurnProvider snapTurn = instance.GetComponent<SnapTurnProvider>();
                 TeleportationProvider teleport = instance.GetComponent<TeleportationProvider>();
+                ContinuousTurnProvider continuousTurn = instance.GetComponent<ContinuousTurnProvider>();
                 TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
 
                 Assert.That(inputRig, Is.Not.Null);
@@ -87,6 +91,9 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(continuousMove.mediator, Is.SameAs(mediator));
                 Assert.That(snapTurn.mediator, Is.SameAs(mediator));
                 Assert.That(teleport.mediator, Is.SameAs(mediator));
+                Assert.That(continuousTurn, Is.Not.Null);
+                Assert.That(inputRig.ContinuousTurnProvider, Is.SameAs(continuousTurn));
+                Assert.That(continuousTurn.mediator, Is.SameAs(mediator));
                 Assert.That(poseDriver, Is.Not.Null);
                 Assert.That(poseDriver.enabled, Is.True);
                 Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
@@ -94,6 +101,9 @@ namespace Blockiverse.Tests.EditMode
                 AssertBinding(poseDriver.positionInput, "<XRHMD>/centerEyePosition");
                 AssertBinding(poseDriver.rotationInput, "<XRHMD>/centerEyeRotation");
                 AssertBinding(poseDriver.trackingStateInput, "<XRHMD>/trackingState");
+
+                AssertControllerPoseDriver(instance, "Left Controller", "<XRController>{LeftHand}/devicePosition", "<XRController>{LeftHand}/deviceRotation");
+                AssertControllerPoseDriver(instance, "Right Controller", "<XRController>{RightHand}/devicePosition", "<XRController>{RightHand}/deviceRotation");
             }
             finally
             {
@@ -133,32 +143,56 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigPrefabIsWiredForInteractionPointerAndBlockMenu()
+        public void XrRigPrefabHasComfortTunnelingVignetteWiredToLocomotion()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            TunnelingVignetteController vignette = prefab.GetComponentInChildren<TunnelingVignetteController>(true);
+
+            Assert.That(vignette, Is.Not.Null, "Rig should carry a TunnelingVignetteController for comfort.");
+            Assert.That(vignette.GetComponent<MeshFilter>()?.sharedMesh, Is.Not.Null, "Vignette mesh must be imported from the sample.");
+            Assert.That(vignette.GetComponent<MeshRenderer>()?.sharedMaterial, Is.Not.Null, "Vignette material must be assigned.");
+            Assert.That(vignette.locomotionVignetteProviders, Has.Count.EqualTo(4));
+            Assert.That(
+                vignette.locomotionVignetteProviders,
+                Has.All.Matches<LocomotionVignetteProvider>(p => p.enabled && p.locomotionProvider != null),
+                "Every vignette provider must be enabled and reference a locomotion provider.");
+        }
+
+        [Test]
+        public void XrRigPrefabIsWiredForNativeInteractorsAndBlockMenu()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
 
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
-            Transform pointerLine = rightController?.Find("Ray Pointer Line");
+            Transform interactionRayTransform = rightController?.Find("Interaction Ray");
+            Transform teleportRayTransform = rightController?.Find("Teleport Ray");
             Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
-            BlockiverseRayPointer pointer = rightController?.GetComponent<BlockiverseRayPointer>();
+            XRRayInteractor interactionRay = interactionRayTransform?.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual interactionLineVisual = interactionRayTransform?.GetComponent<XRInteractorLineVisual>();
+            XRRayInteractor teleportRay = teleportRayTransform?.GetComponent<XRRayInteractor>();
+            BlockiverseLocomotionRayMediator mediator = rightController?.GetComponent<BlockiverseLocomotionRayMediator>();
             BlockiverseCreativeInputBridge creativeInputBridge = prefab.GetComponent<BlockiverseCreativeInputBridge>();
-            BlockiverseVrUiPointer uiPointer = prefab.GetComponent<BlockiverseVrUiPointer>();
             CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
             Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
             BlockiverseWorldSpacePanelPresenter blockMenuPresenter = blockMenu?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            LineRenderer lineRenderer = pointerLine?.GetComponent<LineRenderer>();
 
             Assert.That(rightController, Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
-            Assert.That(pointer, Is.Not.Null);
+            Assert.That(interactionRay, Is.Not.Null);
+            Assert.That(interactionRay.enableUIInteraction, Is.True);
+            Assert.That(interactionRay.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
+            Assert.That(interactionLineVisual, Is.Not.Null);
+            Assert.That(teleportRay, Is.Not.Null);
+            Assert.That(teleportRay.lineType, Is.EqualTo(XRRayInteractor.LineType.ProjectileCurve));
+            Assert.That(teleportRayTransform.gameObject.activeSelf, Is.False);
+            Assert.That(mediator, Is.Not.Null);
             Assert.That(creativeInputBridge, Is.Not.Null);
-            Assert.That(uiPointer, Is.Not.Null);
-            Assert.That(pointerLine, Is.Not.Null);
-            Assert.That(lineRenderer, Is.Not.Null);
-            Assert.That(lineRenderer.shadowCastingMode, Is.EqualTo(ShadowCastingMode.Off));
-            Assert.That(lineRenderer.receiveShadows, Is.False);
+            Assert.That(prefab.transform.Find("Camera Offset/Right Controller/Ray Pointer Line"), Is.Null);
             Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
             Assert.That(blockMenuCanvas, Is.Not.Null);
@@ -275,6 +309,22 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(property.action, Is.Not.Null);
             Assert.That(property.action.bindings, Has.Some.Matches<InputBinding>(
                 binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
+        }
+
+        static void AssertControllerPoseDriver(GameObject instance, string controllerName, string positionPath, string rotationPath)
+        {
+            Transform controller = instance.transform.Find($"Camera Offset/{controllerName}");
+
+            Assert.That(controller, Is.Not.Null);
+
+            TrackedPoseDriver driver = controller.GetComponent<TrackedPoseDriver>();
+
+            Assert.That(driver, Is.Not.Null);
+            Assert.That(driver.enabled, Is.True);
+            Assert.That(driver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
+            Assert.That(driver.trackingType, Is.EqualTo(TrackedPoseDriver.TrackingType.RotationAndPosition));
+            AssertBinding(driver.positionInput, positionPath);
+            AssertBinding(driver.rotationInput, rotationPath);
         }
 
         static T GetAvatarProperty<T>(Component avatarRig, string propertyName)

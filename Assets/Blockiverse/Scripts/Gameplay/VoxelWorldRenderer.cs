@@ -4,6 +4,7 @@ using Blockiverse.Core;
 using Blockiverse.Voxel;
 using Unity.Profiling;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 namespace Blockiverse.Gameplay
 {
@@ -148,12 +149,34 @@ namespace Blockiverse.Gameplay
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;
 
-            chunkObject.AddComponent<MeshCollider>();
+            MeshCollider chunkCollider = chunkObject.AddComponent<MeshCollider>();
             VoxelChunkTarget target = chunkObject.AddComponent<VoxelChunkTarget>();
             target.Configure(world);
 
+            ConfigureTeleportationArea(chunkObject, chunkCollider);
+
             chunkObjects.Add(chunk, chunkObject);
             return chunkObject;
+        }
+
+        // Makes the chunk surface a native teleport target so the XRI teleport ray can land the
+        // player on the actual voxel terrain. Runtime-only so edit-mode rendering tests do not
+        // spawn an XRInteractionManager.
+        static void ConfigureTeleportationArea(GameObject chunkObject, Collider chunkCollider)
+        {
+            if (!Application.isPlaying)
+                return;
+
+            TeleportationArea area = chunkObject.GetComponent<TeleportationArea>();
+
+            if (area == null)
+                area = chunkObject.AddComponent<TeleportationArea>();
+
+            if (!area.colliders.Contains(chunkCollider))
+                area.colliders.Add(chunkCollider);
+
+            area.matchOrientation = MatchOrientation.WorldSpaceUp;
+            area.teleportTrigger = BaseTeleportationInteractable.TeleportTrigger.OnSelectEntered;
         }
 
         void RefreshStats()

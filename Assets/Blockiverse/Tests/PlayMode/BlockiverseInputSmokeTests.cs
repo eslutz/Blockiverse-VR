@@ -59,10 +59,13 @@ namespace Blockiverse.Tests.PlayMode
                 controllerObject.transform.localRotation = fallbackRotation;
 
                 BlockiverseControllerAnchor anchor = controllerObject.AddComponent<BlockiverseControllerAnchor>();
-                anchor.Configure(inputRig, BlockiverseControllerRole.Left);
+                anchor.Configure(BlockiverseControllerRole.Left);
 
                 yield return null;
 
+                // The anchor is a passive role marker; without a TrackedPoseDriver it never moves
+                // the controller transform, so the authored fallback pose is preserved.
+                Assert.That(anchor.Role, Is.EqualTo(BlockiverseControllerRole.Left));
                 Assert.That(Vector3.Distance(controllerObject.transform.localPosition, fallbackPosition), Is.LessThan(0.0001f));
                 Assert.That(Quaternion.Dot(controllerObject.transform.localRotation, fallbackRotation), Is.GreaterThan(0.9999f));
             }

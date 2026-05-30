@@ -17,12 +17,18 @@ namespace Blockiverse.VR
     [DefaultExecutionOrder(XRInteractionUpdateOrder.k_LocomotionProviders - 1)]
     public sealed class BlockiverseInputRig : MonoBehaviour
     {
-        const float TeleportDistanceMeters = 2.0f;
         const float DefaultContinuousMoveSpeed = 1.8f;
         const float DefaultSnapTurnDegrees = 45.0f;
+        const float DefaultContinuousTurnSpeed = 60.0f;
         const string HeadPositionPath = "<XRHMD>/centerEyePosition";
         const string HeadRotationPath = "<XRHMD>/centerEyeRotation";
         const string HeadTrackingStatePath = "<XRHMD>/trackingState";
+        const string LeftControllerPositionPath = "<XRController>{LeftHand}/devicePosition";
+        const string LeftControllerRotationPath = "<XRController>{LeftHand}/deviceRotation";
+        const string LeftControllerTrackingStatePath = "<XRController>{LeftHand}/trackingState";
+        const string RightControllerPositionPath = "<XRController>{RightHand}/devicePosition";
+        const string RightControllerRotationPath = "<XRController>{RightHand}/deviceRotation";
+        const string RightControllerTrackingStatePath = "<XRController>{RightHand}/trackingState";
 
         [SerializeField] InputActionAsset inputActions;
         [SerializeField] TrackedPoseDriver headPoseDriver;
@@ -31,9 +37,9 @@ namespace Blockiverse.VR
         [SerializeField] ContinuousMoveProvider continuousMoveProvider;
         [SerializeField] TeleportationProvider teleportationProvider;
         [SerializeField] SnapTurnProvider snapTurnProvider;
+        [SerializeField] ContinuousTurnProvider continuousTurnProvider;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] BlockiverseHeightReset heightReset;
-        [SerializeField] BlockiverseVrUiPointer uiPointer;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
@@ -41,19 +47,21 @@ namespace Blockiverse.VR
         [SerializeField] UnityEvent placePressed = new();
         [SerializeField] UnityEvent undoPressed = new();
 
+        Action<LocomotionProvider> teleportEndedHandler;
+
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
         public UnityEvent QuickMenuPressed => quickMenuPressed;
         public UnityEvent BreakPressed => breakPressed;
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent UndoPressed => undoPressed;
-        public BlockiverseVrUiPointer UiPointer => uiPointer;
         public TrackedPoseDriver HeadPoseDriver => headPoseDriver;
         public XRBodyTransformer BodyTransformer => bodyTransformer;
         public LocomotionMediator LocomotionMediator => locomotionMediator;
         public ContinuousMoveProvider ContinuousMoveProvider => continuousMoveProvider;
         public TeleportationProvider TeleportationProvider => teleportationProvider;
         public SnapTurnProvider SnapTurnProvider => snapTurnProvider;
+        public ContinuousTurnProvider ContinuousTurnProvider => continuousTurnProvider;
 
         public void Configure(InputActionAsset actions)
         {
@@ -71,7 +79,8 @@ namespace Blockiverse.VR
             ContinuousMoveProvider continuousMove = null,
             LocomotionMediator mediator = null,
             XRBodyTransformer transformer = null,
-            BlockiverseComfortSettings settings = null)
+            BlockiverseComfortSettings settings = null,
+            ContinuousTurnProvider continuousTurn = null)
         {
             teleportationProvider = teleport;
             snapTurnProvider = snapTurn;
@@ -80,17 +89,13 @@ namespace Blockiverse.VR
             locomotionMediator = mediator != null ? mediator : locomotionMediator;
             bodyTransformer = transformer != null ? transformer : bodyTransformer;
             comfortSettings = settings != null ? settings : comfortSettings;
+            continuousTurnProvider = continuousTurn != null ? continuousTurn : continuousTurnProvider;
             ConfigureXriLocomotionProviders();
         }
 
         public void ConfigureTeleportFeedback(BlockiverseAudioCuePlayer cuePlayer)
         {
             audioCuePlayer = cuePlayer;
-        }
-
-        public void ConfigureUiPointer(BlockiverseVrUiPointer pointer)
-        {
-            uiPointer = pointer;
         }
 
         public void ConfigureHeadPoseDriver(TrackedPoseDriver driver)
@@ -103,6 +108,7 @@ namespace Blockiverse.VR
         public void RepairRuntimeTracking()
         {
             EnsureHeadPoseDriver();
+            EnsureControllerPoseDrivers();
             EnsureXriLocomotionProviders();
         }
 
@@ -117,34 +123,54 @@ namespace Blockiverse.VR
 
         public static void ConfigureHeadPoseDriverActions(TrackedPoseDriver driver)
         {
+            ConfigurePoseDriverActions(driver, HeadPositionPath, HeadRotationPath, HeadTrackingStatePath);
+        }
+
+        public static void ConfigureControllerPoseDriverActions(TrackedPoseDriver driver, BlockiverseControllerRole role)
+        {
+            if (role == BlockiverseControllerRole.Left)
+            {
+                ConfigurePoseDriverActions(
+                    driver,
+                    LeftControllerPositionPath,
+                    LeftControllerRotationPath,
+                    LeftControllerTrackingStatePath);
+            }
+            else
+            {
+                ConfigurePoseDriverActions(
+                    driver,
+                    RightControllerPositionPath,
+                    RightControllerRotationPath,
+                    RightControllerTrackingStatePath);
+            }
+        }
+
+        static void ConfigurePoseDriverActions(
+            TrackedPoseDriver driver,
+            string positionPath,
+            string rotationPath,
+            string trackingStatePath)
+        {
             if (driver == null)
                 return;
 
-            if (!HasBinding(driver.positionInput, HeadPositionPath))
+            if (!HasBinding(driver.positionInput, positionPath))
             {
                 driver.positionInput = new InputActionProperty(
-                    new InputAction(
-                        "Head Position",
-                        binding: HeadPositionPath,
-                        expectedControlType: "Vector3"));
+                    new InputAction("Position", binding: positionPath, expectedControlType: "Vector3"));
             }
 
-            if (!HasBinding(driver.rotationInput, HeadRotationPath))
+            if (!HasBinding(driver.rotationInput, rotationPath))
             {
                 driver.rotationInput = new InputActionProperty(
-                    new InputAction(
-                        "Head Rotation",
-                        binding: HeadRotationPath,
-                        expectedControlType: "Quaternion"));
+                    new InputAction("Rotation", binding: rotationPath, expectedControlType: "Quaternion"));
             }
 
-            if (!HasBinding(driver.trackingStateInput, HeadTrackingStatePath))
+            if (!HasBinding(driver.trackingStateInput, trackingStatePath))
             {
                 driver.trackingStateInput = new InputActionProperty(
-                    new InputAction(
-                        "Head Tracking State",
-                        binding: HeadTrackingStatePath,
-                        expectedControlType: "Integer"));
+                    new InputAction("Tracking State", binding: trackingStatePath, expectedControlType: "Integer"));
             }
 
             driver.ignoreTrackingState = false;
@@ -162,52 +188,30 @@ namespace Blockiverse.VR
         {
             RepairRuntimeTracking();
             inputActions?.Enable();
+            SubscribeTeleportFeedback();
         }
 
         void OnDisable()
         {
+            UnsubscribeTeleportFeedback();
             inputActions?.Disable();
-            DisableHeadPoseDriver();
+            DisableTrackedPoseDrivers();
         }
 
         void OnDestroy()
         {
+            UnsubscribeTeleportFeedback();
             inputActions?.Disable();
-            DisableHeadPoseDriver();
+            DisableTrackedPoseDrivers();
         }
 
         void Update()
         {
             ApplyComfortSettingsToProviders();
-            UpdateTeleport();
             UpdateHeightReset();
             UpdateMenu();
             UpdateQuickMenu();
             UpdateCreativeBindings();
-        }
-
-        void UpdateTeleport()
-        {
-            if (teleportationProvider == null ||
-                (comfortSettings != null && !comfortSettings.TeleportEnabled) ||
-                !TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.TeleportMode, out InputAction teleportMode) ||
-                !TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.TeleportSelect, out InputAction teleportSelect))
-            {
-                return;
-            }
-
-            if (!teleportMode.IsPressed() || !teleportSelect.WasPressedThisFrame())
-                return;
-
-            var request = new TeleportRequest
-            {
-                destinationPosition = GetDefaultTeleportDestination(),
-                destinationRotation = transform.rotation,
-                matchOrientation = MatchOrientation.None
-            };
-
-            if (teleportationProvider.QueueTeleportRequest(request))
-                PlayTeleportCue();
         }
 
         void UpdateHeightReset()
@@ -249,18 +253,12 @@ namespace Blockiverse.VR
             if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Select, out InputAction breakAction) &&
                 breakAction.WasPressedThisFrame())
             {
-                if (uiPointer != null && uiPointer.TryClick())
-                    return;
-
                 breakPressed?.Invoke();
             }
 
             if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Activate, out InputAction placeAction) &&
                 placeAction.WasPressedThisFrame())
             {
-                if (uiPointer != null && uiPointer.IsPointerOverUi)
-                    return;
-
                 placePressed?.Invoke();
             }
 
@@ -304,6 +302,21 @@ namespace Blockiverse.VR
 
             ConfigureHeadPoseDriverActions(headPoseDriver);
             EnableHeadPoseDriver();
+        }
+
+        void EnsureControllerPoseDrivers()
+        {
+            foreach (BlockiverseControllerAnchor anchor in GetComponentsInChildren<BlockiverseControllerAnchor>(true))
+            {
+                TrackedPoseDriver driver = anchor.GetComponent<TrackedPoseDriver>();
+
+                if (driver == null)
+                    driver = anchor.gameObject.AddComponent<TrackedPoseDriver>();
+
+                ConfigureControllerPoseDriverActions(driver, anchor.Role);
+                driver.enabled = true;
+                anchor.Configure(anchor.Role, driver);
+            }
         }
 
         void EnsureXriLocomotionProviders()
@@ -354,6 +367,12 @@ namespace Blockiverse.VR
             if (snapTurnProvider == null)
                 snapTurnProvider = gameObject.AddComponent<SnapTurnProvider>();
 
+            if (continuousTurnProvider == null)
+                continuousTurnProvider = GetComponent<ContinuousTurnProvider>();
+
+            if (continuousTurnProvider == null)
+                continuousTurnProvider = gameObject.AddComponent<ContinuousTurnProvider>();
+
             if (heightReset == null)
                 heightReset = GetComponent<BlockiverseHeightReset>();
 
@@ -398,7 +417,14 @@ namespace Blockiverse.VR
                 snapTurnProvider.delayTime = 0.0f;
             }
 
+            if (continuousTurnProvider != null)
+            {
+                continuousTurnProvider.mediator = locomotionMediator;
+                continuousTurnProvider.turnSpeed = DefaultContinuousTurnSpeed;
+            }
+
             ConfigureXriProviderInputs();
+            SubscribeTeleportFeedback();
             ApplyComfortSettingsToProviders();
         }
 
@@ -414,19 +440,32 @@ namespace Blockiverse.VR
                 continuousMoveProvider.rightHandMoveInput = CreateUnusedVector2Reader("Right Hand Move");
             }
 
+            bool hasRightTurn = TryFindAction(
+                BlockiverseInputActionNames.RightHandMap,
+                BlockiverseInputActionNames.Turn,
+                out InputAction rightTurn);
+
             if (snapTurnProvider != null)
             {
                 snapTurnProvider.leftHandTurnInput = CreateUnusedVector2Reader("Left Hand Snap Turn");
                 snapTurnProvider.rightHandTurnInput = CreateVector2ActionReader(
                     "Right Hand Snap Turn",
-                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Turn, out InputAction rightTurn)
-                        ? rightTurn
-                        : null);
+                    hasRightTurn ? rightTurn : null);
+            }
+
+            if (continuousTurnProvider != null)
+            {
+                continuousTurnProvider.leftHandTurnInput = CreateUnusedVector2Reader("Left Hand Smooth Turn");
+                continuousTurnProvider.rightHandTurnInput = CreateVector2ActionReader(
+                    "Right Hand Smooth Turn",
+                    hasRightTurn ? rightTurn : null);
             }
         }
 
         void ApplyComfortSettingsToProviders()
         {
+            bool smoothTurn = comfortSettings != null && comfortSettings.SmoothTurnEnabled;
+
             if (continuousMoveProvider != null)
             {
                 continuousMoveProvider.moveSpeed = comfortSettings != null
@@ -440,7 +479,27 @@ namespace Blockiverse.VR
                 snapTurnProvider.turnAmount = comfortSettings != null
                     ? comfortSettings.SnapTurnDegrees
                     : DefaultSnapTurnDegrees;
+                snapTurnProvider.enabled = !smoothTurn;
             }
+
+            if (continuousTurnProvider != null)
+                continuousTurnProvider.enabled = smoothTurn;
+        }
+
+        void SubscribeTeleportFeedback()
+        {
+            if (!Application.isPlaying || teleportationProvider == null)
+                return;
+
+            teleportEndedHandler ??= _ => PlayTeleportCue();
+            teleportationProvider.locomotionEnded -= teleportEndedHandler;
+            teleportationProvider.locomotionEnded += teleportEndedHandler;
+        }
+
+        void UnsubscribeTeleportFeedback()
+        {
+            if (teleportationProvider != null && teleportEndedHandler != null)
+                teleportationProvider.locomotionEnded -= teleportEndedHandler;
         }
 
         void EnableHeadPoseDriver()
@@ -451,7 +510,7 @@ namespace Blockiverse.VR
             headPoseDriver.enabled = true;
         }
 
-        void DisableHeadPoseDriver()
+        void DisableTrackedPoseDrivers()
         {
             foreach (TrackedPoseDriver driver in GetComponentsInChildren<TrackedPoseDriver>(true))
                 driver.enabled = false;
@@ -466,18 +525,6 @@ namespace Blockiverse.VR
                 audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
 
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
-        }
-
-        Vector3 GetDefaultTeleportDestination()
-        {
-            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
-
-            if (forward.sqrMagnitude <= Mathf.Epsilon)
-                forward = Vector3.forward;
-
-            Vector3 destination = transform.position + forward.normalized * TeleportDistanceMeters;
-            destination.y = transform.position.y;
-            return destination;
         }
 
         static bool HasBinding(InputActionProperty property, string expectedPath)
@@ -501,9 +548,13 @@ namespace Blockiverse.VR
             if (action == null)
                 return CreateUnusedVector2Reader(name);
 
-            return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.InputAction)
+            // Reference the action rather than owning it (InputAction mode): the rig enables/disables
+            // the whole InputActionAsset, so a reader must not toggle the action's lifecycle. Snap and
+            // continuous turn both read the same Turn action, and disabling the inactive provider must
+            // not disable that shared action for the active one.
+            return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.InputActionReference)
             {
-                inputAction = action
+                inputActionReference = InputActionReference.Create(action)
             };
         }
 
