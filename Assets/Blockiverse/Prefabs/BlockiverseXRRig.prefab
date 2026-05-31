@@ -1417,19 +1417,6 @@ MonoBehaviour:
       m_VignetteColor: {r: 0, g: 0, b: 0, a: 1}
       m_VignetteColorBlend: {r: 0, g: 0, b: 0, a: 1}
       m_ApertureVerticalPosition: 0
-  - m_LocomotionProvider: {fileID: 2080850676230912890}
-    m_Enabled: 1
-    m_OverrideDefaultParameters: 0
-    m_OverrideParameters:
-      m_ApertureSize: 0.7
-      m_FeatheringEffect: 0.2
-      m_EaseInTime: 0.3
-      m_EaseOutTime: 0.3
-      m_EaseInTimeLock: 0
-      m_EaseOutDelayTime: 0
-      m_VignetteColor: {r: 0, g: 0, b: 0, a: 1}
-      m_VignetteColorBlend: {r: 0, g: 0, b: 0, a: 1}
-      m_ApertureVerticalPosition: 0
   - m_LocomotionProvider: {fileID: 5169127181023906550}
     m_Enabled: 1
     m_OverrideDefaultParameters: 0
@@ -3987,7 +3974,7 @@ MonoBehaviour:
       m_Name: UI Press Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 143a42a9-aee7-44df-8428-09faed0046f1
+      m_Id: 4fc2d4c8-a408-427d-a66f-5e477a6ba316
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7006,7 +6993,7 @@ MonoBehaviour:
       m_Name: Left Hand Move
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: d18cf2f4-92cf-4d87-bbb4-323209ebbf39
+      m_Id: 183c7378-a67e-4643-a1f6-bf72457466be
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7020,7 +7007,7 @@ MonoBehaviour:
       m_Name: Right Hand Move
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 692be454-d80b-4667-8826-16ca296053fe
+      m_Id: c9afb849-9864-4b04-962d-77ca2d4a7f43
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7054,7 +7041,7 @@ MonoBehaviour:
       m_Name: Left Hand Snap Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: b38f5f37-36ce-49a6-9366-303a2addad04
+      m_Id: 1bd3a469-14f2-4ebb-8c68-4aa25405cb4c
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7068,7 +7055,7 @@ MonoBehaviour:
       m_Name: Right Hand Snap Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 52d5ae57-27ec-436c-b865-b3133b073426
+      m_Id: c64bbde2-737a-4cd0-a5fd-8d6676931400
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7099,7 +7086,7 @@ MonoBehaviour:
       m_Name: Left Hand Smooth Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 8f82e04c-3a25-4480-904e-2cbfebf79514
+      m_Id: 6ade9583-46c2-418e-b6fe-69ef79e185bf
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7113,7 +7100,7 @@ MonoBehaviour:
       m_Name: Right Hand Smooth Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 3c15d828-eb3f-4bcf-bdd2-53562479b3bc
+      m_Id: 2e46fa26-0b59-4d0f-a892-308462fcb98c
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -7756,7 +7743,7 @@ MonoBehaviour:
       m_Name: Teleport Select Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 83bcae34-2f91-442c-b3b5-d137ee62db56
+      m_Id: a736cd99-2c9e-4f92-8fb2-aa16c93c3ebf
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []

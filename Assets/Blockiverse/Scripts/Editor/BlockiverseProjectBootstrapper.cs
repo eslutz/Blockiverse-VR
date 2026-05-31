@@ -1653,11 +1653,13 @@ namespace Blockiverse.Editor
             if (controller == null)
                 return;
 
-            // Ease the comfort vignette in/out during every locomotion type that causes vection.
+            // Ease the comfort vignette in/out during locomotion that causes vection or a viewpoint
+            // jump: continuous move, continuous (smooth) turn, and teleport. Snap turn is itself a
+            // discrete comfort option, so it is intentionally excluded to avoid a vignette flicker
+            // on every snap.
             controller.locomotionVignetteProviders.Clear();
             AddVignetteProvider(controller, rig.GetComponent<ContinuousMoveProvider>());
             AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
-            AddVignetteProvider(controller, rig.GetComponent<SnapTurnProvider>());
             AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
 
             EditorUtility.SetDirty(controller);

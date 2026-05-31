@@ -16,6 +16,7 @@ namespace Blockiverse.VR
         [SerializeField] InputField inputField;
 
         TouchScreenKeyboard keyboard;
+        string textBeforeEdit;
 
         public void Configure(InputField field)
         {
@@ -46,6 +47,7 @@ namespace Blockiverse.VR
             if (keyboard != null && keyboard.active)
                 return;
 
+            textBeforeEdit = inputField.text;
             keyboard = TouchScreenKeyboard.Open(inputField.text, TouchScreenKeyboardType.Default);
         }
 
@@ -60,10 +62,17 @@ namespace Blockiverse.VR
                 return;
             }
 
+            // The keyboard closed this frame. Commit on Done; otherwise (Canceled / LostFocus)
+            // revert the field to the text captured before editing so a cancel does not leave the
+            // partially streamed text behind.
             if (keyboard.status == TouchScreenKeyboard.Status.Done)
             {
                 inputField.text = keyboard.text;
                 inputField.onEndEdit.Invoke(inputField.text);
+            }
+            else
+            {
+                inputField.text = textBeforeEdit;
             }
 
             keyboard = null;

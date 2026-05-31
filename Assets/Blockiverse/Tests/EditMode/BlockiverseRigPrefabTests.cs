@@ -154,11 +154,22 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(vignette, Is.Not.Null, "Rig should carry a TunnelingVignetteController for comfort.");
             Assert.That(vignette.GetComponent<MeshFilter>()?.sharedMesh, Is.Not.Null, "Vignette mesh must be imported from the sample.");
             Assert.That(vignette.GetComponent<MeshRenderer>()?.sharedMaterial, Is.Not.Null, "Vignette material must be assigned.");
-            Assert.That(vignette.locomotionVignetteProviders, Has.Count.EqualTo(4));
             Assert.That(
                 vignette.locomotionVignetteProviders,
                 Has.All.Matches<LocomotionVignetteProvider>(p => p.enabled && p.locomotionProvider != null),
                 "Every vignette provider must be enabled and reference a locomotion provider.");
+
+            var providerTypes = vignette.locomotionVignetteProviders
+                .Select(provider => provider.locomotionProvider.GetType())
+                .ToList();
+
+            // Continuous motions and teleport mask vection/viewpoint jumps; snap turn is a discrete
+            // comfort option and is intentionally excluded to avoid a per-turn vignette flicker.
+            Assert.That(providerTypes, Has.Count.EqualTo(3));
+            Assert.That(providerTypes, Contains.Item(typeof(ContinuousMoveProvider)));
+            Assert.That(providerTypes, Contains.Item(typeof(ContinuousTurnProvider)));
+            Assert.That(providerTypes, Contains.Item(typeof(TeleportationProvider)));
+            Assert.That(providerTypes, Has.No.Member(typeof(SnapTurnProvider)));
         }
 
         [Test]
