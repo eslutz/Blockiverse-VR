@@ -6,6 +6,19 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Fixed Quest movement tracking by migrating the rig to Unity Input System/XRI pose
+  and locomotion providers for before-render HMD tracking, continuous movement,
+  snap turn, and teleport.
+- Completed the native XRI migration for tracking and interaction: controllers are
+  driven by `TrackedPoseDriver` (Update + BeforeRender) like the headset, the comfort
+  menu's Smooth Turn toggle switches between snap and continuous turn, and teleport is
+  target-based (`TeleportationArea` on the voxel terrain with an arc reticle) instead of
+  a fixed forward dash.
+- Reworked every VR menu onto the native UI stack (`XRUIInputModule`,
+  `TrackedDeviceGraphicRaycaster`, controller ray interactor) so buttons, toggles,
+  sliders, scrolling, and the LAN address field (via the system keyboard) are fully
+  usable; block break/place now uses the native ray interactor and is suppressed while
+  the ray is over UI. Removed the custom ray pointer and UI pointer.
 - Added the M6 signed-release APK pipeline path, including a Unity release build entry point,
   secret-based Android signing script, checksum generation, GitHub Release artifact publishing,
   store-document validation, and a Quest screenshot/capture plan.

@@ -9,6 +9,7 @@
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
     "Unity.Netcode.Runtime",
+    "Unity.XR.Interaction.Toolkit",
     "UnityEngine.UI"
   ],
   "includePlatforms": [],

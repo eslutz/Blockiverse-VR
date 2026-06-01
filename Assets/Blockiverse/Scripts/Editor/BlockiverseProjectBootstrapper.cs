@@ -30,6 +30,16 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -69,11 +79,16 @@ namespace Blockiverse.Editor
         const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         const string BootEventSystemName = "Boot Event System";
         const string MultiplayerEventSystemName = "Multiplayer Event System";
+        const string XrInteractionManagerName = "XR Interaction Manager";
         const string MultiplayerTestCameraName = "Multiplayer Test Camera";
         const string NetworkManagerRootName = "Blockiverse Network Manager";
         const string NetworkPlayerPrefabName = "Blockiverse Network Player";
         const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
         const string PointerLineName = "Ray Pointer Line";
+        const string InteractionRayName = "Interaction Ray";
+        const string TeleportRayName = "Teleport Ray";
+        const string TunnelingVignetteName = "Tunneling Vignette";
+        const string TunnelingVignettePrefabPath = "Assets/Blockiverse/VR/TunnelingVignette/TunnelingVignette.prefab";
         const string InteractionTestBlockName = "Interaction Test Block";
         static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
@@ -941,11 +956,37 @@ namespace Blockiverse.Editor
             if (legacyInputModule != null)
                 UnityEngine.Object.DestroyImmediate(legacyInputModule);
 
-            InputSystemUIInputModule inputModule = EnsureComponent<InputSystemUIInputModule>(eventSystemObject);
+            // VR UI is driven by tracked-device rays, so replace the plain Input System module with
+            // XRI's module which understands tracked-device pointer events from XRRayInteractors.
+            // XRUIInputModule does not derive from InputSystemUIInputModule, so a legacy module found
+            // here is always the screen-space one and is removed before adding the XR module.
+            InputSystemUIInputModule legacyUiModule = eventSystemObject.GetComponent<InputSystemUIInputModule>();
+
+            if (legacyUiModule != null)
+                UnityEngine.Object.DestroyImmediate(legacyUiModule);
+
+            XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
+
+            EnsureXrInteractionManager(scene);
 
             EditorUtility.SetDirty(eventSystem);
             EditorUtility.SetDirty(inputModule);
             EditorUtility.SetDirty(eventSystemObject);
+        }
+
+        static void EnsureXrInteractionManager(Scene scene)
+        {
+            GameObject managerObject = FindRootGameObject(scene, XrInteractionManagerName);
+
+            if (managerObject == null)
+            {
+                managerObject = new GameObject(XrInteractionManagerName);
+                SceneManager.MoveGameObjectToScene(managerObject, scene);
+            }
+
+            managerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            EnsureComponent<XRInteractionManager>(managerObject);
+            EditorUtility.SetDirty(managerObject);
         }
 
         static void EnsureMultiplayerSessionMenu(Scene scene, GameObject managerObject)
@@ -976,7 +1017,7 @@ namespace Blockiverse.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
 
-            EnsureComponent<GraphicRaycaster>(menuObject);
+            EnsureTrackedDeviceRaycaster(menuObject);
 
             GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
             RectTransform panelRect = panelObject.GetComponent<RectTransform>();
@@ -1138,14 +1179,13 @@ namespace Blockiverse.Editor
                 return;
 
             BlockiverseInputRig inputRig = rig.GetComponent<BlockiverseInputRig>();
-            BlockiverseRayPointer pointer = rig.GetComponentInChildren<BlockiverseRayPointer>(true);
-            BlockiverseVrUiPointer uiPointer = rig.GetComponent<BlockiverseVrUiPointer>();
 
-            if (inputRig == null || pointer == null)
+            if (inputRig == null)
                 return;
 
+            XRRayInteractor interactionRay = FindInteractionRay(rig);
             BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
-            bridge.Configure(inputRig, pointer, controller, uiPointer);
+            bridge.Configure(inputRig, interactionRay, controller);
             EditorUtility.SetDirty(bridge);
         }
 
@@ -1188,12 +1228,14 @@ namespace Blockiverse.Editor
             camera.nearClipPlane = 0.05f;
             camera.farClipPlane = 500.0f;
             cameraObject.AddComponent<AudioListener>();
-            cameraObject.AddComponent<TrackedPoseDriver>();
+            TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
+            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
 
             XROrigin origin = rig.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
             origin.Camera = camera;
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
+            inputRig.ConfigureHeadPoseDriver(poseDriver);
             EnsureXrRigLocomotion(rig, inputRig, origin);
 
             CreateControllerAnchor(
@@ -1209,10 +1251,10 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
-            EnsureXrRigUiPointer(rig, inputRig);
             EnsureXrRigAvatar(rig);
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigTunnelingVignette(rig);
             EnsureXrRigStartupLoadingOverlay(rig);
             EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
@@ -1250,6 +1292,16 @@ namespace Blockiverse.Editor
             if (origin.Camera == null)
                 origin.Camera = cameraOffset.GetComponentInChildren<Camera>(true);
 
+            Camera xrCamera = origin.Camera;
+            TrackedPoseDriver poseDriver = xrCamera != null
+                ? xrCamera.GetComponent<TrackedPoseDriver>()
+                : rig.GetComponentInChildren<TrackedPoseDriver>(true);
+
+            if (poseDriver == null && xrCamera != null)
+                poseDriver = xrCamera.gameObject.AddComponent<TrackedPoseDriver>();
+
+            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            inputRig.ConfigureHeadPoseDriver(poseDriver);
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
             EnsureXrRigLocomotion(rig, inputRig, origin);
 
@@ -1266,10 +1318,10 @@ namespace Blockiverse.Editor
                 inputRig,
                 BlockiverseControllerRole.Right);
 
-            EnsureXrRigUiPointer(rig, inputRig);
             EnsureXrRigAvatar(rig);
             EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
+            EnsureXrRigTunnelingVignette(rig);
             EnsureXrRigStartupLoadingOverlay(rig);
             EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
@@ -1312,36 +1364,120 @@ namespace Blockiverse.Editor
             BlockiverseInputRig inputRig,
             BlockiverseControllerRole role)
         {
-            BlockiverseControllerAnchor anchor = controller.GetComponent<BlockiverseControllerAnchor>();
+            // Native controller tracking: a TrackedPoseDriver drives the controller transform in
+            // Update + BeforeRender, matching the head and removing the old hand-written pose.
+            TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(controller);
+            BlockiverseInputRig.ConfigureControllerPoseDriverActions(poseDriver, role);
+            poseDriver.enabled = true;
 
-            if (anchor == null)
-                anchor = controller.AddComponent<BlockiverseControllerAnchor>();
+            BlockiverseControllerAnchor anchor = EnsureComponent<BlockiverseControllerAnchor>(controller);
+            anchor.Configure(role, poseDriver);
 
-            anchor.Configure(inputRig, role);
-
-            BlockiverseControllerHaptics haptics = controller.GetComponent<BlockiverseControllerHaptics>();
-
-            if (haptics == null)
-                haptics = controller.AddComponent<BlockiverseControllerHaptics>();
-
+            BlockiverseControllerHaptics haptics = EnsureComponent<BlockiverseControllerHaptics>(controller);
             haptics.Configure(role);
+
+            EnsureControllerInteractors(controller, inputRig, role);
+
+            EditorUtility.SetDirty(poseDriver);
+            EditorUtility.SetDirty(anchor);
+            EditorUtility.SetDirty(haptics);
         }
 
-        static void EnsureXrRigUiPointer(GameObject rig, BlockiverseInputRig inputRig)
+        // Builds the native interaction (UI + block targeting) and teleport rays on the right
+        // controller, plus the mediator that switches between them while Teleport Mode is held.
+        static XRRayInteractor EnsureControllerInteractors(
+            GameObject controller,
+            BlockiverseInputRig inputRig,
+            BlockiverseControllerRole role)
         {
-            Transform cameraOffset = rig.transform.Find("Camera Offset");
-            Transform rightController = cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
-            Camera camera = cameraOffset != null ? cameraOffset.GetComponentInChildren<Camera>(true) : null;
+            if (role != BlockiverseControllerRole.Right)
+                return null;
 
-            if (rightController == null)
-                return;
+            Material pointerMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.PointerLineMaterialPath);
 
-            BlockiverseVrUiPointer uiPointer = EnsureComponent<BlockiverseVrUiPointer>(rig);
-            uiPointer.Configure(rightController, camera, 5.0f);
-            inputRig.ConfigureUiPointer(uiPointer);
+            GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
+            interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            interactionRayObject.SetActive(true);
 
-            EditorUtility.SetDirty(uiPointer);
-            EditorUtility.SetDirty(inputRig);
+            XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
+            interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
+            interactionRay.enableUIInteraction = true;
+            interactionRay.manipulateAttachTransform = false;
+            // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk
+            // TeleportationArea). UI still works (separate path) and block targeting uses the
+            // physics raycast via TryGetCurrent3DRaycastHit on this raycast mask.
+            interactionRay.interactionLayers = 0;
+            interactionRay.raycastMask = GetInteractionLayerMask();
+            interactionRay.uiPressInput = MakeButtonReader("UI Press", FindRigAction(inputRig, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress));
+            interactionRay.uiScrollInput = MakeVector2Reader("UI Scroll", FindRigAction(inputRig, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
+            ConfigureLineVisual(interactionRayObject, pointerMaterial);
+
+            GameObject teleportRayObject = EnsureChild(controller.transform, TeleportRayName);
+            teleportRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            XRRayInteractor teleportRay = EnsureComponent<XRRayInteractor>(teleportRayObject);
+            teleportRay.lineType = XRRayInteractor.LineType.ProjectileCurve;
+            teleportRay.enableUIInteraction = false;
+            teleportRay.manipulateAttachTransform = false;
+            teleportRay.raycastMask = GetInteractionLayerMask();
+            teleportRay.selectInput = MakeButtonReader("Teleport Select", FindRigAction(inputRig, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.TeleportSelect));
+            ConfigureLineVisual(teleportRayObject, pointerMaterial);
+            teleportRayObject.SetActive(false);
+
+            BlockiverseLocomotionRayMediator mediator = EnsureComponent<BlockiverseLocomotionRayMediator>(controller);
+            mediator.Configure(inputRig, interactionRay, teleportRay, role);
+
+            EditorUtility.SetDirty(interactionRay);
+            EditorUtility.SetDirty(teleportRay);
+            EditorUtility.SetDirty(mediator);
+            return interactionRay;
+        }
+
+        static void ConfigureLineVisual(GameObject rayObject, Material pointerMaterial)
+        {
+            LineRenderer lineRenderer = EnsureComponent<LineRenderer>(rayObject);
+            lineRenderer.useWorldSpace = true;
+            lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            lineRenderer.receiveShadows = false;
+
+            if (pointerMaterial != null)
+                lineRenderer.sharedMaterial = pointerMaterial;
+
+            XRInteractorLineVisual lineVisual = EnsureComponent<XRInteractorLineVisual>(rayObject);
+            lineVisual.lineWidth = 0.01f;
+            lineVisual.overrideInteractorLineLength = false;
+            lineVisual.stopLineAtFirstRaycastHit = true;
+
+            EditorUtility.SetDirty(lineRenderer);
+            EditorUtility.SetDirty(lineVisual);
+        }
+
+        static XRInputButtonReader MakeButtonReader(string name, InputAction action)
+        {
+            var reader = new XRInputButtonReader(name, inputSourceMode: XRInputButtonReader.InputSourceMode.InputAction);
+
+            if (action != null)
+                reader.inputActionPerformed = action;
+
+            return reader;
+        }
+
+        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputAction action)
+        {
+            if (action == null)
+                return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
+
+            return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.InputAction)
+            {
+                inputAction = action
+            };
+        }
+
+        static InputAction FindRigAction(BlockiverseInputRig inputRig, string mapName, string actionName)
+        {
+            InputActionAsset asset = inputRig != null ? inputRig.InputActions : null;
+            InputActionMap map = asset?.FindActionMap(mapName, throwIfNotFound: false);
+            return map?.FindAction(actionName, throwIfNotFound: false);
         }
 
         static void EnsureXrRigAvatar(GameObject rig)
@@ -1399,7 +1535,7 @@ namespace Blockiverse.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
 
-            EnsureComponent<GraphicRaycaster>(menuObject);
+            EnsureTrackedDeviceRaycaster(menuObject);
 
             GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
             RectTransform panelRect = panelObject.GetComponent<RectTransform>();
@@ -1483,53 +1619,95 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(presenter);
         }
 
+        static void EnsureXrRigTunnelingVignette(GameObject rig)
+        {
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform headCamera = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
+
+            if (headCamera == null)
+                return;
+
+            Transform existing = headCamera.Find(TunnelingVignetteName);
+            TunnelingVignetteController controller = existing != null
+                ? existing.GetComponent<TunnelingVignetteController>()
+                : null;
+
+            if (controller == null)
+            {
+                GameObject vignettePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(TunnelingVignettePrefabPath);
+
+                if (vignettePrefab == null)
+                {
+                    BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"Tunneling vignette prefab not found at {TunnelingVignettePrefabPath}; skipping comfort vignette.");
+                    return;
+                }
+
+                var vignetteInstance = (GameObject)PrefabUtility.InstantiatePrefab(vignettePrefab);
+                vignetteInstance.transform.SetParent(headCamera, false);
+                vignetteInstance.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                vignetteInstance.name = TunnelingVignetteName;
+                PrefabUtility.UnpackPrefabInstance(vignetteInstance, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                controller = vignetteInstance.GetComponent<TunnelingVignetteController>();
+            }
+
+            if (controller == null)
+                return;
+
+            // Ease the comfort vignette in/out during locomotion that causes vection or a viewpoint
+            // jump: continuous move, continuous (smooth) turn, and teleport. Snap turn is itself a
+            // discrete comfort option, so it is intentionally excluded to avoid a vignette flicker
+            // on every snap.
+            controller.locomotionVignetteProviders.Clear();
+            AddVignetteProvider(controller, rig.GetComponent<ContinuousMoveProvider>());
+            AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
+            AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
+
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(controller.gameObject);
+        }
+
+        static void AddVignetteProvider(TunnelingVignetteController controller, LocomotionProvider provider)
+        {
+            if (provider == null)
+                return;
+
+            controller.locomotionVignetteProviders.Add(new LocomotionVignetteProvider
+            {
+                locomotionProvider = provider,
+                enabled = true,
+            });
+        }
+
         static void EnsureXrRigInteraction(GameObject rig, BlockiverseInputRig inputRig)
         {
-            Transform rightController = rig.transform.Find("Camera Offset/Right Controller");
-
-            if (rightController != null)
-                EnsureRayPointer(rightController);
-
+            // The native XRRayInteractor (built alongside the controller anchor) replaces the old
+            // custom ray pointer + UI pointer; strip any stale objects/scripts from older prefabs.
+            RemoveStaleRayPointer(rig);
             EnsureBlockMenuPlaceholder(rig, inputRig);
         }
 
-        static void EnsureRayPointer(Transform rightController)
+        static void RemoveStaleRayPointer(GameObject rig)
         {
-            Material pointerMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.PointerLineMaterialPath);
-            GameObject lineObject = EnsureChild(rightController, PointerLineName);
-            lineObject.transform.localPosition = Vector3.zero;
-            lineObject.transform.localRotation = Quaternion.identity;
-            lineObject.transform.localScale = Vector3.one;
+            Transform staleLine = rig.transform.Find("Camera Offset/Right Controller/" + PointerLineName);
 
-            LineRenderer lineRenderer = EnsureComponent<LineRenderer>(lineObject);
-            lineRenderer.useWorldSpace = true;
-            lineRenderer.positionCount = 2;
-            lineRenderer.startWidth = 0.012f;
-            lineRenderer.endWidth = 0.006f;
-            lineRenderer.numCapVertices = 4;
-            lineRenderer.numCornerVertices = 2;
-            lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            lineRenderer.receiveShadows = false;
+            if (staleLine != null)
+                UnityEngine.Object.DestroyImmediate(staleLine.gameObject);
 
-            if (pointerMaterial != null)
-                lineRenderer.sharedMaterial = pointerMaterial;
+            foreach (Transform child in rig.GetComponentsInChildren<Transform>(true))
+                GameObjectUtility.RemoveMonoBehavioursWithMissingScript(child.gameObject);
+        }
 
-            lineRenderer.SetPosition(0, rightController.position);
-            lineRenderer.SetPosition(1, rightController.position + rightController.forward * 5.0f);
-
-            BlockiverseRayPointer pointer = EnsureComponent<BlockiverseRayPointer>(rightController.gameObject);
-            pointer.Configure(rightController, lineRenderer, GetInteractionLayerMask(), 5.0f);
-
-            EditorUtility.SetDirty(lineObject);
-            EditorUtility.SetDirty(pointer);
+        static XRRayInteractor FindInteractionRay(GameObject rig)
+        {
+            Transform rayTransform = rig.transform.Find("Camera Offset/Right Controller/" + InteractionRayName);
+            return rayTransform != null ? rayTransform.GetComponent<XRRayInteractor>() : null;
         }
 
         static void EnsureXrRigCreativeInputBridge(GameObject rig, BlockiverseInputRig inputRig)
         {
-            BlockiverseRayPointer pointer = rig.GetComponentInChildren<BlockiverseRayPointer>(true);
-            BlockiverseVrUiPointer uiPointer = rig.GetComponent<BlockiverseVrUiPointer>();
+            XRRayInteractor interactionRay = FindInteractionRay(rig);
             BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
-            bridge.Configure(inputRig, pointer, null, uiPointer);
+            bridge.Configure(inputRig, interactionRay, null);
             EditorUtility.SetDirty(bridge);
         }
 
@@ -1561,7 +1739,7 @@ namespace Blockiverse.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
 
-            EnsureComponent<GraphicRaycaster>(menuObject);
+            EnsureTrackedDeviceRaycaster(menuObject);
 
             GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
             RectTransform panelRect = panelObject.GetComponent<RectTransform>();
@@ -1653,7 +1831,7 @@ namespace Blockiverse.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
 
-            EnsureComponent<GraphicRaycaster>(overlayObject);
+            EnsureTrackedDeviceRaycaster(overlayObject);
 
             GameObject artworkObject = EnsureRectChild(overlayObject.transform, "Artwork");
             RectTransform artworkRect = artworkObject.GetComponent<RectTransform>();
@@ -1746,7 +1924,7 @@ namespace Blockiverse.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
 
-            EnsureComponent<GraphicRaycaster>(popupObject);
+            EnsureTrackedDeviceRaycaster(popupObject);
 
             GameObject panelObject = EnsureRectChild(popupObject.transform, "Panel");
             RectTransform panelRect = panelObject.GetComponent<RectTransform>();
@@ -1837,7 +2015,7 @@ namespace Blockiverse.Editor
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
 
-            EnsureComponent<GraphicRaycaster>(hudObject);
+            EnsureTrackedDeviceRaycaster(hudObject);
 
             GameObject panelObject = EnsureRectChild(hudObject.transform, "Panel");
             RectTransform panelRect = panelObject.GetComponent<RectTransform>();
@@ -2328,6 +2506,11 @@ namespace Blockiverse.Editor
 
             input.textComponent = text;
             input.placeholder = placeholderText;
+
+            // Native VR text entry: open the Quest system keyboard when the field is selected.
+            BlockiverseSystemKeyboardField keyboardField = EnsureComponent<BlockiverseSystemKeyboardField>(inputObject);
+            keyboardField.Configure(input);
+
             return input;
         }
 
@@ -2399,6 +2582,21 @@ namespace Blockiverse.Editor
             canvas.worldCamera = head != null ? head.GetComponent<Camera>() : null;
         }
 
+        // World-space VR canvases must be raycast by tracked-device rays, not the screen-space
+        // GraphicRaycaster. Swap in XRI's TrackedDeviceGraphicRaycaster so XRRayInteractors can
+        // drive buttons, toggles, sliders, and scrolling.
+        static TrackedDeviceGraphicRaycaster EnsureTrackedDeviceRaycaster(GameObject canvasObject)
+        {
+            GraphicRaycaster legacyRaycaster = canvasObject.GetComponent<GraphicRaycaster>();
+
+            if (legacyRaycaster != null)
+                UnityEngine.Object.DestroyImmediate(legacyRaycaster);
+
+            TrackedDeviceGraphicRaycaster raycaster = EnsureComponent<TrackedDeviceGraphicRaycaster>(canvasObject);
+            EditorUtility.SetDirty(canvasObject);
+            return raycaster;
+        }
+
         static GameObject EnsureChild(Transform parent, string name)
         {
             Transform existing = parent.Find(name);
@@ -2444,6 +2642,8 @@ namespace Blockiverse.Editor
 
         static void EnsureXrRigLocomotion(GameObject rig, BlockiverseInputRig inputRig, XROrigin origin)
         {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(rig);
+
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
 
             if (settings == null)
@@ -2452,19 +2652,54 @@ namespace Blockiverse.Editor
             if (origin != null)
                 origin.CameraYOffset = settings.StandingEyeHeight;
 
-            BlockiverseTeleportLocomotion teleport = rig.GetComponent<BlockiverseTeleportLocomotion>();
+            XRBodyTransformer bodyTransformer = rig.GetComponent<XRBodyTransformer>();
+
+            if (bodyTransformer == null)
+                bodyTransformer = rig.AddComponent<XRBodyTransformer>();
+
+            bodyTransformer.xrOrigin = origin;
+
+            LocomotionMediator mediator = rig.GetComponent<LocomotionMediator>();
+
+            if (mediator == null)
+                mediator = rig.AddComponent<LocomotionMediator>();
+
+            TeleportationProvider teleport = rig.GetComponent<TeleportationProvider>();
 
             if (teleport == null)
-                teleport = rig.AddComponent<BlockiverseTeleportLocomotion>();
+                teleport = rig.AddComponent<TeleportationProvider>();
 
-            teleport.Configure(origin, settings);
+            teleport.mediator = mediator;
+            teleport.delayTime = 0.0f;
 
-            BlockiverseSnapTurnLocomotion snapTurn = rig.GetComponent<BlockiverseSnapTurnLocomotion>();
+            ContinuousMoveProvider continuousMove = rig.GetComponent<ContinuousMoveProvider>();
+
+            if (continuousMove == null)
+                continuousMove = rig.AddComponent<ContinuousMoveProvider>();
+
+            continuousMove.mediator = mediator;
+            continuousMove.forwardSource = origin != null && origin.Camera != null ? origin.Camera.transform : rig.transform;
+            continuousMove.enableStrafe = true;
+            continuousMove.enableFly = false;
+            continuousMove.moveSpeed = settings.ContinuousMoveSpeed;
+
+            SnapTurnProvider snapTurn = rig.GetComponent<SnapTurnProvider>();
 
             if (snapTurn == null)
-                snapTurn = rig.AddComponent<BlockiverseSnapTurnLocomotion>();
+                snapTurn = rig.AddComponent<SnapTurnProvider>();
 
-            snapTurn.Configure(origin, settings);
+            snapTurn.mediator = mediator;
+            snapTurn.turnAmount = settings.SnapTurnDegrees;
+            snapTurn.enableTurnLeftRight = true;
+            snapTurn.enableTurnAround = false;
+            snapTurn.delayTime = 0.0f;
+
+            ContinuousTurnProvider continuousTurn = rig.GetComponent<ContinuousTurnProvider>();
+
+            if (continuousTurn == null)
+                continuousTurn = rig.AddComponent<ContinuousTurnProvider>();
+
+            continuousTurn.mediator = mediator;
 
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
 
@@ -2472,7 +2707,10 @@ namespace Blockiverse.Editor
                 heightReset = rig.AddComponent<BlockiverseHeightReset>();
 
             heightReset.Configure(origin, settings);
-            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset);
+            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings, continuousTurn);
+
+            BlockiverseAudioCuePlayer audioCuePlayer = rig.GetComponent<BlockiverseAudioCuePlayer>();
+            inputRig.ConfigureTeleportFeedback(audioCuePlayer);
         }
     }
 }

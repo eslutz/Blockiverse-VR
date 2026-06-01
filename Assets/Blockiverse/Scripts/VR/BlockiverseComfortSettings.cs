@@ -8,8 +8,12 @@ namespace Blockiverse.VR
         const float MaxSnapTurnDegrees = 90.0f;
         const float MinStandingEyeHeight = 1.0f;
         const float MaxStandingEyeHeight = 2.2f;
+        const float MinContinuousMoveSpeed = 0.5f;
+        const float MaxContinuousMoveSpeed = 4.0f;
 
         [SerializeField] bool teleportEnabled = true;
+        [SerializeField] bool continuousMoveEnabled = true;
+        [SerializeField] float continuousMoveSpeed = 1.8f;
         [SerializeField] bool smoothTurnEnabled;
         [SerializeField] float snapTurnDegrees = 45.0f;
         [SerializeField] float standingEyeHeight = 1.6f;
@@ -18,6 +22,18 @@ namespace Blockiverse.VR
         {
             get => teleportEnabled;
             set => teleportEnabled = value;
+        }
+
+        public bool ContinuousMoveEnabled
+        {
+            get => continuousMoveEnabled;
+            set => continuousMoveEnabled = value;
+        }
+
+        public float ContinuousMoveSpeed
+        {
+            get => continuousMoveSpeed;
+            set => continuousMoveSpeed = Mathf.Clamp(value, MinContinuousMoveSpeed, MaxContinuousMoveSpeed);
         }
 
         public bool SmoothTurnEnabled
@@ -40,6 +56,7 @@ namespace Blockiverse.VR
 
         void OnValidate()
         {
+            ContinuousMoveSpeed = continuousMoveSpeed;
             SnapTurnDegrees = snapTurnDegrees;
             StandingEyeHeight = standingEyeHeight;
         }

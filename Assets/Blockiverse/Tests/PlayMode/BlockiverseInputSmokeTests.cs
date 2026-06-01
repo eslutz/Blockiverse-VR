@@ -3,7 +3,6 @@ using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 
 namespace Blockiverse.Tests.PlayMode
@@ -15,9 +14,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneEnablesInputRig()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             BlockiverseInputRig inputRig = Object.FindFirstObjectByType<BlockiverseInputRig>();
             Assert.That(inputRig, Is.Not.Null);
@@ -28,9 +25,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneHasTrackedControllerAnchors()
         {
-            AsyncOperation operation = SceneManager.LoadSceneAsync(BootSceneName, LoadSceneMode.Single);
-            while (!operation.isDone)
-                yield return null;
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             BlockiverseControllerAnchor[] anchors = Object.FindObjectsByType<BlockiverseControllerAnchor>(
                 FindObjectsInactive.Include,
@@ -64,10 +59,13 @@ namespace Blockiverse.Tests.PlayMode
                 controllerObject.transform.localRotation = fallbackRotation;
 
                 BlockiverseControllerAnchor anchor = controllerObject.AddComponent<BlockiverseControllerAnchor>();
-                anchor.Configure(inputRig, BlockiverseControllerRole.Left);
+                anchor.Configure(BlockiverseControllerRole.Left);
 
                 yield return null;
 
+                // The anchor is a passive role marker; without a TrackedPoseDriver it never moves
+                // the controller transform, so the authored fallback pose is preserved.
+                Assert.That(anchor.Role, Is.EqualTo(BlockiverseControllerRole.Left));
                 Assert.That(Vector3.Distance(controllerObject.transform.localPosition, fallbackPosition), Is.LessThan(0.0001f));
                 Assert.That(Quaternion.Dot(controllerObject.transform.localRotation, fallbackRotation), Is.GreaterThan(0.9999f));
             }
@@ -77,6 +75,12 @@ namespace Blockiverse.Tests.PlayMode
                 Object.DestroyImmediate(rigObject);
                 Object.DestroyImmediate(inputActions);
             }
+        }
+
+        [UnityTearDown]
+        public IEnumerator TearDown()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
         }
     }
 }

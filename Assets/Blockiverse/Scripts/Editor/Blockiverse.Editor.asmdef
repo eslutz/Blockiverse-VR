@@ -17,6 +17,7 @@
     "Unity.XR.CoreUtils",
     "Unity.XR.Management",
     "Unity.XR.Management.Editor",
+    "Unity.XR.Interaction.Toolkit",
     "Unity.XR.OpenXR",
     "Unity.XR.OpenXR.Editor",
     "UnityEngine.UI"

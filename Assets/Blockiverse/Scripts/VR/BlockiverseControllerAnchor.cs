@@ -1,67 +1,47 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.XR;
+using UnityEngine.XR;
 
 namespace Blockiverse.VR
 {
+    /// <summary>
+    /// Identifies a controller anchor's hand role. Controller pose is driven natively by the
+    /// <see cref="TrackedPoseDriver"/> on the same GameObject (configured by the rig), so this
+    /// component only carries the role used by haptics, avatars, and interaction wiring.
+    /// </summary>
     public sealed class BlockiverseControllerAnchor : MonoBehaviour
     {
-        [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] BlockiverseControllerRole role;
-
-        bool isTracked;
+        [SerializeField] TrackedPoseDriver poseDriver;
 
         public BlockiverseControllerRole Role => role;
-        public bool IsTracked => isTracked;
 
-        string MapName => role == BlockiverseControllerRole.Left
-            ? BlockiverseInputActionNames.LeftHandMap
-            : BlockiverseInputActionNames.RightHandMap;
-
-        public void Configure(BlockiverseInputRig rig, BlockiverseControllerRole controllerRole)
+        /// <summary>
+        /// Whether the controller is currently tracked, read from the native pose driver's
+        /// tracking-state input (position or rotation reported as tracked).
+        /// </summary>
+        public bool IsTracked
         {
-            inputRig = rig;
-            role = controllerRole;
-        }
-
-        void Update()
-        {
-            if (inputRig == null || inputRig.InputActions == null)
+            get
             {
-                isTracked = false;
-                return;
+                if (poseDriver == null || !poseDriver.enabled)
+                    return false;
+
+                InputAction trackingStateAction = poseDriver.trackingStateInput.action;
+
+                if (trackingStateAction == null)
+                    return false;
+
+                var trackingState = (InputTrackingState)trackingStateAction.ReadValue<int>();
+                return (trackingState & (InputTrackingState.Position | InputTrackingState.Rotation)) != 0;
             }
-
-            isTracked = TryFindAction(BlockiverseInputActionNames.IsTracked, out InputAction isTrackedAction) &&
-                isTrackedAction.IsPressed();
-
-            if (!isTracked)
-                return;
-
-            if (!TryFindAction(BlockiverseInputActionNames.Position, out InputAction position) ||
-                !TryFindAction(BlockiverseInputActionNames.Rotation, out InputAction rotation))
-                return;
-
-            Quaternion controllerRotation = rotation.ReadValue<Quaternion>();
-            if (IsZeroQuaternion(controllerRotation))
-                return;
-
-            transform.localPosition = position.ReadValue<Vector3>();
-            transform.localRotation = controllerRotation;
         }
 
-        bool TryFindAction(string actionName, out InputAction action)
+        public void Configure(BlockiverseControllerRole controllerRole, TrackedPoseDriver controllerPoseDriver = null)
         {
-            InputActionMap map = inputRig.InputActions.FindActionMap(MapName, throwIfNotFound: false);
-            action = map?.FindAction(actionName, throwIfNotFound: false);
-            return action != null;
-        }
-
-        static bool IsZeroQuaternion(Quaternion rotation)
-        {
-            return rotation.x == 0.0f &&
-                rotation.y == 0.0f &&
-                rotation.z == 0.0f &&
-                rotation.w == 0.0f;
+            role = controllerRole;
+            poseDriver = controllerPoseDriver != null ? controllerPoseDriver : poseDriver != null ? poseDriver : GetComponent<TrackedPoseDriver>();
         }
     }
 }

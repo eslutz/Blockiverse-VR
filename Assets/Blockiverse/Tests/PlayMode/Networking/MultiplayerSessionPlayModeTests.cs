@@ -1646,7 +1646,10 @@ namespace Blockiverse.Tests.Networking.PlayMode
             EventSystem[] eventSystems = UnityEngine.Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None);
 
             Assert.That(eventSystems, Has.Length.EqualTo(1));
-            Assert.That(eventSystems[0].GetComponent<InputSystemUIInputModule>(), Is.Not.Null);
+            // VR UI now uses XRI's tracked-device input module (a BaseInputModule) instead of the
+            // screen-space InputSystemUIInputModule. Assert without an XRI dependency in this asmdef.
+            Assert.That(eventSystems[0].GetComponent<BaseInputModule>(), Is.Not.Null);
+            Assert.That(eventSystems[0].GetComponent<InputSystemUIInputModule>(), Is.Null);
         }
     }
 }
