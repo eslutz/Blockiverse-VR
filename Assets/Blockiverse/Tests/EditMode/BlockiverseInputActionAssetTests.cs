@@ -33,6 +33,18 @@ namespace Blockiverse.Tests.EditMode
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, "<XRController>{LeftHand}/secondaryButton");
         }
 
+        [Test]
+        public void RightHandContainsJumpAction()
+        {
+            InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                BlockiverseProject.InputActionsAssetPath);
+
+            // Jump is on right A (primaryButton) — the same button used for height reset on the
+            // left hand; the per-hand map separation keeps them from conflicting.
+            AssertAction(asset, BlockiverseInputActionNames.RightHandMap,
+                BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
+        }
+
         static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)
         {
             string controllerPath = $"<XRController>{{{handUsage}}}";
@@ -48,8 +60,10 @@ namespace Blockiverse.Tests.EditMode
             AssertAction(asset, mapName, BlockiverseInputActionNames.HapticDevice, $"{controllerPath}/*");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Move, $"{controllerPath}/thumbstick");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Turn, $"{controllerPath}/thumbstick");
-            AssertAction(asset, mapName, BlockiverseInputActionNames.TeleportMode, $"{controllerPath}/primaryButton");
-            AssertAction(asset, mapName, BlockiverseInputActionNames.TeleportSelect, $"{controllerPath}/triggerPressed");
+            // Teleport Mode and Teleport Select are now thumbstick-up composites (push forward to
+            // aim, release to teleport), not trigger or A button.
+            AssertActionContainsPath(asset, mapName, BlockiverseInputActionNames.TeleportMode, "thumbstick");
+            AssertActionContainsPath(asset, mapName, BlockiverseInputActionNames.TeleportSelect, "thumbstick");
         }
 
         static void AssertAction(InputActionAsset asset, string mapName, string actionName, string expectedPath)
@@ -58,7 +72,18 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(action, Is.Not.Null, $"{mapName}/{actionName}");
             Assert.That(action.bindings, Has.Some.Matches<InputBinding>(
-                binding => binding.effectivePath == expectedPath));
+                binding => binding.effectivePath == expectedPath),
+                $"{mapName}/{actionName} binding not found: {expectedPath}");
+        }
+
+        static void AssertActionContainsPath(InputActionAsset asset, string mapName, string actionName, string pathSubstring)
+        {
+            InputAction action = asset.FindActionMap(mapName).FindAction(actionName);
+
+            Assert.That(action, Is.Not.Null, $"{mapName}/{actionName}");
+            Assert.That(action.bindings, Has.Some.Matches<InputBinding>(b =>
+                (b.effectivePath ?? b.path ?? "").Contains(pathSubstring)),
+                $"{mapName}/{actionName} should have a binding containing '{pathSubstring}'");
         }
     }
 }

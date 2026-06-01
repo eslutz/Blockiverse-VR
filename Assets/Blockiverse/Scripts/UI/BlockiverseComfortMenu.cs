@@ -9,9 +9,13 @@ namespace Blockiverse.UI
     public sealed class BlockiverseComfortMenu : MonoBehaviour
     {
         [SerializeField] Canvas canvas;
+        // Legacy: kept for compatibility; locomotionMode toggle replaces this.
         [SerializeField] Toggle teleportToggle;
+        [SerializeField] Toggle glideToggle;
         [SerializeField] Toggle smoothTurnToggle;
         [SerializeField] Slider snapTurnSlider;
+        [SerializeField] Toggle vignetteToggle;
+        [SerializeField] Slider vignetteStrengthSlider;
         [SerializeField] BlockiverseComfortSettings settings;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
@@ -19,8 +23,11 @@ namespace Blockiverse.UI
         UnityAction<bool> toggleChanged;
         UnityAction<float> sliderChanged;
         Toggle registeredTeleportToggle;
+        Toggle registeredGlideToggle;
         Toggle registeredSmoothTurnToggle;
+        Toggle registeredVignetteToggle;
         Slider registeredSnapTurnSlider;
+        Slider registeredVignetteStrengthSlider;
 
         public bool IsVisible => canvas != null && canvas.enabled;
 
@@ -32,13 +39,19 @@ namespace Blockiverse.UI
         }
 
         public void ConfigureControls(
+            Toggle targetGlideToggle,
             Toggle targetTeleportToggle,
             Toggle targetSmoothTurnToggle,
-            Slider targetSnapTurnSlider)
+            Slider targetSnapTurnSlider,
+            Toggle targetVignetteToggle = null,
+            Slider targetVignetteStrengthSlider = null)
         {
+            glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
             smoothTurnToggle = targetSmoothTurnToggle;
             snapTurnSlider = targetSnapTurnSlider;
+            vignetteToggle = targetVignetteToggle;
+            vignetteStrengthSlider = targetVignetteStrengthSlider;
             RegisterControlCallbacks();
             ApplyControls();
         }
@@ -88,14 +101,32 @@ namespace Blockiverse.UI
             if (settings == null)
                 return;
 
-            if (teleportToggle != null)
-                settings.TeleportEnabled = teleportToggle.isOn;
+            // Locomotion mode: Glide/Teleport are mutually exclusive.
+            // Glide toggle takes priority over the legacy teleport toggle.
+            if (glideToggle != null)
+            {
+                settings.LocomotionMode = glideToggle.isOn
+                    ? BlockiverseLocomotionMode.Glide
+                    : BlockiverseLocomotionMode.Teleport;
+            }
+            else if (teleportToggle != null)
+            {
+                settings.LocomotionMode = teleportToggle.isOn
+                    ? BlockiverseLocomotionMode.Teleport
+                    : BlockiverseLocomotionMode.Glide;
+            }
 
             if (smoothTurnToggle != null)
                 settings.SmoothTurnEnabled = smoothTurnToggle.isOn;
 
             if (snapTurnSlider != null)
                 settings.SnapTurnDegrees = snapTurnSlider.value;
+
+            if (vignetteToggle != null)
+                settings.VignetteEnabled = vignetteToggle.isOn;
+
+            if (vignetteStrengthSlider != null)
+                settings.VignetteStrength = vignetteStrengthSlider.value;
         }
 
         void Awake()
@@ -115,8 +146,11 @@ namespace Blockiverse.UI
             sliderChanged ??= _ => ApplyControlsWithFeedback();
 
             RegisterToggleCallback(teleportToggle, ref registeredTeleportToggle);
+            RegisterToggleCallback(glideToggle, ref registeredGlideToggle);
             RegisterToggleCallback(smoothTurnToggle, ref registeredSmoothTurnToggle);
+            RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
+            RegisterSliderCallback(vignetteStrengthSlider, ref registeredVignetteStrengthSlider);
         }
 
         void RegisterToggleCallback(Toggle targetToggle, ref Toggle registeredToggle)
@@ -152,15 +186,27 @@ namespace Blockiverse.UI
             if (registeredTeleportToggle != null)
                 registeredTeleportToggle.onValueChanged.RemoveListener(toggleChanged);
 
+            if (registeredGlideToggle != null)
+                registeredGlideToggle.onValueChanged.RemoveListener(toggleChanged);
+
             if (registeredSmoothTurnToggle != null)
                 registeredSmoothTurnToggle.onValueChanged.RemoveListener(toggleChanged);
+
+            if (registeredVignetteToggle != null)
+                registeredVignetteToggle.onValueChanged.RemoveListener(toggleChanged);
 
             if (registeredSnapTurnSlider != null)
                 registeredSnapTurnSlider.onValueChanged.RemoveListener(sliderChanged);
 
+            if (registeredVignetteStrengthSlider != null)
+                registeredVignetteStrengthSlider.onValueChanged.RemoveListener(sliderChanged);
+
             registeredTeleportToggle = null;
+            registeredGlideToggle = null;
             registeredSmoothTurnToggle = null;
+            registeredVignetteToggle = null;
             registeredSnapTurnSlider = null;
+            registeredVignetteStrengthSlider = null;
         }
 
         void ApplyControlsWithFeedback()

@@ -14,6 +14,8 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
@@ -75,6 +77,8 @@ namespace Blockiverse.Tests.EditMode
                 SnapTurnProvider snapTurn = instance.GetComponent<SnapTurnProvider>();
                 TeleportationProvider teleport = instance.GetComponent<TeleportationProvider>();
                 ContinuousTurnProvider continuousTurn = instance.GetComponent<ContinuousTurnProvider>();
+                GravityProvider gravity = instance.GetComponent<GravityProvider>();
+                JumpProvider jump = instance.GetComponent<JumpProvider>();
                 TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
 
                 Assert.That(inputRig, Is.Not.Null);
@@ -94,6 +98,10 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(continuousTurn, Is.Not.Null);
                 Assert.That(inputRig.ContinuousTurnProvider, Is.SameAs(continuousTurn));
                 Assert.That(continuousTurn.mediator, Is.SameAs(mediator));
+                Assert.That(gravity, Is.Not.Null);
+                Assert.That(inputRig.GravityProvider, Is.SameAs(gravity));
+                Assert.That(jump, Is.Not.Null);
+                Assert.That(inputRig.JumpProvider, Is.SameAs(jump));
                 Assert.That(poseDriver, Is.Not.Null);
                 Assert.That(poseDriver.enabled, Is.True);
                 Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
@@ -140,6 +148,17 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
             Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(presenter));
             Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
+
+            // Menu must contain Glide and Teleport selectors + vignette toggle.
+            Toggle glideToggle = menuTransform.Find("Panel/Glide Toggle")?.GetComponent<Toggle>();
+            Toggle teleportToggle = menuTransform.Find("Panel/Teleport Toggle")?.GetComponent<Toggle>();
+            Toggle vignetteToggle = menuTransform.Find("Panel/Vignette Toggle")?.GetComponent<Toggle>();
+            Slider vignetteSlider = menuTransform.Find("Panel/Vignette Slider/Slider")?.GetComponent<Slider>();
+
+            Assert.That(glideToggle, Is.Not.Null, "Comfort menu should have a Glide Motion toggle.");
+            Assert.That(teleportToggle, Is.Not.Null, "Comfort menu should have a Teleport toggle.");
+            Assert.That(vignetteToggle, Is.Not.Null, "Comfort menu should have a Motion Vignette toggle.");
+            Assert.That(vignetteSlider, Is.Not.Null, "Comfort menu should have a vignette strength slider.");
         }
 
         [Test]
@@ -173,6 +192,61 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void XrRigPrefabHasJumpGravityAndCharacterControllerForCollision()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            JumpProvider jump = prefab.GetComponent<JumpProvider>();
+            GravityProvider gravity = prefab.GetComponent<GravityProvider>();
+            CharacterController cc = prefab.GetComponentInChildren<CharacterController>(true);
+
+            Assert.That(jump, Is.Not.Null, "Rig should carry a JumpProvider.");
+            Assert.That(gravity, Is.Not.Null, "Rig should carry a GravityProvider.");
+            Assert.That(cc, Is.Not.Null, "Rig origin should carry a CharacterController for voxel collision.");
+        }
+
+        [Test]
+        public void XrRigPrefabInputBindingsHaveJumpAndThumbstickUpTeleport()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
+
+            Assert.That(inputRig, Is.Not.Null);
+            Assert.That(inputRig.InputActions, Is.Not.Null);
+
+            // Jump must be on right primaryButton (A).
+            InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
+            Assert.That(rightHandMap, Is.Not.Null);
+
+            InputAction jumpAction = rightHandMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
+            Assert.That(jumpAction, Is.Not.Null, "Jump action must exist in RightHand map.");
+            Assert.That(jumpAction.bindings, Has.Some.Matches<InputBinding>(b =>
+                (b.effectivePath ?? b.path ?? "").Contains("primaryButton")),
+                "Jump should be bound to primaryButton (right A).");
+
+            // Teleport Mode on both hands must be thumbstick-based, not a hardware button.
+            foreach (string mapName in new[] { BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.RightHandMap })
+            {
+                InputActionMap map = inputRig.InputActions.FindActionMap(mapName, throwIfNotFound: false);
+                Assert.That(map, Is.Not.Null, $"{mapName} must exist.");
+                InputAction teleportMode = map.FindAction(BlockiverseInputActionNames.TeleportMode, throwIfNotFound: false);
+                Assert.That(teleportMode, Is.Not.Null, $"Teleport Mode must exist in {mapName}.");
+                Assert.That(teleportMode.bindings, Has.Some.Matches<InputBinding>(b =>
+                    (b.effectivePath ?? b.path ?? "").Contains("thumbstick")),
+                    $"Teleport Mode in {mapName} should be bound to thumbstick.");
+                Assert.That(teleportMode.bindings, Has.None.Matches<InputBinding>(b =>
+                    (b.effectivePath ?? b.path ?? "").Contains("primaryButton") ||
+                    (b.effectivePath ?? b.path ?? "").Contains("triggerPressed")),
+                    $"Teleport Mode in {mapName} must not use trigger or A button.");
+            }
+        }
+
+        [Test]
         public void XrRigPrefabIsWiredForNativeInteractorsAndBlockMenu()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
@@ -182,6 +256,9 @@ namespace Blockiverse.Tests.EditMode
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
             Transform interactionRayTransform = rightController?.Find("Interaction Ray");
             Transform teleportRayTransform = rightController?.Find("Teleport Ray");
+            // Left controller now also carries a teleport ray for Teleport mode.
+            Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
+            Transform leftTeleportRayTransform = leftController?.Find("Teleport Ray");
             Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
             XRRayInteractor interactionRay = interactionRayTransform?.GetComponent<XRRayInteractor>();
             XRInteractorLineVisual interactionLineVisual = interactionRayTransform?.GetComponent<XRInteractorLineVisual>();
@@ -202,6 +279,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(teleportRay.lineType, Is.EqualTo(XRRayInteractor.LineType.ProjectileCurve));
             Assert.That(teleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(mediator, Is.Not.Null);
+            // Left controller also carries a teleport ray (either thumbstick can aim in Teleport mode).
+            Assert.That(leftTeleportRayTransform, Is.Not.Null, "Left controller must have a Teleport Ray.");
+            Assert.That(leftTeleportRayTransform.GetComponent<XRRayInteractor>(), Is.Not.Null);
+            Assert.That(leftTeleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(creativeInputBridge, Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Right Controller/Ray Pointer Line"), Is.Null);
             Assert.That(blockMenu, Is.Not.Null);
