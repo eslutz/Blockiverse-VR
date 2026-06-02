@@ -500,7 +500,8 @@ namespace Blockiverse.VR
                 continuousMoveProvider.moveSpeed = comfortSettings != null
                     ? comfortSettings.ContinuousMoveSpeed
                     : DefaultContinuousMoveSpeed;
-                continuousMoveProvider.enabled = comfortSettings == null || comfortSettings.ContinuousMoveEnabled;
+                continuousMoveProvider.enabled = comfortSettings == null ||
+                    comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide;
             }
 
             if (snapTurnProvider != null)

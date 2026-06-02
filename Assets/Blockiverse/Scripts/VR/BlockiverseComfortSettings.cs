@@ -29,10 +29,6 @@ namespace Blockiverse.VR
             set => locomotionMode = value;
         }
 
-        // Compatibility wrappers used by existing code that predates LocomotionMode.
-        public bool TeleportEnabled => locomotionMode == BlockiverseLocomotionMode.Teleport;
-        public bool ContinuousMoveEnabled => locomotionMode == BlockiverseLocomotionMode.Glide;
-
         public float ContinuousMoveSpeed
         {
             get => continuousMoveSpeed;
