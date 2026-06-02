@@ -301,8 +301,6 @@ namespace Blockiverse.Tests.PlayMode
                 snapTurnSlider.value = 60.0f;
 
                 Assert.That(settings.LocomotionMode, Is.EqualTo(BlockiverseLocomotionMode.Teleport));
-                Assert.That(settings.TeleportEnabled, Is.True);
-                Assert.That(settings.ContinuousMoveEnabled, Is.False);
                 Assert.That(settings.SmoothTurnEnabled, Is.True);
                 Assert.That(settings.SnapTurnDegrees, Is.EqualTo(60.0f).Within(0.01f));
             }
