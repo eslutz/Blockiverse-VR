@@ -7,6 +7,8 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
@@ -40,6 +42,8 @@ namespace Blockiverse.VR
         [SerializeField] ContinuousTurnProvider continuousTurnProvider;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] BlockiverseHeightReset heightReset;
+        [SerializeField] GravityProvider gravityProvider;
+        [SerializeField] JumpProvider jumpProvider;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
@@ -62,6 +66,8 @@ namespace Blockiverse.VR
         public TeleportationProvider TeleportationProvider => teleportationProvider;
         public SnapTurnProvider SnapTurnProvider => snapTurnProvider;
         public ContinuousTurnProvider ContinuousTurnProvider => continuousTurnProvider;
+        public GravityProvider GravityProvider => gravityProvider;
+        public JumpProvider JumpProvider => jumpProvider;
 
         public void Configure(InputActionAsset actions)
         {
@@ -80,7 +86,9 @@ namespace Blockiverse.VR
             LocomotionMediator mediator = null,
             XRBodyTransformer transformer = null,
             BlockiverseComfortSettings settings = null,
-            ContinuousTurnProvider continuousTurn = null)
+            ContinuousTurnProvider continuousTurn = null,
+            GravityProvider gravity = null,
+            JumpProvider jump = null)
         {
             teleportationProvider = teleport;
             snapTurnProvider = snapTurn;
@@ -90,6 +98,8 @@ namespace Blockiverse.VR
             bodyTransformer = transformer != null ? transformer : bodyTransformer;
             comfortSettings = settings != null ? settings : comfortSettings;
             continuousTurnProvider = continuousTurn != null ? continuousTurn : continuousTurnProvider;
+            gravityProvider = gravity != null ? gravity : gravityProvider;
+            jumpProvider = jump != null ? jump : jumpProvider;
             ConfigureXriLocomotionProviders();
         }
 
@@ -380,6 +390,19 @@ namespace Blockiverse.VR
                 heightReset = gameObject.AddComponent<BlockiverseHeightReset>();
 
             heightReset.Configure(origin, comfortSettings);
+
+            if (gravityProvider == null)
+                gravityProvider = GetComponent<GravityProvider>();
+
+            if (gravityProvider == null)
+                gravityProvider = gameObject.AddComponent<GravityProvider>();
+
+            if (jumpProvider == null)
+                jumpProvider = GetComponent<JumpProvider>();
+
+            if (jumpProvider == null)
+                jumpProvider = gameObject.AddComponent<JumpProvider>();
+
             ConfigureXriLocomotionProviders();
         }
 
@@ -422,6 +445,12 @@ namespace Blockiverse.VR
                 continuousTurnProvider.mediator = locomotionMediator;
                 continuousTurnProvider.turnSpeed = DefaultContinuousTurnSpeed;
             }
+
+            if (gravityProvider != null)
+                gravityProvider.mediator = locomotionMediator;
+
+            if (jumpProvider != null)
+                jumpProvider.mediator = locomotionMediator;
 
             ConfigureXriProviderInputs();
             SubscribeTeleportFeedback();
@@ -471,7 +500,8 @@ namespace Blockiverse.VR
                 continuousMoveProvider.moveSpeed = comfortSettings != null
                     ? comfortSettings.ContinuousMoveSpeed
                     : DefaultContinuousMoveSpeed;
-                continuousMoveProvider.enabled = comfortSettings == null || comfortSettings.ContinuousMoveEnabled;
+                continuousMoveProvider.enabled = comfortSettings == null ||
+                    comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide;
             }
 
             if (snapTurnProvider != null)
@@ -484,6 +514,26 @@ namespace Blockiverse.VR
 
             if (continuousTurnProvider != null)
                 continuousTurnProvider.enabled = smoothTurn;
+
+            // In Teleport mode teleport rays are active; in Glide mode they must stay inactive.
+            // The teleport ray mediators read LocomotionMode directly, so no rig-level toggle
+            // is needed here — the provider enable state below is sufficient.
+            if (jumpProvider != null)
+            {
+                bool isGlide = comfortSettings == null ||
+                    comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide;
+                // Jump is only meaningful in Glide mode (Teleport mode uses teleport, not jump).
+                jumpProvider.enabled = isGlide;
+
+                if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction))
+                {
+                    jumpProvider.jumpInput = new XRInputButtonReader("Jump",
+                        inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference)
+                    {
+                        inputActionReferencePerformed = InputActionReference.Create(jumpAction)
+                    };
+                }
+            }
         }
 
         void SubscribeTeleportFeedback()

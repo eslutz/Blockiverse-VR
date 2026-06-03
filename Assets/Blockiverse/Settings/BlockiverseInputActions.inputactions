@@ -107,7 +107,7 @@
                 {
                     "name": "Teleport Mode",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000013",
+                    "id": "{26BB17C0-3DA6-44C8-AF61-45F4C541BF67}",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -116,7 +116,7 @@
                 {
                     "name": "Teleport Select",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000014",
+                    "id": "{DD0E0C94-C7D4-446A-A4AF-5EB7658566D2}",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -246,26 +246,48 @@
                     "isPartOfComposite": false
                 },
                 {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000026",
-                    "path": "<XRController>{LeftHand}/primaryButton",
+                    "name": "1D Axis",
+                    "id": "{9CD4726D-DE7D-46B5-B5CA-37DBFDC2D62E}",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Mode",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "positive",
+                    "id": "{7D9D67CA-F5E9-412B-8DB2-0F374C38A104}",
+                    "path": "<XRController>{LeftHand}/thumbstick/y",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Teleport Mode",
                     "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "1D Axis",
+                    "id": "{82F09146-F8E9-4D38-979E-50A2266A485F}",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Select",
+                    "isComposite": true,
                     "isPartOfComposite": false
                 },
                 {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000027",
-                    "path": "<XRController>{LeftHand}/triggerPressed",
+                    "name": "positive",
+                    "id": "{41408077-8183-4D69-9251-F277AF97A535}",
+                    "path": "<XRController>{LeftHand}/thumbstick/y",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Teleport Select",
                     "isComposite": false,
-                    "isPartOfComposite": false
+                    "isPartOfComposite": true
                 }
             ]
         },
@@ -375,7 +397,7 @@
                 {
                     "name": "Teleport Mode",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000040",
+                    "id": "{E946299A-6EFE-4D98-BDCF-38C8CBFB7BD4}",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -384,7 +406,16 @@
                 {
                     "name": "Teleport Select",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000041",
+                    "id": "{71C3AD55-B234-42C9-B10C-3367F6288E8A}",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Jump",
+                    "type": "Button",
+                    "id": "{56EDF0A2-DC73-4DA2-ACAA-41BE7BCC93D9}",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -514,24 +545,57 @@
                     "isPartOfComposite": false
                 },
                 {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000053",
-                    "path": "<XRController>{RightHand}/primaryButton",
+                    "name": "1D Axis",
+                    "id": "{0246ED54-56D0-470D-A1B4-1FBE304BBD34}",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Mode",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "positive",
+                    "id": "{4C3A8D0A-23AD-4F14-95D5-41AEAF155A3A}",
+                    "path": "<XRController>{RightHand}/thumbstick/y",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Teleport Mode",
                     "isComposite": false,
-                    "isPartOfComposite": false
+                    "isPartOfComposite": true
                 },
                 {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000054",
-                    "path": "<XRController>{RightHand}/triggerPressed",
+                    "name": "1D Axis",
+                    "id": "{691AFFA8-7872-4213-BEDA-E2E04C5AE16E}",
+                    "path": "1DAxis",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Teleport Select",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "positive",
+                    "id": "{461807D0-7984-4D73-8504-64210D6D6074}",
+                    "path": "<XRController>{RightHand}/thumbstick/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Select",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "",
+                    "id": "{714A8ED1-183D-47A7-8A75-6DBE64502EB9}",
+                    "path": "<XRController>{RightHand}/primaryButton",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Jump",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

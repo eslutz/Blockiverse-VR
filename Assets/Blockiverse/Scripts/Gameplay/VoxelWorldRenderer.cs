@@ -176,7 +176,10 @@ namespace Blockiverse.Gameplay
                 area.colliders.Add(chunkCollider);
 
             area.matchOrientation = MatchOrientation.WorldSpaceUp;
-            area.teleportTrigger = BaseTeleportationInteractable.TeleportTrigger.OnSelectEntered;
+            // OnSelectExited: the player releases the thumbstick to commit the teleport.
+            // Teleport Mode and Teleport Select are both bound to thumbstick/y, so OnSelectEntered
+            // would teleport instantly on aim; Exited gives hold-to-aim / release-to-land behavior.
+            area.teleportTrigger = BaseTeleportationInteractable.TeleportTrigger.OnSelectExited;
         }
 
         void RefreshStats()

@@ -36,6 +36,8 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
@@ -90,7 +92,7 @@ namespace Blockiverse.Editor
         const string TunnelingVignetteName = "Tunneling Vignette";
         const string TunnelingVignettePrefabPath = "Assets/Blockiverse/VR/TunnelingVignette/TunnelingVignette.prefab";
         const string InteractionTestBlockName = "Interaction Test Block";
-        static readonly Vector2 ComfortMenuSize = new(520.0f, 420.0f);
+        static readonly Vector2 ComfortMenuSize = new(520.0f, 580.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
         static readonly Vector2 SurvivalHudSize = new(720.0f, 420.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
@@ -1383,35 +1385,45 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(haptics);
         }
 
-        // Builds the native interaction (UI + block targeting) and teleport rays on the right
-        // controller, plus the mediator that switches between them while Teleport Mode is held.
+        // Builds the native interaction (UI + block targeting, right hand only) and teleport rays
+        // on each controller, plus the mediator that switches between them while the locomotion
+        // mode is Teleport and thumbstick-forward is pushed.
         static XRRayInteractor EnsureControllerInteractors(
             GameObject controller,
             BlockiverseInputRig inputRig,
             BlockiverseControllerRole role)
         {
-            if (role != BlockiverseControllerRole.Right)
-                return null;
-
             Material pointerMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.PointerLineMaterialPath);
+            BlockiverseComfortSettings settings = inputRig != null ? inputRig.GetComponent<BlockiverseComfortSettings>() : null;
+            string mapName = role == BlockiverseControllerRole.Left
+                ? BlockiverseInputActionNames.LeftHandMap
+                : BlockiverseInputActionNames.RightHandMap;
 
-            GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
-            interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-            interactionRayObject.SetActive(true);
+            XRRayInteractor interactionRay = null;
 
-            XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
-            interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
-            interactionRay.enableUIInteraction = true;
-            interactionRay.manipulateAttachTransform = false;
-            // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk
-            // TeleportationArea). UI still works (separate path) and block targeting uses the
-            // physics raycast via TryGetCurrent3DRaycastHit on this raycast mask.
-            interactionRay.interactionLayers = 0;
-            interactionRay.raycastMask = GetInteractionLayerMask();
-            interactionRay.uiPressInput = MakeButtonReader("UI Press", FindRigAction(inputRig, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress));
-            interactionRay.uiScrollInput = MakeVector2Reader("UI Scroll", FindRigAction(inputRig, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
-            ConfigureLineVisual(interactionRayObject, pointerMaterial);
+            // Only the right controller carries the UI/block interaction ray.
+            if (role == BlockiverseControllerRole.Right)
+            {
+                GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
+                interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+                interactionRayObject.SetActive(true);
 
+                interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
+                interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
+                interactionRay.enableUIInteraction = true;
+                interactionRay.manipulateAttachTransform = false;
+                // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk
+                // TeleportationArea). UI still works (separate path) and block targeting uses
+                // TryGetCurrent3DRaycastHit on this raycast mask.
+                interactionRay.interactionLayers = 0;
+                interactionRay.raycastMask = GetInteractionLayerMask();
+                interactionRay.uiPressInput = MakeButtonReader("UI Press", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.UiPress));
+                interactionRay.uiScrollInput = MakeVector2Reader("UI Scroll", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.UiScroll));
+                ConfigureLineVisual(interactionRayObject, pointerMaterial);
+                EditorUtility.SetDirty(interactionRay);
+            }
+
+            // Both controllers get a teleport ray; the mediator activates it only in Teleport mode.
             GameObject teleportRayObject = EnsureChild(controller.transform, TeleportRayName);
             teleportRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
@@ -1420,16 +1432,16 @@ namespace Blockiverse.Editor
             teleportRay.enableUIInteraction = false;
             teleportRay.manipulateAttachTransform = false;
             teleportRay.raycastMask = GetInteractionLayerMask();
-            teleportRay.selectInput = MakeButtonReader("Teleport Select", FindRigAction(inputRig, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.TeleportSelect));
+            // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
+            teleportRay.selectInput = MakeButtonReader("Teleport Select", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.TeleportSelect));
             ConfigureLineVisual(teleportRayObject, pointerMaterial);
             teleportRayObject.SetActive(false);
+            EditorUtility.SetDirty(teleportRay);
 
             BlockiverseLocomotionRayMediator mediator = EnsureComponent<BlockiverseLocomotionRayMediator>(controller);
-            mediator.Configure(inputRig, interactionRay, teleportRay, role);
-
-            EditorUtility.SetDirty(interactionRay);
-            EditorUtility.SetDirty(teleportRay);
+            mediator.Configure(inputRig, settings, interactionRay, teleportRay, role);
             EditorUtility.SetDirty(mediator);
+
             return interactionRay;
         }
 
@@ -1452,12 +1464,16 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(lineVisual);
         }
 
+        // Use InputActionReference mode so the bootstrapper-assigned reader does not take ownership
+        // of the action's enable/disable lifecycle. The rig enables/disables the whole
+        // InputActionAsset, and InputAction mode would fight that.
         static XRInputButtonReader MakeButtonReader(string name, InputAction action)
         {
-            var reader = new XRInputButtonReader(name, inputSourceMode: XRInputButtonReader.InputSourceMode.InputAction);
+            var reader = new XRInputButtonReader(name,
+                inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference);
 
             if (action != null)
-                reader.inputActionPerformed = action;
+                reader.inputActionReferencePerformed = InputActionReference.Create(action);
 
             return reader;
         }
@@ -1467,9 +1483,10 @@ namespace Blockiverse.Editor
             if (action == null)
                 return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
 
-            return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.InputAction)
+            return new XRInputValueReader<Vector2>(name,
+                XRInputValueReader.InputSourceMode.InputActionReference)
             {
-                inputAction = action
+                inputActionReference = InputActionReference.Create(action)
             };
         }
 
@@ -1558,30 +1575,58 @@ namespace Blockiverse.Editor
                 new Vector2(32.0f, -36.0f),
                 new Vector2(460.0f, 56.0f));
 
+            // --- Movement Mode (Glide / Teleport) ---
+            EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 28,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(32.0f, -104.0f), new Vector2(300.0f, 36.0f));
+
+            Toggle glideToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Glide Toggle",
+                "Glide Motion",
+                settings == null || settings.LocomotionMode == BlockiverseLocomotionMode.Glide,
+                new Vector2(32.0f, -148.0f));
+
             Toggle teleportToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Teleport Toggle",
                 "Teleport",
-                settings == null || settings.TeleportEnabled,
-                new Vector2(32.0f, -104.0f));
+                settings != null && settings.LocomotionMode == BlockiverseLocomotionMode.Teleport,
+                new Vector2(32.0f, -196.0f));
 
+            // --- Turning ---
             Toggle smoothTurnToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Smooth Turn Toggle",
                 "Smooth Turn",
                 settings != null && settings.SmoothTurnEnabled,
-                new Vector2(32.0f, -176.0f));
+                new Vector2(32.0f, -252.0f));
 
             Slider snapTurnSlider = EnsureSnapTurnSlider(
                 panelObject.transform,
                 settings != null ? settings.SnapTurnDegrees : 45.0f,
-                new Vector2(32.0f, -254.0f));
+                new Vector2(32.0f, -308.0f));
 
+            // --- Vignette ---
+            Toggle vignetteToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Vignette Toggle",
+                "Motion Vignette",
+                settings == null || settings.VignetteEnabled,
+                new Vector2(32.0f, -376.0f));
+
+            Slider vignetteSlider = EnsureVignetteSlider(
+                panelObject.transform,
+                settings != null ? settings.VignetteStrength : 1.0f,
+                new Vector2(32.0f, -430.0f));
+
+            // --- Height Reset ---
             Button heightResetButton = EnsureButtonControl(
                 panelObject.transform,
                 "Height Reset Button",
                 "Reset Height",
-                new Vector2(32.0f, -356.0f));
+                new Vector2(32.0f, -494.0f));
 
             if (heightReset != null)
             {
@@ -1595,7 +1640,7 @@ namespace Blockiverse.Editor
 
             BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
             menu.Configure(canvas, settings);
-            menu.ConfigureControls(teleportToggle, smoothTurnToggle, snapTurnSlider);
+            menu.ConfigureControls(glideToggle, teleportToggle, smoothTurnToggle, snapTurnSlider, vignetteToggle, vignetteSlider);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             presenter.Configure(canvas, head, 1.18f, 0.0f, -0.1f, 0.0f);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
@@ -1653,6 +1698,19 @@ namespace Blockiverse.Editor
             if (controller == null)
                 return;
 
+            BlockiverseComfortSettings vignetteSettings = rig.GetComponent<BlockiverseComfortSettings>();
+            float aperture = vignetteSettings != null ? vignetteSettings.VignetteAperture : 0.85f;
+
+            // Default parameters: aperture 0.85 is subtler than the XRI default (0.7).
+            // The comfort menu's vignette strength slider adjusts this at runtime.
+            controller.defaultParameters = new VignetteParameters
+            {
+                apertureSize = aperture,
+                featheringEffect = 0.2f,
+                easeInTime = 0.3f,
+                easeOutTime = 0.3f,
+            };
+
             // Ease the comfort vignette in/out during locomotion that causes vection or a viewpoint
             // jump: continuous move, continuous (smooth) turn, and teleport. Snap turn is itself a
             // discrete comfort option, so it is intentionally excluded to avoid a vignette flicker
@@ -1662,7 +1720,11 @@ namespace Blockiverse.Editor
             AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
             AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
 
+            BlockiverseVignetteSettingsDriver driver = EnsureComponent<BlockiverseVignetteSettingsDriver>(controller.gameObject);
+            driver.Configure(vignetteSettings);
+
             EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(driver);
             EditorUtility.SetDirty(controller.gameObject);
         }
 
@@ -2408,6 +2470,71 @@ namespace Blockiverse.Editor
             return slider;
         }
 
+        static Slider EnsureVignetteSlider(Transform parent, float value, Vector2 anchoredPosition)
+        {
+            GameObject rowObject = EnsureRectChild(parent, "Vignette Slider");
+            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(rowRect, anchoredPosition, new Vector2(456.0f, 88.0f));
+
+            EnsureLabel(rowObject.transform, "Label", "Strength", 32, TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 0.0f), new Vector2(220.0f, 40.0f));
+
+            GameObject sliderObject = EnsureRectChild(rowObject.transform, "Slider");
+            RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(sliderRect, new Vector2(0.0f, -48.0f), new Vector2(420.0f, 32.0f));
+
+            Slider slider = EnsureComponent<Slider>(sliderObject);
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = 0.0f;
+            slider.maxValue = 1.0f;
+            slider.wholeNumbers = false;
+
+            GameObject backgroundObject = EnsureRectChild(sliderObject.transform, "Background");
+            RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+            backgroundRect.anchorMin = new Vector2(0.0f, 0.35f);
+            backgroundRect.anchorMax = new Vector2(1.0f, 0.65f);
+            backgroundRect.offsetMin = Vector2.zero;
+            backgroundRect.offsetMax = Vector2.zero;
+            EnsureComponent<Image>(backgroundObject).color = ComfortMenuControlColor;
+
+            GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
+            RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
+            fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one;
+            fillAreaRect.offsetMin = new Vector2(8.0f, 0.0f);
+            fillAreaRect.offsetMax = new Vector2(-8.0f, 0.0f);
+
+            GameObject fillObject = EnsureRectChild(fillAreaObject.transform, "Fill");
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.anchorMin = new Vector2(0.0f, 0.35f);
+            fillRect.anchorMax = new Vector2(1.0f, 0.65f);
+            fillRect.offsetMin = Vector2.zero;
+            fillRect.offsetMax = Vector2.zero;
+            EnsureComponent<Image>(fillObject).color = ComfortMenuAccentColor;
+
+            GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
+            RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
+            handleAreaRect.anchorMin = Vector2.zero;
+            handleAreaRect.anchorMax = Vector2.one;
+            handleAreaRect.offsetMin = new Vector2(8.0f, 0.0f);
+            handleAreaRect.offsetMax = new Vector2(-8.0f, 0.0f);
+
+            GameObject handleObject = EnsureRectChild(handleAreaObject.transform, "Handle");
+            RectTransform handleRect = handleObject.GetComponent<RectTransform>();
+            handleRect.anchorMin = new Vector2(0.0f, 0.5f);
+            handleRect.anchorMax = new Vector2(0.0f, 0.5f);
+            handleRect.sizeDelta = new Vector2(32.0f, 32.0f);
+            Image handle = EnsureComponent<Image>(handleObject);
+            handle.color = Color.white;
+
+            slider.fillRect = fillRect;
+            slider.handleRect = handleRect;
+            slider.targetGraphic = handle;
+            slider.value = value;
+            return slider;
+        }
+
         static Button EnsureButtonControl(Transform parent, string name, string label, Vector2 anchoredPosition)
         {
             return EnsureButtonControl(parent, name, label, anchoredPosition, new Vector2(220.0f, 54.0f));
@@ -2707,7 +2834,41 @@ namespace Blockiverse.Editor
                 heightReset = rig.AddComponent<BlockiverseHeightReset>();
 
             heightReset.Configure(origin, settings);
-            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings, continuousTurn);
+
+            // CharacterController enables physical collisions against voxel chunk mesh colliders.
+            // XRBodyTransformer.useCharacterControllerIfExists (default true) picks it up
+            // automatically; no additional wiring is needed.
+            CharacterController characterController = origin != null
+                ? origin.Origin.GetComponent<CharacterController>()
+                : rig.GetComponent<CharacterController>();
+
+            if (characterController == null)
+            {
+                GameObject originObject = origin != null ? origin.Origin : rig;
+                characterController = originObject.AddComponent<CharacterController>();
+                characterController.height = 1.8f;
+                characterController.radius = 0.3f;
+                characterController.center = new Vector3(0.0f, 0.9f, 0.0f);
+                characterController.slopeLimit = 45.0f;
+                characterController.stepOffset = 0.3f;
+            }
+
+            GravityProvider gravityProvider = rig.GetComponent<GravityProvider>();
+
+            if (gravityProvider == null)
+                gravityProvider = rig.AddComponent<GravityProvider>();
+
+            gravityProvider.mediator = mediator;
+
+            JumpProvider jumpProvider = rig.GetComponent<JumpProvider>();
+
+            if (jumpProvider == null)
+                jumpProvider = rig.AddComponent<JumpProvider>();
+
+            jumpProvider.mediator = mediator;
+            jumpProvider.jumpHeight = 1.2f;
+
+            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings, continuousTurn, gravityProvider, jumpProvider);
 
             BlockiverseAudioCuePlayer audioCuePlayer = rig.GetComponent<BlockiverseAudioCuePlayer>();
             inputRig.ConfigureTeleportFeedback(audioCuePlayer);

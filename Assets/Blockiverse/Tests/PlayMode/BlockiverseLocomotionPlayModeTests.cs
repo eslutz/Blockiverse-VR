@@ -172,10 +172,17 @@ namespace Blockiverse.Tests.PlayMode
                 continuousMove.moveSpeed = 2.0f;
                 continuousMove.leftHandMoveInput = CreateManualVector2Reader("Left Hand Move", new Vector2(0.0f, 1.0f));
 
+                // Capture the starting position after the first frame so the assertion measures
+                // only the delta from continuous move, not any displacement caused by a
+                // GravityProvider that may be active elsewhere in the scene (e.g. the Boot scene
+                // was loaded by a prior test and not fully unloaded yet).
                 yield return null;
+                Vector3 positionAfterFirstFrame = origin.transform.position;
+                yield return null;
+                Vector3 delta = origin.transform.position - positionAfterFirstFrame;
 
-                Assert.That(origin.transform.position.x, Is.GreaterThan(0.0f));
-                Assert.That(Mathf.Abs(origin.transform.position.z), Is.LessThan(0.01f));
+                Assert.That(delta.x, Is.GreaterThan(0.0f), "Continuous move should translate +X when camera is yawed 90°.");
+                Assert.That(Mathf.Abs(delta.z), Is.LessThan(Mathf.Abs(delta.x) * 0.1f), "Movement should be primarily along camera forward (+X), not Z.");
             }
             finally
             {
@@ -191,7 +198,7 @@ namespace Blockiverse.Tests.PlayMode
             try
             {
                 var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                settings.ContinuousMoveEnabled = false;
+                settings.LocomotionMode = BlockiverseLocomotionMode.Teleport;
                 ConfigureXriLocomotionStack(
                     rigObject,
                     origin,
@@ -262,6 +269,7 @@ namespace Blockiverse.Tests.PlayMode
         {
             var settingsObject = new GameObject("Comfort Settings");
             var menuObject = new GameObject("Comfort Menu");
+            var glideObject = new GameObject("Glide Toggle");
             var teleportObject = new GameObject("Teleport Toggle");
             var smoothTurnObject = new GameObject("Smooth Turn Toggle");
             var snapTurnObject = new GameObject("Snap Turn Slider");
@@ -271,24 +279,28 @@ namespace Blockiverse.Tests.PlayMode
                 var settings = settingsObject.AddComponent<BlockiverseComfortSettings>();
                 var menu = menuObject.AddComponent<BlockiverseComfortMenu>();
                 var canvas = menuObject.AddComponent<Canvas>();
+                var glideToggle = glideObject.AddComponent<Toggle>();
                 var teleportToggle = teleportObject.AddComponent<Toggle>();
                 var smoothTurnToggle = smoothTurnObject.AddComponent<Toggle>();
                 var snapTurnSlider = snapTurnObject.AddComponent<Slider>();
 
-                teleportToggle.isOn = true;
+                // Start in Glide mode
+                glideToggle.isOn = true;
+                teleportToggle.isOn = false;
                 smoothTurnToggle.isOn = false;
                 snapTurnSlider.minValue = 15.0f;
                 snapTurnSlider.maxValue = 90.0f;
                 snapTurnSlider.value = 45.0f;
 
                 menu.Configure(canvas, settings);
-                menu.ConfigureControls(teleportToggle, smoothTurnToggle, snapTurnSlider);
+                menu.ConfigureControls(glideToggle, teleportToggle, smoothTurnToggle, snapTurnSlider);
 
-                teleportToggle.isOn = false;
+                // Switch to Teleport mode via the glide toggle
+                glideToggle.isOn = false;
                 smoothTurnToggle.isOn = true;
                 snapTurnSlider.value = 60.0f;
 
-                Assert.That(settings.TeleportEnabled, Is.False);
+                Assert.That(settings.LocomotionMode, Is.EqualTo(BlockiverseLocomotionMode.Teleport));
                 Assert.That(settings.SmoothTurnEnabled, Is.True);
                 Assert.That(settings.SnapTurnDegrees, Is.EqualTo(60.0f).Within(0.01f));
             }
@@ -297,6 +309,7 @@ namespace Blockiverse.Tests.PlayMode
                 Object.DestroyImmediate(snapTurnObject);
                 Object.DestroyImmediate(smoothTurnObject);
                 Object.DestroyImmediate(teleportObject);
+                Object.DestroyImmediate(glideObject);
                 Object.DestroyImmediate(menuObject);
                 Object.DestroyImmediate(settingsObject);
             }
