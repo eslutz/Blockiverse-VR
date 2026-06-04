@@ -479,6 +479,9 @@ namespace Blockiverse.Editor
         static void EnsureInputActionSchema(InputActionAsset asset)
         {
             InputActionMap gameplayMap = asset.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
+            InputActionMap rightHandMap = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
+
+            RemoveAction(rightHandMap, BlockiverseInputActionNames.Jump);
 
             if (gameplayMap == null)
             {
@@ -501,6 +504,12 @@ namespace Blockiverse.Editor
                 "<XRController>{LeftHand}/secondaryButton");
             RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
             EditorUtility.SetDirty(asset);
+        }
+
+        static void RemoveAction(InputActionMap map, string actionName)
+        {
+            InputAction action = map?.FindAction(actionName, throwIfNotFound: false);
+            action?.RemoveAction();
         }
 
         static void EnsureButtonAction(InputActionMap map, string actionName, string bindingPath)

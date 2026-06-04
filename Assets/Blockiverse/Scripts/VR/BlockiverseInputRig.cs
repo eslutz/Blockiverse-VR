@@ -610,14 +610,11 @@ namespace Blockiverse.VR
                 // Jump is only meaningful in Glide mode (Teleport mode uses teleport, not jump).
                 jumpProvider.enabled = isGlide;
 
-                if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction))
-                {
-                    jumpProvider.jumpInput = new XRInputButtonReader("Jump",
-                        inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference)
-                    {
-                        inputActionReferencePerformed = InputActionReference.Create(jumpAction)
-                    };
-                }
+                jumpProvider.jumpInput = CreateButtonActionReader(
+                    "Jump",
+                    TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction)
+                        ? jumpAction
+                        : null);
             }
         }
 
