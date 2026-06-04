@@ -6,6 +6,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
@@ -22,6 +23,7 @@ namespace Blockiverse.VR
         const float DefaultContinuousMoveSpeed = 1.8f;
         const float DefaultSnapTurnDegrees = 45.0f;
         const float DefaultContinuousTurnSpeed = 60.0f;
+        const float DefaultJumpHeightMeters = 1.3f;
         const string HeadPositionPath = "<XRHMD>/centerEyePosition";
         const string HeadRotationPath = "<XRHMD>/centerEyeRotation";
         const string HeadTrackingStatePath = "<XRHMD>/trackingState";
@@ -40,10 +42,11 @@ namespace Blockiverse.VR
         [SerializeField] TeleportationProvider teleportationProvider;
         [SerializeField] SnapTurnProvider snapTurnProvider;
         [SerializeField] ContinuousTurnProvider continuousTurnProvider;
-        [SerializeField] BlockiverseComfortSettings comfortSettings;
-        [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] GravityProvider gravityProvider;
         [SerializeField] JumpProvider jumpProvider;
+        [SerializeField] CharacterController characterController;
+        [SerializeField] BlockiverseComfortSettings comfortSettings;
+        [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
@@ -68,6 +71,7 @@ namespace Blockiverse.VR
         public ContinuousTurnProvider ContinuousTurnProvider => continuousTurnProvider;
         public GravityProvider GravityProvider => gravityProvider;
         public JumpProvider JumpProvider => jumpProvider;
+        public CharacterController CharacterController => characterController;
 
         public void Configure(InputActionAsset actions)
         {
@@ -88,7 +92,8 @@ namespace Blockiverse.VR
             BlockiverseComfortSettings settings = null,
             ContinuousTurnProvider continuousTurn = null,
             GravityProvider gravity = null,
-            JumpProvider jump = null)
+            JumpProvider jump = null,
+            CharacterController controller = null)
         {
             teleportationProvider = teleport;
             snapTurnProvider = snapTurn;
@@ -100,6 +105,7 @@ namespace Blockiverse.VR
             continuousTurnProvider = continuousTurn != null ? continuousTurn : continuousTurnProvider;
             gravityProvider = gravity != null ? gravity : gravityProvider;
             jumpProvider = jump != null ? jump : jumpProvider;
+            characterController = controller != null ? controller : characterController;
             ConfigureXriLocomotionProviders();
         }
 
@@ -120,6 +126,7 @@ namespace Blockiverse.VR
             EnsureHeadPoseDriver();
             EnsureControllerPoseDrivers();
             EnsureXriLocomotionProviders();
+            EnsureRayInteractorInputs();
         }
 
         public InputAction FindAction(string mapName, string actionName)
@@ -218,22 +225,9 @@ namespace Blockiverse.VR
         void Update()
         {
             ApplyComfortSettingsToProviders();
-            UpdateHeightReset();
             UpdateMenu();
             UpdateQuickMenu();
             UpdateCreativeBindings();
-        }
-
-        void UpdateHeightReset()
-        {
-            if (heightReset == null ||
-                !TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.HeightReset, out InputAction heightResetAction) ||
-                !heightResetAction.WasPressedThisFrame())
-            {
-                return;
-            }
-
-            heightReset.ResetHeight();
         }
 
         void UpdateMenu()
@@ -383,6 +377,30 @@ namespace Blockiverse.VR
             if (continuousTurnProvider == null)
                 continuousTurnProvider = gameObject.AddComponent<ContinuousTurnProvider>();
 
+            // A CharacterController gives the body a collision capsule so gravity/jumping land on the
+            // voxel terrain; XRBodyTransformer auto-creates a CharacterControllerBodyManipulator when it
+            // sees one. GravityProvider must exist before JumpProvider (JumpProvider disables itself in
+            // Awake if it cannot find a GravityProvider), so add them in that order.
+            if (characterController == null)
+                characterController = GetComponent<CharacterController>();
+
+            if (characterController == null)
+                characterController = gameObject.AddComponent<CharacterController>();
+
+            ConfigureCharacterController(characterController);
+
+            if (gravityProvider == null)
+                gravityProvider = GetComponent<GravityProvider>();
+
+            if (gravityProvider == null)
+                gravityProvider = gameObject.AddComponent<GravityProvider>();
+
+            if (jumpProvider == null)
+                jumpProvider = GetComponent<JumpProvider>();
+
+            if (jumpProvider == null)
+                jumpProvider = gameObject.AddComponent<JumpProvider>();
+
             if (heightReset == null)
                 heightReset = GetComponent<BlockiverseHeightReset>();
 
@@ -450,7 +468,10 @@ namespace Blockiverse.VR
                 gravityProvider.mediator = locomotionMediator;
 
             if (jumpProvider != null)
+            {
                 jumpProvider.mediator = locomotionMediator;
+                jumpProvider.jumpHeight = DefaultJumpHeightMeters;
+            }
 
             ConfigureXriProviderInputs();
             SubscribeTeleportFeedback();
@@ -489,6 +510,70 @@ namespace Blockiverse.VR
                     "Right Hand Smooth Turn",
                     hasRightTurn ? rightTurn : null);
             }
+
+            if (jumpProvider != null)
+            {
+                jumpProvider.jumpInput = CreateButtonActionReader(
+                    "Jump",
+                    TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction)
+                        ? jumpAction
+                        : null);
+            }
+        }
+
+        // Re-wire the right controller's ray readers from the live InputActionAsset every run. These
+        // XRInputButtonReaders are serialized on the ray interactors with embedded direct actions whose
+        // map-owned bindings are lost on serialization, which is why UI clicks and teleport-select silently
+        // fail. Pointing them at the live actions (InputActionReference) restores the bindings at runtime.
+        void EnsureRayInteractorInputs()
+        {
+            BlockiverseLocomotionRayMediator rayMediator = GetComponentInChildren<BlockiverseLocomotionRayMediator>(true);
+
+            if (rayMediator == null)
+                return;
+
+            XRRayInteractor interactionRay = rayMediator.InteractionRay;
+
+            if (interactionRay != null)
+            {
+                interactionRay.uiPressInput = CreateButtonActionReader(
+                    "UI Press",
+                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress, out InputAction uiPress)
+                        ? uiPress
+                        : null);
+                interactionRay.uiScrollInput = CreateVector2ActionReader(
+                    "UI Scroll",
+                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll, out InputAction uiScroll)
+                        ? uiScroll
+                        : null);
+            }
+
+            XRRayInteractor teleportRay = rayMediator.TeleportRay;
+
+            if (teleportRay != null)
+            {
+                teleportRay.selectInput = CreateButtonActionReader(
+                    "Teleport Select",
+                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.TeleportSelect, out InputAction teleportSelect)
+                        ? teleportSelect
+                        : null);
+            }
+        }
+
+        public static void ConfigureCharacterController(CharacterController controller)
+        {
+            if (controller == null)
+                return;
+
+            // The CharacterControllerBodyManipulator rewrites height/center each move from the camera, so
+            // these are starting values; radius/slope/step define how the capsule clears voxel edges.
+            controller.radius = 0.3f;
+            controller.height = 1.6f;
+            controller.center = new Vector3(0.0f, 0.8f, 0.0f);
+            controller.slopeLimit = 45.0f;
+            controller.stepOffset = 0.3f;
+            controller.skinWidth = 0.02f;
+            controller.minMoveDistance = 0.0f;
         }
 
         void ApplyComfortSettingsToProviders()
@@ -525,14 +610,11 @@ namespace Blockiverse.VR
                 // Jump is only meaningful in Glide mode (Teleport mode uses teleport, not jump).
                 jumpProvider.enabled = isGlide;
 
-                if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction))
-                {
-                    jumpProvider.jumpInput = new XRInputButtonReader("Jump",
-                        inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference)
-                    {
-                        inputActionReferencePerformed = InputActionReference.Create(jumpAction)
-                    };
-                }
+                jumpProvider.jumpInput = CreateButtonActionReader(
+                    "Jump",
+                    TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction)
+                        ? jumpAction
+                        : null);
             }
         }
 
@@ -611,6 +693,19 @@ namespace Blockiverse.VR
         static XRInputValueReader<Vector2> CreateUnusedVector2Reader(string name)
         {
             return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
+        }
+
+        static XRInputButtonReader CreateButtonActionReader(string name, InputAction action)
+        {
+            if (action == null)
+                return new XRInputButtonReader(name, inputSourceMode: XRInputButtonReader.InputSourceMode.Unused);
+
+            // Reference the live action instead of embedding it (see CreateVector2ActionReader): a direct
+            // InputAction serialized into the prefab loses its map-owned bindings, so the press never reads.
+            return new XRInputButtonReader(name, inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference)
+            {
+                inputActionReferencePerformed = InputActionReference.Create(action)
+            };
         }
     }
 }

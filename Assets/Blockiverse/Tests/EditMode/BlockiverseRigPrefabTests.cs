@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
+using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
@@ -19,6 +20,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using TMPro;
 using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
@@ -77,8 +79,9 @@ namespace Blockiverse.Tests.EditMode
                 SnapTurnProvider snapTurn = instance.GetComponent<SnapTurnProvider>();
                 TeleportationProvider teleport = instance.GetComponent<TeleportationProvider>();
                 ContinuousTurnProvider continuousTurn = instance.GetComponent<ContinuousTurnProvider>();
-                GravityProvider gravity = instance.GetComponent<GravityProvider>();
-                JumpProvider jump = instance.GetComponent<JumpProvider>();
+                GravityProvider gravityProvider = instance.GetComponent<GravityProvider>();
+                JumpProvider jumpProvider = instance.GetComponent<JumpProvider>();
+                CharacterController characterController = instance.GetComponent<CharacterController>();
                 TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
 
                 Assert.That(inputRig, Is.Not.Null);
@@ -98,10 +101,18 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(continuousTurn, Is.Not.Null);
                 Assert.That(inputRig.ContinuousTurnProvider, Is.SameAs(continuousTurn));
                 Assert.That(continuousTurn.mediator, Is.SameAs(mediator));
-                Assert.That(gravity, Is.Not.Null);
-                Assert.That(inputRig.GravityProvider, Is.SameAs(gravity));
-                Assert.That(jump, Is.Not.Null);
-                Assert.That(inputRig.JumpProvider, Is.SameAs(jump));
+                // Gravity + physics-based jumping: CharacterController gives the player a
+                // collision capsule, GravityProvider applies gravity via sphere-cast grounding,
+                // and JumpProvider drives kinematic jump arcs with coyote time.
+                Assert.That(characterController, Is.Not.Null, "Rig must have a CharacterController for physics-based locomotion.");
+                Assert.That(gravityProvider, Is.Not.Null, "Rig must have a GravityProvider for falling off edges.");
+                Assert.That(jumpProvider, Is.Not.Null, "Rig must have a JumpProvider for jumping.");
+                Assert.That(inputRig.CharacterController, Is.SameAs(characterController));
+                Assert.That(inputRig.GravityProvider, Is.SameAs(gravityProvider));
+                Assert.That(inputRig.JumpProvider, Is.SameAs(jumpProvider));
+                Assert.That(gravityProvider.mediator, Is.SameAs(mediator));
+                Assert.That(jumpProvider.mediator, Is.SameAs(mediator));
+                AssertJumpProviderUsesGameplayJump(inputRig, jumpProvider);
                 Assert.That(poseDriver, Is.Not.Null);
                 Assert.That(poseDriver.enabled, Is.True);
                 Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
@@ -219,15 +230,18 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(inputRig.InputActions, Is.Not.Null);
 
-            // Jump must be on right primaryButton (A).
-            InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
-            Assert.That(rightHandMap, Is.Not.Null);
+            InputActionMap gameplayMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
+            Assert.That(gameplayMap, Is.Not.Null);
 
-            InputAction jumpAction = rightHandMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
-            Assert.That(jumpAction, Is.Not.Null, "Jump action must exist in RightHand map.");
+            InputAction jumpAction = gameplayMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
+            Assert.That(jumpAction, Is.Not.Null, "Jump action must exist in the gameplay map.");
             Assert.That(jumpAction.bindings, Has.Some.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "").Contains("primaryButton")),
-                "Jump should be bound to primaryButton (right A).");
+                "Jump should be bound to primaryButton.");
+
+            InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
+            Assert.That(rightHandMap?.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
+                "RightHand/Jump is stale; JumpProvider should read Blockiverse Gameplay/Jump.");
 
             // Teleport Mode on both hands must be thumbstick-based, not a hardware button.
             foreach (string mapName in new[] { BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.RightHandMap })
@@ -343,7 +357,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popup.GetComponent<Canvas>()?.enabled, Is.False);
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
             Assert.That(
-                popup.GetComponentsInChildren<Text>(includeInactive: true)
+                popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                     .Any(label => label.text.Contains("Right trigger")),
                 Is.True);
 
@@ -401,6 +415,18 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(property.action, Is.Not.Null);
             Assert.That(property.action.bindings, Has.Some.Matches<InputBinding>(
                 binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
+        }
+
+        static void AssertJumpProviderUsesGameplayJump(BlockiverseInputRig inputRig, JumpProvider jumpProvider)
+        {
+            InputAction jumpAction = inputRig.InputActions
+                .FindActionMap(BlockiverseInputActionNames.GameplayMap)
+                .FindAction(BlockiverseInputActionNames.Jump);
+
+            Assert.That(jumpProvider.jumpInput.inputSourceMode,
+                Is.EqualTo(XRInputButtonReader.InputSourceMode.InputActionReference));
+            Assert.That(jumpProvider.jumpInput.inputActionReferencePerformed?.action,
+                Is.SameAs(jumpAction));
         }
 
         static void AssertControllerPoseDriver(GameObject instance, string controllerName, string positionPath, string rotationPath)

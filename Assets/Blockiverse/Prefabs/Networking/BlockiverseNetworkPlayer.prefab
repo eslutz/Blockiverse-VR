@@ -413,7 +413,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 0
   InScenePlacedSourceGlobalObjectIdHash: 0
@@ -438,7 +438,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 44b2c1b7d98f4a0a9f2a5e1b7c3d9e10, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseNetworkAvatarRig
   ShowTopMostFoldoutHeaderGroup: 1
   fallbackProxyEnabled: 1
@@ -463,7 +463,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e69b52f7fe865492d8c8aec88463c916, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.MetaAvatars::Blockiverse.MetaAvatars.MetaHorizonAvatarProvider
   avatarEntity: {fileID: 0}
   streamLod: 2
@@ -481,7 +481,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d0a726e692d6140a299a3a712f4dac3b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.MetaAvatars::Blockiverse.MetaAvatars.BlockiverseMetaAvatarPresenter
   providerBehaviour: {fileID: 3261388504053597789}
   fallbackRig: {fileID: 7759416061770130042}
@@ -501,7 +501,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 89abe2397df254dbea207cc802e0fad5, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.MetaAvatars::Blockiverse.MetaAvatars.MetaAvatarStreamRelay
   ShowTopMostFoldoutHeaderGroup: 1
   remotePresenter: {fileID: 0}

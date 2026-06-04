@@ -9,6 +9,7 @@
     "Blockiverse.Networking",
     "Blockiverse.VR",
     "UnityEngine.UI",
+    "Unity.TextMeshPro",
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],

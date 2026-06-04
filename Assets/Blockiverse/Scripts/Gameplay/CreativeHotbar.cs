@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Blockiverse.Voxel;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -13,7 +14,7 @@ namespace Blockiverse.Gameplay
         readonly List<BlockId> blockIds = new();
 
         BlockRegistry registry;
-        [SerializeField] Text selectedBlockLabel;
+        [SerializeField] TMP_Text selectedBlockLabel;
         [SerializeField] Canvas targetCanvas;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         int selectedIndex;
@@ -23,7 +24,7 @@ namespace Blockiverse.Gameplay
         public bool IsVisible => targetCanvas != null && targetCanvas.enabled;
         public UnityEvent SelectionChanged { get; } = new();
 
-        public void Configure(BlockRegistry blockRegistry, IEnumerable<BlockId> selectableBlocks, Text selectedLabel)
+        public void Configure(BlockRegistry blockRegistry, IEnumerable<BlockId> selectableBlocks, TMP_Text selectedLabel)
         {
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             selectedBlockLabel = selectedLabel;
@@ -52,7 +53,7 @@ namespace Blockiverse.Gameplay
             audioCuePlayer = targetAudioCuePlayer;
         }
 
-        public void ConfigureDefault(Text selectedLabel)
+        public void ConfigureDefault(TMP_Text selectedLabel)
         {
             BlockRegistry defaultRegistry = BlockRegistry.CreateDefault();
             Configure(

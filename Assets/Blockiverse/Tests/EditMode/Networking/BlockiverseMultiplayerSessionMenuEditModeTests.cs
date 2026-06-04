@@ -1,6 +1,7 @@
 using Blockiverse.Networking;
 using Blockiverse.UI;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -71,20 +72,20 @@ namespace Blockiverse.Tests.Networking.EditMode
             return buttonObject.AddComponent<Button>();
         }
 
-        InputField CreateInputField(string name)
+        TMP_InputField CreateInputField(string name)
         {
             GameObject inputObject = new(name, typeof(RectTransform));
             inputObject.transform.SetParent(menuObject.transform, false);
-            InputField input = inputObject.AddComponent<InputField>();
+            TMP_InputField input = inputObject.AddComponent<TMP_InputField>();
             input.textComponent = CreateText("Text");
             return input;
         }
 
-        Text CreateText(string name)
+        TextMeshProUGUI CreateText(string name)
         {
             GameObject textObject = new(name, typeof(RectTransform));
             textObject.transform.SetParent(menuObject.transform, false);
-            return textObject.AddComponent<Text>();
+            return textObject.AddComponent<TextMeshProUGUI>();
         }
     }
 }

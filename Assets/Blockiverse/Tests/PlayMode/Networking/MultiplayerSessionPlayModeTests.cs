@@ -22,6 +22,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using TMPro;
 using UnityEngine.UI;
 
 namespace Blockiverse.Tests.Networking.PlayMode
@@ -1446,8 +1447,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Button hostButton = CreateButton("Host Button", menuObject.transform);
             Button joinButton = CreateButton("Join Button", menuObject.transform);
             Button stopButton = CreateButton("Stop Button", menuObject.transform);
-            InputField addressInput = CreateInputField("Address Input", menuObject.transform);
-            Text statusText = CreateText("Status", menuObject.transform);
+            TMP_InputField addressInput = CreateInputField("Address Input", menuObject.transform);
+            TMP_Text statusText = CreateText("Status", menuObject.transform);
 
             menu.Configure(session);
             menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
@@ -1472,20 +1473,20 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return buttonObject.AddComponent<Button>();
         }
 
-        static InputField CreateInputField(string name, Transform parent)
+        static TMP_InputField CreateInputField(string name, Transform parent)
         {
             GameObject inputObject = new(name, typeof(RectTransform));
             inputObject.transform.SetParent(parent, false);
-            InputField input = inputObject.AddComponent<InputField>();
+            TMP_InputField input = inputObject.AddComponent<TMP_InputField>();
             input.textComponent = CreateText("Text", inputObject.transform);
             return input;
         }
 
-        static Text CreateText(string name, Transform parent)
+        static TextMeshProUGUI CreateText(string name, Transform parent)
         {
             GameObject textObject = new(name, typeof(RectTransform));
             textObject.transform.SetParent(parent, false);
-            return textObject.AddComponent<Text>();
+            return textObject.AddComponent<TextMeshProUGUI>();
         }
 
         static ushort NextPort()

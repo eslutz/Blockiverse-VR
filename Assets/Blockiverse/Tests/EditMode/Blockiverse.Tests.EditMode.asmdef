@@ -14,6 +14,7 @@
     "Unity.InputSystem",
     "Unity.XR.CoreUtils",
     "Unity.XR.Interaction.Toolkit",
+    "Unity.TextMeshPro",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
     "Unity.XR.OpenXR"

@@ -8,6 +8,7 @@
     "Blockiverse.Survival",
     "Blockiverse.Persistence",
     "Blockiverse.UI",
+    "Unity.TextMeshPro",
     "UnityEngine.UI",
     "Unity.Netcode.Runtime",
     "UnityEditor.TestRunner",

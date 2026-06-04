@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.VR;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,8 +12,8 @@ namespace Blockiverse.UI
     public sealed class SurvivalCraftingPanel : MonoBehaviour
     {
         [SerializeField] Button[] recipeButtons;
-        [SerializeField] Text[] recipeLabels;
-        [SerializeField] Text statusLabel;
+        [SerializeField] TMP_Text[] recipeLabels;
+        [SerializeField] TMP_Text statusLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
@@ -31,14 +32,14 @@ namespace Blockiverse.UI
             interactionHaptics = targetInteractionHaptics;
         }
 
-        public void Configure(Text[] targetRecipeLabels, Text targetStatusLabel)
+        public void Configure(TMP_Text[] targetRecipeLabels, TMP_Text targetStatusLabel)
         {
             Configure(null, targetRecipeLabels, targetStatusLabel);
         }
 
-        public void Configure(Button[] targetRecipeButtons, Text[] targetRecipeLabels, Text targetStatusLabel)
+        public void Configure(Button[] targetRecipeButtons, TMP_Text[] targetRecipeLabels, TMP_Text targetStatusLabel)
         {
-            recipeLabels = targetRecipeLabels ?? Array.Empty<Text>();
+            recipeLabels = targetRecipeLabels ?? Array.Empty<TMP_Text>();
             recipeButtons = targetRecipeButtons ?? Array.Empty<Button>();
             statusLabel = targetStatusLabel;
             WireRecipeButtons();

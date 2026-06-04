@@ -3,6 +3,7 @@ using System.Collections;
 using Blockiverse.Core;
 using Blockiverse.UI;
 using Blockiverse.VR;
+using TMPro;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -116,9 +117,11 @@ namespace Blockiverse.Tests.PlayMode
         static void AssertPanelContainsText(Transform panel, string expectedText)
         {
             Text[] labels = panel.GetComponentsInChildren<Text>(includeInactive: true);
+            TMP_Text[] tmpLabels = panel.GetComponentsInChildren<TMP_Text>(includeInactive: true);
 
             Assert.That(
-                Array.Exists(labels, label => label != null && label.text.Contains(expectedText)),
+                Array.Exists(labels, label => label != null && label.text.Contains(expectedText))
+                    || Array.Exists(tmpLabels, label => label != null && label.text.Contains(expectedText)),
                 Is.True,
                 $"Expected panel {panel.name} to contain text '{expectedText}'.");
         }

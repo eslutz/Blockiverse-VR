@@ -411,15 +411,6 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
-                },
-                {
-                    "name": "Jump",
-                    "type": "Button",
-                    "id": "{56EDF0A2-DC73-4DA2-ACAA-41BE7BCC93D9}",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -587,17 +578,6 @@
                     "action": "Teleport Select",
                     "isComposite": false,
                     "isPartOfComposite": true
-                },
-                {
-                    "name": "",
-                    "id": "{714A8ED1-183D-47A7-8A75-6DBE64502EB9}",
-                    "path": "<XRController>{RightHand}/primaryButton",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Jump",
-                    "isComposite": false,
-                    "isPartOfComposite": false
                 }
             ]
         },
@@ -615,7 +595,7 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Height Reset",
+                    "name": "Jump",
                     "type": "Button",
                     "id": "00000000-0000-0000-0000-000000000057",
                     "expectedControlType": "Button",
@@ -652,7 +632,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Height Reset",
+                    "action": "Jump",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

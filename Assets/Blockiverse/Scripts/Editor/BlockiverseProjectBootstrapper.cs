@@ -8,6 +8,8 @@ using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
 using Blockiverse.UI;
 using Blockiverse.VR;
+using Oculus.Avatar2;
+using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -92,24 +94,42 @@ namespace Blockiverse.Editor
         const string TunnelingVignetteName = "Tunneling Vignette";
         const string TunnelingVignettePrefabPath = "Assets/Blockiverse/VR/TunnelingVignette/TunnelingVignette.prefab";
         const string InteractionTestBlockName = "Interaction Test Block";
+        const float JumpHeightMeters = 1.3f;
         static readonly Vector2 ComfortMenuSize = new(520.0f, 580.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
         static readonly Vector2 SurvivalHudSize = new(720.0f, 420.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
-        static readonly Color ComfortMenuPanelColor = new(0.07f, 0.08f, 0.09f, 0.92f);
-        static readonly Color ComfortMenuControlColor = new(0.18f, 0.21f, 0.24f, 1.0f);
-        static readonly Color ComfortMenuAccentColor = new(0.19f, 0.72f, 0.54f, 1.0f);
-        static readonly Color BlockMenuPanelColor = new(0.05f, 0.12f, 0.16f, 0.94f);
-        static readonly Color BlockMenuControlColor = new(0.18f, 0.31f, 0.36f, 1.0f);
-        static readonly Color BlockMenuAccentColor = new(0.94f, 0.72f, 0.26f, 1.0f);
-        static readonly Color SurvivalHudPanelColor = new(0.06f, 0.08f, 0.10f, 0.90f);
-        static readonly Color SurvivalHudSectionColor = new(0.13f, 0.18f, 0.20f, 0.95f);
-        static readonly Color SurvivalHudAccentColor = new(0.21f, 0.75f, 0.57f, 1.0f);
-        static readonly Color StartupOverlayPanelColor = new(0.02f, 0.04f, 0.05f, 0.96f);
-        static readonly Color MultiplayerMenuPanelColor = new(0.07f, 0.09f, 0.10f, 0.94f);
-        static readonly Color MultiplayerMenuInputColor = new(0.11f, 0.16f, 0.18f, 1.0f);
+        // --- Dark-glass theme palette -------------------------------------------------------
+        // All panels share a deep charcoal-glass base with a single teal accent. Controls use
+        // a lighter tinted surface with hover/pressed tints via Button.ColorBlock.
+        static readonly Color PanelBaseColor       = new(0.06f, 0.07f, 0.09f, 0.94f);
+        static readonly Color PanelHeaderColor     = new(0.09f, 0.11f, 0.14f, 1.00f);
+        static readonly Color ControlNormalColor   = new(0.16f, 0.20f, 0.24f, 1.00f);
+        static readonly Color ControlHighlightColor= new(0.26f, 0.34f, 0.40f, 1.00f);
+        static readonly Color ControlPressedColor  = new(0.10f, 0.14f, 0.18f, 1.00f);
+        static readonly Color ControlSelectedColor = new(0.20f, 0.29f, 0.36f, 1.00f);
+        static readonly Color AccentColor          = new(0.18f, 0.75f, 0.56f, 1.00f);
+        static readonly Color AccentHighlightColor = new(0.24f, 0.88f, 0.66f, 1.00f);
+        static readonly Color TextPrimaryColor     = new(0.95f, 0.97f, 1.00f, 1.00f);
+        static readonly Color TextDimColor         = new(0.65f, 0.70f, 0.75f, 1.00f);
+        static readonly Color DividerColor         = new(0.22f, 0.28f, 0.34f, 0.80f);
+
+        // Legacy per-panel aliases used by a few callers that haven't been refactored yet.
+        static readonly Color ComfortMenuPanelColor    = PanelBaseColor;
+        static readonly Color ComfortMenuControlColor  = ControlNormalColor;
+        static readonly Color ComfortMenuAccentColor   = AccentColor;
+        static readonly Color BlockMenuPanelColor      = new(0.05f, 0.09f, 0.13f, 0.96f);
+        static readonly Color BlockMenuControlColor    = ControlNormalColor;
+        static readonly Color BlockMenuAccentColor     = new(0.94f, 0.78f, 0.24f, 1.0f);
+        static readonly Color SurvivalHudPanelColor    = PanelBaseColor;
+        static readonly Color SurvivalHudSectionColor  = PanelHeaderColor;
+        static readonly Color SurvivalHudAccentColor   = AccentColor;
+        static readonly Color StartupOverlayPanelColor = new(0.02f, 0.03f, 0.04f, 0.97f);
+        static readonly Color MultiplayerMenuPanelColor= PanelBaseColor;
+        static readonly Color MultiplayerMenuInputColor= ControlNormalColor;
+        // --- end palette --------------------------------------------------------------------
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
         static readonly Color HighlightColor = new(1.0f, 0.85f, 0.18f, 1.0f);
         static readonly Color TestBlockColor = new(0.22f, 0.56f, 0.43f, 1.0f);
@@ -118,6 +138,7 @@ namespace Blockiverse.Editor
         public static void Run()
         {
             EnsureFolders();
+            EnsureTmpEssentialResources();
             ConfigureEditorSerialization();
             ConfigureAndroidPlayer();
             ConfigureAppBranding();
@@ -149,6 +170,14 @@ namespace Blockiverse.Editor
             EnsureBuildScenes();
             RemoveGeneratedDefaultNetworkPrefabs();
 
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        [MenuItem("Blockiverse/Import TMP Essential Resources")]
+        public static void ImportTmpEssentialResources()
+        {
+            EnsureTmpEssentialResources();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -450,6 +479,9 @@ namespace Blockiverse.Editor
         static void EnsureInputActionSchema(InputActionAsset asset)
         {
             InputActionMap gameplayMap = asset.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
+            InputActionMap rightHandMap = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
+
+            RemoveAction(rightHandMap, BlockiverseInputActionNames.Jump);
 
             if (gameplayMap == null)
             {
@@ -464,13 +496,20 @@ namespace Blockiverse.Editor
                 "<XRController>{LeftHand}/menuButton");
             EnsureButtonAction(
                 gameplayMap,
-                BlockiverseInputActionNames.HeightReset,
+                BlockiverseInputActionNames.Jump,
                 "<XRController>{LeftHand}/primaryButton");
             EnsureButtonAction(
                 gameplayMap,
                 BlockiverseInputActionNames.Undo,
                 "<XRController>{LeftHand}/secondaryButton");
+            RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
             EditorUtility.SetDirty(asset);
+        }
+
+        static void RemoveAction(InputActionMap map, string actionName)
+        {
+            InputAction action = map?.FindAction(actionName, throwIfNotFound: false);
+            action?.RemoveAction();
         }
 
         static void EnsureButtonAction(InputActionMap map, string actionName, string bindingPath)
@@ -484,6 +523,61 @@ namespace Blockiverse.Editor
 
             if (!hasBinding)
                 action.AddBinding(bindingPath);
+        }
+
+        // Import TextMeshPro Essential Resources once so the default font asset is available for
+        // procedurally-created TMP labels. The package lives in com.unity.ugui's Package Resources
+        // folder. If TMP Settings are already present the import is skipped.
+        static void EnsureTmpEssentialResources()
+        {
+            const string projectSettingsPath = "Assets/TextMesh Pro/Resources/TMP Settings.asset";
+
+            if (File.Exists(projectSettingsPath))
+                return;
+
+            string packageFullPath = Path.GetFullPath("Packages/com.unity.ugui");
+
+            if (!Directory.Exists(packageFullPath))
+            {
+                // Fall back to the cached package location.
+                string[] candidates = Directory.GetDirectories(
+                    Path.GetFullPath("Library/PackageCache"),
+                    "com.unity.ugui*",
+                    SearchOption.TopDirectoryOnly);
+
+                if (candidates.Length > 0)
+                    packageFullPath = candidates[0];
+            }
+
+            string resourcePackage = Path.Combine(packageFullPath, "Package Resources", "TMP Essential Resources.unitypackage");
+
+            if (!File.Exists(resourcePackage))
+            {
+                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"TMP Essential Resources package not found at '{resourcePackage}'; TMP labels will use the default fallback font.");
+                return;
+            }
+
+            // Silent import (false = no dialog). This copies fonts, settings and shaders into
+            // Assets/TextMesh Pro/ and makes TMP_Settings.defaultFontAsset available.
+            AssetDatabase.ImportPackage(resourcePackage, false);
+            AssetDatabase.Refresh();
+            BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Imported TMP Essential Resources.");
+        }
+
+        // Migration helper: drop a stale binding (e.g. the old A-button Height Reset that is now Jump) so a
+        // regenerated asset does not double-bind the control. No-op when the action/binding is already gone.
+        static void RemoveActionBinding(InputActionMap map, string actionName, string bindingPath)
+        {
+            InputAction action = map.FindAction(actionName, throwIfNotFound: false);
+
+            if (action == null)
+                return;
+
+            for (int index = action.bindings.Count - 1; index >= 0; index--)
+            {
+                if (action.bindings[index].path == bindingPath)
+                    action.ChangeBinding(index).Erase();
+            }
         }
 
         static void EnsureInteractionMaterials()
@@ -627,7 +721,7 @@ namespace Blockiverse.Editor
         {
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
-            map.AddAction(BlockiverseInputActionNames.HeightReset, InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
             map.AddAction(BlockiverseInputActionNames.Undo, InputActionType.Button, "<XRController>{LeftHand}/secondaryButton");
         }
 
@@ -690,6 +784,7 @@ namespace Blockiverse.Editor
             EnsureBootSceneRig(scene, rigPrefab);
             EnsureBootSceneLight(scene);
             EnsureBootEventSystem(scene);
+            EnsureOvrAvatarManager(scene);
             EnsureBootSceneCreativeWorld(scene);
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
@@ -830,6 +925,7 @@ namespace Blockiverse.Editor
             EnsureBootSceneLight(scene);
             EnsureMultiplayerTestCamera(scene);
             EnsureMultiplayerEventSystem(scene);
+            EnsureOvrAvatarManager(scene);
             EnsureMultiplayerSessionMenu(scene, managerObject);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.MultiplayerTestScenePath);
@@ -906,6 +1002,40 @@ namespace Blockiverse.Editor
         static void EnsureBootEventSystem(Scene scene)
         {
             EnsureEventSystem(scene, BootEventSystemName);
+        }
+
+        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any legacy scene
+        // manager inactive in editor-authored scenes so macOS/headless PlayMode tests do not
+        // load avatar native libraries; MetaHorizonAvatarProvider creates the singleton on Quest.
+        static void EnsureOvrAvatarManager(Scene scene)
+        {
+            const string AvatarManagerName = "OvrAvatarManager";
+
+            GameObject managerObject = FindRootGameObject(scene, AvatarManagerName);
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (managerObject == null)
+            {
+                managerObject = new GameObject(AvatarManagerName);
+                SceneManager.MoveGameObjectToScene(managerObject, scene);
+            }
+
+            OvrAvatarManager manager = EnsureComponent<OvrAvatarManager>(managerObject);
+
+            // Configure loading budgets suitable for VR. These can be tuned in the inspector
+            // after the initial bootstrap.
+            manager.MaxConcurrentAvatarsLoading = 4;
+            manager.MaxConcurrentResourcesLoading = 2;
+
+            EditorUtility.SetDirty(manager);
+            EditorUtility.SetDirty(managerObject);
+#else
+            if (managerObject != null && managerObject.activeSelf)
+            {
+                managerObject.SetActive(false);
+                EditorUtility.SetDirty(managerObject);
+            }
+#endif
         }
 
         static void EnsureMultiplayerTestCamera(Scene scene)
@@ -1028,6 +1158,12 @@ namespace Blockiverse.Editor
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
             Image panelImage = EnsureComponent<Image>(panelObject);
+            Sprite panelSprite = GetRoundedSprite();
+            if (panelSprite != null)
+            {
+                panelImage.sprite = panelSprite;
+                panelImage.type = Image.Type.Sliced;
+            }
             panelImage.color = MultiplayerMenuPanelColor;
 
             EnsureLabel(
@@ -1042,7 +1178,7 @@ namespace Blockiverse.Editor
                 new Vector2(28.0f, -34.0f),
                 new Vector2(500.0f, 52.0f));
 
-            InputField addressInput = EnsureInputFieldControl(
+            TMP_InputField addressInput = EnsureInputFieldControl(
                 panelObject.transform,
                 "Address Input",
                 "Host address",
@@ -1071,17 +1207,18 @@ namespace Blockiverse.Editor
                 new Vector2(368.0f, -182.0f),
                 new Vector2(148.0f, 54.0f));
 
-            Text statusText = EnsureLabel(
+            TextMeshProUGUI statusText = EnsureLabel(
                 panelObject.transform,
                 "Status",
                 $"LAN session stopped. Join address defaults to {BlockiverseNetworkConfig.DefaultAddress}.",
-                24,
+                22,
                 TextAnchor.UpperLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(28.0f, -258.0f),
-                new Vector2(500.0f, 88.0f));
+                new Vector2(500.0f, 88.0f),
+                TextDimColor);
 
             BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(menuObject);
             menu.Configure(managerObject != null ? managerObject.GetComponent<BlockiverseNetworkSession>() : null);
@@ -1499,6 +1636,11 @@ namespace Blockiverse.Editor
 
         static void EnsureXrRigAvatar(GameObject rig)
         {
+            // The XRI input manager feeds OvrPlugin controller/HMD pose data to the avatar entity
+            // so that hands track the physical controllers. It must be on the rig (or a child)
+            // before the entity is instantiated at runtime.
+            EnsureComponent<BlockiverseXriAvatarInputManager>(rig);
+
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
             MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(rig);
             BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(rig);
@@ -1561,6 +1703,12 @@ namespace Blockiverse.Editor
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
             Image panelImage = EnsureComponent<Image>(panelObject);
+            Sprite comfortPanelSprite = GetRoundedSprite();
+            if (comfortPanelSprite != null)
+            {
+                panelImage.sprite = comfortPanelSprite;
+                panelImage.type = Image.Type.Sliced;
+            }
             panelImage.color = ComfortMenuPanelColor;
 
             EnsureLabel(
@@ -1810,6 +1958,12 @@ namespace Blockiverse.Editor
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
             Image panelImage = EnsureComponent<Image>(panelObject);
+            Sprite blockMenuSprite = GetRoundedSprite();
+            if (blockMenuSprite != null)
+            {
+                panelImage.sprite = blockMenuSprite;
+                panelImage.type = Image.Type.Sliced;
+            }
             panelImage.color = BlockMenuPanelColor;
 
             EnsureLabel(
@@ -1824,7 +1978,7 @@ namespace Blockiverse.Editor
                 new Vector2(24.0f, -32.0f),
                 new Vector2(300.0f, 48.0f));
 
-            Text selectedLabel = EnsureLabel(
+            TMP_Text selectedLabel = EnsureLabel(
                 panelObject.transform,
                 "Selected Block",
                 "Meadow Turf",
@@ -2012,7 +2166,7 @@ namespace Blockiverse.Editor
             EnsureLabel(
                 panelObject.transform,
                 "Mapping Text",
-                "Right trigger: press UI or break blocks\nRight grip: place blocks\nLeft grip: blocks menu\nMenu: comfort settings\nRight thumbstick: snap turn\nRight A + trigger: teleport\nLeft X: reset height\nLeft Y: undo",
+                "Right trigger: press UI or break blocks\nRight grip: place blocks\nLeft grip: blocks menu\nMenu: comfort settings\nRight thumbstick: snap turn\nRight A + trigger: teleport\nLeft X: jump\nLeft Y: undo\nHeight reset: comfort settings menu",
                 24,
                 TextAnchor.UpperLeft,
                 new Vector2(0.0f, 1.0f),
@@ -2127,7 +2281,7 @@ namespace Blockiverse.Editor
                 new Vector2(16.0f, -10.0f),
                 new Vector2(170.0f, 34.0f));
 
-            Text valueLabel = EnsureLabel(
+            TMP_Text valueLabel = EnsureLabel(
                 sectionObject.transform,
                 "Value",
                 "100 / 100",
@@ -2141,7 +2295,7 @@ namespace Blockiverse.Editor
 
             Slider slider = EnsureHudSlider(sectionObject.transform, "Health Slider", new Vector2(16.0f, -92.0f), new Vector2(170.0f, 20.0f));
 
-            Text stateLabel = EnsureLabel(
+            TMP_Text stateLabel = EnsureLabel(
                 sectionObject.transform,
                 "State",
                 "Stable",
@@ -2175,7 +2329,7 @@ namespace Blockiverse.Editor
                 new Vector2(16.0f, -10.0f),
                 new Vector2(170.0f, 34.0f));
 
-            Text selectedHotbarLabel = EnsureLabel(
+            TMP_Text selectedHotbarLabel = EnsureLabel(
                 sectionObject.transform,
                 "Selected Hotbar",
                 "Hotbar 1 / 8",
@@ -2187,7 +2341,7 @@ namespace Blockiverse.Editor
                 new Vector2(16.0f, -44.0f),
                 new Vector2(170.0f, 28.0f));
 
-            Text[] slotLabels = new Text[6];
+            TMP_Text[] slotLabels = new TMP_Text[6];
             Button[] slotButtons = new Button[slotLabels.Length];
 
             for (int index = 0; index < slotLabels.Length; index++)
@@ -2228,7 +2382,7 @@ namespace Blockiverse.Editor
                 new Vector2(16.0f, -10.0f),
                 new Vector2(180.0f, 34.0f));
 
-            Text statusLabel = EnsureLabel(
+            TMP_Text statusLabel = EnsureLabel(
                 sectionObject.transform,
                 "Status",
                 "Ready",
@@ -2238,9 +2392,10 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(16.0f, -44.0f),
-                new Vector2(180.0f, 28.0f));
+                new Vector2(180.0f, 28.0f),
+                TextDimColor);
 
-            Text[] recipeLabels = new Text[5];
+            TMP_Text[] recipeLabels = new TMP_Text[5];
             Button[] recipeButtons = new Button[recipeLabels.Length];
 
             for (int index = 0; index < recipeLabels.Length; index++)
@@ -2271,6 +2426,12 @@ namespace Blockiverse.Editor
             RectTransform sectionRect = sectionObject.GetComponent<RectTransform>();
             ConfigureTopLeftRect(sectionRect, anchoredPosition, size);
             Image sectionImage = EnsureComponent<Image>(sectionObject);
+            Sprite hudSectionSprite = GetRoundedSprite();
+            if (hudSectionSprite != null)
+            {
+                sectionImage.sprite = hudSectionSprite;
+                sectionImage.type = Image.Type.Sliced;
+            }
             sectionImage.color = SurvivalHudSectionColor;
             return sectionObject;
         }
@@ -2367,31 +2528,50 @@ namespace Blockiverse.Editor
             RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
             ConfigureTopLeftRect(backgroundRect, new Vector2(0.0f, -10.0f), new Vector2(44.0f, 44.0f));
             Image background = EnsureComponent<Image>(backgroundObject);
-            background.color = ComfortMenuControlColor;
+            Sprite roundedSprite = GetRoundedSprite();
+            if (roundedSprite != null)
+            {
+                background.sprite = roundedSprite;
+                background.type = Image.Type.Sliced;
+            }
+            background.color = ControlNormalColor;
 
             GameObject checkmarkObject = EnsureRectChild(backgroundObject.transform, "Checkmark");
             RectTransform checkmarkRect = checkmarkObject.GetComponent<RectTransform>();
             checkmarkRect.anchorMin = Vector2.zero;
             checkmarkRect.anchorMax = Vector2.one;
-            checkmarkRect.offsetMin = new Vector2(8.0f, 8.0f);
-            checkmarkRect.offsetMax = new Vector2(-8.0f, -8.0f);
+            checkmarkRect.offsetMin = new Vector2(7.0f, 7.0f);
+            checkmarkRect.offsetMax = new Vector2(-7.0f, -7.0f);
             Image checkmark = EnsureComponent<Image>(checkmarkObject);
-            checkmark.color = ComfortMenuAccentColor;
+            Sprite checkmarkSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Checkmark.psd");
+            if (checkmarkSprite != null)
+                checkmark.sprite = checkmarkSprite;
+            checkmark.color = AccentColor;
 
             EnsureLabel(
                 toggleObject.transform,
                 "Label",
                 label,
-                34,
+                30,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
-                new Vector2(64.0f, -4.0f),
-                new Vector2(360.0f, 56.0f));
+                new Vector2(60.0f, -4.0f),
+                new Vector2(380.0f, 56.0f));
 
             toggle.targetGraphic = background;
             toggle.graphic = checkmark;
+            toggle.colors = new ColorBlock
+            {
+                normalColor      = ControlNormalColor,
+                highlightedColor = ControlHighlightColor,
+                pressedColor     = ControlPressedColor,
+                selectedColor    = ControlSelectedColor,
+                disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
+                colorMultiplier  = 1.0f,
+                fadeDuration     = 0.08f
+            };
             toggle.isOn = isOn;
             return toggle;
         }
@@ -2406,66 +2586,92 @@ namespace Blockiverse.Editor
                 rowObject.transform,
                 "Label",
                 "Snap Turn",
-                32,
+                28,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 0.0f),
-                new Vector2(220.0f, 40.0f));
+                new Vector2(220.0f, 40.0f),
+                TextDimColor);
 
             GameObject sliderObject = EnsureRectChild(rowObject.transform, "Slider");
             RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
-            ConfigureTopLeftRect(sliderRect, new Vector2(0.0f, -48.0f), new Vector2(420.0f, 32.0f));
+            ConfigureTopLeftRect(sliderRect, new Vector2(0.0f, -48.0f), new Vector2(420.0f, 36.0f));
             Slider slider = EnsureComponent<Slider>(sliderObject);
             slider.direction = Slider.Direction.LeftToRight;
             slider.minValue = 15.0f;
             slider.maxValue = 90.0f;
             slider.wholeNumbers = true;
 
+            Sprite roundedSprite = GetRoundedSprite();
+
             GameObject backgroundObject = EnsureRectChild(sliderObject.transform, "Background");
             RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
-            backgroundRect.anchorMin = new Vector2(0.0f, 0.35f);
-            backgroundRect.anchorMax = new Vector2(1.0f, 0.65f);
+            backgroundRect.anchorMin = new Vector2(0.0f, 0.30f);
+            backgroundRect.anchorMax = new Vector2(1.0f, 0.70f);
             backgroundRect.offsetMin = Vector2.zero;
             backgroundRect.offsetMax = Vector2.zero;
             Image background = EnsureComponent<Image>(backgroundObject);
-            background.color = ComfortMenuControlColor;
+            if (roundedSprite != null)
+            {
+                background.sprite = roundedSprite;
+                background.type = Image.Type.Sliced;
+            }
+            background.color = ControlNormalColor;
 
             GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
             RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
             fillAreaRect.anchorMin = Vector2.zero;
             fillAreaRect.anchorMax = Vector2.one;
-            fillAreaRect.offsetMin = new Vector2(8.0f, 0.0f);
-            fillAreaRect.offsetMax = new Vector2(-8.0f, 0.0f);
+            fillAreaRect.offsetMin = new Vector2(10.0f, 0.0f);
+            fillAreaRect.offsetMax = new Vector2(-10.0f, 0.0f);
 
             GameObject fillObject = EnsureRectChild(fillAreaObject.transform, "Fill");
             RectTransform fillRect = fillObject.GetComponent<RectTransform>();
-            fillRect.anchorMin = new Vector2(0.0f, 0.35f);
-            fillRect.anchorMax = new Vector2(1.0f, 0.65f);
+            fillRect.anchorMin = new Vector2(0.0f, 0.30f);
+            fillRect.anchorMax = new Vector2(1.0f, 0.70f);
             fillRect.offsetMin = Vector2.zero;
             fillRect.offsetMax = Vector2.zero;
             Image fill = EnsureComponent<Image>(fillObject);
-            fill.color = ComfortMenuAccentColor;
+            if (roundedSprite != null)
+            {
+                fill.sprite = roundedSprite;
+                fill.type = Image.Type.Sliced;
+            }
+            fill.color = AccentColor;
 
             GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
             RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
             handleAreaRect.anchorMin = Vector2.zero;
             handleAreaRect.anchorMax = Vector2.one;
-            handleAreaRect.offsetMin = new Vector2(8.0f, 0.0f);
-            handleAreaRect.offsetMax = new Vector2(-8.0f, 0.0f);
+            handleAreaRect.offsetMin = new Vector2(10.0f, 0.0f);
+            handleAreaRect.offsetMax = new Vector2(-10.0f, 0.0f);
 
             GameObject handleObject = EnsureRectChild(handleAreaObject.transform, "Handle");
             RectTransform handleRect = handleObject.GetComponent<RectTransform>();
             handleRect.anchorMin = new Vector2(0.0f, 0.5f);
             handleRect.anchorMax = new Vector2(0.0f, 0.5f);
-            handleRect.sizeDelta = new Vector2(32.0f, 32.0f);
+            handleRect.sizeDelta = new Vector2(36.0f, 36.0f);
             Image handle = EnsureComponent<Image>(handleObject);
-            handle.color = Color.white;
+            Sprite knobSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            if (knobSprite != null)
+                handle.sprite = knobSprite;
+            handle.color = TextPrimaryColor;
 
             slider.fillRect = fillRect;
             slider.handleRect = handleRect;
             slider.targetGraphic = handle;
+            slider.colors = new ColorBlock
+            {
+                normalColor      = TextPrimaryColor,
+                highlightedColor = AccentHighlightColor,
+                pressedColor     = AccentColor,
+                selectedColor    = AccentColor,
+                disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
+                colorMultiplier  = 1.0f,
+                fadeDuration     = 0.08f
+            };
             slider.value = value;
             return slider;
         }
@@ -2551,17 +2757,35 @@ namespace Blockiverse.Editor
             RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
             ConfigureTopLeftRect(buttonRect, anchoredPosition, size);
 
+            // Rounded 9-slice background using the Unity built-in UI sprite.
             Image image = EnsureComponent<Image>(buttonObject);
-            image.color = ComfortMenuControlColor;
+            Sprite roundedSprite = GetRoundedSprite();
+            if (roundedSprite != null)
+            {
+                image.sprite = roundedSprite;
+                image.type = Image.Type.Sliced;
+            }
+            image.color = ControlNormalColor;
 
             Button button = EnsureComponent<Button>(buttonObject);
             button.targetGraphic = image;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = new ColorBlock
+            {
+                normalColor      = ControlNormalColor,
+                highlightedColor = ControlHighlightColor,
+                pressedColor     = ControlPressedColor,
+                selectedColor    = ControlSelectedColor,
+                disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
+                colorMultiplier  = 1.0f,
+                fadeDuration     = 0.08f
+            };
 
             EnsureLabel(
                 buttonObject.transform,
                 "Label",
                 label,
-                28,
+                26,
                 TextAnchor.MiddleCenter,
                 Vector2.zero,
                 Vector2.one,
@@ -2569,22 +2793,33 @@ namespace Blockiverse.Editor
                 Vector2.zero,
                 Vector2.zero);
 
-            Text buttonLabel = buttonObject.transform.Find("Label").GetComponent<Text>();
+            TextMeshProUGUI buttonLabel = buttonObject.transform.Find("Label").GetComponent<TextMeshProUGUI>();
             RectTransform labelRect = buttonLabel.GetComponent<RectTransform>();
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
+            labelRect.offsetMin = new Vector2(8.0f, 4.0f);
+            labelRect.offsetMax = new Vector2(-8.0f, -4.0f);
             return button;
         }
 
-        static Button EnsureTextButton(Text label)
+        static Button EnsureTextButton(TMP_Text label)
         {
             Button button = EnsureComponent<Button>(label.gameObject);
             label.raycastTarget = true;
             button.targetGraphic = label;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = new ColorBlock
+            {
+                normalColor      = Color.white,
+                highlightedColor = AccentHighlightColor,
+                pressedColor     = AccentColor,
+                selectedColor    = AccentColor,
+                disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
+                colorMultiplier  = 1.0f,
+                fadeDuration     = 0.08f
+            };
             return button;
         }
 
-        static InputField EnsureInputFieldControl(
+        static TMP_InputField EnsureInputFieldControl(
             Transform parent,
             string name,
             string placeholder,
@@ -2596,16 +2831,27 @@ namespace Blockiverse.Editor
             RectTransform inputRect = inputObject.GetComponent<RectTransform>();
             ConfigureTopLeftRect(inputRect, anchoredPosition, size);
 
-            Image image = EnsureComponent<Image>(inputObject);
-            image.color = MultiplayerMenuInputColor;
+            // Remove legacy InputField if present (migration).
+            InputField legacyInput = inputObject.GetComponent<InputField>();
+            if (legacyInput != null)
+                UnityEngine.Object.DestroyImmediate(legacyInput);
 
-            InputField input = EnsureComponent<InputField>(inputObject);
+            Image image = EnsureComponent<Image>(inputObject);
+            Sprite roundedSprite = GetRoundedSprite();
+            if (roundedSprite != null)
+            {
+                image.sprite = roundedSprite;
+                image.type = Image.Type.Sliced;
+            }
+            image.color = ControlNormalColor;
+
+            TMP_InputField input = EnsureComponent<TMP_InputField>(inputObject);
             input.targetGraphic = image;
             input.text = value;
-            input.contentType = InputField.ContentType.Standard;
-            input.lineType = InputField.LineType.SingleLine;
+            input.contentType = TMP_InputField.ContentType.Standard;
+            input.lineType = TMP_InputField.LineType.SingleLine;
 
-            Text text = EnsureLabel(
+            TextMeshProUGUI textComp = EnsureLabel(
                 inputObject.transform,
                 "Text",
                 value,
@@ -2616,9 +2862,9 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 0.5f),
                 new Vector2(18.0f, 0.0f),
                 new Vector2(-36.0f, 0.0f));
-            text.supportRichText = false;
+            textComp.richText = false;
 
-            Text placeholderText = EnsureLabel(
+            TextMeshProUGUI placeholderText = EnsureLabel(
                 inputObject.transform,
                 "Placeholder",
                 placeholder,
@@ -2628,10 +2874,10 @@ namespace Blockiverse.Editor
                 Vector2.one,
                 new Vector2(0.0f, 0.5f),
                 new Vector2(18.0f, 0.0f),
-                new Vector2(-36.0f, 0.0f));
-            placeholderText.color = new Color(1.0f, 1.0f, 1.0f, 0.45f);
+                new Vector2(-36.0f, 0.0f),
+                new Color(0.65f, 0.70f, 0.75f, 0.60f));
 
-            input.textComponent = text;
+            input.textComponent = textComp;
             input.placeholder = placeholderText;
 
             // Native VR text entry: open the Quest system keyboard when the field is selected.
@@ -2641,7 +2887,9 @@ namespace Blockiverse.Editor
             return input;
         }
 
-        static Text EnsureLabel(
+        // Returns a TextMeshProUGUI label so the caller can set .text; also removes any legacy
+        // UnityEngine.UI.Text on the same object to avoid double-rendering during migration.
+        static TextMeshProUGUI EnsureLabel(
             Transform parent,
             string name,
             string label,
@@ -2651,7 +2899,8 @@ namespace Blockiverse.Editor
             Vector2 anchorMax,
             Vector2 pivot,
             Vector2 anchoredPosition,
-            Vector2 size)
+            Vector2 size,
+            Color? colorOverride = null)
         {
             GameObject labelObject = EnsureRectChild(parent, name);
             RectTransform labelRect = labelObject.GetComponent<RectTransform>();
@@ -2661,15 +2910,48 @@ namespace Blockiverse.Editor
             labelRect.anchoredPosition = anchoredPosition;
             labelRect.sizeDelta = size;
 
-            Text text = EnsureComponent<Text>(labelObject);
-            text.text = label;
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = fontSize;
-            text.alignment = alignment;
-            text.color = Color.white;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            return text;
+            // Remove legacy Text if present (idempotent migration).
+            Text legacyText = labelObject.GetComponent<Text>();
+            if (legacyText != null)
+                UnityEngine.Object.DestroyImmediate(legacyText);
+
+            TextMeshProUGUI tmp = EnsureComponent<TextMeshProUGUI>(labelObject);
+            tmp.text = label;
+            tmp.fontSize = fontSize;
+            tmp.color = colorOverride ?? TextPrimaryColor;
+            tmp.enableWordWrapping = true;
+            tmp.overflowMode = TextOverflowModes.Truncate;
+
+            // Map TextAnchor to TMP alignment.
+            tmp.alignment = alignment switch
+            {
+                TextAnchor.UpperLeft    => TextAlignmentOptions.TopLeft,
+                TextAnchor.UpperCenter  => TextAlignmentOptions.Top,
+                TextAnchor.UpperRight   => TextAlignmentOptions.TopRight,
+                TextAnchor.MiddleLeft   => TextAlignmentOptions.MidlineLeft,
+                TextAnchor.MiddleCenter => TextAlignmentOptions.Midline,
+                TextAnchor.MiddleRight  => TextAlignmentOptions.MidlineRight,
+                TextAnchor.LowerLeft    => TextAlignmentOptions.BottomLeft,
+                TextAnchor.LowerCenter  => TextAlignmentOptions.Bottom,
+                TextAnchor.LowerRight   => TextAlignmentOptions.BottomRight,
+                _                       => TextAlignmentOptions.MidlineLeft,
+            };
+
+            // Use the TMP default font if available. TMP_Settings.defaultFontAsset throws a
+            // NullReferenceException on first run before Essential Resources are imported, so
+            // guard it. The label still renders (TMP uses an internal fallback).
+            try
+            {
+                TMP_FontAsset defaultFont = TMP_Settings.defaultFontAsset;
+                if (defaultFont != null)
+                    tmp.font = defaultFont;
+            }
+            catch
+            {
+                // TMP_Settings not yet initialized — font will be assigned on next bootstrap.
+            }
+
+            return tmp;
         }
 
         static GameObject EnsureRectChild(Transform parent, string name)
@@ -2746,6 +3028,11 @@ namespace Blockiverse.Editor
             return component;
         }
 
+        // Returns Unity's built-in 9-slice rounded-rectangle sprite ("Background.psd").
+        // When set on an Image with Image.Type.Sliced it produces rounded corners at any size.
+        // Returns null when running without the UISprite built-ins (very rare; handled gracefully by callers).
+        static Sprite GetRoundedSprite() => Resources.GetBuiltinResource<Sprite>("UI/Skin/Background.psd");
+
         static void ConfigureTopLeftRect(RectTransform rectTransform, Vector2 anchoredPosition, Vector2 size)
         {
             rectTransform.anchorMin = new Vector2(0.0f, 1.0f);
@@ -2779,6 +3066,15 @@ namespace Blockiverse.Editor
             if (origin != null)
                 origin.CameraYOffset = settings.StandingEyeHeight;
 
+            // Collision capsule so gravity/jumping land on the voxel terrain. Added before the body
+            // transformer so it auto-binds a CharacterControllerBodyManipulator when it initializes.
+            CharacterController characterController = rig.GetComponent<CharacterController>();
+
+            if (characterController == null)
+                characterController = rig.AddComponent<CharacterController>();
+
+            BlockiverseInputRig.ConfigureCharacterController(characterController);
+
             XRBodyTransformer bodyTransformer = rig.GetComponent<XRBodyTransformer>();
 
             if (bodyTransformer == null)
@@ -2790,6 +3086,22 @@ namespace Blockiverse.Editor
 
             if (mediator == null)
                 mediator = rig.AddComponent<LocomotionMediator>();
+
+            // Gravity must exist before Jump: JumpProvider disables itself in Awake without a GravityProvider.
+            GravityProvider gravityProvider = rig.GetComponent<GravityProvider>();
+
+            if (gravityProvider == null)
+                gravityProvider = rig.AddComponent<GravityProvider>();
+
+            gravityProvider.mediator = mediator;
+
+            JumpProvider jumpProvider = rig.GetComponent<JumpProvider>();
+
+            if (jumpProvider == null)
+                jumpProvider = rig.AddComponent<JumpProvider>();
+
+            jumpProvider.mediator = mediator;
+            jumpProvider.jumpHeight = JumpHeightMeters;
 
             TeleportationProvider teleport = rig.GetComponent<TeleportationProvider>();
 
@@ -2834,41 +3146,7 @@ namespace Blockiverse.Editor
                 heightReset = rig.AddComponent<BlockiverseHeightReset>();
 
             heightReset.Configure(origin, settings);
-
-            // CharacterController enables physical collisions against voxel chunk mesh colliders.
-            // XRBodyTransformer.useCharacterControllerIfExists (default true) picks it up
-            // automatically; no additional wiring is needed.
-            CharacterController characterController = origin != null
-                ? origin.Origin.GetComponent<CharacterController>()
-                : rig.GetComponent<CharacterController>();
-
-            if (characterController == null)
-            {
-                GameObject originObject = origin != null ? origin.Origin : rig;
-                characterController = originObject.AddComponent<CharacterController>();
-                characterController.height = 1.8f;
-                characterController.radius = 0.3f;
-                characterController.center = new Vector3(0.0f, 0.9f, 0.0f);
-                characterController.slopeLimit = 45.0f;
-                characterController.stepOffset = 0.3f;
-            }
-
-            GravityProvider gravityProvider = rig.GetComponent<GravityProvider>();
-
-            if (gravityProvider == null)
-                gravityProvider = rig.AddComponent<GravityProvider>();
-
-            gravityProvider.mediator = mediator;
-
-            JumpProvider jumpProvider = rig.GetComponent<JumpProvider>();
-
-            if (jumpProvider == null)
-                jumpProvider = rig.AddComponent<JumpProvider>();
-
-            jumpProvider.mediator = mediator;
-            jumpProvider.jumpHeight = 1.2f;
-
-            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings, continuousTurn, gravityProvider, jumpProvider);
+            inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings, continuousTurn, gravityProvider, jumpProvider, characterController);
 
             BlockiverseAudioCuePlayer audioCuePlayer = rig.GetComponent<BlockiverseAudioCuePlayer>();
             inputRig.ConfigureTeleportFeedback(audioCuePlayer);

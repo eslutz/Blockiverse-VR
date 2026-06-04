@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Survival;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,13 +8,13 @@ namespace Blockiverse.UI
 {
     public sealed class SurvivalHealthPanel : MonoBehaviour
     {
-        [SerializeField] Text healthLabel;
+        [SerializeField] TMP_Text healthLabel;
         [SerializeField] Slider healthSlider;
-        [SerializeField] Text stateLabel;
+        [SerializeField] TMP_Text stateLabel;
 
         PlayerVitals vitals;
 
-        public void Configure(Text targetHealthLabel, Slider targetHealthSlider, Text targetStateLabel)
+        public void Configure(TMP_Text targetHealthLabel, Slider targetHealthSlider, TMP_Text targetStateLabel)
         {
             healthLabel = targetHealthLabel;
             healthSlider = targetHealthSlider;
@@ -58,7 +59,7 @@ namespace Blockiverse.UI
             }
 
             if (stateLabel != null)
-                stateLabel.text = GetStateText(vitals);
+                stateLabel.text = GetStateTMP_Text(vitals);
         }
 
         void OnDestroy()
@@ -72,7 +73,7 @@ namespace Blockiverse.UI
             Refresh();
         }
 
-        static string GetStateText(PlayerVitals playerVitals)
+        static string GetStateTMP_Text(PlayerVitals playerVitals)
         {
             if (playerVitals.IsDead)
                 return "Down";

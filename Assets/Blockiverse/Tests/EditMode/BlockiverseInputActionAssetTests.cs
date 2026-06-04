@@ -29,20 +29,22 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerActions(asset, BlockiverseInputActionNames.LeftHandMap, "LeftHand");
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, "<XRController>{LeftHand}/secondaryButton");
         }
 
         [Test]
-        public void RightHandContainsJumpAction()
+        public void JumpIsOnlyInGameplayMap()
         {
             InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
                 BlockiverseProject.InputActionsAssetPath);
 
-            // Jump is on right A (primaryButton) — the same button used for height reset on the
-            // left hand; the per-hand map separation keeps them from conflicting.
-            AssertAction(asset, BlockiverseInputActionNames.RightHandMap,
-                BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
+            InputAction rightHandJump = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap)
+                .FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
+
+            Assert.That(rightHandJump, Is.Null, "RightHand/Jump is stale; JumpProvider reads Blockiverse Gameplay/Jump.");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
+                BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
         }
 
         static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)

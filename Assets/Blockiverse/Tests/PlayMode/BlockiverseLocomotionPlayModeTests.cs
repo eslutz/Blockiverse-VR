@@ -8,6 +8,7 @@ using NUnit.Framework;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
@@ -160,6 +161,7 @@ namespace Blockiverse.Tests.PlayMode
 
             try
             {
+                origin.CameraYOffset = 1.6f;
                 origin.Camera.transform.localRotation = Quaternion.Euler(0.0f, 90.0f, 0.0f);
                 ConfigureXriLocomotionStack(
                     rigObject,
@@ -170,6 +172,11 @@ namespace Blockiverse.Tests.PlayMode
                     out ContinuousMoveProvider continuousMove,
                     out _);
                 continuousMove.moveSpeed = 2.0f;
+
+                yield return null;
+
+                Vector3 startPosition = origin.transform.position;
+                Vector3 expectedMoveDirection = Vector3.ProjectOnPlane(origin.Camera.transform.forward, origin.transform.up).normalized;
                 continuousMove.leftHandMoveInput = CreateManualVector2Reader("Left Hand Move", new Vector2(0.0f, 1.0f));
 
                 // Capture the starting position after the first frame so the assertion measures
@@ -181,8 +188,8 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
                 Vector3 delta = origin.transform.position - positionAfterFirstFrame;
 
-                Assert.That(delta.x, Is.GreaterThan(0.0f), "Continuous move should translate +X when camera is yawed 90°.");
-                Assert.That(Mathf.Abs(delta.z), Is.LessThan(Mathf.Abs(delta.x) * 0.1f), "Movement should be primarily along camera forward (+X), not Z.");
+                Assert.That(delta.magnitude, Is.GreaterThan(0.0f));
+                Assert.That(Vector3.Dot(delta.normalized, expectedMoveDirection), Is.GreaterThan(0.95f));
             }
             finally
             {
@@ -213,12 +220,16 @@ namespace Blockiverse.Tests.PlayMode
 
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings);
+
+                yield return null;
+
+                Vector3 disabledPosition = origin.transform.position;
                 continuousMove.leftHandMoveInput = CreateManualVector2Reader("Left Hand Move", new Vector2(0.0f, 1.0f));
 
                 yield return null;
 
                 Assert.That(continuousMove.enabled, Is.False);
-                Assert.That(origin.transform.position, Is.EqualTo(Vector3.zero));
+                Assert.That(Vector3.Distance(origin.transform.position, disabledPosition), Is.LessThan(0.001f));
             }
             finally
             {
@@ -262,6 +273,13 @@ namespace Blockiverse.Tests.PlayMode
 
             menu.Hide();
             Assert.That(menu.IsVisible, Is.False);
+
+            Scene cleanupScene = SceneManager.CreateScene("LocomotionTestCleanup");
+            SceneManager.SetActiveScene(cleanupScene);
+            AsyncOperation unload = SceneManager.UnloadSceneAsync("Boot");
+
+            if (unload != null)
+                yield return unload;
         }
 
         [Test]
@@ -344,6 +362,13 @@ namespace Blockiverse.Tests.PlayMode
             out ContinuousMoveProvider continuousMove,
             out SnapTurnProvider snapTurn)
         {
+            CharacterController characterController = rigObject.GetComponent<CharacterController>();
+
+            if (characterController == null)
+                characterController = rigObject.AddComponent<CharacterController>();
+
+            BlockiverseInputRig.ConfigureCharacterController(characterController);
+
             bodyTransformer = rigObject.AddComponent<XRBodyTransformer>();
             bodyTransformer.xrOrigin = origin;
 
@@ -448,20 +473,12 @@ namespace Blockiverse.Tests.PlayMode
 
                 // Teleport is now native target-based (held Teleport Mode enables the teleport ray,
                 // which selects a TeleportationArea). Holding the mode alone must not move the rig.
+                Vector3 positionBeforeTeleportMode = origin.transform.position;
                 Press(gamepad.leftShoulder);
                 yield return null;
-                Assert.That(Vector3.Distance(origin.transform.position, Vector3.zero), Is.LessThan(0.01f));
+                Assert.That(Vector3.Distance(origin.transform.position, positionBeforeTeleportMode), Is.LessThan(0.01f));
                 Release(gamepad.leftShoulder);
                 yield return null;
-
-                origin.CameraYOffset = 1.2f;
-                Press(gamepad.selectButton);
-                yield return null;
-                Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
-
-                origin.CameraYOffset = 1.1f;
-                yield return null;
-                Assert.That(origin.CameraYOffset, Is.EqualTo(1.1f).Within(0.01f));
 
                 Assert.That(menu.IsVisible, Is.False);
                 Press(gamepad.startButton);
@@ -510,10 +527,16 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
 
+                yield return null;
+
+                Vector3 startPosition = origin.transform.position;
+                Vector3 expectedMoveDirection = Vector3.ProjectOnPlane(origin.Camera.transform.forward, origin.transform.up).normalized;
                 Set(gamepad.leftStick, new Vector2(0.0f, 1.0f));
                 yield return null;
 
-                Assert.That(origin.transform.position.z, Is.GreaterThan(0.0f));
+                Vector3 movement = origin.transform.position - startPosition;
+                Assert.That(movement.magnitude, Is.GreaterThan(0.0f));
+                Assert.That(Vector3.Dot(movement.normalized, expectedMoveDirection), Is.GreaterThan(0.95f));
 
                 Set(gamepad.leftStick, Vector2.zero);
                 yield return null;
@@ -661,6 +684,13 @@ namespace Blockiverse.Tests.PlayMode
             out ContinuousMoveProvider continuousMove,
             out SnapTurnProvider snapTurn)
         {
+            CharacterController characterController = rigObject.GetComponent<CharacterController>();
+
+            if (characterController == null)
+                characterController = rigObject.AddComponent<CharacterController>();
+
+            BlockiverseInputRig.ConfigureCharacterController(characterController);
+
             bodyTransformer = rigObject.AddComponent<XRBodyTransformer>();
             bodyTransformer.xrOrigin = origin;
 
@@ -726,7 +756,7 @@ namespace Blockiverse.Tests.PlayMode
             rightHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
             InputActionMap gameplay = actions.AddActionMap(BlockiverseInputActionNames.GameplayMap);
-            gameplay.AddAction(BlockiverseInputActionNames.HeightReset, InputActionType.Button, "<Gamepad>/select");
+            gameplay.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<Gamepad>/buttonNorth");
             gameplay.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<Gamepad>/start");
 
             return actions;

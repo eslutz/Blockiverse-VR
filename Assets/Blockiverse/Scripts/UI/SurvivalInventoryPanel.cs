@@ -2,6 +2,7 @@ using System;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.VR;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,8 +13,8 @@ namespace Blockiverse.UI
         static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.CreateDefault();
 
         [SerializeField] Button[] slotButtons;
-        [SerializeField] Text[] slotLabels;
-        [SerializeField] Text selectedHotbarLabel;
+        [SerializeField] TMP_Text[] slotLabels;
+        [SerializeField] TMP_Text selectedHotbarLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
@@ -24,14 +25,14 @@ namespace Blockiverse.UI
 
         public int SelectedHotbarSlotIndex => selectedHotbarSlotIndex;
 
-        public void Configure(Text[] targetSlotLabels, Text targetSelectedHotbarLabel)
+        public void Configure(TMP_Text[] targetSlotLabels, TMP_Text targetSelectedHotbarLabel)
         {
             Configure(null, targetSlotLabels, targetSelectedHotbarLabel);
         }
 
-        public void Configure(Button[] targetSlotButtons, Text[] targetSlotLabels, Text targetSelectedHotbarLabel)
+        public void Configure(Button[] targetSlotButtons, TMP_Text[] targetSlotLabels, TMP_Text targetSelectedHotbarLabel)
         {
-            slotLabels = targetSlotLabels ?? Array.Empty<Text>();
+            slotLabels = targetSlotLabels ?? Array.Empty<TMP_Text>();
             slotButtons = targetSlotButtons ?? Array.Empty<Button>();
             selectedHotbarLabel = targetSelectedHotbarLabel;
             WireSlotButtons();
