@@ -8,6 +8,7 @@
     "Blockiverse.Networking",
     "Blockiverse.UI",
     "Blockiverse.VR",
+    "Oculus.AvatarSDK2",
     "Oculus.VR.Editor",
     "Unity.InputSystem",
     "Unity.Netcode.Editor",
@@ -20,6 +21,7 @@
     "Unity.XR.Interaction.Toolkit",
     "Unity.XR.OpenXR",
     "Unity.XR.OpenXR.Editor",
+    "Unity.TextMeshPro",
     "UnityEngine.UI"
   ],
   "includePlatforms": [

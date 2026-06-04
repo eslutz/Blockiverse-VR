@@ -19,6 +19,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using TMPro;
 using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
@@ -77,8 +78,9 @@ namespace Blockiverse.Tests.EditMode
                 SnapTurnProvider snapTurn = instance.GetComponent<SnapTurnProvider>();
                 TeleportationProvider teleport = instance.GetComponent<TeleportationProvider>();
                 ContinuousTurnProvider continuousTurn = instance.GetComponent<ContinuousTurnProvider>();
-                GravityProvider gravity = instance.GetComponent<GravityProvider>();
-                JumpProvider jump = instance.GetComponent<JumpProvider>();
+                GravityProvider gravityProvider = instance.GetComponent<GravityProvider>();
+                JumpProvider jumpProvider = instance.GetComponent<JumpProvider>();
+                CharacterController characterController = instance.GetComponent<CharacterController>();
                 TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
 
                 Assert.That(inputRig, Is.Not.Null);
@@ -98,10 +100,17 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(continuousTurn, Is.Not.Null);
                 Assert.That(inputRig.ContinuousTurnProvider, Is.SameAs(continuousTurn));
                 Assert.That(continuousTurn.mediator, Is.SameAs(mediator));
-                Assert.That(gravity, Is.Not.Null);
-                Assert.That(inputRig.GravityProvider, Is.SameAs(gravity));
-                Assert.That(jump, Is.Not.Null);
-                Assert.That(inputRig.JumpProvider, Is.SameAs(jump));
+                // Gravity + physics-based jumping: CharacterController gives the player a
+                // collision capsule, GravityProvider applies gravity via sphere-cast grounding,
+                // and JumpProvider drives kinematic jump arcs with coyote time.
+                Assert.That(characterController, Is.Not.Null, "Rig must have a CharacterController for physics-based locomotion.");
+                Assert.That(gravityProvider, Is.Not.Null, "Rig must have a GravityProvider for falling off edges.");
+                Assert.That(jumpProvider, Is.Not.Null, "Rig must have a JumpProvider for jumping.");
+                Assert.That(inputRig.CharacterController, Is.SameAs(characterController));
+                Assert.That(inputRig.GravityProvider, Is.SameAs(gravityProvider));
+                Assert.That(inputRig.JumpProvider, Is.SameAs(jumpProvider));
+                Assert.That(gravityProvider.mediator, Is.SameAs(mediator));
+                Assert.That(jumpProvider.mediator, Is.SameAs(mediator));
                 Assert.That(poseDriver, Is.Not.Null);
                 Assert.That(poseDriver.enabled, Is.True);
                 Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
@@ -343,7 +352,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popup.GetComponent<Canvas>()?.enabled, Is.False);
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
             Assert.That(
-                popup.GetComponentsInChildren<Text>(includeInactive: true)
+                popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                     .Any(label => label.text.Contains("Right trigger")),
                 Is.True);
 

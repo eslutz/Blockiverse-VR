@@ -3,6 +3,7 @@ using Blockiverse.Gameplay;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
+using TMPro;
 using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
@@ -75,7 +76,7 @@ namespace Blockiverse.Tests.EditMode
             Canvas canvas = hotbarObject.AddComponent<Canvas>();
             CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
             BlockiverseWorldSpacePanelPresenter presenter = hotbarObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-            Text label = CreateText("Selected Block Label");
+            TMP_Text label = CreateText("Selected Block Label");
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
             BlockiverseInteractionHaptics haptics = CreateHaptics();
             var playedCues = new List<BlockiverseAudioCue>();
@@ -175,11 +176,11 @@ namespace Blockiverse.Tests.EditMode
             return gameObject.AddComponent<BlockiverseInteractionHaptics>();
         }
 
-        Text CreateText(string name)
+        TextMeshProUGUI CreateText(string name)
         {
             var gameObject = new GameObject(name);
             objectsToDestroy.Add(gameObject);
-            return gameObject.AddComponent<Text>();
+            return gameObject.AddComponent<TextMeshProUGUI>();
         }
 
         static AudioClip CreateClip(string name)

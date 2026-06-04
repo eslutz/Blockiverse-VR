@@ -1,6 +1,7 @@
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -248,7 +249,7 @@ namespace Blockiverse.Tests.PlayMode
 
             try
             {
-                Text label = labelObject.AddComponent<Text>();
+                TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
                 hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam, BlockRegistry.Clearstone }, label);
 

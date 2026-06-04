@@ -20,8 +20,8 @@ namespace Blockiverse.VR
         public const string TeleportMode = "Teleport Mode";
         public const string TeleportSelect = "Teleport Select";
         public const string Menu = "Menu";
+        public const string Jump = "Jump";
         public const string HeightReset = "Height Reset";
         public const string Undo = "Undo";
-        public const string Jump = "Jump";
     }
 }

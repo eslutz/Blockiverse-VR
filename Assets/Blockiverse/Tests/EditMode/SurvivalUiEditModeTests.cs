@@ -6,6 +6,7 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -34,8 +35,8 @@ namespace Blockiverse.Tests.EditMode
             var inventory = new Inventory(itemRegistry, slotCount: 3, hotbarSlotCount: 2);
             inventory.SetSlot(0, new ItemStack(ItemId.Timber, 12));
             inventory.SetSlot(2, new ItemStack(ItemId.Pick, 1));
-            Text[] slotLabels = CreateTexts(3);
-            Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            TMP_Text[] slotLabels = CreateTexts(3);
+            TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
             SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
 
             panel.Configure(slotLabels, selectedHotbarLabel);
@@ -65,8 +66,8 @@ namespace Blockiverse.Tests.EditMode
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
             inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
-            Text[] recipeLabels = CreateTexts(4);
-            Text statusLabel = CreateText("CraftStatus");
+            TMP_Text[] recipeLabels = CreateTexts(4);
+            TMP_Text statusLabel = CreateText("CraftStatus");
             SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
 
             panel.Configure(recipeLabels, statusLabel);
@@ -89,9 +90,9 @@ namespace Blockiverse.Tests.EditMode
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
             inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
-            Text[] recipeLabels = CreateTexts(2);
+            TMP_Text[] recipeLabels = CreateTexts(2);
             Button[] recipeButtons = CreateButtons(2);
-            Text statusLabel = CreateText("CraftStatus");
+            TMP_Text statusLabel = CreateText("CraftStatus");
             SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
 
             panel.Configure(recipeButtons, recipeLabels, statusLabel);
@@ -108,9 +109,9 @@ namespace Blockiverse.Tests.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 3);
-            Text[] slotLabels = CreateTexts(4);
+            TMP_Text[] slotLabels = CreateTexts(4);
             Button[] slotButtons = CreateButtons(4);
-            Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
             SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
 
             panel.Configure(slotButtons, slotLabels, selectedHotbarLabel);
@@ -127,9 +128,9 @@ namespace Blockiverse.Tests.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 3);
-            Text[] slotLabels = CreateTexts(4);
+            TMP_Text[] slotLabels = CreateTexts(4);
             Button[] slotButtons = CreateButtons(4);
-            Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
             SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
             BlockiverseInteractionHaptics haptics = CreateHaptics();
@@ -158,8 +159,8 @@ namespace Blockiverse.Tests.EditMode
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
             inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
-            Text[] recipeLabels = CreateTexts(4);
-            Text statusLabel = CreateText("CraftStatus");
+            TMP_Text[] recipeLabels = CreateTexts(4);
+            TMP_Text statusLabel = CreateText("CraftStatus");
             SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
             BlockiverseInteractionHaptics haptics = CreateHaptics();
@@ -192,8 +193,8 @@ namespace Blockiverse.Tests.EditMode
         public void HealthPanelUpdatesFromVitalsChanges()
         {
             var vitals = new PlayerVitals(currentHealth: 75);
-            Text healthLabel = CreateText("Health");
-            Text stateLabel = CreateText("HealthState");
+            TMP_Text healthLabel = CreateText("Health");
+            TMP_Text stateLabel = CreateText("HealthState");
             Slider healthSlider = CreateComponent<Slider>("HealthSlider");
             SurvivalHealthPanel panel = CreateComponent<SurvivalHealthPanel>("HealthPanel");
 
@@ -212,9 +213,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(stateLabel.text, Is.EqualTo("Down"));
         }
 
-        Text[] CreateTexts(int count)
+        TMP_Text[] CreateTexts(int count)
         {
-            var labels = new Text[count];
+            var labels = new TMP_Text[count];
             for (int i = 0; i < count; i++)
                 labels[i] = CreateText($"Text{i}");
 
@@ -230,9 +231,9 @@ namespace Blockiverse.Tests.EditMode
             return buttons;
         }
 
-        Text CreateText(string name)
+        TMP_Text CreateText(string name)
         {
-            return CreateComponent<Text>(name);
+            return CreateComponent<TextMeshProUGUI>(name);
         }
 
         T CreateComponent<T>(string name) where T : Component

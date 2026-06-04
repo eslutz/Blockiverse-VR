@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.MetaAvatars",
     "Blockiverse.Networking",
+    "Oculus.AvatarSDK2",
     "Unity.Netcode.Runtime",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"

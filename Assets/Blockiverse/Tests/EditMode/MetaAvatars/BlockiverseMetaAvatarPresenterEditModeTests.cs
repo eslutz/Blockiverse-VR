@@ -1,8 +1,13 @@
 using System;
+using System.Linq;
 using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
+using Oculus.Avatar2;
 using NUnit.Framework;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.TestTools;
+using UnityEngine.SceneManagement;
 
 namespace Blockiverse.Tests.MetaAvatars.EditMode
 {
@@ -12,6 +17,11 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
         GameObject head;
         GameObject leftHand;
         GameObject rightHand;
+        static readonly string[] AvatarScenePaths =
+        {
+            "Assets/Blockiverse/Scenes/Boot.unity",
+            "Assets/Blockiverse/Scenes/MultiplayerTest.unity"
+        };
 
         [TearDown]
         public void TearDown()
@@ -84,6 +94,70 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             Assert.That(actual, Is.EqualTo(expected));
         }
 
+        [Test]
+        public void AvatarEntityPresentationConfigurationDoesNotCreateNativeEntityBeforeInputIsAssigned()
+        {
+            root = new GameObject("Meta Avatar Entity Test");
+            BlockiverseMetaAvatarEntity entity = root.AddComponent<BlockiverseMetaAvatarEntity>();
+
+            entity.ConfigurePresentation(MetaAvatarPresentationMode.LocalFirstPerson, hideHeadForFirstPerson: true);
+
+            Assert.That(entity.IsCreated, Is.False);
+            Assert.That(entity.InputManager, Is.Null);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void AvatarEntityResolvesInputManagerFromParentRig()
+        {
+            root = new GameObject("Meta Avatar Rig Test");
+            TestAvatarInputManager inputManager = root.AddComponent<TestAvatarInputManager>();
+            var entityObject = new GameObject("Meta Horizon Avatar Entity");
+            entityObject.transform.SetParent(root.transform, false);
+            BlockiverseMetaAvatarEntity entity = entityObject.AddComponent<BlockiverseMetaAvatarEntity>();
+
+            entity.EnsureInputManager();
+
+            Assert.That(entity.InputManager, Is.SameAs(inputManager));
+        }
+
+        [Test]
+        public void AvatarEntityCreationWaitsWhenAvatarManagerIsUnavailable()
+        {
+            root = new GameObject("Meta Avatar Entity Creation Test");
+            BlockiverseMetaAvatarEntity entity = root.AddComponent<BlockiverseMetaAvatarEntity>();
+            entity.ConfigurePresentation(MetaAvatarPresentationMode.LocalFirstPerson, hideHeadForFirstPerson: true);
+
+            Assert.That(entity.CreateConfiguredEntity(), Is.False);
+
+            Assert.That(entity.IsCreated, Is.False);
+            LogAssert.NoUnexpectedReceived();
+        }
+
+        [Test]
+        public void AvatarSdkSceneManagersStayInactiveForEditorPlayMode()
+        {
+            try
+            {
+                foreach (string scenePath in AvatarScenePaths)
+                {
+                    Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+                    OvrAvatarManager[] managers = scene.GetRootGameObjects()
+                        .SelectMany(sceneRoot => sceneRoot.GetComponentsInChildren<OvrAvatarManager>(true))
+                        .ToArray();
+
+                    Assert.That(
+                        managers.Where(manager => manager.isActiveAndEnabled),
+                        Is.Empty,
+                        $"{scenePath} must not initialize Avatar SDK native libraries in editor PlayMode.");
+                }
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
         BlockiverseMetaAvatarPresenter CreatePresenter(
             out BlockiverseNetworkAvatarRig fallbackRig,
             out FakeMetaAvatarProvider provider)
@@ -140,6 +214,14 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
                 LastAppliedStream = streamData;
                 IsAvatarReady = streamData is { Length: > 0 };
             }
+        }
+
+        sealed class TestAvatarInputManager : OvrAvatarInputManagerBehavior
+        {
+            public override OvrAvatarInputTrackingProviderBase InputTrackingProvider => null;
+            public override OvrAvatarInputControlProviderBase InputControlProvider => null;
+            public override OvrAvatarBodyTrackingContextBase BodyTrackingContext => null;
+            public override OvrAvatarHandTrackingPoseProviderBase HandTrackingProvider => null;
         }
     }
 }

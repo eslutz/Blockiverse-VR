@@ -10,6 +10,10 @@ namespace Blockiverse.MetaAvatars
     public sealed class MetaHorizonAvatarProvider : MonoBehaviour, IBlockiverseMetaAvatarProvider
     {
         const string AvatarEntityName = "Meta Horizon Avatar Entity";
+#if UNITY_ANDROID && !UNITY_EDITOR
+        const int AvatarManagerMaxConcurrentAvatarsLoading = 4;
+        const int AvatarManagerMaxConcurrentResourcesLoading = 2;
+#endif
 
         [SerializeField] BlockiverseMetaAvatarEntity avatarEntity;
         [SerializeField] OvrAvatarEntity.StreamLOD streamLod = OvrAvatarEntity.StreamLOD.Medium;
@@ -46,14 +50,22 @@ namespace Blockiverse.MetaAvatars
         public void Configure(MetaAvatarTrackingSources sources, MetaAvatarPresentationMode presentationMode, bool hideFirstPersonHead)
         {
             mode = presentationMode;
-            EnsureAvatarEntity();
+            EnsureAvatarEntity(presentationMode, hideFirstPersonHead, sources);
 
             if (avatarEntity == null)
                 return;
 
+            // For a pre-existing entity (e.g. from a previous Configure call), update its
+            // presentation and tracking. For newly-created entities these calls already ran
+            // inside EnsureAvatarEntity(), so they are idempotent here.
+            OvrAvatarInputManagerBehavior inputManager = ResolveInputManager();
             avatarEntity.ConfigurePresentation(presentationMode, hideFirstPersonHead);
+            avatarEntity.EnsureInputManager(inputManager);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            EnsureAvatarManager();
+            avatarEntity.CreateConfiguredEntity(inputManager);
+#endif
             avatarEntity.SetTrackingSources(sources);
-            avatarEntity.SetIsLocal(presentationMode == MetaAvatarPresentationMode.LocalFirstPerson);
 
             if (presentationMode == MetaAvatarPresentationMode.LocalFirstPerson && !attemptedLocalLoad)
                 attemptedLocalLoad = TryStartLocalAvatarLoad();
@@ -62,6 +74,14 @@ namespace Blockiverse.MetaAvatars
         public void TickProvider()
         {
             avatarEntity?.SetTrackingSourcesFromTransforms();
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (avatarEntity != null && !avatarEntity.IsCreated)
+            {
+                EnsureAvatarManager();
+                avatarEntity.CreateConfiguredEntity(ResolveInputManager());
+            }
+#endif
 
             if (mode == MetaAvatarPresentationMode.LocalFirstPerson && !attemptedLocalLoad)
                 attemptedLocalLoad = TryStartLocalAvatarLoad();
@@ -97,7 +117,10 @@ namespace Blockiverse.MetaAvatars
                 : "Remote Meta Horizon avatar stream is waiting for a ready entity.";
         }
 
-        void EnsureAvatarEntity()
+        void EnsureAvatarEntity(
+            MetaAvatarPresentationMode presentationMode = MetaAvatarPresentationMode.RemoteThirdPerson,
+            bool hideFirstPersonHead = false,
+            MetaAvatarTrackingSources sources = default)
         {
             if (avatarEntity != null)
                 return;
@@ -110,13 +133,50 @@ namespace Blockiverse.MetaAvatars
                 return;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
+            // Create inactive so OvrAvatarEntity.Awake() cannot create the SDK entity before
+            // Blockiverse has staged creation flags and the avatar input manager.
             var entityObject = new GameObject(AvatarEntityName);
+            entityObject.SetActive(false);
             entityObject.transform.SetParent(transform, false);
             avatarEntity = entityObject.AddComponent<BlockiverseMetaAvatarEntity>();
+
+            OvrAvatarInputManagerBehavior inputManager = ResolveInputManager();
+            avatarEntity.ConfigurePresentation(presentationMode, hideFirstPersonHead);
+            avatarEntity.EnsureInputManager(inputManager);
+
+            entityObject.SetActive(true);
+            EnsureAvatarManager();
+            avatarEntity.CreateConfiguredEntity(inputManager);
+
+            if (sources.Head != null)
+                avatarEntity.SetTrackingSources(sources);
 #else
             fallbackReason = "Meta Horizon avatar entity is only created in Quest runtime.";
 #endif
         }
+
+        OvrAvatarInputManagerBehavior ResolveInputManager()
+        {
+            return GetComponent<OvrAvatarInputManagerBehavior>()
+                ?? GetComponentInParent<OvrAvatarInputManagerBehavior>(true)
+                ?? GetComponentInChildren<OvrAvatarInputManagerBehavior>(true);
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        static bool EnsureAvatarManager()
+        {
+            if (!OvrAvatarManager.hasInstance)
+                OvrAvatarManager.Instantiate();
+
+            if (!OvrAvatarManager.hasInstance)
+                return false;
+
+            OvrAvatarManager manager = OvrAvatarManager.Instance;
+            manager.MaxConcurrentAvatarsLoading = AvatarManagerMaxConcurrentAvatarsLoading;
+            manager.MaxConcurrentResourcesLoading = AvatarManagerMaxConcurrentResourcesLoading;
+            return OvrAvatarManager.initialized;
+        }
+#endif
 
         bool TryStartLocalAvatarLoad()
         {

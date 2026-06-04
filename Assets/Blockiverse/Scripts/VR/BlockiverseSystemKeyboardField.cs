@@ -1,24 +1,24 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.UI;
 
 namespace Blockiverse.VR
 {
     /// <summary>
     /// Opens the native system (Quest) keyboard via <see cref="TouchScreenKeyboard"/> when a
-    /// world-space <see cref="InputField"/> is selected or clicked by the controller ray, and
+    /// world-space <see cref="TMP_InputField"/> is selected or clicked by the controller ray, and
     /// streams the result back into the field. This is the native text-entry path for VR; legacy
     /// UI input fields cannot be typed into without a hardware keyboard otherwise.
     /// </summary>
-    [RequireComponent(typeof(InputField))]
+    [RequireComponent(typeof(TMP_InputField))]
     public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, ISelectHandler
     {
-        [SerializeField] InputField inputField;
+        [SerializeField] TMP_InputField inputField;
 
         TouchScreenKeyboard keyboard;
         string textBeforeEdit;
 
-        public void Configure(InputField field)
+        public void Configure(TMP_InputField field)
         {
             inputField = field;
         }
@@ -36,7 +36,7 @@ namespace Blockiverse.VR
         void Awake()
         {
             if (inputField == null)
-                inputField = GetComponent<InputField>();
+                inputField = GetComponent<TMP_InputField>();
         }
 
         void OpenKeyboard()

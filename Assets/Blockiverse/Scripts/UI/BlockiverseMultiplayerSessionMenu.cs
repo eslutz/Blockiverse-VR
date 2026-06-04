@@ -1,6 +1,7 @@
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using Blockiverse.VR;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
@@ -14,8 +15,8 @@ namespace Blockiverse.UI
         [SerializeField] Button hostButton;
         [SerializeField] Button joinButton;
         [SerializeField] Button stopButton;
-        [SerializeField] InputField addressInput;
-        [SerializeField] Text statusText;
+        [SerializeField] TMP_InputField addressInput;
+        [SerializeField] TMP_Text statusText;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
@@ -30,8 +31,8 @@ namespace Blockiverse.UI
         string lastDisplayedDisconnectReason = string.Empty;
 
         public BlockiverseNetworkSession Session => session;
-        public Text StatusText => statusText;
-        public InputField AddressInput => addressInput;
+        public TMP_Text StatusText => statusText;
+        public TMP_InputField AddressInput => addressInput;
         public Button HostButton => hostButton;
         public Button JoinButton => joinButton;
         public Button StopButton => stopButton;
@@ -57,8 +58,8 @@ namespace Blockiverse.UI
             Button targetHostButton,
             Button targetJoinButton,
             Button targetStopButton,
-            InputField targetAddressInput,
-            Text targetStatusText)
+            TMP_InputField targetAddressInput,
+            TMP_Text targetStatusText)
         {
             hostButton = targetHostButton;
             joinButton = targetJoinButton;
