@@ -1,4 +1,5 @@
 using System;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using UnityEngine;
 using UnityEngine.Events;
@@ -30,9 +31,15 @@ namespace Blockiverse.VR
         const string LeftControllerPositionPath = "<XRController>{LeftHand}/devicePosition";
         const string LeftControllerRotationPath = "<XRController>{LeftHand}/deviceRotation";
         const string LeftControllerTrackingStatePath = "<XRController>{LeftHand}/trackingState";
+        const string LeftControllerPointerPositionPath = "<XRController>{LeftHand}/pointerPosition";
+        const string LeftControllerPointerRotationPath = "<XRController>{LeftHand}/pointerRotation";
         const string RightControllerPositionPath = "<XRController>{RightHand}/devicePosition";
         const string RightControllerRotationPath = "<XRController>{RightHand}/deviceRotation";
         const string RightControllerTrackingStatePath = "<XRController>{RightHand}/trackingState";
+        const string RightControllerPointerPositionPath = "<XRController>{RightHand}/pointerPosition";
+        const string RightControllerPointerRotationPath = "<XRController>{RightHand}/pointerRotation";
+        const string LeftAimPoseName = "Left Aim Pose";
+        const string RightAimPoseName = "Right Aim Pose";
 
         [SerializeField] InputActionAsset inputActions;
         [SerializeField] TrackedPoseDriver headPoseDriver;
@@ -125,6 +132,7 @@ namespace Blockiverse.VR
         {
             EnsureHeadPoseDriver();
             EnsureControllerPoseDrivers();
+            EnsureControllerAimPoseDrivers();
             EnsureXriLocomotionProviders();
             EnsureRayInteractorInputs();
         }
@@ -159,6 +167,26 @@ namespace Blockiverse.VR
                     driver,
                     RightControllerPositionPath,
                     RightControllerRotationPath,
+                    RightControllerTrackingStatePath);
+            }
+        }
+
+        public static void ConfigureControllerAimPoseDriverActions(TrackedPoseDriver driver, BlockiverseControllerRole role)
+        {
+            if (role == BlockiverseControllerRole.Left)
+            {
+                ConfigurePoseDriverActions(
+                    driver,
+                    LeftControllerPointerPositionPath,
+                    LeftControllerPointerRotationPath,
+                    LeftControllerTrackingStatePath);
+            }
+            else
+            {
+                ConfigurePoseDriverActions(
+                    driver,
+                    RightControllerPointerPositionPath,
+                    RightControllerPointerRotationPath,
                     RightControllerTrackingStatePath);
             }
         }
@@ -198,6 +226,13 @@ namespace Blockiverse.VR
 
         void Awake()
         {
+            RepairRuntimeTracking();
+        }
+
+        void Start()
+        {
+            // LocomotionMediator initializes its transformer during Awake; repair once more after
+            // all Awake calls so GravityProvider and JumpProvider see a complete mediator.
             RepairRuntimeTracking();
         }
 
@@ -321,6 +356,35 @@ namespace Blockiverse.VR
                 driver.enabled = true;
                 anchor.Configure(anchor.Role, driver);
             }
+        }
+
+        void EnsureControllerAimPoseDrivers()
+        {
+            EnsureControllerAimPoseDriver(BlockiverseControllerRole.Left);
+            EnsureControllerAimPoseDriver(BlockiverseControllerRole.Right);
+        }
+
+        Transform EnsureControllerAimPoseDriver(BlockiverseControllerRole role)
+        {
+            Transform parent = ResolveCameraOffsetTransform();
+            string aimPoseName = GetAimPoseName(role);
+            Transform aimPose = parent.Find(aimPoseName);
+
+            if (aimPose == null)
+            {
+                var aimPoseObject = new GameObject(aimPoseName);
+                aimPoseObject.transform.SetParent(parent, false);
+                aimPose = aimPoseObject.transform;
+            }
+
+            TrackedPoseDriver driver = aimPose.GetComponent<TrackedPoseDriver>();
+
+            if (driver == null)
+                driver = aimPose.gameObject.AddComponent<TrackedPoseDriver>();
+
+            ConfigureControllerAimPoseDriverActions(driver, role);
+            driver.enabled = true;
+            return aimPose;
         }
 
         void EnsureXriLocomotionProviders()
@@ -465,12 +529,22 @@ namespace Blockiverse.VR
             }
 
             if (gravityProvider != null)
+            {
                 gravityProvider.mediator = locomotionMediator;
+                gravityProvider.enabled = true;
+                gravityProvider.useGravity = true;
+                gravityProvider.useLocalSpaceGravity = true;
+                gravityProvider.sphereCastLayerMask = GetVoxelTerrainLayerMask();
+                gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
+            }
 
             if (jumpProvider != null)
             {
                 jumpProvider.mediator = locomotionMediator;
                 jumpProvider.jumpHeight = DefaultJumpHeightMeters;
+                jumpProvider.disableGravityDuringJump = false;
+                jumpProvider.unlimitedInAirJumps = false;
+                jumpProvider.inAirJumpCount = 0;
             }
 
             ConfigureXriProviderInputs();
@@ -521,43 +595,75 @@ namespace Blockiverse.VR
             }
         }
 
-        // Re-wire the right controller's ray readers from the live InputActionAsset every run. These
+        // Re-wire ray readers from the live InputActionAsset every run. These
         // XRInputButtonReaders are serialized on the ray interactors with embedded direct actions whose
         // map-owned bindings are lost on serialization, which is why UI clicks and teleport-select silently
         // fail. Pointing them at the live actions (InputActionReference) restores the bindings at runtime.
         void EnsureRayInteractorInputs()
         {
-            BlockiverseLocomotionRayMediator rayMediator = GetComponentInChildren<BlockiverseLocomotionRayMediator>(true);
-
-            if (rayMediator == null)
-                return;
-
-            XRRayInteractor interactionRay = rayMediator.InteractionRay;
-
-            if (interactionRay != null)
+            foreach (BlockiverseLocomotionRayMediator rayMediator in GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
             {
-                interactionRay.uiPressInput = CreateButtonActionReader(
-                    "UI Press",
-                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress, out InputAction uiPress)
-                        ? uiPress
-                        : null);
-                interactionRay.uiScrollInput = CreateVector2ActionReader(
-                    "UI Scroll",
-                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll, out InputAction uiScroll)
-                        ? uiScroll
-                        : null);
-            }
+                string mapName = GetControllerMapName(rayMediator.Hand);
+                Transform aimPose = EnsureControllerAimPoseDriver(rayMediator.Hand);
+                XRRayInteractor interactionRay = rayMediator.InteractionRay;
 
-            XRRayInteractor teleportRay = rayMediator.TeleportRay;
+                if (interactionRay != null)
+                {
+                    interactionRay.rayOriginTransform = aimPose;
+                    interactionRay.enableUIInteraction = true;
+                    interactionRay.uiPressInput = CreateButtonActionReader(
+                        "UI Press",
+                        TryFindAction(mapName, BlockiverseInputActionNames.UiPress, out InputAction uiPress)
+                            ? uiPress
+                            : null);
+                    interactionRay.uiScrollInput = CreateVector2ActionReader(
+                        "UI Scroll",
+                        TryFindAction(mapName, BlockiverseInputActionNames.UiScroll, out InputAction uiScroll)
+                            ? uiScroll
+                            : null);
+                }
 
-            if (teleportRay != null)
-            {
-                teleportRay.selectInput = CreateButtonActionReader(
-                    "Teleport Select",
-                    TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.TeleportSelect, out InputAction teleportSelect)
-                        ? teleportSelect
-                        : null);
+                XRRayInteractor teleportRay = rayMediator.TeleportRay;
+
+                if (teleportRay != null)
+                {
+                    teleportRay.rayOriginTransform = aimPose;
+                    teleportRay.selectInput = CreateButtonActionReader(
+                        "Teleport Select",
+                        TryFindAction(mapName, BlockiverseInputActionNames.TeleportSelect, out InputAction teleportSelect)
+                            ? teleportSelect
+                            : null);
+                }
             }
+        }
+
+        static string GetControllerMapName(BlockiverseControllerRole role)
+        {
+            return role == BlockiverseControllerRole.Left
+                ? BlockiverseInputActionNames.LeftHandMap
+                : BlockiverseInputActionNames.RightHandMap;
+        }
+
+        static string GetAimPoseName(BlockiverseControllerRole role)
+        {
+            return role == BlockiverseControllerRole.Left ? LeftAimPoseName : RightAimPoseName;
+        }
+
+        Transform ResolveCameraOffsetTransform()
+        {
+            XROrigin origin = GetComponent<XROrigin>();
+
+            if (origin != null && origin.CameraFloorOffsetObject != null)
+                return origin.CameraFloorOffsetObject.transform;
+
+            Transform cameraOffset = transform.Find("Camera Offset");
+            return cameraOffset != null ? cameraOffset : transform;
+        }
+
+        static LayerMask GetVoxelTerrainLayerMask()
+        {
+            int terrainLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+            return terrainLayer >= 0 ? (LayerMask)(1 << terrainLayer) : Physics.DefaultRaycastLayers;
         }
 
         public static void ConfigureCharacterController(CharacterController controller)
@@ -599,6 +705,15 @@ namespace Blockiverse.VR
 
             if (continuousTurnProvider != null)
                 continuousTurnProvider.enabled = smoothTurn;
+
+            if (gravityProvider != null)
+            {
+                gravityProvider.enabled = true;
+                gravityProvider.useGravity = true;
+                gravityProvider.useLocalSpaceGravity = true;
+                gravityProvider.sphereCastLayerMask = GetVoxelTerrainLayerMask();
+                gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
+            }
 
             // In Teleport mode teleport rays are active; in Glide mode they must stay inactive.
             // The teleport ray mediators read LocomotionMode directly, so no rig-level toggle

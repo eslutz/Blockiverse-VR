@@ -28,6 +28,12 @@ namespace Blockiverse.MetaAvatars
         // set _creationInfo flags and wire the InputManager before the entity is created.
         protected override bool CreateEntityOnAwake => false;
 
+        public bool IsRenderableReady =>
+            IsCreated &&
+            CurrentState >= AvatarState.DefaultAvatar &&
+            !IsApplyingModels &&
+            !IsPendingAvatar;
+
         /// <summary>
         /// Set presentation flags before the SDK entity is created.
         /// </summary>

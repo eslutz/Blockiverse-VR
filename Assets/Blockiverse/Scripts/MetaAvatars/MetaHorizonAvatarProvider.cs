@@ -41,7 +41,7 @@ namespace Blockiverse.MetaAvatars
                 if (mode == MetaAvatarPresentationMode.RemoteThirdPerson)
                     return hasAppliedRemoteStream;
 
-                return avatarEntity.IsCreated && !avatarEntity.IsPendingAvatar;
+                return avatarEntity.IsRenderableReady;
             }
         }
 
@@ -76,6 +76,8 @@ namespace Blockiverse.MetaAvatars
             avatarEntity?.SetTrackingSourcesFromTransforms();
 
 #if UNITY_ANDROID && !UNITY_EDITOR
+            Request.RunCallbacks();
+
             if (avatarEntity != null && !avatarEntity.IsCreated)
             {
                 EnsureAvatarManager();
@@ -237,6 +239,7 @@ namespace Blockiverse.MetaAvatars
             {
                 Error error = message.GetError();
                 fallbackReason = $"Meta Platform access token lookup failed: {error.Message}";
+                Debug.LogWarning($"[MetaHorizonAvatarProvider] {fallbackReason}", this);
                 return;
             }
 
@@ -253,13 +256,20 @@ namespace Blockiverse.MetaAvatars
             {
                 Error error = message.GetError();
                 fallbackReason = $"Meta Platform user lookup failed: {error.Message}";
+                Debug.LogWarning($"[MetaHorizonAvatarProvider] {fallbackReason}", this);
                 return;
             }
 
             if (avatarEntity != null && avatarEntity.TryLoadUserAvatar(message.Data.ID))
+            {
                 fallbackReason = "Meta Horizon avatar is loading from the signed-in Quest profile.";
+                Debug.Log($"[MetaHorizonAvatarProvider] Loading signed-in user avatar {message.Data.ID}.", this);
+            }
             else
+            {
                 fallbackReason = "Meta Horizon avatar user load could not start; fallback proxy remains active.";
+                Debug.LogWarning($"[MetaHorizonAvatarProvider] {fallbackReason}", this);
+            }
         }
 #endif
     }

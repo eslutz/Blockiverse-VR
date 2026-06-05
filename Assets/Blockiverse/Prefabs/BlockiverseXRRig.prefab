@@ -948,8 +948,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 28
-  m_fontSizeBase: 28
+  m_fontSize: 22
+  m_fontSizeBase: 22
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1606,7 +1606,7 @@ RectTransform:
   m_GameObject: {fileID: 1248877660919414135}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 1.06}
-  m_LocalScale: {x: 0.00185, y: 0.00185, z: 0.00185}
+  m_LocalScale: {x: 0.0013, y: 0.0013, z: 0.0013}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6786935270320217866}
@@ -1681,7 +1681,7 @@ MonoBehaviour:
   horizontalOffsetMeters: 0
   verticalOffsetMeters: -0.14
   pitchDegrees: 0
-  panelScale: 0.00185
+  panelScale: 0.0013
   recenterOnShow: 1
   showOnStart: 1
   playShowFeedback: 0
@@ -2925,7 +2925,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.94}
+  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.99}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -3714,8 +3714,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 40
-  m_fontSizeBase: 40
+  m_fontSize: 32
+  m_fontSizeBase: 32
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -4872,6 +4872,131 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RaycastTriggerInteraction: 1
+--- !u!1 &4028696901824828555
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3260024600113923118}
+  - component: {fileID: 700853340359080918}
+  m_Layer: 0
+  m_Name: Right Aim Pose
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3260024600113923118
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4028696901824828555}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6200346131006441375}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &700853340359080918
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4028696901824828555}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2fadf230d1919748a9aa21d40f74619, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.XR.TrackedPoseDriver
+  m_TrackingType: 0
+  m_UpdateType: 0
+  m_IgnoreTrackingState: 0
+  m_PositionInput:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Position
+      m_Type: 0
+      m_ExpectedControlType: Vector3
+      m_Id: 1db9c76e-b6eb-49f7-be18-fec4882cb544
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: 84b9d07c-d8f9-4f20-98d1-4bf0e5b35255
+        m_Path: <XRController>{RightHand}/pointerPosition
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Position
+        m_Flags: 0
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_RotationInput:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Rotation
+      m_Type: 0
+      m_ExpectedControlType: Quaternion
+      m_Id: 1253fc95-f7a2-40d6-8f24-9fa5b013a057
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: e9e6cea2-9ffe-4e98-af97-c8522ac97ce2
+        m_Path: <XRController>{RightHand}/pointerRotation
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Rotation
+        m_Flags: 0
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_TrackingStateInput:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Tracking State
+      m_Type: 0
+      m_ExpectedControlType: Integer
+      m_Id: a9a822a5-8f3a-4bd8-a81c-4b6f0b3c6cea
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: 0e0a7920-2022-41d9-9585-032420481abf
+        m_Path: <XRController>{RightHand}/trackingState
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Tracking State
+        m_Flags: 0
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_PositionAction:
+    m_Name:
+    m_Type: 0
+    m_ExpectedControlType:
+    m_Id: c942c358-70ef-4b63-8ce2-2807523d131d
+    m_Processors:
+    m_Interactions:
+    m_SingletonActionBindings: []
+    m_Flags: 0
+  m_RotationAction:
+    m_Name:
+    m_Type: 0
+    m_ExpectedControlType:
+    m_Id: c62fd28c-5e30-4d64-95a0-870ed3634e04
+    m_Processors:
+    m_Interactions:
+    m_SingletonActionBindings: []
+    m_Flags: 0
 --- !u!1 &4264771262897812024
 GameObject:
   m_ObjectHideFlags: 0
@@ -5517,6 +5642,8 @@ Transform:
   - {fileID: 5282975311847451478}
   - {fileID: 7343541312360383394}
   - {fileID: 4934816231249909626}
+  - {fileID: 7886461404964936601}
+  - {fileID: 3260024600113923118}
   m_Father: {fileID: 4474765016073847360}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4727232166728498998
@@ -5690,7 +5817,7 @@ MonoBehaviour:
   m_LineType: 0
   m_BlendVisualLinePoints: 1
   m_MaxRaycastDistance: 30
-  m_RayOriginTransform: {fileID: 0}
+  m_RayOriginTransform: {fileID: 3260024600113923118}
   m_ReferenceFrame: {fileID: 0}
   m_Velocity: 16
   m_Acceleration: 9.8
@@ -5740,7 +5867,7 @@ MonoBehaviour:
       m_Name: UI Press
       m_Type: 1
       m_ExpectedControlType: 
-      m_Id: 09f30eaf-e4cc-4d53-bfe4-e886100b961c
+      m_Id: 59b6ebc3-c7e6-447a-a72f-fcd28076687e
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -5749,7 +5876,7 @@ MonoBehaviour:
       m_Name: UI Press Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 2e652b86-b486-403a-8c72-06556a9433fc
+      m_Id: f47bd2cf-ab5e-4a83-9947-ffe7afe068bf
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -5770,7 +5897,7 @@ MonoBehaviour:
       m_Name: UI Scroll
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: d8c8c726-559a-49cb-8765-039cd0dd8aaf
+      m_Id: 293fbea7-27f8-41cc-ad36-ab38abf2458e
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -5950,8 +6077,8 @@ LineRenderer:
       m_RotationOrder: 4
     colorGradient:
       serializedVersion: 2
-      key0: {r: 1, g: 1, b: 1, a: 1}
-      key1: {r: 1, g: 1, b: 1, a: 1}
+      key0: {r: 0.36078432, g: 0.81960785, b: 1, a: 0.92156863}
+      key1: {r: 0.36078432, g: 0.81960785, b: 1, a: 0.92156863}
       key2: {r: 0, g: 0, b: 0, a: 0}
       key3: {r: 0, g: 0, b: 0, a: 0}
       key4: {r: 0, g: 0, b: 0, a: 0}
@@ -6902,8 +7029,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 40
-  m_fontSizeBase: 40
+  m_fontSize: 32
+  m_fontSizeBase: 32
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -8778,7 +8905,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.94}
+  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.99}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -9570,7 +9697,7 @@ MonoBehaviour:
       m_Name: Left Hand Move
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 5d6b251a-2aac-4429-8269-4ae8f01da667
+      m_Id: 127a7036-3f18-41c4-9135-a5850d6d3c50
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9584,7 +9711,7 @@ MonoBehaviour:
       m_Name: Right Hand Move
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: b4ed55b0-c422-4a8c-861e-1f9eb2304209
+      m_Id: 9f41c0e7-aa0e-40ae-a738-30216b5b2659
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9618,7 +9745,7 @@ MonoBehaviour:
       m_Name: Left Hand Snap Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 4b7f9720-6fe1-4a2e-9e4c-0736018dc304
+      m_Id: 133d5bdd-7be8-4b9e-972b-68d0f703759a
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9632,7 +9759,7 @@ MonoBehaviour:
       m_Name: Right Hand Snap Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 6be4a425-9ed5-4c39-a4a6-74eab9d1a790
+      m_Id: e59c3a58-7526-4015-819a-f17571dda7cc
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9663,7 +9790,7 @@ MonoBehaviour:
       m_Name: Left Hand Smooth Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: a89a26d6-1ea0-49f0-b82f-e6b205da47da
+      m_Id: 54b0a77f-8d7b-4ddf-b10c-fa03c17fe513
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9677,7 +9804,7 @@ MonoBehaviour:
       m_Name: Right Hand Smooth Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 745aabf8-f7dc-4e6d-93a2-098aff8ec21b
+      m_Id: ef1ff051-aca8-4fce-a4ba-9cf290d32d2e
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9733,7 +9860,7 @@ MonoBehaviour:
   m_SphereCastDistanceBuffer: -0.05
   m_SphereCastLayerMask:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 256
   m_SphereCastTriggerInteraction: 1
   m_OnGravityLockChanged:
     m_PersistentCalls:
@@ -9757,7 +9884,7 @@ MonoBehaviour:
   m_TransformationPriority: 0
   m_DisableGravityDuringJump: 0
   m_UnlimitedInAirJumps: 0
-  m_InAirJumpCount: 1
+  m_InAirJumpCount: 0
   m_JumpForgivenessWindow: 0.25
   m_JumpHeight: 1.3
   m_VariableHeightJump: 1
@@ -9770,7 +9897,7 @@ MonoBehaviour:
       m_Name: Jump
       m_Type: 1
       m_ExpectedControlType: 
-      m_Id: a9780b7f-27c5-4ade-97ba-b20e54252415
+      m_Id: 81a3237d-8235-4023-9c7a-06d047dabcb1
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9779,7 +9906,7 @@ MonoBehaviour:
       m_Name: Jump Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 7f9e62f3-8ca8-4174-bbca-c133f73968ab
+      m_Id: 7e408f9d-bad8-4bd3-a169-472d577b04f9
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -9806,6 +9933,131 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6683f8b82935e4dde9ce275fe7ae9d24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.MetaAvatars::Blockiverse.MetaAvatars.BlockiverseXriAvatarInputManager
+--- !u!1 &6817520142354188832
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7886461404964936601}
+  - component: {fileID: 3096071848498281733}
+  m_Layer: 0
+  m_Name: Left Aim Pose
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7886461404964936601
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6817520142354188832}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6200346131006441375}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3096071848498281733
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6817520142354188832}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2fadf230d1919748a9aa21d40f74619, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.XR.TrackedPoseDriver
+  m_TrackingType: 0
+  m_UpdateType: 0
+  m_IgnoreTrackingState: 0
+  m_PositionInput:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Position
+      m_Type: 0
+      m_ExpectedControlType: Vector3
+      m_Id: 5984cc59-88a0-4b5a-9846-b48f614399e8
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: 3c585b01-769b-4933-aedb-46e9fbd7966e
+        m_Path: <XRController>{LeftHand}/pointerPosition
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Position
+        m_Flags: 0
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_RotationInput:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Rotation
+      m_Type: 0
+      m_ExpectedControlType: Quaternion
+      m_Id: cd40fea5-6d00-45c3-b394-85aadb87f36c
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: 1c2922c9-9cd3-49c1-afee-aa9dba30e24e
+        m_Path: <XRController>{LeftHand}/pointerRotation
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Rotation
+        m_Flags: 0
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_TrackingStateInput:
+    m_UseReference: 0
+    m_Action:
+      m_Name: Tracking State
+      m_Type: 0
+      m_ExpectedControlType: Integer
+      m_Id: 32e7e966-52da-4cad-871b-69b0a2d7e6bd
+      m_Processors:
+      m_Interactions:
+      m_SingletonActionBindings:
+      - m_Name:
+        m_Id: 1fff0bcb-96da-4f83-9168-250435f7d47e
+        m_Path: <XRController>{LeftHand}/trackingState
+        m_Interactions:
+        m_Processors:
+        m_Groups:
+        m_Action: Tracking State
+        m_Flags: 0
+      m_Flags: 0
+    m_Reference: {fileID: 0}
+  m_PositionAction:
+    m_Name:
+    m_Type: 0
+    m_ExpectedControlType:
+    m_Id: 985f633c-4109-400f-9b74-29b0cbd2c426
+    m_Processors:
+    m_Interactions:
+    m_SingletonActionBindings: []
+    m_Flags: 0
+  m_RotationAction:
+    m_Name:
+    m_Type: 0
+    m_ExpectedControlType:
+    m_Id: 3e40b392-2441-4f27-83bf-244dea5d77d6
+    m_Processors:
+    m_Interactions:
+    m_SingletonActionBindings: []
+    m_Flags: 0
 --- !u!1 &6937898104666057989
 GameObject:
   m_ObjectHideFlags: 0
@@ -10740,7 +10992,7 @@ MonoBehaviour:
       m_Name: Teleport Select
       m_Type: 1
       m_ExpectedControlType: 
-      m_Id: 63bcfecb-3298-4754-ad45-a0555938dcf8
+      m_Id: f09558ed-ad07-46b7-802f-c91901d39ad9
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -10749,7 +11001,7 @@ MonoBehaviour:
       m_Name: Teleport Select Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 7c96229a-60c2-4608-9c6d-efd8b161af45
+      m_Id: 6a21c9c6-1b5e-48a6-9c9e-2b8df0ebb4d8
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -10834,7 +11086,7 @@ MonoBehaviour:
   m_LineType: 1
   m_BlendVisualLinePoints: 1
   m_MaxRaycastDistance: 30
-  m_RayOriginTransform: {fileID: 0}
+  m_RayOriginTransform: {fileID: 7886461404964936601}
   m_ReferenceFrame: {fileID: 0}
   m_Velocity: 16
   m_Acceleration: 9.8
@@ -11094,8 +11346,8 @@ LineRenderer:
       m_RotationOrder: 4
     colorGradient:
       serializedVersion: 2
-      key0: {r: 1, g: 1, b: 1, a: 1}
-      key1: {r: 1, g: 1, b: 1, a: 1}
+      key0: {r: 0.36078432, g: 0.81960785, b: 1, a: 0.92156863}
+      key1: {r: 0.36078432, g: 0.81960785, b: 1, a: 0.92156863}
       key2: {r: 0, g: 0, b: 0, a: 0}
       key3: {r: 0, g: 0, b: 0, a: 0}
       key4: {r: 0, g: 0, b: 0, a: 0}
@@ -11359,7 +11611,7 @@ MonoBehaviour:
       m_Name: Teleport Select
       m_Type: 1
       m_ExpectedControlType: 
-      m_Id: 4566a3f2-2206-4d72-95fe-04c13a20bea8
+      m_Id: c50ca757-c308-4cad-a6f2-722c8c8d8d4f
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -11368,7 +11620,7 @@ MonoBehaviour:
       m_Name: Teleport Select Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 7b4bd15d-83f6-4ec2-bd90-cacc6fa73bbb
+      m_Id: 29e1efca-f0c2-4de2-8378-41fcb1666c96
       m_Processors: 
       m_Interactions: 
       m_SingletonActionBindings: []
@@ -11453,7 +11705,7 @@ MonoBehaviour:
   m_LineType: 1
   m_BlendVisualLinePoints: 1
   m_MaxRaycastDistance: 30
-  m_RayOriginTransform: {fileID: 0}
+  m_RayOriginTransform: {fileID: 3260024600113923118}
   m_ReferenceFrame: {fileID: 0}
   m_Velocity: 16
   m_Acceleration: 9.8
@@ -11713,8 +11965,8 @@ LineRenderer:
       m_RotationOrder: 4
     colorGradient:
       serializedVersion: 2
-      key0: {r: 1, g: 1, b: 1, a: 1}
-      key1: {r: 1, g: 1, b: 1, a: 1}
+      key0: {r: 0.36078432, g: 0.81960785, b: 1, a: 0.92156863}
+      key1: {r: 0.36078432, g: 0.81960785, b: 1, a: 0.92156863}
       key2: {r: 0, g: 0, b: 0, a: 0}
       key3: {r: 0, g: 0, b: 0, a: 0}
       key4: {r: 0, g: 0, b: 0, a: 0}
@@ -12252,14 +12504,13 @@ MonoBehaviour:
     Right thumbstick: snap turn
 
     Right
-    A + trigger: teleport
+    A: jump
 
-    Left X: jump
+    Left X: unassigned
 
-    Left Y: undo
+    Left Y: unassigned
 
-    Height reset:
-    comfort settings menu'
+    Right B: unassigned'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -12286,8 +12537,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 20
+  m_fontSizeBase: 20
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -12361,7 +12612,7 @@ RectTransform:
   m_GameObject: {fileID: 8082815210719743204}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 1.18}
-  m_LocalScale: {x: 0.002, y: 0.002, z: 0.002}
+  m_LocalScale: {x: 0.0013, y: 0.0013, z: 0.0013}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4027276087503650836}
@@ -12454,11 +12705,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseWorldSpacePanelPresenter
   targetCanvas: {fileID: 6903944831176797711}
   headset: {fileID: 96463171583487156}
-  distanceMeters: 1.18
+  distanceMeters: 1.3
   horizontalOffsetMeters: 0
-  verticalOffsetMeters: -0.1
+  verticalOffsetMeters: -0.06
   pitchDegrees: 0
-  panelScale: 0.002
+  panelScale: 0.0013
   recenterOnShow: 1
   showOnStart: 0
   playShowFeedback: 1
@@ -12772,7 +13023,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.94}
+  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.99}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

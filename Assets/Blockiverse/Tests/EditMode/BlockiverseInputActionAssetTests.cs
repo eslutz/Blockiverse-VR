@@ -1,3 +1,4 @@
+using System.Linq;
 using Blockiverse.Core;
 using Blockiverse.VR;
 using NUnit.Framework;
@@ -29,12 +30,15 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerActions(asset, BlockiverseInputActionNames.LeftHandMap, "LeftHand");
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, "<XRController>{LeftHand}/secondaryButton");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo);
+            AssertNoBindingPath(asset, "<XRController>{LeftHand}/primaryButton", "Left X is intentionally unassigned.");
+            AssertNoBindingPath(asset, "<XRController>{LeftHand}/secondaryButton", "Left Y is intentionally unassigned.");
+            AssertNoBindingPath(asset, "<XRController>{RightHand}/secondaryButton", "Right B is intentionally unassigned.");
         }
 
         [Test]
-        public void JumpIsOnlyInGameplayMap()
+        public void JumpUsesRightAAndHasNoLegacyControllerBindings()
         {
             InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
                 BlockiverseProject.InputActionsAssetPath);
@@ -44,7 +48,8 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(rightHandJump, Is.Null, "RightHand/Jump is stale; JumpProvider reads Blockiverse Gameplay/Jump.");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
-                BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
+                BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
+            AssertNoBindingPath(asset, "<XRController>{LeftHand}/primaryButton", "Jump must no longer be on Left X.");
         }
 
         static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)
@@ -66,6 +71,8 @@ namespace Blockiverse.Tests.EditMode
             // aim, release to teleport), not trigger or A button.
             AssertActionContainsPath(asset, mapName, BlockiverseInputActionNames.TeleportMode, "thumbstick");
             AssertActionContainsPath(asset, mapName, BlockiverseInputActionNames.TeleportSelect, "thumbstick");
+            AssertActionDoesNotContainPath(asset, mapName, BlockiverseInputActionNames.TeleportMode, "primaryButton");
+            AssertActionDoesNotContainPath(asset, mapName, BlockiverseInputActionNames.TeleportSelect, "triggerPressed");
         }
 
         static void AssertAction(InputActionAsset asset, string mapName, string actionName, string expectedPath)
@@ -86,6 +93,30 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(action.bindings, Has.Some.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "").Contains(pathSubstring)),
                 $"{mapName}/{actionName} should have a binding containing '{pathSubstring}'");
+        }
+
+        static void AssertActionDoesNotContainPath(InputActionAsset asset, string mapName, string actionName, string pathSubstring)
+        {
+            InputAction action = asset.FindActionMap(mapName).FindAction(actionName);
+
+            Assert.That(action, Is.Not.Null, $"{mapName}/{actionName}");
+            Assert.That(action.bindings, Has.None.Matches<InputBinding>(b =>
+                (b.effectivePath ?? b.path ?? "").Contains(pathSubstring)),
+                $"{mapName}/{actionName} should not have a binding containing '{pathSubstring}'");
+        }
+
+        static void AssertNoAction(InputActionAsset asset, string mapName, string actionName)
+        {
+            InputAction action = asset.FindActionMap(mapName).FindAction(actionName, throwIfNotFound: false);
+
+            Assert.That(action, Is.Null, $"{mapName}/{actionName} should not exist.");
+        }
+
+        static void AssertNoBindingPath(InputActionAsset asset, string expectedPath, string message)
+        {
+            Assert.That(asset.actionMaps.SelectMany(map => map.bindings), Has.None.Matches<InputBinding>(
+                binding => binding.effectivePath == expectedPath || binding.path == expectedPath),
+                message);
         }
     }
 }

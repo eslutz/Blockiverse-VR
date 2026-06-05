@@ -91,6 +91,8 @@ namespace Blockiverse.Editor
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionRayName = "Interaction Ray";
         const string TeleportRayName = "Teleport Ray";
+        const string LeftAimPoseName = "Left Aim Pose";
+        const string RightAimPoseName = "Right Aim Pose";
         const string TunnelingVignetteName = "Tunneling Vignette";
         const string TunnelingVignettePrefabPath = "Assets/Blockiverse/VR/TunnelingVignette/TunnelingVignette.prefab";
         const string InteractionTestBlockName = "Interaction Test Block";
@@ -104,7 +106,7 @@ namespace Blockiverse.Editor
         // --- Dark-glass theme palette -------------------------------------------------------
         // All panels share a deep charcoal-glass base with a single teal accent. Controls use
         // a lighter tinted surface with hover/pressed tints via Button.ColorBlock.
-        static readonly Color PanelBaseColor       = new(0.06f, 0.07f, 0.09f, 0.94f);
+        static readonly Color PanelBaseColor       = new(0.06f, 0.07f, 0.09f, 0.99f);
         static readonly Color PanelHeaderColor     = new(0.09f, 0.11f, 0.14f, 1.00f);
         static readonly Color ControlNormalColor   = new(0.16f, 0.20f, 0.24f, 1.00f);
         static readonly Color ControlHighlightColor= new(0.26f, 0.34f, 0.40f, 1.00f);
@@ -479,7 +481,18 @@ namespace Blockiverse.Editor
         static void EnsureInputActionSchema(InputActionAsset asset)
         {
             InputActionMap gameplayMap = asset.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
+            InputActionMap leftHandMap = asset.FindActionMap(BlockiverseInputActionNames.LeftHandMap, throwIfNotFound: false);
             InputActionMap rightHandMap = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
+
+            if (leftHandMap == null)
+                AddControllerMap(asset, BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}");
+            else
+                EnsureControllerMapSchema(leftHandMap, "<XRController>{LeftHand}");
+
+            if (rightHandMap == null)
+                AddControllerMap(asset, BlockiverseInputActionNames.RightHandMap, "<XRController>{RightHand}");
+            else
+                EnsureControllerMapSchema(rightHandMap, "<XRController>{RightHand}");
 
             RemoveAction(rightHandMap, BlockiverseInputActionNames.Jump);
 
@@ -497,12 +510,12 @@ namespace Blockiverse.Editor
             EnsureButtonAction(
                 gameplayMap,
                 BlockiverseInputActionNames.Jump,
-                "<XRController>{LeftHand}/primaryButton");
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.Undo,
-                "<XRController>{LeftHand}/secondaryButton");
+                "<XRController>{RightHand}/primaryButton");
+            RemoveAction(gameplayMap, BlockiverseInputActionNames.Undo);
             RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
+            RemoveBindingPath(asset, "<XRController>{LeftHand}/primaryButton");
+            RemoveBindingPath(asset, "<XRController>{LeftHand}/secondaryButton");
+            RemoveBindingPath(asset, "<XRController>{RightHand}/secondaryButton");
             EditorUtility.SetDirty(asset);
         }
 
@@ -523,6 +536,35 @@ namespace Blockiverse.Editor
 
             if (!hasBinding)
                 action.AddBinding(bindingPath);
+        }
+
+        static void EnsureControllerMapSchema(InputActionMap map, string controllerPath)
+        {
+            RemoveAction(map, BlockiverseInputActionNames.Jump);
+            EnsureThumbstickYAction(map, BlockiverseInputActionNames.TeleportMode, controllerPath);
+            EnsureThumbstickYAction(map, BlockiverseInputActionNames.TeleportSelect, controllerPath);
+            RemoveActionBindingsContaining(map, BlockiverseInputActionNames.TeleportMode, "primaryButton", "triggerPressed");
+            RemoveActionBindingsContaining(map, BlockiverseInputActionNames.TeleportSelect, "primaryButton", "triggerPressed");
+        }
+
+        static void EnsureThumbstickYAction(InputActionMap map, string actionName, string controllerPath)
+        {
+            InputAction action = map.FindAction(actionName, throwIfNotFound: false);
+
+            if (action == null)
+                action = map.AddAction(actionName, InputActionType.Button);
+
+            string thumbstickPath = $"{controllerPath}/thumbstick/y";
+            bool hasThumbstickY = action.bindings.Any(binding => binding.path == thumbstickPath);
+
+            if (!hasThumbstickY)
+                AddThumbstickYComposite(action, controllerPath);
+        }
+
+        static void AddThumbstickYComposite(InputAction action, string controllerPath)
+        {
+            action.AddCompositeBinding("1DAxis")
+                .With("Positive", $"{controllerPath}/thumbstick/y");
         }
 
         // Import TextMeshPro Essential Resources once so the default font asset is available for
@@ -577,6 +619,37 @@ namespace Blockiverse.Editor
             {
                 if (action.bindings[index].path == bindingPath)
                     action.ChangeBinding(index).Erase();
+            }
+        }
+
+        static void RemoveActionBindingsContaining(InputActionMap map, string actionName, params string[] pathSubstrings)
+        {
+            InputAction action = map?.FindAction(actionName, throwIfNotFound: false);
+
+            if (action == null)
+                return;
+
+            for (int index = action.bindings.Count - 1; index >= 0; index--)
+            {
+                string path = action.bindings[index].path ?? string.Empty;
+
+                if (pathSubstrings.Any(path.Contains))
+                    action.ChangeBinding(index).Erase();
+            }
+        }
+
+        static void RemoveBindingPath(InputActionAsset asset, string bindingPath)
+        {
+            foreach (InputActionMap map in asset.actionMaps)
+            {
+                foreach (InputAction action in map.actions)
+                {
+                    for (int index = action.bindings.Count - 1; index >= 0; index--)
+                    {
+                        if (action.bindings[index].path == bindingPath)
+                            action.ChangeBinding(index).Erase();
+                    }
+                }
             }
         }
 
@@ -713,16 +786,15 @@ namespace Blockiverse.Editor
             map.AddAction(BlockiverseInputActionNames.HapticDevice, InputActionType.PassThrough, $"{controllerPath}/*");
             map.AddAction(BlockiverseInputActionNames.Move, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
             map.AddAction(BlockiverseInputActionNames.Turn, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
-            map.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, $"{controllerPath}/primaryButton");
-            map.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, $"{controllerPath}/triggerPressed");
+            AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button), controllerPath);
+            AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button), controllerPath);
         }
 
         static void AddGameplayMap(InputActionAsset asset)
         {
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
-            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{LeftHand}/primaryButton");
-            map.AddAction(BlockiverseInputActionNames.Undo, InputActionType.Button, "<XRController>{LeftHand}/secondaryButton");
+            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)
@@ -1535,6 +1607,7 @@ namespace Blockiverse.Editor
             string mapName = role == BlockiverseControllerRole.Left
                 ? BlockiverseInputActionNames.LeftHandMap
                 : BlockiverseInputActionNames.RightHandMap;
+            Transform aimPose = EnsureControllerAimPose(controller.transform.parent, role);
 
             XRRayInteractor interactionRay = null;
 
@@ -1549,6 +1622,7 @@ namespace Blockiverse.Editor
                 interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
                 interactionRay.enableUIInteraction = true;
                 interactionRay.manipulateAttachTransform = false;
+                interactionRay.rayOriginTransform = aimPose;
                 // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk
                 // TeleportationArea). UI still works (separate path) and block targeting uses
                 // TryGetCurrent3DRaycastHit on this raycast mask.
@@ -1568,6 +1642,7 @@ namespace Blockiverse.Editor
             teleportRay.lineType = XRRayInteractor.LineType.ProjectileCurve;
             teleportRay.enableUIInteraction = false;
             teleportRay.manipulateAttachTransform = false;
+            teleportRay.rayOriginTransform = aimPose;
             teleportRay.raycastMask = GetInteractionLayerMask();
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
             teleportRay.selectInput = MakeButtonReader("Teleport Select", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.TeleportSelect));
@@ -1582,6 +1657,27 @@ namespace Blockiverse.Editor
             return interactionRay;
         }
 
+        static Transform EnsureControllerAimPose(Transform cameraOffset, BlockiverseControllerRole role)
+        {
+            string aimPoseName = role == BlockiverseControllerRole.Left ? LeftAimPoseName : RightAimPoseName;
+            Transform aimPose = cameraOffset != null ? cameraOffset.Find(aimPoseName) : null;
+
+            if (aimPose == null)
+            {
+                GameObject aimPoseObject = EnsureChild(cameraOffset, aimPoseName);
+                aimPose = aimPoseObject.transform;
+            }
+
+            aimPose.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(aimPose.gameObject);
+            BlockiverseInputRig.ConfigureControllerAimPoseDriverActions(poseDriver, role);
+            poseDriver.enabled = true;
+            EditorUtility.SetDirty(poseDriver);
+            EditorUtility.SetDirty(aimPose.gameObject);
+            return aimPose;
+        }
+
         static void ConfigureLineVisual(GameObject rayObject, Material pointerMaterial)
         {
             LineRenderer lineRenderer = EnsureComponent<LineRenderer>(rayObject);
@@ -1591,6 +1687,9 @@ namespace Blockiverse.Editor
 
             if (pointerMaterial != null)
                 lineRenderer.sharedMaterial = pointerMaterial;
+
+            lineRenderer.startColor = PointerLineColor;
+            lineRenderer.endColor = PointerLineColor;
 
             XRInteractorLineVisual lineVisual = EnsureComponent<XRInteractorLineVisual>(rayObject);
             lineVisual.lineWidth = 0.01f;
@@ -1678,7 +1777,7 @@ namespace Blockiverse.Editor
             GameObject menuObject = EnsureRectChildMigrated(cameraOffset, leftController, ComfortMenuName);
             menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
             menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
-            menuObject.transform.localScale = Vector3.one * 0.002f;
+            menuObject.transform.localScale = Vector3.one * 0.0013f;
 
             RectTransform menuRect = menuObject.GetComponent<RectTransform>();
             menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ComfortMenuSize.x);
@@ -1715,7 +1814,7 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Title",
                 "Comfort Settings",
-                40,
+                32,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
@@ -1724,7 +1823,7 @@ namespace Blockiverse.Editor
                 new Vector2(460.0f, 56.0f));
 
             // --- Movement Mode (Glide / Teleport) ---
-            EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 28,
+            EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
                 new Vector2(32.0f, -104.0f), new Vector2(300.0f, 36.0f));
@@ -1790,7 +1889,7 @@ namespace Blockiverse.Editor
             menu.Configure(canvas, settings);
             menu.ConfigureControls(glideToggle, teleportToggle, smoothTurnToggle, snapTurnSlider, vignetteToggle, vignetteSlider);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
-            presenter.Configure(canvas, head, 1.18f, 0.0f, -0.1f, 0.0f);
+            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, 0.0013f);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             if (inputRig != null)
@@ -2124,7 +2223,7 @@ namespace Blockiverse.Editor
             GameObject popupObject = EnsureRectChild(cameraOffset, ControllerMappingPopupName);
             popupObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.06f);
             popupObject.transform.localRotation = Quaternion.identity;
-            popupObject.transform.localScale = Vector3.one * 0.00185f;
+            popupObject.transform.localScale = Vector3.one * 0.0013f;
 
             RectTransform popupRect = popupObject.GetComponent<RectTransform>();
             popupRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ControllerMappingPopupSize.x);
@@ -2155,7 +2254,7 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Title",
                 "Controller Map",
-                40,
+                32,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
@@ -2166,8 +2265,8 @@ namespace Blockiverse.Editor
             EnsureLabel(
                 panelObject.transform,
                 "Mapping Text",
-                "Right trigger: press UI or break blocks\nRight grip: place blocks\nLeft grip: blocks menu\nMenu: comfort settings\nRight thumbstick: snap turn\nRight A + trigger: teleport\nLeft X: jump\nLeft Y: undo\nHeight reset: comfort settings menu",
-                24,
+                "Right trigger: press UI or break blocks\nRight grip: place blocks\nLeft grip: blocks menu\nMenu: comfort settings\nRight thumbstick: snap turn\nRight A: jump\nLeft X: unassigned\nLeft Y: unassigned\nRight B: unassigned",
+                20,
                 TextAnchor.UpperLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
@@ -2190,7 +2289,7 @@ namespace Blockiverse.Editor
                 0.0f,
                 -0.14f,
                 0.0f,
-                0.00185f,
+                0.0013f,
                 showWhenStarted: true);
 
             RemovePersistentListeners(
@@ -3094,6 +3193,11 @@ namespace Blockiverse.Editor
                 gravityProvider = rig.AddComponent<GravityProvider>();
 
             gravityProvider.mediator = mediator;
+            gravityProvider.enabled = true;
+            gravityProvider.useGravity = true;
+            gravityProvider.useLocalSpaceGravity = true;
+            gravityProvider.sphereCastLayerMask = GetInteractionLayerMask();
+            gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
 
             JumpProvider jumpProvider = rig.GetComponent<JumpProvider>();
 
@@ -3102,6 +3206,9 @@ namespace Blockiverse.Editor
 
             jumpProvider.mediator = mediator;
             jumpProvider.jumpHeight = JumpHeightMeters;
+            jumpProvider.disableGravityDuringJump = false;
+            jumpProvider.unlimitedInAirJumps = false;
+            jumpProvider.inAirJumpCount = 0;
 
             TeleportationProvider teleport = rig.GetComponent<TeleportationProvider>();
 

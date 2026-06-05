@@ -26,6 +26,7 @@ namespace Blockiverse.VR
         public bool TeleportActive => teleportActive;
         public XRRayInteractor InteractionRay => interactionRay;
         public XRRayInteractor TeleportRay => teleportRay;
+        public BlockiverseControllerRole Hand => hand;
 
         public void Configure(
             BlockiverseInputRig rig,
