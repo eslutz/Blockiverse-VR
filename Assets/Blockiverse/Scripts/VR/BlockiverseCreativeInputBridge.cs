@@ -21,6 +21,7 @@ namespace Blockiverse.VR
         UnityAction breakAction;
         UnityAction placeAction;
         UnityAction undoAction;
+        UnityAction blockEditingToggleAction;
 
         public XRRayInteractor InteractionRay => interactionRay;
 
@@ -69,9 +70,11 @@ namespace Blockiverse.VR
             inputRig.BreakPressed.RemoveListener(breakAction);
             inputRig.PlacePressed.RemoveListener(placeAction);
             inputRig.UndoPressed.RemoveListener(undoAction);
+            inputRig.BlockEditingTogglePressed.RemoveListener(blockEditingToggleAction);
             inputRig.BreakPressed.AddListener(breakAction);
             inputRig.PlacePressed.AddListener(placeAction);
             inputRig.UndoPressed.AddListener(undoAction);
+            inputRig.BlockEditingTogglePressed.AddListener(blockEditingToggleAction);
         }
 
         void Unbind()
@@ -83,6 +86,7 @@ namespace Blockiverse.VR
             inputRig.BreakPressed.RemoveListener(breakAction);
             inputRig.PlacePressed.RemoveListener(placeAction);
             inputRig.UndoPressed.RemoveListener(undoAction);
+            inputRig.BlockEditingTogglePressed.RemoveListener(blockEditingToggleAction);
         }
 
         void EnsureActions()
@@ -90,6 +94,7 @@ namespace Blockiverse.VR
             breakAction ??= TryBreakTarget;
             placeAction ??= TryPlaceTarget;
             undoAction ??= TryUndo;
+            blockEditingToggleAction ??= ToggleBlockEditing;
         }
 
         void DiscoverDependencies()
@@ -119,6 +124,11 @@ namespace Blockiverse.VR
         void TryUndo()
         {
             interactionController?.UndoLast();
+        }
+
+        void ToggleBlockEditing()
+        {
+            interactionController?.ToggleBlockEditingEnabled();
         }
 
         bool TryGetTarget(out BlockPosition target, out Vector3 normal)

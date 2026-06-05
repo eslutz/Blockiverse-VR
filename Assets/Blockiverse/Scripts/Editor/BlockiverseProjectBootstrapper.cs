@@ -511,11 +511,14 @@ namespace Blockiverse.Editor
                 gameplayMap,
                 BlockiverseInputActionNames.Jump,
                 "<XRController>{RightHand}/primaryButton");
+            EnsureButtonAction(
+                gameplayMap,
+                BlockiverseInputActionNames.BlockEditingToggle,
+                "<XRController>{RightHand}/secondaryButton");
             RemoveAction(gameplayMap, BlockiverseInputActionNames.Undo);
             RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
             RemoveBindingPath(asset, "<XRController>{LeftHand}/primaryButton");
             RemoveBindingPath(asset, "<XRController>{LeftHand}/secondaryButton");
-            RemoveBindingPath(asset, "<XRController>{RightHand}/secondaryButton");
             EditorUtility.SetDirty(asset);
         }
 
@@ -795,6 +798,7 @@ namespace Blockiverse.Editor
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
             map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)
@@ -1170,6 +1174,7 @@ namespace Blockiverse.Editor
                 UnityEngine.Object.DestroyImmediate(legacyUiModule);
 
             XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
+            BlockiverseXrUiInputConfigurator.Configure(inputModule, EnsureInputActions());
 
             EnsureXrInteractionManager(scene);
 
@@ -1621,6 +1626,7 @@ namespace Blockiverse.Editor
                 interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
                 interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
                 interactionRay.enableUIInteraction = true;
+                interactionRay.blockUIOnInteractableSelection = false;
                 interactionRay.manipulateAttachTransform = false;
                 interactionRay.rayOriginTransform = aimPose;
                 // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk

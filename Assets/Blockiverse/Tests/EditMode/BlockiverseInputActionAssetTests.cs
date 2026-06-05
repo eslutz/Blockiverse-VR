@@ -31,10 +31,10 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{RightHand}/secondaryButton");
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo);
             AssertNoBindingPath(asset, "<XRController>{LeftHand}/primaryButton", "Left X is intentionally unassigned.");
             AssertNoBindingPath(asset, "<XRController>{LeftHand}/secondaryButton", "Left Y is intentionally unassigned.");
-            AssertNoBindingPath(asset, "<XRController>{RightHand}/secondaryButton", "Right B is intentionally unassigned.");
         }
 
         [Test]

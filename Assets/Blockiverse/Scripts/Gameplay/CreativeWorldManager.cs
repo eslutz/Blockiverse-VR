@@ -51,6 +51,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeHotbar hotbar;
         [SerializeField] PlacementPreview placementPreview;
+        [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
         MultiplayerChunkAuthoritySync authoritySync;
 
         public BlockRegistry Registry { get; private set; }
@@ -139,6 +140,8 @@ namespace Blockiverse.Gameplay
                 chunkMaterial,
                 interactionLayer);
 
+            ConfigureVoidSafetyFloor();
+
             if (authoritySyncOverride != null)
                 authoritySync = authoritySyncOverride;
 
@@ -169,6 +172,26 @@ namespace Blockiverse.Gameplay
                     : null,
                 Renderer,
                 authoritySync: authoritySync);
+        }
+
+        void ConfigureVoidSafetyFloor()
+        {
+            if (voidSafetyFloor == null)
+                voidSafetyFloor = GetComponentInChildren<BlockiverseVoidSafetyFloor>(true);
+
+            if (voidSafetyFloor == null)
+            {
+                var floorObject = new GameObject("Void Safety Floor");
+                floorObject.transform.SetParent(transform, false);
+                voidSafetyFloor = floorObject.AddComponent<BlockiverseVoidSafetyFloor>();
+            }
+
+            voidSafetyFloor.Configure(
+                World.Bounds,
+                BlockiverseVoidSafetyFloor.DefaultFallAllowanceMeters,
+                BlockiverseVoidSafetyFloor.DefaultThicknessMeters,
+                BlockiverseVoidSafetyFloor.DefaultHorizontalMarginMeters,
+                interactionLayer);
         }
 
         public static GeneratedCreativeWorld CreateDefaultGeneratedWorld(int seed = 6401)

@@ -17,12 +17,15 @@ namespace Blockiverse.Gameplay
         BlockMutationAuthority mutationAuthority;
         MultiplayerChunkAuthoritySync chunkAuthoritySync;
         Bounds? playerBounds;
+        bool blockEditingEnabled = true;
 
         public BlockMutationAuthority MutationAuthority => mutationAuthority;
         public BlockMutationResult LastMutationResult { get; private set; }
+        public bool BlockEditingEnabled => blockEditingEnabled;
 
         /// <summary>Raised after a block mutation is locally applied so presentation systems (audio, haptics) can react.</summary>
         public event Action<BlockChange> BlockMutationApplied;
+        public event Action<bool> BlockEditingEnabledChanged;
 
         public void Configure(
             VoxelWorld voxelWorld,
@@ -73,6 +76,9 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
+            if (!blockEditingEnabled)
+                return RejectBlockEditingDisabled(position);
+
             return TryMutate(position, BlockRegistry.Air, pushUndo: true);
         }
 
@@ -84,6 +90,9 @@ namespace Blockiverse.Gameplay
         public bool TryPlaceAt(BlockPosition position)
         {
             EnsureConfigured();
+
+            if (!blockEditingEnabled)
+                return RejectBlockEditingDisabled(position);
 
             if (hotbar == null || !CanPlaceBlock(position))
                 return false;
@@ -101,6 +110,9 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
+            if (!blockEditingEnabled)
+                return false;
+
             if (!world.Bounds.Contains(position))
                 return false;
 
@@ -116,6 +128,12 @@ namespace Blockiverse.Gameplay
         public bool UndoLast()
         {
             EnsureConfigured();
+
+            if (!blockEditingEnabled)
+            {
+                BlockPosition position = undoStack.Count > 0 ? undoStack.Peek().Position : default;
+                return RejectBlockEditingDisabled(position);
+            }
 
             if (undoStack.Count == 0)
                 return false;
@@ -169,6 +187,25 @@ namespace Blockiverse.Gameplay
             placementPreview?.Hide();
         }
 
+        public bool ToggleBlockEditingEnabled()
+        {
+            SetBlockEditingEnabled(!blockEditingEnabled);
+            return blockEditingEnabled;
+        }
+
+        public void SetBlockEditingEnabled(bool enabled)
+        {
+            if (blockEditingEnabled == enabled)
+                return;
+
+            blockEditingEnabled = enabled;
+
+            if (!blockEditingEnabled)
+                HidePreview();
+
+            BlockEditingEnabledChanged?.Invoke(blockEditingEnabled);
+        }
+
         void EnsureConfigured()
         {
             if (world == null || registry == null || mutationAuthority == null)
@@ -177,6 +214,9 @@ namespace Blockiverse.Gameplay
 
         bool TryMutate(BlockPosition position, BlockId newBlock, bool pushUndo)
         {
+            if (!blockEditingEnabled)
+                return RejectBlockEditingDisabled(position);
+
             BlockMutationRequest request = CreateMutationRequest(position, newBlock);
             BlockMutationResult result = SubmitMutation(request, out SetBlockCommand command, out bool requestSentToHost);
             LastMutationResult = result;
@@ -193,6 +233,15 @@ namespace Blockiverse.Gameplay
                 BlockMutationApplied?.Invoke(command.AppliedChange);
 
             return true;
+        }
+
+        bool RejectBlockEditingDisabled(BlockPosition position)
+        {
+            LastMutationResult = BlockMutationResult.Reject(
+                BlockMutationRejectionReason.BlockEditingDisabled,
+                ChunkCoordinate.FromBlockPosition(position, world.ChunkSize),
+                "Block editing is disabled.");
+            return false;
         }
 
         BlockMutationResult SubmitMutation(

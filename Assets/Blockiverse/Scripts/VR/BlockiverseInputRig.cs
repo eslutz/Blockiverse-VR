@@ -60,6 +60,7 @@ namespace Blockiverse.VR
         [SerializeField] UnityEvent breakPressed = new();
         [SerializeField] UnityEvent placePressed = new();
         [SerializeField] UnityEvent undoPressed = new();
+        [SerializeField] UnityEvent blockEditingTogglePressed = new();
 
         Action<LocomotionProvider> teleportEndedHandler;
 
@@ -69,6 +70,7 @@ namespace Blockiverse.VR
         public UnityEvent BreakPressed => breakPressed;
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent UndoPressed => undoPressed;
+        public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
         public TrackedPoseDriver HeadPoseDriver => headPoseDriver;
         public XRBodyTransformer BodyTransformer => bodyTransformer;
         public LocomotionMediator LocomotionMediator => locomotionMediator;
@@ -84,6 +86,7 @@ namespace Blockiverse.VR
         {
             inputActions = actions;
             ConfigureXriProviderInputs();
+            BlockiverseXrUiInputConfigurator.ConfigureAll(inputActions);
 
             if (isActiveAndEnabled)
                 inputActions?.Enable();
@@ -135,6 +138,7 @@ namespace Blockiverse.VR
             EnsureControllerAimPoseDrivers();
             EnsureXriLocomotionProviders();
             EnsureRayInteractorInputs();
+            BlockiverseXrUiInputConfigurator.ConfigureAll(inputActions);
         }
 
         public InputAction FindAction(string mapName, string actionName)
@@ -305,6 +309,12 @@ namespace Blockiverse.VR
                 undoAction.WasPressedThisFrame())
             {
                 undoPressed?.Invoke();
+            }
+
+            if (TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, out InputAction blockEditingToggleAction) &&
+                blockEditingToggleAction.WasPressedThisFrame())
+            {
+                blockEditingTogglePressed?.Invoke();
             }
         }
 
@@ -611,6 +621,7 @@ namespace Blockiverse.VR
                 {
                     interactionRay.rayOriginTransform = aimPose;
                     interactionRay.enableUIInteraction = true;
+                    interactionRay.blockUIOnInteractableSelection = false;
                     interactionRay.uiPressInput = CreateButtonActionReader(
                         "UI Press",
                         TryFindAction(mapName, BlockiverseInputActionNames.UiPress, out InputAction uiPress)

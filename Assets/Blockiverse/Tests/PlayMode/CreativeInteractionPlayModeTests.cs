@@ -58,6 +58,55 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [Test]
+        public void BlockEditingToggleRejectsBreakPlaceAndUndoWithoutMutatingWorld()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            var breakPosition = new BlockPosition(1, 1, 1);
+            var placePosition = new BlockPosition(2, 1, 1);
+            world.SetBlock(breakPosition, BlockRegistry.MeadowTurf, trackChange: false);
+
+            var controllerObject = new GameObject("Creative Controller");
+            var hotbarObject = new GameObject("Hotbar");
+
+            try
+            {
+                CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam }, null);
+
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
+
+                bool observedState = true;
+                controller.BlockEditingEnabledChanged += enabled => observedState = enabled;
+
+                Assert.That(controller.BlockEditingEnabled, Is.True);
+                Assert.That(controller.ToggleBlockEditingEnabled(), Is.False);
+                Assert.That(controller.BlockEditingEnabled, Is.False);
+                Assert.That(observedState, Is.False);
+
+                Assert.That(controller.TryBreakBlock(breakPosition), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.BlockEditingDisabled));
+                Assert.That(world.GetBlock(breakPosition), Is.EqualTo(BlockRegistry.MeadowTurf));
+
+                Assert.That(controller.TryPlaceAt(placePosition), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.BlockEditingDisabled));
+                Assert.That(world.GetBlock(placePosition), Is.EqualTo(BlockRegistry.Air));
+
+                Assert.That(controller.UndoLast(), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.BlockEditingDisabled));
+
+                controller.SetBlockEditingEnabled(true);
+                Assert.That(controller.TryBreakBlock(breakPosition), Is.True);
+                Assert.That(world.GetBlock(breakPosition), Is.EqualTo(BlockRegistry.Air));
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(hotbarObject);
+            }
+        }
+
+        [Test]
         public void BlockMutationsRaiseAppliedEventForFeedbackSystems()
         {
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);

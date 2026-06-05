@@ -266,11 +266,15 @@ namespace Blockiverse.Tests.EditMode
                 "Jump must no longer be bound to Left X.");
             Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Undo, throwIfNotFound: false), Is.Null,
                 "Undo must not have a controller button.");
+            InputAction blockEditingToggle = gameplayMap.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false);
+            Assert.That(blockEditingToggle, Is.Not.Null, "Right B should toggle block editing through the gameplay map.");
+            Assert.That(blockEditingToggle.bindings, Has.Some.Matches<InputBinding>(b =>
+                (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/secondaryButton"),
+                "Block editing toggle should be bound to Right B.");
             Assert.That(inputRig.InputActions.actionMaps.SelectMany(map => map.bindings), Has.None.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/primaryButton" ||
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/secondaryButton" ||
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/secondaryButton"),
-                "Left X, Left Y, and Right B are intentionally unassigned.");
+                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/secondaryButton"),
+                "Left X and Left Y are intentionally unassigned.");
 
             InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
             Assert.That(rightHandMap?.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
@@ -342,6 +346,9 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(rightTeleportRay, Is.Not.Null);
                 Assert.That(leftTeleportRay, Is.Not.Null);
                 AssertButtonReaderReferencesAction(rightInteractionRay.uiPressInput, rightUiPress, "Right trigger must click UI through the right UI Press action.");
+                Assert.That(rightInteractionRay.enableUIInteraction, Is.True);
+                Assert.That(rightInteractionRay.blockUIOnInteractableSelection, Is.False,
+                    "Selecting block interactables must not suppress UI clicks while a menu is visible.");
                 AssertButtonReaderReferencesAction(rightTeleportRay.selectInput, rightTeleportSelect, "Right teleport ray must use right thumbstick select.");
                 AssertButtonReaderReferencesAction(leftTeleportRay.selectInput, leftTeleportSelect, "Left teleport ray must use left thumbstick select.");
                 Assert.That(rightInteractionRay.rayOriginTransform, Is.Not.Null, "UI/block ray should use the OpenXR aim pose, not the controller grip pose.");
@@ -385,6 +392,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
             Assert.That(interactionRay, Is.Not.Null);
             Assert.That(interactionRay.enableUIInteraction, Is.True);
+            Assert.That(interactionRay.blockUIOnInteractableSelection, Is.False);
             Assert.That(interactionRay.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
             Assert.That(rightAimPose, Is.Not.Null, "Right app pointer should be driven by the OpenXR aim pose.");
             Assert.That(leftAimPose, Is.Not.Null, "Left teleport pointer should be driven by the OpenXR aim pose.");
