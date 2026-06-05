@@ -107,6 +107,43 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [Test]
+        public void BlockEditingToggleKeepsPlacementPreviewHidden()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+
+            var controllerObject = new GameObject("Creative Controller");
+            var hotbarObject = new GameObject("Hotbar");
+            var previewObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+            try
+            {
+                PlacementPreview preview = previewObject.AddComponent<PlacementPreview>();
+                preview.Configure(previewObject.GetComponent<MeshRenderer>());
+
+                CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam }, null);
+
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, preview, null);
+
+                controller.UpdatePreview(new BlockPosition(1, 0, 1), Vector3.up);
+                Assert.That(preview.IsVisible, Is.True);
+
+                controller.SetBlockEditingEnabled(false);
+                controller.UpdatePreview(new BlockPosition(1, 0, 1), Vector3.up);
+
+                Assert.That(preview.IsVisible, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(hotbarObject);
+                Object.DestroyImmediate(previewObject);
+            }
+        }
+
+        [Test]
         public void BlockMutationsRaiseAppliedEventForFeedbackSystems()
         {
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);

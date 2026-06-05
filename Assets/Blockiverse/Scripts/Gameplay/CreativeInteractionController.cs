@@ -178,6 +178,12 @@ namespace Blockiverse.Gameplay
             if (placementPreview == null)
                 return;
 
+            if (!blockEditingEnabled)
+            {
+                HidePreview();
+                return;
+            }
+
             BlockPosition placement = ComputePlacementPosition(targetPosition, faceNormal);
             placementPreview.ShowAt(placement, CanPlaceBlock(placement));
         }

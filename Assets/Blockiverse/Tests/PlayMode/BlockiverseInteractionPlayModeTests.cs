@@ -8,6 +8,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -51,6 +53,45 @@ namespace Blockiverse.Tests.PlayMode
                 Object.DestroyImmediate(firstMaterial);
                 Object.DestroyImmediate(secondMaterial);
                 Object.DestroyImmediate(highlightMaterial);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator BlockEditingToggleHidesAndRestoresTheInteractionRayVisual()
+        {
+            var bridgeObject = new GameObject("Creative Input Bridge");
+            var rayObject = new GameObject("Interaction Ray");
+            var controllerObject = new GameObject("Creative Controller");
+
+            try
+            {
+                rayObject.transform.SetParent(bridgeObject.transform);
+                XRRayInteractor ray = rayObject.AddComponent<XRRayInteractor>();
+                LineRenderer lineRenderer = rayObject.AddComponent<LineRenderer>();
+                XRInteractorLineVisual lineVisual = rayObject.AddComponent<XRInteractorLineVisual>();
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                BlockiverseCreativeInputBridge bridge = bridgeObject.AddComponent<BlockiverseCreativeInputBridge>();
+
+                lineRenderer.enabled = true;
+                lineVisual.enabled = true;
+                bridge.Configure(null, ray, controller);
+
+                controller.SetBlockEditingEnabled(false);
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.False);
+                Assert.That(lineVisual.enabled, Is.False);
+
+                controller.SetBlockEditingEnabled(true);
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.True);
+                Assert.That(lineVisual.enabled, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(bridgeObject);
+                Object.DestroyImmediate(controllerObject);
             }
         }
 
