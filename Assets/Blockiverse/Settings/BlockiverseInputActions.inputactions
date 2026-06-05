@@ -604,9 +604,9 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Undo",
+                    "name": "Block Editing Toggle",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000060",
+                    "id": "00000000-0000-0000-0000-00000000005A",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -628,7 +628,7 @@
                 {
                     "name": "",
                     "id": "00000000-0000-0000-0000-000000000059",
-                    "path": "<XRController>{LeftHand}/primaryButton",
+                    "path": "<XRController>{RightHand}/primaryButton",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
@@ -638,12 +638,12 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000061",
-                    "path": "<XRController>{LeftHand}/secondaryButton",
+                    "id": "00000000-0000-0000-0000-00000000005B",
+                    "path": "<XRController>{RightHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Undo",
+                    "action": "Block Editing Toggle",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

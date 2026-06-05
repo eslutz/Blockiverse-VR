@@ -3,8 +3,10 @@
   "rootNamespace": "Blockiverse.MetaAvatars",
   "references": [
     "Blockiverse.Networking",
+    "Meta.XR.MultiplayerBlocks.Shared",
     "Oculus.AvatarSDK2",
     "Oculus.Platform",
+    "Oculus.VR",
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],

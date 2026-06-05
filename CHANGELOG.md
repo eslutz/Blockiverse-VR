@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Fixed Quest menu interaction and creative safety controls by wiring menus through
+  the native XRI UI input stack, adding a void safety floor below world bounds, and
+  binding Right B to toggle block editing without affecting locomotion or UI input.
 - Fixed Quest movement tracking by migrating the rig to Unity Input System/XRI pose
   and locomotion providers for before-render HMD tracking, continuous movement,
   snap turn, and teleport.

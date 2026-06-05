@@ -119,6 +119,34 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!114 &112309451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
+  m_Name: XRI RightHand/Turn
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
+  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
+  m_ActionId: 00000000-0000-0000-0000-000000000039
+--- !u!114 &159611429
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
+  m_Name: XRI RightHand/Turn
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
+  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
+  m_ActionId: 00000000-0000-0000-0000-000000000039
 --- !u!1 &200000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -170,6 +198,7 @@ MonoBehaviour:
   interactionController: {fileID: 200000004}
   hotbar: {fileID: 1420024871}
   placementPreview: {fileID: 0}
+  voidSafetyFloor: {fileID: 0}
 --- !u!114 &200000003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -194,7 +223,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5226686041b249e1b3cea8295edab68d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeInteractionController
---- !u!114 &368529117
+--- !u!114 &666423704
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -204,25 +233,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/Turn
+  m_Name: XRI RightHand/UI Scroll
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000039
---- !u!114 &623636160
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/Jump
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
-  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 56edf0a2-dc73-4da2-acaa-41be7bcc93d9
---- !u!114 &809255109
+  m_ActionId: 00000000-0000-0000-0000-000000000036
+--- !u!114 &712634221
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -236,6 +251,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
   m_ActionId: 00000000-0000-0000-0000-000000000035
+--- !u!114 &779952874
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
+  m_Name: XRI RightHand/Teleport Select
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
+  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
+  m_ActionId: 71c3ad55-b234-42c9-b10c-3367f6288e8a
 --- !u!1 &810693170
 GameObject:
   m_ObjectHideFlags: 0
@@ -352,24 +381,24 @@ MonoBehaviour:
   m_BypassUIToolkitEvents: 0
   m_ActiveInputMode: 0
   m_EnableXRInput: 1
-  m_EnableMouseInput: 1
-  m_EnableTouchInput: 1
-  m_EnableGamepadInput: 1
-  m_EnableJoystickInput: 1
+  m_EnableMouseInput: 0
+  m_EnableTouchInput: 0
+  m_EnableGamepadInput: 0
+  m_EnableJoystickInput: 0
   m_PointAction: {fileID: 0}
-  m_LeftClickAction: {fileID: 0}
+  m_LeftClickAction: {fileID: 1126490856}
   m_MiddleClickAction: {fileID: 0}
   m_RightClickAction: {fileID: 0}
-  m_ScrollWheelAction: {fileID: 0}
-  m_NavigateAction: {fileID: 0}
-  m_SubmitAction: {fileID: 0}
+  m_ScrollWheelAction: {fileID: 2125689076}
+  m_NavigateAction: {fileID: 666423704}
+  m_SubmitAction: {fileID: 1758510218}
   m_CancelAction: {fileID: 0}
   m_EnableBuiltinActionsAsFallback: 1
   m_HorizontalAxis: Horizontal
   m_VerticalAxis: Vertical
   m_SubmitButton: Submit
   m_CancelButton: Cancel
---- !u!114 &947242168
+--- !u!114 &1126490856
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -379,11 +408,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI LeftHand/Move
+  m_Name: XRI RightHand/UI Press
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000011
---- !u!114 &1112694936
+  m_ActionId: 00000000-0000-0000-0000-000000000035
+--- !u!114 &1320053608
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -393,11 +422,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI LeftHand/Teleport Select
+  m_Name: Blockiverse Gameplay/Jump
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: dd0e0c94-c7d4-446a-a4af-5eb7658566d2
---- !u!114 &1220995703
+  m_ActionId: 00000000-0000-0000-0000-000000000057
+--- !u!114 &1328026284
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -411,20 +440,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
   m_ActionId: 00000000-0000-0000-0000-000000000036
---- !u!114 &1244612720
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/Teleport Select
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
-  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 71c3ad55-b234-42c9-b10c-3367f6288e8a
 --- !u!1001 &1420024869
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -439,16 +454,16 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionValue.m_Id
-      value: b2633ccf-dcdd-4847-a55f-9ae42a6a796c
+      value: 7ca72333-1205-41af-810f-3930e6460111
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionPerformed.m_Id
-      value: fcb73f26-4a0e-4455-8a22-beb16691dc57
+      value: 7a44bc7d-b986-4769-816b-92ac8982c143
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionReferencePerformed
       value: 
-      objectReference: {fileID: 1112694936}
+      objectReference: {fileID: 1579082702}
     - target: {fileID: 1148233133332261351, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_fontColor32.rgba
       value: 4294965234
@@ -467,16 +482,16 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionValue.m_Id
-      value: c74ba782-3654-4664-b0ad-1a5a65c73858
+      value: 8d5031f9-1c39-4675-9649-3a25d219a6de
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionPerformed.m_Id
-      value: 0f4fa0b9-41f6-4327-a116-5035d3e37678
+      value: 77a8f97c-0616-4447-a752-3e6b35818a4f
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionReferencePerformed
       value: 
-      objectReference: {fileID: 1244612720}
+      objectReference: {fileID: 779952874}
     - target: {fileID: 2856492318373381169, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_TextStyleHashCode
       value: -1183493901
@@ -551,24 +566,24 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIScrollInput.m_InputAction.m_Id
-      value: aa038fdb-0cc0-4187-9ffd-a8e1355e79e0
+      value: 84b2e593-eb2f-42d1-854f-0a38febe522d
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionValue.m_Id
-      value: bf1f0062-980b-4746-b9b1-572fcf1956c1
+      value: 46c7a770-e733-4457-88d2-99e4dcb523f4
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIScrollInput.m_InputActionReference
       value: 
-      objectReference: {fileID: 1220995703}
+      objectReference: {fileID: 1328026284}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionPerformed.m_Id
-      value: 909faf8f-4280-4c1f-88d0-0039885dc22c
+      value: 01ace44d-a3c1-445b-a399-336eaa3c6a9d
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionReferencePerformed
       value: 
-      objectReference: {fileID: 809255109}
+      objectReference: {fileID: 712634221}
     - target: {fileID: 8206611384480909587, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_TextStyleHashCode
       value: -1183493901
@@ -593,6 +608,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 917fc1f9e1f244dab3d301e086932df2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
+--- !u!114 &1579082702
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
+  m_Name: XRI LeftHand/Teleport Select
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
+  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
+  m_ActionId: dd0e0c94-c7d4-446a-a4af-5eb7658566d2
 --- !u!1 &1590357433
 GameObject:
   m_ObjectHideFlags: 0
@@ -690,7 +719,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1788713798
+--- !u!114 &1674977783
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -700,10 +729,38 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/Turn
+  m_Name: XRI LeftHand/Move
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000039
+  m_ActionId: 00000000-0000-0000-0000-000000000011
+--- !u!114 &1758510218
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
+  m_Name: XRI RightHand/UI Press
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
+  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
+  m_ActionId: 00000000-0000-0000-0000-000000000035
+--- !u!114 &2125689076
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
+  m_Name: XRI RightHand/UI Scroll
+  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
+  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
+  m_ActionId: 00000000-0000-0000-0000-000000000036
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

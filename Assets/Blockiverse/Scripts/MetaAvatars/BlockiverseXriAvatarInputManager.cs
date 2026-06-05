@@ -1,3 +1,4 @@
+using Meta.XR.MultiplayerBlocks.Shared;
 using Oculus.Avatar2;
 using UnityEngine;
 
@@ -7,8 +8,9 @@ namespace Blockiverse.MetaAvatars
     /// Minimal <see cref="OvrAvatarInputManagerBehavior"/> for the Blockiverse XR rig.
     ///
     /// This project drives head/hand transforms through native XRI (no OVRCameraRig), so
-    /// we use the Meta SDK's own OvrPluginTracking delegates for controller pose data -
-    /// they read from the same OVR Plugin layer that XRI reads, so they stay in sync.
+    /// we use Meta's public multiplayer-blocks tracking delegate for controller pose data.
+    /// It reads from OVRInput/OVRNodeStateProperties, which are backed by the same Quest
+    /// runtime data source as XRI.
     /// Body tracking and hand tracking (finger-pose) are not used in this configuration.
     ///
     /// The component must be on the same GameObject as (or reachable from)
@@ -31,19 +33,17 @@ namespace Blockiverse.MetaAvatars
 
         void Awake()
         {
-            // OvrPluginTracking creates a delegate that reads directly from the Quest OVR
-            // Plugin, which is the same data source as the XRI TrackedPoseDriver - so the
-            // avatar hands and the XRI interaction ray stay in sync without any custom bridge.
-            // This only succeeds on a real Quest device (Android runtime); in the Editor it
-            // returns null and the avatar falls back to the blob proxy.
+            // The multiplayer-blocks delegate supports a null OVRCameraRig by reading from
+            // OVRInput and OVRNodeStateProperties directly. Keep this Android-only so editor
+            // play mode continues to use the lightweight fallback proxy.
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
-                trackingProvider = OvrPluginTracking.CreateInputTrackingProvider();
+                trackingProvider = new OvrAvatarInputTrackingDelegatedProvider(new InputTrackingDelegate(null));
             }
             catch (System.Exception ex)
             {
-                Debug.LogWarning($"[BlockiverseXriAvatarInputManager] Failed to create OvrPlugin tracking provider: {ex.Message}. Avatar will use fallback proxy.", this);
+                Debug.LogWarning($"[BlockiverseXriAvatarInputManager] Failed to create Quest tracking provider: {ex.Message}. Avatar will use fallback proxy.", this);
                 trackingProvider = null;
             }
 #endif

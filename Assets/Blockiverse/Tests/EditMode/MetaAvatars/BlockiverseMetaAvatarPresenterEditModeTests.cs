@@ -103,6 +103,7 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             entity.ConfigurePresentation(MetaAvatarPresentationMode.LocalFirstPerson, hideHeadForFirstPerson: true);
 
             Assert.That(entity.IsCreated, Is.False);
+            Assert.That(entity.IsRenderableReady, Is.False);
             Assert.That(entity.InputManager, Is.Null);
             LogAssert.NoUnexpectedReceived();
         }

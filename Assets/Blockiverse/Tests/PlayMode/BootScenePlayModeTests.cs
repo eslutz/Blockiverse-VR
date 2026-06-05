@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using TMPro;
@@ -11,6 +12,7 @@ using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.UI;
+using UnityEngine.InputSystem;
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -97,6 +99,25 @@ namespace Blockiverse.Tests.PlayMode
 
             Assert.That(uiInputModule, Is.Not.Null, "EventSystem should use XRUIInputModule for tracked-device UI.");
             Assert.That(interactionManager, Is.Not.Null, "Scene should contain an XRInteractionManager.");
+            Assert.That(uiInputModule.enableXRInput, Is.True);
+            Assert.That(uiInputModule.enableMouseInput, Is.False);
+            Assert.That(uiInputModule.enableTouchInput, Is.False);
+            AssertUiActionReference(
+                uiInputModule.leftClickAction,
+                BlockiverseInputActionNames.RightHandMap,
+                BlockiverseInputActionNames.UiPress);
+            AssertUiActionReference(
+                uiInputModule.scrollWheelAction,
+                BlockiverseInputActionNames.RightHandMap,
+                BlockiverseInputActionNames.UiScroll);
+            AssertUiActionReference(
+                uiInputModule.navigateAction,
+                BlockiverseInputActionNames.RightHandMap,
+                BlockiverseInputActionNames.UiScroll);
+            AssertUiActionReference(
+                uiInputModule.submitAction,
+                BlockiverseInputActionNames.RightHandMap,
+                BlockiverseInputActionNames.UiPress);
 
             // World-space menus are raycast by the tracked-device raycaster, not the screen raycaster.
             SurvivalInventoryPanel inventoryPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>();
@@ -112,6 +133,19 @@ namespace Blockiverse.Tests.PlayMode
             XRRayInteractor rayInteractor = interactionRay.GetComponent<XRRayInteractor>();
             Assert.That(rayInteractor, Is.Not.Null);
             Assert.That(rayInteractor.enableUIInteraction, Is.True);
+            Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False);
+
+            BlockiverseVoidSafetyFloor voidFloor = UnityEngine.Object.FindFirstObjectByType<BlockiverseVoidSafetyFloor>();
+            Assert.That(voidFloor, Is.Not.Null, "Boot scene should catch players who fall below the voxel world.");
+            Assert.That(voidFloor.TopY, Is.EqualTo(-8.0f).Within(0.001f));
+        }
+
+        static void AssertUiActionReference(InputActionReference reference, string expectedMap, string expectedAction)
+        {
+            Assert.That(reference, Is.Not.Null, $"{expectedAction} reference must be configured explicitly.");
+            Assert.That(reference.action, Is.Not.Null);
+            Assert.That(reference.action.actionMap?.name, Is.EqualTo(expectedMap));
+            Assert.That(reference.action.name, Is.EqualTo(expectedAction));
         }
 
         static void AssertPanelContainsText(Transform panel, string expectedText)

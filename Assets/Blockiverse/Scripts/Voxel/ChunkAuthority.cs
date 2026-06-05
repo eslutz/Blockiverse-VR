@@ -79,7 +79,8 @@ namespace Blockiverse.Voxel
         ExpectedBlockMismatch,
         NoChange,
         RequestSentToHost,
-        HostOnlyAuthorityOperation
+        HostOnlyAuthorityOperation,
+        BlockEditingDisabled
     }
 
     public readonly struct BlockMutationRequest : IEquatable<BlockMutationRequest>
