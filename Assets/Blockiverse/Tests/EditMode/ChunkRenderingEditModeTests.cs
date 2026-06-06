@@ -25,6 +25,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(mesh.Vertices, Has.Count.EqualTo(24));
             Assert.That(mesh.Triangles, Has.Count.EqualTo(36));
             Assert.That(mesh.Uvs, Has.Count.EqualTo(24));
+            Assert.That(mesh.Colors, Has.Count.EqualTo(24));
         }
 
         [Test]
@@ -208,6 +209,34 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(mesh.Uvs.Any(uv => IsInside(uv, meadowRect)), Is.True);
             Assert.That(mesh.Uvs.Any(uv => IsInside(uv, slateRect)), Is.True);
+        }
+
+        [Test]
+        public void MeshBuilderAppliesDarkerVertexColorsInsideTunnel()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
+
+            for (int x = 0; x < world.Bounds.Width; x++)
+            {
+                for (int y = 0; y < world.Bounds.Height; y++)
+                {
+                    for (int z = 0; z < world.Bounds.Depth; z++)
+                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Slate, trackChange: false);
+                }
+            }
+
+            for (int x = 0; x < 6; x++)
+                world.SetBlock(new BlockPosition(x, 3, 3), BlockRegistry.Air, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            float brightest = mesh.Colors.Max(color => color.grayscale);
+            float darkest = mesh.Colors.Min(color => color.grayscale);
+
+            Assert.That(mesh.Colors, Has.Count.EqualTo(mesh.Vertices.Count));
+            Assert.That(brightest, Is.GreaterThan(darkest));
+            Assert.That(darkest, Is.LessThan(0.55f));
         }
 
         [Test]

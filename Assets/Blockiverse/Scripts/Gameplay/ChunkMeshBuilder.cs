@@ -8,17 +8,19 @@ namespace Blockiverse.Gameplay
 {
     public sealed class ChunkMeshData
     {
-        public ChunkMeshData(List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, int faceCount)
+        public ChunkMeshData(List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, List<Color> colors, int faceCount)
         {
             Vertices = vertices;
             Triangles = triangles;
             Uvs = uvs;
+            Colors = colors;
             FaceCount = faceCount;
         }
 
         public List<Vector3> Vertices { get; }
         public List<int> Triangles { get; }
         public List<Vector2> Uvs { get; }
+        public List<Color> Colors { get; }
         public int FaceCount { get; }
 
         public int TriangleCount => Triangles.Count / 3;
@@ -60,6 +62,7 @@ namespace Blockiverse.Gameplay
             var vertices = new List<Vector3>();
             var triangles = new List<int>();
             var uvs = new List<Vector2>();
+            var colors = new List<Color>();
             int faceCount = 0;
 
             int startX = chunk.X * world.ChunkSize;
@@ -88,14 +91,15 @@ namespace Blockiverse.Gameplay
                             if (!ShouldRenderFace(world, registry, neighbor))
                                 continue;
 
-                            AddFace(vertices, triangles, uvs, position, face, definition.Id);
+                            float light = VoxelLightSampler.SampleAirLight(world, registry, neighbor);
+                            AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, light);
                             faceCount++;
                         }
                     }
                 }
             }
 
-            return new ChunkMeshData(vertices, triangles, uvs, faceCount);
+            return new ChunkMeshData(vertices, triangles, uvs, colors, faceCount);
         }
 
         static bool ShouldRenderFace(VoxelWorld world, BlockRegistry registry, BlockPosition neighbor)
@@ -107,16 +111,26 @@ namespace Blockiverse.Gameplay
             return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
         }
 
-        static void AddFace(List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, BlockPosition position, int faceIndex, BlockId blockId)
+        static void AddFace(
+            List<Vector3> vertices,
+            List<int> triangles,
+            List<Vector2> uvs,
+            List<Color> colors,
+            BlockPosition position,
+            int faceIndex,
+            BlockId blockId,
+            float light)
         {
             int vertexStart = vertices.Count;
             Rect uvRect = BlockVisualAtlas.GetTileRect(blockId);
             var origin = new Vector3(position.X, position.Y, position.Z);
+            Color vertexColor = VoxelLightSampler.ToVertexColor(light);
 
             for (int i = 0; i < 4; i++)
             {
                 Vector3 corner = FaceVertices[faceIndex, i];
                 vertices.Add(origin + corner);
+                colors.Add(vertexColor);
             }
 
             uvs.Add(new Vector2(uvRect.xMin, uvRect.yMin));

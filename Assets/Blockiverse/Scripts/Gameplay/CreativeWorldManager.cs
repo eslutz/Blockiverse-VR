@@ -53,6 +53,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] PlacementPreview placementPreview;
         [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
         MultiplayerChunkAuthoritySync authoritySync;
+        TorchbudLightManager torchbudLightManager;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -129,6 +130,7 @@ namespace Blockiverse.Gameplay
             if (World == null)
                 throw new InvalidOperationException("Creative world runtime requires voxel data.");
 
+            BlockiverseLightingRuntime.EnsureSceneLighting();
             Renderer = GetComponent<VoxelWorldRenderer>();
 
             if (Renderer == null)
@@ -140,12 +142,24 @@ namespace Blockiverse.Gameplay
                 chunkMaterial,
                 interactionLayer);
 
+            ConfigureTorchbudLights();
             ConfigureVoidSafetyFloor();
 
             if (authoritySyncOverride != null)
                 authoritySync = authoritySyncOverride;
 
             ConfigureInteractionController(settings);
+        }
+
+        void ConfigureTorchbudLights()
+        {
+            if (torchbudLightManager == null)
+                torchbudLightManager = GetComponent<TorchbudLightManager>();
+
+            if (torchbudLightManager == null)
+                torchbudLightManager = gameObject.AddComponent<TorchbudLightManager>();
+
+            torchbudLightManager.Configure(World, Registry);
         }
 
         void ConfigureInteractionController(WorldGenerationSettings settings)
