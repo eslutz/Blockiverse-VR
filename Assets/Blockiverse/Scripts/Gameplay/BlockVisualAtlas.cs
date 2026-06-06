@@ -13,6 +13,7 @@ namespace Blockiverse.Gameplay
         public const int TilePixels = 16;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
+        public const string VoxelLitShaderName = "Blockiverse/Voxel Lit";
 
         const float UvInset = 0.001f;
 
@@ -140,13 +141,30 @@ namespace Blockiverse.Gameplay
 
         static Material CreateBaseMaterial(Material sourceMaterial)
         {
-            Shader shader = sourceMaterial != null
+            Shader voxelShader = Shader.Find(VoxelLitShaderName);
+            Shader shader = voxelShader != null
+                ? voxelShader
+                : sourceMaterial != null
                 ? sourceMaterial.shader
                 : Shader.Find("Universal Render Pipeline/Lit") ??
                   Shader.Find("Standard") ??
                   Shader.Find("Sprites/Default");
 
-            return sourceMaterial != null ? new Material(sourceMaterial) : new Material(shader);
+            TryGetBaseTexture(sourceMaterial, out Texture sourceTexture);
+            Material material = sourceMaterial != null ? new Material(sourceMaterial) : new Material(shader);
+
+            if (voxelShader != null)
+                material.shader = voxelShader;
+
+            if (sourceTexture != null)
+            {
+                if (material.HasProperty("_BaseMap"))
+                    material.SetTexture("_BaseMap", sourceTexture);
+                if (material.HasProperty("_MainTex"))
+                    material.SetTexture("_MainTex", sourceTexture);
+            }
+
+            return material;
         }
 
         static void SetBaseColor(Material material, Color color)

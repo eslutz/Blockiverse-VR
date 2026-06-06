@@ -109,6 +109,7 @@ namespace Blockiverse.Gameplay
             mesh.SetVertices(meshData.Vertices);
             mesh.SetTriangles(meshData.Triangles, 0);
             mesh.SetUVs(0, meshData.Uvs);
+            mesh.SetColors(meshData.Colors);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
 
@@ -145,6 +146,8 @@ namespace Blockiverse.Gameplay
 
             chunkObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = chunkObject.AddComponent<MeshRenderer>();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            renderer.receiveShadows = true;
 
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;
