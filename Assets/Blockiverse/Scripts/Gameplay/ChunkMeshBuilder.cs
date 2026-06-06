@@ -149,6 +149,8 @@ namespace Blockiverse.Gameplay
 
     public sealed class ChunkRebuildQueue
     {
+        const int LightingProbeInvalidationPadding = VoxelLightSampler.DefaultProbeDistance + 1;
+
         readonly VoxelWorld world;
         readonly HashSet<ChunkCoordinate> dirtyChunks = new();
 
@@ -176,6 +178,7 @@ namespace Blockiverse.Gameplay
         {
             ChunkCoordinate changedChunk = world.GetChunkCoordinate(change.Position);
             MarkDirty(changedChunk);
+            MarkLightingAffectedChunks(change.Position);
 
             BlockPosition local = ChunkCoordinate.LocalPositionFromBlockPosition(change.Position, world.ChunkSize);
             MarkNeighborIfNeeded(local.X == 0, change.Position + new BlockPosition(-1, 0, 0));
@@ -184,6 +187,28 @@ namespace Blockiverse.Gameplay
             MarkNeighborIfNeeded(local.Y == world.ChunkSize - 1, change.Position + new BlockPosition(0, 1, 0));
             MarkNeighborIfNeeded(local.Z == 0, change.Position + new BlockPosition(0, 0, -1));
             MarkNeighborIfNeeded(local.Z == world.ChunkSize - 1, change.Position + new BlockPosition(0, 0, 1));
+        }
+
+        void MarkLightingAffectedChunks(BlockPosition position)
+        {
+            int minX = Math.Max(0, position.X - LightingProbeInvalidationPadding);
+            int maxX = Math.Min(world.Bounds.Width - 1, position.X + LightingProbeInvalidationPadding);
+            int minY = 0;
+            int maxY = position.Y;
+            int minZ = Math.Max(0, position.Z - LightingProbeInvalidationPadding);
+            int maxZ = Math.Min(world.Bounds.Depth - 1, position.Z + LightingProbeInvalidationPadding);
+
+            ChunkCoordinate minChunk = ChunkCoordinate.FromBlockPosition(new BlockPosition(minX, minY, minZ), world.ChunkSize);
+            ChunkCoordinate maxChunk = ChunkCoordinate.FromBlockPosition(new BlockPosition(maxX, maxY, maxZ), world.ChunkSize);
+
+            for (int y = minChunk.Y; y <= maxChunk.Y; y++)
+            {
+                for (int z = minChunk.Z; z <= maxChunk.Z; z++)
+                {
+                    for (int x = minChunk.X; x <= maxChunk.X; x++)
+                        MarkDirty(new ChunkCoordinate(x, y, z));
+                }
+            }
         }
 
         void MarkNeighborIfNeeded(bool condition, BlockPosition neighbor)

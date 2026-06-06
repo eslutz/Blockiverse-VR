@@ -43,7 +43,20 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void DirtyChunkQueueMarksOnlyMutatedChunkAwayFromBorders()
+        public void DirtyChunkQueueDoesNotMarkNeighborChunksOutsideLightProbeRange()
+        {
+            var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
+            var queue = new ChunkRebuildQueue(world);
+
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Slate);
+
+            CollectionAssert.AreEquivalent(
+                new[] { new ChunkCoordinate(0, 0, 0) },
+                queue.DrainDirtyChunks().ToArray());
+        }
+
+        [Test]
+        public void DirtyChunkQueueMarksLightProbeAffectedNeighborChunks()
         {
             var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
@@ -51,7 +64,25 @@ namespace Blockiverse.Tests.EditMode
             world.SetBlock(new BlockPosition(4, 1, 4), BlockRegistry.Slate);
 
             CollectionAssert.AreEquivalent(
-                new[] { new ChunkCoordinate(0, 0, 0) },
+                new[] { new ChunkCoordinate(0, 0, 0), new ChunkCoordinate(1, 0, 0) },
+                queue.DrainDirtyChunks().ToArray());
+        }
+
+        [Test]
+        public void DirtyChunkQueueMarksLowerChunksWhenSkyColumnChanges()
+        {
+            var world = new VoxelWorld(new WorldBounds(16, 48, 16), chunkSize: 16, seed: 1);
+            var queue = new ChunkRebuildQueue(world);
+
+            world.SetBlock(new BlockPosition(1, 34, 1), BlockRegistry.Slate);
+
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    new ChunkCoordinate(0, 0, 0),
+                    new ChunkCoordinate(0, 1, 0),
+                    new ChunkCoordinate(0, 2, 0)
+                },
                 queue.DrainDirtyChunks().ToArray());
         }
 
