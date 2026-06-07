@@ -364,7 +364,7 @@ namespace Blockiverse.Persistence
             { 3, "graystone" },
             { 4, "branchwood_log" },
             { 5, "leafmoss" },
-            { 6, "lumen_quartz" },
+            { 6, "lumen_crystal" },
             { 7, "embercoal" },
             { 8, "raw_rosycopper" },
             { 9, "raw_rustcore" },

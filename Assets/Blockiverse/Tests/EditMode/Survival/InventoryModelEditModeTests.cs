@@ -22,7 +22,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.Graystone,          ItemId.Graystone);
             AssertBlockMapsToItem(registry, BlockRegistry.BranchwoodLog,      ItemId.BranchwoodLog);
             AssertBlockMapsToItem(registry, BlockRegistry.Leafmoss,           ItemId.Leafmoss);
-            AssertBlockMapsToItem(registry, BlockRegistry.LumenQuartzCluster, ItemId.LumenQuartz);
+            AssertBlockMapsToItem(registry, BlockRegistry.LumenQuartzCluster, ItemId.LumenCrystal);
             AssertBlockMapsToItem(registry, BlockRegistry.EmbercoalSeam,      ItemId.Embercoal);
             AssertBlockMapsToItem(registry, BlockRegistry.RosycopperBloom,    ItemId.RawRosycopper);
             AssertBlockMapsToItem(registry, BlockRegistry.RustcoreOre,        ItemId.RawRustcore);
@@ -39,7 +39,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(registry.Get(ItemId.MeadowTurf).MaxStackSize,    Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.BranchwoodLog).MaxStackSize,  Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.Embercoal).MaxStackSize,      Is.EqualTo(ItemRegistry.OreStackSize));
-            Assert.That(registry.Get(ItemId.LumenQuartz).MaxStackSize,    Is.EqualTo(ItemRegistry.CrystalStackSize));
+            Assert.That(registry.Get(ItemId.LumenCrystal).MaxStackSize,   Is.EqualTo(ItemRegistry.CrystalStackSize));
             Assert.That(registry.Get(ItemId.BuildTable).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize,   Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodFeller).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));

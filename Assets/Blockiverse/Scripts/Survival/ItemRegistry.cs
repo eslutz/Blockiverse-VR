@@ -75,7 +75,7 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.PaletinThread,  "Paletin Thread",   ItemKind.Resource, OreStackSize,    BlockRegistry.PaletinThread));
             registry.Register(new ItemDefinition(ItemId.RawRustcore,    "Raw Rustcore",     ItemKind.Resource, OreStackSize,    BlockRegistry.RustcoreOre));
             registry.Register(new ItemDefinition(ItemId.SunmetalFleck,  "Sunmetal Fleck",   ItemKind.Resource, OreStackSize,    BlockRegistry.SunmetalFleck));
-            registry.Register(new ItemDefinition(ItemId.LumenQuartz,    "Lumen Quartz",     ItemKind.Resource, CrystalStackSize, BlockRegistry.LumenQuartzCluster));
+            registry.Register(new ItemDefinition(ItemId.LumenCrystal,   "Lumen Crystal",    ItemKind.Resource, CrystalStackSize, BlockRegistry.LumenQuartzCluster));
             registry.Register(new ItemDefinition(ItemId.Niterstone,     "Niterstone",       ItemKind.Resource, OreStackSize,    BlockRegistry.NiterstonePocket));
             registry.Register(new ItemDefinition(ItemId.Brightsalt,     "Brightsalt",       ItemKind.Resource, OreStackSize,    BlockRegistry.BrightsaltCrust));
             registry.Register(new ItemDefinition(ItemId.Shellgrit,      "Shellgrit",        ItemKind.Resource, OreStackSize,    BlockRegistry.ShellgritBed));
