@@ -132,7 +132,7 @@ namespace Blockiverse.UI
                 return recipes;
 
             recipes.AddRange(recipeBook.All);
-            recipes.Sort((left, right) => ((int)left.Output.ItemId).CompareTo((int)right.Output.ItemId));
+            recipes.Sort((left, right) => string.Compare(left.Output.ItemId.Value, right.Output.ItemId.Value, StringComparison.OrdinalIgnoreCase));
             return recipes;
         }
 

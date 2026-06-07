@@ -9,7 +9,7 @@ namespace Blockiverse.Survival
             if (count <= 0)
                 throw new ArgumentOutOfRangeException(nameof(count), "Item stack count must be positive. Use ItemStack.Empty for empty slots.");
 
-            if (itemId == ItemId.None)
+            if (itemId.IsNone)
                 throw new ArgumentException("Empty item IDs cannot have a positive count.", nameof(itemId));
 
             ItemId = itemId;
@@ -49,7 +49,7 @@ namespace Blockiverse.Survival
         {
             unchecked
             {
-                return ((int)ItemId * 397) ^ Count;
+                return (ItemId.GetHashCode() * 397) ^ Count;
             }
         }
 

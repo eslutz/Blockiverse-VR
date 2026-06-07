@@ -51,7 +51,7 @@ namespace Blockiverse.Tests.EditMode
                 for (int y = 0; y < world.Bounds.Height; y++)
                 {
                     for (int z = 0; z < world.Bounds.Depth; z++)
-                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Slate, trackChange: false);
+                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Graystone, trackChange: false);
                 }
             }
 
@@ -73,8 +73,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(position.x, Is.EqualTo(2.5f).Within(0.001f));
             Assert.That(position.y, Is.GreaterThan(4.75f));
             Assert.That(position.z, Is.EqualTo(6.5f).Within(0.001f));
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Torchbud), Is.True);
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Workbench), Is.False);
+            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Glowwick), Is.True);
+            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.BuildTable), Is.False);
         }
     }
 }

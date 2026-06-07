@@ -72,9 +72,9 @@ namespace Blockiverse.WorldGen
         public static SurvivalResourceTuning CreateDefault()
         {
             return new SurvivalResourceTuning(
-                new ResourceVeinTuning(BlockRegistry.Coalstone, salt: 701, minY: 6, maxY: 46, chancePermille: 270, radius: 2, verticalRadius: 2),
-                new ResourceVeinTuning(BlockRegistry.Copperstone, salt: 809, minY: 5, maxY: 36, chancePermille: 145, radius: 2, verticalRadius: 1),
-                new ResourceVeinTuning(BlockRegistry.Ironstone, salt: 907, minY: 3, maxY: 26, chancePermille: 80, radius: 2, verticalRadius: 1));
+                new ResourceVeinTuning(BlockRegistry.EmbercoalSeam,   salt: 701, minY: 6, maxY: 46, chancePermille: 270, radius: 2, verticalRadius: 2),
+                new ResourceVeinTuning(BlockRegistry.RosycopperBloom, salt: 809, minY: 5, maxY: 36, chancePermille: 145, radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.RustcoreOre,     salt: 907, minY: 3, maxY: 26, chancePermille: 80,  radius: 2, verticalRadius: 1));
         }
 
         public ResourceVeinTuning Get(BlockId resourceBlock)

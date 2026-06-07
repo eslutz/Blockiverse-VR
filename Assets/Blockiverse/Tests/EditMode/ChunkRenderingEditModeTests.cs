@@ -17,7 +17,7 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
-            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Slate, trackChange: false);
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone, trackChange: false);
 
             ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
 
@@ -33,8 +33,8 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
-            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Slate, trackChange: false);
-            world.SetBlock(new BlockPosition(2, 1, 1), BlockRegistry.Loam, trackChange: false);
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 1, 1), BlockRegistry.LooseLoam, trackChange: false);
 
             ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
 
@@ -48,7 +48,7 @@ namespace Blockiverse.Tests.EditMode
             var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
 
-            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Slate);
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
 
             CollectionAssert.AreEquivalent(
                 new[] { new ChunkCoordinate(0, 0, 0) },
@@ -61,7 +61,7 @@ namespace Blockiverse.Tests.EditMode
             var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
 
-            world.SetBlock(new BlockPosition(4, 1, 4), BlockRegistry.Slate);
+            world.SetBlock(new BlockPosition(4, 1, 4), BlockRegistry.Graystone);
 
             CollectionAssert.AreEquivalent(
                 new[] { new ChunkCoordinate(0, 0, 0), new ChunkCoordinate(1, 0, 0) },
@@ -74,7 +74,7 @@ namespace Blockiverse.Tests.EditMode
             var world = new VoxelWorld(new WorldBounds(16, 48, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
 
-            world.SetBlock(new BlockPosition(1, 34, 1), BlockRegistry.Slate);
+            world.SetBlock(new BlockPosition(1, 34, 1), BlockRegistry.Graystone);
 
             CollectionAssert.AreEquivalent(
                 new[]
@@ -92,7 +92,7 @@ namespace Blockiverse.Tests.EditMode
             var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
 
-            world.SetBlock(new BlockPosition(15, 1, 4), BlockRegistry.Slate);
+            world.SetBlock(new BlockPosition(15, 1, 4), BlockRegistry.Graystone);
 
             CollectionAssert.AreEquivalent(
                 new[] { new ChunkCoordinate(0, 0, 0), new ChunkCoordinate(1, 0, 0) },
@@ -217,7 +217,7 @@ namespace Blockiverse.Tests.EditMode
         public void VisualAtlasRejectsRenderableBlocksWithoutTileMapping()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            registry.Register(new BlockDefinition(new BlockId(99), "Missing Tile", BlockCategory.Crafted, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(new BlockId(99), "test_missing_tile", "Missing Tile", BlockCategory.Crafted, isSolid: true, isRenderable: true));
 
             InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
                 BlockVisualAtlas.ValidateRenderableBlockCoverage(registry));
@@ -231,12 +231,12 @@ namespace Blockiverse.Tests.EditMode
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 16, seed: 1);
             world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.MeadowTurf, trackChange: false);
-            world.SetBlock(new BlockPosition(5, 1, 1), BlockRegistry.Slate, trackChange: false);
+            world.SetBlock(new BlockPosition(5, 1, 1), BlockRegistry.Graystone, trackChange: false);
 
             ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
 
             Rect meadowRect = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf);
-            Rect slateRect = BlockVisualAtlas.GetTileRect(BlockRegistry.Slate);
+            Rect slateRect = BlockVisualAtlas.GetTileRect(BlockRegistry.Graystone);
 
             Assert.That(mesh.Uvs.Any(uv => IsInside(uv, meadowRect)), Is.True);
             Assert.That(mesh.Uvs.Any(uv => IsInside(uv, slateRect)), Is.True);
@@ -253,7 +253,7 @@ namespace Blockiverse.Tests.EditMode
                 for (int y = 0; y < world.Bounds.Height; y++)
                 {
                     for (int z = 0; z < world.Bounds.Depth; z++)
-                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Slate, trackChange: false);
+                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Graystone, trackChange: false);
                 }
             }
 

@@ -10,9 +10,17 @@ namespace Blockiverse.Survival
         readonly Dictionary<BlockId, ItemDefinition> definitionsByBlock = new();
         readonly Dictionary<string, ItemDefinition> definitionsByName = new(StringComparer.OrdinalIgnoreCase);
 
-        public const int ResourceStackSize = 64;
+        public const int BlockStackSize = 99;
+        public const int OreStackSize = 50;
+        public const int CrystalStackSize = 30;
+        public const int FoodStackSize = 20;
         public const int ToolStackSize = 1;
-        public const int RecoveryWrapStackSize = 16;
+        public const int ConsumableStackSize = 20;
+        public const int FieldBandageStackSize = 20;
+
+        // Kept for backward compat with existing callers.
+        public const int ResourceStackSize = BlockStackSize;
+        public const int RecoveryWrapStackSize = FieldBandageStackSize;
 
         public IReadOnlyCollection<ItemDefinition> All => definitionsById.Values;
 
@@ -20,22 +28,84 @@ namespace Blockiverse.Survival
         {
             var registry = new ItemRegistry();
             registry.Register(new ItemDefinition(ItemId.None, "None", ItemKind.None, maxStackSize: 0));
-            registry.Register(new ItemDefinition(ItemId.MeadowTurf, "Meadow Turf", ItemKind.Resource, ResourceStackSize, BlockRegistry.MeadowTurf));
-            registry.Register(new ItemDefinition(ItemId.Loam, "Loam", ItemKind.Resource, ResourceStackSize, BlockRegistry.Loam));
-            registry.Register(new ItemDefinition(ItemId.Slate, "Slate", ItemKind.Resource, ResourceStackSize, BlockRegistry.Slate));
-            registry.Register(new ItemDefinition(ItemId.Timber, "Timber", ItemKind.Resource, ResourceStackSize, BlockRegistry.Timber));
-            registry.Register(new ItemDefinition(ItemId.Leafmass, "Leafmass", ItemKind.Resource, ResourceStackSize, BlockRegistry.Leafmass));
-            registry.Register(new ItemDefinition(ItemId.Clearstone, "Clearstone", ItemKind.Resource, ResourceStackSize, BlockRegistry.Clearstone));
-            registry.Register(new ItemDefinition(ItemId.Coalstone, "Coalstone", ItemKind.Resource, ResourceStackSize, BlockRegistry.Coalstone));
-            registry.Register(new ItemDefinition(ItemId.Copperstone, "Copperstone", ItemKind.Resource, ResourceStackSize, BlockRegistry.Copperstone));
-            registry.Register(new ItemDefinition(ItemId.Ironstone, "Ironstone", ItemKind.Resource, ResourceStackSize, BlockRegistry.Ironstone));
-            registry.Register(new ItemDefinition(ItemId.Workbench, "Workbench", ItemKind.Placeable, ResourceStackSize, BlockRegistry.Workbench));
-            registry.Register(new ItemDefinition(ItemId.Torchbud, "Torchbud", ItemKind.Placeable, ResourceStackSize, BlockRegistry.Torchbud));
-            registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, ResourceStackSize, BlockRegistry.StorageCrate));
-            registry.Register(new ItemDefinition(ItemId.Chipper, "Chipper", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.Mallet, "Mallet", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.Pick, "Pick", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.RecoveryWrap, "Recovery Wrap", ItemKind.Consumable, RecoveryWrapStackSize));
+
+            // ── Block items (terrain) ─────────────────────────────────────────
+            registry.Register(new ItemDefinition(ItemId.MeadowTurf, "Meadow Turf", ItemKind.Resource, BlockStackSize, BlockRegistry.MeadowTurf));
+            registry.Register(new ItemDefinition(ItemId.DryTurf, "Dry Turf", ItemKind.Resource, BlockStackSize, BlockRegistry.DryTurf));
+            registry.Register(new ItemDefinition(ItemId.SnowcapTurf, "Snowcap Turf", ItemKind.Resource, BlockStackSize, BlockRegistry.SnowcapTurf));
+            registry.Register(new ItemDefinition(ItemId.LooseLoam, "Loose Loam", ItemKind.Resource, BlockStackSize, BlockRegistry.LooseLoam));
+            registry.Register(new ItemDefinition(ItemId.Rootsoil, "Rootsoil", ItemKind.Resource, BlockStackSize, BlockRegistry.Rootsoil));
+            registry.Register(new ItemDefinition(ItemId.Claybed, "Claybed", ItemKind.Resource, BlockStackSize, BlockRegistry.Claybed));
+            registry.Register(new ItemDefinition(ItemId.RiverSilt, "River Silt", ItemKind.Resource, BlockStackSize, BlockRegistry.RiverSilt));
+            registry.Register(new ItemDefinition(ItemId.PaleSand, "Pale Sand", ItemKind.Resource, BlockStackSize, BlockRegistry.PaleSand));
+            registry.Register(new ItemDefinition(ItemId.ShingleGravel, "Shingle Gravel", ItemKind.Resource, BlockStackSize, BlockRegistry.ShingleGravel));
+            registry.Register(new ItemDefinition(ItemId.Graystone, "Graystone", ItemKind.Resource, BlockStackSize, BlockRegistry.Graystone));
+            registry.Register(new ItemDefinition(ItemId.DarkSlate, "Dark Slate", ItemKind.Resource, BlockStackSize, BlockRegistry.DarkSlate));
+            registry.Register(new ItemDefinition(ItemId.WarmGranite, "Warm Granite", ItemKind.Resource, BlockStackSize, BlockRegistry.WarmGranite));
+            registry.Register(new ItemDefinition(ItemId.WhiteLimestone, "White Limestone", ItemKind.Resource, BlockStackSize, BlockRegistry.WhiteLimestone));
+            registry.Register(new ItemDefinition(ItemId.BlackBasalt, "Black Basalt", ItemKind.Resource, BlockStackSize, BlockRegistry.BlackBasalt));
+
+            // ── Block items (vegetation) ──────────────────────────────────────
+            registry.Register(new ItemDefinition(ItemId.BranchwoodLog, "Branchwood Log", ItemKind.Resource, BlockStackSize, BlockRegistry.BranchwoodLog));
+            registry.Register(new ItemDefinition(ItemId.Leafmoss, "Leafmoss", ItemKind.Resource, BlockStackSize, BlockRegistry.Leafmoss));
+            registry.Register(new ItemDefinition(ItemId.Thornbrush, "Thornbrush", ItemKind.Resource, BlockStackSize, BlockRegistry.Thornbrush));
+            registry.Register(new ItemDefinition(ItemId.Reedgrass, "Reedgrass", ItemKind.Resource, BlockStackSize, BlockRegistry.Reedgrass));
+
+            // ── Block items (crafted) ─────────────────────────────────────────
+            registry.Register(new ItemDefinition(ItemId.WorkPlank, "Work Plank", ItemKind.Resource, BlockStackSize, BlockRegistry.WorkPlank));
+            registry.Register(new ItemDefinition(ItemId.CutstoneBlock, "Cutstone Block", ItemKind.Resource, BlockStackSize, BlockRegistry.CutstoneBlock));
+            registry.Register(new ItemDefinition(ItemId.FiredBrick, "Fired Brick", ItemKind.Resource, BlockStackSize, BlockRegistry.FiredBrick));
+            registry.Register(new ItemDefinition(ItemId.ClearpaneGlass, "Clearpane Glass", ItemKind.Resource, BlockStackSize, BlockRegistry.ClearpaneGlass));
+
+            // ── Block items (placeable stations/lights) ───────────────────────
+            registry.Register(new ItemDefinition(ItemId.BuildTable, "Build Table", ItemKind.Placeable, BlockStackSize, BlockRegistry.BuildTable));
+            registry.Register(new ItemDefinition(ItemId.Glowwick, "Glowwick", ItemKind.Placeable, BlockStackSize, BlockRegistry.Glowwick));
+            registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, BlockStackSize, BlockRegistry.StorageCrate));
+            registry.Register(new ItemDefinition(ItemId.Campfire, "Campfire", ItemKind.Placeable, BlockStackSize, BlockRegistry.Campfire));
+            registry.Register(new ItemDefinition(ItemId.ClayKiln, "Clay Kiln", ItemKind.Placeable, BlockStackSize, BlockRegistry.ClayKiln));
+            registry.Register(new ItemDefinition(ItemId.BellowsForge, "Bellows Forge", ItemKind.Placeable, BlockStackSize, BlockRegistry.BellowsForge));
+            registry.Register(new ItemDefinition(ItemId.PrepBoard, "Prep Board", ItemKind.Placeable, BlockStackSize, BlockRegistry.PrepBoard));
+            registry.Register(new ItemDefinition(ItemId.MendBench, "Mend Bench", ItemKind.Placeable, BlockStackSize, BlockRegistry.MendBench));
+
+            // ── Raw resource items (block mapping used for harvest drop lookup until M6 drop tables) ──
+            registry.Register(new ItemDefinition(ItemId.SurfacePebbles, "Surface Pebbles", ItemKind.Resource, BlockStackSize,  BlockRegistry.SurfacePebbles));
+            registry.Register(new ItemDefinition(ItemId.FlintyShingle,  "Flinty Shingle",  ItemKind.Resource, BlockStackSize,  BlockRegistry.FlintyShingle));
+            registry.Register(new ItemDefinition(ItemId.Embercoal,      "Embercoal",        ItemKind.Resource, OreStackSize,    BlockRegistry.EmbercoalSeam));
+            registry.Register(new ItemDefinition(ItemId.RawRosycopper,  "Raw Rosycopper",   ItemKind.Resource, OreStackSize,    BlockRegistry.RosycopperBloom));
+            registry.Register(new ItemDefinition(ItemId.PaletinThread,  "Paletin Thread",   ItemKind.Resource, OreStackSize,    BlockRegistry.PaletinThread));
+            registry.Register(new ItemDefinition(ItemId.RawRustcore,    "Raw Rustcore",     ItemKind.Resource, OreStackSize,    BlockRegistry.RustcoreOre));
+            registry.Register(new ItemDefinition(ItemId.SunmetalFleck,  "Sunmetal Fleck",   ItemKind.Resource, OreStackSize,    BlockRegistry.SunmetalFleck));
+            registry.Register(new ItemDefinition(ItemId.LumenQuartz,    "Lumen Quartz",     ItemKind.Resource, CrystalStackSize, BlockRegistry.LumenQuartzCluster));
+            registry.Register(new ItemDefinition(ItemId.Niterstone,     "Niterstone",       ItemKind.Resource, OreStackSize,    BlockRegistry.NiterstonePocket));
+            registry.Register(new ItemDefinition(ItemId.Brightsalt,     "Brightsalt",       ItemKind.Resource, OreStackSize,    BlockRegistry.BrightsaltCrust));
+            registry.Register(new ItemDefinition(ItemId.Shellgrit,      "Shellgrit",        ItemKind.Resource, OreStackSize,    BlockRegistry.ShellgritBed));
+            registry.Register(new ItemDefinition(ItemId.ResinKnot,      "Resin Knot",       ItemKind.Resource, BlockStackSize,  BlockRegistry.ResinKnot));
+            registry.Register(new ItemDefinition(ItemId.Berrybush,      "Berrybush",        ItemKind.Resource, FoodStackSize,   BlockRegistry.Berrybush));
+            registry.Register(new ItemDefinition(ItemId.GrainStalk,     "Grain Stalk",      ItemKind.Resource, FoodStackSize,   BlockRegistry.GrainStalk));
+            registry.Register(new ItemDefinition(ItemId.UmbraliteNode,  "Umbralite Node",   ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
+            registry.Register(new ItemDefinition(ItemId.StaropalGeode,  "Staropal Geode",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
+
+            // ── Tier-1 (Reedwood) tools ───────────────────────────────────────
+            registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodSpade, "Reedwood Spade", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodFeller, "Reedwood Feller", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodSickle, "Reedwood Sickle", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodMallet, "Reedwood Mallet", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodCarver, "Reedwood Carver", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodTiller, "Reedwood Tiller", ItemKind.Tool, ToolStackSize));
+
+            // ── Tier-2 (Flint) tools ──────────────────────────────────────────
+            registry.Register(new ItemDefinition(ItemId.FlintDelver, "Flint Delver", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.FlintSpade, "Flint Spade", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.FlintFeller, "Flint Feller", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.FlintSickle, "Flint Sickle", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.FlintMallet, "Flint Mallet", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize));
+            registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize));
+
+            // ── Consumables ───────────────────────────────────────────────────
+            registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
+
             return registry;
         }
 

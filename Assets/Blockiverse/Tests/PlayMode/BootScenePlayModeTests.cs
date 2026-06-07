@@ -56,7 +56,7 @@ namespace Blockiverse.Tests.PlayMode
 
             AssertPanelContainsText(inventoryPanel.transform, "Hotbar 1 /");
             AssertPanelContainsText(inventoryPanel.transform, "Empty");
-            AssertPanelContainsText(craftingPanel.transform, "Workbench x1");
+            AssertPanelContainsText(craftingPanel.transform, "Build Table x1");
             AssertPanelContainsText(craftingPanel.transform, "Ready");
             AssertPanelContainsText(healthPanel.transform, "100 / 100");
             AssertPanelContainsText(healthPanel.transform, "Stable");

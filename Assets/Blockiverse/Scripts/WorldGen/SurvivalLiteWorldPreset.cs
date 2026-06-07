@@ -57,8 +57,8 @@ namespace Blockiverse.WorldGen
         {
             registry.Get(BlockRegistry.Air);
             registry.Get(BlockRegistry.MeadowTurf);
-            registry.Get(BlockRegistry.Loam);
-            registry.Get(BlockRegistry.Slate);
+            registry.Get(BlockRegistry.LooseLoam);
+            registry.Get(BlockRegistry.Graystone);
 
             foreach (ResourceVeinTuning vein in resourceTuning.ResourceVeins)
                 registry.Get(vein.ResourceBlock);
@@ -135,9 +135,9 @@ namespace Blockiverse.WorldGen
                 return BlockRegistry.MeadowTurf;
 
             if (y >= surfaceY - 3)
-                return BlockRegistry.Loam;
+                return BlockRegistry.LooseLoam;
 
-            return BlockRegistry.Slate;
+            return BlockRegistry.Graystone;
         }
 
         void CarveCaves(VoxelWorld world, int[] surfaceHeights)
@@ -372,7 +372,7 @@ namespace Blockiverse.WorldGen
 
                     for (int y = 0; y < floorY; y++)
                     {
-                        BlockId support = y >= floorY - 3 ? BlockRegistry.Loam : BlockRegistry.Slate;
+                        BlockId support = y >= floorY - 3 ? BlockRegistry.LooseLoam : BlockRegistry.Graystone;
                         world.SetBlock(new BlockPosition(x, y, z), support, trackChange: false);
                     }
 

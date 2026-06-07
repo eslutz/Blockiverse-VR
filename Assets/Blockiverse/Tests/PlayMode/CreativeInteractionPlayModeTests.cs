@@ -35,20 +35,20 @@ namespace Blockiverse.Tests.PlayMode
             try
             {
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam, BlockRegistry.Clearstone }, null);
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam, BlockRegistry.LumenQuartzCluster }, null);
                 hotbar.SelectIndex(1);
 
                 CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
                 controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
 
                 Assert.That(controller.TryPlaceBlock(new BlockPosition(1, 0, 1), Vector3.up), Is.True);
-                Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
 
                 Assert.That(controller.TryBreakBlock(new BlockPosition(1, 1, 1)), Is.True);
                 Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Air));
 
                 Assert.That(controller.UndoLast(), Is.True);
-                Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
             }
             finally
             {
@@ -71,7 +71,7 @@ namespace Blockiverse.Tests.PlayMode
             try
             {
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam }, null);
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam }, null);
 
                 CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
                 controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
@@ -122,7 +122,7 @@ namespace Blockiverse.Tests.PlayMode
                 preview.Configure(previewObject.GetComponent<MeshRenderer>());
 
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam }, null);
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam }, null);
 
                 CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
                 controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, preview, null);
@@ -155,7 +155,7 @@ namespace Blockiverse.Tests.PlayMode
             try
             {
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Clearstone }, null);
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LumenQuartzCluster }, null);
 
                 CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
                 controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
@@ -168,9 +168,9 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(controller.UndoLast(), Is.True);
 
                 Assert.That(observed, Has.Count.EqualTo(3));
-                Assert.That(observed[0].NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(observed[0].NewBlock, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
                 Assert.That(observed[1].NewBlock, Is.EqualTo(BlockRegistry.Air));
-                Assert.That(observed[2].NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(observed[2].NewBlock, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
             }
             finally
             {
@@ -199,7 +199,7 @@ namespace Blockiverse.Tests.PlayMode
                 renderer.Configure(world, registry, blockMaterial, -1);
 
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(registry, new[] { BlockRegistry.Loam }, null);
+                hotbar.Configure(registry, new[] { BlockRegistry.LooseLoam }, null);
 
                 CreativeInteractionController controller = worldObject.AddComponent<CreativeInteractionController>();
                 controller.Configure(world, registry, hotbar, null, null, renderer);
@@ -225,8 +225,8 @@ namespace Blockiverse.Tests.PlayMode
         public void PlacementRejectsOutsideWorldBoundsAndPlayerCollision()
         {
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
-            world.SetBlock(new BlockPosition(3, 1, 1), BlockRegistry.Slate, trackChange: false);
-            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.Slate, trackChange: false);
+            world.SetBlock(new BlockPosition(3, 1, 1), BlockRegistry.Graystone, trackChange: false);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.Graystone, trackChange: false);
 
             var controllerObject = new GameObject("Creative Controller");
             var hotbarObject = new GameObject("Hotbar");
@@ -234,7 +234,7 @@ namespace Blockiverse.Tests.PlayMode
             try
             {
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam }, null);
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam }, null);
 
                 CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
                 controller.Configure(
@@ -261,7 +261,7 @@ namespace Blockiverse.Tests.PlayMode
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 6);
             var breakPosition = new BlockPosition(1, 1, 1);
             var placePosition = new BlockPosition(2, 1, 1);
-            world.SetBlock(breakPosition, BlockRegistry.Slate, trackChange: false);
+            world.SetBlock(breakPosition, BlockRegistry.Graystone, trackChange: false);
 
             var controllerObject = new GameObject("Creative Controller");
             var hotbarObject = new GameObject("Hotbar");
@@ -269,7 +269,7 @@ namespace Blockiverse.Tests.PlayMode
             try
             {
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(registry, new[] { BlockRegistry.Loam }, null);
+                hotbar.Configure(registry, new[] { BlockRegistry.LooseLoam }, null);
 
                 BlockMutationAuthority clientAuthority = BlockMutationAuthority.CreateClientProxy(
                     world,
@@ -280,7 +280,7 @@ namespace Blockiverse.Tests.PlayMode
 
                 Assert.That(controller.TryBreakBlock(breakPosition), Is.False);
                 Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
-                Assert.That(world.GetBlock(breakPosition), Is.EqualTo(BlockRegistry.Slate));
+                Assert.That(world.GetBlock(breakPosition), Is.EqualTo(BlockRegistry.Graystone));
 
                 Assert.That(controller.TryPlaceAt(placePosition), Is.False);
                 Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
@@ -299,7 +299,7 @@ namespace Blockiverse.Tests.PlayMode
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 7);
             var position = new BlockPosition(1, 1, 1);
-            world.SetBlock(position, BlockRegistry.Slate, trackChange: false);
+            world.SetBlock(position, BlockRegistry.Graystone, trackChange: false);
 
             var controllerObject = new GameObject("Creative Controller");
 
@@ -337,12 +337,12 @@ namespace Blockiverse.Tests.PlayMode
             {
                 TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.Loam, BlockRegistry.Clearstone }, label);
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam, BlockRegistry.LumenQuartzCluster }, label);
 
                 hotbar.SelectNext();
 
-                Assert.That(hotbar.SelectedBlockId, Is.EqualTo(BlockRegistry.Clearstone));
-                Assert.That(label.text, Does.Contain("Clearstone"));
+                Assert.That(hotbar.SelectedBlockId, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
+                Assert.That(label.text, Does.Contain("Lumen Quartz Cluster"));
             }
             finally
             {

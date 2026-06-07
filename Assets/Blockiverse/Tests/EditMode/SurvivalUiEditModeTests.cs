@@ -33,8 +33,8 @@ namespace Blockiverse.Tests.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 3, hotbarSlotCount: 2);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 12));
-            inventory.SetSlot(2, new ItemStack(ItemId.Pick, 1));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 12));
+            inventory.SetSlot(2, new ItemStack(ItemId.ReedwoodDelver, 1));
             TMP_Text[] slotLabels = CreateTexts(3);
             TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
             SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
@@ -42,9 +42,9 @@ namespace Blockiverse.Tests.EditMode
             panel.Configure(slotLabels, selectedHotbarLabel);
             panel.Bind(inventory, itemRegistry, selectedHotbarSlotIndex: 1);
 
-            Assert.That(slotLabels[0].text, Is.EqualTo("Timber x12"));
+            Assert.That(slotLabels[0].text, Is.EqualTo("Branchwood Log x12"));
             Assert.That(slotLabels[1].text, Is.EqualTo("Empty"));
-            Assert.That(slotLabels[2].text, Is.EqualTo("Pick x1"));
+            Assert.That(slotLabels[2].text, Is.EqualTo("Reedwood Delver x1"));
             Assert.That(selectedHotbarLabel.text, Is.EqualTo("Hotbar 2 / 2"));
         }
 
@@ -65,7 +65,7 @@ namespace Blockiverse.Tests.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 4));
             TMP_Text[] recipeLabels = CreateTexts(4);
             TMP_Text statusLabel = CreateText("CraftStatus");
             SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
@@ -73,14 +73,14 @@ namespace Blockiverse.Tests.EditMode
             panel.Configure(recipeLabels, statusLabel);
             panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
 
-            Assert.That(recipeLabels[0].text, Does.Contain("Workbench x1"));
+            Assert.That(recipeLabels[0].text, Does.Contain("Build Table x1"));
 
-            CraftingResult result = panel.TryCraftByOutput(ItemId.Workbench);
+            CraftingResult result = panel.TryCraftByOutput(ItemId.BuildTable);
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
-            Assert.That(inventory.CountOf(ItemId.Workbench), Is.EqualTo(1));
-            Assert.That(inventory.CountOf(ItemId.Timber), Is.Zero);
-            Assert.That(statusLabel.text, Is.EqualTo("Crafted Workbench x1"));
+            Assert.That(inventory.CountOf(ItemId.BuildTable), Is.EqualTo(1));
+            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
+            Assert.That(statusLabel.text, Is.EqualTo("Crafted Build Table x1"));
         }
 
         [Test]
@@ -89,7 +89,7 @@ namespace Blockiverse.Tests.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 4));
             TMP_Text[] recipeLabels = CreateTexts(2);
             Button[] recipeButtons = CreateButtons(2);
             TMP_Text statusLabel = CreateText("CraftStatus");
@@ -100,8 +100,8 @@ namespace Blockiverse.Tests.EditMode
 
             recipeButtons[0].onClick.Invoke();
 
-            Assert.That(inventory.CountOf(ItemId.Workbench), Is.EqualTo(1));
-            Assert.That(statusLabel.text, Is.EqualTo("Crafted Workbench x1"));
+            Assert.That(inventory.CountOf(ItemId.BuildTable), Is.EqualTo(1));
+            Assert.That(statusLabel.text, Is.EqualTo("Crafted Build Table x1"));
         }
 
         [Test]
@@ -158,7 +158,7 @@ namespace Blockiverse.Tests.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 4));
             TMP_Text[] recipeLabels = CreateTexts(4);
             TMP_Text statusLabel = CreateText("CraftStatus");
             SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
@@ -176,8 +176,8 @@ namespace Blockiverse.Tests.EditMode
             panel.ConfigureFeedback(audioCuePlayer, haptics);
             panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
 
-            CraftingResult success = panel.TryCraftByOutput(ItemId.Workbench);
-            CraftingResult failure = panel.TryCraftByOutput(ItemId.Workbench);
+            CraftingResult success = panel.TryCraftByOutput(ItemId.BuildTable);
+            CraftingResult failure = panel.TryCraftByOutput(ItemId.BuildTable);
 
             Assert.That(success.Succeeded, Is.True);
             Assert.That(failure.Succeeded, Is.False);

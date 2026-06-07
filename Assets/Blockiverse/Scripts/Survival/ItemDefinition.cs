@@ -19,7 +19,7 @@ namespace Blockiverse.Survival
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Item names must be non-empty.", nameof(name));
 
-            if (id == ItemId.None)
+            if (id.IsNone)
             {
                 if (kind != ItemKind.None)
                     throw new ArgumentException("The empty item must use ItemKind.None.", nameof(kind));

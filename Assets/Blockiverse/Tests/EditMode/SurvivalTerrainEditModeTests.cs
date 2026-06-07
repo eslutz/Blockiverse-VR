@@ -139,9 +139,9 @@ namespace Blockiverse.Tests.EditMode
             VoxelWorld world = GenerateSurvivalWorld(seed: 97531);
             var resourceCounts = new Dictionary<BlockId, int>
             {
-                { BlockRegistry.Coalstone, 0 },
-                { BlockRegistry.Copperstone, 0 },
-                { BlockRegistry.Ironstone, 0 }
+                { BlockRegistry.EmbercoalSeam, 0 },
+                { BlockRegistry.RosycopperBloom, 0 },
+                { BlockRegistry.RustcoreOre, 0 }
             };
 
             for (int x = 0; x < world.Bounds.Width; x++)
@@ -161,11 +161,11 @@ namespace Blockiverse.Tests.EditMode
                 }
             }
 
-            Assert.That(resourceCounts[BlockRegistry.Coalstone], Is.InRange(3000, 20000));
-            Assert.That(resourceCounts[BlockRegistry.Copperstone], Is.InRange(1000, 12000));
-            Assert.That(resourceCounts[BlockRegistry.Ironstone], Is.InRange(400, 6000));
-            Assert.That(resourceCounts[BlockRegistry.Coalstone], Is.GreaterThan(resourceCounts[BlockRegistry.Copperstone]));
-            Assert.That(resourceCounts[BlockRegistry.Copperstone], Is.GreaterThan(resourceCounts[BlockRegistry.Ironstone]));
+            Assert.That(resourceCounts[BlockRegistry.EmbercoalSeam], Is.InRange(3000, 20000));
+            Assert.That(resourceCounts[BlockRegistry.RosycopperBloom], Is.InRange(1000, 12000));
+            Assert.That(resourceCounts[BlockRegistry.RustcoreOre], Is.InRange(400, 6000));
+            Assert.That(resourceCounts[BlockRegistry.EmbercoalSeam], Is.GreaterThan(resourceCounts[BlockRegistry.RosycopperBloom]));
+            Assert.That(resourceCounts[BlockRegistry.RosycopperBloom], Is.GreaterThan(resourceCounts[BlockRegistry.RustcoreOre]));
         }
 
         [Test]
@@ -183,7 +183,7 @@ namespace Blockiverse.Tests.EditMode
                 .ToArray();
 
             Assert.That(sampledSurfaceHeights.Length, Is.GreaterThan(1), "Creative validation should no longer use the flat test preset.");
-            Assert.That(CountBlocks(world, BlockRegistry.Coalstone), Is.GreaterThan(0));
+            Assert.That(CountBlocks(world, BlockRegistry.EmbercoalSeam), Is.GreaterThan(0));
             Assert.That(world.GetBlock(generatedWorld.Settings.SpawnPosition), Is.EqualTo(BlockRegistry.Air));
         }
 

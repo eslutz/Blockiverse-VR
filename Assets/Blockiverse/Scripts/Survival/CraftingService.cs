@@ -29,7 +29,7 @@ namespace Blockiverse.Survival
             return new CraftingResult(true, CraftingFailureReason.None, ItemId.None);
         }
 
-        public static CraftingResult Failure(CraftingFailureReason reason, ItemId failedItemId = ItemId.None)
+        public static CraftingResult Failure(CraftingFailureReason reason, ItemId failedItemId = default)
         {
             if (reason == CraftingFailureReason.None)
                 throw new ArgumentException("Failure results must include a concrete reason.", nameof(reason));

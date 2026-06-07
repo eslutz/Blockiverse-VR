@@ -6,7 +6,12 @@ namespace Blockiverse.Survival
     public enum CraftingStation
     {
         None,
-        Workbench
+        BuildTable,
+        ClayKiln,
+        BellowsForge,
+        PrepBoard,
+        MendBench,
+        Campfire
     }
 
     public sealed class CraftingRecipe

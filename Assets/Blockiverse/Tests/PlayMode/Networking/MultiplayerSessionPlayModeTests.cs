@@ -466,7 +466,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                           hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
                     "Client did not connect to host.");
 
-                worldManager.World.SetBlock(editPosition, BlockRegistry.Clearstone);
+                worldManager.World.SetBlock(editPosition, BlockRegistry.LumenQuartzCluster);
                 hostSession.StopSession();
 
                 Assert.That(hostSession.LastStopRequestSucceeded, Is.True);
@@ -492,9 +492,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
                 Assert.That(persistence.LastHostLoadAttempted, Is.True);
                 Assert.That(persistence.LastHostLoadSucceeded, Is.True);
-                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
+                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
 
-                worldManager.World.SetBlock(restartEditPosition, BlockRegistry.Loam);
+                worldManager.World.SetBlock(restartEditPosition, BlockRegistry.LooseLoam);
                 hostSession.StopSession();
 
                 Assert.That(hostSession.LastStopRequestSucceeded, Is.True);
@@ -514,8 +514,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
                     () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
                     "Host did not restart after the second shutdown save.");
 
-                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Clearstone));
-                Assert.That(worldManager.World.GetBlock(restartEditPosition), Is.EqualTo(BlockRegistry.Loam));
+                Assert.That(worldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
+                Assert.That(worldManager.World.GetBlock(restartEditPosition), Is.EqualTo(BlockRegistry.LooseLoam));
             }
             finally
             {
@@ -536,7 +536,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Mismatched Save World");
             MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
             VoxelWorld savedWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 2026);
-            savedWorld.SetBlock(new BlockPosition(3, 3, 3), BlockRegistry.Clearstone);
+            savedWorld.SetBlock(new BlockPosition(3, 3, 3), BlockRegistry.LumenQuartzCluster);
             ushort port = NextPort();
             var testConfig = new BlockiverseNetworkConfig(
                 BlockiverseNetworkConfig.DefaultAddress,
@@ -654,7 +654,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             clientSession.Configure(testConfig);
             observerClientSession.Configure(testConfig);
             lateJoinClientSession.Configure(testConfig);
-            hostWorldManager.World.SetBlock(stalePosition, BlockRegistry.Loam);
+            hostWorldManager.World.SetBlock(stalePosition, BlockRegistry.LooseLoam);
 
             Assert.That(hostSession.StartHost(), Is.True);
             yield return WaitFor(
@@ -678,17 +678,17 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       clientSync.HasHostGenerationSnapshotForSession &&
                       clientWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
                       clientWorldManager.World.Seed == hostWorldManager.World.Seed &&
-                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam &&
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.LooseLoam &&
                       observerSync.AppliedGenerationSnapshotCount >= 1 &&
                       observerSync.HasHostGenerationSnapshotForSession &&
                       observerWorldManager.World.Bounds == hostWorldManager.World.Bounds &&
                       observerWorldManager.World.Seed == hostWorldManager.World.Seed &&
-                      observerWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                      observerWorldManager.World.GetBlock(stalePosition) == BlockRegistry.LooseLoam,
                 "Connected clients did not replace local generation with the host-owned world snapshot.");
 
             BlockMutationResult requestResult = clientSync.TrySubmitMutation(
                 editPosition,
-                BlockRegistry.Clearstone,
+                BlockRegistry.LumenQuartzCluster,
                 out SetBlockCommand clientCommand,
                 out bool requestSentToHost);
 
@@ -701,9 +701,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientWorldManager.World.GetBlock(editPosition), Is.EqualTo(BlockRegistry.Air));
 
             yield return WaitFor(
-                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
-                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
-                      observerWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.LumenQuartzCluster &&
+                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.LumenQuartzCluster &&
+                      observerWorldManager.World.GetBlock(editPosition) == BlockRegistry.LumenQuartzCluster,
                 "Host did not validate and broadcast the client block mutation.");
 
             Assert.That(hostSync.CurrentBoundary.OwnsMutationValidation, Is.True);
@@ -718,7 +718,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSync.RecordedChunkDeltas[0].SequenceId, Is.EqualTo(1));
             Assert.That(hostSync.RecordedChunkDeltas[0].Chunk, Is.EqualTo(new ChunkCoordinate(0, 0, 0)));
             Assert.That(hostSync.RecordedChunkDeltas[0].Change.Position, Is.EqualTo(editPosition));
-            Assert.That(hostSync.RecordedChunkDeltas[0].Change.NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(hostSync.RecordedChunkDeltas[0].Change.NewBlock, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
             Assert.That(clientSync.SentMutationRequestCount, Is.EqualTo(1));
             Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(1));
             Assert.That(clientSync.AppliedChunkDeltaCount, Is.EqualTo(1));
@@ -737,7 +737,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockMutationResult rejectedRequest = clientSync.TrySubmitMutation(
                 new BlockPosition(-1, 2, 2),
-                BlockRegistry.Slate,
+                BlockRegistry.Graystone,
                 out SetBlockCommand rejectedClientCommand,
                 out bool rejectedRequestSentToHost);
 
@@ -759,7 +759,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             clientWorldManager.World.SetBlock(stalePosition, BlockRegistry.Air, trackChange: false);
             BlockMutationResult staleRequest = clientSync.TrySubmitMutation(
                 stalePosition,
-                BlockRegistry.Slate,
+                BlockRegistry.Graystone,
                 out SetBlockCommand staleClientCommand,
                 out bool staleRequestSentToHost);
 
@@ -770,7 +770,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             yield return WaitFor(
                 () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.ExpectedBlockMismatch &&
-                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.Loam,
+                      clientWorldManager.World.GetBlock(stalePosition) == BlockRegistry.LooseLoam,
                 "Host did not reject and correct a stale client mutation request.");
 
             Assert.That(clientSync.ReceivedMutationRejectionCount, Is.EqualTo(2));
@@ -786,7 +786,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Late join client did not connect for chunk authority sync.");
 
             yield return WaitFor(
-                () => lateJoinWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone,
+                () => lateJoinWorldManager.World.GetBlock(editPosition) == BlockRegistry.LumenQuartzCluster,
                 "Late join client did not receive the host chunk snapshot.");
 
             Assert.That(hostSync.CurrentBoundary.CanServeLateJoinSync, Is.True);
@@ -801,7 +801,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockMutationResult postLateJoinRequest = clientSync.TrySubmitMutation(
                 postLateJoinPosition,
-                BlockRegistry.Slate,
+                BlockRegistry.Graystone,
                 out SetBlockCommand postLateJoinClientCommand,
                 out bool postLateJoinRequestSentToHost);
 
@@ -812,10 +812,10 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientSync.PendingMutationRequestCount, Is.EqualTo(1));
 
             yield return WaitFor(
-                () => hostWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
-                      clientWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
-                      observerWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate &&
-                      lateJoinWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Slate,
+                () => hostWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Graystone &&
+                      clientWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Graystone &&
+                      observerWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Graystone &&
+                      lateJoinWorldManager.World.GetBlock(postLateJoinPosition) == BlockRegistry.Graystone,
                 "Late join client did not remain synchronized with subsequent host chunk deltas.");
 
             Assert.That(hostSync.BroadcastDeltaCount, Is.EqualTo(2));
@@ -826,7 +826,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 hostSync.RecordedChunkDeltas[1].Chunk,
                 Is.EqualTo(ChunkCoordinate.FromBlockPosition(postLateJoinPosition, hostWorldManager.World.ChunkSize)));
             Assert.That(hostSync.RecordedChunkDeltas[1].Change.Position, Is.EqualTo(postLateJoinPosition));
-            Assert.That(hostSync.RecordedChunkDeltas[1].Change.NewBlock, Is.EqualTo(BlockRegistry.Slate));
+            Assert.That(hostSync.RecordedChunkDeltas[1].Change.NewBlock, Is.EqualTo(BlockRegistry.Graystone));
             Assert.That(clientSync.AppliedRemoteDeltaCount, Is.EqualTo(2));
             Assert.That(clientSync.AppliedChunkDeltaCount, Is.EqualTo(2));
             Assert.That(clientSync.AcceptedMutationResponseCount, Is.EqualTo(2));
@@ -909,7 +909,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 new BlockMutationRequest(
                     firstClientSync.CurrentBoundary.LocalClientId,
                     conflictPosition,
-                    BlockRegistry.Clearstone,
+                    BlockRegistry.LumenQuartzCluster,
                     BlockRegistry.Air),
                 out SetBlockCommand firstClientCommand,
                 out bool winningRequestSentToHost);
@@ -919,16 +919,16 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(firstClientCommand, Is.Null);
 
             yield return WaitFor(
-                () => hostWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.Clearstone &&
-                      firstClientWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.Clearstone &&
-                      competingClientWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.Clearstone,
+                () => hostWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.LumenQuartzCluster &&
+                      firstClientWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.LumenQuartzCluster &&
+                      competingClientWorldManager.World.GetBlock(conflictPosition) == BlockRegistry.LumenQuartzCluster,
                 "Winning competing mutation did not converge before stale conflict request.");
 
             BlockMutationResult staleCompetingRequest = competingClientSync.TrySubmitMutation(
                 new BlockMutationRequest(
                     competingClientSync.CurrentBoundary.LocalClientId,
                     conflictPosition,
-                    BlockRegistry.Slate,
+                    BlockRegistry.Graystone,
                     BlockRegistry.Air),
                 out SetBlockCommand competingClientCommand,
                 out bool staleRequestSentToHost);
@@ -946,9 +946,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSync.ConflictRejectedMutationCount, Is.EqualTo(1));
             Assert.That(competingClientSync.ReceivedMutationRejectionCount, Is.EqualTo(1));
             Assert.That(competingClientSync.PendingMutationRequestCount, Is.Zero);
-            Assert.That(hostWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.Clearstone));
-            Assert.That(firstClientWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.Clearstone));
-            Assert.That(competingClientWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(hostWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
+            Assert.That(firstClientWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
+            Assert.That(competingClientWorldManager.World.GetBlock(conflictPosition), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
         }
 
         [UnityTest]
@@ -1001,7 +1001,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 new BlockMutationRequest(
                     clientSync.CurrentBoundary.LocalClientId,
                     editPosition,
-                    BlockRegistry.Clearstone,
+                    BlockRegistry.LumenQuartzCluster,
                     BlockRegistry.Air),
                 out SetBlockCommand clientCommand,
                 out bool requestSentToHost);
@@ -1011,8 +1011,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientCommand, Is.Null);
 
             yield return WaitFor(
-                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
-                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.Clearstone &&
+                () => hostWorldManager.World.GetBlock(editPosition) == BlockRegistry.LumenQuartzCluster &&
+                      clientWorldManager.World.GetBlock(editPosition) == BlockRegistry.LumenQuartzCluster &&
                       clientSync.PendingMutationRequestCount == 0,
                 "Active block edit did not converge under simulated 100ms latency.",
                 timeoutSeconds: 8.0f);
@@ -1095,7 +1095,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                     new BlockMutationRequest(
                         clientSync.CurrentBoundary.LocalClientId,
                         editPositions[index],
-                        index == 1 ? BlockRegistry.Slate : BlockRegistry.Clearstone,
+                        index == 1 ? BlockRegistry.Graystone : BlockRegistry.LumenQuartzCluster,
                         BlockRegistry.Air),
                     out SetBlockCommand clientCommand,
                     out bool requestSentToHost);
@@ -1142,9 +1142,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
             var timberPosition = new BlockPosition(2, 2, 2);
             var coalstonePosition = new BlockPosition(3, 2, 2);
             var crateTimberPosition = new BlockPosition(4, 2, 2);
-            hostWorldManager.World.SetBlock(timberPosition, BlockRegistry.Timber);
-            hostWorldManager.World.SetBlock(coalstonePosition, BlockRegistry.Coalstone);
-            hostWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.Timber);
+            hostWorldManager.World.SetBlock(timberPosition, BlockRegistry.BranchwoodLog);
+            hostWorldManager.World.SetBlock(coalstonePosition, BlockRegistry.EmbercoalSeam);
+            hostWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.BranchwoodLog);
 
             MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
             MultiplayerChunkAuthoritySync firstClientChunkSync = ConfigureChunkSync(firstClientSession, firstClientWorldManager);
@@ -1196,9 +1196,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(timberHarvest.CommandKind, Is.EqualTo(SurvivalCommandKind.HarvestResource));
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 1 &&
-                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Timber) == 1 &&
-                      secondClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 0 &&
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 1 &&
+                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.BranchwoodLog) == 1 &&
+                      secondClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 0 &&
                       hostWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air &&
                       firstClientWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air &&
                       secondClientWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air,
@@ -1213,22 +1213,22 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(coalHarvest.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Coalstone) == 1,
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 1,
                 "Host did not grant harvested coalstone to the requesting client.");
 
             SurvivalCommandResult craftTorchbud = firstClientSurvivalSync.TrySubmitCraft(
-                ItemId.Torchbud,
-                CraftingStation.Workbench,
+                ItemId.Glowwick,
+                CraftingStation.BuildTable,
                 out bool craftSentToHost);
 
             Assert.That(craftSentToHost, Is.True);
             Assert.That(craftTorchbud.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Torchbud) == 4 &&
-                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 0 &&
-                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Coalstone) == 0 &&
-                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Torchbud) == 4,
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Glowwick) == 4 &&
+                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 0 &&
+                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 0 &&
+                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Glowwick) == 4,
                 "Host did not validate crafting consistently for the requesting client.");
 
             SurvivalCommandResult crateTimberHarvest = firstClientSurvivalSync.TrySubmitHarvest(
@@ -1240,11 +1240,11 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(crateTimberHarvest.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 1,
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 1,
                 "Host did not grant timber before crate transfer.");
 
             SurvivalCommandResult depositTimber = firstClientSurvivalSync.TrySubmitCrateDeposit(
-                ItemId.Timber,
+                ItemId.BranchwoodLog,
                 1,
                 out bool depositSentToHost);
 
@@ -1252,13 +1252,13 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(depositTimber.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 0 &&
-                      firstClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 1 &&
-                      secondClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 1,
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 0 &&
+                      firstClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog) == 1 &&
+                      secondClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog) == 1,
                 "Shared crate deposit did not sync to both clients.");
 
             SurvivalCommandResult withdrawTimber = secondClientSurvivalSync.TrySubmitCrateWithdraw(
-                ItemId.Timber,
+                ItemId.BranchwoodLog,
                 1,
                 out bool withdrawSentToHost);
 
@@ -1266,9 +1266,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(withdrawTimber.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => secondClientSurvivalSync.LocalInventory.CountOf(ItemId.Timber) == 1 &&
-                      firstClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 0 &&
-                      secondClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.Timber) == 0,
+                () => secondClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 1 &&
+                      firstClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog) == 0 &&
+                      secondClientSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog) == 0,
                 "Shared crate withdrawal did not update the withdrawing client and crate mirrors.");
 
             Assert.That(hostSurvivalSync.AcceptedHarvestCount, Is.EqualTo(3));
@@ -1290,7 +1290,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             try
             {
                 Assert.DoesNotThrow(
-                    () => result = survivalSync.TrySubmitCrateDeposit((ItemId)9999, 1, out requestSentToHost));
+                    () => result = survivalSync.TrySubmitCrateDeposit(new ItemId("unknown_item_test_9999"), 1, out requestSentToHost));
                 Assert.That(requestSentToHost, Is.False);
                 Assert.That(result.Accepted, Is.False);
                 Assert.That(result.FailureReason, Is.EqualTo(SurvivalCommandFailureReason.InvalidTransfer));

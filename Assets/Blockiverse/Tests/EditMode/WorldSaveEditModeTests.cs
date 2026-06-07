@@ -20,8 +20,8 @@ namespace Blockiverse.Tests.EditMode
             var settings = new WorldGenerationSettings(width: 16, height: 8, depth: 16, chunkSize: 16, seed: 2202, groundHeight: 2);
             var preset = new FlatCreativeWorldPreset(registry, settings);
             VoxelWorld world = preset.Generate();
-            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.Clearstone);
-            world.SetBlock(new BlockPosition(3, 2, 2), BlockRegistry.Torchbud);
+            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.LumenQuartzCluster);
+            world.SetBlock(new BlockPosition(3, 2, 2), BlockRegistry.Glowwick);
 
             try
             {
@@ -38,8 +38,8 @@ namespace Blockiverse.Tests.EditMode
                 VoxelWorld loadedWorld = preset.Generate();
                 result.ApplyTo(loadedWorld);
 
-                Assert.That(loadedWorld.GetBlock(new BlockPosition(2, 2, 2)), Is.EqualTo(BlockRegistry.Clearstone));
-                Assert.That(loadedWorld.GetBlock(new BlockPosition(3, 2, 2)), Is.EqualTo(BlockRegistry.Torchbud));
+                Assert.That(loadedWorld.GetBlock(new BlockPosition(2, 2, 2)), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
+                Assert.That(loadedWorld.GetBlock(new BlockPosition(3, 2, 2)), Is.EqualTo(BlockRegistry.Glowwick));
             }
             finally
             {
@@ -54,8 +54,8 @@ namespace Blockiverse.Tests.EditMode
             var sink = new CapturingLogSink();
             VoxelWorld world = CreateDefaultWorld();
             var inventory = new Inventory(ItemRegistry.CreateDefault());
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 4));
-            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.Clearstone);
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 4));
+            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.LumenQuartzCluster);
 
             try
             {
@@ -69,7 +69,7 @@ namespace Blockiverse.Tests.EditMode
                     log.Level == LogType.Log &&
                     log.Message.Contains("Saved world"));
                 Assert.That(entry.Message, Does.Contain("world=summary-test"));
-                Assert.That(entry.Message, Does.Contain("schema=2"));
+                Assert.That(entry.Message, Does.Contain("schema=3"));
                 Assert.That(entry.Message, Does.Contain("dimensions=32x16x32"));
                 Assert.That(entry.Message, Does.Contain("changedBlocks=1"));
                 Assert.That(entry.Message, Does.Contain("inventorySlots=24"));
@@ -98,7 +98,7 @@ namespace Blockiverse.Tests.EditMode
                 Seed = 1,
                 ChangedBlocks = new[]
                 {
-                    new SavedBlockDelta { X = 1, Y = 1, Z = 1, BlockId = BlockRegistry.Slate.Value }
+                    new SavedBlockDelta { X = 1, Y = 1, Z = 1, BlockId = BlockRegistry.Graystone.Value }
                 },
                 PlayerInventory = new SavedPlayerInventory
                 {
@@ -114,7 +114,7 @@ namespace Blockiverse.Tests.EditMode
 
             WorldLoadResult.Loaded(data).ApplyTo(world);
 
-            Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Slate));
+            Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Graystone));
             Assert.That(world.GetChangedBlocks(), Is.Empty);
             Assert.That(eventCount, Is.EqualTo(1));
         }
@@ -126,9 +126,9 @@ namespace Blockiverse.Tests.EditMode
             VoxelWorld world = CreateDefaultWorld();
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 12));
-            inventory.SetSlot(5, new ItemStack(ItemId.Pick, 1));
-            inventory.SetSlot(8, new ItemStack(ItemId.RecoveryWrap, 2));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 12));
+            inventory.SetSlot(5, new ItemStack(ItemId.ReedwoodDelver, 1));
+            inventory.SetSlot(8, new ItemStack(ItemId.FieldBandage, 2));
 
             try
             {
@@ -147,9 +147,9 @@ namespace Blockiverse.Tests.EditMode
 
                 Assert.That(loadedInventory.SlotCount, Is.EqualTo(Inventory.DefaultSlotCount));
                 Assert.That(loadedInventory.HotbarSlotCount, Is.EqualTo(Inventory.DefaultHotbarSlotCount));
-                Assert.That(loadedInventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Timber, 12)));
-                Assert.That(loadedInventory.GetSlot(5), Is.EqualTo(new ItemStack(ItemId.Pick, 1)));
-                Assert.That(loadedInventory.GetSlot(8), Is.EqualTo(new ItemStack(ItemId.RecoveryWrap, 2)));
+                Assert.That(loadedInventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 12)));
+                Assert.That(loadedInventory.GetSlot(5), Is.EqualTo(new ItemStack(ItemId.ReedwoodDelver, 1)));
+                Assert.That(loadedInventory.GetSlot(8), Is.EqualTo(new ItemStack(ItemId.FieldBandage, 2)));
             }
             finally
             {
@@ -190,7 +190,7 @@ namespace Blockiverse.Tests.EditMode
             BlockRegistry registry = BlockRegistry.CreateDefault();
             VoxelWorld firstWorld = new FlatCreativeWorldPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
             VoxelWorld secondWorld = new FlatCreativeWorldPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
-            secondWorld.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.Clearstone);
+            secondWorld.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.LumenQuartzCluster);
 
             try
             {
@@ -267,7 +267,7 @@ namespace Blockiverse.Tests.EditMode
                         SelectedHotbarSlotIndex = 0,
                         Slots = new[]
                         {
-                            new SavedInventorySlot { SlotIndex = 0, ItemId = (int)ItemId.Pick, Count = 2 }
+                            new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.ReedwoodDelver.Value, Count = 2 }
                         }
                     }
                 };
@@ -452,7 +452,7 @@ namespace Blockiverse.Tests.EditMode
                     Seed = 1,
                     ChangedBlocks = new[]
                     {
-                        new SavedBlockDelta { X = 8, Y = 1, Z = 1, BlockId = BlockRegistry.Loam.Value }
+                        new SavedBlockDelta { X = 8, Y = 1, Z = 1, BlockId = BlockRegistry.LooseLoam.Value }
                     }
                 };
                 File.WriteAllText(path, JsonUtility.ToJson(data, prettyPrint: true));

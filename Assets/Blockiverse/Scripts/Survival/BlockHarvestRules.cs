@@ -7,9 +7,13 @@ namespace Blockiverse.Survival
     public enum HarvestToolKind
     {
         Hand,
-        Chipper,
+        Delver,
+        Spade,
+        Feller,
+        Sickle,
         Mallet,
-        Pick
+        Carver,
+        Tiller
     }
 
     public sealed class BlockHarvestRule
@@ -66,18 +70,18 @@ namespace Blockiverse.Survival
             itemRegistry ??= ItemRegistry.CreateDefault();
             var rules = new BlockHarvestRuleSet(itemRegistry);
 
-            rules.RegisterForBlock(BlockRegistry.MeadowTurf, HarvestToolKind.Mallet, handWork: 4, effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Loam, HarvestToolKind.Mallet, handWork: 4, effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Slate, HarvestToolKind.Pick, handWork: 8, effectiveToolWork: 3);
-            rules.RegisterForBlock(BlockRegistry.Timber, HarvestToolKind.Chipper, handWork: 6, effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Leafmass, HarvestToolKind.Chipper, handWork: 3, effectiveToolWork: 1);
-            rules.RegisterForBlock(BlockRegistry.Clearstone, HarvestToolKind.Pick, handWork: 8, effectiveToolWork: 3);
-            rules.RegisterForBlock(BlockRegistry.Coalstone, HarvestToolKind.Pick, handWork: 10, effectiveToolWork: 4);
-            rules.RegisterForBlock(BlockRegistry.Copperstone, HarvestToolKind.Pick, handWork: 12, effectiveToolWork: 4);
-            rules.RegisterForBlock(BlockRegistry.Ironstone, HarvestToolKind.Pick, handWork: 14, effectiveToolWork: 5);
-            rules.RegisterForBlock(BlockRegistry.Workbench, HarvestToolKind.Mallet, handWork: 6, effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Torchbud, HarvestToolKind.Hand, handWork: 2, effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.StorageCrate, HarvestToolKind.Mallet, handWork: 6, effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.MeadowTurf,        HarvestToolKind.Mallet, handWork: 4,  effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.LooseLoam,          HarvestToolKind.Spade,  handWork: 4,  effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.Graystone,          HarvestToolKind.Delver, handWork: 8,  effectiveToolWork: 3);
+            rules.RegisterForBlock(BlockRegistry.BranchwoodLog,      HarvestToolKind.Feller, handWork: 6,  effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.Leafmoss,           HarvestToolKind.Feller, handWork: 3,  effectiveToolWork: 1);
+            rules.RegisterForBlock(BlockRegistry.LumenQuartzCluster, HarvestToolKind.Delver, handWork: 8,  effectiveToolWork: 3);
+            rules.RegisterForBlock(BlockRegistry.EmbercoalSeam,      HarvestToolKind.Delver, handWork: 10, effectiveToolWork: 4);
+            rules.RegisterForBlock(BlockRegistry.RosycopperBloom,    HarvestToolKind.Delver, handWork: 12, effectiveToolWork: 4);
+            rules.RegisterForBlock(BlockRegistry.RustcoreOre,        HarvestToolKind.Delver, handWork: 14, effectiveToolWork: 5);
+            rules.RegisterForBlock(BlockRegistry.BuildTable,         HarvestToolKind.Mallet, handWork: 6,  effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.Glowwick,           HarvestToolKind.Hand,   handWork: 2,  effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.StorageCrate,       HarvestToolKind.Mallet, handWork: 6,  effectiveToolWork: 2);
 
             return rules;
         }
@@ -112,13 +116,30 @@ namespace Blockiverse.Survival
             if (equippedItem.IsEmpty)
                 return HarvestToolKind.Hand;
 
-            return equippedItem.ItemId switch
-            {
-                ItemId.Chipper => HarvestToolKind.Chipper,
-                ItemId.Mallet => HarvestToolKind.Mallet,
-                ItemId.Pick => HarvestToolKind.Pick,
-                _ => HarvestToolKind.Hand
-            };
+            ItemId id = equippedItem.ItemId;
+
+            if (id == ItemId.ReedwoodDelver || id == ItemId.FlintDelver)
+                return HarvestToolKind.Delver;
+
+            if (id == ItemId.ReedwoodSpade || id == ItemId.FlintSpade)
+                return HarvestToolKind.Spade;
+
+            if (id == ItemId.ReedwoodFeller || id == ItemId.FlintFeller)
+                return HarvestToolKind.Feller;
+
+            if (id == ItemId.ReedwoodSickle || id == ItemId.FlintSickle)
+                return HarvestToolKind.Sickle;
+
+            if (id == ItemId.ReedwoodMallet || id == ItemId.FlintMallet)
+                return HarvestToolKind.Mallet;
+
+            if (id == ItemId.ReedwoodCarver || id == ItemId.FlintCarver)
+                return HarvestToolKind.Carver;
+
+            if (id == ItemId.ReedwoodTiller || id == ItemId.FlintTiller)
+                return HarvestToolKind.Tiller;
+
+            return HarvestToolKind.Hand;
         }
 
         void RegisterForBlock(BlockId blockId, HarvestToolKind effectiveTool, int handWork, int effectiveToolWork)

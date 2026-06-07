@@ -61,7 +61,7 @@ namespace Blockiverse.WorldGen
         {
             registry.Get(BlockRegistry.Air);
             registry.Get(BlockRegistry.MeadowTurf);
-            registry.Get(BlockRegistry.Loam);
+            registry.Get(BlockRegistry.LooseLoam);
 
             var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
 
@@ -73,7 +73,7 @@ namespace Blockiverse.WorldGen
                     {
                         BlockId block = y == settings.GroundHeight - 1
                             ? BlockRegistry.MeadowTurf
-                            : BlockRegistry.Loam;
+                            : BlockRegistry.LooseLoam;
                         world.SetBlock(new BlockPosition(x, y, z), block, trackChange: false);
                     }
                 }
