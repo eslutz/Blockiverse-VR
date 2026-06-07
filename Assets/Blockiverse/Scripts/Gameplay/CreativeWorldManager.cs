@@ -212,7 +212,7 @@ namespace Blockiverse.Gameplay
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
-            VoxelWorld world = new SurvivalLiteWorldPreset(registry, settings).Generate();
+            VoxelWorld world = new SurvivalTerrainPreset(registry, settings).Generate();
             return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite);
         }
 

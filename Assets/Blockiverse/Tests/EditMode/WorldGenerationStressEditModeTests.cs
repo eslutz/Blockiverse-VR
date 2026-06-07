@@ -8,7 +8,7 @@ using UnityEngine;
 namespace Blockiverse.Tests.EditMode
 {
     /// <summary>
-    /// Stress coverage for the largest world the game ships (default survival-lite preset):
+    /// Stress coverage for the largest world the game ships (default survival terrain preset):
     /// generation and a full chunk-mesh pass must complete deterministically and stay bounded.
     /// This is the CPU-side proxy for the Quest performance budget; headset captures are recorded
     /// separately under docs/testing/performance.
@@ -19,8 +19,8 @@ namespace Blockiverse.Tests.EditMode
         public void DefaultSurvivalWorldGeneratesAndMeshesWithoutErrors()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite();
-            var preset = new SurvivalLiteWorldPreset(registry, settings);
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain();
+            var preset = new SurvivalTerrainPreset(registry, settings);
 
             var stopwatch = Stopwatch.StartNew();
             VoxelWorld world = preset.Generate();
@@ -37,8 +37,8 @@ namespace Blockiverse.Tests.EditMode
         public void ChunkMeshingIsDeterministicForRepeatedBuilds()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite();
-            VoxelWorld world = new SurvivalLiteWorldPreset(registry, settings).Generate();
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain();
+            VoxelWorld world = new SurvivalTerrainPreset(registry, settings).Generate();
             var chunk = new ChunkCoordinate(
                 settings.Bounds.Width / (2 * settings.ChunkSize),
                 0,
@@ -56,10 +56,10 @@ namespace Blockiverse.Tests.EditMode
         public void GeneratedWorldIsReproducibleForSameSeed()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed: 4242);
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed: 4242);
 
-            long first = MeshEveryChunk(new SurvivalLiteWorldPreset(registry, settings).Generate(), registry, out _);
-            long second = MeshEveryChunk(new SurvivalLiteWorldPreset(registry, settings).Generate(), registry, out _);
+            long first = MeshEveryChunk(new SurvivalTerrainPreset(registry, settings).Generate(), registry, out _);
+            long second = MeshEveryChunk(new SurvivalTerrainPreset(registry, settings).Generate(), registry, out _);
 
             Assert.That(second, Is.EqualTo(first));
         }

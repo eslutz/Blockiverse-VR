@@ -4,9 +4,11 @@ using Unity.Profiling;
 
 namespace Blockiverse.WorldGen
 {
-    public sealed class SurvivalLiteWorldPreset
+    enum TerrainBiome { Meadow, Pinewild, Wetland, Drybrush, Dunes, Tundra, Highlands }
+
+    public sealed class SurvivalTerrainPreset
     {
-        static readonly ProfilerMarker GenerateMarker = new("Blockiverse.SurvivalLiteWorldPreset.Generate");
+        static readonly ProfilerMarker GenerateMarker = new("Blockiverse.SurvivalTerrainPreset.Generate");
 
         const int SpawnClearanceRadius = 3;
         const int SpawnHeadroom = 3;
@@ -16,7 +18,7 @@ namespace Blockiverse.WorldGen
         readonly WorldGenerationSettings settings;
         readonly SurvivalResourceTuning resourceTuning;
 
-        public SurvivalLiteWorldPreset(BlockRegistry registry, WorldGenerationSettings settings, SurvivalResourceTuning resourceTuning = null)
+        public SurvivalTerrainPreset(BlockRegistry registry, WorldGenerationSettings settings, SurvivalResourceTuning resourceTuning = null)
         {
             this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -31,11 +33,13 @@ namespace Blockiverse.WorldGen
             ValidateRegistry();
 
             var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
-            int[] surfaceHeights = BuildSurfaceHeights();
+            TerrainBiome[] biomeMap = BuildBiomeMap();
+            int[] surfaceHeights = BuildSurfaceHeights(biomeMap);
 
-            FillTerrain(world, surfaceHeights);
+            FillTerrain(world, surfaceHeights, biomeMap);
             CarveCaves(world, surfaceHeights);
             PlaceResourceVeins(world, surfaceHeights);
+            PlaceSparseVegetation(world, surfaceHeights, biomeMap);
             ApplySpawnSafety(world);
 
             return world;
@@ -43,14 +47,14 @@ namespace Blockiverse.WorldGen
 
         void ValidateSettings()
         {
-            if (settings.Bounds.Height < 32)
-                throw new InvalidOperationException("Survival Lite generation requires a world height of at least 32 blocks.");
+            if (settings.Bounds.Height < 128)
+                throw new InvalidOperationException("Survival terrain generation requires a world height of at least 128 blocks.");
 
             if (!settings.Bounds.Contains(settings.SpawnPosition))
-                throw new InvalidOperationException("Survival Lite generation requires a spawn position inside the world bounds.");
+                throw new InvalidOperationException("Survival terrain generation requires a spawn position inside the world bounds.");
 
             if (settings.SpawnPosition.Y + SpawnHeadroom >= settings.Bounds.Height)
-                throw new InvalidOperationException("Survival Lite generation requires enough headroom above the spawn position.");
+                throw new InvalidOperationException("Survival terrain generation requires enough headroom above the spawn position.");
         }
 
         void ValidateRegistry()
@@ -59,12 +63,58 @@ namespace Blockiverse.WorldGen
             registry.Get(BlockRegistry.MeadowTurf);
             registry.Get(BlockRegistry.LooseLoam);
             registry.Get(BlockRegistry.Graystone);
+            registry.Get(BlockRegistry.Worldroot);
+            registry.Get(BlockRegistry.Deepmantle);
 
             foreach (ResourceVeinTuning vein in resourceTuning.ResourceVeins)
                 registry.Get(vein.ResourceBlock);
         }
 
-        int[] BuildSurfaceHeights()
+        TerrainBiome[] BuildBiomeMap()
+        {
+            WorldBounds bounds = settings.Bounds;
+            var biomeMap = new TerrainBiome[bounds.Width * bounds.Depth];
+
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                for (int z = 0; z < bounds.Depth; z++)
+                {
+                    int surfaceY = CalculateSurfaceHeight(x, z);
+                    biomeMap[SurfaceIndex(x, z)] = ClassifyBiome(x, z, surfaceY);
+                }
+            }
+
+            return biomeMap;
+        }
+
+        TerrainBiome ClassifyBiome(int x, int z, int surfaceY)
+        {
+            if (surfaceY >= 130)
+                return TerrainBiome.Highlands;
+
+            double temperature = ValueNoise2D(x, z, scale: 250, settings.Seed + 11, salt: 511);
+            double moisture = ValueNoise2D(x, z, scale: 250, settings.Seed + 23, salt: 737);
+            temperature -= Math.Max(0, surfaceY - 120) * 0.006;
+
+            if (temperature < 0.25)
+                return TerrainBiome.Tundra;
+
+            if (temperature > 0.72 && moisture < 0.28)
+                return TerrainBiome.Dunes;
+
+            if (temperature > 0.58 && moisture < 0.45)
+                return TerrainBiome.Drybrush;
+
+            if (moisture > 0.65)
+                return TerrainBiome.Wetland;
+
+            if (temperature < 0.45 && moisture > 0.52)
+                return TerrainBiome.Pinewild;
+
+            return TerrainBiome.Meadow;
+        }
+
+        int[] BuildSurfaceHeights(TerrainBiome[] biomeMap)
         {
             WorldBounds bounds = settings.Bounds;
             int[] surfaceHeights = new int[bounds.Width * bounds.Depth];
@@ -81,11 +131,12 @@ namespace Blockiverse.WorldGen
 
         int CalculateSurfaceHeight(int x, int z)
         {
-            double broad = ValueNoise2D(x, z, scale: 32, settings.Seed, salt: 101);
-            double detail = ValueNoise2D(x, z, scale: 11, settings.Seed, salt: 211);
-            int heightOffset = (int)Math.Round((broad - 0.5d) * 18d + (detail - 0.5d) * 8d);
+            double continent = (ValueNoise2D(x, z, scale: 500, settings.Seed, salt: 101) - 0.5) * 2.0;
+            double hills = (ValueNoise2D(x, z, scale: 67, settings.Seed, salt: 211) - 0.5) * 2.0;
+            double detail = (ValueNoise2D(x, z, scale: 17, settings.Seed, salt: 323) - 0.5) * 2.0;
 
-            return Clamp(settings.GroundHeight + heightOffset, 18, settings.Bounds.Height - 14);
+            int height = (int)Math.Round(WorldConstants.SeaLevel + continent * 42 + hills * 18 + detail * 5);
+            return Clamp(height, 40, 190);
         }
 
         void FlattenSpawnSurface(int[] surfaceHeights)
@@ -111,7 +162,7 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        void FillTerrain(VoxelWorld world, int[] surfaceHeights)
+        void FillTerrain(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
         {
             WorldBounds bounds = world.Bounds;
 
@@ -120,24 +171,85 @@ namespace Blockiverse.WorldGen
                 for (int z = 0; z < bounds.Depth; z++)
                 {
                     int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
+                    TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
+                    int subsoilDepth = 3 + (int)(Hash(settings.Seed, x, 0, z, salt: 999) % 4u);
+
                     for (int y = 0; y <= surfaceY; y++)
                     {
-                        BlockId block = SelectTerrainBlock(y, surfaceY);
+                        BlockId block = SelectTerrainBlock(y, surfaceY, subsoilDepth, biome, x, z);
                         world.SetBlock(new BlockPosition(x, y, z), block, trackChange: false);
                     }
+
+                    BlockId surfaceBlock = SelectSurfaceBlock(biome, x, z);
+                    world.SetBlock(new BlockPosition(x, surfaceY, z), surfaceBlock, trackChange: false);
                 }
             }
         }
 
-        static BlockId SelectTerrainBlock(int y, int surfaceY)
+        BlockId SelectTerrainBlock(int y, int surfaceY, int subsoilDepth, TerrainBiome biome, int x, int z)
         {
-            if (y == surfaceY)
-                return BlockRegistry.MeadowTurf;
+            if (y <= WorldConstants.BedrockTopY)
+                return BlockRegistry.Worldroot;
 
-            if (y >= surfaceY - 3)
-                return BlockRegistry.LooseLoam;
+            if (y <= 24)
+                return BlockRegistry.Deepmantle;
 
-            return BlockRegistry.Graystone;
+            if (y >= surfaceY - subsoilDepth)
+                return SelectSubsoilBlock(biome);
+
+            return SelectStoneBlock(y, biome, x, z);
+        }
+
+        static BlockId SelectStoneBlock(int y, TerrainBiome biome, int x, int z)
+        {
+            if (y < 35)
+            {
+                uint h = Hash(x, 0, y, z, salt: 37);
+                return h % 8u == 0 ? BlockRegistry.BlackBasalt : BlockRegistry.Deepmantle;
+            }
+
+            if (y < 70)
+            {
+                uint h = Hash(x, 0, y, z, salt: 43);
+                if (h % 20u == 0)
+                    return BlockRegistry.BlackBasalt;
+
+                return h % 3u == 0 ? BlockRegistry.Graystone : BlockRegistry.DarkSlate;
+            }
+
+            if (y < 130)
+            {
+                uint h = Hash(x, 0, y, z, salt: 53);
+                return h % 5u == 0 ? BlockRegistry.WhiteLimestone : BlockRegistry.Graystone;
+            }
+
+            return biome == TerrainBiome.Highlands ? BlockRegistry.WarmGranite : BlockRegistry.Graystone;
+        }
+
+        static BlockId SelectSubsoilBlock(TerrainBiome biome)
+        {
+            return biome switch
+            {
+                TerrainBiome.Pinewild => BlockRegistry.Rootsoil,
+                TerrainBiome.Wetland => BlockRegistry.Claybed,
+                TerrainBiome.Dunes => BlockRegistry.PaleSand,
+                TerrainBiome.Highlands => BlockRegistry.WarmGranite,
+                _ => BlockRegistry.LooseLoam,
+            };
+        }
+
+        static BlockId SelectSurfaceBlock(TerrainBiome biome, int x, int z)
+        {
+            return biome switch
+            {
+                TerrainBiome.Pinewild => BlockRegistry.Rootsoil,
+                TerrainBiome.Wetland => BlockRegistry.RiverSilt,
+                TerrainBiome.Drybrush => BlockRegistry.DryTurf,
+                TerrainBiome.Dunes => BlockRegistry.PaleSand,
+                TerrainBiome.Tundra => BlockRegistry.SnowcapTurf,
+                TerrainBiome.Highlands => BlockRegistry.WarmGranite,
+                _ => BlockRegistry.MeadowTurf,
+            };
         }
 
         void CarveCaves(VoxelWorld world, int[] surfaceHeights)
@@ -233,7 +345,7 @@ namespace Blockiverse.WorldGen
             if (!world.Bounds.Contains(position))
                 return;
 
-            if (y < 3 || y > surfaceHeights[SurfaceIndex(x, z)] - 3)
+            if (y <= WorldConstants.BedrockTopY || y > surfaceHeights[SurfaceIndex(x, z)] - 3)
                 return;
 
             if (IsInsideSpawnProtectedColumn(x, z))
@@ -353,6 +465,80 @@ namespace Blockiverse.WorldGen
             world.SetBlock(position, resource, trackChange: false);
         }
 
+        void PlaceSparseVegetation(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
+        {
+            WorldBounds bounds = world.Bounds;
+
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                for (int z = 0; z < bounds.Depth; z++)
+                {
+                    if (IsInsideSpawnProtectedColumn(x, z))
+                        continue;
+
+                    TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
+                    int treeDensityThreshold = BiomeTreeDensityThreshold(biome);
+
+                    if (treeDensityThreshold == 0)
+                        continue;
+
+                    uint hash = Hash(settings.Seed, x, 0, z, salt: 1301);
+                    if (hash % 100u >= (uint)treeDensityThreshold)
+                        continue;
+
+                    int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
+                    int trunkHeight = 3 + (int)(hash % 3u);
+                    PlaceTree(world, x, surfaceY + 1, z, trunkHeight);
+                }
+            }
+        }
+
+        void PlaceTree(VoxelWorld world, int baseX, int baseY, int baseZ, int trunkHeight)
+        {
+            WorldBounds bounds = world.Bounds;
+
+            for (int dy = 0; dy < trunkHeight; dy++)
+            {
+                var trunkPos = new BlockPosition(baseX, baseY + dy, baseZ);
+                if (!bounds.Contains(trunkPos))
+                    return;
+
+                world.SetBlock(trunkPos, BlockRegistry.BranchwoodLog, trackChange: false);
+            }
+
+            int canopyY = baseY + trunkHeight;
+            for (int layer = 0; layer <= 1; layer++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        var leafPos = new BlockPosition(baseX + dx, canopyY + layer, baseZ + dz);
+                        if (!bounds.Contains(leafPos))
+                            continue;
+
+                        if (world.GetBlock(leafPos) == BlockRegistry.Air)
+                            world.SetBlock(leafPos, BlockRegistry.Leafmoss, trackChange: false);
+                    }
+                }
+            }
+        }
+
+        static int BiomeTreeDensityThreshold(TerrainBiome biome)
+        {
+            return biome switch
+            {
+                TerrainBiome.Pinewild  => 55,
+                TerrainBiome.Meadow    => 25,
+                TerrainBiome.Wetland   => 20,
+                TerrainBiome.Tundra    => 10,
+                TerrainBiome.Highlands => 10,
+                TerrainBiome.Drybrush  => 8,
+                TerrainBiome.Dunes     => 3,
+                _                      => 0,
+            };
+        }
+
         void ApplySpawnSafety(VoxelWorld world)
         {
             BlockPosition spawn = settings.SpawnPosition;
@@ -372,7 +558,11 @@ namespace Blockiverse.WorldGen
 
                     for (int y = 0; y < floorY; y++)
                     {
-                        BlockId support = y >= floorY - 3 ? BlockRegistry.LooseLoam : BlockRegistry.Graystone;
+                        BlockId support = y <= WorldConstants.BedrockTopY
+                            ? BlockRegistry.Worldroot
+                            : y <= 24 ? BlockRegistry.Deepmantle
+                            : y >= floorY - 3 ? BlockRegistry.LooseLoam
+                            : BlockRegistry.Graystone;
                         world.SetBlock(new BlockPosition(x, y, z), support, trackChange: false);
                     }
 
