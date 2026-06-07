@@ -74,9 +74,8 @@ namespace Blockiverse.WorldGen
             return new SurvivalResourceTuning(
                 new ResourceVeinTuning(BlockRegistry.EmbercoalSeam,      salt: 701, minY: 35, maxY: 135, chancePermille: 270, radius: 2, verticalRadius: 2),
                 new ResourceVeinTuning(BlockRegistry.RosycopperBloom,    salt: 809, minY: 45, maxY: 150, chancePermille: 145, radius: 2, verticalRadius: 1),
-                new ResourceVeinTuning(BlockRegistry.RustcoreOre,        salt: 907, minY: 15, maxY: 95,  chancePermille: 80,  radius: 2, verticalRadius: 1),
-                new ResourceVeinTuning(BlockRegistry.SunmetalFleck,      salt: 1013, minY: 10, maxY: 65, chancePermille: 35,  radius: 1, verticalRadius: 1),
-                new ResourceVeinTuning(BlockRegistry.LumenQuartzCluster, salt: 1117, minY: 15, maxY: 120, chancePermille: 60, radius: 2, verticalRadius: 1));
+                new ResourceVeinTuning(BlockRegistry.RustcoreOre,        salt: 907,  minY: 15, maxY: 95,  chancePermille: 80,  radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.LumenQuartzCluster, salt: 1117, minY: 15, maxY: 120, chancePermille: 60,  radius: 2, verticalRadius: 1));
         }
 
         public ResourceVeinTuning Get(BlockId resourceBlock)
