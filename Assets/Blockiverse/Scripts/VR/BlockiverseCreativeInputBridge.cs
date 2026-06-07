@@ -3,6 +3,7 @@ using Blockiverse.Voxel;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 
 namespace Blockiverse.VR
 {
@@ -16,12 +17,18 @@ namespace Blockiverse.VR
     {
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] XRRayInteractor interactionRay;
+        [SerializeField] LineRenderer interactionLineRenderer;
+        [SerializeField] XRInteractorLineVisual interactionLineVisual;
         [SerializeField] CreativeInteractionController interactionController;
 
         UnityAction breakAction;
         UnityAction placeAction;
         UnityAction undoAction;
         UnityAction blockEditingToggleAction;
+        bool capturedLineRendererDefault;
+        bool lineRendererDefaultEnabled;
+        bool capturedLineVisualDefault;
+        bool lineVisualDefaultEnabled;
 
         public XRRayInteractor InteractionRay => interactionRay;
 
@@ -33,7 +40,13 @@ namespace Blockiverse.VR
             Unbind();
             inputRig = rig;
             interactionRay = ray;
+            interactionLineRenderer = null;
+            interactionLineVisual = null;
+            capturedLineRendererDefault = false;
+            capturedLineVisualDefault = false;
             interactionController = controller;
+            DiscoverInteractionRayVisuals();
+            ApplyInteractionRayVisualState();
             Bind();
         }
 
@@ -50,6 +63,8 @@ namespace Blockiverse.VR
 
         void Update()
         {
+            ApplyInteractionRayVisualState();
+
             if (interactionController == null)
                 return;
 
@@ -105,8 +120,44 @@ namespace Blockiverse.VR
             if (interactionRay == null)
                 interactionRay = GetComponentInChildren<XRRayInteractor>(true);
 
+            DiscoverInteractionRayVisuals();
+
             if (interactionController == null && Application.isPlaying)
                 interactionController = FindFirstObjectByType<CreativeInteractionController>();
+        }
+
+        void DiscoverInteractionRayVisuals()
+        {
+            if (interactionRay == null)
+                return;
+
+            if (interactionLineRenderer == null)
+                interactionLineRenderer = interactionRay.GetComponent<LineRenderer>();
+
+            CaptureLineRendererDefault();
+
+            if (interactionLineVisual == null)
+                interactionLineVisual = interactionRay.GetComponent<XRInteractorLineVisual>();
+
+            CaptureLineVisualDefault();
+        }
+
+        void CaptureLineRendererDefault()
+        {
+            if (capturedLineRendererDefault || interactionLineRenderer == null)
+                return;
+
+            lineRendererDefaultEnabled = interactionLineRenderer.enabled;
+            capturedLineRendererDefault = true;
+        }
+
+        void CaptureLineVisualDefault()
+        {
+            if (capturedLineVisualDefault || interactionLineVisual == null)
+                return;
+
+            lineVisualDefaultEnabled = interactionLineVisual.enabled;
+            capturedLineVisualDefault = true;
         }
 
         void TryBreakTarget()
@@ -128,7 +179,11 @@ namespace Blockiverse.VR
 
         void ToggleBlockEditing()
         {
-            interactionController?.ToggleBlockEditingEnabled();
+            if (interactionController == null)
+                return;
+
+            interactionController.ToggleBlockEditingEnabled();
+            ApplyInteractionRayVisualState();
         }
 
         bool TryGetTarget(out BlockPosition target, out Vector3 normal)
@@ -136,7 +191,7 @@ namespace Blockiverse.VR
             target = default;
             normal = Vector3.up;
 
-            if (interactionController == null || !CanInteract())
+            if (interactionController == null || !interactionController.BlockEditingEnabled || !CanInteract())
                 return false;
 
             if (!interactionRay.TryGetCurrent3DRaycastHit(out RaycastHit hit))
@@ -149,6 +204,22 @@ namespace Blockiverse.VR
 
             normal = hit.normal;
             return true;
+        }
+
+        void ApplyInteractionRayVisualState()
+        {
+            DiscoverInteractionRayVisuals();
+
+            bool shouldShow = interactionController == null || interactionController.BlockEditingEnabled;
+
+            if (interactionLineRenderer != null)
+                interactionLineRenderer.enabled = shouldShow && (!capturedLineRendererDefault || lineRendererDefaultEnabled);
+
+            if (interactionLineVisual != null)
+                interactionLineVisual.enabled = shouldShow && (!capturedLineVisualDefault || lineVisualDefaultEnabled);
+
+            if (!shouldShow)
+                interactionController?.HidePreview();
         }
 
         bool CanInteract()
