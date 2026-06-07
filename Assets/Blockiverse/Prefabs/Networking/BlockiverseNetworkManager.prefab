@@ -169,5 +169,5 @@ MonoBehaviour:
   session: {fileID: 0}
   worldManager: {fileID: 0}
   chunkAuthoritySync: {fileID: 2253992077840423001}
-  saveFileName: multiplayer-world.json
+  saveFileName: multiplayer-world.vxlworld
   worldName: Multiplayer World

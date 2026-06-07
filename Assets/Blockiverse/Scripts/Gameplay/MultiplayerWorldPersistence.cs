@@ -12,7 +12,7 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class MultiplayerWorldPersistence : MonoBehaviour
     {
-        const string DefaultSaveFileName = "multiplayer-world.json";
+        const string DefaultSaveFileName = "multiplayer-world.vxlworld";
         const string DefaultWorldName = "Multiplayer World";
 
         [SerializeField] BlockiverseNetworkSession session;
@@ -73,7 +73,7 @@ namespace Blockiverse.Gameplay
 
             string path = ResolveSavePath();
 
-            if (!File.Exists(path))
+            if (!File.Exists(path) && !Directory.Exists(path))
                 return true;
 
             LastHostLoadAttempted = true;
