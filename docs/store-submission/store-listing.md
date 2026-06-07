@@ -12,6 +12,7 @@
 - **Supported input:** Quest Touch controllers
 - **Player modes:** Single player, local LAN multiplayer (host-authoritative co-op)
 - **Internet required:** No for single player; local network required for LAN multiplayer
+- **Design source:** Current gameplay scope is defined by `../rulesets/` and the execution plan.
 
 ## Short description (<= ~150 characters)
 
@@ -26,13 +27,13 @@ interaction and comfort-first locomotion.
 
 Key features:
 
-- **Creative and survival-lite building** in a bounded voxel world with original block art.
+- **Creative and survival building** in canonical bounded voxel worlds with original block art.
 - **Natural VR interaction** — point, place, break, and undo with a dominant-hand ray and a
   left-hand block menu.
 - **Comfort options** — teleport movement, snap turning, height reset, and a comfort settings
   menu so you can play the way that feels best.
 - **Local co-op multiplayer** — host or join a LAN session and build together with
-  host-authoritative world sync and Meta Horizon avatars.
+  host-authoritative canonical world sync and Meta Horizon avatars or fallback proxies.
 - **Audio and haptic feedback** on every block break and placement for a tactile feel.
 
 Blockiverse VR uses only original art, characters, and audio.

@@ -2,6 +2,8 @@
 
 ## Direction
 
+Use the canonical Blockiverse rulesets as the source of truth for current block, item, biome, structure, menu, audio/VFX, and world vocabulary. This art-direction note records visual principles and historical asset provenance; it does not define gameplay content.
+
 Use a readable, blocky, colorful voxel style with a distinct identity:
 
 - Softer, toy-like block edges
@@ -11,9 +13,11 @@ Use a readable, blocky, colorful voxel style with a distinct identity:
 - Original UI panels
 - VR-readable contrast and silhouettes
 
-## M4 Authored Visual Pass
+## Historical Authored Visual Pass
 
-The M4 Art and Texture Assets milestone uses committed authored texture assets as the rendering path. Missing or incorrectly wired block atlases should fail validation instead of silently falling back to runtime-generated visuals.
+The earlier M4 Art and Texture Assets milestone committed a small authored texture set for headset readability validation. Those assets remain useful as migration input and renderer validation coverage, but canonical names and target content now come from [../rulesets/](../rulesets/).
+
+Missing or incorrectly wired block atlases should fail validation instead of silently falling back to runtime-generated visuals.
 
 This pass is intentionally functional and VR-readable:
 
@@ -23,7 +27,7 @@ This pass is intentionally functional and VR-readable:
 - Distinct color families for grass, soil, stone, wood, leaves, glass, ores, crafted blocks, and light sources
 - Original names and visual motifs only
 
-The committed block atlas covers:
+The historical committed block atlas covered temporary validation names:
 
 - Meadow Turf
 - Loam
@@ -54,18 +58,18 @@ Branding assets should stay readable at headset distance and in the Quest instal
 - Startup/loading artwork can show the voxel landscape direction, but exact game-name text should be rendered by Unity UI unless a reviewed title treatment is committed.
 - Android launcher resources should use the same icon direction across density variants under `Assets/Plugins/Android/res/mipmap-*`.
 
-## M4 Palette And Naming Rules
+## Palette And Naming Rules
 
-Use original Blockiverse names in filenames, issue text, UI labels, prompts, and provenance notes. Filenames are lowercase snake_case and should match the block, item, or UI sprite name without third-party references.
+Use original Blockiverse names in filenames, issue text, UI labels, prompts, and provenance notes. New filenames, UI labels, prompts, and registries should use canonical IDs and display names from `docs/rulesets/`. Historical validation names may appear only in provenance notes, migration fixtures, or explicit legacy mapping code.
 
-The M4 palette should stay bright, readable, and varied:
+The palette should stay bright, readable, and varied:
 
-- Terrain: meadow greens, warm loam browns, cool slate grays
+- Terrain: meadow greens, warm soil browns, cool stone grays
 - Organic: amber timber and saturated leaf greens
-- Clearstone: cyan glass/crystal tones
+- Glass/crystal: cyan transparent and luminous tones
 - Resources: dark coal contrast, orange copper accents, pale iron accents
 - Crafted blocks: warm utility browns with distinct crate/workbench construction marks
-- Torchbud: green stem tones with warm yellow light
+- Light sources: botanical or crafted silhouettes with warm yellow light
 - UI: dark translucent work surfaces with green, gold, red, and blue accents
 
 ## Texture Rules
@@ -74,8 +78,8 @@ Block textures:
 
 - Source tiles are 16x16 RGBA PNG files.
 - The runtime atlas is a committed 4x4, 64x64 RGBA PNG.
-- Tile order follows `BlockVisualAtlas`: Meadow Turf, Loam, Slate, Timber, Leafmass, Clearstone, Coalstone, Copperstone, Ironstone, Workbench, Torchbud, Storage Crate.
-- Use point filtering, clamp wrapping, and no mipmaps for the first M4 validation pass.
+- Tile order follows the runtime atlas mapping for the current canonical registry. Historical temporary atlas ordering may be retained only while migration tests still cover old saved worlds.
+- Use point filtering, clamp wrapping, and no mipmaps unless headset validation proves a different import profile is readable.
 - Keep silhouettes and color families distinct enough to read in Quest headset validation.
 
 Item and UI textures:
@@ -87,7 +91,7 @@ Item and UI textures:
 Quest import policy:
 
 - Commit Unity `.meta` files with texture import settings.
-- Android overrides stay enabled for M4 assets with max texture size matching the authored asset dimensions.
+- Android overrides stay enabled with max texture size matching the authored asset dimensions.
 - Compression remains disabled for this first readability pass; revisit compression only with headset evidence that readability is preserved.
 
 ## Atlas Validation Policy

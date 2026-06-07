@@ -1,8 +1,8 @@
 # Data Use & Safety Declarations
 
-> Source of truth for the Meta store "Data Use" / privacy questionnaire answers. Keep this in
-> sync with `privacy-policy.md` and the actual shipped behavior. Update whenever a new data
-> flow or third-party integration is added.
+> Store-facing source for Meta "Data Use" / privacy questionnaire answers. Keep this in sync
+> with `privacy-policy.md`, the rulesets under `../rulesets/`, and the actual shipped behavior.
+> Update whenever a new data flow or third-party integration is added.
 
 ## Data collection summary
 
@@ -12,6 +12,7 @@
 | World saves & inventory | Yes (local) | No | Game progression | Stored on device |
 | Comfort / settings preferences | Yes (local) | No | User preferences | Stored on device |
 | LAN session / IP data | Yes (transient) | Peer-to-peer on local network | Host/join a session | Not persisted after session |
+| Canonical world state | Yes (local) | No | World persistence | Includes ruleset-defined environment, structure, vegetation, inventory, and save metadata |
 | Diagnostic logs | Yes (local) | No (not auto-uploaded) | Debugging | Stored on device |
 | Precise location | No | No | — | — |
 | Advertising identifiers | No | No | — | No ads SDK |

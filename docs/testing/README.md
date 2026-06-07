@@ -4,7 +4,7 @@ Testing is split into:
 
 - Repository safety checks for shell syntax, release policy docs, and forbidden tracked files
 - Local Unity validation for tests and development APK build smoke checks
-- Meta XR Simulator and MCP-driven manual validation for M3 survival-lite flows
+- Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
 - Release APK workflow checks that publish CI artifacts
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
@@ -15,9 +15,9 @@ Testing is split into:
 
 Performance reports belong in `docs/testing/performance/`.
 
-M3 Meta XR Simulator setup, MCP configuration, and survival-lite smoke scripts are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md).
+Meta XR Simulator setup, MCP configuration, and historical smoke-script notes are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md). New smoke scripts should use the canonical world presets and rulesets in `../rulesets/`.
 
-M5 multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md).
+Historical multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md). New multiplayer validation should follow [Voxel Multiplayer and Networking Ruleset](../rulesets/voxel_multiplayer_networking_ruleset.md).
 
 Runtime diagnostics use local Unity and player logs only. Capture recent Quest player logs with:
 

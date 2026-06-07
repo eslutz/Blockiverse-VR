@@ -31,17 +31,17 @@ Copy this file to `report-YYYY-MM-DD.md` and fill in each section from a headset
 
 ## Scenarios
 
-1. Cold load of the default survival-lite world (generation + first full mesh).
+1. Cold load of the canonical `survival_terrain` world or largest currently shipped canonical preset (generation + first full mesh).
 2. Sustained creative editing (rapid break/place near chunk borders to exercise dirty rebuilds).
 3. Two-player host-authoritative session (host + one client editing concurrently).
 
 ## Observations
 
-- Frame rate: 
-- Notable hitches (cause, ProfilerMarker, duration): 
-- Memory / allocation notes: 
-- Thermal behavior over <N> minutes: 
+- Frame rate:
+- Notable hitches (cause, ProfilerMarker, duration):
+- Memory / allocation notes:
+- Thermal behavior over <N> minutes:
 
 ## Follow-ups
 
-- 
+-

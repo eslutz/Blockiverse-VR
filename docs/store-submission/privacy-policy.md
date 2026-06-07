@@ -20,9 +20,9 @@ it does not sell personal data.
   avatars or party chat), that functionality is provided by Meta under Meta's own privacy
   policy. Blockiverse VR receives only the minimum identifiers required to display avatars and
   connect players in a session.
-- **Local game data:** World saves, player inventory, and comfort/settings preferences are
-  stored locally on your device. This data stays on the device unless you choose to share a
-  save file yourself.
+- **Local game data:** World saves, ruleset-defined world state, player inventory, and
+  comfort/settings preferences are stored locally on your device. This data stays on the
+  device unless you choose to share a save file yourself.
 - **Multiplayer connection data:** In LAN multiplayer, devices exchange IP addresses and game
   state directly to host or join a session. This information is used only to maintain the
   active session and is not stored after the session ends.
