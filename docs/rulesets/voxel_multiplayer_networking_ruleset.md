@@ -18,8 +18,9 @@ This document defines the multiplayer/networking rules for the canonical Blockiv
 | Host-authoritative world | The host owns world generation, block mutation validation, authoritative world state, survival command validation, and multiplayer save state. |
 | LAN-first release | The first shippable multiplayer mode is LAN host/client co-op. No public matchmaking or cloud persistence is required for the initial release. |
 | Two-player first | The implementation target is host + one client. Protocols should not hard-code assumptions that prevent later 3–4 player testing. |
-| Command-based gameplay | Clients send intent commands. The host validates commands and broadcasts accepted state changes. |
-| Deterministic correction | Rejected or stale client commands must produce explicit rejection/correction messages. |
+| Command-based gameplay | Clients send intent commands. The host validates commands and broadcasts accepted authoritative state changes. |
+| Comfort-preserving prediction | Clients may locally predict their own actions for responsiveness while the host remains authoritative. |
+| Deterministic correction | Rejected or stale client commands must produce explicit rejection/correction messages and client reconciliation. |
 | Bounded world first | Multiplayer sync assumes fixed-size worlds. Infinite streaming terrain is out of scope for the first multiplayer version. |
 | Meta identity for players | Local and remote players should use Meta Horizon avatars when available, with a simple fallback proxy for development or unavailable avatar data. |
 | No in-app voice in initial release | Voice communication is handled by Meta Quest party chat, not by Blockiverse-owned voice capture or transmission. |
@@ -251,13 +252,11 @@ The host snapshot header must include:
 
 Canonical world presets:
 
-| Preset | Purpose |
-|---|---|
-| `survival_terrain` | Ruleset-defined survival world with terrain, caves, resources, vegetation, environment hooks, and structures. |
-| `flat_builder` | Canonical creative flat world with full creative catalog. |
-| `void_builder` | Empty builder world with safety floor, spawn platform, and explicit bounds. |
-
-The snapshot's `width`, `height`, `depth`, `chunkSize`, `seed`, and `groundHeight` fields carry the exact host world instance values. Do not infer network compatibility from legacy preset IDs.
+| Preset | Width | Height | Depth | Chunk Size | Seed | Ground Height | Purpose |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `survival_terrain` | 128 | 64 | 128 | 16 | 6401 | 32 | Ruleset-defined survival world with terrain, caves, resources, vegetation, environment hooks, and structures. |
+| `flat_builder` | 32 | 16 | 32 | 16 | 1001 | 2 | Flat canonical creative world with full creative catalog. |
+| `void_builder` | 32 | 16 | 32 | 16 | 1001 | 0 | Empty builder world with safety floor/spawn platform and explicit bounds. |
 
 ### Late-join snapshot
 
@@ -382,6 +381,133 @@ On rejection, the client must:
 
 ---
 
+## 7.5 Client Prediction and Reconciliation
+
+### Goals
+
+Prediction exists to improve VR comfort and responsiveness while preserving host authority.
+
+The host remains authoritative for:
+
+- Block state
+- Chunk state
+- Inventory state
+- Survival progression
+- Shared containers
+- Multiplayer save data
+
+Clients may predict:
+
+- Local block placement previews
+- Local block removal previews
+- Controller interactions
+- Hand interactions
+- Audio feedback
+- Visual feedback
+
+Clients must not predict authoritative gameplay state for inventory, crafting, shared containers, progression, or persistence.
+
+### Prediction flow
+
+1. Client performs local validation.
+2. Client creates a predicted local result.
+3. Client sends mutation request to host.
+4. Host validates request.
+5. Host broadcasts authoritative mutation delta or rejection result.
+6. Client reconciles prediction against authoritative result.
+
+### Prediction limits
+
+| Rule | Value |
+|---|---:|
+| Maximum pending predicted edits | 16 |
+| Prediction warning timeout | 500 ms |
+| Prediction rollback timeout | 1500 ms |
+| Prediction before snapshot received | Not allowed |
+| Prediction for inventory commands | Not allowed |
+| Prediction for shared crate commands | Not allowed |
+| Prediction for crafting commands | Not allowed |
+| Prediction for batch/fill/world-edit tools | Not allowed |
+
+### Predicted block state rules
+
+Predicted edits must use dedicated prediction state instead of directly mutating authoritative chunk data.
+
+A predicted block edit must track:
+
+```json
+{
+  "requestId": 12,
+  "position": { "x": 42, "y": 31, "z": 77 },
+  "expectedCurrentBlockId": 3,
+  "predictedNewBlockId": 0,
+  "createdAtMs": 123456,
+  "state": "PendingHostResult"
+}
+```
+
+Predicted edits:
+
+- exist only in local client state
+- are never saved
+- are never transmitted as authoritative state
+- must be replaced by the authoritative host delta
+- must be rolled back if rejected
+- must be cleared on disconnect, reconnect, or snapshot reload
+
+### Accepted prediction reconciliation
+
+If the authoritative delta matches the prediction:
+
+1. Convert prediction to committed state.
+2. Clear pending request.
+3. Remove prediction markers.
+
+If the authoritative delta differs from the prediction:
+
+1. Apply the authoritative delta.
+2. Clear pending request.
+3. Remove prediction markers.
+4. Show correction feedback only if the visual difference is player-noticeable.
+
+### Rejected prediction reconciliation
+
+If the authoritative result rejects the request:
+
+1. Remove predicted state.
+2. Apply authoritative correction if provided.
+3. Clear pending request.
+4. Show subtle local failure feedback.
+5. Do not automatically replay the failed command.
+
+### Timeout handling
+
+If a prediction exceeds the warning timeout:
+
+1. Keep the predicted state visible.
+2. Mark the request as delayed.
+3. Avoid sending duplicate mutation requests unless explicitly retried by protocol logic.
+
+If a prediction exceeds the rollback timeout:
+
+1. Remove the predicted state.
+2. Clear the pending request.
+3. Request a chunk or world resync if repeated timeouts occur.
+4. Show subtle degraded-connection feedback.
+
+### Missing sequence recovery
+
+If a sequence gap is detected:
+
+1. Buffer newer deltas.
+2. Request missing deltas or a chunk resync.
+3. Apply buffered deltas once gaps are resolved.
+4. Request a broader world resync if recovery fails.
+
+### Prediction implementation rule
+
+Prediction is a presentation and responsiveness layer. It must not weaken host validation, save ownership, inventory authority, registry compatibility checks, or survival command authority.
+
 ## 8. Creative editing rules in multiplayer
 
 | Action | Host | Client |
@@ -406,6 +532,18 @@ canPlacePreview =
 ```
 
 A client preview result is not authoritative and must not create a real block until the host delta arrives.
+
+Clients may create temporary predicted edits for responsiveness.
+
+Predicted edits:
+
+- exist only in local client state
+- are never saved
+- are never transmitted as authoritative state
+- must be replaced by the authoritative host delta
+- must be rolled back if rejected
+
+Predicted edits should use dedicated prediction state rather than modifying authoritative chunk data directly.
 
 ---
 
@@ -691,14 +829,63 @@ These estimates exclude Netcode headers, Unity Transport headers, retransmits, c
 
 ### Host disconnect behavior
 
+Initial LAN implementation:
+
 When a client loses the host:
 
 1. Set state to `Disconnected`.
 2. Clear pending mutation and survival command request dictionaries.
-3. Keep the last entered join address.
-4. Show a world-space reconnect prompt.
-5. Allow `Join` to retry the previous address.
-6. Do not allow new gameplay commands while disconnected.
+3. Clear all predicted edit state.
+4. Keep the last entered join address.
+5. Show reconnect/session-ended UI.
+6. Prevent further gameplay commands.
+7. Preserve local client settings only.
+
+The initial LAN implementation does not support host migration.
+
+### Future host migration support
+
+Host migration is a future enhancement and is not required for the first multiplayer milestone.
+
+Goals:
+
+- Allow a multiplayer session to continue after host departure.
+- Preserve world state without disconnecting remaining players.
+- Maintain host-authoritative gameplay.
+
+Required capabilities:
+
+- Periodic authoritative world checkpoints.
+- Transferable save metadata.
+- Host election or explicit host promotion.
+- Ownership rebinding.
+- Inventory ownership transfer.
+- Pending request cleanup.
+- Full world resynchronization after migration.
+
+Migration rules:
+
+- Correctness is preferred over seamlessness.
+- A short gameplay pause is acceptable.
+- In-flight commands may be discarded during migration.
+- Remaining clients must not continue simulation until a new authoritative host is established.
+- A promoted host must serve a fresh authoritative snapshot before gameplay resumes.
+- Divergent client-local world state must be discarded in favor of the promoted host's authoritative checkpoint.
+
+Recommended host selection order:
+
+1. Explicitly designated backup host.
+2. Lowest latency connected player.
+3. Longest connected player.
+4. Manual host selection.
+
+Host migration should not be implemented until:
+
+- LAN co-op is stable.
+- Late join is stable.
+- Reconnect is stable.
+- Save/load is stable.
+- Prediction/reconciliation is stable.
 
 ### Client reconnect behavior
 
@@ -822,6 +1009,7 @@ moderation/reporting if public social features expand
 |---|---|
 | Block mutation authority | Host accepts valid edits, rejects invalid/stale edits, clients cannot commit directly. |
 | Chunk delta log | Sequence IDs are nonzero, increasing, replayable, and wrap safely. |
+| Client prediction | Predicted edits are isolated from authoritative chunk state and clear correctly on accept, reject, timeout, disconnect, and resync. |
 | Survival commands | Harvest/craft/crate commands are validated and do not duplicate on repeated request ID. |
 | Inventory snapshots | Snapshot shape and contents round-trip. |
 | Save metadata | Multiplayer save refuses mismatched dimensions/chunk size/seed. |
@@ -837,6 +1025,7 @@ moderation/reporting if public social features expand
 | Late join | Late join receives generated world + changed blocks. |
 | Conflict | Competing edits converge to host-authoritative winner. |
 | 100 ms simulated latency | Active block edit converges with no pending request left open. |
+| Prediction reconciliation | Client prediction commits on matching delta, corrects on mismatched delta, and rolls back on rejection. |
 | Simulated packet loss | Ordered deltas eventually converge or trigger resync. |
 | Host disconnect | Client sees session-ended/reconnect UI. |
 | Host shutdown save | Saved edits reload before next hosted session. |
@@ -886,6 +1075,7 @@ Fallback proxy avatar sync
 Meta avatar stream relay
 Reconnect/session-ended UX
 Simulator latency tests
+Prediction/reconciliation tests
 Simulator packet loss tests
 Quest LAN smoke test plan
 ```
