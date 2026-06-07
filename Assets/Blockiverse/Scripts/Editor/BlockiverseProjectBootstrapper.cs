@@ -1060,19 +1060,30 @@ namespace Blockiverse.Editor
 
         static void EnsureBootSceneLight(Scene scene)
         {
-            GameObject lightObject = FindRootGameObject(scene, "Bootstrap Directional Light");
+            GameObject lightObject = FindRootGameObject(scene, BlockiverseLightingRuntime.SunObjectName) ??
+                                     FindRootGameObject(scene, "Bootstrap Directional Light");
 
             if (lightObject == null)
             {
-                lightObject = new GameObject("Bootstrap Directional Light");
+                lightObject = new GameObject(BlockiverseLightingRuntime.SunObjectName);
                 SceneManager.MoveGameObjectToScene(lightObject, scene);
             }
 
+            lightObject.name = BlockiverseLightingRuntime.SunObjectName;
             Light light = EnsureComponent<Light>(lightObject);
             light.type = LightType.Directional;
             light.intensity = 1.0f;
+            light.shadows = LightShadows.Hard;
+            light.shadowStrength = 0.85f;
+            light.renderMode = LightRenderMode.ForcePixel;
             lightObject.transform.rotation = Quaternion.Euler(50.0f, -30.0f, 0.0f);
+
+            WorldTimeClock clock = EnsureComponent<WorldTimeClock>(lightObject);
+            BlockiverseLightingCycleController controller = EnsureComponent<BlockiverseLightingCycleController>(lightObject);
+            controller.Configure(clock, light);
             EditorUtility.SetDirty(lightObject);
+            EditorUtility.SetDirty(clock);
+            EditorUtility.SetDirty(controller);
         }
 
         static void EnsureBootEventSystem(Scene scene)

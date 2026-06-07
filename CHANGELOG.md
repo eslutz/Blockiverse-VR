@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added real world lighting for the day/night slice: a shadow-casting sun,
+  voxel face light falloff for caves and tunnels, and Torchbud point lights at
+  the flame end.
 - Fixed Quest menu interaction and creative safety controls by wiring menus through
   the native XRI UI input stack, adding a void safety floor below world bounds, and
   binding Right B to toggle block editing without affecting locomotion or UI input.
