@@ -134,45 +134,41 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SurvivalTerrainPresetPlacesCanonicalTerrainLayers()
+        public void SurvivalTerrainPresetPlacesRenderableTerrainLayers()
         {
             VoxelWorld world = GenerateSurvivalWorld(seed: 5050);
 
-            int worldrootCount = 0;
-            int deepmantleCount = 0;
-            int stoneLevelCount = 0;
+            int graystoneCount = 0;
+            int subsoilCount = 0;
+            int surfaceCount = 0;
 
             for (int x = 0; x < world.Bounds.Width; x += 4)
             {
                 for (int z = 0; z < world.Bounds.Depth; z += 4)
                 {
-                    for (int y = 0; y <= WorldConstants.BedrockTopY; y++)
-                    {
-                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
-                        if (block == BlockRegistry.Worldroot) worldrootCount++;
-                    }
-
-                    for (int y = WorldConstants.BedrockTopY + 1; y <= 24; y++)
-                    {
-                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
-                        if (block == BlockRegistry.Deepmantle) deepmantleCount++;
-                    }
-
                     int surfaceY = FindSurfaceY(world, x, z);
-                    for (int y = 25; y < surfaceY - 6; y++)
+
+                    for (int y = 0; y < surfaceY - 4; y++)
                     {
                         BlockId block = world.GetBlock(new BlockPosition(x, y, z));
-                        if (block == BlockRegistry.Graystone || block == BlockRegistry.DarkSlate ||
-                            block == BlockRegistry.WarmGranite || block == BlockRegistry.WhiteLimestone ||
-                            block == BlockRegistry.BlackBasalt || block == BlockRegistry.Deepmantle)
-                            stoneLevelCount++;
+                        if (block == BlockRegistry.Graystone) graystoneCount++;
                     }
+
+                    for (int y = surfaceY - 3; y < surfaceY; y++)
+                    {
+                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                        if (block == BlockRegistry.LooseLoam || block == BlockRegistry.Graystone) subsoilCount++;
+                    }
+
+                    BlockId surf = world.GetBlock(new BlockPosition(x, surfaceY, z));
+                    if (surf == BlockRegistry.MeadowTurf || surf == BlockRegistry.LooseLoam || surf == BlockRegistry.Graystone)
+                        surfaceCount++;
                 }
             }
 
-            Assert.That(worldrootCount, Is.GreaterThan(0), "Expected worldroot blocks at bedrock layer.");
-            Assert.That(deepmantleCount, Is.GreaterThan(0), "Expected deepmantle blocks in deep layer.");
-            Assert.That(stoneLevelCount, Is.GreaterThan(0), "Expected stone-class blocks in mid-depth layer.");
+            Assert.That(graystoneCount, Is.GreaterThan(0), "Expected Graystone in deep layers.");
+            Assert.That(subsoilCount, Is.GreaterThan(0), "Expected subsoil blocks near surface.");
+            Assert.That(surfaceCount, Is.GreaterThan(0), "Expected renderable surface blocks.");
         }
 
         [Test]

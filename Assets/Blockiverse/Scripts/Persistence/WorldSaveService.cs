@@ -119,7 +119,10 @@ namespace Blockiverse.Persistence
                 if (string.IsNullOrEmpty(slot.CanonicalId))
                     continue;
 
-                var itemId = new ItemId(slot.CanonicalId);
+                string canonicalId = WorldSaveService.LegacyItemCanonicalIdAliases.TryGetValue(slot.CanonicalId, out string aliased)
+                    ? aliased
+                    : slot.CanonicalId;
+                var itemId = new ItemId(canonicalId);
                 if (!itemRegistry.TryGet(itemId, out _))
                     continue;
 
@@ -355,6 +358,11 @@ namespace Blockiverse.Persistence
             { 10, "build_table" },
             { 11, "glowwick" },
             { 12, "storage_crate" }
+        };
+
+        internal static readonly Dictionary<string, string> LegacyItemCanonicalIdAliases = new()
+        {
+            { "lumen_quartz", "lumen_crystal" },
         };
 
         static readonly Dictionary<int, string> LegacyItemIdToCanonical = new()
@@ -659,7 +667,10 @@ namespace Blockiverse.Persistence
                     return false;
                 }
 
-                var itemId = new ItemId(slot.CanonicalId);
+                string resolvedId = LegacyItemCanonicalIdAliases.TryGetValue(slot.CanonicalId, out string aliasedId)
+                    ? aliasedId
+                    : slot.CanonicalId;
+                var itemId = new ItemId(resolvedId);
                 if (!itemRegistry.TryGet(itemId, out ItemDefinition definition))
                 {
                     error = $"player inventory item id is not registered: {slot.CanonicalId}";

@@ -136,7 +136,7 @@ namespace Blockiverse.WorldGen
             double detail = (ValueNoise2D(x, z, scale: 17, settings.Seed, salt: 323) - 0.5) * 2.0;
 
             int height = (int)Math.Round(WorldConstants.SeaLevel + continent * 42 + hills * 18 + detail * 5);
-            return Clamp(height, 40, 190);
+            return Clamp(height, 40, settings.Bounds.Height - 1);
         }
 
         void FlattenSpawnSurface(int[] surfaceHeights)
@@ -189,51 +189,19 @@ namespace Blockiverse.WorldGen
         BlockId SelectTerrainBlock(int y, int surfaceY, int subsoilDepth, TerrainBiome biome, int x, int z)
         {
             if (y <= WorldConstants.BedrockTopY)
-                return BlockRegistry.Worldroot;
-
-            if (y <= 24)
-                return BlockRegistry.Deepmantle;
+                return BlockRegistry.Graystone;
 
             if (y >= surfaceY - subsoilDepth)
                 return SelectSubsoilBlock(biome);
 
-            return SelectStoneBlock(y, biome, x, z);
-        }
-
-        static BlockId SelectStoneBlock(int y, TerrainBiome biome, int x, int z)
-        {
-            if (y < 35)
-            {
-                uint h = Hash(x, 0, y, z, salt: 37);
-                return h % 8u == 0 ? BlockRegistry.BlackBasalt : BlockRegistry.Deepmantle;
-            }
-
-            if (y < 70)
-            {
-                uint h = Hash(x, 0, y, z, salt: 43);
-                if (h % 20u == 0)
-                    return BlockRegistry.BlackBasalt;
-
-                return h % 3u == 0 ? BlockRegistry.Graystone : BlockRegistry.DarkSlate;
-            }
-
-            if (y < 130)
-            {
-                uint h = Hash(x, 0, y, z, salt: 53);
-                return h % 5u == 0 ? BlockRegistry.WhiteLimestone : BlockRegistry.Graystone;
-            }
-
-            return biome == TerrainBiome.Highlands ? BlockRegistry.WarmGranite : BlockRegistry.Graystone;
+            return BlockRegistry.Graystone;
         }
 
         static BlockId SelectSubsoilBlock(TerrainBiome biome)
         {
             return biome switch
             {
-                TerrainBiome.Pinewild => BlockRegistry.Rootsoil,
-                TerrainBiome.Wetland => BlockRegistry.Claybed,
-                TerrainBiome.Dunes => BlockRegistry.PaleSand,
-                TerrainBiome.Highlands => BlockRegistry.WarmGranite,
+                TerrainBiome.Highlands => BlockRegistry.Graystone,
                 _ => BlockRegistry.LooseLoam,
             };
         }
@@ -242,13 +210,13 @@ namespace Blockiverse.WorldGen
         {
             return biome switch
             {
-                TerrainBiome.Pinewild => BlockRegistry.Rootsoil,
-                TerrainBiome.Wetland => BlockRegistry.RiverSilt,
-                TerrainBiome.Drybrush => BlockRegistry.DryTurf,
-                TerrainBiome.Dunes => BlockRegistry.PaleSand,
-                TerrainBiome.Tundra => BlockRegistry.SnowcapTurf,
-                TerrainBiome.Highlands => BlockRegistry.WarmGranite,
-                _ => BlockRegistry.MeadowTurf,
+                TerrainBiome.Highlands => BlockRegistry.Graystone,
+                TerrainBiome.Drybrush  => BlockRegistry.MeadowTurf,
+                TerrainBiome.Dunes     => BlockRegistry.MeadowTurf,
+                TerrainBiome.Tundra    => BlockRegistry.MeadowTurf,
+                TerrainBiome.Pinewild  => BlockRegistry.LooseLoam,
+                TerrainBiome.Wetland   => BlockRegistry.LooseLoam,
+                _                      => BlockRegistry.MeadowTurf,
             };
         }
 
@@ -558,11 +526,7 @@ namespace Blockiverse.WorldGen
 
                     for (int y = 0; y < floorY; y++)
                     {
-                        BlockId support = y <= WorldConstants.BedrockTopY
-                            ? BlockRegistry.Worldroot
-                            : y <= 24 ? BlockRegistry.Deepmantle
-                            : y >= floorY - 3 ? BlockRegistry.LooseLoam
-                            : BlockRegistry.Graystone;
+                        BlockId support = y >= floorY - 3 ? BlockRegistry.LooseLoam : BlockRegistry.Graystone;
                         world.SetBlock(new BlockPosition(x, y, z), support, trackChange: false);
                     }
 
