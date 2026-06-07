@@ -422,7 +422,11 @@ namespace Blockiverse.Persistence
             }
 
             string regionsDir = Path.Combine(savePath, "dimensions", "main", "regions");
-            Directory.CreateDirectory(regionsDir);
+            // Replace the entire regions directory atomically so stale region files from a
+            // previous save with more/different edits are never resurrected on load.
+            string regionsDirTmp = regionsDir + ".tmp";
+            string regionsDirBak = regionsDir + ".bak";
+            Directory.CreateDirectory(regionsDirTmp);
 
             foreach (var (rKey, chunkMap) in regionMap)
             {
@@ -477,9 +481,21 @@ namespace Blockiverse.Persistence
                     Chunks = chunkDataList.ToArray()
                 };
 
-                string regionPath = Path.Combine(regionsDir, $"r.{rKey.rx}.{rKey.rz}.vxlr");
+                string regionPath = Path.Combine(regionsDirTmp, $"r.{rKey.rx}.{rKey.rz}.vxlr");
                 WriteJsonAtomic(regionPath, regionFile);
             }
+
+            // Atomically swap regionsDirTmp → regionsDir, removing any stale previous region files.
+            if (Directory.Exists(regionsDirBak))
+                Directory.Delete(regionsDirBak, recursive: true);
+
+            if (Directory.Exists(regionsDir))
+                Directory.Move(regionsDir, regionsDirBak);
+
+            Directory.Move(regionsDirTmp, regionsDir);
+
+            if (Directory.Exists(regionsDirBak))
+                Directory.Delete(regionsDirBak, recursive: true);
         }
 
         List<SavedBlockDelta> LoadRegionFiles(string savePath, VxlwManifest manifest)
