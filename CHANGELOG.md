@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 ## Unreleased
 
 - Adopted the canonical Blockiverse ruleset documentation as the development/design source of truth, added `docs/rulesets/`, replaced the execution plan, aligned agent and contributor guidance, and added a root `.CLAUDE.md` pointer to `AGENTS.md`.
+- Simplified GitHub tracking policy so issues and the `Blockiverse VR Roadmap` project act as lightweight active-work aids instead of a required feature/story hierarchy.
 - Added real world lighting for the day/night slice: a shadow-casting sun,
   voxel face light falloff for caves and tunnels, and Torchbud point lights at
   the flame end.

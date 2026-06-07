@@ -42,4 +42,4 @@ The canonical development/design source of truth is:
 - [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md)
 - [docs/rulesets/](docs/rulesets/)
 
-GitHub Projects and linked issues track current work state, priority, and review flow.
+GitHub issues and the `Blockiverse VR Roadmap` project are lightweight workflow aids for active bugs, blockers, reviews, and current initiatives. They are not the canonical roadmap or a required issue hierarchy.

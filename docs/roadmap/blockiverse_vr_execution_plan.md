@@ -1688,9 +1688,9 @@ Support contact filled
 
 ---
 
-# 11. Backlog seed
+# 11. Implementation Outline
 
-Use these as work units or issue seeds. Do not treat this list as automatically created GitHub issues.
+Use this as an implementation outline and planning aid. Do not file each row as a GitHub issue; create issues only for active bugs, blockers, validation gates, multi-PR initiatives, or follow-ups that need durable tracking.
 
 ## EPIC-00 — Repo, documentation, CI/CD, and checkpoint policy
 

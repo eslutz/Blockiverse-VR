@@ -19,10 +19,12 @@ Pull requests should include:
 - Summary of player-facing and technical changes
 - Test evidence
 - Manual validation steps when VR, performance, save/load, networking, signing, or store behavior changes
-- Linked issue or roadmap item
+- Linked issue when one exists, otherwise the relevant roadmap section or ruleset
 - Links to affected rulesets in `docs/rulesets/` when gameplay, UI, world generation, save data, multiplayer, audio/VFX, or design behavior changes
 
 Incomplete systems should stay behind feature flags, disabled scenes, or clearly isolated test scenes so `main` remains playable. New gameplay and UI vocabulary should use canonical ruleset IDs; legacy names are migration inputs only.
+
+Do not create a GitHub issue for every roadmap row or ruleset item. Use issues for active bugs, blockers, multi-PR initiatives, validation gates, or follow-ups that need durable tracking beyond the current pull request.
 
 ## Assets
 

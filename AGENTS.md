@@ -8,9 +8,9 @@ This file defines standing workflow instructions for AI agents and automation wo
 - Read and follow the canonical rulesets under [docs/rulesets/](docs/rulesets/). These documents define the current game design, implementation vocabulary, save schema, menus, environment, structures, vegetation, multiplayer behavior, audio/VFX behavior, and known-good checkpoint policy.
 - The rulesets define the game. Existing temporary validation worlds, reduced starter registries, and old temporary block/item names are migration inputs only.
 - Use [docs/rulesets/voxel_implementation_alignment_matrix.md](docs/rulesets/voxel_implementation_alignment_matrix.md) only as a migration/refactor aid. It is not a second gameplay vocabulary.
-- Use the GitHub Project `Blockiverse VR Roadmap` and linked GitHub issues for current work state, priority, review status, and detailed task breakdown.
-- Preserve the roadmap hierarchy: epics contain features, features contain stories, and implementation work should trace back to the relevant issue whenever one exists.
-- Do not duplicate detailed product, architecture, testing, art, release, or platform requirements in this file. Keep those details in the execution plan, rulesets, issues, project fields, or pull requests.
+- Use GitHub issues and pull requests for active workflow state only: current bugs, blockers, review work, multi-PR initiatives, and durable follow-ups.
+- Use the GitHub Project `Blockiverse VR Roadmap` as a lightweight active-work board. It is not a canonical roadmap, product spec, or required issue hierarchy.
+- Do not duplicate detailed product, architecture, testing, art, release, or platform requirements in this file. Keep those details in the execution plan, rulesets, pull requests, or focused issues.
 
 ## Human Owner
 
@@ -24,38 +24,30 @@ This file defines standing workflow instructions for AI agents and automation wo
 
 ## GitHub Issue And Project Workflow
 
-- Before starting work, identify the best matching GitHub issue.
+- Use issues deliberately. Do not create or maintain a GitHub issue for every roadmap line, backlog row, feature, or story in the execution plan.
+- Before starting work, check for an existing issue only when one is likely to exist. If no issue exists, proceed without creating one unless issue tracking would materially help the work.
+- Create or use an issue when Eric asks for one, the work spans multiple pull requests, a bug or blocker needs durable tracking, manual or external validation must remain open, or a follow-up must survive beyond the current pull request.
 - If an issue exists for the work:
-  - Assign it to `eslutz`.
-  - Move it to the correct active lane/status in `Blockiverse VR Roadmap`.
-  - Create or use a branch linked to the issue.
-  - Link every branch, pull request, and review to the issue.
+  - Assign it to `eslutz` unless Eric explicitly says otherwise.
+  - Create or use a branch whose relationship to the issue is clear.
+  - Link the branch, pull request, and relevant review comments to the issue.
   - Keep the issue updated with material decisions, blockers, validation notes, and follow-up tasks.
-- If no issue exists for the work:
-  - Create one unless the work is truly trivial.
-  - Add it to `Blockiverse VR Roadmap`.
-  - Set the appropriate Type, Phase, Priority, Area, Risk, Target Release, Effort, and Roadmap Milestone fields.
-  - Link it to the correct parent epic or feature when applicable.
-- Move issues through the project lanes as a human developer would:
-  - `Backlog` for planned but not started work.
-  - `Ready` for work that is scoped and unblocked.
-  - `In Progress` when active implementation begins.
-  - `Blocked` when progress is waiting on an external dependency or decision.
-  - `In Review` when a pull request is open or review is needed.
-  - `Done` after implementation, validation, documentation, and any required approval are complete.
-- Keep parent and child issue statuses coherent:
-  - When a story starts, move that story and its active parent feature or epic to `In Progress`.
-  - When completed work is ready for Eric review, move the completed story to `In Review`.
-  - Move a parent feature to `In Review` when its relevant child stories are in `In Review` or `Done` and no child is still active.
-  - Keep an epic `In Progress` while any of its features remain active or review is still pending.
-  - Move completed pre-existing cards to `In Review` when they need Eric review.
-  - Move completed pre-existing cards directly to `Done` when they are simple, objectively verifiable, do not require a PR, and closing evidence has been posted.
-- Leave a useful issue comment whenever status changes materially:
-  - Start comment: branch name, implementation scope, linked parent or children, and expected validation.
+- If no issue is needed, reference the relevant execution-plan section or ruleset in the pull request and include normal validation evidence.
+- Use the GitHub Project `Blockiverse VR Roadmap` only for active-work visibility. Keep active bugs, blockers, in-review work, and current initiative issues or pull requests there when access is available.
+- Treat project status updates as best-effort workflow hygiene, not a blocking implementation requirement. Do not require legacy metadata fields for Type, phase, priority, area, risk, target release, effort, or roadmap milestone.
+- Use these project statuses when maintaining active cards:
+  - `Backlog` for planned active work that is not started.
+  - `Ready` for scoped and unblocked work.
+  - `In Progress` for active implementation or investigation.
+  - `Blocked` for work waiting on an external dependency or decision.
+  - `In Review` for open pull requests or work awaiting Eric review.
+  - `Done` after implementation, validation, documentation, and required approval are complete.
+- Leave a useful issue comment when issue-backed work changes materially:
+  - Start comment: branch name, implementation scope, and expected validation.
   - Progress comment: decisions, blockers, or scope changes.
   - Review comment: PR link, validation commands, manual validation notes, and residual risk.
-- Do not close an issue unless the acceptance criteria and relevant validation steps are satisfied.
-- Do not move an issue to `Done` until either Eric has approved the completed work or the work qualifies for autonomous closure under the rules below.
+- Do not close an active bug, blocker, validation-gated issue, or PR-backed issue unless the acceptance criteria and relevant validation steps are satisfied.
+- Old roadmap hierarchy issues may be closed with reason `not planned` when Eric has explicitly approved consolidation. In that case, `not planned` means "no longer tracked as a standalone GitHub issue"; it does not cancel canonical roadmap or ruleset scope.
 
 ## Dependency, Tool, And Workflow Currency
 
@@ -72,10 +64,11 @@ Agents may move issues to `Done` and close them without additional Eric approval
 
 Autonomous closure is appropriate for tasks such as:
 
-- Creating or verifying repository files, labels, milestones, issue templates, project fields, or folders.
+- Creating or verifying repository files, labels, milestones, issue templates, project settings, or folders.
 - Updating repository settings or rulesets when Eric has directly requested the setting change.
 - Documentation-only policy changes that Eric explicitly requested and that do not change product behavior.
-- Scripted roadmap/bootstrap bookkeeping where command output proves the requested state.
+- Scripted repository or GitHub cleanup where command output proves the requested state.
+- Closing stale tracking-only issues or milestones when Eric has explicitly requested consolidation and the closing comment points to the canonical docs or retained active issue.
 
 Autonomous closure is not appropriate when the issue:
 
@@ -94,14 +87,14 @@ Before autonomously closing any issue, an agent must:
   - The exact evidence or validation commands.
   - Any relevant links to files, settings, project items, or PRs.
   - A statement that the issue is being closed under the autonomous closure rule.
-- Move the Project item to `Done`.
-- Close the issue with state reason `completed`.
-- Verify both the GitHub issue state and the Project lane after closing.
+- Update, archive, or remove the Project item when Project access is available and the issue is tracked there.
+- Close the issue with the correct state reason: `completed` for objectively completed work, `not planned` for retired standalone tracking scope, or `duplicate` for duplicate issues.
+- Verify the GitHub issue state after closing. Verify the Project state too when Project access is available.
 
-### GitHub Project Update Procedure
+### GitHub Project Use
 
-- Prefer GitHub CLI for ProjectV2 lane updates because the GitHub connector may not expose project field mutations.
-- Before changing project lanes, verify authentication and project access:
+- Prefer GitHub CLI for project status updates and cleanup because the GitHub connector may not expose all project mutations.
+- Before changing project cards, verify authentication and project access:
 
 ```sh
 gh auth status
@@ -121,20 +114,21 @@ gh project field-list <PROJECT_NUMBER> --owner eslutz --format json
 gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 ```
 
-- Update the `Status` field with `gh project item-edit` using the resolved project ID, item ID, Status field ID, and single-select option ID.
-- Verify the lane after every batch update with `gh project item-list` or `gh issue view --json projectItems`.
+- Update only the `Status` field unless Eric explicitly asks for additional project metadata.
+- Archive or remove stale tracking cards when their issues have been closed under a consolidation cleanup.
+- Verify the active-card set after every batch update with `gh project item-list` or `gh issue view --json projectItems`.
 - If `gh auth status` fails, try the same command outside the sandbox if available. If authentication is still missing, start `gh auth login -h github.com`, give Eric the one-time code and URL, then retry after he completes the flow.
-- If project updates cannot be completed, still assign/update/comment on the issue and explicitly report the project-lane blocker.
+- If project updates cannot be completed because the token is missing `read:project` or `project` scopes, continue the issue or pull-request work and explicitly report the project cleanup blocker.
 
 ### Issue And Pull Request Linking
 
-- Name branches so the issue relationship is obvious, for example `feature/20-ci-foundation-checks` or `feature/53-block-registry`.
-- Link pull requests to issues in the PR body.
+- Name branches so the issue relationship is obvious when an issue exists, for example `feature/53-block-registry`.
+- Link pull requests to issues in the PR body when an issue exists. Otherwise link to the relevant execution-plan section or ruleset.
 - Use non-closing references such as `Related to #20` unless Eric has explicitly asked for merge to close the issue.
 - Use closing keywords such as `Closes #20` only when all acceptance criteria are complete and Eric has approved closing on merge.
 - For autonomously closeable issues, close the issue directly after posting evidence instead of relying on PR closing keywords.
-- Add reciprocal issue comments with the PR link for every linked issue and important parent issue.
-- When a PR covers multiple issues, list all of them in the PR body and move each review-ready issue to `In Review`.
+- Add reciprocal issue comments with the PR link for linked active issues.
+- When a PR covers multiple issues, list all of them in the PR body and move each review-ready issue to `In Review` when Project access is available.
 - Keep PR descriptions useful enough for a human to resume work: include scope, linked issues, validation commands, manual validation, risk notes, and known follow-ups.
 
 ## Branching, Pull Requests, And Reviews
@@ -149,19 +143,19 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
   - `chore/*`
   - `spike/*`
   - `hotfix/*`
-- Name branches so the linked issue is obvious, for example `feature/53-block-registry`.
+- Name branches so the linked issue is obvious when an issue exists, for example `feature/53-block-registry`.
 - Keep GitHub repository settings configured to automatically delete head branches after pull requests merge.
 - All production releases must be cut from `main`.
 - Release tags must match `v*` and point to commits reachable from `origin/main`.
 - Prefer pull requests into `main` after CI passes. Direct pushes to `main` should be rare and explicit.
 - When a pull request is opened:
-  - Link the associated issue if one exists.
-  - Move linked issues to `In Review`.
+  - Link the associated issue if one exists, or link the relevant execution-plan section or ruleset.
+  - Move linked issues to `In Review` when Project access is available.
   - Request Eric's final approval in the PR or linked issue comments.
   - Do not require GitHub approving reviews while Eric is the sole human maintainer.
 - Do not merge a pull request, close the linked issue, or move the linked issue to `Done` until Eric has approved the work or explicitly asked the agent to merge/complete it.
 - PRs must include:
-  - Linked issue, when one exists.
+  - Linked issue, when one exists, or the relevant execution-plan section or ruleset.
   - Summary of player-facing and technical changes.
   - Test evidence.
   - Manual validation steps when VR, save/load, networking, performance, signing, store, or Quest device behavior changes.
@@ -195,7 +189,7 @@ hzdb device list
 - Use `adb` directly only when hzdb does not expose the needed operation or when comparing behavior against lower-level Android tooling. Document why the fallback was needed.
 - Do not commit local device logs, screenshots, recordings, Perfetto traces, APKs, or other large/generated validation artifacts unless a tracked artifact is explicitly required. Store them outside the repo or attach them to the relevant GitHub issue, pull request, or workflow artifact instead.
 - Keep experimental or unstable MCP servers out of the base Codex config. If a server is needed for testing but can break prompt execution, put it in a separate Codex profile, validate it with `codex mcp list` and a fresh Codex session, and remove or disable it immediately if it blocks normal prompts.
-- Use GitHub CLI for ProjectV2 lane/status updates, because GitHub MCP/connector tools may not expose all project field mutations.
+- Use GitHub CLI for best-effort GitHub Project status updates and cleanup, because GitHub MCP/connector tools may not expose all project mutations.
 - Use browser automation tools for local web targets only when the task involves browser-visible UI, screenshots, or interaction checks.
 - Use annotated `kg/...` tags only for validated engineering checkpoints and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). Do not use known-good checkpoint tags as release tags.
 
@@ -226,6 +220,6 @@ scripts/unity/run-tests.sh
 - Keep canonical design and implementation rules in [docs/rulesets/](docs/rulesets/) and roadmap sequencing in [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md). Other docs should point to those sources instead of redefining gameplay or design rules.
 - Keep [CHANGELOG.md](CHANGELOG.md) up-to-date with completed work that changes project behavior, workflow, documentation, release process, or user-visible scope.
 - Add completed work to the `Unreleased` section unless the change is being documented directly under a release version.
-- Keep issue bodies and PR descriptions useful enough for a human developer to resume the work.
+- Keep active issue bodies and PR descriptions useful enough for a human developer to resume the work.
 - Record important technical decisions under `docs/adr/`.
-- Keep the execution plan, rulesets, GitHub Project, and linked issues aligned when roadmap structure or canonical design scope changes.
+- Keep the execution plan, rulesets, and active issues or pull requests aligned when roadmap structure or canonical design scope changes.
