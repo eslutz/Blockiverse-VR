@@ -1,4 +1,4 @@
-# M5 Multiplayer Validation
+# Historical Multiplayer Validation
 
 Date recorded: 2026-05-28
 
@@ -51,6 +51,6 @@ Rejected stale or invalid client edits use approximately 256 bytes of applicatio
 
 ## Scope And Residual Risk
 
-This evidence is local editor multi-client validation on loopback transport. It satisfies the M5 requirement to record active block-editing bandwidth and run simulated 100ms latency and packet-loss checks for chunk synchronization.
+This evidence is local editor multi-client validation on loopback transport from the earlier milestone plan. It remains useful as historical proof of host-authoritative command and delta behavior, but new validation should follow [Voxel Multiplayer and Networking Ruleset](../rulesets/voxel_multiplayer_networking_ruleset.md) and synchronize canonical world metadata, registry versions, structure state, vegetation state, and environment state.
 
 Quest-device network captures, OVR Metrics captures, and headset multiplayer smoke evidence remain part of later device validation before store-candidate release work. Do not treat this document as Quest 3 or Quest 3S device proof.

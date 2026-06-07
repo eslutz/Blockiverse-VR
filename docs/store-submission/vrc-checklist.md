@@ -7,6 +7,7 @@
 ## Functional
 
 - [ ] App launches to an interactive state without crashing.
+- [ ] New worlds and menus use canonical ruleset IDs and labels rather than temporary validation vocabulary.
 - [ ] App recovers correctly from headset sleep / proximity-sensor undock.
 - [ ] App handles controller disconnect/reconnect gracefully.
 - [ ] App exits cleanly and does not hang on quit.

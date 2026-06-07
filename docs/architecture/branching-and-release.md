@@ -12,4 +12,6 @@ Blockiverse VR uses trunk-based development.
 
 Release tags must match `v*` and point to commits reachable from `origin/main`. The release workflow must verify ancestry before building or signing release artifacts.
 
+Known-good engineering checkpoint tags use the `kg/...` family and are governed by [Voxel Known-Good Git Tagging Policy](../rulesets/voxel_git_known_good_tagging_policy.md). They are recovery points, not player-facing releases.
+
 The `main` ruleset must require the `Repository checks` status check, require branches to be up to date before merge, require linear history, require conversation resolution, and block force pushes and branch deletion. Do not require approving reviews or CODEOWNERS review while Eric is the only human maintainer.

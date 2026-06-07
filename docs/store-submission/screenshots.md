@@ -7,7 +7,7 @@
 
 - Boot/main interaction scene with the branded startup overlay dismissed.
 - Creative building: active block placement with authored block textures visible.
-- Survival-lite terrain: caves/resources visible from normal player height.
+- Canonical `survival_terrain`: caves/resources visible from normal player height.
 - Multiplayer LAN: two players connected with the session status visible.
 - Comfort/UI: comfort menu or block menu readable in headset.
 

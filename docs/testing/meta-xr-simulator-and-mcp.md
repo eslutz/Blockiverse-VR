@@ -1,6 +1,8 @@
 # Meta XR Simulator And MCP Validation
 
-This document records the local M3 validation tooling for Blockiverse VR. The setup is global on Eric's machine so any Codex workspace can use the same Horizon Debug Bridge, Unity MCP relay, and Meta XR Simulator validation flow.
+This document records local validation tooling for Blockiverse VR. The setup is global on Eric's machine so any Codex workspace can use the same Horizon Debug Bridge, Unity MCP relay, and Meta XR Simulator validation flow.
+
+The smoke script below is historical evidence from the earlier temporary validation world. New simulator checks should use the canonical rulesets in `../rulesets/`, especially `survival_terrain`, `flat_builder`, `void_builder`, canonical registry IDs, and the unified save schema.
 
 ## Installed Tooling
 
@@ -81,9 +83,9 @@ Use Computer Use for editor-facing validation. Unity MCP may also be used from a
 
 MQDH and physical Touch controller forwarding are only needed when keyboard/mouse input is insufficient for a validation case.
 
-## M3 Survival-Lite Smoke Script
+## Historical Temporary-World Smoke Script
 
-Use this script after each integration PR that changes gameplay, persistence, or VR input:
+Use this script only when validating legacy migration behavior from old temporary saves or fixtures:
 
 1. Start a Survival Lite session from `Boot`.
 2. Verify spawn is safe and generated terrain is visible.
@@ -98,7 +100,7 @@ Use this script after each integration PR that changes gameplay, persistence, or
 11. Save and reload. Verify game mode, inventory, hotbar, vitals, and crate contents persist.
 12. Re-run the relevant Creative Mode smoke check to confirm M2 placement, breaking, hotbar selection, undo, and save/load did not regress.
 
-Record the worktree branch, linked issue, Unity test commands, APK build command if run, simulator screenshots/log paths, and residual risk in the PR and linked GitHub issue.
+For new gameplay, record the worktree branch, linked issue, affected rulesets, Unity test commands, APK build command if run, simulator screenshots/log paths, and residual risk in the PR and linked GitHub issue.
 
 ## Sources
 

@@ -4,16 +4,18 @@
 
 Accepted
 
+Current design authority for audio, haptics, VFX, multiplayer feedback, and Quest effect budgets now lives in [Voxel Audio and VFX Ruleset](../rulesets/voxel_audio_vfx_ruleset.md). This ADR remains the historical decision record for the first performance instrumentation and generated feedback implementation.
+
 ## Decision
 
 Implement the M6 performance, store-readiness, and audio/haptics workstreams as follows:
 
-- **Performance instrumentation.** Wrap the hot CPU paths (survival-lite world generation,
+- **Performance instrumentation.** Wrap the hot CPU paths (canonical world generation,
   chunk meshing, and renderer rebuilds) with named `Unity.Profiling.ProfilerMarker`s. Add an
   engine-free `FrameStatisticsSampler` in Core for unit-testable frame timing, surfaced through
   a local-only `PerformanceStatsOverlay` that reuses the existing `VoxelRenderStats` and the
   `BlockiverseLog` `Performance` category. The overlay never renders in release builds.
-- **CPU performance proxy.** Cover the largest shipped world (default survival-lite preset)
+- **CPU performance proxy.** Cover the largest shipped canonical world preset
   with an EditMode stress test that generates and meshes every chunk and asserts the work is
   deterministic and bounded. On-headset frame-rate evidence is recorded separately under
   `docs/testing/performance` using a report template.

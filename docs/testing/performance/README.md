@@ -15,12 +15,12 @@ Minimum internal target:
   frame time, chunk count, triangle count, and the rebuild queue depth. It also logs a
   periodic `Performance` summary through `BlockiverseLog` for Quest log capture.
 - **ProfilerMarkers:** generation and meshing are wrapped with named markers
-  (`Blockiverse.SurvivalLiteWorldPreset.Generate`,
+  (canonical world generation,
   `Blockiverse.VoxelWorldRenderer.RebuildAll` / `RebuildDirty` / `RebuildChunk`,
   `Blockiverse.ChunkMeshBuilder.Build`) for the Unity Profiler and OVR Metrics Tool.
 - **CPU proxy tests:** `WorldGenerationStressEditModeTests` generates and meshes the full
-  default survival-lite world (the largest world the game ships) and asserts the work is
-  deterministic and bounded. Run it before each headset capture.
+  canonical `survival_terrain` world or the largest currently shipped canonical preset and
+  asserts the work is deterministic and bounded. Run it before each headset capture.
 
 ## Recording a capture
 

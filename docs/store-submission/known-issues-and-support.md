@@ -12,9 +12,11 @@
 ## Known limitations (current build)
 
 - Multiplayer is **local LAN only**; there is no cloud-hosted/online matchmaking yet
-  (cloud private worlds are a post-release roadmap item, M8).
+  (cloud private worlds are a later roadmap item).
 - Worlds are bounded (fixed dimensions), not infinite/streaming terrain.
 - Voice communication uses Meta Quest party chat; there is no in-app voice.
+- Gameplay, save, environment, vegetation, structures, multiplayer, and feedback behavior
+  should match the canonical rulesets under `../rulesets/`.
 - Interaction, movement, inventory, and crafting sounds are generated original cues in
   `Assets/Blockiverse/Audio` (Git LFS). Regenerate the current cue set by running
   `python3 scripts/audio/generate-m6-audio.py`.

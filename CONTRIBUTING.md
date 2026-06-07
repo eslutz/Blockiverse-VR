@@ -20,8 +20,9 @@ Pull requests should include:
 - Test evidence
 - Manual validation steps when VR, performance, save/load, networking, signing, or store behavior changes
 - Linked issue or roadmap item
+- Links to affected rulesets in `docs/rulesets/` when gameplay, UI, world generation, save data, multiplayer, audio/VFX, or design behavior changes
 
-Incomplete systems should stay behind feature flags, disabled scenes, or clearly isolated test scenes so `main` remains playable.
+Incomplete systems should stay behind feature flags, disabled scenes, or clearly isolated test scenes so `main` remains playable. New gameplay and UI vocabulary should use canonical ruleset IDs; legacy names are migration inputs only.
 
 ## Assets
 

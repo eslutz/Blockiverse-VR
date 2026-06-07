@@ -2,73 +2,142 @@
 
 **Working title:** Blockiverse VR
 **Target platform:** Meta Quest 3 / Quest 3S
-**Input:** Quest controllers only; no hand-tracking-only mode
-**Engine:** Unity 6 Personal
+**Input:** Quest controllers only; no hand-tracking-only mode for the initial target
+**Engine:** Unity 6
 **Language:** C#
-**Primary gameplay scope:** Creative-mode voxel building + survival-lite with health, resources, crafting, inventory, terrain, and caves
-**Later expansion:** Full survival mode with mobs/day-night and cloud-hosted persistent private worlds
-**Multiplayer:** Basic LAN co-op for two players first; cloud-hosted persistent private worlds are a post-release upgrade
-**Player representation:** Use each player's Meta Horizon avatar for local and remote players; do not build a game-specific custom avatar creator
-**NPC representation:** Use original blocky voxel characters for in-game NPCs/mobs; do not use player Meta Horizon avatars for NPCs
-**World model:** Bounded test world first; no infinite terrain initially
-**Primary release path:** Meta Horizon Store / Early Access / release channels
-**Fallback release path:** Signed APKs through GitHub Releases for sideloading if store submission is blocked or delayed
-**Repo model:** Public GitHub repo, trunk-based development, protected `main`, short-lived feature branches, releases from `main` only
+**Rendering:** URP, original voxel art assets, Quest-readable atlas/material pipeline
+**XR stack:** OpenXR, Unity OpenXR: Meta, Meta XR SDK, Unity Input System, XR Interaction Toolkit where it fits
+**Networking stack:** Netcode for GameObjects + Unity Transport
+**Primary game target:** Ruleset-defined voxel survival/creative game using the canonical Blockiverse world, registries, menus, save schema, environment, structures, vegetation, multiplayer, and audio/VFX rulesets
+**World model:** Bounded canonical worlds first; world presets are `survival_terrain`, `flat_builder`, and `void_builder`
+**Player representation:** Meta Horizon avatars for local and remote players; original voxel characters for NPCs/mobs
+**Multiplayer:** LAN host-authoritative co-op first; cloud-hosted private worlds are a later upgrade
+**Voice:** Meta Quest party chat; no in-app voice chat in the initial multiplayer scope
+**Release path:** Meta release channels and Meta Horizon Store / Early Access; signed APK fallback through GitHub Releases
+**Repo model:** Public GitHub repo, trunk-based development, protected `main`, short-lived branches, releases from `main` only
+**Known-good rollback model:** Annotated `kg/...` checkpoint tags after stable implementation states, separate from release `v*` tags
 
 ---
 
-## 1. Engine, licensing, and platform decision
+## 1. Source of truth
 
-Use **Unity 6 Personal + C# + URP + OpenXR + Unity OpenXR: Meta + Meta XR SDK + Netcode for GameObjects**.
+The canonical target is defined by the Blockiverse ruleset documents. Existing code may be reused where it already matches these rules, especially VR locomotion, XRI menu interaction, block targeting, host-authoritative command patterns, save/versioning hooks, and generated original audio cues. The older temporary validation world, temporary block names, and reduced starter registries should be replaced or migrated to the canonical ruleset-defined world.
 
-Unity is the strongest fit for this project because:
+### Canonical design documents
 
-- The project should use C#.
-- Quest support is mature.
-- Unity has first-party and widely adopted tooling for XR, Android builds, testing, and CI/CD.
-- The personal/free tier is suitable for a personal project unless revenue/funding grows past Unity's threshold.
+- [voxel_survival_ruleset.md](../rulesets/voxel_survival_ruleset.md)
+- [voxel_creative_ruleset.md](../rulesets/voxel_creative_ruleset.md)
+- [voxel_survival_menus.md](../rulesets/voxel_survival_menus.md)
+- [voxel_world_environment_effects.md](../rulesets/voxel_world_environment_effects.md)
+- [voxel_structure_generation_ruleset.md](../rulesets/voxel_structure_generation_ruleset.md)
+- [voxel_biome_vegetation_ruleset.md](../rulesets/voxel_biome_vegetation_ruleset.md)
+- [voxel_save_versioning_schema.md](../rulesets/voxel_save_versioning_schema.md)
+- [voxel_multiplayer_networking_ruleset.md](../rulesets/voxel_multiplayer_networking_ruleset.md)
+- [voxel_audio_vfx_ruleset.md](../rulesets/voxel_audio_vfx_ruleset.md)
+- [voxel_git_known_good_tagging_policy.md](../rulesets/voxel_git_known_good_tagging_policy.md)
+- [voxel_implementation_alignment_matrix.md](../rulesets/voxel_implementation_alignment_matrix.md)
 
-As of the sources referenced when this plan was created:
-
-- **Unity Personal** is free for customers with up to **$200,000 USD in annual revenue and funding**.
-- Above that, **Unity Pro** is required. Unity listed 2026 Pro pricing as **$2,310/year per seat prepaid yearly** or **$210/month per seat paid monthly**.
-- Unity states the old Runtime Fee was canceled and does not apply to Unity 6 or any other Unity games.
-- **Unreal Engine still exists** and is excellent, but it is not the best fit here because its primary development model is C++ and Blueprints rather than C#.
-- For games, Unreal's current model is generally free until the product exceeds **$1M USD lifetime gross revenue**, then a **5% royalty applies only to gross revenue above $1M**.
-
-Before any serious commercial release, re-check current Unity, Unreal, Meta, and store policy terms.
-
-### Recommended technical stack
+### Implementation policy
 
 ```text
-Unity 6 Personal
+The rulesets define the game.
+The repo implementation conforms to the rulesets.
+Temporary validation blocks, items, presets, and registries are migration inputs only.
+New gameplay code should use stable string IDs from the canonical registries.
+Backward compatibility is handled by save migrations, not by preserving temporary systems as permanent design.
+```
+
+---
+
+## 2. Product target
+
+### Platform
+
+```text
+Primary: Meta Quest 3 and Quest 3S
+Input: Quest controllers
+Unsupported initially: hand-tracking-only mode, non-VR desktop mode, mobile, PC VR
+```
+
+### Game modes
+
+```text
+survival
+creative
+```
+
+### World presets
+
+```text
+survival_terrain
+  Primary ruleset-defined survival world.
+  Includes terrain, caves, resources, biome vegetation, structures, day/night, weather, and persistence.
+
+flat_builder
+  Creative-friendly flat world with canonical block/item catalog.
+  Used for building, quick validation, and tutorials.
+
+void_builder
+  Empty creative construction space with safety bounds and explicit spawn platform.
+  Used for large creative builds and structure template testing.
+```
+
+### Initial playable target
+
+```text
+Quest-playable VR voxel world
+Ruleset-defined terrain/block/resource registry
+Creative placement/removal using refined controller movement and block interaction
+Survival resource mining, inventory, tools, crafting, and storage
+Day/night and environment effects
+Biome vegetation and generated structures
+Versioned save/load with migration support
+LAN host-authoritative co-op
+Original audio, haptics, and lightweight VFX feedback
+Quest-readable menus and menu flows
+```
+
+### Later expansion target
+
+```text
+Original voxel NPCs and mobs
+Combat, armor, and deeper progression
+Expanded biome and structure variety
+Cloud-hosted persistent private worlds
+Owner/member invite access
+Cloud save, spin-down, spin-up, and reconnect flow
+```
+
+---
+
+## 3. Engine, licensing, and platform decision
+
+Use:
+
+```text
+Unity 6
 C#
-Universal Render Pipeline (URP)
+Universal Render Pipeline
 OpenXR
 Unity OpenXR: Meta
 Meta XR Core SDK
-Meta Avatars SDK when multiplayer player representation starts
+Meta XR Platform SDK when entitlement/identity/store features are needed
+Meta Avatars SDK for player representation
 Unity Input System
-XR Interaction Toolkit, if it fits the final interaction model
+XR Interaction Toolkit for locomotion, interaction rays, UI input, and teleport where appropriate
 Netcode for GameObjects
 Unity Transport
-Optional later: cloud-hosted private world service for persistent online worlds
-Meta XR Platform SDK when Meta Horizon Avatars, entitlement, identity, or store platform features are needed
 ```
 
-### Why not Godot for this version?
-
-Godot is attractive because it is fully free and open source. However, for this project's constraints — C#, standalone Quest support, CI/CD, test tooling, XR maturity, and store submission path — Unity is the lower-risk choice.
+Before commercial release, re-check current Unity, Meta, store, SDK, and licensing terms.
 
 ---
 
-## 2. Naming, IP, and repo visibility
+## 4. Naming, IP, and asset policy
 
-Use **Blockiverse VR** as the working title.
+Use original Blockiverse names, textures, icons, UI, audio, creatures, structures, and branding.
 
-Avoid using **BlockCraft World** as the primary name. It is likely to be crowded with similar app names and could create brand/search confusion.
-
-This project should be visually inspired by voxel sandbox games, but it must not copy Minecraft's protected identity. Do not use:
+Do not use:
 
 ```text
 Minecraft name
@@ -85,159 +154,87 @@ Minecraft item names as distinctive names
 Minecraft fonts or branding
 ```
 
-A blocky, colorful, voxel sandbox style is fine. The game should have original block names, item names, textures, UI, audio, creatures, and branding.
-
-### Repo visibility recommendation
-
-Use a **public GitHub repo** because showcasing the work matters.
-
-Recommended licensing posture at the start:
-
-```text
-Repo visibility: public
-Code license: source-available / All Rights Reserved initially
-Third-party assets: only included if redistribution is allowed
-Secrets/keystores/API credentials: never committed
-```
-
-A source-available public repo gives portfolio value while reducing the chance that someone can freely commercialize the code. The project can later switch to MIT, Apache-2.0, GPL, or another open-source license if desired.
+A colorful, blocky, voxel sandbox style is acceptable. The final game identity must remain original.
 
 ---
 
-## 3. Product target
+## 5. Development principles
 
-### Platform
-
-```text
-Primary: Meta Quest 3 and Meta Quest 3S
-Input: Quest controllers
-Unsupported initially: hand-tracking-only mode, non-VR desktop mode, mobile, PC VR
-```
-
-### Gameplay scope
-
-Initial playable product:
-
-```text
-Creative building
-Bounded voxel terrain
-Caves
-Resources
-Inventory
-Crafting
-Health
-Basic survival-lite resource loop
-Two-player LAN co-op multiplayer
-Save/load
-Original placeholder-to-polished voxel art
-```
-
-### Player and character representation
-
-Player identity and representation should come from Meta Horizon:
-
-```text
-Local player uses their Meta Horizon avatar in single-player and multiplayer, including first-person arms, hands, and clothing
-Remote multiplayer players are shown as their Meta Horizon avatars
-No custom Blockiverse-only player avatar creator
-No custom player profile/identity system unless required later for non-Meta platforms
-Development-only fallback proxies are allowed before Meta Horizon Avatar integration is complete
-```
-
-In-world non-player characters remain part of Blockiverse's original voxel art direction:
-
-```text
-Friendly NPCs use original blocky voxel character designs
-Hostile mobs use original blocky voxel creature designs
-NPCs/mobs do not use Meta Horizon avatars
-NPCs/mobs must not copy Minecraft-protected names, silhouettes, sounds, or behavior identities
-```
-
-Later expansion:
-
-```text
-Full survival mode
-Mobs
-Day/night cycle
-Deeper progression
-Combat
-Biome expansion
-More recipes
-More multiplayer survival interactions
-Cloud-hosted persistent private worlds
-Owner-scoped member-only invite access
-Automatic cloud world spin-up/spin-down
-```
-
-### Distribution path
-
-Primary:
-
-```text
-Meta Developer Dashboard
-Meta release channels
-Private Alpha/Beta testing
-Meta Horizon Store / Early Access submission
-```
-
-Fallback:
-
-```text
-Signed APKs through GitHub Releases
-Personal sideloading
-Private manual tester distribution where appropriate
-```
-
-The GitHub Release APK fallback should not be used to broadly bypass legitimate store review concerns such as safety, privacy, or policy violations.
+1. **Ruleset-first implementation.** Gameplay systems must implement the canonical ruleset docs.
+2. **Preserve what works.** Keep refined VR movement, XRI interaction, and block editing behavior where it supports the canonical game.
+3. **Replace temporary registries.** Temporary blocks, items, and world presets are mapped through migrations into canonical IDs.
+4. **Pure C# where practical.** World data, block registries, crafting, inventory, save/load, worldgen, command validation, and networking DTOs should be testable without VR hardware.
+5. **Host-authoritative commands.** Block edits, inventory changes, crafting, resource harvests, damage, weather-affecting world events, and structure edits should flow through command objects.
+6. **Quest performance is a feature.** Target stable 72 FPS minimum on Quest 3/3S, with 90 FPS as an optimization goal when feasible.
+7. **VR comfort comes first.** Teleport, snap turn, height reset, readable UI, comfort toggles, and no forced smooth locomotion.
+8. **Trunk-based development.** `main` remains releasable. Feature branches stay short-lived.
+9. **Known-good tags.** After stable checkpoints, create annotated `kg/...` tags so rollback is easy.
+10. **Original assets only.** Do not copy protected assets, sounds, names, or silhouettes.
 
 ---
 
-## 4. Development principles
+## 6. Git and release workflow
 
-1. **Build vertical slices.** Each phase ends with a playable or verifiable deliverable.
-2. **Keep core game logic in pure C#.** Voxel storage, world generation, inventory, crafting, save/load, and command validation should be testable without VR hardware.
-3. **Treat VR performance as a feature.** Target stable 72 FPS minimum on Quest 3/3S, with 90 FPS as an optimization goal where feasible.
-4. **Design for multiplayer early.** Even single-player block edits should use command objects that can later be synchronized over the network.
-5. **Keep assets original.** The game can be blocky and voxel-based, but not a Minecraft asset or branding clone.
-6. **Use platform identity for players.** Player bodies should be Meta Horizon avatars in multiplayer; reserve original voxel character design for NPCs and mobs.
-7. **Use trunk-based development.** Keep `main` releasable. Use short-lived feature branches only. Cut releases from `main`.
+### Branch model
 
----
+```text
+main          protected, always releasable
+feature/*     short-lived feature branches
+fix/*         short-lived bug-fix branches
+chore/*       short-lived maintenance branches
+spike/*       short-lived exploratory branches
+hotfix/*      short-lived urgent fixes
+```
 
-# 5. GitHub repository setup
+Do not use a long-lived `develop` branch.
 
-## Phase 0 — GitHub repo, governance, and roadmap foundation
+### Release tags
 
-### Deliverable
+```text
+v0.1.0
+v0.2.0
+v1.0.0
+```
 
-A public GitHub repository with repo rules, project board, labels, milestones, issue hierarchy, and first backlog.
+Release tags are player-facing. They must point to commits reachable from `origin/main`.
 
-### Create the repo
+### Known-good checkpoint tags
 
-Use GitHub CLI:
+```text
+kg/20260606-before-world-ruleset-migration
+kg/20260606-canonical-registry-loaded
+kg/20260606-survival-terrain-generates
+kg/20260606-creative-build-loop-canonical
+kg/20260606-save-schema-migration-stable
+kg/20260606-lan-coop-canonical-world-sync
+```
+
+Known-good tags are internal checkpoints. They should be annotated and pushed after validation.
+
+Example:
 
 ```bash
-gh auth login
-gh auth refresh -s project
-
-gh repo create <OWNER>/blockiverse-vr \
-  --public \
-  --description "VR voxel sandbox prototype for Meta Quest 3/3S built with Unity and C#." \
-  --gitignore Unity \
-  --clone
+git tag -a kg/20260606-canonical-registry-loaded \
+  -m "Known good: canonical registry loads, tests pass, old temporary IDs migrate"
+git push origin kg/20260606-canonical-registry-loaded
 ```
 
-Create the GitHub Project:
+### Checkpoint rule
 
-```bash
-cd blockiverse-vr
+Create a `kg/...` tag after each state that is:
 
-gh project create \
-  --owner <OWNER> \
-  --title "Blockiverse VR Roadmap"
+```text
+Tested
+Playable or objectively verifiable
+Worth returning to
+Before a risky migration, refactor, rendering change, networking change, save migration, or Quest performance change
 ```
 
-### Repo files to add
+---
+
+## 7. Repository setup and structure
+
+### Repo files
 
 ```text
 README.md
@@ -247,12 +244,15 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 SECURITY.md
 CHANGELOG.md
+AGENTS.md
 docs/
   architecture/
   adr/
+  roadmap/
   testing/
   store-submission/
   art-direction/
+  rulesets/
 .github/
   ISSUE_TEMPLATE/
   workflows/
@@ -261,223 +261,39 @@ docs/
 .gitignore
 ```
 
-### Unity-specific Git settings
-
-Use Git LFS for binary assets.
-
-`.gitattributes`:
-
-```text
-*.png filter=lfs diff=lfs merge=lfs -text
-*.psd filter=lfs diff=lfs merge=lfs -text
-*.blend filter=lfs diff=lfs merge=lfs -text
-*.fbx filter=lfs diff=lfs merge=lfs -text
-*.wav filter=lfs diff=lfs merge=lfs -text
-*.mp3 filter=lfs diff=lfs merge=lfs -text
-*.apk filter=lfs diff=lfs merge=lfs -text
-
-*.cs text eol=lf
-*.asmdef text eol=lf
-*.shader text eol=lf
-*.mat text eol=lf
-*.prefab text eol=lf
-*.unity text eol=lf
-*.asset text eol=lf
-*.meta text eol=lf
-```
-
-### Branching and release model
-
-Use **trunk-based development**.
-
-Branches:
-
-```text
-main          protected, always releasable
-feature/*     short-lived feature branches
-fix/*         short-lived bug-fix branches
-chore/*       short-lived maintenance branches
-spike/*       short-lived exploratory branches
-hotfix/*      short-lived urgent fixes, merged back to main quickly
-```
-
-Do **not** create or use a long-lived `develop` branch.
-
-Do **not** use long-lived release branches.
-
-Rules:
-
-```text
-All production releases are cut from main.
-All release tags must point to commits on main.
-Feature branches should stay small and short-lived.
-Pull requests merge into main after CI passes.
-main should always be playable or quickly repairable.
-Use feature flags or disabled scenes for incomplete systems.
-Use draft PRs for work in progress.
-Prefer squash merge or rebase merge to keep main readable.
-```
-
-Recommended repository ruleset for `main`:
-
-```text
-Require pull request before merge
-Require passing CI
-Require Repository checks status
-Require no unresolved review comments
-Require linear history or squash merge
-Disallow force pushes
-Disallow branch deletion
-Do not use classic branch protection for main
-Do not require approving reviews or CODEOWNERS review while Eric is the only human maintainer
-```
-
-Release flow:
-
-```text
-1. Merge validated work to main.
-2. Confirm main is green.
-3. Create a version tag from the main commit:
-   git tag v0.1.0
-   git push origin v0.1.0
-4. GitHub Actions verifies the tag is on main.
-5. Release workflow builds, signs, tests, and uploads artifacts.
-6. GitHub Release is created from the tag.
-7. Optional: same signed artifact is uploaded to a Meta release channel.
-```
-
-### GitHub Project fields
-
-Create fields:
-
-```text
-Status: Backlog, Ready, In Progress, In Review, Blocked, Done
-Type: Epic, Feature, Story, Task, Bug, Tech Debt, Spike
-Phase: 0-20
-Priority: P0, P1, P2, P3
-Area: Repo, Engine, VR, Voxel, Terrain, Creative, Survival, Multiplayer, Art, Audio, UI, CI/CD, Store, QA
-Milestone: M0 Bootstrap, M1 VR Slice, M2 Creative, M3 Survival-Lite, M4 Art and Texture Assets, M5 Multiplayer, M6 Store Candidate, M7 Full Survival
-Risk: Low, Medium, High
-Target Release: Prototype, Alpha, Beta, RC, Store
-Effort: XS, S, M, L, XL
-```
-
-### Validation
-
-This phase is done when:
-
-```text
-Repo is public.
-No develop branch exists.
-main is protected.
-Project exists.
-Labels, milestones, fields, and issue templates exist.
-At least one epic issue exists for every roadmap phase.
-README explains project goals, target headset, engine, and license.
-Branch policy says releases are cut from main only.
-No secrets or generated keystores are present in git history.
-```
-
----
-
-# 6. Suggested GitHub epics
-
-Create these as parent issues, then add feature/story sub-issues beneath them.
-
-```text
-EPIC-00 Repo, project management, CI/CD foundation
-EPIC-01 Unity/Quest project bootstrap
-EPIC-02 VR player controller and interaction foundation
-EPIC-03 Voxel data model and block registry
-EPIC-04 Bounded terrain, caves, and resources
-EPIC-05 Chunk rendering and mesh optimization
-EPIC-06 Creative-mode building loop
-EPIC-07 Inventory, hotbar, resources, and crafting
-EPIC-08 Survival-lite health and resource loop
-EPIC-09 Save/load and world versioning
-EPIC-10 Multiplayer co-op foundation
-EPIC-11 Multiplayer world synchronization
-EPIC-12 Art generation, audio, and UI polish
-EPIC-13 Performance, profiling, and Quest validation
-EPIC-14 Meta release pipeline and store readiness
-EPIC-15 Full survival expansion: mobs, day/night, progression
-EPIC-16 Cloud-hosted persistent private worlds
-```
-
-Each issue should include:
-
-```text
-Goal
-Player-facing outcome
-Technical scope
-Out of scope
-Acceptance criteria
-Test plan
-Manual validation steps
-Dependencies
-```
-
----
-
-# 7. Roadmap overview
-
-| Milestone | Goal | Result |
-|---|---|---|
-| M0 Bootstrap | Repo, Unity project, CI, basic Quest build | Project is buildable and testable |
-| M1 VR Slice | Player can stand in VR, move, point, select, and interact | Quest 3/3S vertical slice |
-| M2 Creative | Bounded voxel world, break/place blocks, save/load | Playable creative prototype |
-| M3 Survival-Lite | Terrain, caves, resources, inventory, crafting, health | Solo survival-lite loop |
-| M4 Art and Texture Assets | Authored art/texture assets, renderer integration, provenance, and Quest visual validation | Visually readable world using original committed assets |
-| M5 Multiplayer | Two-player join/edit foundation | Father/daughter co-op |
-| M6 Store Candidate | Performance, privacy, signing, release channels, metadata | Meta submission candidate |
-| M7 Full Survival | Original voxel NPCs/mobs, day/night, hostile encounters, progression | Later expansion |
-| M8 Cloud Private Worlds | Cloud-hosted persistent owner/member private worlds | Post-release online multiplayer upgrade |
-
----
-
-# 8. Phase-by-phase execution plan
-
-## Phase 1 — Unity project bootstrap
-
-### Deliverable
-
-A Unity 6 project that opens cleanly, targets Quest 3/3S, and has a minimal empty VR scene.
-
-### Scope
-
-Use:
-
-```text
-Unity 6.1+ / current Unity 6 LTS
-Universal 3D / URP template
-C#
-OpenXR
-Unity OpenXR: Meta
-Meta XR Core SDK
-Meta Avatars SDK later, when multiplayer player representation starts
-Meta XR Platform SDK later, when Meta Horizon Avatars, entitlement, identity, or store platform features are needed
-Input System
-XR Interaction Toolkit, if it fits the controller interaction model
-```
-
-### Repo structure
+### Unity project structure
 
 ```text
 Assets/
   Blockiverse/
     Art/
+      Textures/
+      Sprites/
+      Materials/
     Audio/
-    Materials/
+      SFX/
+      Ambience/
+      Music/
     Prefabs/
+      Gameplay/
+      Networking/
+      UI/
+      VR/
     Scenes/
     Scripts/
       Core/
       Voxel/
       WorldGen/
+      Environment/
+      Structures/
+      Vegetation/
       Gameplay/
-      VR/
-      Networking/
+      Survival/
+      Creative/
       Persistence/
+      Networking/
+      AudioVfx/
+      VR/
       UI/
       Editor/
     Settings/
@@ -495,279 +311,309 @@ docs/
 Blockiverse.Core
 Blockiverse.Voxel
 Blockiverse.WorldGen
+Blockiverse.Environment
+Blockiverse.Structures
+Blockiverse.Vegetation
+Blockiverse.Survival
+Blockiverse.Creative
 Blockiverse.Gameplay
 Blockiverse.Persistence
-Blockiverse.VR
 Blockiverse.Networking
+Blockiverse.AudioVfx
+Blockiverse.VR
 Blockiverse.UI
 Blockiverse.Editor
 Blockiverse.Tests.EditMode
 Blockiverse.Tests.PlayMode
 ```
 
-### Tests
+---
+
+## 8. Roadmap overview
+
+| Milestone | Goal | Result |
+|---|---|---|
+| M0 | Repo, Unity, CI, ruleset docs, and rollback policy | Project is buildable, documented, and checkpointable |
+| M1 | Quest VR foundation | Player movement, controller input, UI interaction, and block targeting are comfortable |
+| M2 | Canonical voxel core and registries | Block/item/tool/resource IDs match the ruleset-defined game |
+| M3 | Canonical world generation | `survival_terrain`, `flat_builder`, and `void_builder` replace temporary validation worlds |
+| M4 | Environment, vegetation, and structures | Day/night, weather, biome vegetation, and generated structures exist in the canonical world |
+| M5 | Creative mode | Ruleset-defined creative catalog, placement/removal, world tools, menus, and save support |
+| M6 | Survival systems | Mining, tools, inventory, crafting, stations, farming, containers, and player survival stats |
+| M7 | Save/load, migration, and versioning | Stable save schema, migrations from temporary IDs, autosave, and recovery |
+| M8 | LAN multiplayer | Host-authoritative co-op with canonical world sync, inventories, structures, and environment state |
+| M9 | Audio, VFX, haptics, art polish | Original feedback, ambience, weather effects, block VFX, UI sounds, and Quest-readable assets |
+| M10 | Quest performance and store candidate | Performance budget, release APK, Meta release channels, and store submission package |
+| M11 | Full survival expansion | Original NPCs/mobs, combat, armor, deeper progression, and multiplayer survival interactions |
+| M12 | Cloud private worlds | Owner/member cloud worlds with invite access, persistence, spin-down, and reconnect |
+
+---
+
+# 9. Phase-by-phase execution plan
+
+## Phase 0 — Documentation, repo governance, and known-good policy
+
+### Deliverable
+
+The repo has clear source-of-truth documents, trunk-based workflow, validation commands, and `kg/...` checkpoint tag policy.
+
+### Scope
 
 ```text
-EditMode: empty sanity test passes.
-PlayMode: Boot scene loads without errors.
-Build smoke: Android/Quest build profile can produce a development APK.
+Keep roadmap in docs/roadmap/blockiverse_vr_execution_plan.md
+Add ruleset docs under docs/rulesets/ or equivalent
+Document canonical world replacement strategy
+Document temporary ID migration strategy
+Keep AGENTS.md aligned with roadmap
+Keep CHANGELOG.md updated for material changes
+Use source-available / All Rights Reserved until licensing posture changes
 ```
 
-### Validation
+### Tests / validation
 
 ```text
-Unity opens without package errors.
-Boot scene loads.
-XR rig exists.
-Quest build profile is selected.
-A development APK can be built.
-CI test job runs at least one EditMode and one PlayMode test.
+Markdown files render cleanly.
+No committed secrets, keystores, generated APKs, Unity Library, Temp, Logs, or local credentials.
+Repo rules protect main.
+Release tags use v*.
+Known-good tags use kg/*.
+A pre-migration kg tag exists before replacing old world registries.
+```
+
+### Recommended first checkpoint
+
+```text
+kg/20260606-before-world-ruleset-migration
 ```
 
 ---
 
-## Phase 2 — CI/CD quality gates
+## Phase 1 — Quest VR movement and interaction foundation
 
 ### Deliverable
 
-GitHub Actions validates pull requests and keeps release/store artifact workflow contracts in place. Development APK smoke builds are produced locally while the project uses Unity Personal.
-
-### Preferred approach
-
-Use **GitHub-hosted runners** for CI by default. Local developer machines can keep globally installed Unity tooling for convenience, but GitHub Actions should not depend on Eric's workstation or a self-hosted runner.
-
-Use a hybrid validation model while the project is on Unity Personal:
-
-- GitHub-hosted runners validate repository policy, shell syntax, forbidden files, and release workflow contracts.
-- Unity tests and development APK build smoke checks run locally with Unity Hub Personal and globally installed developer tooling.
-- Pull requests that touch Unity behavior must include local validation evidence before review or merge.
-
-Hosted Unity test/build jobs can be added later through a separate issue if the project adopts a CI-compatible Unity license, Unity Build Automation, or a self-hosted runner with an accepted local license.
-
-### Workflows
-
-```text
-.github/workflows/ci-pr.yml
-  Runs on pull requests targeting main
-  Validates repository shell script syntax
-  Runs forbidden tracked-file checks
-  Verifies release policy docs exist
-
-.github/workflows/release-apk.yml
-  Runs on tags v*
-  Verifies the tag commit is contained in main
-  Builds signed APK
-  Creates GitHub Release
-  Uploads APK, symbols, changelog, checksum
-
-.github/workflows/store-candidate.yml
-  Manual only
-  Requires selected commit/tag from main
-  Builds signed release APK using production keystore
-  Runs store-readiness checklist
-```
-
-### Secrets
-
-```text
-ANDROID_KEYSTORE_BASE64
-ANDROID_KEYSTORE_PASSWORD
-ANDROID_KEY_ALIAS
-ANDROID_KEY_PASSWORD
-META_APP_ID
-UNITY_CLOUD_PROJECT_ID
-```
-
-Current GitHub Actions workflows do not use `UNITY_LICENSE`, `UNITY_EMAIL`, or `UNITY_PASSWORD`. Local Unity validation uses the Unity Personal license accepted in Unity Hub on the developer machine.
-
-### Tests
-
-```text
-CI fails if release tag is not on main.
-CI fails if forbidden files are committed: keystore, .env, credentials, local Unity Library, Temp, Logs.
-CI fails if tracked shell scripts have syntax errors.
-Local validation fails if Unity tests fail.
-Local validation fails if the project cannot build a development APK.
-```
-
-### Validation
-
-```text
-Opening a PR to main runs GitHub-hosted repository checks.
-Before review or merge, run scripts/unity/run-tests.sh locally and post the result.
-Before review or merge, run scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk locally and post the result.
-Tagging v0.1.0 from main creates a GitHub Release with a signed APK.
-Tagging from a non-main commit fails.
-No production signing occurs on PRs from forks.
-```
-
----
-
-## Phase 3 — VR controller locomotion and interaction foundation
-
-### Deliverable
-
-A Quest-playable scene where the player can move, rotate, point at blocks/placeholders, and use controller buttons.
+A Quest-playable scene where the player can move, turn, teleport, point, use VR menus, and target blocks comfortably.
 
 ### Scope
 
 ```text
 Quest 3/3S controller bindings
-Standing/seated calibration
+Unity Input System
+OpenXR Meta tracking
+TrackedPoseDriver with before-render tracking
+XR Interaction Toolkit ray interactors
+Teleport locomotion
 Snap turn
-Smooth turn option, disabled by default
-Teleport locomotion for comfort
-Optional smooth locomotion later
-Dominant-hand ray pointer
-Non-dominant-hand quick menu
+Optional smooth turn with comfort setting
+Height reset
 Controller haptics abstraction
-Comfort vignette option if smooth locomotion is enabled
+World-space VR menus using XRI UI input
+Suppress block editing while UI is targeted
+Dominant-hand block editing toggle
+Void safety handling
+```
+
+### Reuse guidance
+
+```text
+Keep the refined movement implementation if it remains stable.
+Keep native XRI UI interaction where it works.
+Keep controller ray-based block targeting.
+Do not preserve temporary debug UI as final menu design unless it is converted to the menu spec.
 ```
 
 ### Tests
 
 ```text
-EditMode: input action asset loads and required actions exist.
-PlayMode: fake input can trigger select, grab, menu, jump/teleport.
-PlayMode: player rig spawns at safe origin.
-Manual Quest smoke: launch APK, controllers tracked, buttons respond, no hand tracking required.
+EditMode: input actions exist and required bindings load.
+PlayMode: rig spawns safely and menus are reachable.
+PlayMode: UI input and block editing do not conflict.
+PlayMode: teleport, snap turn, height reset, and dominant-hand editing toggle work.
+Manual Quest: launch APK, controllers tracked, menus interactable, movement comfortable.
 ```
 
 ### Validation
 
 ```text
-On Quest 3/3S, player can move and turn.
-Both controllers are tracked.
-Ray pointer can highlight a test cube.
-Menu button opens/closes debug menu.
-No hand tracking dependency exists.
+Quest 3 and Quest 3S can launch to a playable VR scene.
+Player can move and turn without forced smooth locomotion.
+Menus are readable and interactable.
+Block targeting works without interfering with UI.
 ```
 
 ---
 
-## Phase 4 — Pure C# voxel core
+## Phase 2 — Canonical voxel core and registries
 
 ### Deliverable
 
-A testable voxel world model independent of Unity scenes.
+The game loads canonical block, item, tool, resource, terrain, crop, structure, environment, and audio/VFX IDs from ruleset-defined registries.
 
 ### Scope
 
 ```text
-BlockId value type
-BlockDefinition registry
-Block categories: air, terrain, organic, crafted, resource
-Chunk coordinate system
-Bounded world dimensions
-Voxel storage
-Block read/write API
-Block mutation commands
-Deterministic random seed handling
-Basic event stream for block changes
+Stable string IDs for canonical content
+Numeric runtime IDs generated from registry snapshots
+Block categories: air, terrain, stone, resource_node, plant, crafted, fluid
+Item categories: terrain block, resource, tool, food, utility, station, container, fluid container
+Tool classes: HAND, DELVER, SPADE, FELLER, SICKLE, MALLET, CARVER, TILLER
+Harvest tiers 0-7
+Canonical stack sizes
+Canonical block hardness and drop rules
+Legacy temporary ID migration table
+Validation for duplicate IDs and missing mappings
 ```
 
-### Initial block set
-
-Use original names:
+### Canonical block/item direction
 
 ```text
+Use the ruleset names such as:
 Air
+Worldroot
+Deepmantle
+Graystone
+Dark Slate
+Warm Granite
+White Limestone
+Black Basalt
 Meadow Turf
-Loam
-Slate
-Timber
-Leafmass
-Clearstone
-Coalstone
-Copperstone
-Ironstone
-Workbench
-Torchbud
+Loose Loam
+Rootsoil
+Branchwood Log
+Leafmoss
+Reedgrass
+Embercoal Seam
+Rosycopper Bloom
+Paletin Thread
+Rustcore Ore
+Lumen Quartz Cluster
 Storage Crate
+Build Table
+Clay Kiln
+Bellows Forge
+```
+
+### Migration policy
+
+```text
+Temporary validation names such as Loam, Slate, Timber, Leafmass, Clearstone, Coalstone, Copperstone, Ironstone, Workbench, and Torchbud are migrated to canonical equivalents or marked as legacy aliases.
+New saves write only canonical IDs.
+Old saves load through migration hooks.
 ```
 
 ### Tests
 
 ```text
-Unit: block registry rejects duplicate IDs.
-Unit: chunk coordinates map correctly for positive/negative local positions.
-Unit: setting/getting blocks works across chunk boundaries.
-Unit: world bounds reject invalid coordinates.
-Unit: mutation commands are reversible where needed.
-Unit: same seed produces same initial world metadata.
+Unit: registry rejects duplicate stable IDs.
+Unit: all recipes reference valid items.
+Unit: all block drops reference valid items.
+Unit: all tool definitions reference valid materials and classes.
+Unit: legacy temporary IDs migrate to canonical IDs.
+Unit: registry snapshot hash changes when content changes.
 ```
 
 ### Validation
 
 ```text
-All voxel logic tests run without Unity scene loading.
-A debug console command can create a bounded empty world.
-World dimensions are visible in debug UI.
+Canonical registry loads in editor and player.
+Temporary validation registries are not used for new worlds.
+A kg checkpoint is tagged after canonical registry load and migration tests pass.
+```
+
+### Recommended checkpoint
+
+```text
+kg/20260606-canonical-registry-loaded
 ```
 
 ---
 
-## Phase 5 — Bounded terrain and cave generation
+## Phase 3 — Canonical world generation
 
 ### Deliverable
 
-A bounded world with terrain, caves, trees, and resource deposits.
+The game generates canonical `survival_terrain`, `flat_builder`, and `void_builder` worlds from the ruleset-defined worldgen model.
 
 ### Scope
 
 ```text
-Default test world: 128 x 64 x 128 blocks
-Chunk size: 16 x 16 x 16 or 16 x 64 x 16 after profiling
-Seeded heightmap
-Basic biome bands
-Caves using noise/carving
-Resource veins
+Chunk size: 16
+World min/max Y from rulesets
+Bounded world size presets
+Seeded deterministic generation
+Biome temperature/moisture selection
+Terrain layering
+Surface blocks by biome
+Caves
+Fluids
+Resource placement
 Spawn-safe area
-Flat test world preset
-Debug terrain regeneration menu
+Worldroot bottom layer
+Resource abundance tables
+Biome modifiers
+```
+
+### World presets
+
+```text
+survival_terrain
+  Ruleset-defined survival world with terrain, caves, resources, vegetation, environment hooks, and structures.
+
+flat_builder
+  Flat canonical creative world with full creative catalog.
+
+void_builder
+  Empty builder world with safety floor/spawn platform and explicit bounds.
 ```
 
 ### Tests
 
 ```text
-Unit: same seed generates identical terrain.
-Unit: spawn area is always non-lethal and has walkable space.
-Unit: caves do not exceed world bounds.
-Unit: resource distribution stays within configured ranges.
-Integration: generated world contains air, surface, underground, and resource blocks.
-Performance: generation for default world completes under target time on desktop.
+Unit: same seed produces same world.
+Unit: spawn is safe and has headroom.
+Unit: caves do not carve through protected spawn area.
+Unit: resources stay within configured Y ranges and valid host blocks.
+Unit: biome selection is deterministic.
+Integration: generated world contains terrain, stone, resource nodes, caves, and surface vegetation hooks.
+Performance: default survival_terrain generates within desktop budget.
 ```
 
 ### Validation
 
 ```text
-Player spawns in a generated bounded world.
-Terrain has visible height variation.
-Caves exist and are reachable.
-Resources are present.
-A deterministic seed can be shared/replayed.
+New game creates a canonical survival_terrain world.
+Creative can start flat_builder or void_builder.
+Old temporary generation presets are not used for new worlds.
+Seed can be replayed.
+```
+
+### Recommended checkpoint
+
+```text
+kg/20260606-survival-terrain-generates
 ```
 
 ---
 
-## Phase 6 — Chunk mesh rendering
+## Phase 4 — Chunk rendering, authored block visuals, and visual validation
 
 ### Deliverable
 
-The generated voxel world renders efficiently as chunk meshes.
+Canonical worlds render efficiently with original authored voxel art.
 
 ### Scope
 
 ```text
 Chunk mesh builder
-Face culling for hidden faces
-Texture atlas lookup
-Simple material set
-Chunk dirty flag system
-Mesh regeneration queue
-Debug wireframe/chunk boundary toggle
-LOD excluded for now
-Greedy meshing as optimization if needed
+Visible-face generation
+Transparent/air handling
+Texture atlas lookup by canonical block ID
+Authored block texture atlas
+Point-filtered VR-readable textures
+Dirty chunk rebuild queue
+Mesh/collider rebuild throttling
+Material validation
+Debug chunk/stats overlay in development builds only
 ```
 
 ### Tests
@@ -775,610 +621,670 @@ Greedy meshing as optimization if needed
 ```text
 Unit: solid cube mesh has only exterior faces.
 Unit: adjacent solid blocks remove internal faces.
-Unit: transparent/air blocks do not render as solid faces.
-Integration: mutating one block marks only affected chunks dirty.
-PlayMode: generated terrain scene renders without exceptions.
+Unit: transparent and non-solid blocks follow render rules.
+Unit: atlas contains all renderable canonical blocks.
+EditMode: missing or unrelated atlas fails validation.
+PlayMode: generated canonical terrain renders without missing materials.
 ```
 
 ### Validation
 
 ```text
-Bounded world renders on desktop and Quest.
-Chunk rebuild happens after block mutation.
-Debug overlay shows chunk count, triangle count, and rebuild queue.
+No magenta/missing-material blocks.
+Canonical terrain blocks and resources are visually distinct in Quest.
+Chunk rebuilds after block mutation.
 ```
 
 ---
 
-## Phase 7 — Creative-mode block interaction loop
+## Phase 5 — Environment effects
 
 ### Deliverable
 
-Playable creative mode: select block type, break block, place block, undo last action.
+The world has deterministic day/night, lighting rules, cloud coverage, rain, thunderstorms/lightning, fog, and snow.
 
 ### Scope
 
 ```text
-Raycast block targeting
-Face-normal placement
-Break/place controller bindings
+World time state
+Day/night cycle
+Sun/moon light intensity
+Ambient light rules
+Block light interaction
+Cloud coverage
+Rain
+Thunderstorms
+Lightning strike validation
+Fog
+Snowfall
+Snow accumulation
+Weather transitions
+Environment presets: normal, clear_builder, storm_test, winter_test
+Environment save state
+Audio/VFX hooks for weather and time-of-day
+```
+
+### Tests
+
+```text
+Unit: world time advances deterministically.
+Unit: light level changes match time-of-day curve.
+Unit: weather transitions obey configured probabilities and cooldowns.
+Unit: snow only accumulates in valid cold conditions.
+Unit: lightning cannot strike protected/invalid targets.
+Integration: environment state saves and loads.
+```
+
+### Validation
+
+```text
+Day/night visibly changes the world.
+Rain and snow are readable but not overwhelming in VR.
+Storms produce audio/VFX hooks.
+Environment presets are selectable from world settings or debug tools.
+```
+
+---
+
+## Phase 6 — Biome vegetation
+
+### Deliverable
+
+Canonical biomes contain vegetation according to the vegetation ruleset.
+
+### Scope
+
+```text
+Tree variants
+Groundcover
+Reedgrass
+Berrybushes
+Grain stalks
+Biome vegetation density
+Saplings
+Regrowth
+Leaf decay
+Plant harvesting
+Weather interactions
+Structure integration
+Spawn vegetation guarantees
+Creative vegetation placement tools
+Vegetation save hooks
+```
+
+### Tests
+
+```text
+Unit: vegetation placement is deterministic per seed.
+Unit: vegetation respects valid surface/biome/water rules.
+Unit: spawn area remains safe.
+Unit: regrowth timers save/load correctly.
+Unit: leaf decay does not remove protected/generated structure blocks incorrectly.
+```
+
+### Validation
+
+```text
+Biomes read visually different.
+Plants and trees provide correct resources.
+Vegetation does not block spawn or essential paths.
+```
+
+---
+
+## Phase 7 — Structure generation
+
+### Deliverable
+
+The canonical world includes deterministic generated structures and structure-aware persistence.
+
+### Scope
+
+```text
+Structure templates
+Placement validation
+Terrain fitting
+Structure categories
+Path/connector rules
+Loot tables
+Containers and stations
+Block masks
+Structure IDs and instance IDs
+Persistence hooks
+Environment interaction hooks
+Creative structure tools
+```
+
+### Initial structure targets
+
+```text
+Ruin
+Waypost
+Cabin shell
+Cave shrine
+Ore marker
+Bridge/path segment
+Small campsite
+```
+
+### Tests
+
+```text
+Unit: structures place only on valid terrain.
+Unit: structure placement is deterministic.
+Unit: no structure overlaps protected spawn unless explicitly allowed.
+Unit: loot tables reference valid canonical items.
+Unit: block masks protect intended content.
+Integration: structure instances save/load and do not duplicate.
+```
+
+### Validation
+
+```text
+Generated structures appear naturally.
+Structures use canonical blocks and containers.
+Structure loot does not break progression.
+```
+
+---
+
+## Phase 8 — Creative mode
+
+### Deliverable
+
+Creative mode implements the ruleset-defined catalog, placement/removal, world tools, menus, and save behavior.
+
+### Scope
+
+```text
+Unlimited catalog access
 Creative hotbar
-Block picker menu
-Placement preview ghost
-Range limit
-Undo/redo command history for local play
-Haptic feedback
-Basic sound placeholders
+Block picker
+Search/category filter
+Placement preview
+Break/place/remove
+Undo/redo
+World edit tools
+Structure tools
+Vegetation tools
+Environment controls
+Time/weather controls
+No survival resource consumption
+No durability loss
+Optional creative flight only if comfort-tested and explicitly enabled
+VR-safe build limits
+Canonical save metadata
 ```
 
 ### Tests
 
 ```text
-Unit: placement computes correct adjacent coordinate from hit face.
+Unit: creative placement uses canonical block IDs.
 Unit: cannot place outside world bounds.
-Unit: cannot place into player collision volume.
-Unit: undo restores previous block state.
-PlayMode: fake raycast can break/place expected block.
-PlayMode: hotbar selection changes active block.
-Smoke: Quest player can build a small structure.
+Unit: cannot place into player collision volume unless no-clip/admin mode is enabled.
+Unit: undo/redo restores block state.
+PlayMode: raycast placement and removal work in VR.
+PlayMode: creative catalog menu selects canonical items.
 ```
 
 ### Validation
 
 ```text
-Player can build, remove, and change block types in VR.
-Placement preview matches final block location.
-No accidental self-trapping without a warning/escape.
-Creative mode can be tested in under two minutes.
+Player can build in flat_builder and void_builder.
+Player can edit survival_terrain in creative mode when allowed.
+Menus match the menu spec.
+Creative saves use canonical schema.
+```
+
+### Recommended checkpoint
+
+```text
+kg/20260606-creative-build-loop-canonical
 ```
 
 ---
 
-## Phase 8 — Save/load and world versioning
+## Phase 9 — Survival resources, tools, inventory, and crafting
 
 ### Deliverable
 
-Worlds can be saved, loaded, deleted, and versioned.
+Survival mode implements mining, tools, drops, inventory, crafting, containers, stations, farming, and progression according to the survival ruleset.
 
 ### Scope
 
 ```text
-World metadata
-Seed
-Changed block delta storage
-Inventory state
-Player spawn transform
-Versioned save schema
-Migration hooks
-Autosave
-Manual save
-Corruption-safe write: temp file then atomic replace
-Debug save browser
-```
-
-### Tests
-
-```text
-Unit: save then load reproduces block changes.
-Unit: corrupted save is detected and does not crash boot.
-Unit: old schema migrates to current schema.
-Integration: terrain seed + deltas reconstruct world.
-PlayMode: save/load returns player to expected world state.
-```
-
-### Validation
-
-```text
-Build a small structure.
-Save.
-Quit.
-Reload.
-Structure persists.
-World version is displayed in debug menu.
-```
-
----
-
-## Phase 9 — Inventory, hotbar, resources, and crafting
-
-### Deliverable
-
-Survival-lite resource loop: collect resources, store items, craft basic blocks/tools.
-
-### Scope
-
-```text
-Inventory slots
-Stacking rules
+Mining formula
+Harvest tiers
+Tool classes
+Tool speed
+Tool durability
+Drop tables
+Resource abundance
+Inventory slots and stack sizes
 Hotbar
-Item definitions
-Resource drops from blocks
-Crafting recipes
-Workbench UI
-Storage crate
-Basic tools: hand, chipper, mallet, pick
-Durability optional
-Creative inventory remains separate
+Containers
+Crafting stations
+Fuel values
+Kiln and forge logic
+Recipe registry
+Farming/tended soil
+Crop growth
+Repair/mending
+Food and recovery items
+```
+
+### Initial progression
+
+```text
+Gather surface pebbles, reed fiber, branchwood, and flint.
+Craft poles, cord, simple tools, and build table.
+Mine embercoal, rosycopper, and paletin.
+Build clay kiln and bellows forge.
+Create bronze, ironroot, deepsteel, and starforged progression.
 ```
 
 ### Tests
 
 ```text
-Unit: item stacks merge/split correctly.
-Unit: inventory rejects over-capacity items.
-Unit: crafting consumes correct inputs and produces expected outputs.
-Unit: invalid recipes fail safely.
-Integration: breaking block grants configured drop.
-PlayMode: controller menu can select and craft item.
+Unit: mining time and harvest success follow block/tool rules.
+Unit: durability cost applies correctly.
+Unit: drops are deterministic under seeded test RNG.
+Unit: inventory stack merge/split rules work.
+Unit: crafting consumes correct inputs and returns containers where required.
+Unit: station and fuel requirements validate correctly.
+Unit: crop growth obeys light/water/soil rules.
 ```
 
 ### Validation
 
 ```text
-Player can collect Timber/Slate/etc.
-Player can craft a Workbench.
-Player can craft and place a Storage Crate.
-Player can switch between creative and survival-lite test modes.
+Player can gather resources.
+Player can craft tools.
+Player can build stations.
+Player can mine progressively deeper resources.
+Player can store items and recover from basic damage/resource needs.
 ```
 
 ---
 
-## Phase 10 — Survival-lite health and resource loop
+## Phase 10 — Menus and VR UI flows
 
 ### Deliverable
 
-A non-combat survival-lite mode with health, stamina/energy optional, fall damage optional, and basic recovery.
+All major menus, actions, transitions, and state flows match the menu specification.
 
 ### Scope
 
 ```text
-Health
-Damage events
-Fall damage, optional after comfort testing
-Food/energy, optional
-Healing item
-Safe respawn
-Resource scarcity tuning
-No hostile mobs yet
-No day/night yet
+Main menu
+New world
+Load world
+World settings
+Mode selection
+Pause menu
+Inventory
+Crafting
+Creative catalog
+Creative world tools
+Environment controls
+Structure/vegetation tools
+LAN multiplayer menu
+Reconnect/session-ended flow
+Settings
+Comfort
+Audio
+Controls
+Save/delete confirmation
+Error dialogs
 ```
 
 ### Tests
 
 ```text
-Unit: damage cannot reduce health below zero.
-Unit: healing respects max health.
-Unit: respawn restores player to safe spawn.
-Integration: fall/damage event updates health UI.
-PlayMode: death/respawn flow works without soft-lock.
+EditMode: menu action handlers exist and route to expected services.
+PlayMode: main menu can create and load worlds.
+PlayMode: pause menu opens from VR controller input.
+PlayMode: LAN host/join/stop actions update UI state.
+PlayMode: UI suppresses world editing while targeted.
+Manual Quest: all menus are readable and interactable.
 ```
 
 ### Validation
 
 ```text
-Player can lose health.
-Player can recover health.
-Player can respawn safely.
-No full survival mobs or day/night are included yet.
+User can start survival or creative mode.
+User can select canonical world presets.
+User can host/join LAN sessions.
+User can recover from host disconnect.
+User can save/load/delete worlds.
+Comfort and audio settings persist.
 ```
 
 ---
 
-## Phase 10.5 — Early visual differentiation and generated creative terrain
+## Phase 11 — Unified save/load, versioning, and migration
 
 ### Deliverable
 
-The current headset validation build renders generated terrain with distinct original block visuals before multiplayer work begins, then the M4 Art and Texture Assets milestone replaces validation-only runtime visuals with committed authored texture assets and fail-fast atlas validation.
+Canonical worlds, players, inventories, environment state, structures, vegetation, and multiplayer host saves persist with versioning and migrations.
 
 ### Scope
 
-This is a moved-up art subset of EPIC-12 so in-headset validation is not blocked by flat terrain or indistinguishable placeholder blocks.
-
 ```text
-Generated survival-lite terrain remains the default validation world.
-Creative editing still works against generated terrain.
-Renderable block types use distinct original visual treatments.
-Committed authored texture assets become the default rendering source once created.
-Missing or unrelated atlas textures fail validation instead of falling back to generated runtime visuals.
-The first block visual pass is documented in the art direction and provenance logs.
-The implementation must not use copied Minecraft textures, names, prompts, or references.
-Audio and haptics remain later EPIC-12 art/audio/UI polish work.
-Store screenshots and final store polish remain EPIC-14/M6 Store Candidate work.
+Save manifest
+Ruleset version metadata
+Registry snapshot hashes
+World metadata
+Dimension files
+Chunk delta or chunk storage
+Block states
+Block entities
+Inventories
+Player state
+Environment state
+Structure state
+Vegetation state
+Autosaves
+Manual saves
+Atomic write
+Backup and corruption recovery
+Migration registry
+Temporary ID migration to canonical IDs
+LAN host-only save ownership
 ```
 
 ### Tests
 
 ```text
-EditMode: creative validation world uses survival-lite terrain settings.
-EditMode: renderable blocks have distinct atlas tiles.
-EditMode: chunk mesh UVs use block-specific atlas coordinates.
-PlayMode: Boot scene still loads with the XR rig and rendered world.
+Unit: save/load reproduces canonical block changes.
+Unit: registry snapshot mismatch is detected.
+Unit: old temporary IDs migrate to canonical IDs.
+Unit: corrupted save is detected and does not crash.
+Unit: environment, structures, vegetation, and inventories persist.
+Integration: terrain seed + changed chunks reconstruct world.
+PlayMode: save/load returns player to expected state.
+PlayMode: LAN host save persists shared edits.
 ```
 
 ### Validation
 
 ```text
-In headset, the player should not spawn onto a flat-only world.
-Terrain height variation should be visible around spawn.
-Meadow Turf, Loam, Slate, Timber, Leafmass, ores, Workbench, Storage Crate, and Torchbud should be easier to tell apart.
-Creative break/place validation still works on the generated world.
+Build a structure, save, quit, reload, and verify it persists.
+Old temporary saves either migrate or fail with clear recovery messaging.
+Host multiplayer saves include canonical metadata.
+```
+
+### Recommended checkpoint
+
+```text
+kg/20260606-save-schema-migration-stable
 ```
 
 ---
 
-## Phase 11 — Multiplayer architecture foundation
+## Phase 12 — LAN multiplayer and canonical world sync
 
 ### Deliverable
 
-Two players can join the same test scene, see each other, and move around.
+Two Quest players can cooperatively play in the same canonical world over LAN.
 
-### Networking choice
-
-Use **Netcode for GameObjects** with Unity Transport.
-
-### Cost strategy
-
-Start with:
+### Networking model
 
 ```text
-LAN host/client for home play: lowest cost
-Relay/Lobby later for remote play or easier join codes
+Host authoritative
+Client requests only
+Host validates commands
+Host owns world generation, mutation validation, save state, environment simulation, structure generation, vegetation simulation, inventory/crafting validation, and survival resource state
+Clients receive snapshots and deltas
+Late joiners receive canonical world metadata and current changed state
 ```
 
 ### Scope
 
 ```text
-Host-authoritative model
-One player hosts
-Second player joins by LAN/IP first
-Join code via Relay later
-Networked Meta Horizon player avatar
-Single-player first-person Meta Horizon avatar body visibility
-Head/controller transform sync
-Player display name/identity from Meta platform data where allowed
-Fallback proxy avatar when Meta Horizon Avatar data is unavailable or fails
-Unexpected host disconnect returns clients to a multiplayer session menu or reconnect option
-Graceful host shutdown persists the multiplayer world before disconnecting clients
-No public matchmaking initially
-Voice chat relies on Meta Quest party chat outside the app
-No in-app voice chat in M5
-No open text chat initially
-No game-specific custom avatar creator
+LAN host
+LAN join by IP
+Session stop
+Reconnect/session-ended UX
+Meta Horizon avatars
+Fallback proxy avatar
+Head/controller pose sync
+Block mutation requests
+Chunk deltas
+Late-join snapshots
+Inventory snapshots
+Shared containers
+Crafting validation
+Resource harvesting
+Environment state sync
+Structure/vegetation state sync
+Host-only save ownership
+Meta Quest party chat for voice
+No in-app voice chat
+No public matchmaking
 ```
 
 ### Tests
 
 ```text
-EditMode: network message DTOs serialize/deserialize.
-PlayMode: host starts successfully.
-PlayMode: client connects to host.
+PlayMode: host starts and client connects.
 PlayMode: two simulated players spawn with unique IDs.
-PlayMode: disconnect cleans up player object.
-PlayMode: avatar sync layer tolerates missing Meta Horizon Avatar data by using a development fallback proxy.
-PlayMode: host disconnect notifies clients and returns them to multiplayer menu/reconnect UX.
-PlayMode: graceful host shutdown saves world state before ending the session.
-Manual: two Quest devices join same LAN session.
-Manual: each Quest user sees the other player as that user's Meta Horizon avatar.
-Manual: players use Meta Quest party chat for voice instead of an in-app voice channel.
+PlayMode: client block mutation is host-validated and broadcast.
+PlayMode: stale competing edits reject deterministically.
+PlayMode: late join receives current world state.
+PlayMode: inventory/crafting/harvest commands are host-authoritative.
+PlayMode: shared container snapshots stay synchronized.
+PlayMode: environment/structure/vegetation state appears in sync payloads.
+Network simulation: active block editing converges at 100ms latency.
+Network simulation: ordered chunk deltas converge under packet loss.
+Manual Quest: two headsets join same LAN session.
 ```
 
 ### Validation
 
 ```text
-You and your daughter can stand in the same bounded test scene.
-Each player sees the other player's Meta Horizon avatar.
-Disconnect/rejoin does not crash the host.
-Host shutdown preserves the shared world.
-Clients receive clear session-ended or reconnect UX when the host is gone.
-No in-app voice chat is required for M5; voice is handled by Meta Quest party chat.
+Two Quest players can join the same canonical world.
+Both players see each other through Meta Horizon avatars or fallback proxies.
+Both players can build and gather resources together.
+World state stays synchronized through extended play.
+Host save/load preserves shared edits.
+Host disconnect produces clear client UX.
+```
+
+### Recommended checkpoint
+
+```text
+kg/20260606-lan-coop-canonical-world-sync
 ```
 
 ---
 
-## Phase 12 — Multiplayer voxel synchronization
+## Phase 13 — Audio, haptics, and VFX
 
 ### Deliverable
 
-Two players can cooperatively break/place blocks, and the world stays synchronized.
+The game has original audio, haptics, and lightweight VR-readable VFX for interactions, UI, environment, structures, vegetation, and survival events.
 
 ### Scope
 
 ```text
-Networked block mutation commands
-Host controls chunk generation, mutation validation, and authoritative sync
-Clients only send chunk and block mutation requests
-Client prediction for local placement preview
-Authoritative correction
-Chunk delta broadcast
-Late-join world state sync
-Simple conflict handling
-Multiplayer save belongs to host
-```
-
-### Tests
-
-```text
-Unit: block mutation command is deterministic.
-Unit: invalid remote placement is rejected.
-Integration: command log replay reconstructs world.
-PlayMode: client places block, host and second client observe same block.
-PlayMode: late joiner receives current world deltas.
-PlayMode: simultaneous edits resolve predictably.
-Network simulation: active block editing remains acceptable at 100ms latency.
-Network simulation: chunk synchronization recovers or corrects predictably under packet loss.
-Profiling: average bandwidth during active block editing is measured and recorded.
-```
-
-### Validation
-
-```text
-Two players can build one shared structure.
-Breaking/placing remains synchronized after 100+ edits.
-Late join shows current world state.
-Host save/load preserves multiplayer edits.
-Chunk authority boundaries are enforced: host owns generation, validation, sync, and save state.
-```
-
----
-
-## Phase 13 — Multiplayer inventory and crafting
-
-### Deliverable
-
-Survival-lite co-op works with basic inventory/resource/crafting synchronization.
-
-### Scope
-
-```text
-Per-player inventory
-Host-authoritative item grants
-Shared world resources
-Optional shared storage crate
-Crafting validation on host
-No item trading UI initially
-No economy
-```
-
-### Tests
-
-```text
-Unit: item grant command validates source block/resource.
-Unit: crafting cannot duplicate items.
-Integration: shared crate state syncs to both clients.
-PlayMode: player A mines resource; only A receives item unless using shared crate.
-PlayMode: crafting result appears consistently.
-```
-
-### Validation
-
-```text
-Two players can gather resources.
-Each has a separate inventory.
-Shared storage crate works.
-Crafting does not duplicate or lose items under normal latency.
-```
-
----
-
-## Phase 14 — Full art asset generation pipeline
-
-### Deliverable
-
-The moved-up block readability pass expands into a coherent voxel art, item, UI, audio, and haptics style.
-
-The first block visual pass now begins in the M4 Art and Texture Assets milestone for validation readability. That milestone is responsible for committed original block texture assets, renderer integration, provenance, asset validation, and Quest headset visual validation. Phase 14 remains responsible for broader production-ready item icons, UI panels, audio, haptics, store-facing polish, and any later replacement or refinement of reviewed assets.
-
-### Art direction
-
-Keep the feel readable and blocky, but establish a distinct identity:
-
-```text
-Softer, toy-like block edges
-Brighter "storybook explorer" palette
-Original block names
-Original icons
-Original UI panels
-No Minecraft textures, sounds, mobs, screenshots, music, logos, font, or item names
-```
-
-### Asset pipeline
-
-```text
-docs/art-direction/style-guide.md
-docs/art-direction/prompt-log.md
-Assets/Blockiverse/Art/Textures/Blocks/
-Assets/Blockiverse/Art/Textures/Items/
-Assets/Blockiverse/Art/Sprites/UI/
-Assets/Blockiverse/Audio/SFX/
-Assets/Blockiverse/Materials/
-```
-
-`BlockVisualAtlas` owns atlas tile layout and validation only. Production-facing development builds must use committed authored texture assets, and missing or unrelated atlas textures should fail fast before store-candidate validation.
-
-### Generated asset rules
-
-For AI-generated assets:
-
-```text
-Store the prompt.
-Store the generation date/tool.
-Store post-processing steps.
-Never prompt for "Minecraft texture," "Creeper," "Steve," "Enderman," etc.
-Prefer "original voxel sandbox texture, 16x16, colorful, readable, VR-friendly."
-Keep source images layered when possible.
-```
-
-### First asset set
-
-```text
-Blocks:
-  Meadow Turf
-  Loam
-  Slate
-  Clearstone
-  Timber
-  Leafmass
-  Coalstone
-  Copperstone
-  Ironstone
-  Workbench
-  Storage Crate
-  Torchbud
-
-Items:
-  Timber Chunk
-  Slate Shard
-  Copper Nugget
-  Iron Nugget
-  Workbench Kit
-  Crate Kit
-  Chipper Tool
-  Pick Tool
-
-UI:
-  Hotbar frame
-  Selected slot
-  Health pips
-  Inventory panel
-  Crafting panel
-  Multiplayer status badge
-```
-
-### Tests
-
-```text
-Editor test: all block textures are expected dimensions.
-Editor test: all BlockDefinitions reference valid texture atlas entries.
-Editor test: no missing materials.
-Editor test: no forbidden asset names or Minecraft references.
-Editor test: authored atlas texture name and dimensions are validated.
-Editor test: missing or unrelated atlas textures are rejected.
-PlayMode: all registered blocks render with non-placeholder textures.
-```
-
-### Validation
-
-```text
-Game looks cohesive.
-All placeholder magenta/missing materials are gone.
-Art remains original and documented.
-```
-
----
-
-## Phase 15 — Audio and comfort polish
-
-### Deliverable
-
-The game has basic feedback, comfort settings, and readable VR UI.
-
-### Scope
-
-```text
-Block break/place sounds
-Footstep placeholders
-Inventory/crafting UI sounds
+Block break/place audio
+Mining hits
+Tool swing/contact sounds
+Inventory open/close
+Craft success/fail
+UI select/confirm/cancel
+Footsteps/landing
+Weather ambience
+Rain/snow/storm audio
+Lightning audio/VFX
+Campfire and torch audio/VFX
+Block particles
+Resource harvest particles
+Crop/plant harvest particles
+Structure placement/loot cues
 Controller haptics
-Comfort menu
-Height reset
-Dominant-hand setting
-Snap turn angle setting
-Subtitles/captions for important sounds if needed
-Large VR-readable UI
+Audio settings
+Volume categories
+Object pooling for VFX
 ```
 
 ### Tests
 
 ```text
-Unit: settings persist.
-PlayMode: comfort settings apply to locomotion provider.
-PlayMode: audio events fire for break/place/craft.
-Manual Quest: UI readable at headset resolution.
-Manual Quest: no forced smooth locomotion.
+Unit: audio cue registry covers required events.
+Unit: no missing clips for required cues.
+Unit: VFX pool handles repeated block edits.
+PlayMode: block mutation event triggers audio/haptics/VFX subscribers.
+PlayMode: UI actions trigger UI cues.
+Manual Quest: sounds are audible but not harsh.
+Manual Quest: VFX are readable and do not harm frame rate.
 ```
 
 ### Validation
 
 ```text
-Player can adjust comfort settings.
-UI can be read in headset.
 Building loop has clear feedback.
-No required audio is missing.
+Weather feels present without reducing comfort.
+Important events are visible and audible.
+All shipped audio is original and documented.
 ```
 
 ---
 
-## Phase 16 — Performance and Quest hardening
+## Phase 14 — Art direction and asset polish
 
 ### Deliverable
 
-A Quest 3/3S build that meets the internal performance budget.
+The game has cohesive original block, item, UI, structure, vegetation, and environment art that is readable in Quest.
+
+### Scope
+
+```text
+Block atlas
+Item icons
+Tool icons
+Crafting station visuals
+Container visuals
+Structure block variations
+Vegetation textures
+Weather visual assets
+UI panels
+Branding assets
+Store screenshots
+Asset provenance
+Texture import settings
+Quest readability validation
+```
+
+### Asset policy
+
+```text
+16x16 source block tiles for initial voxel readability
+64x64 item icons
+Transparent PNG sprites for UI where appropriate
+Point filtering for block texture clarity
+No embedded text in icons
+No protected third-party names or visual identities
+```
+
+### Tests
+
+```text
+Editor: all block textures match expected dimensions.
+Editor: all registered renderable blocks map to atlas tiles.
+Editor: no missing materials.
+Editor: no forbidden asset names/references.
+PlayMode: all registered blocks render with valid visuals.
+```
+
+### Validation
+
+```text
+World is visually readable in headset.
+Block/resource families are easy to tell apart.
+No placeholder magenta/missing material surfaces remain.
+Art provenance is recorded.
+```
+
+---
+
+## Phase 15 — Quest performance, diagnostics, and hardening
+
+### Deliverable
+
+Canonical survival/creative worlds meet Quest 3/3S comfort and performance targets.
 
 ### Performance budget
 
 ```text
-Internal minimum: stable 72 FPS
-Store/VRC floor: must not drop below required Meta thresholds
-Memory: no runaway chunk mesh allocations
-World size: bounded until profiling proves larger worlds are safe
-Chunk rebuilds: throttled
-Draw calls/materials: monitored
+Minimum target: stable 72 FPS
+Optimization goal: 90 FPS where practical
+No runaway mesh allocations
+Bounded world sizes until profiling supports expansion
+Chunk rebuilds are throttled
+VFX are pooled
+Development-only debug overlays hidden in release builds
 ```
 
 ### Scope
 
 ```text
-Chunk mesh pooling
-Mesh rebuild throttling
-Texture atlas batching
-Physics collider simplification
-Object pooling for UI/effects
 Profiler markers
-In-game debug stats panel
-OVR Metrics manual test pass
-Thermal throttling observation
+Frame statistics sampler
+In-game development performance overlay
+Chunk mesh pooling
+Collider simplification
+Texture atlas batching
+Object pooling for VFX
+Stress scenes
+OVR Metrics captures
+Thermal observation
+Quest 3 validation
+Quest 3S validation
+Performance report templates
 ```
-
-The local diagnostics logging foundation is pulled forward into M4/Alpha as issue #225. Full profiler markers, in-game stats panels, OVR Metrics captures, stress scenes, and formal performance reports remain in M6.
 
 ### Tests
 
 ```text
-EditMode: mesh builder allocation regression checks where practical.
-PlayMode: stress scene generates max test world without exceptions.
-Performance smoke: 10 minutes in generated world, no memory growth spike.
-Manual Quest: OVR Metrics capture for creative, cave, and multiplayer scenes.
+EditMode: mesh generation deterministic and bounded.
+PlayMode: max configured world generates and meshes without exceptions.
+PlayMode: high edit-rate scene remains stable.
+Manual Quest: 10-minute survival_terrain run.
+Manual Quest: 10-minute creative building run.
+Manual Quest: two-player LAN run.
 ```
 
 ### Validation
 
 ```text
-Quest 3 and Quest 3S builds remain comfortable in normal play.
-World generation and chunk rebuilds do not cause extended hitches.
-Two-player session remains stable.
-Performance report is saved under docs/testing/performance/.
+Quest 3 and 3S builds remain comfortable.
+World generation and chunk rebuilds avoid extended hitches.
+Multiplayer remains stable.
+Performance reports are saved under docs/testing/performance/.
 ```
 
 ---
 
-## Phase 17 — Release pipeline and sideload fallback
+## Phase 16 — Release pipeline and sideload fallback
 
 ### Deliverable
 
-Signed APKs are produced consistently from `main`, attached to GitHub Releases, and installable on Quest.
+Signed APKs are produced from `main`, attached to GitHub Releases, and installable on Quest.
 
 ### Scope
 
 ```text
-Production Android keystore
-Keystore stored outside repo
+Production Android keystore outside repo
 GitHub Actions secret-based signing
 Version code/version name automation
-Changelog generation
+Release tags from main only
 APK checksum
-Symbols/logs artifact
-ADB install instructions for personal sideload testing
+Symbols/log artifacts
 Release notes template
+Known issues
+ADB/hzdb sideload validation path
 ```
 
 ### Release artifacts
@@ -1393,32 +1299,13 @@ test-results.zip
 performance-summary.md
 ```
 
-### Release-from-main requirements
-
-```text
-Release tags must match v*.
-Release tags must point to a commit reachable from origin/main.
-Release workflow must fail if tag is not on main.
-Release workflow must fetch full history so ancestry checks work.
-Production signing only happens for approved release workflow contexts.
-```
-
-Example ancestry check:
-
-```bash
-git fetch origin main --depth=1
-git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-```
-
-For a tag workflow, use a full fetch or fetch enough history to verify ancestry reliably.
-
 ### Tests
 
 ```text
-CI: release build signs successfully.
-CI: APK artifact exists and checksum is generated.
-CI: release tag on non-main commit is rejected.
-Smoke: APK installs on Quest via ADB.
+CI: release tag must be on main.
+CI: signed release artifact exists.
+CI: checksum is generated.
+Smoke: APK installs on Quest.
 Smoke: app launches to main menu.
 Smoke: boot scene reaches playable state.
 ```
@@ -1428,42 +1315,41 @@ Smoke: boot scene reaches playable state.
 ```text
 Tagging v0.x from main creates a GitHub Release.
 APK can be sideloaded.
-APK version appears correctly in game.
+Version appears correctly in game.
 Release notes include known issues.
 ```
 
 ---
 
-## Phase 18 — Meta release channels and private testing
+## Phase 17 — Meta release channels and private testing
 
 ### Deliverable
 
-The game is testable by invited users through Meta release channels before public submission.
+The game is testable by invited users through Meta release channels.
 
 ### Scope
 
 ```text
-Create Meta developer app
-Configure package name
-Configure app ID
-Configure Meta Platform settings required for Meta Horizon Avatars
-Complete or explicitly defer Data Use Checkup requirements for any Platform SDK APIs used by avatars, identity, entitlement, or multiplayer platform features
-Document that M5 voice relies on Meta Quest party chat and does not use an in-app voice API
-Upload signed build from a main release tag
-Create Alpha/Beta/RC channels
-Invite private testers
-Add family tester accounts if appropriate
-Collect feedback
-Track bugs in GitHub
+Meta developer app
+Package name
+App ID
+Meta Platform settings
+Meta Horizon Avatar requirements
+Entitlement requirements
+Data Use Checkup requirements
+Alpha/Beta/RC channels
+Private tester invites
+Family tester accounts if appropriate
+Bug feedback flow
 ```
 
 ### Tests
 
 ```text
 Store upload accepts APK.
-Alpha channel installs on Quest.
+Release channel install works.
 Entitlement behavior is understood.
-Meta Horizon Avatar and Platform SDK requirements are understood and documented.
+Avatar/platform requirements are documented.
 Private tester can launch app.
 Crash/log collection path documented.
 ```
@@ -1478,7 +1364,7 @@ No GitHub-only sideload step is required for invited testing.
 
 ---
 
-## Phase 19 — Meta Horizon Store / Early Access submission candidate
+## Phase 18 — Meta Horizon Store / Early Access submission candidate
 
 ### Deliverable
 
@@ -1505,21 +1391,19 @@ Known issues
 Release notes
 ```
 
-### Privacy posture
-
-For the first public candidate:
+### Privacy posture for first public candidate
 
 ```text
 No public chat
-Voice chat relies on Meta Quest party chat outside the app
+Voice uses Meta Quest party chat
 No in-app voice chat, voice capture, or game-hosted voice transport
-No user-generated text
-No analytics beyond essential crash/performance diagnostics unless explicitly documented
-No account system beyond Meta/Unity services required for multiplayer
+No user-generated text chat
+No advertising SDK
+No analytics beyond documented diagnostics unless explicitly added
+Local saves remain local unless user shares them
+LAN multiplayer exchanges local network connection data only for the active session
 Meta Horizon Avatar/profile data use is disclosed when avatar integration ships
-No custom player avatar/profile data is collected for a Blockiverse-only avatar system
-Private LAN multiplayer for the first release; cloud-hosted invite-code private worlds are post-release M8 scope
-Clear privacy policy
+Cloud-hosted private worlds are later scope
 ```
 
 ### Tests
@@ -1528,7 +1412,7 @@ Clear privacy policy
 Submission checklist complete.
 VRC checklist complete.
 Privacy policy link works.
-Store images meet required dimensions.
+Store images meet dimensions.
 APK upload succeeds.
 Release channel RC build matches submitted build.
 Submitted build comes from a main release tag.
@@ -1538,55 +1422,55 @@ Submitted build comes from a main release tag.
 
 ```text
 Submission can be sent to Meta without missing metadata.
-If rejected, rejection reasons become GitHub issues under EPIC-14.
-If approved, release remains Early Access/Beta until multiplayer and save stability are proven.
+If rejected, rejection reasons become tracked work.
+If approved, release remains Early Access/Beta until save and multiplayer stability are proven.
 ```
 
 ---
 
-## Phase 20 — Full survival mode, later expansion
+## Phase 19 — Full survival expansion
 
 ### Deliverable
 
-A separate post-MVP survival expansion with day/night, mobs, and deeper progression.
+A deeper survival game with original NPCs/mobs, combat, armor, progression, and expanded multiplayer survival interactions.
 
 ### Scope
 
 ```text
-Day/night cycle
-Lighting changes
-Friendly creatures
-Hostile mobs
-Original blocky voxel NPC/creature visual language
+Original passive creatures
+Original hostile creatures
+NPCs/mobs use original voxel character designs
+Mob spawning
 Mob pathfinding
 Combat
-Armor/tools progression
-More recipes
+Armor
+Weapons/tools progression
+Status effects
+Difficulty settings
 Biome expansion
 Dungeon/cave points of interest
-Difficulty settings
+Advanced structures
+Advanced crafting
 Multiplayer combat sync
 ```
 
-### Out of scope until this phase
+### Out of scope
 
 ```text
-Creeper-like mobs
 Minecraft mob names
-Minecraft item names
-Minecraft sounds/music
-Meta Horizon avatars for NPCs or mobs
+Minecraft mob silhouettes
+Creeper-like behavior identity
+Meta Horizon avatars for NPCs/mobs
 Public matchmaking
-Infinite terrain
-Marketplace/modding support
+Marketplace/modding
 ```
 
 ### Tests
 
 ```text
-Unit: time-of-day system deterministic.
-Unit: mob spawn rules obey safe zones.
-PlayMode: hostile mob can find player in simple test arena.
+Unit: spawn rules obey safe zones.
+Unit: combat damage and armor formulas are deterministic.
+PlayMode: hostile mob can navigate simple test arena.
 PlayMode: combat damage syncs in multiplayer.
 Performance: mob counts stay within Quest budget.
 ```
@@ -1595,44 +1479,47 @@ Performance: mob counts stay within Quest budget.
 
 ```text
 Survival mode feels distinct from creative.
-Mobs and day/night do not break VR comfort.
+Mobs and combat remain comfortable in VR.
+NPCs/mobs are original.
 Multiplayer remains stable.
-No Minecraft-protected characters or names are introduced.
-NPCs/mobs are original voxel characters and do not use player Meta Horizon avatars.
 ```
 
 ---
 
-## Phase 21 — Cloud-hosted persistent private worlds, post-release upgrade
+## Phase 20 — Cloud-hosted persistent private worlds
 
 ### Deliverable
 
-Cloud-hosted, owner-scoped private worlds that persist when nobody is connected and can be joined by invited members over the internet while local LAN multiplayer remains available as a separate low-cost mode.
+Cloud-hosted, owner-scoped private worlds persist when empty and can be joined by invited members over the internet. LAN remains available as a separate low-cost mode.
 
 ### Scope
 
 ```text
 Cloud-hosted dedicated/private world runtime
-Server-authoritative world simulation and command validation
-Stable cloud world IDs and owner identity
-Durable member list for each world
-Owner-only invite code generation and regeneration
+Server-authoritative world simulation
+Stable cloud world IDs
+Owner identity
+Durable member list
+Owner-only invite code generation/regeneration
 One active reusable invite code per world
 Invite codes expire 48 hours after generation
 Auto-accept invite redemption by default
-Owner-approval-required invite mode as an owner-configurable setting
-Pending member requests when approval is required
-Permanent membership until owner removal or member self-removal
-Owner member management: remove, block, approve, deny, regenerate invite
-Meta identity, entitlement, active membership, and access-state validation on every join
-Cloud persistent storage for terrain, structures, inventories, and world metadata
-Save versioning, atomic writes, restore validation, and corruption recovery
-Automatic idle spin-down with final save
-Automatic spin-up on authorized reconnect/join
-Session registry and routing to active or starting world servers
-Lifecycle, access, crash, startup, quota, and cost diagnostics
-Quest internet multiplayer validation
-Privacy, data-use, and store-readiness documentation for cloud-hosted private worlds
+Owner-approval-required invite mode
+Pending member requests
+Permanent membership until owner removal or self-removal
+Owner management: remove, block, approve, deny, regenerate invite
+Meta identity, entitlement, membership, and access-state validation on join
+Cloud persistent storage
+Save versioning and migration
+Atomic writes
+Restore validation
+Corruption recovery
+Idle spin-down with final save
+On-demand spin-up
+Session registry/routing
+Lifecycle diagnostics
+Cost and quota guardrails
+Privacy/data-use/store documentation
 ```
 
 ### Out of scope
@@ -1644,131 +1531,142 @@ Community world discovery
 Public moderation/reporting surfaces
 Marketplace or mod distribution
 In-app voice chat
-Members generating or regenerating invite codes
-User-configurable invite-code expiration windows
+Members generating invite codes
 Single-use per-recipient invite codes
-Replacing local LAN multiplayer
+Replacing LAN multiplayer
 ```
 
 ### Tests
 
 ```text
-Unit: invite code generation prevents collisions and rejects expired codes.
-Unit: membership remains active after invite code expiration.
-Unit: removed or blocked members cannot rejoin through a fresh code.
-Unit: owner approval mode creates pending requests instead of membership.
-Integration: session registry routes authorized players to the active or starting world server.
-Integration: cloud save/load restores terrain, structures, inventories, and world metadata.
-Integration: idle spin-down performs a final save before teardown.
-Integration: on-demand spin-up restores the latest persisted world state before admitting players.
-PlayMode: unauthorized, expired-code, non-member, removed, and blocked join attempts fail cleanly.
-PlayMode: LAN mode remains usable without cloud service availability.
-Network simulation: cloud private world join, edit, save, spin-down, and reconnect remain stable under expected internet latency.
+Unit: invite code generation prevents collisions.
+Unit: expired invite codes are rejected.
+Unit: membership persists after code expiration.
+Unit: removed/blocked members cannot rejoin.
+Integration: session registry routes authorized players.
+Integration: cloud save/load restores terrain, structures, inventories, environment, vegetation, and metadata.
+Integration: idle spin-down saves before teardown.
+Integration: spin-up restores latest world state before admitting players.
+Network simulation: edit/save/spin-down/reconnect remain stable under expected latency.
 ```
 
 ### Validation
 
 ```text
 Owner can create a cloud private world.
-Owner can share a 48-hour reusable invite code.
-Default auto-accept mode adds entitled signed-in redeemers as members.
-Owner can switch future invite redemptions to approval-required mode.
-Owner can approve, deny, remove, and block members.
-Existing members keep access after invite-code expiration.
-Cloud world saves when empty and spins down cleanly.
-Authorized members can later reconnect and trigger spin-up.
-Two Quest devices can join over the internet and resume a persisted world.
-Local LAN multiplayer still works without cloud dependencies.
-No public matchmaking, public browsing, community discovery, or in-app voice scope is introduced.
-Cloud cost, quota, privacy, and diagnostic evidence is documented.
+Owner can share a 48-hour invite code.
+Entitled signed-in redeemers become members in auto-accept mode.
+Owner can approve/deny/remove/block members.
+Cloud world saves when empty and spins down.
+Authorized members reconnect and trigger spin-up.
+Two Quest devices can resume a persisted world over the internet.
+LAN mode still works without cloud dependencies.
 ```
 
 ---
 
-# 9. Testing strategy
+# 10. Testing strategy
 
-## Unit tests
-
-Use EditMode tests for pure C#:
+## EditMode / pure C# tests
 
 ```text
 Voxel coordinates
 Chunk storage
 Block registry
+Item registry
+Tool registry
+Recipe registry
 World bounds
-Generation determinism
-Crafting recipes
+World generation determinism
+Resource placement
+Biome selection
+Environment simulation
+Structure placement
+Vegetation placement/regrowth
 Inventory
+Crafting
 Save/load serialization
+Migration registry
 Network command validation
-Cloud invite and membership validation
-Cloud world lifecycle state transitions
+Audio/VFX cue registries
 Settings persistence
 ```
 
-## Integration tests
-
-Use PlayMode tests for Unity-connected systems:
+## PlayMode / Unity integration tests
 
 ```text
 Boot scene
+VR rig setup
 World generation scene
 Chunk rendering
 Block break/place
+Creative catalog UI
 Inventory UI
 Crafting UI
 Save/load in scene
+Environment visuals
+Structure generation in scene
+Vegetation in scene
 Multiplayer host/client scene
 Late join world sync
-Cloud session registry routing
-Cloud world save/restore
+LAN session reconnect UX
+Audio/haptics/VFX feedback
 ```
 
 ## Multiplayer tests
 
-Use:
-
 ```text
-Unity Multiplayer Play Mode for local editor multi-client tests
-Host/client PlayMode tests
+Unity Multiplayer Play Mode local clients
+Host/client lifecycle
+Host-authoritative block mutation
+Client correction/rejection
+Late join
+Inventory snapshots
+Shared containers
+Crafting validation
+Resource harvesting
+Environment sync
+Structure/vegetation sync
+100ms latency simulation
+Packet loss resilience
+Bandwidth measurement
 Manual two-Quest LAN tests
-Network simulation for 100ms latency
-Packet loss resilience checks for chunk sync
-Bandwidth measurement during active block editing
-Cloud private world integration smoke tests later
 ```
 
 ## VR/device smoke tests
-
-Manual or self-hosted-runner-assisted:
 
 ```text
 Install APK on Quest 3
 Install APK on Quest 3S
 Launch app
 Reach main menu
-Start creative world
+Start survival_terrain
+Start flat_builder
+Start void_builder
+Move, turn, teleport
+Open menus
 Break block
 Place block
 Open inventory
+Craft item
 Save world
 Reload world
-Start host session
+Start LAN host
 Join second headset
 Build together for 5 minutes
-Create cloud private world
-Join cloud private world over the internet
-Verify cloud save, spin-down, spin-up, and reconnect
-Collect logs
+Collect logs and performance data
 ```
 
 ## Performance tests
 
 ```text
-Small world scene
-Max bounded world scene
+Default survival_terrain
+Large bounded survival_terrain
+Flat builder edit-rate stress
 Cave-heavy scene
-High edit-rate scene
+Structure-heavy scene
+Vegetation-heavy scene
+Storm/weather scene
 Two-player edit scene
 10-minute thermal/performance run
 ```
@@ -1784,517 +1682,490 @@ Privacy policy present
 VRC checklist complete
 Comfort settings available
 Performance capture archived
+Known issues updated
+Support contact filled
 ```
 
 ---
 
-# 10. Backlog seed
+# 11. Backlog seed
 
-Use these as initial GitHub issues/sub-issues.
+Use these as work units or issue seeds. Do not treat this list as automatically created GitHub issues.
 
-## EPIC-00 — Repo, project management, CI/CD foundation
+## EPIC-00 — Repo, documentation, CI/CD, and checkpoint policy
 
 ```text
-FEATURE: Create public repo and baseline docs
-  STORY: Add README with project goals and target platform
-  STORY: Add source-available license
-  STORY: Add CONTRIBUTING, SECURITY, CODE_OF_CONDUCT
-  STORY: Add Unity .gitignore and .gitattributes with LFS
-  STORY: Add docs/adr folder and first architecture decision records
+FEATURE: Roadmap and ruleset source of truth
+  STORY: Move ruleset docs into repo docs/rulesets/
+  STORY: Update roadmap to canonical ruleset-defined world
+  STORY: Add implementation alignment matrix
+  STORY: Add known-good git tagging policy
 
-FEATURE: Configure GitHub Project
-  STORY: Create Roadmap project
-  STORY: Add fields: Phase, Priority, Area, Risk, Target Release, Effort
-  STORY: Add milestones M0-M7
-  STORY: Add labels for area/type/priority
-  STORY: Add issue templates
-
-FEATURE: Configure trunk-based development
+FEATURE: Trunk-based workflow
   STORY: Protect main
-  STORY: Document no develop branch policy
-  STORY: Document short-lived feature branch policy
   STORY: Document release-from-main-only policy
-  STORY: Add CI check that release tags are on main
+  STORY: Document short-lived branch policy
+  STORY: Add forbidden-files checks
 
-FEATURE: Configure CI
-  STORY: Add PR test workflow targeting main
-  STORY: Add main development APK artifact workflow
-  STORY: Add release APK workflow triggered by v* tags
-  STORY: Add forbidden-secrets check
+FEATURE: Local Unity validation
+  STORY: Keep scripts/unity/run-tests.sh as required local validation
+  STORY: Keep development APK build script
+  STORY: Document Quest hzdb validation path
 ```
 
-## EPIC-01 — Unity/Quest project bootstrap
+## EPIC-01 — Quest VR foundation
 
 ```text
-FEATURE: Create Unity 6 URP project
-  STORY: Pin Unity version
-  STORY: Configure visible meta files and text serialization
-  STORY: Add assembly definitions
-  STORY: Add boot scene
-  STORY: Configure Quest/OpenXR build profile
+FEATURE: Controller input and locomotion
+  STORY: Validate Quest controller input actions
+  STORY: Preserve/refine teleport locomotion
+  STORY: Preserve/refine snap turn and comfort menu
+  STORY: Preserve/refine height reset
+  STORY: Validate movement on Quest 3/3S
 
-FEATURE: Add Meta/XR dependencies
-  STORY: Install OpenXR
-  STORY: Install Unity OpenXR: Meta
-  STORY: Install Meta XR Core SDK
-  STORY: Add XR rig prefab
+FEATURE: Native XRI interaction
+  STORY: Use XRUIInputModule and TrackedDeviceGraphicRaycaster
+  STORY: Suppress block editing over UI
+  STORY: Preserve/refine controller ray block targeting
+  STORY: Add dominant-hand editing toggle
 ```
 
-## EPIC-02 — VR player controller and interaction foundation
+## EPIC-02 — Canonical voxel data and registries
 
 ```text
-FEATURE: Controller input
-  STORY: Create input action map
-  STORY: Bind Quest controller buttons
-  STORY: Add controller haptics abstraction
-  STORY: Add input smoke tests
+FEATURE: Canonical block registry
+  STORY: Add stable string IDs
+  STORY: Add terrain/stone/resource/fluid/plant/crafted categories
+  STORY: Add hardness/tool/tier/drop metadata
+  STORY: Add registry snapshot hashing
 
-FEATURE: Locomotion
-  STORY: Add teleport locomotion
-  STORY: Add snap turn
-  STORY: Add height reset
-  STORY: Add comfort settings menu
+FEATURE: Canonical item/tool registry
+  STORY: Add resource, food, utility, station, container, tool definitions
+  STORY: Add tool classes and harvest tiers
+  STORY: Add stack size rules
+  STORY: Add durability metadata
 
-FEATURE: Interaction
-  STORY: Add ray pointer
-  STORY: Add block highlight
-  STORY: Add radial/block menu placeholder
+FEATURE: Temporary ID migration
+  STORY: Map old temporary block names to canonical IDs
+  STORY: Map old temporary item/tool names to canonical IDs
+  STORY: Add save migration tests
 ```
 
-## EPIC-03 — Voxel data model and block registry
+## EPIC-03 — Canonical world generation
 
 ```text
-FEATURE: Block registry
-  STORY: Add BlockId and BlockDefinition
-  STORY: Add initial original block list
-  STORY: Add registry validation tests
+FEATURE: World presets
+  STORY: Implement survival_terrain
+  STORY: Implement flat_builder
+  STORY: Implement void_builder
+  STORY: Remove temporary validation presets from new-world creation
 
-FEATURE: Chunk/world storage
-  STORY: Add chunk coordinate math
-  STORY: Add bounded world storage
-  STORY: Add block mutation commands
-  STORY: Add world bounds tests
+FEATURE: Terrain/caves/resources
+  STORY: Add deterministic height/biome generation
+  STORY: Add terrain layering
+  STORY: Add cave generation
+  STORY: Add fluid placement
+  STORY: Add resource placement table
+  STORY: Add spawn safety
 ```
 
-## EPIC-04 — Bounded terrain, caves, and resources
+## EPIC-04 — Environment, vegetation, and structures
 
 ```text
-FEATURE: Terrain generation
-  STORY: Add seeded heightmap
-  STORY: Add flat test preset
-  STORY: Add spawn-safe clearing
-  STORY: Add deterministic generation tests
+FEATURE: Environment
+  STORY: Add world time
+  STORY: Add day/night lighting
+  STORY: Add clouds, rain, storms, lightning, fog, snow
+  STORY: Add environment save state
+  STORY: Add environment audio/VFX hooks
 
-FEATURE: Caves/resources
-  STORY: Add cave carving
-  STORY: Add resource veins
-  STORY: Add distribution tests
+FEATURE: Vegetation
+  STORY: Add biome vegetation profiles
+  STORY: Add tree/plant placement
+  STORY: Add regrowth and leaf decay
+  STORY: Add vegetation harvesting
+  STORY: Add weather interactions
+
+FEATURE: Structures
+  STORY: Add template schema
+  STORY: Add deterministic placement
+  STORY: Add terrain fitting
+  STORY: Add loot/container/station hooks
+  STORY: Add structure save state
 ```
 
-## EPIC-05 — Chunk rendering and mesh optimization
+## EPIC-05 — Creative mode
 
 ```text
-FEATURE: Chunk meshing
-  STORY: Generate visible faces only
-  STORY: Add UV atlas mapping
-  STORY: Add dirty chunk rebuild queue
-  STORY: Add mesh tests
+FEATURE: Creative catalog
+  STORY: Add block/item category browser
+  STORY: Add search/filter
+  STORY: Add hotbar assignment
+  STORY: Add unlimited placement mode
 
-FEATURE: Quest rendering budget
-  STORY: Add debug stats panel
-  STORY: Add triangle/chunk counter
-  STORY: Add stress scene
+FEATURE: Creative tools
+  STORY: Add placement/removal
+  STORY: Add undo/redo
+  STORY: Add world edit tools
+  STORY: Add structure placement tools
+  STORY: Add vegetation tools
+  STORY: Add environment controls
 ```
 
-## EPIC-06 — Creative-mode building loop
+## EPIC-06 — Survival systems
 
 ```text
-FEATURE: Break/place blocks
-  STORY: Add raycast targeting
-  STORY: Add face-normal placement
-  STORY: Add placement preview
-  STORY: Add undo command
+FEATURE: Mining and drops
+  STORY: Implement mining formula
+  STORY: Implement harvest success rules
+  STORY: Implement durability costs
+  STORY: Implement drop tables and yield bonuses
 
-FEATURE: Creative inventory
-  STORY: Add hotbar
-  STORY: Add block picker
-  STORY: Add selected block UI
+FEATURE: Inventory and containers
+  STORY: Implement inventory model
+  STORY: Implement stack rules
+  STORY: Implement pickup/merge/drop rules
+  STORY: Implement storage containers
+
+FEATURE: Crafting and stations
+  STORY: Implement recipe registry
+  STORY: Implement build table
+  STORY: Implement clay kiln and fuel
+  STORY: Implement bellows forge and alloys
+  STORY: Implement mend bench repair
+  STORY: Implement farming/crop growth
 ```
 
-## EPIC-07 — Inventory, resources, and crafting
+## EPIC-07 — Save/load and versioning
 
 ```text
-FEATURE: Inventory
-  STORY: Add inventory model
-  STORY: Add stacking/splitting
-  STORY: Add inventory UI
-  STORY: Add unit tests
+FEATURE: Unified save schema
+  STORY: Save manifests and metadata
+  STORY: Save registry snapshot hashes
+  STORY: Save chunks/block changes
+  STORY: Save inventories
+  STORY: Save environment, structure, and vegetation state
+  STORY: Save player state and settings
 
-FEATURE: Crafting
-  STORY: Add recipe definitions
-  STORY: Add workbench
-  STORY: Add crafting validation
-  STORY: Add crafting UI
-```
-
-## EPIC-08 — Survival-lite health/resource loop
-
-```text
-FEATURE: Health
-  STORY: Add health model
-  STORY: Add damage/healing events
-  STORY: Add respawn
-  STORY: Add health UI
-
-FEATURE: Resource loop
-  STORY: Add block drops
-  STORY: Add tool effectiveness
-  STORY: Add simple scarcity tuning
-```
-
-## EPIC-09 — Save/load and world versioning
-
-```text
-FEATURE: Save system
-  STORY: Save world metadata
-  STORY: Save changed block deltas
-  STORY: Save player inventory
-  STORY: Add atomic save writes
-
-FEATURE: Load/migration
-  STORY: Load current schema
-  STORY: Add schema version
-  STORY: Add migration hook
+FEATURE: Migration and recovery
+  STORY: Add migration registry
+  STORY: Add temporary ID migration
+  STORY: Add atomic writes and backup recovery
   STORY: Add corrupted-save handling
 ```
 
-## EPIC-10 — Multiplayer co-op foundation
+## EPIC-08 — LAN multiplayer
 
 ```text
-FEATURE: Host/client setup
-  STORY: Add NetworkManager prefab
-  STORY: Add LAN host flow
-  STORY: Add LAN join flow
-  STORY: Add Meta Horizon Avatar sync
-  STORY: Add fallback proxy avatar implementation
-  STORY: Handle host disconnect and return clients to multiplayer menu
-  STORY: Persist multiplayer world before host shutdown
-  STORY: Display reconnect/session-ended UX to clients
-  TASK: Clarify voice chat scope (no in-app voice chat)
+FEATURE: LAN session flow
+  STORY: Host LAN world
+  STORY: Join by IP
+  STORY: Stop session
+  STORY: Reconnect/session-ended UX
+  STORY: Host-only save ownership
 
-FEATURE: Multiplayer tests
-  STORY: Add Multiplayer Play Mode test scene
-  STORY: Add host/client connection test
-  STORY: Add disconnect/rejoin test
-  STORY: Measure average bandwidth during active block editing
-  STORY: Test multiplayer under simulated 100ms latency
-  STORY: Validate chunk sync under packet loss
+FEATURE: Player representation
+  STORY: Meta Horizon avatar local/remote setup
+  STORY: Fallback proxy avatar
+  STORY: Head/controller pose sync
+
+FEATURE: Host-authoritative world sync
+  STORY: Block mutation requests
+  STORY: Ordered chunk deltas
+  STORY: Late-join snapshots
+  STORY: Conflict rejection/correction
+  STORY: Environment/structure/vegetation sync
+
+FEATURE: Survival co-op sync
+  STORY: Resource harvest commands
+  STORY: Inventory snapshots
+  STORY: Shared container snapshots
+  STORY: Host-validated crafting
 ```
 
-## EPIC-11 — Multiplayer world synchronization
+## EPIC-09 — Audio, VFX, haptics, and art polish
 
 ```text
-FEATURE: Networked voxel edits
-  STORY: Add authoritative block mutation RPC
-  STORY: Define and enforce chunk authority boundaries
-  STORY: Add chunk delta sync
-  STORY: Add late-join sync
-  STORY: Add conflict handling
-
-FEATURE: Networked survival-lite
-  STORY: Sync resource drops
-  STORY: Sync shared crate
-  STORY: Validate crafting on host
-```
-
-## EPIC-12 — Art/audio/UI polish
-
-```text
-FEATURE: Art style guide
-  STORY: Define palette (M4)
-  STORY: Define block texture rules (M4)
-  STORY: Define naming rules (M4)
-  STORY: Add AI/procedural asset provenance log (M4)
-
-FEATURE: First art pass
-  STORY: Generate original block textures (M4)
-  STORY: Generate original item icons (M4)
-  STORY: Generate UI panels (M4)
-  STORY: Add asset validation tests (M4)
-  STORY: Integrate authored block texture atlas (M4)
-  STORY: Configure Quest texture import settings (M4)
-  STORY: Validate authored art assets in headset (M4)
-
 FEATURE: Audio/haptics
-  STORY: Add break/place sounds
-  STORY: Add UI sounds
-  STORY: Add haptic patterns
+  STORY: Break/place sounds
+  STORY: Mining/tool sounds
+  STORY: UI sounds
+  STORY: Inventory/crafting sounds
+  STORY: Weather ambience
+  STORY: Haptic patterns
+
+FEATURE: VFX
+  STORY: Block particles
+  STORY: Resource harvest particles
+  STORY: Weather effects
+  STORY: Lightning effects
+  STORY: Campfire/torch effects
+  STORY: VFX pooling
+
+FEATURE: Art polish
+  STORY: Canonical block atlas
+  STORY: Item/tool icons
+  STORY: UI panels
+  STORY: Structure and vegetation visuals
+  STORY: Quest readability validation
 ```
 
-## EPIC-13 — Performance, profiling, and Quest validation
+## EPIC-10 — Quest performance and store readiness
 
 ```text
-FEATURE: Performance instrumentation
-  STORY: Add profiler markers
-  STORY: Add in-game stats
-  STORY: Add stress scenes
+FEATURE: Performance
+  STORY: Profiler markers
+  STORY: Frame statistics overlay
+  STORY: Stress scenes
+  STORY: Quest 3 capture
+  STORY: Quest 3S capture
+  STORY: Performance report
 
-FEATURE: Quest validation
-  STORY: Run Quest 3 smoke test
-  STORY: Run Quest 3S smoke test
-  STORY: Capture OVR Metrics
-  STORY: Document performance results
+FEATURE: Release pipeline
+  STORY: Signed APK from main v* tag
+  STORY: Checksum and release artifact
+  STORY: Store candidate workflow
+  STORY: Release notes and known issues
+
+FEATURE: Meta store
+  STORY: Privacy policy
+  STORY: Data use declarations
+  STORY: Store listing
+  STORY: Screenshots
+  STORY: VRC checklist
+  STORY: Private release channel validation
 ```
 
-## EPIC-14 — Meta release pipeline and store readiness
+## EPIC-11 — Full survival expansion
 
 ```text
-FEATURE: Signed release builds
-  STORY: Create production keystore
-  STORY: Store keystore in secrets
-  STORY: Build signed APK from main tag
-  STORY: Create GitHub Release artifact
+FEATURE: NPCs/mobs
+  STORY: Original passive creature
+  STORY: Original hostile creature
+  STORY: AI and pathfinding
+  STORY: Spawn rules
 
-FEATURE: Meta release channels
-  STORY: Create Meta app
-  STORY: Upload Alpha build from main tag
-  STORY: Invite private testers
-  STORY: Validate install/update flow
-
-FEATURE: Store submission
-  STORY: Draft privacy policy
-  STORY: Prepare screenshots
-  STORY: Prepare descriptions
-  STORY: Complete VRC checklist
-  STORY: Submit candidate build
+FEATURE: Combat/progression
+  STORY: Weapons/tools progression
+  STORY: Armor
+  STORY: Damage/status effects
+  STORY: Multiplayer combat sync
 ```
 
-## EPIC-15 — Full survival expansion
+## EPIC-12 — Cloud private worlds
 
 ```text
-FEATURE: Day/night
-  STORY: Add world time
-  STORY: Add lighting cycle
-  STORY: Add sleep/skip mechanic, optional
+FEATURE: Cloud architecture
+  SPIKE: Choose hosting/runtime/provider model
+  STORY: Define cost, quota, region, privacy guardrails
+  STORY: Define server-authoritative runtime
 
-FEATURE: Mobs
-  STORY: Add original passive creature
-  STORY: Add original hostile creature
-  STORY: Add basic AI
-  STORY: Add multiplayer combat sync
-```
+FEATURE: Owner/member access
+  STORY: Stable cloud world IDs
+  STORY: Owner model
+  STORY: Member list
+  STORY: Invite codes
+  STORY: Removal/block/approval flows
 
-## EPIC-16 — Cloud-hosted persistent private worlds
-
-```text
-FEATURE: Cloud hosting architecture and provider foundation
-  SPIKE: Choose cloud-hosting architecture for private worlds
-  STORY: Define cloud cost, quota, region, and privacy guardrails
-  STORY: Document post-release cloud-world privacy and data-use requirements
-
-FEATURE: Dedicated cloud world server runtime
-  STORY: Add headless cloud world server build
-  STORY: Enforce server-authoritative simulation and command validation
-
-FEATURE: Private world identity and ownership
-  STORY: Add stable cloud world metadata and owner model
-  STORY: Add durable member model with self-leave, removal, and block state
-
-FEATURE: Invite codes and membership policy
-  STORY: Add owner-only 48-hour reusable invite codes
-  STORY: Add auto-accept default and owner-approval invite mode
-
-FEATURE: Cloud world UI and owner management
-  STORY: Add LAN vs cloud multiplayer mode selection
-  STORY: Add create, join, and manage cloud world UI
-
-FEATURE: Session registry and routing
-  STORY: Add service-backed world/session registry
-  STORY: Route clients to active or starting cloud world servers
-
-FEATURE: Cloud persistence and lifecycle
-  STORY: Persist cloud world state with versioning and corruption recovery
-  STORY: Implement idle spin-down with final save
-  STORY: Implement on-demand spin-up and reconnect synchronization
-
-FEATURE: Observability, security, and operational guardrails
-  STORY: Validate Meta entitlement, identity, and membership on every join
-  STORY: Add invite redemption rate limiting and access audit logs
-  STORY: Add lifecycle diagnostics, crash tracking, quota, and cost guardrails
-
-FEATURE: Quest, network, and release validation
-  STORY: Add cloud private world automated integration tests
-  STORY: Validate two Quest devices over internet with save, spin-down, and reconnect
+FEATURE: Cloud persistence
+  STORY: Cloud save schema
+  STORY: Spin-down final save
+  STORY: On-demand spin-up
+  STORY: Reconnect sync
 ```
 
 ---
 
-# 11. Recommended build order
-
-Build in this order:
+# 12. Recommended build order
 
 ```text
-1. Repo + GitHub Project + Unity bootstrap
-2. CI tests + main development APK build
-3. VR controller locomotion
-4. Pure C# voxel model
-5. Render bounded flat world
-6. Break/place blocks in creative mode
-7. Save/load
-8. Procedural bounded terrain
-9. Inventory/crafting/resources
-10. Survival-lite health loop
-11. M4 Art and Texture Assets, authored texture integration, atlas validation, and generated creative validation terrain
-12. Multiplayer host/client movement
-13. Multiplayer block synchronization
-14. Multiplayer inventory/crafting sync
-15. Full art/audio/UI pass
-16. Quest performance hardening
-17. GitHub Release signed APK fallback from main tags
-18. Meta release channels
-19. Meta Store/Early Access submission
-20. Full survival expansion later
+1. Commit ruleset docs and updated roadmap.
+2. Tag known-good state before canonical world migration.
+3. Preserve/refine Quest VR movement, XRI UI, and block targeting.
+4. Replace temporary registries with canonical registries.
+5. Add migration aliases for old temporary IDs.
+6. Generate survival_terrain.
+7. Generate flat_builder and void_builder.
+8. Render canonical blocks with authored atlas validation.
+9. Add environment state and day/night/weather.
+10. Add biome vegetation.
+11. Add generated structures.
+12. Implement creative catalog and tools.
+13. Implement survival mining, inventory, tools, crafting, and farming.
+14. Implement unified save/load and migrations.
+15. Add LAN host-authoritative canonical world sync.
+16. Add audio, haptics, and VFX.
+17. Harden Quest performance.
+18. Produce signed release candidate.
+19. Validate through Meta release channels.
+20. Prepare Store / Early Access submission.
+21. Expand with mobs, combat, and deeper progression.
+22. Add cloud private worlds.
 ```
-
-The key architectural decision is to make block edits, inventory changes, crafting, and damage all flow through command objects early. That keeps single-player, multiplayer, save/load, undo, and tests aligned instead of requiring a networking rewrite later.
 
 ---
 
-# 12. Definition of done by milestone
+# 13. Definition of done by milestone
 
-## M0 Bootstrap
+## M0 — Repo, docs, and checkpoint policy
 
 ```text
-Public repo exists.
-main is protected.
-No develop branch exists.
-GitHub Project exists.
-Unity project opens.
-CI runs tests.
-main can build a dev APK artifact.
+Ruleset docs are committed.
+Roadmap identifies rulesets as source of truth.
+Known-good tag policy exists.
+Pre-migration kg tag exists.
+Validation commands are documented.
 ```
 
-## M1 VR Slice
+## M1 — Quest VR foundation
 
 ```text
-Quest 3/3S app launches.
-Player can move and turn.
-Controllers work.
-Pointer can highlight objects.
-Comfort settings exist.
+Quest app launches.
+Movement and turn work.
+Controllers track reliably.
+Menus are interactable through XRI UI.
+Block targeting works.
+Comfort settings persist.
 ```
 
-## M2 Creative
+## M2 — Canonical voxel core
 
 ```text
-Bounded world renders.
-Player can place and break blocks.
-Hotbar works.
-Save/load works.
-World can be validated with automated tests.
+Canonical registries load.
+Temporary IDs migrate.
+New worlds write canonical IDs only.
+Registry tests pass.
+kg checkpoint exists.
 ```
 
-## M3 Survival-Lite
+## M3 — Canonical world generation
 
 ```text
-Terrain, caves, and resources generate.
-Inventory works.
-Crafting works.
-Health loop works.
-No mobs/day-night yet.
+survival_terrain generates.
+flat_builder generates.
+void_builder generates.
+Resources, caves, spawn safety, and biome selection are deterministic.
+Temporary validation world is not used for new worlds.
+kg checkpoint exists.
 ```
 
-## M4 Art and Texture Assets
+## M4 — Environment, vegetation, structures
 
 ```text
-Generated terrain is visible in the default validation world.
-Committed original block texture assets exist with Unity .meta files.
-Renderable blocks use authored texture assets by default.
-Missing or unrelated atlas textures fail validation instead of falling back to generated runtime visuals.
-Texture import settings are appropriate for Quest 3/3S validation.
-Asset provenance is recorded.
-Asset validation tests cover dimensions, mappings, missing materials, and unrelated atlas rejection.
-Local diagnostics logging foundation supports Alpha validation for renderer, persistence, and authored asset bootstrap failures.
-Quest headset validation confirms block readability and no magenta/missing-material surfaces.
+Day/night and weather exist.
+Biome vegetation exists.
+Generated structures exist.
+Environment, vegetation, and structure state save/load.
+Audio/VFX hooks exist.
 ```
 
-## M5 Multiplayer
+## M5 — Creative mode
 
 ```text
-Two Quest devices can connect.
-Players can see each other's Meta Horizon avatars.
-Players can edit the same world.
-World edits stay synchronized.
-Basic multiplayer save/load works.
-Host disconnect and host shutdown behavior is defined and validated.
-Clients receive clear reconnect/session-ended UX when the host is gone.
-Host chunk authority boundaries are enforced.
-Fallback proxy avatars keep multiplayer usable when Meta Horizon Avatars are unavailable.
-Bandwidth, 100ms latency, and packet loss checks are recorded for active block editing/chunk sync.
-Voice chat uses Meta Quest party chat; M5 does not build in-app voice chat.
+Creative catalog uses canonical IDs.
+Player can build/remove/undo in VR.
+World tools work.
+Environment/structure/vegetation creative tools exist.
+Creative saves use canonical schema.
+kg checkpoint exists.
 ```
 
-## M6 Store Candidate
+## M6 — Survival systems
 
 ```text
-Signed release APK is built from a main tag.
+Mining/tool/durability/drop rules work.
+Inventory and containers work.
+Crafting stations and recipes work.
+Farming/regrowth works.
+Progression is playable.
+```
+
+## M7 — Save/load and migration
+
+```text
+Canonical save schema is stable.
+Autosave/manual save work.
+Corruption recovery works.
+Temporary save data migrates or fails clearly.
+LAN host save metadata is supported.
+kg checkpoint exists.
+```
+
+## M8 — LAN multiplayer
+
+```text
+Two Quest devices can connect over LAN.
+Players see avatars or fallback proxies.
+Block edits sync.
+Inventory/crafting/resource commands are host-authoritative.
+Environment/structure/vegetation state syncs.
+Host save/load works.
+Host disconnect UX is clear.
+kg checkpoint exists.
+```
+
+## M9 — Audio/VFX/art polish
+
+```text
+Required audio cues exist.
+Haptics exist.
+VFX are pooled and readable.
+Weather ambience exists.
+Art assets are original and Quest-readable.
+No missing materials.
+```
+
+## M10 — Quest performance and store candidate
+
+```text
+Quest 3 and Quest 3S performance evidence exists.
+Signed APK builds from main v* tag.
 Meta release channel testing works.
-Performance evidence is captured.
-Privacy/store metadata is ready.
+Store metadata and privacy docs are ready.
 Submission package is complete.
 ```
 
-## M7 Full Survival
+## M11 — Full survival expansion
 
 ```text
-Day/night exists.
-Original mobs exist.
-Combat/progression exists.
+Original mobs/NPCs exist.
+Combat and armor/progression exist.
 Multiplayer survival remains stable.
 Quest performance remains acceptable.
 ```
 
-## M8 Cloud Private Worlds
+## M12 — Cloud private worlds
 
 ```text
-Local LAN multiplayer remains available.
-Owner can create a cloud-hosted private world.
-Owner-only reusable invite codes expire after 48 hours.
-Default auto-accept mode adds entitled signed-in redeemers as members.
-Owner can switch future invite redemptions to approval-required mode.
-Membership remains permanent until owner removal or member self-removal.
-Owner can remove, block, approve, deny, and regenerate invite access.
-Cloud worlds persist when empty, spin down, and spin up for authorized members.
-Two Quest devices can join over the internet and resume a persisted world.
-No public matchmaking, community world browser, public discovery, or in-app voice scope is introduced.
-Cloud cost, quota, privacy, diagnostics, and store-readiness notes are recorded.
+LAN remains available.
+Owner can create cloud private world.
+Invite/member model works.
+Cloud save/spin-down/spin-up works.
+Authorized Quest users can resume persisted world over internet.
+Privacy/cost/quota diagnostics are documented.
 ```
 
 ---
 
-# 13. Source references to re-check before implementation
+# 14. Source references to re-check before implementation
 
-These references were used to form the plan. Re-check them before implementation because pricing, store policy, SDK guidance, and platform requirements can change.
+Re-check external references before implementation because pricing, SDKs, platform rules, and store requirements can change.
 
-- Unity pricing and plan thresholds: <https://unity.com/products/pricing-updates>
-- Unity Personal: <https://unity.com/products/unity-personal>
-- Unreal Engine licensing: <https://www.unrealengine.com/license>
-- Meta Unity project setup: <https://developers.meta.com/horizon/documentation/unity/unity-project-setup/>
-- Unity Quest/OpenXR documentation: <https://docs.unity3d.com/6000.0/Documentation/Manual/xr-meta-quest-develop.html>
-- Unity Test Framework: <https://docs.unity3d.com/Packages/com.unity.test-framework@1.4/manual/index.html>
-- Unity command-line tests: <https://docs.unity3d.com/6000.3/Documentation/Manual/test-framework/run-tests-from-command-line.html>
-- Netcode for GameObjects: <https://github.com/Unity-Technologies/com.unity.netcode.gameobjects>
-- Unity Multiplayer Play Mode / sessions quickstart: <https://docs.unity.com/en-us/mps-sdk/build-your-first-session>
-- Unity Relay: <https://docs.unity.com/en-us/relay/get-started>
-- Unity Lobby cost information: <https://support.unity.com/hc/en-us/articles/4410130452628-What-are-the-costs-associated-with-using-the-Lobby-service>
-- GitHub CLI repo creation: <https://cli.github.com/manual/gh_repo_create>
-- GitHub CLI project creation: <https://cli.github.com/manual/gh_project>
-- GitHub Projects and Issues: <https://github.com/features/issues>
-- GitHub sub-issues: <https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/adding-sub-issues>
-- GitHub issue types: <https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/managing-issue-types-in-an-organization>
-- Meta performance VRC: <https://developers.meta.com/horizon/resources/vrc-quest-performance-1/>
-- Meta app submission overview: <https://developers.meta.com/horizon/resources/publish-submit/>
-- Meta release channels: <https://developers.meta.com/horizon/blog/end-to-end-testing-with-release-channels/>
-- Meta APK signing: <https://developers.meta.com/horizon/documentation/native/android/mobile-application-signing-quest/>
-- Meta store ecosystem / App Lab changes: <https://developers.meta.com/horizon/blog/a-more-open-ecosystem-for-developers/>
-- Minecraft usage guidelines: <https://www.minecraft.net/en-us/usage-guidelines>
+```text
+Unity pricing and plan thresholds
+Unity Personal terms
+Meta Unity/OpenXR project setup
+Meta XR SDK documentation
+Meta Horizon Avatars documentation
+Meta Platform SDK and Data Use Checkup requirements
+Unity Input System documentation
+XR Interaction Toolkit documentation
+Netcode for GameObjects documentation
+Unity Transport documentation
+Meta Quest performance VRCs
+Meta release channel and store submission requirements
+Meta APK signing requirements
+GitHub Actions release workflow guidance
+GitHub protected branch/ruleset documentation
+Minecraft usage guidelines
+```

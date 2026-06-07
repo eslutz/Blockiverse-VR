@@ -5,9 +5,12 @@ This file defines standing workflow instructions for AI agents and automation wo
 ## Source Of Truth
 
 - Read and follow the committed execution plan: [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md).
-- Use the GitHub Project `Blockiverse VR Roadmap` and linked GitHub issues for current scope, priority, status, and detailed work breakdown.
+- Read and follow the canonical rulesets under [docs/rulesets/](docs/rulesets/). These documents define the current game design, implementation vocabulary, save schema, menus, environment, structures, vegetation, multiplayer behavior, audio/VFX behavior, and known-good checkpoint policy.
+- The rulesets define the game. Existing temporary validation worlds, reduced starter registries, and old temporary block/item names are migration inputs only.
+- Use [docs/rulesets/voxel_implementation_alignment_matrix.md](docs/rulesets/voxel_implementation_alignment_matrix.md) only as a migration/refactor aid. It is not a second gameplay vocabulary.
+- Use the GitHub Project `Blockiverse VR Roadmap` and linked GitHub issues for current work state, priority, review status, and detailed task breakdown.
 - Preserve the roadmap hierarchy: epics contain features, features contain stories, and implementation work should trace back to the relevant issue whenever one exists.
-- Do not duplicate detailed product, architecture, testing, art, release, or platform requirements in this file. Keep those details in the plan, issues, project fields, or pull requests.
+- Do not duplicate detailed product, architecture, testing, art, release, or platform requirements in this file. Keep those details in the execution plan, rulesets, issues, project fields, or pull requests.
 
 ## Human Owner
 
@@ -167,9 +170,10 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 ## Project Guardrails
 
 - Treat Meta Quest 3 and Meta Quest 3S as primary target platforms.
-- Basic multiplayer scope includes voice chat.
+- Initial multiplayer uses Meta Quest party chat for voice. Do not add in-app voice chat unless the rulesets and roadmap are explicitly changed.
 - Use original names.
 - Keep assets original and do not copy protected third-party identity.
+- New gameplay code, UI labels, registries, save data, and tests should use stable canonical IDs from the rulesets. Legacy IDs and names should be handled through explicit migration code or marked as historical validation artifacts.
 - Never commit secrets, keystores, signing credentials, API keys, `.env` files, Unity `Library`, `Temp`, `Logs`, or local generated folders.
 - Keystores and production signing material must remain outside the repo and be stored in GitHub Actions secrets when needed.
 - Current licensing state: source-available / All Rights Reserved. Keep `LICENSE.md`, `NOTICE.md`, and relevant docs aligned with current project intent.
@@ -193,6 +197,7 @@ hzdb device list
 - Keep experimental or unstable MCP servers out of the base Codex config. If a server is needed for testing but can break prompt execution, put it in a separate Codex profile, validate it with `codex mcp list` and a fresh Codex session, and remove or disable it immediately if it blocks normal prompts.
 - Use GitHub CLI for ProjectV2 lane/status updates, because GitHub MCP/connector tools may not expose all project field mutations.
 - Use browser automation tools for local web targets only when the task involves browser-visible UI, screenshots, or interaction checks.
+- Use annotated `kg/...` tags only for validated engineering checkpoints and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). Do not use known-good checkpoint tags as release tags.
 
 ## Local Unity Validation
 
@@ -218,8 +223,9 @@ scripts/unity/run-tests.sh
 ## Documentation Discipline
 
 - Update documentation when behavior, workflow, architecture, or project policy changes.
+- Keep canonical design and implementation rules in [docs/rulesets/](docs/rulesets/) and roadmap sequencing in [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md). Other docs should point to those sources instead of redefining gameplay or design rules.
 - Keep [CHANGELOG.md](CHANGELOG.md) up-to-date with completed work that changes project behavior, workflow, documentation, release process, or user-visible scope.
 - Add completed work to the `Unreleased` section unless the change is being documented directly under a release version.
 - Keep issue bodies and PR descriptions useful enough for a human developer to resume the work.
 - Record important technical decisions under `docs/adr/`.
-- Keep the execution plan, GitHub Project, and linked issues aligned when roadmap structure changes.
+- Keep the execution plan, rulesets, GitHub Project, and linked issues aligned when roadmap structure or canonical design scope changes.

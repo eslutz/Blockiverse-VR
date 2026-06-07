@@ -21,5 +21,6 @@ submission, or Submit for Review action is performed by this repository checklis
 - Support email or site — `known-issues-and-support.md`
 - Known issues — `known-issues-and-support.md`
 - Release notes — `release-notes-template.md`
+- Ruleset/design consistency — `../rulesets/` and `../roadmap/blockiverse_vr_execution_plan.md`
 - Signed release APK from a `main` tag — `.github/workflows/release-apk.yml` after Eric
   provides production signing material through GitHub Actions secrets

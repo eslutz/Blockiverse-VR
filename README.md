@@ -10,15 +10,14 @@ Blockiverse VR is a VR voxel sandbox prototype for Meta Quest 3 and Quest 3S, bu
 
 ## Initial Gameplay Scope
 
-- Creative-mode voxel building
-- Bounded voxel terrain
-- Caves and resource deposits
-- Inventory, hotbar, and crafting
-- Health and survival-lite resource loop
-- Save/load with world versioning
-- Basic two-player co-op with private voice chat
+- Ruleset-defined survival and creative modes
+- Canonical bounded world presets: `survival_terrain`, `flat_builder`, and `void_builder`
+- Canonical voxel registries, terrain, caves, resources, structures, vegetation, and environment systems
+- Inventory, hotbar, tools, crafting, stations, farming, containers, and player survival stats
+- Save/load with explicit schema versioning and temporary-ID migrations
+- LAN host-authoritative co-op with Meta Horizon avatars or fallback proxies
 
-Full survival mode, mobs, day/night, combat, and deeper progression are planned after the MVP.
+Original NPCs/mobs, combat, deeper progression, and cloud-hosted private worlds are later expansions.
 
 ## Development Model
 
@@ -38,13 +37,9 @@ Third-party assets may only be committed when redistribution is allowed. Secrets
 
 ## Roadmap
 
-The roadmap is managed through GitHub Projects and linked GitHub issues:
+The canonical development/design source of truth is:
 
-- M0 Bootstrap
-- M1 VR Slice
-- M2 Creative
-- M3 Survival-Lite
-- M4 Art and Texture Assets
-- M5 Multiplayer
-- M6 Store Candidate
-- M7 Full Survival
+- [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md)
+- [docs/rulesets/](docs/rulesets/)
+
+GitHub Projects and linked issues track current work state, priority, and review flow.
