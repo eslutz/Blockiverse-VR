@@ -21,43 +21,43 @@ namespace Blockiverse.Survival
             var recipeBook = new CraftingRecipeBook(itemRegistry);
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.Workbench, 1),
+                new ItemStack(ItemId.BuildTable, 1),
                 CraftingStation.None,
-                new ItemStack(ItemId.Timber, 4)));
+                new ItemStack(ItemId.BranchwoodLog, 4)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.Torchbud, 4),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Timber, 1),
-                new ItemStack(ItemId.Coalstone, 1)));
+                new ItemStack(ItemId.Glowwick, 4),
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.BranchwoodLog, 1),
+                new ItemStack(ItemId.Embercoal, 1)));
 
             recipeBook.Register(new CraftingRecipe(
                 new ItemStack(ItemId.StorageCrate, 1),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Timber, 8)));
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.BranchwoodLog, 8)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.Chipper, 1),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Timber, 3)));
+                new ItemStack(ItemId.ReedwoodFeller, 1),
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.BranchwoodLog, 3)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.Mallet, 1),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Timber, 2),
-                new ItemStack(ItemId.Slate, 2)));
+                new ItemStack(ItemId.ReedwoodMallet, 1),
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.BranchwoodLog, 2),
+                new ItemStack(ItemId.Graystone, 2)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.Pick, 1),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Timber, 2),
-                new ItemStack(ItemId.Copperstone, 3)));
+                new ItemStack(ItemId.ReedwoodDelver, 1),
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.BranchwoodLog, 2),
+                new ItemStack(ItemId.RawRosycopper, 3)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.RecoveryWrap, 2),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Leafmass, 3),
-                new ItemStack(ItemId.Timber, 1)));
+                new ItemStack(ItemId.FieldBandage, 2),
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.Leafmoss, 3),
+                new ItemStack(ItemId.BranchwoodLog, 1)));
 
             return recipeBook;
         }

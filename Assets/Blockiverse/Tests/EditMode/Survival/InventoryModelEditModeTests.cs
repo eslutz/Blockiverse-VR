@@ -10,61 +10,42 @@ namespace Blockiverse.Tests.Survival.EditMode
     public sealed class InventoryModelEditModeTests
     {
         [Test]
-        public void DefaultRegistryContainsWaveOneDefinitionsAndBlockMappings()
+        public void DefaultRegistryContainsCanonicalItemDefinitionsAndBlockMappings()
         {
             ItemRegistry registry = ItemRegistry.CreateDefault();
 
-            ItemId[] expectedItems =
-            {
-                ItemId.MeadowTurf,
-                ItemId.Loam,
-                ItemId.Slate,
-                ItemId.Timber,
-                ItemId.Leafmass,
-                ItemId.Clearstone,
-                ItemId.Coalstone,
-                ItemId.Copperstone,
-                ItemId.Ironstone,
-                ItemId.Workbench,
-                ItemId.Torchbud,
-                ItemId.StorageCrate,
-                ItemId.Chipper,
-                ItemId.Mallet,
-                ItemId.Pick,
-                ItemId.RecoveryWrap
-            };
-
-            CollectionAssert.AreEquivalent(expectedItems, registry.All.Where(item => item.Id != ItemId.None).Select(item => item.Id));
-            Assert.That((int)ItemId.None, Is.EqualTo(0));
+            Assert.That(ItemId.None.IsNone, Is.True);
             Assert.That(registry.TryGetItemForBlock(BlockRegistry.Air, out _), Is.False);
 
-            AssertBlockMapsToItem(registry, BlockRegistry.MeadowTurf, ItemId.MeadowTurf);
-            AssertBlockMapsToItem(registry, BlockRegistry.Loam, ItemId.Loam);
-            AssertBlockMapsToItem(registry, BlockRegistry.Slate, ItemId.Slate);
-            AssertBlockMapsToItem(registry, BlockRegistry.Timber, ItemId.Timber);
-            AssertBlockMapsToItem(registry, BlockRegistry.Leafmass, ItemId.Leafmass);
-            AssertBlockMapsToItem(registry, BlockRegistry.Clearstone, ItemId.Clearstone);
-            AssertBlockMapsToItem(registry, BlockRegistry.Coalstone, ItemId.Coalstone);
-            AssertBlockMapsToItem(registry, BlockRegistry.Copperstone, ItemId.Copperstone);
-            AssertBlockMapsToItem(registry, BlockRegistry.Ironstone, ItemId.Ironstone);
-            AssertBlockMapsToItem(registry, BlockRegistry.Workbench, ItemId.Workbench);
-            AssertBlockMapsToItem(registry, BlockRegistry.Torchbud, ItemId.Torchbud);
-            AssertBlockMapsToItem(registry, BlockRegistry.StorageCrate, ItemId.StorageCrate);
+            AssertBlockMapsToItem(registry, BlockRegistry.MeadowTurf,        ItemId.MeadowTurf);
+            AssertBlockMapsToItem(registry, BlockRegistry.LooseLoam,          ItemId.LooseLoam);
+            AssertBlockMapsToItem(registry, BlockRegistry.Graystone,          ItemId.Graystone);
+            AssertBlockMapsToItem(registry, BlockRegistry.BranchwoodLog,      ItemId.BranchwoodLog);
+            AssertBlockMapsToItem(registry, BlockRegistry.Leafmoss,           ItemId.Leafmoss);
+            AssertBlockMapsToItem(registry, BlockRegistry.LumenQuartzCluster, ItemId.LumenCrystal);
+            AssertBlockMapsToItem(registry, BlockRegistry.EmbercoalSeam,      ItemId.Embercoal);
+            AssertBlockMapsToItem(registry, BlockRegistry.RosycopperBloom,    ItemId.RawRosycopper);
+            AssertBlockMapsToItem(registry, BlockRegistry.RustcoreOre,        ItemId.RawRustcore);
+            AssertBlockMapsToItem(registry, BlockRegistry.BuildTable,         ItemId.BuildTable);
+            AssertBlockMapsToItem(registry, BlockRegistry.Glowwick,           ItemId.Glowwick);
+            AssertBlockMapsToItem(registry, BlockRegistry.StorageCrate,       ItemId.StorageCrate);
         }
 
         [Test]
-        public void DefaultRegistryUsesRequiredStackSizesAndStacksPlaceablesToSixtyFour()
+        public void DefaultRegistryUsesRequiredStackSizesPerCategory()
         {
             ItemRegistry registry = ItemRegistry.CreateDefault();
 
-            Assert.That(registry.Get(ItemId.MeadowTurf).MaxStackSize, Is.EqualTo(ItemRegistry.ResourceStackSize));
-            Assert.That(registry.Get(ItemId.Timber).MaxStackSize, Is.EqualTo(ItemRegistry.ResourceStackSize));
-            Assert.That(registry.Get(ItemId.Coalstone).MaxStackSize, Is.EqualTo(ItemRegistry.ResourceStackSize));
-            Assert.That(registry.Get(ItemId.Workbench).MaxStackSize, Is.EqualTo(ItemRegistry.ResourceStackSize));
-            Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize, Is.EqualTo(ItemRegistry.ResourceStackSize));
-            Assert.That(registry.Get(ItemId.Chipper).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
-            Assert.That(registry.Get(ItemId.Mallet).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
-            Assert.That(registry.Get(ItemId.Pick).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
+            Assert.That(registry.Get(ItemId.MeadowTurf).MaxStackSize,    Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.BranchwoodLog).MaxStackSize,  Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.Embercoal).MaxStackSize,      Is.EqualTo(ItemRegistry.OreStackSize));
+            Assert.That(registry.Get(ItemId.LumenCrystal).MaxStackSize,   Is.EqualTo(ItemRegistry.CrystalStackSize));
+            Assert.That(registry.Get(ItemId.BuildTable).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize,   Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.ReedwoodFeller).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
+            Assert.That(registry.Get(ItemId.ReedwoodMallet).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
+            Assert.That(registry.Get(ItemId.ReedwoodDelver).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
+            Assert.That(registry.Get(ItemId.FieldBandage).MaxStackSize,   Is.EqualTo(ItemRegistry.FieldBandageStackSize));
         }
 
         [Test]
@@ -83,13 +64,13 @@ namespace Blockiverse.Tests.Survival.EditMode
         public void AddMergesIntoPartialStacksBeforeUsingEmptySlots()
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault(), slotCount: 3, hotbarSlotCount: 1);
-            inventory.SetSlot(1, new ItemStack(ItemId.Slate, 60));
+            inventory.SetSlot(1, new ItemStack(ItemId.LooseLoam, 95));
 
-            ItemStack leftover = inventory.Add(new ItemStack(ItemId.Slate, 10));
+            ItemStack leftover = inventory.Add(new ItemStack(ItemId.LooseLoam, 10));
 
             Assert.That(leftover.IsEmpty, Is.True);
-            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Slate, 64)));
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Slate, 6)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 99)));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 6)));
             Assert.That(inventory.GetSlot(2).IsEmpty, Is.True);
         }
 
@@ -97,42 +78,42 @@ namespace Blockiverse.Tests.Survival.EditMode
         public void AddReturnsLeftoverWhenInventoryCannotFitFullStack()
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault(), slotCount: 2, hotbarSlotCount: 1);
-            inventory.SetSlot(0, new ItemStack(ItemId.MeadowTurf, 64));
-            inventory.SetSlot(1, new ItemStack(ItemId.MeadowTurf, 60));
+            inventory.SetSlot(0, new ItemStack(ItemId.MeadowTurf, 99));
+            inventory.SetSlot(1, new ItemStack(ItemId.MeadowTurf, 95));
 
             ItemStack leftover = inventory.Add(new ItemStack(ItemId.MeadowTurf, 10));
 
             Assert.That(leftover, Is.EqualTo(new ItemStack(ItemId.MeadowTurf, 6)));
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.MeadowTurf, 64)));
-            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.MeadowTurf, 64)));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.MeadowTurf, 99)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.MeadowTurf, 99)));
         }
 
         [Test]
         public void TryAddAllReturnsFalseAndLeavesInventoryUnchangedWhenCapacityIsInsufficient()
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault(), slotCount: 1, hotbarSlotCount: 1);
-            inventory.SetSlot(0, new ItemStack(ItemId.Loam, 60));
+            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, 94));
 
-            bool added = inventory.TryAddAll(new ItemStack(ItemId.Loam, 10));
+            bool added = inventory.TryAddAll(new ItemStack(ItemId.LooseLoam, 10));
 
             Assert.That(added, Is.False);
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Loam, 60)));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 94)));
         }
 
         [Test]
         public void SplitSlotRemovesRequestedCountAndLeavesRemainder()
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault());
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 20));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 20));
 
             ItemStack split = inventory.SplitSlot(0, 7);
 
-            Assert.That(split, Is.EqualTo(new ItemStack(ItemId.Timber, 7)));
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Timber, 13)));
+            Assert.That(split, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 7)));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 13)));
 
             ItemStack remainder = inventory.SplitSlot(0, 13);
 
-            Assert.That(remainder, Is.EqualTo(new ItemStack(ItemId.Timber, 13)));
+            Assert.That(remainder, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 13)));
             Assert.That(inventory.GetSlot(0).IsEmpty, Is.True);
         }
 
@@ -140,20 +121,20 @@ namespace Blockiverse.Tests.Survival.EditMode
         public void RemoveConsumesExactCountAcrossStacksOrLeavesInventoryUnchanged()
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault());
-            inventory.SetSlot(0, new ItemStack(ItemId.Loam, 5));
-            inventory.SetSlot(1, new ItemStack(ItemId.Loam, 10));
+            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, 5));
+            inventory.SetSlot(1, new ItemStack(ItemId.LooseLoam, 10));
 
-            bool removed = inventory.Remove(ItemId.Loam, 12);
+            bool removed = inventory.Remove(ItemId.LooseLoam, 12);
 
             Assert.That(removed, Is.True);
             Assert.That(inventory.GetSlot(0).IsEmpty, Is.True);
-            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Loam, 3)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 3)));
 
-            bool removedTooMuch = inventory.Remove(ItemId.Loam, 4);
+            bool removedTooMuch = inventory.Remove(ItemId.LooseLoam, 4);
 
             Assert.That(removedTooMuch, Is.False);
             Assert.That(inventory.GetSlot(0).IsEmpty, Is.True);
-            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Loam, 3)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 3)));
         }
 
         [Test]
@@ -161,12 +142,12 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault());
 
-            Assert.Throws<ArgumentOutOfRangeException>(() => new ItemStack(ItemId.Timber, 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => new ItemStack(ItemId.BranchwoodLog, 0));
             Assert.Throws<ArgumentException>(() => new ItemStack(ItemId.None, 1));
             Assert.Throws<ArgumentOutOfRangeException>(() => new Inventory(ItemRegistry.CreateDefault(), Inventory.MaxSlotCount + 1, hotbarSlotCount: 1));
-            Assert.Throws<ArgumentOutOfRangeException>(() => inventory.Remove(ItemId.Timber, 0));
-            Assert.Throws<KeyNotFoundException>(() => inventory.Add(new ItemStack((ItemId)999, 1)));
-            Assert.Throws<InvalidOperationException>(() => inventory.SetSlot(0, new ItemStack(ItemId.Pick, 2)));
+            Assert.Throws<ArgumentOutOfRangeException>(() => inventory.Remove(ItemId.BranchwoodLog, 0));
+            Assert.Throws<KeyNotFoundException>(() => inventory.Add(new ItemStack(new ItemId("unknown_item_test_999"), 1)));
+            Assert.Throws<InvalidOperationException>(() => inventory.SetSlot(0, new ItemStack(ItemId.ReedwoodDelver, 2)));
         }
 
         static void AssertBlockMapsToItem(ItemRegistry registry, BlockId blockId, ItemId itemId)

@@ -52,17 +52,22 @@ namespace Blockiverse.Voxel
         Terrain,
         Organic,
         Crafted,
-        Resource
+        Resource,
+        Station
     }
 
     public sealed class BlockDefinition
     {
-        public BlockDefinition(BlockId id, string name, BlockCategory category, bool isSolid, bool isRenderable)
+        public BlockDefinition(BlockId id, string canonicalId, string name, BlockCategory category, bool isSolid, bool isRenderable)
         {
+            if (string.IsNullOrWhiteSpace(canonicalId))
+                throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
+
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Block names must be non-empty.", nameof(name));
 
             Id = id;
+            CanonicalId = canonicalId;
             Name = name;
             Category = category;
             IsSolid = isSolid;
@@ -70,6 +75,7 @@ namespace Blockiverse.Voxel
         }
 
         public BlockId Id { get; }
+        public string CanonicalId { get; }
         public string Name { get; }
         public BlockCategory Category { get; }
         public bool IsSolid { get; }
@@ -80,39 +86,144 @@ namespace Blockiverse.Voxel
     {
         readonly Dictionary<BlockId, BlockDefinition> definitionsById = new();
         readonly Dictionary<string, BlockDefinition> definitionsByName = new(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, BlockDefinition> definitionsByCanonicalId = new(StringComparer.OrdinalIgnoreCase);
 
-        public static readonly BlockId Air = new(0);
-        public static readonly BlockId MeadowTurf = new(1);
-        public static readonly BlockId Loam = new(2);
-        public static readonly BlockId Slate = new(3);
-        public static readonly BlockId Timber = new(4);
-        public static readonly BlockId Leafmass = new(5);
-        public static readonly BlockId Clearstone = new(6);
-        public static readonly BlockId Coalstone = new(7);
-        public static readonly BlockId Copperstone = new(8);
-        public static readonly BlockId Ironstone = new(9);
-        public static readonly BlockId Workbench = new(10);
-        public static readonly BlockId Torchbud = new(11);
-        public static readonly BlockId StorageCrate = new(12);
+        // ── Preserved integer IDs (0-12) for legacy save migration ──────────
+        public static readonly BlockId Air                 = new(0);
+        public static readonly BlockId MeadowTurf          = new(1);
+        public static readonly BlockId LooseLoam            = new(2);
+        public static readonly BlockId Graystone            = new(3);
+        public static readonly BlockId BranchwoodLog        = new(4);
+        public static readonly BlockId Leafmoss             = new(5);
+        public static readonly BlockId LumenQuartzCluster   = new(6);
+        public static readonly BlockId EmbercoalSeam        = new(7);
+        public static readonly BlockId RosycopperBloom      = new(8);
+        public static readonly BlockId RustcoreOre          = new(9);
+        public static readonly BlockId BuildTable           = new(10);
+        public static readonly BlockId Glowwick             = new(11);
+        public static readonly BlockId StorageCrate         = new(12);
+
+        // ── Canonical terrain blocks ─────────────────────────────────────────
+        public static readonly BlockId Worldroot            = new(13);
+        public static readonly BlockId Deepmantle           = new(14);
+        public static readonly BlockId DarkSlate            = new(15);
+        public static readonly BlockId WarmGranite          = new(16);
+        public static readonly BlockId WhiteLimestone       = new(17);
+        public static readonly BlockId BlackBasalt          = new(18);
+
+        // ── Canonical soil/surface blocks ────────────────────────────────────
+        public static readonly BlockId DryTurf              = new(19);
+        public static readonly BlockId SnowcapTurf          = new(20);
+        public static readonly BlockId Rootsoil             = new(21);
+        public static readonly BlockId Claybed              = new(22);
+        public static readonly BlockId RiverSilt            = new(23);
+        public static readonly BlockId PaleSand             = new(24);
+        public static readonly BlockId ShingleGravel        = new(25);
+        public static readonly BlockId Snowpack             = new(26);
+        public static readonly BlockId Frostglass           = new(27);
+
+        // ── Canonical vegetation blocks ──────────────────────────────────────
+        public static readonly BlockId Thornbrush           = new(28);
+        public static readonly BlockId Reedgrass            = new(29);
+
+        // ── Canonical crafted blocks ─────────────────────────────────────────
+        public static readonly BlockId WorkPlank            = new(30);
+        public static readonly BlockId CutstoneBlock        = new(31);
+        public static readonly BlockId FiredBrick           = new(32);
+        public static readonly BlockId ClearpaneGlass       = new(33);
+
+        // ── Canonical resource nodes ─────────────────────────────────────────
+        public static readonly BlockId SurfacePebbles       = new(34);
+        public static readonly BlockId FlintyShingle        = new(35);
+        public static readonly BlockId PaletinThread        = new(36);
+        public static readonly BlockId SunmetalFleck        = new(37);
+        public static readonly BlockId NiterstonePocket     = new(38);
+        public static readonly BlockId BrightsaltCrust      = new(39);
+        public static readonly BlockId ShellgritBed         = new(40);
+        public static readonly BlockId ResinKnot            = new(41);
+        public static readonly BlockId Berrybush            = new(42);
+        public static readonly BlockId GrainStalk           = new(43);
+        public static readonly BlockId UmbraliteNode        = new(44);
+        public static readonly BlockId StaropalGeode        = new(45);
+
+        // ── Canonical station blocks ─────────────────────────────────────────
+        public static readonly BlockId Campfire             = new(46);
+        public static readonly BlockId ClayKiln             = new(47);
+        public static readonly BlockId BellowsForge         = new(48);
+        public static readonly BlockId PrepBoard            = new(49);
+        public static readonly BlockId MendBench            = new(50);
 
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
 
         public static BlockRegistry CreateDefault()
         {
             var registry = new BlockRegistry();
-            registry.Register(new BlockDefinition(Air, "Air", BlockCategory.Air, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(MeadowTurf, "Meadow Turf", BlockCategory.Terrain, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Loam, "Loam", BlockCategory.Terrain, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Slate, "Slate", BlockCategory.Terrain, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Timber, "Timber", BlockCategory.Organic, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Leafmass, "Leafmass", BlockCategory.Organic, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Clearstone, "Clearstone", BlockCategory.Terrain, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Coalstone, "Coalstone", BlockCategory.Resource, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Copperstone, "Copperstone", BlockCategory.Resource, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Ironstone, "Ironstone", BlockCategory.Resource, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Workbench, "Workbench", BlockCategory.Crafted, isSolid: true, isRenderable: true));
-            registry.Register(new BlockDefinition(Torchbud, "Torchbud", BlockCategory.Crafted, isSolid: false, isRenderable: true));
-            registry.Register(new BlockDefinition(StorageCrate, "Storage Crate", BlockCategory.Crafted, isSolid: true, isRenderable: true));
+
+            // ── Preserved blocks (atlas tiles exist, IsRenderable: true) ─────
+            registry.Register(new BlockDefinition(Air, "air", "Air", BlockCategory.Air, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(MeadowTurf, "meadow_turf", "Meadow Turf", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(LooseLoam, "loose_loam", "Loose Loam", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Graystone, "graystone", "Graystone", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(BranchwoodLog, "branchwood_log", "Branchwood Log", BlockCategory.Organic, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Leafmoss, "leafmoss", "Leafmoss", BlockCategory.Organic, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(LumenQuartzCluster, "lumen_quartz_cluster", "Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(EmbercoalSeam, "embercoal_seam", "Embercoal Seam", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(RosycopperBloom, "rosycopper_bloom", "Rosycopper Bloom", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(RustcoreOre, "rustcore_ore", "Rustcore Ore", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(BuildTable, "build_table", "Build Table", BlockCategory.Station, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Glowwick, "glowwick", "Glowwick", BlockCategory.Crafted, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(StorageCrate, "storage_crate", "Storage Crate", BlockCategory.Crafted, isSolid: true, isRenderable: true));
+
+            // ── Additional canonical terrain (no atlas tile yet) ─────────────
+            registry.Register(new BlockDefinition(Worldroot, "worldroot", "Worldroot", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(Deepmantle, "deepmantle", "Deepmantle", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(DarkSlate, "dark_slate", "Dark Slate", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(WarmGranite, "warm_granite", "Warm Granite", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(WhiteLimestone, "white_limestone", "White Limestone", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(BlackBasalt, "black_basalt", "Black Basalt", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+
+            // ── Additional canonical soil/surface (no atlas tile yet) ────────
+            registry.Register(new BlockDefinition(DryTurf, "dry_turf", "Dry Turf", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(SnowcapTurf, "snowcap_turf", "Snowcap Turf", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(Rootsoil, "rootsoil", "Rootsoil", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(Claybed, "claybed", "Claybed", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(RiverSilt, "river_silt", "River Silt", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(PaleSand, "pale_sand", "Pale Sand", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(ShingleGravel, "shingle_gravel", "Shingle Gravel", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(Snowpack, "snowpack", "Snowpack", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(Frostglass, "frostglass", "Frostglass", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+
+            // ── Additional canonical vegetation (no atlas tile yet) ──────────
+            registry.Register(new BlockDefinition(Thornbrush, "thornbrush", "Thornbrush", BlockCategory.Organic, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(Reedgrass, "reedgrass", "Reedgrass", BlockCategory.Organic, isSolid: false, isRenderable: false));
+
+            // ── Additional canonical crafted (no atlas tile yet) ─────────────
+            registry.Register(new BlockDefinition(WorkPlank, "work_plank", "Work Plank", BlockCategory.Crafted, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(FiredBrick, "fired_brick", "Fired Brick", BlockCategory.Crafted, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(ClearpaneGlass, "clearpane_glass", "Clearpane Glass", BlockCategory.Crafted, isSolid: false, isRenderable: false));
+
+            // ── Additional canonical resource nodes (no atlas tile yet) ──────
+            registry.Register(new BlockDefinition(SurfacePebbles, "surface_pebbles", "Surface Pebbles", BlockCategory.Resource, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(FlintyShingle, "flinty_shingle", "Flinty Shingle", BlockCategory.Resource, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(PaletinThread, "paletin_thread", "Paletin Thread", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(SunmetalFleck, "sunmetal_fleck", "Sunmetal Fleck", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(NiterstonePocket, "niterstone_pocket", "Niterstone Pocket", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(BrightsaltCrust, "brightsalt_crust", "Brightsalt Crust", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(ShellgritBed, "shellgrit_bed", "Shellgrit Bed", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(ResinKnot, "resin_knot", "Resin Knot", BlockCategory.Resource, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(Berrybush, "berrybush", "Berrybush", BlockCategory.Organic, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(GrainStalk, "grain_stalk", "Grain Stalk", BlockCategory.Organic, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(UmbraliteNode, "umbralite_node", "Umbralite Node", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(StaropalGeode, "staropal_geode", "Staropal Geode", BlockCategory.Resource, isSolid: true, isRenderable: false));
+
+            // ── Additional canonical stations (no atlas tile yet) ─────────────
+            registry.Register(new BlockDefinition(Campfire, "campfire", "Campfire", BlockCategory.Station, isSolid: false, isRenderable: false));
+            registry.Register(new BlockDefinition(ClayKiln, "clay_kiln", "Clay Kiln", BlockCategory.Station, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(BellowsForge, "bellows_forge", "Bellows Forge", BlockCategory.Station, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(PrepBoard, "prep_board", "Prep Board", BlockCategory.Station, isSolid: true, isRenderable: false));
+            registry.Register(new BlockDefinition(MendBench, "mend_bench", "Mend Bench", BlockCategory.Station, isSolid: true, isRenderable: false));
+
             return registry;
         }
 
@@ -127,8 +238,12 @@ namespace Blockiverse.Voxel
             if (definitionsByName.ContainsKey(definition.Name))
                 throw new InvalidOperationException($"Block name is already registered: {definition.Name}");
 
+            if (definitionsByCanonicalId.ContainsKey(definition.CanonicalId))
+                throw new InvalidOperationException($"Block canonical ID is already registered: {definition.CanonicalId}");
+
             definitionsById.Add(definition.Id, definition);
             definitionsByName.Add(definition.Name, definition);
+            definitionsByCanonicalId.Add(definition.CanonicalId, definition);
         }
 
         public BlockDefinition Get(BlockId id)
@@ -142,6 +257,17 @@ namespace Blockiverse.Voxel
         public bool TryGet(BlockId id, out BlockDefinition definition)
         {
             return definitionsById.TryGetValue(id, out definition);
+        }
+
+        public bool TryGetByCanonicalId(string canonicalId, out BlockDefinition definition)
+        {
+            if (string.IsNullOrWhiteSpace(canonicalId))
+            {
+                definition = null;
+                return false;
+            }
+
+            return definitionsByCanonicalId.TryGetValue(canonicalId, out definition);
         }
     }
 

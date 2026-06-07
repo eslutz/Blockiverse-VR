@@ -190,7 +190,7 @@ namespace Blockiverse.Survival
 
         ItemDefinition ValidateNonEmptyKnownItem(ItemId itemId)
         {
-            if (itemId == ItemId.None)
+            if (itemId.IsNone)
                 throw new ArgumentException("Empty item IDs are not valid inventory items.", nameof(itemId));
 
             return registry.Get(itemId);

@@ -11,20 +11,20 @@ namespace Blockiverse.Tests.EditMode
     public sealed class SurvivalTerrainEditModeTests
     {
         [Test]
-        public void SurvivalLiteSettingsUseExpectedBoundsChunkAndSeed()
+        public void SurvivalTerrainSettingsUseExpectedBoundsChunkAndSeed()
         {
             const int seed = 642064;
 
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed);
 
-            Assert.That(settings.Bounds, Is.EqualTo(new WorldBounds(128, 64, 128)));
-            Assert.That(settings.ChunkSize, Is.EqualTo(16));
+            Assert.That(settings.Bounds, Is.EqualTo(new WorldBounds(128, 256, 128)));
+            Assert.That(settings.ChunkSize, Is.EqualTo(WorldConstants.ChunkSize));
             Assert.That(settings.Seed, Is.EqualTo(seed));
             Assert.That(settings.Bounds.Contains(settings.SpawnPosition), Is.True);
         }
 
         [Test]
-        public void SurvivalLitePresetIsDeterministicForSameSeed()
+        public void SurvivalTerrainPresetIsDeterministicForSameSeed()
         {
             VoxelWorld first = GenerateSurvivalWorld(seed: 8675309);
             VoxelWorld second = GenerateSurvivalWorld(seed: 8675309);
@@ -33,7 +33,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SurvivalLitePresetVariesTerrainForDifferentSeeds()
+        public void SurvivalTerrainPresetVariesTerrainForDifferentSeeds()
         {
             VoxelWorld first = GenerateSurvivalWorld(seed: 1401);
             VoxelWorld second = GenerateSurvivalWorld(seed: 2609);
@@ -52,28 +52,28 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SurvivalLitePresetFailsFastWhenWorldHeightCannotFitTerrainBand()
+        public void SurvivalTerrainPresetFailsFastWhenWorldHeightCannotFitTerrainBand()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var settings = new WorldGenerationSettings(
                 width: 32,
-                height: 16,
+                height: 64,
                 depth: 32,
-                chunkSize: 16,
+                chunkSize: WorldConstants.ChunkSize,
                 seed: 24601,
-                groundHeight: 8);
+                groundHeight: 32);
 
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new SurvivalLiteWorldPreset(registry, settings).Generate());
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new SurvivalTerrainPreset(registry, settings).Generate());
 
             Assert.That(exception.Message, Does.Contain("world height"));
         }
 
         [Test]
-        public void SurvivalLitePresetKeepsSpawnAreaClearAndFloored()
+        public void SurvivalTerrainPresetKeepsSpawnAreaClearAndFloored()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed: 112358);
-            VoxelWorld world = new SurvivalLiteWorldPreset(registry, settings).Generate();
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed: 112358);
+            VoxelWorld world = new SurvivalTerrainPreset(registry, settings).Generate();
 
             const int clearRadius = 3;
             const int headroom = 3;
@@ -107,7 +107,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SurvivalLitePresetCarvesBoundedUndergroundCavesBelowSurface()
+        public void SurvivalTerrainPresetCarvesBoundedUndergroundCavesBelowSurface()
         {
             VoxelWorld world = GenerateSurvivalWorld(seed: 424242);
             int undergroundAir = 0;
@@ -129,19 +129,57 @@ namespace Blockiverse.Tests.EditMode
                 }
             }
 
-            Assert.That(undergroundAir, Is.InRange(1500, 60000));
+            Assert.That(undergroundAir, Is.InRange(1500, 200000));
             Assert.That(undergroundAir, Is.LessThan(undergroundSolid / 5));
         }
 
         [Test]
-        public void SurvivalLitePresetPlacesOrderedUndergroundResourceVeins()
+        public void SurvivalTerrainPresetPlacesRenderableTerrainLayers()
+        {
+            VoxelWorld world = GenerateSurvivalWorld(seed: 5050);
+
+            int graystoneCount = 0;
+            int subsoilCount = 0;
+            int surfaceCount = 0;
+
+            for (int x = 0; x < world.Bounds.Width; x += 4)
+            {
+                for (int z = 0; z < world.Bounds.Depth; z += 4)
+                {
+                    int surfaceY = FindSurfaceY(world, x, z);
+
+                    for (int y = 0; y < surfaceY - 4; y++)
+                    {
+                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                        if (block == BlockRegistry.Graystone) graystoneCount++;
+                    }
+
+                    for (int y = surfaceY - 3; y < surfaceY; y++)
+                    {
+                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                        if (block == BlockRegistry.LooseLoam || block == BlockRegistry.Graystone) subsoilCount++;
+                    }
+
+                    BlockId surf = world.GetBlock(new BlockPosition(x, surfaceY, z));
+                    if (surf == BlockRegistry.MeadowTurf || surf == BlockRegistry.LooseLoam || surf == BlockRegistry.Graystone)
+                        surfaceCount++;
+                }
+            }
+
+            Assert.That(graystoneCount, Is.GreaterThan(0), "Expected Graystone in deep layers.");
+            Assert.That(subsoilCount, Is.GreaterThan(0), "Expected subsoil blocks near surface.");
+            Assert.That(surfaceCount, Is.GreaterThan(0), "Expected renderable surface blocks.");
+        }
+
+        [Test]
+        public void SurvivalTerrainPresetPlacesOrderedUndergroundResourceVeins()
         {
             VoxelWorld world = GenerateSurvivalWorld(seed: 97531);
             var resourceCounts = new Dictionary<BlockId, int>
             {
-                { BlockRegistry.Coalstone, 0 },
-                { BlockRegistry.Copperstone, 0 },
-                { BlockRegistry.Ironstone, 0 }
+                { BlockRegistry.EmbercoalSeam, 0 },
+                { BlockRegistry.RosycopperBloom, 0 },
+                { BlockRegistry.RustcoreOre, 0 }
             };
 
             for (int x = 0; x < world.Bounds.Width; x++)
@@ -161,20 +199,35 @@ namespace Blockiverse.Tests.EditMode
                 }
             }
 
-            Assert.That(resourceCounts[BlockRegistry.Coalstone], Is.InRange(3000, 20000));
-            Assert.That(resourceCounts[BlockRegistry.Copperstone], Is.InRange(1000, 12000));
-            Assert.That(resourceCounts[BlockRegistry.Ironstone], Is.InRange(400, 6000));
-            Assert.That(resourceCounts[BlockRegistry.Coalstone], Is.GreaterThan(resourceCounts[BlockRegistry.Copperstone]));
-            Assert.That(resourceCounts[BlockRegistry.Copperstone], Is.GreaterThan(resourceCounts[BlockRegistry.Ironstone]));
+            Assert.That(resourceCounts[BlockRegistry.EmbercoalSeam], Is.InRange(3000, 80000));
+            Assert.That(resourceCounts[BlockRegistry.RosycopperBloom], Is.InRange(1000, 50000));
+            Assert.That(resourceCounts[BlockRegistry.RustcoreOre], Is.InRange(400, 25000));
+            Assert.That(resourceCounts[BlockRegistry.EmbercoalSeam], Is.GreaterThan(resourceCounts[BlockRegistry.RosycopperBloom]));
+            Assert.That(resourceCounts[BlockRegistry.RosycopperBloom], Is.GreaterThan(resourceCounts[BlockRegistry.RustcoreOre]));
         }
 
         [Test]
-        public void CreativeValidationWorldUsesGeneratedSurvivalLiteTerrain()
+        public void SurvivalTerrainPresetSurfaceHeightsStayWithinCanonicalBounds()
+        {
+            VoxelWorld world = GenerateSurvivalWorld(seed: 7777);
+
+            for (int x = 0; x < world.Bounds.Width; x += 4)
+            {
+                for (int z = 0; z < world.Bounds.Depth; z += 4)
+                {
+                    int surfaceY = FindSurfaceY(world, x, z);
+                    Assert.That(surfaceY, Is.InRange(40, 190), $"Surface height out of canonical range at ({x},{z}).");
+                }
+            }
+        }
+
+        [Test]
+        public void CreativeValidationWorldUsesGeneratedSurvivalTerrain()
         {
             GeneratedCreativeWorld generatedWorld = CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 97531);
             VoxelWorld world = generatedWorld.World;
 
-            Assert.That(generatedWorld.Settings.Bounds, Is.EqualTo(new WorldBounds(128, 64, 128)));
+            Assert.That(generatedWorld.Settings.Bounds, Is.EqualTo(new WorldBounds(128, 256, 128)));
             Assert.That(world.Bounds, Is.EqualTo(generatedWorld.Settings.Bounds));
 
             int[] sampledSurfaceHeights = Enumerable.Range(0, world.Bounds.Width / 8)
@@ -182,16 +235,59 @@ namespace Blockiverse.Tests.EditMode
                 .Distinct()
                 .ToArray();
 
-            Assert.That(sampledSurfaceHeights.Length, Is.GreaterThan(1), "Creative validation should no longer use the flat test preset.");
-            Assert.That(CountBlocks(world, BlockRegistry.Coalstone), Is.GreaterThan(0));
+            Assert.That(sampledSurfaceHeights.Length, Is.GreaterThan(1), "Creative validation should use varied survival terrain.");
+            Assert.That(CountBlocks(world, BlockRegistry.EmbercoalSeam), Is.GreaterThan(0));
             Assert.That(world.GetBlock(generatedWorld.Settings.SpawnPosition), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
+        public void FlatBuilderPresetGeneratesGroundAtSeaLevel()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(32, 128, 32, WorldConstants.ChunkSize, 1001, WorldConstants.SeaLevel);
+            VoxelWorld world = new FlatBuilderPreset(registry, settings).Generate();
+
+            int groundY = WorldConstants.SeaLevel - 1;
+            for (int x = 0; x < world.Bounds.Width; x += 4)
+            {
+                for (int z = 0; z < world.Bounds.Depth; z += 4)
+                {
+                    Assert.That(world.GetBlock(new BlockPosition(x, groundY, z)), Is.EqualTo(BlockRegistry.MeadowTurf));
+                    Assert.That(world.GetBlock(new BlockPosition(x, groundY - 1, z)), Is.EqualTo(BlockRegistry.LooseLoam));
+                    Assert.That(world.GetBlock(new BlockPosition(x, groundY + 1, z)), Is.EqualTo(BlockRegistry.Air));
+                }
+            }
+        }
+
+        [Test]
+        public void VoidBuilderPresetGenerates5x5PlatformAtY64()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(32, 128, 32, WorldConstants.ChunkSize, 1001, 2);
+            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
+
+            int cx = settings.Bounds.Width / 2;
+            int cz = settings.Bounds.Depth / 2;
+
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dz = -2; dz <= 2; dz++)
+                {
+                    Assert.That(world.GetBlock(new BlockPosition(cx + dx, 64, cz + dz)),
+                        Is.EqualTo(BlockRegistry.WhiteLimestone),
+                        $"Expected WhiteLimestone at platform offset ({dx},{dz}).");
+                }
+            }
+
+            Assert.That(world.GetBlock(new BlockPosition(cx, 63, cz)), Is.EqualTo(BlockRegistry.Air));
+            Assert.That(world.GetBlock(new BlockPosition(cx, 65, cz)), Is.EqualTo(BlockRegistry.Air));
         }
 
         static VoxelWorld GenerateSurvivalWorld(int seed)
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
-            return new SurvivalLiteWorldPreset(registry, settings).Generate();
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed);
+            return new SurvivalTerrainPreset(registry, settings).Generate();
         }
 
         static int CountBlocks(VoxelWorld world, BlockId blockId)

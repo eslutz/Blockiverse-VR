@@ -831,7 +831,7 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry = BlockRegistry.CreateDefault();
             VoxelWorld world = preset == CreativeWorldGenerationPreset.FlatCreative
                 ? new FlatCreativeWorldPreset(registry, settings).Generate()
-                : new SurvivalLiteWorldPreset(registry, settings).Generate();
+                : new SurvivalTerrainPreset(registry, settings).Generate();
             worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset), this);
             LastAppliedChunkDeltaSequence = hostDeltaSequence;
             hasHostGenerationSnapshotForSession = true;

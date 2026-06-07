@@ -21,7 +21,7 @@ namespace Blockiverse.Gameplay
 
         public static bool IsLightEmitter(BlockId block)
         {
-            return block == BlockRegistry.Torchbud;
+            return block == BlockRegistry.Glowwick;
         }
 
         public static Vector3 GetLightPosition(BlockPosition position)

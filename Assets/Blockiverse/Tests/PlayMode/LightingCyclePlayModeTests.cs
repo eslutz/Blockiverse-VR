@@ -40,7 +40,7 @@ namespace Blockiverse.Tests.PlayMode
                 manager.Configure(world, registry);
 
                 var torchPosition = new BlockPosition(3, 2, 3);
-                world.SetBlock(torchPosition, BlockRegistry.Torchbud);
+                world.SetBlock(torchPosition, BlockRegistry.Glowwick);
                 yield return null;
 
                 Assert.That(manager.ActiveLightCount, Is.EqualTo(1));

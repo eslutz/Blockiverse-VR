@@ -12,32 +12,32 @@ namespace Blockiverse.Tests.Survival.EditMode
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
 
             Assert.That(recipeBook.All.Count, Is.EqualTo(7));
-            AssertRecipe(recipeBook, ItemId.Workbench, CraftingStation.None, new ItemStack(ItemId.Workbench, 1), new ItemStack(ItemId.Timber, 4));
-            AssertRecipe(recipeBook, ItemId.Torchbud, CraftingStation.Workbench, new ItemStack(ItemId.Torchbud, 4), new ItemStack(ItemId.Timber, 1), new ItemStack(ItemId.Coalstone, 1));
-            AssertRecipe(recipeBook, ItemId.StorageCrate, CraftingStation.Workbench, new ItemStack(ItemId.StorageCrate, 1), new ItemStack(ItemId.Timber, 8));
-            AssertRecipe(recipeBook, ItemId.Chipper, CraftingStation.Workbench, new ItemStack(ItemId.Chipper, 1), new ItemStack(ItemId.Timber, 3));
-            AssertRecipe(recipeBook, ItemId.Mallet, CraftingStation.Workbench, new ItemStack(ItemId.Mallet, 1), new ItemStack(ItemId.Timber, 2), new ItemStack(ItemId.Slate, 2));
-            AssertRecipe(recipeBook, ItemId.Pick, CraftingStation.Workbench, new ItemStack(ItemId.Pick, 1), new ItemStack(ItemId.Timber, 2), new ItemStack(ItemId.Copperstone, 3));
-            AssertRecipe(recipeBook, ItemId.RecoveryWrap, CraftingStation.Workbench, new ItemStack(ItemId.RecoveryWrap, 2), new ItemStack(ItemId.Leafmass, 3), new ItemStack(ItemId.Timber, 1));
+            AssertRecipe(recipeBook, ItemId.BuildTable, CraftingStation.None, new ItemStack(ItemId.BuildTable, 1), new ItemStack(ItemId.BranchwoodLog, 4));
+            AssertRecipe(recipeBook, ItemId.Glowwick, CraftingStation.BuildTable, new ItemStack(ItemId.Glowwick, 4), new ItemStack(ItemId.BranchwoodLog, 1), new ItemStack(ItemId.Embercoal, 1));
+            AssertRecipe(recipeBook, ItemId.StorageCrate, CraftingStation.BuildTable, new ItemStack(ItemId.StorageCrate, 1), new ItemStack(ItemId.BranchwoodLog, 8));
+            AssertRecipe(recipeBook, ItemId.ReedwoodFeller, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodFeller, 1), new ItemStack(ItemId.BranchwoodLog, 3));
+            AssertRecipe(recipeBook, ItemId.ReedwoodMallet, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodMallet, 1), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.Graystone, 2));
+            AssertRecipe(recipeBook, ItemId.ReedwoodDelver, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodDelver, 1), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.RawRosycopper, 3));
+            AssertRecipe(recipeBook, ItemId.FieldBandage, CraftingStation.BuildTable, new ItemStack(ItemId.FieldBandage, 2), new ItemStack(ItemId.Leafmoss, 3), new ItemStack(ItemId.BranchwoodLog, 1));
         }
 
         [Test]
-        public void CraftingValidationRequiresWorkbenchBeforeConsumingInputs()
+        public void CraftingValidationRequiresBuildTableBeforeConsumingInputs()
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             Inventory inventory = new(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 1));
-            inventory.SetSlot(1, new ItemStack(ItemId.Coalstone, 1));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 1));
+            inventory.SetSlot(1, new ItemStack(ItemId.Embercoal, 1));
 
-            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.Torchbud);
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.Glowwick);
             CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.None);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.MissingStation));
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Timber, 1)));
-            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Coalstone, 1)));
-            Assert.That(inventory.CountOf(ItemId.Torchbud), Is.Zero);
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Embercoal, 1)));
+            Assert.That(inventory.CountOf(ItemId.Glowwick), Is.Zero);
         }
 
         [Test]
@@ -46,17 +46,17 @@ namespace Blockiverse.Tests.Survival.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             Inventory inventory = new(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 2));
-            inventory.SetSlot(1, new ItemStack(ItemId.Copperstone, 3));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2));
+            inventory.SetSlot(1, new ItemStack(ItemId.RawRosycopper, 3));
 
-            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.Pick);
-            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.Workbench);
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.ReedwoodDelver);
+            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.BuildTable);
 
             Assert.That(result.Succeeded, Is.True);
             Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.None));
-            Assert.That(inventory.CountOf(ItemId.Timber), Is.Zero);
-            Assert.That(inventory.CountOf(ItemId.Copperstone), Is.Zero);
-            Assert.That(inventory.CountOf(ItemId.Pick), Is.EqualTo(1));
+            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
+            Assert.That(inventory.CountOf(ItemId.RawRosycopper), Is.Zero);
+            Assert.That(inventory.CountOf(ItemId.ReedwoodDelver), Is.EqualTo(1));
         }
 
         [Test]
@@ -65,18 +65,18 @@ namespace Blockiverse.Tests.Survival.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             Inventory inventory = new(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 1));
-            inventory.SetSlot(1, new ItemStack(ItemId.Slate, 1));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 1));
+            inventory.SetSlot(1, new ItemStack(ItemId.Graystone, 1));
 
-            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.Mallet);
-            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.Workbench);
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.ReedwoodMallet);
+            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.BuildTable);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.MissingIngredient));
-            Assert.That(result.FailedItemId, Is.EqualTo(ItemId.Timber));
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Timber, 1)));
-            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Slate, 1)));
-            Assert.That(inventory.CountOf(ItemId.Mallet), Is.Zero);
+            Assert.That(result.FailedItemId, Is.EqualTo(ItemId.BranchwoodLog));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.Graystone, 1)));
+            Assert.That(inventory.CountOf(ItemId.ReedwoodMallet), Is.Zero);
         }
 
         [Test]
@@ -84,20 +84,20 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             Inventory inventory = new(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.Timber, 2));
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2));
             CraftingRecipe recipe = new(
-                new ItemStack(ItemId.Torchbud, 1),
-                CraftingStation.Workbench,
-                new ItemStack(ItemId.Timber, 2),
-                new ItemStack(ItemId.Timber, 2));
+                new ItemStack(ItemId.Glowwick, 1),
+                CraftingStation.BuildTable,
+                new ItemStack(ItemId.BranchwoodLog, 2),
+                new ItemStack(ItemId.BranchwoodLog, 2));
 
-            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.Workbench);
+            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.BuildTable);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.MissingIngredient));
-            Assert.That(result.FailedItemId, Is.EqualTo(ItemId.Timber));
-            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.Timber, 2)));
-            Assert.That(inventory.CountOf(ItemId.Torchbud), Is.Zero);
+            Assert.That(result.FailedItemId, Is.EqualTo(ItemId.BranchwoodLog));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 2)));
+            Assert.That(inventory.CountOf(ItemId.Glowwick), Is.Zero);
         }
 
         static void AssertRecipe(CraftingRecipeBook recipeBook, ItemId outputItemId, CraftingStation requiredStation, ItemStack output, params ItemStack[] ingredients)

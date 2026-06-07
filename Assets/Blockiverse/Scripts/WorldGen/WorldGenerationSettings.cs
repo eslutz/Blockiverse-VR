@@ -11,20 +11,25 @@ namespace Blockiverse.WorldGen
                 width: 32,
                 height: 16,
                 depth: 32,
-                chunkSize: 16,
+                chunkSize: WorldConstants.ChunkSize,
                 seed: 1001,
                 groundHeight: 2);
         }
 
-        public static WorldGenerationSettings CreateDefaultSurvivalLite(int seed = 6401)
+        public static WorldGenerationSettings CreateDefaultSurvivalTerrain(int seed = 6401)
         {
             return new WorldGenerationSettings(
                 width: 128,
-                height: 64,
+                height: 256,
                 depth: 128,
-                chunkSize: 16,
+                chunkSize: WorldConstants.ChunkSize,
                 seed: seed,
-                groundHeight: 32);
+                groundHeight: WorldConstants.SeaLevel);
+        }
+
+        public static WorldGenerationSettings CreateDefaultSurvivalLite(int seed = 6401)
+        {
+            return CreateDefaultSurvivalTerrain(seed);
         }
 
         public WorldGenerationSettings(int width, int height, int depth, int chunkSize, int seed, int groundHeight)
@@ -46,6 +51,45 @@ namespace Blockiverse.WorldGen
         public BlockPosition SpawnPosition { get; }
     }
 
+    public sealed class FlatBuilderPreset
+    {
+        readonly BlockRegistry registry;
+        readonly WorldGenerationSettings settings;
+
+        public FlatBuilderPreset(BlockRegistry registry, WorldGenerationSettings settings)
+        {
+            this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        }
+
+        public VoxelWorld Generate()
+        {
+            registry.Get(BlockRegistry.Air);
+            registry.Get(BlockRegistry.MeadowTurf);
+            registry.Get(BlockRegistry.LooseLoam);
+
+            var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
+
+            for (int x = 0; x < settings.Bounds.Width; x++)
+            {
+                for (int z = 0; z < settings.Bounds.Depth; z++)
+                {
+                    for (int y = 0; y < settings.GroundHeight; y++)
+                    {
+                        int layersFromSurface = settings.GroundHeight - 1 - y;
+                        BlockId block = layersFromSurface == 0
+                            ? BlockRegistry.MeadowTurf
+                            : layersFromSurface <= 4 ? BlockRegistry.LooseLoam
+                            : BlockRegistry.Graystone;
+                        world.SetBlock(new BlockPosition(x, y, z), block, trackChange: false);
+                    }
+                }
+            }
+
+            return world;
+        }
+    }
+
     public sealed class FlatCreativeWorldPreset
     {
         readonly BlockRegistry registry;
@@ -59,23 +103,41 @@ namespace Blockiverse.WorldGen
 
         public VoxelWorld Generate()
         {
+            return new FlatBuilderPreset(registry, settings).Generate();
+        }
+    }
+
+    public sealed class VoidBuilderPreset
+    {
+        const int PlatformHalfSize = 2;
+        const int PlatformY = 64;
+
+        readonly BlockRegistry registry;
+        readonly WorldGenerationSettings settings;
+
+        public VoidBuilderPreset(BlockRegistry registry, WorldGenerationSettings settings)
+        {
+            this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        }
+
+        public VoxelWorld Generate()
+        {
             registry.Get(BlockRegistry.Air);
-            registry.Get(BlockRegistry.MeadowTurf);
-            registry.Get(BlockRegistry.Loam);
+            registry.Get(BlockRegistry.WhiteLimestone);
 
             var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
 
-            for (int x = 0; x < settings.Bounds.Width; x++)
+            int centerX = settings.Bounds.Width / 2;
+            int centerZ = settings.Bounds.Depth / 2;
+
+            for (int dx = -PlatformHalfSize; dx <= PlatformHalfSize; dx++)
             {
-                for (int z = 0; z < settings.Bounds.Depth; z++)
+                for (int dz = -PlatformHalfSize; dz <= PlatformHalfSize; dz++)
                 {
-                    for (int y = 0; y < settings.GroundHeight; y++)
-                    {
-                        BlockId block = y == settings.GroundHeight - 1
-                            ? BlockRegistry.MeadowTurf
-                            : BlockRegistry.Loam;
-                        world.SetBlock(new BlockPosition(x, y, z), block, trackChange: false);
-                    }
+                    var pos = new BlockPosition(centerX + dx, PlatformY, centerZ + dz);
+                    if (world.Bounds.Contains(pos))
+                        world.SetBlock(pos, BlockRegistry.WhiteLimestone, trackChange: false);
                 }
             }
 

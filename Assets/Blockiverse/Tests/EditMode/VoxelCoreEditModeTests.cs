@@ -10,43 +10,29 @@ namespace Blockiverse.Tests.EditMode
     public sealed class VoxelCoreEditModeTests
     {
         [Test]
-        public void DefaultRegistryContainsOriginalM2BlockList()
+        public void DefaultRegistryContainsCanonicalBlockSet()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            string[] expectedNames =
-            {
-                "Air",
-                "Meadow Turf",
-                "Loam",
-                "Slate",
-                "Timber",
-                "Leafmass",
-                "Clearstone",
-                "Coalstone",
-                "Copperstone",
-                "Ironstone",
-                "Workbench",
-                "Torchbud",
-                "Storage Crate"
-            };
-
-            CollectionAssert.AreEquivalent(expectedNames, registry.All.Select(block => block.Name));
+            Assert.That(registry.All.Count, Is.EqualTo(51));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
-            Assert.That(registry.Get(BlockRegistry.Timber).Category, Is.EqualTo(BlockCategory.Organic));
-            Assert.That(registry.Get(BlockRegistry.Workbench).Category, Is.EqualTo(BlockCategory.Crafted));
-            Assert.That(registry.Get(BlockRegistry.Coalstone).Category, Is.EqualTo(BlockCategory.Resource));
+            Assert.That(registry.Get(BlockRegistry.BranchwoodLog).Category, Is.EqualTo(BlockCategory.Organic));
+            Assert.That(registry.Get(BlockRegistry.BuildTable).Category, Is.EqualTo(BlockCategory.Station));
+            Assert.That(registry.Get(BlockRegistry.EmbercoalSeam).Category, Is.EqualTo(BlockCategory.Resource));
+            Assert.That(registry.All.Select(b => b.Name), Has.Member("Graystone"));
+            Assert.That(registry.All.Select(b => b.Name), Has.Member("Dark Slate"));
+            Assert.That(registry.All.Select(b => b.Name), Has.Member("Glowwick"));
         }
 
         [Test]
         public void RegistryRejectsDuplicateIds()
         {
             var registry = new BlockRegistry();
-            registry.Register(new BlockDefinition(new BlockId(7), "First", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(new BlockId(7), "test_first", "First", BlockCategory.Terrain, isSolid: true, isRenderable: true));
 
             Assert.Throws<InvalidOperationException>(() =>
-                registry.Register(new BlockDefinition(new BlockId(7), "Second", BlockCategory.Terrain, isSolid: true, isRenderable: true)));
+                registry.Register(new BlockDefinition(new BlockId(7), "test_second", "Second", BlockCategory.Terrain, isSolid: true, isRenderable: true)));
         }
 
         [Test]
@@ -69,10 +55,10 @@ namespace Blockiverse.Tests.EditMode
             var second = new BlockPosition(16, 1, 16);
 
             world.SetBlock(first, BlockRegistry.MeadowTurf);
-            world.SetBlock(second, BlockRegistry.Slate);
+            world.SetBlock(second, BlockRegistry.Graystone);
 
             Assert.That(world.GetBlock(first), Is.EqualTo(BlockRegistry.MeadowTurf));
-            Assert.That(world.GetBlock(second), Is.EqualTo(BlockRegistry.Slate));
+            Assert.That(world.GetBlock(second), Is.EqualTo(BlockRegistry.Graystone));
             Assert.That(world.GetChunkCoordinate(first), Is.EqualTo(new ChunkCoordinate(0, 0, 0)));
             Assert.That(world.GetChunkCoordinate(second), Is.EqualTo(new ChunkCoordinate(1, 0, 1)));
         }
@@ -86,9 +72,9 @@ namespace Blockiverse.Tests.EditMode
             int eventCount = 0;
             world.BlockChanged += _ => eventCount++;
 
-            world.SetBlock(position, BlockRegistry.Slate, trackChange: false);
+            world.SetBlock(position, BlockRegistry.Graystone, trackChange: false);
 
-            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Slate));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Graystone));
             Assert.That(world.GetChangedBlocks(), Is.Empty);
             Assert.That(eventCount, Is.EqualTo(1));
             Assert.That(rebuildQueue.Count, Is.EqualTo(1));
@@ -102,7 +88,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(world.Bounds.Contains(new BlockPosition(3, 3, 3)), Is.True);
             Assert.That(world.Bounds.Contains(new BlockPosition(4, 3, 3)), Is.False);
             Assert.Throws<ArgumentOutOfRangeException>(() => world.GetBlock(new BlockPosition(-1, 0, 0)));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.SetBlock(new BlockPosition(0, 4, 0), BlockRegistry.Loam));
+            Assert.Throws<ArgumentOutOfRangeException>(() => world.SetBlock(new BlockPosition(0, 4, 0), BlockRegistry.LooseLoam));
         }
 
         [Test]
@@ -110,18 +96,18 @@ namespace Blockiverse.Tests.EditMode
         {
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 11);
             var position = new BlockPosition(1, 1, 1);
-            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            world.SetBlock(position, BlockRegistry.LooseLoam, trackChange: false);
 
-            var command = new SetBlockCommand(position, BlockRegistry.Clearstone);
+            var command = new SetBlockCommand(position, BlockRegistry.LumenQuartzCluster);
             BlockChange change = command.Execute(world);
 
-            Assert.That(change.PreviousBlock, Is.EqualTo(BlockRegistry.Loam));
-            Assert.That(change.NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
-            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(change.PreviousBlock, Is.EqualTo(BlockRegistry.LooseLoam));
+            Assert.That(change.NewBlock, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
 
             command.Undo(world);
 
-            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Loam));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.LooseLoam));
         }
 
         [Test]
@@ -153,24 +139,24 @@ namespace Blockiverse.Tests.EditMode
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 17);
             var position = new BlockPosition(3, 1, 1);
-            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            world.SetBlock(position, BlockRegistry.LooseLoam, trackChange: false);
             BlockMutationAuthority authority = BlockMutationAuthority.CreateHost(world, registry);
             var request = new BlockMutationRequest(
                 requestingClientId: 7,
                 position,
-                BlockRegistry.Clearstone,
-                expectedCurrentBlock: BlockRegistry.Loam);
+                BlockRegistry.LumenQuartzCluster,
+                expectedCurrentBlock: BlockRegistry.LooseLoam);
 
             BlockMutationResult result = authority.TryCommit(request, out SetBlockCommand command);
 
             Assert.That(result.Accepted, Is.True);
             Assert.That(result.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.None));
             Assert.That(result.Change.Position, Is.EqualTo(position));
-            Assert.That(result.Change.PreviousBlock, Is.EqualTo(BlockRegistry.Loam));
-            Assert.That(result.Change.NewBlock, Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(result.Change.PreviousBlock, Is.EqualTo(BlockRegistry.LooseLoam));
+            Assert.That(result.Change.NewBlock, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
             Assert.That(result.Chunk, Is.EqualTo(new ChunkCoordinate(1, 0, 0)));
             Assert.That(command, Is.Not.Null);
-            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Clearstone));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
         }
 
         [Test]
@@ -182,8 +168,8 @@ namespace Blockiverse.Tests.EditMode
             var secondPosition = new BlockPosition(3, 1, 1);
             var log = new ChunkDeltaLog();
 
-            ChunkDelta firstDelta = log.Record(new SetBlockCommand(firstPosition, BlockRegistry.Clearstone).Execute(sourceWorld), sourceWorld.ChunkSize);
-            ChunkDelta secondDelta = log.Record(new SetBlockCommand(secondPosition, BlockRegistry.Slate).Execute(sourceWorld), sourceWorld.ChunkSize);
+            ChunkDelta firstDelta = log.Record(new SetBlockCommand(firstPosition, BlockRegistry.LumenQuartzCluster).Execute(sourceWorld), sourceWorld.ChunkSize);
+            ChunkDelta secondDelta = log.Record(new SetBlockCommand(secondPosition, BlockRegistry.Graystone).Execute(sourceWorld), sourceWorld.ChunkSize);
 
             ChunkDeltaLog.Replay(replayWorld, log.Deltas);
 
@@ -203,20 +189,20 @@ namespace Blockiverse.Tests.EditMode
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 18);
             var position = new BlockPosition(1, 1, 1);
-            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            world.SetBlock(position, BlockRegistry.LooseLoam, trackChange: false);
             BlockMutationAuthority authority = BlockMutationAuthority.CreateClientProxy(world, registry, localClientId: 7);
 
             BlockMutationResult result = authority.TryCommit(
-                new BlockMutationRequest(7, position, BlockRegistry.Clearstone),
+                new BlockMutationRequest(7, position, BlockRegistry.LumenQuartzCluster),
                 out SetBlockCommand command);
 
             Assert.That(result.Accepted, Is.False);
             Assert.That(result.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState));
             Assert.That(command, Is.Null);
-            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Loam));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.LooseLoam));
 
             BlockMutationResult validationResult = authority.ValidateHostMutation(
-                new BlockMutationRequest(7, position, BlockRegistry.Clearstone));
+                new BlockMutationRequest(7, position, BlockRegistry.LumenQuartzCluster));
             Assert.That(validationResult.Accepted, Is.False);
             Assert.That(validationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.HostOnlyAuthorityOperation));
         }
@@ -227,22 +213,22 @@ namespace Blockiverse.Tests.EditMode
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 19);
             var position = new BlockPosition(1, 1, 1);
-            world.SetBlock(position, BlockRegistry.Loam, trackChange: false);
+            world.SetBlock(position, BlockRegistry.LooseLoam, trackChange: false);
             BlockMutationAuthority authority = BlockMutationAuthority.CreateHost(world, registry);
 
             Assert.That(
-                authority.TryCommit(new BlockMutationRequest(7, new BlockPosition(-1, 1, 1), BlockRegistry.Slate)).RejectionReason,
+                authority.TryCommit(new BlockMutationRequest(7, new BlockPosition(-1, 1, 1), BlockRegistry.Graystone)).RejectionReason,
                 Is.EqualTo(BlockMutationRejectionReason.PositionOutOfBounds));
             Assert.That(
                 authority.TryCommit(new BlockMutationRequest(7, position, new BlockId(999))).RejectionReason,
                 Is.EqualTo(BlockMutationRejectionReason.UnknownBlock));
             Assert.That(
-                authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Slate, expectedCurrentBlock: BlockRegistry.Clearstone)).RejectionReason,
+                authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Graystone, expectedCurrentBlock: BlockRegistry.LumenQuartzCluster)).RejectionReason,
                 Is.EqualTo(BlockMutationRejectionReason.ExpectedBlockMismatch));
             Assert.That(
-                authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Loam)).RejectionReason,
+                authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.LooseLoam)).RejectionReason,
                 Is.EqualTo(BlockMutationRejectionReason.NoChange));
-            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.Loam));
+            Assert.That(world.GetBlock(position), Is.EqualTo(BlockRegistry.LooseLoam));
         }
 
         [Test]
@@ -256,7 +242,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(world.Bounds, Is.EqualTo(new WorldBounds(16, 8, 16)));
             Assert.That(world.Seed, Is.EqualTo(123));
-            Assert.That(world.GetBlock(new BlockPosition(0, 0, 0)), Is.EqualTo(BlockRegistry.Loam));
+            Assert.That(world.GetBlock(new BlockPosition(0, 0, 0)), Is.EqualTo(BlockRegistry.LooseLoam));
             Assert.That(world.GetBlock(new BlockPosition(0, 1, 0)), Is.EqualTo(BlockRegistry.MeadowTurf));
             Assert.That(world.GetBlock(new BlockPosition(0, 2, 0)), Is.EqualTo(BlockRegistry.Air));
             Assert.That(world.GetChangedBlocks(), Is.Empty);

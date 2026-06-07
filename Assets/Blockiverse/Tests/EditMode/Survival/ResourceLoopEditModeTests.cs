@@ -12,15 +12,15 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
-            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.Timber);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
             var service = CreateService(itemRegistry);
 
             BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
-            Assert.That(result.Drop, Is.EqualTo(new ItemStack(ItemId.Timber, 1)));
+            Assert.That(result.Drop, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
             Assert.That(result.WorkRequired, Is.GreaterThan(0));
-            Assert.That(inventory.CountOf(ItemId.Timber), Is.EqualTo(1));
+            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1));
             Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Air));
         }
 
@@ -29,16 +29,16 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 1, hotbarSlotCount: 1);
-            inventory.SetSlot(0, new ItemStack(ItemId.Loam, ItemRegistry.ResourceStackSize));
-            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.Timber);
+            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, ItemRegistry.ResourceStackSize));
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
             var service = CreateService(itemRegistry);
 
             BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.FailureReason, Is.EqualTo(BlockHarvestFailureReason.InventoryFull));
-            Assert.That(inventory.CountOf(ItemId.Timber), Is.Zero);
-            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Timber));
+            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.BranchwoodLog));
         }
 
         [Test]
@@ -46,14 +46,14 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             BlockHarvestRuleSet rules = BlockHarvestRuleSet.CreateDefault(ItemRegistry.CreateDefault());
 
-            BlockHarvestRule timber = rules.Get(BlockRegistry.Timber);
-            BlockHarvestRule copperstone = rules.Get(BlockRegistry.Copperstone);
-            BlockHarvestRule workbench = rules.Get(BlockRegistry.Workbench);
+            BlockHarvestRule log = rules.Get(BlockRegistry.BranchwoodLog);
+            BlockHarvestRule rosycopper = rules.Get(BlockRegistry.RosycopperBloom);
+            BlockHarvestRule buildTable = rules.Get(BlockRegistry.BuildTable);
 
-            Assert.That(timber.GetWorkRequired(HarvestToolKind.Chipper), Is.LessThan(timber.GetWorkRequired(HarvestToolKind.Hand)));
-            Assert.That(timber.GetWorkRequired(HarvestToolKind.Pick), Is.EqualTo(timber.GetWorkRequired(HarvestToolKind.Hand)));
-            Assert.That(copperstone.GetWorkRequired(HarvestToolKind.Pick), Is.LessThan(copperstone.GetWorkRequired(HarvestToolKind.Hand)));
-            Assert.That(workbench.GetWorkRequired(HarvestToolKind.Mallet), Is.LessThan(workbench.GetWorkRequired(HarvestToolKind.Hand)));
+            Assert.That(log.GetWorkRequired(HarvestToolKind.Feller), Is.LessThan(log.GetWorkRequired(HarvestToolKind.Hand)));
+            Assert.That(log.GetWorkRequired(HarvestToolKind.Delver), Is.EqualTo(log.GetWorkRequired(HarvestToolKind.Hand)));
+            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver), Is.LessThan(rosycopper.GetWorkRequired(HarvestToolKind.Hand)));
+            Assert.That(buildTable.GetWorkRequired(HarvestToolKind.Mallet), Is.LessThan(buildTable.GetWorkRequired(HarvestToolKind.Hand)));
         }
 
         [Test]
@@ -61,13 +61,14 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             SurvivalResourceTuning tuning = SurvivalResourceTuning.CreateDefault();
 
-            ResourceVeinTuning coal = tuning.Get(BlockRegistry.Coalstone);
-            ResourceVeinTuning copper = tuning.Get(BlockRegistry.Copperstone);
-            ResourceVeinTuning iron = tuning.Get(BlockRegistry.Ironstone);
+            ResourceVeinTuning coal = tuning.Get(BlockRegistry.EmbercoalSeam);
+            ResourceVeinTuning copper = tuning.Get(BlockRegistry.RosycopperBloom);
+            ResourceVeinTuning iron = tuning.Get(BlockRegistry.RustcoreOre);
 
             Assert.That(coal.ChancePermille, Is.GreaterThan(copper.ChancePermille));
             Assert.That(copper.ChancePermille, Is.GreaterThan(iron.ChancePermille));
-            Assert.That(coal.MaxY, Is.GreaterThan(copper.MaxY));
+            Assert.That(copper.MaxY, Is.GreaterThan(coal.MaxY));
+            Assert.That(coal.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(copper.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(coal.MinY, Is.GreaterThanOrEqualTo(iron.MinY));
         }

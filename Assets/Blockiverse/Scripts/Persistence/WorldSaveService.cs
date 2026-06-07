@@ -14,14 +14,16 @@ namespace Blockiverse.Persistence
         public int X;
         public int Y;
         public int Z;
-        public int BlockId;
+        public int BlockId;         // legacy (schema v2): integer block ID
+        public string CanonicalId;  // canonical (schema v3+): string block ID
     }
 
     [Serializable]
     public sealed class SavedInventorySlot
     {
         public int SlotIndex;
-        public int ItemId;
+        public int ItemId;          // legacy (schema v2): integer item ID
+        public string CanonicalId;  // canonical (schema v3+): string item ID
         public int Count;
     }
 
@@ -71,18 +73,31 @@ namespace Blockiverse.Persistence
             return new WorldLoadResult(false, null, error);
         }
 
-        public void ApplyTo(VoxelWorld world, bool preserveLoadedBlockChanges = false)
+        public void ApplyTo(VoxelWorld world, BlockRegistry blockRegistry = null, bool preserveLoadedBlockChanges = false)
         {
             if (!Success)
                 throw new InvalidOperationException("Cannot apply a failed save load result.");
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
 
+            blockRegistry ??= BlockRegistry.CreateDefault();
+
             foreach (SavedBlockDelta delta in Data.ChangedBlocks ?? Array.Empty<SavedBlockDelta>())
             {
+                BlockId blockId;
+                if (!string.IsNullOrEmpty(delta.CanonicalId) &&
+                    blockRegistry.TryGetByCanonicalId(delta.CanonicalId, out BlockDefinition def))
+                {
+                    blockId = def.Id;
+                }
+                else
+                {
+                    blockId = new BlockId(delta.BlockId);
+                }
+
                 world.SetBlock(
                     new BlockPosition(delta.X, delta.Y, delta.Z),
-                    new BlockId(delta.BlockId),
+                    blockId,
                     trackChange: preserveLoadedBlockChanges);
             }
 
@@ -95,11 +110,24 @@ namespace Blockiverse.Persistence
             if (!Success)
                 throw new InvalidOperationException("Cannot create an inventory from a failed save load result.");
 
+            itemRegistry ??= ItemRegistry.CreateDefault();
             SavedPlayerInventory savedInventory = Data.PlayerInventory ?? WorldSaveService.CreateEmptyInventoryData();
             var inventory = new Inventory(itemRegistry, savedInventory.SlotCount, savedInventory.HotbarSlotCount);
 
             foreach (SavedInventorySlot slot in savedInventory.Slots ?? Array.Empty<SavedInventorySlot>())
-                inventory.SetSlot(slot.SlotIndex, new ItemStack((ItemId)slot.ItemId, slot.Count));
+            {
+                if (string.IsNullOrEmpty(slot.CanonicalId))
+                    continue;
+
+                string canonicalId = WorldSaveService.LegacyItemCanonicalIdAliases.TryGetValue(slot.CanonicalId, out string aliased)
+                    ? aliased
+                    : slot.CanonicalId;
+                var itemId = new ItemId(canonicalId);
+                if (!itemRegistry.TryGet(itemId, out _))
+                    continue;
+
+                inventory.SetSlot(slot.SlotIndex, new ItemStack(itemId, slot.Count));
+            }
 
             return inventory;
         }
@@ -155,7 +183,7 @@ namespace Blockiverse.Persistence
         readonly WorldSaveMigrationRegistry migrationRegistry;
         readonly ItemRegistry itemRegistry;
 
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public WorldSaveService(WorldSaveMigrationRegistry migrations, ItemRegistry items = null)
         {
@@ -247,15 +275,21 @@ namespace Blockiverse.Persistence
         WorldSaveData CreateSaveData(string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex)
         {
             var deltas = new List<SavedBlockDelta>();
+            BlockRegistry blockRegistry = BlockRegistry.CreateDefault();
 
             foreach (BlockChange change in world.GetChangedBlocks())
             {
+                string canonicalId = blockRegistry.TryGet(change.NewBlock, out BlockDefinition def)
+                    ? def.CanonicalId
+                    : string.Empty;
+
                 deltas.Add(new SavedBlockDelta
                 {
                     X = change.Position.X,
                     Y = change.Position.Y,
                     Z = change.Position.Z,
-                    BlockId = change.NewBlock.Value
+                    BlockId = change.NewBlock.Value,
+                    CanonicalId = canonicalId
                 });
             }
 
@@ -294,7 +328,8 @@ namespace Blockiverse.Persistence
                 slots.Add(new SavedInventorySlot
                 {
                     SlotIndex = i,
-                    ItemId = (int)stack.ItemId,
+                    ItemId = 0,
+                    CanonicalId = stack.ItemId.Value,
                     Count = stack.Count
                 });
             }
@@ -308,15 +343,89 @@ namespace Blockiverse.Persistence
             };
         }
 
+        static readonly Dictionary<int, string> LegacyBlockIdToCanonical = new()
+        {
+            { 0, "air" },
+            { 1, "meadow_turf" },
+            { 2, "loose_loam" },
+            { 3, "graystone" },
+            { 4, "branchwood_log" },
+            { 5, "leafmoss" },
+            { 6, "lumen_quartz_cluster" },
+            { 7, "embercoal_seam" },
+            { 8, "rosycopper_bloom" },
+            { 9, "rustcore_ore" },
+            { 10, "build_table" },
+            { 11, "glowwick" },
+            { 12, "storage_crate" }
+        };
+
+        internal static readonly Dictionary<string, string> LegacyItemCanonicalIdAliases = new()
+        {
+            { "lumen_quartz", "lumen_crystal" },
+        };
+
+        static readonly Dictionary<int, string> LegacyItemIdToCanonical = new()
+        {
+            { 1, "meadow_turf" },
+            { 2, "loose_loam" },
+            { 3, "graystone" },
+            { 4, "branchwood_log" },
+            { 5, "leafmoss" },
+            { 6, "lumen_crystal" },
+            { 7, "embercoal" },
+            { 8, "raw_rosycopper" },
+            { 9, "raw_rustcore" },
+            { 10, "build_table" },
+            { 11, "glowwick" },
+            { 12, "storage_crate" },
+            { 100, "reedwood_feller" },
+            { 101, "reedwood_mallet" },
+            { 102, "reedwood_delver" },
+            { 200, "field_bandage" }
+        };
+
         static WorldSaveData ApplyBuiltInMigrations(WorldSaveData data, string saveName)
         {
-            if (data != null && data.SchemaVersion == 1)
+            if (data == null)
+                return data;
+
+            if (data.SchemaVersion == 1)
             {
-                data.SchemaVersion = CurrentSchemaVersion;
+                data.SchemaVersion = 2;
                 data.PlayerInventory = CreateEmptyInventoryData();
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,
-                    $"Applied built-in world save migration file={saveName} fromSchema=1 toSchema={CurrentSchemaVersion}");
+                    $"Applied built-in world save migration file={saveName} fromSchema=1 toSchema=2");
+            }
+
+            if (data.SchemaVersion == 2)
+            {
+                foreach (SavedBlockDelta delta in data.ChangedBlocks ?? Array.Empty<SavedBlockDelta>())
+                {
+                    if (string.IsNullOrEmpty(delta.CanonicalId) &&
+                        LegacyBlockIdToCanonical.TryGetValue(delta.BlockId, out string canonical))
+                    {
+                        delta.CanonicalId = canonical;
+                    }
+                }
+
+                if (data.PlayerInventory?.Slots != null)
+                {
+                    foreach (SavedInventorySlot slot in data.PlayerInventory.Slots)
+                    {
+                        if (string.IsNullOrEmpty(slot.CanonicalId) &&
+                            LegacyItemIdToCanonical.TryGetValue(slot.ItemId, out string canonical))
+                        {
+                            slot.CanonicalId = canonical;
+                        }
+                    }
+                }
+
+                data.SchemaVersion = CurrentSchemaVersion;
+                BlockiverseLog.Info(
+                    BlockiverseLogCategory.Persistence,
+                    $"Applied built-in world save migration file={saveName} fromSchema=2 toSchema={CurrentSchemaVersion}");
             }
 
             return data;
@@ -552,10 +661,19 @@ namespace Blockiverse.Persistence
                     return false;
                 }
 
-                ItemId itemId = (ItemId)slot.ItemId;
-                if (itemId == ItemId.None || !itemRegistry.TryGet(itemId, out ItemDefinition definition))
+                if (string.IsNullOrEmpty(slot.CanonicalId))
                 {
-                    error = "player inventory item id is invalid";
+                    error = "player inventory slot is missing canonical item id";
+                    return false;
+                }
+
+                string resolvedId = LegacyItemCanonicalIdAliases.TryGetValue(slot.CanonicalId, out string aliasedId)
+                    ? aliasedId
+                    : slot.CanonicalId;
+                var itemId = new ItemId(resolvedId);
+                if (!itemRegistry.TryGet(itemId, out ItemDefinition definition))
+                {
+                    error = $"player inventory item id is not registered: {slot.CanonicalId}";
                     return false;
                 }
 

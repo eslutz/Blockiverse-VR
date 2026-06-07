@@ -19,18 +19,18 @@ namespace Blockiverse.Gameplay
 
         static readonly Dictionary<int, int> TileIndexByBlockId = new()
         {
-            { BlockRegistry.MeadowTurf.Value, 0 },
-            { BlockRegistry.Loam.Value, 1 },
-            { BlockRegistry.Slate.Value, 2 },
-            { BlockRegistry.Timber.Value, 3 },
-            { BlockRegistry.Leafmass.Value, 4 },
-            { BlockRegistry.Clearstone.Value, 5 },
-            { BlockRegistry.Coalstone.Value, 6 },
-            { BlockRegistry.Copperstone.Value, 7 },
-            { BlockRegistry.Ironstone.Value, 8 },
-            { BlockRegistry.Workbench.Value, 9 },
-            { BlockRegistry.Torchbud.Value, 10 },
-            { BlockRegistry.StorageCrate.Value, 11 }
+            { BlockRegistry.MeadowTurf.Value,        0 },
+            { BlockRegistry.LooseLoam.Value,          1 },
+            { BlockRegistry.Graystone.Value,          2 },
+            { BlockRegistry.BranchwoodLog.Value,      3 },
+            { BlockRegistry.Leafmoss.Value,           4 },
+            { BlockRegistry.LumenQuartzCluster.Value, 5 },
+            { BlockRegistry.EmbercoalSeam.Value,      6 },
+            { BlockRegistry.RosycopperBloom.Value,    7 },
+            { BlockRegistry.RustcoreOre.Value,        8 },
+            { BlockRegistry.BuildTable.Value,         9 },
+            { BlockRegistry.Glowwick.Value,           10 },
+            { BlockRegistry.StorageCrate.Value,       11 }
         };
 
         public static Rect GetTileRect(BlockId blockId)

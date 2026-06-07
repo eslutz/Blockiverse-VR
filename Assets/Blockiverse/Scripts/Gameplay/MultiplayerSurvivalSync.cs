@@ -579,12 +579,12 @@ namespace Blockiverse.Gameplay
                 return;
 
             reader.ReadValueSafe(out uint requestId);
-            reader.ReadValueSafe(out int outputItemId);
+            reader.ReadValueSafe(out string outputItemId);
             reader.ReadValueSafe(out int availableStation);
             ProcessHostCraft(
                 senderClientId,
                 requestId,
-                (ItemId)outputItemId,
+                new ItemId(outputItemId),
                 (CraftingStation)availableStation,
                 sendResponse: true);
         }
@@ -669,7 +669,7 @@ namespace Blockiverse.Gameplay
             try
             {
                 writer.WriteValueSafe(requestId);
-                writer.WriteValueSafe((int)outputItemId);
+                writer.WriteValueSafe(outputItemId.Value);
                 writer.WriteValueSafe((int)availableStation);
                 networkManager.CustomMessagingManager.SendNamedMessage(
                     CraftRequestMessage,
@@ -1150,15 +1150,15 @@ namespace Blockiverse.Gameplay
 
         static void WriteItemStack(ref FastBufferWriter writer, ItemStack stack)
         {
-            writer.WriteValueSafe((int)stack.ItemId);
+            writer.WriteValueSafe(stack.ItemId.Value);
             writer.WriteValueSafe(stack.Count);
         }
 
         static ItemStack ReadItemStack(ref FastBufferReader reader)
         {
-            reader.ReadValueSafe(out int itemId);
+            reader.ReadValueSafe(out string itemId);
             reader.ReadValueSafe(out int count);
-            return count > 0 ? new ItemStack((ItemId)itemId, count) : ItemStack.Empty;
+            return count > 0 ? new ItemStack(new ItemId(itemId), count) : ItemStack.Empty;
         }
 
         static void WriteBlockPosition(ref FastBufferWriter writer, BlockPosition position)
