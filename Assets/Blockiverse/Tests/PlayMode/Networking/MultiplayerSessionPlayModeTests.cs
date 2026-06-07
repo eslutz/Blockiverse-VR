@@ -481,7 +481,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                           !clientSession.NetworkManager.IsListening,
                     "Host shutdown did not stop after saving the world.");
 
-                Assert.That(File.Exists(savePath), Is.True);
+                Assert.That(Directory.Exists(savePath), Is.True);
 
                 worldManager.World.SetBlock(editPosition, BlockRegistry.Air);
 
@@ -1496,14 +1496,16 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
         static string CreateTempSavePath()
         {
-            string path = Path.Combine(Path.GetTempPath(), $"blockiverse-multiplayer-{Guid.NewGuid():N}.json");
+            string path = Path.Combine(Path.GetTempPath(), $"blockiverse-multiplayer-{Guid.NewGuid():N}.vxlworld");
             TempSavePaths.Add(path);
             return path;
         }
 
         static void DeleteIfExists(string path)
         {
-            if (File.Exists(path))
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+            else if (File.Exists(path))
                 File.Delete(path);
         }
 

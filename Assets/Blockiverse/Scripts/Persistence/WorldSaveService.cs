@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using Blockiverse.Core;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -14,7 +17,7 @@ namespace Blockiverse.Persistence
         public int X;
         public int Y;
         public int Z;
-        public int BlockId;         // legacy (schema v2): integer block ID
+        public int BlockId;         // legacy (schema v1-v2): integer block ID
         public string CanonicalId;  // canonical (schema v3+): string block ID
     }
 
@@ -22,7 +25,7 @@ namespace Blockiverse.Persistence
     public sealed class SavedInventorySlot
     {
         public int SlotIndex;
-        public int ItemId;          // legacy (schema v2): integer item ID
+        public int ItemId;          // legacy (schema v1-v2): integer item ID
         public string CanonicalId;  // canonical (schema v3+): string item ID
         public int Count;
     }
@@ -183,13 +186,25 @@ namespace Blockiverse.Persistence
         readonly WorldSaveMigrationRegistry migrationRegistry;
         readonly ItemRegistry itemRegistry;
 
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
+        public const string SaveFormatVersion = "1.0.0";
+        public const float AutoSaveIntervalSeconds = 300f;
+
+        const int RegionSizeChunks = 32;
+        const int SectionSize = 16;
 
         public WorldSaveService(WorldSaveMigrationRegistry migrations, ItemRegistry items = null)
         {
             migrationRegistry = migrations ?? throw new ArgumentNullException(nameof(migrations));
             itemRegistry = items ?? ItemRegistry.CreateDefault();
         }
+
+        public bool ShouldAutoSave(float elapsedSecondsSinceLastSave)
+        {
+            return elapsedSecondsSinceLastSave >= AutoSaveIntervalSeconds;
+        }
+
+        // ── Save ─────────────────────────────────────────────────────────────
 
         public void Save(string path, string worldName, VoxelWorld world)
         {
@@ -205,63 +220,104 @@ namespace Blockiverse.Persistence
             if (string.IsNullOrWhiteSpace(path))
                 throw new ArgumentException("Save path must be non-empty.", nameof(path));
 
-            WorldSaveData data = CreateSaveData(worldName, world, inventory, selectedHotbarSlotIndex);
-            string directory = Path.GetDirectoryName(path);
+            Directory.CreateDirectory(path);
+            string sanitizedPath = SanitizeSavePath(path);
 
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
+            BlockRegistry blockRegistry = BlockRegistry.CreateDefault();
+            string blockHash = ComputeBlockRegistryHash(blockRegistry);
+            string itemHash = ComputeItemRegistryHash(itemRegistry);
+            string now = DateTime.UtcNow.ToString("o");
+            string createdAt = GetExistingCreatedAtUtc(path) ?? now;
+            worldName = string.IsNullOrWhiteSpace(worldName) ? "Creative World" : worldName;
 
-            string tempPath = path + ".tmp";
-            File.WriteAllText(tempPath, JsonUtility.ToJson(data, prettyPrint: true));
-            ReplaceWithTempFile(tempPath, path);
+            var manifest = new VxlwManifest
+            {
+                SchemaVersion = CurrentSchemaVersion,
+                SaveFormatVersion = SaveFormatVersion,
+                WorldName = worldName,
+                Seed = world.Seed,
+                Width = world.Bounds.Width,
+                Height = world.Bounds.Height,
+                Depth = world.Bounds.Depth,
+                ChunkSize = world.ChunkSize,
+                WorldPreset = "survival_terrain",
+                GameMode = "creative",
+                CreatedAtUtc = createdAt,
+                ModifiedAtUtc = now,
+                BlockRegistryHash = blockHash,
+                ItemRegistryHash = itemHash
+            };
 
+            var dimension = new VxlwDimension
+            {
+                DimensionId = "main",
+                Seed = world.Seed,
+                MinY = 0,
+                MaxY = world.Bounds.Height - 1,
+                ChunkSize = world.ChunkSize
+            };
+
+            var environment = new VxlwEnvironment
+            {
+                WorldTimeTicks = 0,
+                WeatherState = "CLEAR"
+            };
+
+            var registryManifest = new VxlwRegistryManifest
+            {
+                BlockRegistryHash = blockHash,
+                ItemRegistryHash = itemHash,
+                BlockCount = blockRegistry.All.Count,
+                ItemCount = itemRegistry.All.Count
+            };
+
+            var playerSave = new VxlwPlayerSave
+            {
+                PlayerId = "local_player",
+                GameMode = "creative",
+                SlotCount = inventory.SlotCount,
+                HotbarSlotCount = inventory.HotbarSlotCount,
+                SelectedHotbarSlotIndex = selectedHotbarSlotIndex,
+                Slots = BuildInventorySlots(inventory, selectedHotbarSlotIndex)
+            };
+
+            // Write all files atomically using .tmp → rename
+            WriteJsonAtomic(Path.Combine(path, "manifest.json"), manifest);
+
+            string dimDir = Path.Combine(path, "dimensions", "main");
+            Directory.CreateDirectory(dimDir);
+            WriteJsonAtomic(Path.Combine(dimDir, "dimension.json"), dimension);
+            WriteJsonAtomic(Path.Combine(dimDir, "environment.json"), environment);
+
+            WriteRegionFiles(path, world, blockRegistry);
+
+            string playersDir = Path.Combine(path, "players");
+            Directory.CreateDirectory(playersDir);
+            WriteJsonAtomic(Path.Combine(playersDir, "local_player.json"), playerSave);
+
+            string registriesDir = Path.Combine(path, "registries");
+            Directory.CreateDirectory(registriesDir);
+            WriteJsonAtomic(Path.Combine(registriesDir, "registry-manifest.json"), registryManifest);
+
+            int changedBlockCount = world.GetChangedBlocks().Count();
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Persistence,
-                $"Saved world save file={SanitizeSavePath(path)} world={data.WorldName} schema={data.SchemaVersion} dimensions={data.Width}x{data.Height}x{data.Depth} changedBlocks={ChangedBlockCount(data)} inventorySlots={data.PlayerInventory.SlotCount} occupiedInventorySlots={OccupiedInventorySlotCount(data.PlayerInventory)}");
+                $"Saved world save file={sanitizedPath} world={worldName} schema={CurrentSchemaVersion} dimensions={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} changedBlocks={changedBlockCount} inventorySlots={inventory.SlotCount} occupiedInventorySlots={CountOccupiedSlots(inventory)}");
         }
+
+        // ── Load ─────────────────────────────────────────────────────────────
 
         public WorldLoadResult Load(string path)
         {
             try
             {
-                if (!File.Exists(path))
-                    return FailedLoad(path, $"World save does not exist: {path}", "World save does not exist.");
+                if (Directory.Exists(path))
+                    return LoadDirectory(path);
 
-                string json = File.ReadAllText(path);
+                if (File.Exists(path))
+                    return LoadFlatJson(path);
 
-                if (string.IsNullOrWhiteSpace(json) || !HasCompleteTopLevelJsonObject(json))
-                    return FailedLoad(path, "World save is corrupt or incomplete.");
-
-                WorldSaveData data = JsonUtility.FromJson<WorldSaveData>(json);
-
-                if (!IsValid(data, validateInventory: false, out string validationError))
-                    return FailedLoad(path, $"World save is corrupt: {validationError}");
-
-                int loadedSchemaVersion = data.SchemaVersion;
-                data = ApplyBuiltInMigrations(data, SanitizeSavePath(path));
-
-                if (data.SchemaVersion != CurrentSchemaVersion &&
-                    !migrationRegistry.TryMigrateToCurrent(data, CurrentSchemaVersion, out data, out string migrationError))
-                {
-                    return FailedLoad(path, migrationError);
-                }
-
-                if (loadedSchemaVersion != data.SchemaVersion)
-                {
-                    BlockiverseLog.Info(
-                        BlockiverseLogCategory.Persistence,
-                        $"Migrated world save file={SanitizeSavePath(path)} fromSchema={loadedSchemaVersion} toSchema={data.SchemaVersion}");
-                }
-
-                EnsurePlayerInventoryDefaults(data);
-
-                if (!IsValid(data, validateInventory: true, out validationError))
-                    return FailedLoad(path, $"World save is corrupt: {validationError}");
-
-                BlockiverseLog.Info(
-                    BlockiverseLogCategory.Persistence,
-                    $"Loaded world save file={SanitizeSavePath(path)} world={data.WorldName} schema={data.SchemaVersion} dimensions={data.Width}x{data.Height}x{data.Depth} changedBlocks={ChangedBlockCount(data)} inventorySlots={data.PlayerInventory.SlotCount} occupiedInventorySlots={OccupiedInventorySlotCount(data.PlayerInventory)}");
-                return WorldLoadResult.Loaded(data);
+                return FailedLoad(path, $"World save does not exist: {path}", "World save does not exist.");
             }
             catch (Exception exception) when (exception is IOException || exception is ArgumentException || exception is UnauthorizedAccessException)
             {
@@ -272,76 +328,315 @@ namespace Blockiverse.Persistence
             }
         }
 
-        WorldSaveData CreateSaveData(string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex)
+        // ── Directory format (schema v4) ──────────────────────────────────────
+
+        WorldLoadResult LoadDirectory(string path)
         {
-            var deltas = new List<SavedBlockDelta>();
+            string manifestPath = Path.Combine(path, "manifest.json");
+            if (!File.Exists(manifestPath))
+                return FailedLoad(path, "World save is corrupt: missing manifest.json.");
+
+            string manifestJson = File.ReadAllText(manifestPath);
+            if (!HasCompleteTopLevelJsonObject(manifestJson))
+                return FailedLoad(path, "World save is corrupt or incomplete.");
+
+            VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(manifestJson);
+            if (manifest == null || string.IsNullOrWhiteSpace(manifest.WorldName))
+                return FailedLoad(path, "World save is corrupt: manifest is invalid.");
+
+            if (manifest.Width <= 0 || manifest.Height <= 0 || manifest.Depth <= 0 || manifest.ChunkSize <= 0)
+                return FailedLoad(path, "World save is corrupt: invalid world dimensions.");
+
             BlockRegistry blockRegistry = BlockRegistry.CreateDefault();
+            string currentBlockHash = ComputeBlockRegistryHash(blockRegistry);
+            if (!string.IsNullOrEmpty(manifest.BlockRegistryHash) &&
+                manifest.BlockRegistryHash != currentBlockHash)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Persistence,
+                    $"World save registry hash mismatch file={SanitizeSavePath(path)} — block registry has changed since this save was created.");
+            }
+
+            List<SavedBlockDelta> changedBlocks = LoadRegionFiles(path, manifest);
+
+            SavedPlayerInventory playerInventory = LoadPlayerInventory(path) ?? CreateEmptyInventoryData();
+            EnsurePlayerInventoryDefaults(ref playerInventory);
+
+            var data = new WorldSaveData
+            {
+                SchemaVersion = CurrentSchemaVersion,
+                WorldName = manifest.WorldName,
+                Width = manifest.Width,
+                Height = manifest.Height,
+                Depth = manifest.Depth,
+                ChunkSize = manifest.ChunkSize,
+                Seed = manifest.Seed,
+                ChangedBlocks = changedBlocks.ToArray(),
+                PlayerInventory = playerInventory
+            };
+
+            if (!IsValidInventory(data.PlayerInventory, out string inventoryError))
+                return FailedLoad(path, $"World save is corrupt: {inventoryError}");
+
+            int loadedSchemaVersion = manifest.SchemaVersion;
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Persistence,
+                $"Loaded world save file={SanitizeSavePath(path)} world={data.WorldName} schema={data.SchemaVersion} dimensions={data.Width}x{data.Height}x{data.Depth} changedBlocks={data.ChangedBlocks.Length} inventorySlots={data.PlayerInventory.SlotCount} occupiedInventorySlots={data.PlayerInventory.Slots?.Length ?? 0}");
+
+            return WorldLoadResult.Loaded(data);
+        }
+
+        void WriteRegionFiles(string savePath, VoxelWorld world, BlockRegistry blockRegistry)
+        {
+            var regionMap = new Dictionary<(int rx, int rz), Dictionary<(int cx, int cz), Dictionary<int, List<(int pos, string canonicalId)>>>>();
 
             foreach (BlockChange change in world.GetChangedBlocks())
             {
+                int chunkX = change.Position.X / world.ChunkSize;
+                int chunkZ = change.Position.Z / world.ChunkSize;
+                int regionX = chunkX / RegionSizeChunks;
+                int regionZ = chunkZ / RegionSizeChunks;
+                int sectionY = change.Position.Y / SectionSize;
+
+                int localX = change.Position.X - chunkX * world.ChunkSize;
+                int localZ = change.Position.Z - chunkZ * world.ChunkSize;
+                int localSectionY = change.Position.Y - sectionY * SectionSize;
+                int pos = localX + localZ * SectionSize + localSectionY * SectionSize * SectionSize;
+
                 string canonicalId = blockRegistry.TryGet(change.NewBlock, out BlockDefinition def)
                     ? def.CanonicalId
-                    : string.Empty;
+                    : "air";
 
-                deltas.Add(new SavedBlockDelta
-                {
-                    X = change.Position.X,
-                    Y = change.Position.Y,
-                    Z = change.Position.Z,
-                    BlockId = change.NewBlock.Value,
-                    CanonicalId = canonicalId
-                });
+                var rKey = (regionX, regionZ);
+                if (!regionMap.TryGetValue(rKey, out var chunkMap))
+                    regionMap[rKey] = chunkMap = new Dictionary<(int, int), Dictionary<int, List<(int, string)>>>();
+
+                var cKey = (chunkX, chunkZ);
+                if (!chunkMap.TryGetValue(cKey, out var sectionMap))
+                    chunkMap[cKey] = sectionMap = new Dictionary<int, List<(int, string)>>();
+
+                if (!sectionMap.TryGetValue(sectionY, out var changes))
+                    sectionMap[sectionY] = changes = new List<(int, string)>();
+
+                changes.Add((pos, canonicalId));
             }
 
-            return new WorldSaveData
+            string regionsDir = Path.Combine(savePath, "dimensions", "main", "regions");
+            Directory.CreateDirectory(regionsDir);
+
+            foreach (var (rKey, chunkMap) in regionMap)
             {
-                SchemaVersion = CurrentSchemaVersion,
-                WorldName = string.IsNullOrWhiteSpace(worldName) ? "Creative World" : worldName,
-                Width = world.Bounds.Width,
-                Height = world.Bounds.Height,
-                Depth = world.Bounds.Depth,
-                ChunkSize = world.ChunkSize,
-                Seed = world.Seed,
-                ChangedBlocks = deltas.ToArray(),
-                PlayerInventory = CreateSavedInventory(inventory, selectedHotbarSlotIndex)
-            };
+                var chunkDataList = new List<VxlwChunkData>();
+
+                foreach (var (cKey, sectionMap) in chunkMap)
+                {
+                    var sectionList = new List<VxlwSectionData>();
+
+                    foreach (var (sectionY, changeList) in sectionMap)
+                    {
+                        var palette = new List<string>();
+                        var paletteIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        var positions = new List<int>();
+                        var indices = new List<int>();
+
+                        foreach (var (pos, canonicalId) in changeList)
+                        {
+                            if (!paletteIndex.TryGetValue(canonicalId, out int idx))
+                            {
+                                idx = palette.Count;
+                                palette.Add(canonicalId);
+                                paletteIndex[canonicalId] = idx;
+                            }
+                            positions.Add(pos);
+                            indices.Add(idx);
+                        }
+
+                        sectionList.Add(new VxlwSectionData
+                        {
+                            SectionY = sectionY,
+                            BlockPalette = palette.ToArray(),
+                            ChangePositions = positions.ToArray(),
+                            PaletteIndices = indices.ToArray()
+                        });
+                    }
+
+                    chunkDataList.Add(new VxlwChunkData
+                    {
+                        ChunkX = cKey.Item1,
+                        ChunkZ = cKey.Item2,
+                        Sections = sectionList.ToArray()
+                    });
+                }
+
+                var regionFile = new VxlwRegionFile
+                {
+                    Format = "vxlr",
+                    SaveFormatVersion = SaveFormatVersion,
+                    RegionX = rKey.rx,
+                    RegionZ = rKey.rz,
+                    Chunks = chunkDataList.ToArray()
+                };
+
+                string regionPath = Path.Combine(regionsDir, $"r.{rKey.rx}.{rKey.rz}.vxlr");
+                WriteJsonAtomic(regionPath, regionFile);
+            }
         }
 
-        SavedPlayerInventory CreateSavedInventory(Inventory inventory, int selectedHotbarSlotIndex)
+        List<SavedBlockDelta> LoadRegionFiles(string savePath, VxlwManifest manifest)
         {
-            if (!IsValidSelectedHotbarSlotIndex(selectedHotbarSlotIndex, inventory.HotbarSlotCount))
-                throw new ArgumentOutOfRangeException(nameof(selectedHotbarSlotIndex), "Selected hotbar slot must fit inside the inventory hotbar.");
+            var deltas = new List<SavedBlockDelta>();
+            string regionsDir = Path.Combine(savePath, "dimensions", "main", "regions");
 
-            var slots = new List<SavedInventorySlot>();
-            for (int i = 0; i < inventory.SlotCount; i++)
+            if (!Directory.Exists(regionsDir))
+                return deltas;
+
+            BlockRegistry blockRegistry = BlockRegistry.CreateDefault();
+
+            foreach (string regionPath in Directory.GetFiles(regionsDir, "r.*.*.vxlr"))
             {
-                ItemStack stack = inventory.GetSlot(i);
-                if (stack.IsEmpty)
+                string regionJson = File.ReadAllText(regionPath);
+                if (string.IsNullOrWhiteSpace(regionJson))
                     continue;
 
-                if (!itemRegistry.TryGet(stack.ItemId, out ItemDefinition definition))
-                    throw new InvalidOperationException($"Inventory item is not registered: {stack.ItemId}.");
+                VxlwRegionFile regionFile = JsonUtility.FromJson<VxlwRegionFile>(regionJson);
+                if (regionFile?.Chunks == null)
+                    continue;
 
-                if (stack.Count > definition.MaxStackSize)
-                    throw new InvalidOperationException($"Inventory stack count {stack.Count} exceeds max stack size {definition.MaxStackSize} for {stack.ItemId}.");
-
-                slots.Add(new SavedInventorySlot
+                foreach (VxlwChunkData chunk in regionFile.Chunks)
                 {
-                    SlotIndex = i,
-                    ItemId = 0,
-                    CanonicalId = stack.ItemId.Value,
-                    Count = stack.Count
-                });
+                    if (chunk?.Sections == null)
+                        continue;
+
+                    foreach (VxlwSectionData section in chunk.Sections)
+                    {
+                        if (section?.BlockPalette == null || section.ChangePositions == null)
+                            continue;
+
+                        int count = Math.Min(section.ChangePositions.Length, section.PaletteIndices?.Length ?? 0);
+                        for (int i = 0; i < count; i++)
+                        {
+                            int paletteIdx = section.PaletteIndices[i];
+                            if (paletteIdx < 0 || paletteIdx >= section.BlockPalette.Length)
+                                continue;
+
+                            string canonicalId = section.BlockPalette[paletteIdx];
+                            int pos = section.ChangePositions[i];
+
+                            int localSectionY = pos / (SectionSize * SectionSize);
+                            int remainder = pos % (SectionSize * SectionSize);
+                            int localZ = remainder / SectionSize;
+                            int localX = remainder % SectionSize;
+
+                            int worldX = chunk.ChunkX * manifest.ChunkSize + localX;
+                            int worldY = section.SectionY * SectionSize + localSectionY;
+                            int worldZ = chunk.ChunkZ * manifest.ChunkSize + localZ;
+
+                            deltas.Add(new SavedBlockDelta
+                            {
+                                X = worldX,
+                                Y = worldY,
+                                Z = worldZ,
+                                BlockId = 0,
+                                CanonicalId = canonicalId
+                            });
+                        }
+                    }
+                }
             }
+
+            return deltas;
+        }
+
+        SavedPlayerInventory LoadPlayerInventory(string savePath)
+        {
+            string playerPath = Path.Combine(savePath, "players", "local_player.json");
+            if (!File.Exists(playerPath))
+                return null;
+
+            string json = File.ReadAllText(playerPath);
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            VxlwPlayerSave playerSave = JsonUtility.FromJson<VxlwPlayerSave>(json);
+            if (playerSave == null)
+                return null;
 
             return new SavedPlayerInventory
             {
-                SlotCount = inventory.SlotCount,
-                HotbarSlotCount = inventory.HotbarSlotCount,
-                SelectedHotbarSlotIndex = selectedHotbarSlotIndex,
-                Slots = slots.ToArray()
+                SlotCount = playerSave.SlotCount,
+                HotbarSlotCount = playerSave.HotbarSlotCount,
+                SelectedHotbarSlotIndex = playerSave.SelectedHotbarSlotIndex,
+                Slots = playerSave.Slots ?? Array.Empty<SavedInventorySlot>()
             };
         }
+
+        // ── Legacy flat JSON format (schema v1-v3) ────────────────────────────
+
+        WorldLoadResult LoadFlatJson(string path)
+        {
+            string json = File.ReadAllText(path);
+
+            if (string.IsNullOrWhiteSpace(json) || !HasCompleteTopLevelJsonObject(json))
+                return FailedLoad(path, "World save is corrupt or incomplete.");
+
+            WorldSaveData data = JsonUtility.FromJson<WorldSaveData>(json);
+
+            if (!IsValidFlatData(data, out string validationError))
+                return FailedLoad(path, $"World save is corrupt: {validationError}");
+
+            int loadedSchemaVersion = data.SchemaVersion;
+            data = ApplyBuiltInMigrations(data, SanitizeSavePath(path));
+
+            if (data.SchemaVersion != CurrentSchemaVersion &&
+                !migrationRegistry.TryMigrateToCurrent(data, CurrentSchemaVersion, out data, out string migrationError))
+            {
+                return FailedLoad(path, migrationError);
+            }
+
+            if (loadedSchemaVersion != data.SchemaVersion)
+            {
+                BlockiverseLog.Info(
+                    BlockiverseLogCategory.Persistence,
+                    $"Migrated world save file={SanitizeSavePath(path)} fromSchema={loadedSchemaVersion} toSchema={data.SchemaVersion}");
+            }
+
+            EnsurePlayerInventoryDefaults(ref data.PlayerInventory);
+
+            if (!IsValidFlatData(data, out validationError))
+                return FailedLoad(path, $"World save is corrupt: {validationError}");
+
+            if (!IsValidInventory(data.PlayerInventory, out validationError))
+                return FailedLoad(path, $"World save is corrupt: {validationError}");
+
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Persistence,
+                $"Loaded world save file={SanitizeSavePath(path)} world={data.WorldName} schema={data.SchemaVersion} dimensions={data.Width}x{data.Height}x{data.Depth} changedBlocks={data.ChangedBlocks?.Length ?? 0} inventorySlots={data.PlayerInventory.SlotCount} occupiedInventorySlots={data.PlayerInventory.Slots?.Length ?? 0}");
+
+            return WorldLoadResult.Loaded(data);
+        }
+
+        // ── Registry hashes ───────────────────────────────────────────────────
+
+        public static string ComputeBlockRegistryHash(BlockRegistry registry)
+        {
+            string content = string.Join("|", registry.All.Select(d => d.CanonicalId).OrderBy(id => id));
+            return ComputeMd5Hex(content);
+        }
+
+        public static string ComputeItemRegistryHash(ItemRegistry registry)
+        {
+            string content = string.Join("|", registry.All.Select(d => d.Id.Value).OrderBy(id => id));
+            return ComputeMd5Hex(content);
+        }
+
+        static string ComputeMd5Hex(string content)
+        {
+            using var md5 = MD5.Create();
+            byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes(content));
+            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
+        // ── Shared helpers ────────────────────────────────────────────────────
 
         static readonly Dictionary<int, string> LegacyBlockIdToCanonical = new()
         {
@@ -422,13 +717,50 @@ namespace Blockiverse.Persistence
                     }
                 }
 
+                data.SchemaVersion = 3;
+                BlockiverseLog.Info(
+                    BlockiverseLogCategory.Persistence,
+                    $"Applied built-in world save migration file={saveName} fromSchema=2 toSchema=3");
+            }
+
+            if (data.SchemaVersion == 3)
+            {
                 data.SchemaVersion = CurrentSchemaVersion;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,
-                    $"Applied built-in world save migration file={saveName} fromSchema=2 toSchema={CurrentSchemaVersion}");
+                    $"Applied built-in world save migration file={saveName} fromSchema=3 toSchema={CurrentSchemaVersion}");
             }
 
             return data;
+        }
+
+        SavedInventorySlot[] BuildInventorySlots(Inventory inventory, int selectedHotbarSlotIndex)
+        {
+            if (!IsValidSelectedHotbarSlotIndex(selectedHotbarSlotIndex, inventory.HotbarSlotCount))
+                throw new ArgumentOutOfRangeException(nameof(selectedHotbarSlotIndex), "Selected hotbar slot must fit inside the inventory hotbar.");
+
+            var slots = new List<SavedInventorySlot>();
+            for (int i = 0; i < inventory.SlotCount; i++)
+            {
+                ItemStack stack = inventory.GetSlot(i);
+                if (stack.IsEmpty)
+                    continue;
+
+                if (!itemRegistry.TryGet(stack.ItemId, out ItemDefinition definition))
+                    throw new InvalidOperationException($"Inventory item is not registered: {stack.ItemId}.");
+
+                if (stack.Count > definition.MaxStackSize)
+                    throw new InvalidOperationException($"Inventory stack count {stack.Count} exceeds max stack size {definition.MaxStackSize} for {stack.ItemId}.");
+
+                slots.Add(new SavedInventorySlot
+                {
+                    SlotIndex = i,
+                    ItemId = 0,
+                    CanonicalId = stack.ItemId.Value,
+                    Count = stack.Count
+                });
+            }
+            return slots.ToArray();
         }
 
         static bool HasCompleteTopLevelJsonObject(string json)
@@ -453,26 +785,17 @@ namespace Blockiverse.Persistence
                 if (inString)
                 {
                     if (escaped)
-                    {
                         escaped = false;
-                    }
                     else if (character == '\\')
-                    {
                         escaped = true;
-                    }
                     else if (character == '"')
-                    {
                         inString = false;
-                    }
-
                     continue;
                 }
 
                 if (character == '"')
                 {
-                    if (completedTopLevelObject)
-                        return false;
-
+                    if (completedTopLevelObject) return false;
                     inString = true;
                     continue;
                 }
@@ -480,55 +803,38 @@ namespace Blockiverse.Persistence
                 switch (character)
                 {
                     case '{':
-                        if (completedTopLevelObject)
-                            return false;
-
+                        if (completedTopLevelObject) return false;
                         objectDepth++;
                         break;
-
                     case '}':
                         objectDepth--;
-                        if (objectDepth < 0)
-                            return false;
-
-                        if (objectDepth == 0 && arrayDepth == 0)
-                            completedTopLevelObject = true;
+                        if (objectDepth < 0) return false;
+                        if (objectDepth == 0 && arrayDepth == 0) completedTopLevelObject = true;
                         break;
-
                     case '[':
-                        if (completedTopLevelObject)
-                            return false;
-
+                        if (completedTopLevelObject) return false;
                         arrayDepth++;
                         break;
-
                     case ']':
                         arrayDepth--;
-                        if (arrayDepth < 0)
-                            return false;
+                        if (arrayDepth < 0) return false;
                         break;
-
                     default:
-                        if (completedTopLevelObject && !char.IsWhiteSpace(character))
-                            return false;
+                        if (completedTopLevelObject && !char.IsWhiteSpace(character)) return false;
                         break;
                 }
             }
 
-            return completedTopLevelObject &&
-                   objectDepth == 0 &&
-                   arrayDepth == 0 &&
-                   !inString &&
-                   !escaped;
+            return completedTopLevelObject && objectDepth == 0 && arrayDepth == 0 && !inString && !escaped;
         }
 
-        static void EnsurePlayerInventoryDefaults(WorldSaveData data)
+        static void EnsurePlayerInventoryDefaults(ref SavedPlayerInventory inventory)
         {
-            if (data.PlayerInventory == null || IsMissingInventoryData(data.PlayerInventory))
-                data.PlayerInventory = CreateEmptyInventoryData();
+            if (inventory == null || IsMissingInventoryData(inventory))
+                inventory = CreateEmptyInventoryData();
 
-            if (data.PlayerInventory.Slots == null)
-                data.PlayerInventory.Slots = Array.Empty<SavedInventorySlot>();
+            if (inventory.Slots == null)
+                inventory.Slots = Array.Empty<SavedInventorySlot>();
         }
 
         static bool IsMissingInventoryData(SavedPlayerInventory inventory)
@@ -550,56 +856,24 @@ namespace Blockiverse.Persistence
             };
         }
 
-        bool IsValid(WorldSaveData data, bool validateInventory, out string error)
+        bool IsValidFlatData(WorldSaveData data, out string error)
         {
-            if (data == null)
-            {
-                error = "missing root data";
-                return false;
-            }
-
-            if (data.SchemaVersion < 0)
-            {
-                error = "invalid schema version";
-                return false;
-            }
-
-            if (data.Width <= 0 || data.Height <= 0 || data.Depth <= 0 || data.ChunkSize <= 0)
-            {
-                error = "invalid world dimensions";
-                return false;
-            }
+            if (data == null) { error = "missing root data"; return false; }
+            if (data.SchemaVersion < 0) { error = "invalid schema version"; return false; }
+            if (data.Width <= 0 || data.Height <= 0 || data.Depth <= 0 || data.ChunkSize <= 0) { error = "invalid world dimensions"; return false; }
 
             if (data.ChangedBlocks == null)
                 data.ChangedBlocks = Array.Empty<SavedBlockDelta>();
 
             foreach (SavedBlockDelta delta in data.ChangedBlocks)
             {
-                if (delta == null)
-                {
-                    error = "missing changed block delta";
-                    return false;
-                }
+                if (delta == null) { error = "missing changed block delta"; return false; }
 
-                bool deltaInBounds = delta.X >= 0 && delta.X < data.Width &&
-                                     delta.Y >= 0 && delta.Y < data.Height &&
-                                     delta.Z >= 0 && delta.Z < data.Depth;
+                if (!(delta.X >= 0 && delta.X < data.Width && delta.Y >= 0 && delta.Y < data.Height && delta.Z >= 0 && delta.Z < data.Depth))
+                { error = "changed block delta is outside world bounds"; return false; }
 
-                if (!deltaInBounds)
-                {
-                    error = "changed block delta is outside world bounds";
-                    return false;
-                }
-
-                if (delta.BlockId < 0)
-                {
-                    error = "changed block delta has an invalid block id";
-                    return false;
-                }
+                if (delta.BlockId < 0) { error = "changed block delta has an invalid block id"; return false; }
             }
-
-            if (validateInventory && !IsValidInventory(data.PlayerInventory, out error))
-                return false;
 
             error = string.Empty;
             return true;
@@ -607,29 +881,16 @@ namespace Blockiverse.Persistence
 
         bool IsValidInventory(SavedPlayerInventory inventory, out string error)
         {
-            if (inventory == null)
-            {
-                error = "missing player inventory";
-                return false;
-            }
+            if (inventory == null) { error = "missing player inventory"; return false; }
 
             if (inventory.SlotCount <= 0 || inventory.SlotCount > Inventory.MaxSlotCount)
-            {
-                error = "player inventory slot count is invalid";
-                return false;
-            }
+            { error = "player inventory slot count is invalid"; return false; }
 
             if (inventory.HotbarSlotCount < 0 || inventory.HotbarSlotCount > inventory.SlotCount)
-            {
-                error = "player inventory hotbar count is invalid";
-                return false;
-            }
+            { error = "player inventory hotbar count is invalid"; return false; }
 
             if (!IsValidSelectedHotbarSlotIndex(inventory.SelectedHotbarSlotIndex, inventory.HotbarSlotCount))
-            {
-                error = "player inventory selected hotbar slot is invalid";
-                return false;
-            }
+            { error = "player inventory selected hotbar slot is invalid"; return false; }
 
             if (inventory.Slots == null)
                 inventory.Slots = Array.Empty<SavedInventorySlot>();
@@ -637,51 +898,16 @@ namespace Blockiverse.Persistence
             var occupiedSlots = new HashSet<int>();
             foreach (SavedInventorySlot slot in inventory.Slots)
             {
-                if (slot == null)
-                {
-                    error = "missing player inventory slot";
-                    return false;
-                }
+                if (slot == null) { error = "missing player inventory slot"; return false; }
+                if (slot.SlotIndex < 0 || slot.SlotIndex >= inventory.SlotCount) { error = "player inventory slot index is outside inventory bounds"; return false; }
+                if (!occupiedSlots.Add(slot.SlotIndex)) { error = "player inventory has duplicate slot indexes"; return false; }
+                if (slot.Count <= 0) { error = "player inventory stack count is invalid"; return false; }
+                if (string.IsNullOrEmpty(slot.CanonicalId)) { error = "player inventory slot is missing canonical item id"; return false; }
 
-                if (slot.SlotIndex < 0 || slot.SlotIndex >= inventory.SlotCount)
-                {
-                    error = "player inventory slot index is outside inventory bounds";
-                    return false;
-                }
-
-                if (!occupiedSlots.Add(slot.SlotIndex))
-                {
-                    error = "player inventory has duplicate slot indexes";
-                    return false;
-                }
-
-                if (slot.Count <= 0)
-                {
-                    error = "player inventory stack count is invalid";
-                    return false;
-                }
-
-                if (string.IsNullOrEmpty(slot.CanonicalId))
-                {
-                    error = "player inventory slot is missing canonical item id";
-                    return false;
-                }
-
-                string resolvedId = LegacyItemCanonicalIdAliases.TryGetValue(slot.CanonicalId, out string aliasedId)
-                    ? aliasedId
-                    : slot.CanonicalId;
+                string resolvedId = LegacyItemCanonicalIdAliases.TryGetValue(slot.CanonicalId, out string aliasedId) ? aliasedId : slot.CanonicalId;
                 var itemId = new ItemId(resolvedId);
-                if (!itemRegistry.TryGet(itemId, out ItemDefinition definition))
-                {
-                    error = $"player inventory item id is not registered: {slot.CanonicalId}";
-                    return false;
-                }
-
-                if (slot.Count > definition.MaxStackSize)
-                {
-                    error = "player inventory stack count exceeds item max stack size";
-                    return false;
-                }
+                if (!itemRegistry.TryGet(itemId, out ItemDefinition definition)) { error = $"player inventory item id is not registered: {slot.CanonicalId}"; return false; }
+                if (slot.Count > definition.MaxStackSize) { error = "player inventory stack count exceeds item max stack size"; return false; }
             }
 
             error = string.Empty;
@@ -692,8 +918,15 @@ namespace Blockiverse.Persistence
         {
             if (hotbarSlotCount == 0)
                 return selectedHotbarSlotIndex == 0;
-
             return selectedHotbarSlotIndex >= 0 && selectedHotbarSlotIndex < hotbarSlotCount;
+        }
+
+        static void WriteJsonAtomic(string path, object data)
+        {
+            string json = JsonUtility.ToJson(data, prettyPrint: true);
+            string tempPath = path + ".tmp";
+            File.WriteAllText(tempPath, json);
+            ReplaceWithTempFile(tempPath, path);
         }
 
         static void ReplaceWithTempFile(string tempPath, string path)
@@ -705,22 +938,34 @@ namespace Blockiverse.Persistence
             }
 
             string backupPath = path + ".bak";
-
             try
             {
                 File.Replace(tempPath, path, backupPath);
-
-                if (File.Exists(backupPath))
-                    File.Delete(backupPath);
+                if (File.Exists(backupPath)) File.Delete(backupPath);
             }
             catch (Exception exception) when (exception is IOException || exception is PlatformNotSupportedException || exception is UnauthorizedAccessException)
             {
-                if (File.Exists(backupPath))
-                    File.Delete(backupPath);
-
+                if (File.Exists(backupPath)) File.Delete(backupPath);
                 File.Move(path, backupPath);
                 File.Move(tempPath, path);
                 File.Delete(backupPath);
+            }
+        }
+
+        static string GetExistingCreatedAtUtc(string dirPath)
+        {
+            string manifestPath = Path.Combine(dirPath, "manifest.json");
+            if (!File.Exists(manifestPath))
+                return null;
+
+            try
+            {
+                VxlwManifest existing = JsonUtility.FromJson<VxlwManifest>(File.ReadAllText(manifestPath));
+                return string.IsNullOrWhiteSpace(existing?.CreatedAtUtc) ? null : existing.CreatedAtUtc;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -737,18 +982,17 @@ namespace Blockiverse.Persistence
             if (string.IsNullOrWhiteSpace(path))
                 return "<empty>";
 
-            string fileName = Path.GetFileName(path);
-            return string.IsNullOrWhiteSpace(fileName) ? "<unnamed>" : fileName;
+            // For directories, use the directory name; for files, use the file name
+            string name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return string.IsNullOrWhiteSpace(name) ? "<unnamed>" : name;
         }
 
-        static int ChangedBlockCount(WorldSaveData data)
+        static int CountOccupiedSlots(Inventory inventory)
         {
-            return data.ChangedBlocks?.Length ?? 0;
-        }
-
-        static int OccupiedInventorySlotCount(SavedPlayerInventory inventory)
-        {
-            return inventory?.Slots?.Length ?? 0;
+            int count = 0;
+            for (int i = 0; i < inventory.SlotCount; i++)
+                if (!inventory.GetSlot(i).IsEmpty) count++;
+            return count;
         }
     }
 }
