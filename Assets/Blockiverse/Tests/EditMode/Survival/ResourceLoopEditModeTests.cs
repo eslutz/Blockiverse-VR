@@ -67,7 +67,8 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             Assert.That(coal.ChancePermille, Is.GreaterThan(copper.ChancePermille));
             Assert.That(copper.ChancePermille, Is.GreaterThan(iron.ChancePermille));
-            Assert.That(coal.MaxY, Is.GreaterThan(copper.MaxY));
+            Assert.That(copper.MaxY, Is.GreaterThan(coal.MaxY));
+            Assert.That(coal.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(copper.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(coal.MinY, Is.GreaterThanOrEqualTo(iron.MinY));
         }
