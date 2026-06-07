@@ -61,7 +61,7 @@ namespace Blockiverse.Survival
         public static readonly ItemId PaletinThread        = new("paletin_thread");
         public static readonly ItemId RawRustcore          = new("raw_rustcore");
         public static readonly ItemId SunmetalFleck        = new("sunmetal_fleck");
-        public static readonly ItemId LumenQuartz          = new("lumen_quartz");
+        public static readonly ItemId LumenCrystal         = new("lumen_crystal");
         public static readonly ItemId Niterstone           = new("niterstone");
         public static readonly ItemId Brightsalt           = new("brightsalt");
         public static readonly ItemId Shellgrit            = new("shellgrit");
