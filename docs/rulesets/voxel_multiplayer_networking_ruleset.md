@@ -237,7 +237,7 @@ The host snapshot header must include:
 
 ```json
 {
-  "generationPreset": "survival_lite | flat_creative",
+  "worldPreset": "survival_terrain | flat_builder | void_builder",
   "width": 128,
   "height": 64,
   "depth": 128,
@@ -251,10 +251,13 @@ The host snapshot header must include:
 
 Canonical world presets:
 
-| Preset | Width | Height | Depth | Chunk Size | Seed | Ground Height | Purpose |
-|---|---:|---:|---:|---:|---:|---:|---|
-| `flat_creative` | 32 | 16 | 32 | 16 | 1001 | 2 | Small editor/dev validation world. |
-| `survival_lite` | 128 | 64 | 128 | 16 | 6401 | 32 | Default creative validation and survival-lite world. |
+| Preset | Purpose |
+|---|---|
+| `survival_terrain` | Ruleset-defined survival world with terrain, caves, resources, vegetation, environment hooks, and structures. |
+| `flat_builder` | Canonical creative flat world with full creative catalog. |
+| `void_builder` | Empty builder world with safety floor, spawn platform, and explicit bounds. |
+
+The snapshot's `width`, `height`, `depth`, `chunkSize`, `seed`, and `groundHeight` fields carry the exact host world instance values. Do not infer network compatibility from legacy preset IDs.
 
 ### Late-join snapshot
 
@@ -599,6 +602,7 @@ Application.persistentDataPath/Saves/multiplayer-world.json
 A multiplayer save may be restored only when these fields match the initialized host world:
 
 ```txt
+worldPreset
 width
 height
 depth
@@ -609,7 +613,6 @@ seed
 Recommended future additions:
 
 ```txt
-generationPreset
 rulesetVersion
 blockRegistryHash
 itemRegistryHash

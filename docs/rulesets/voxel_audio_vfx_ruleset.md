@@ -469,24 +469,27 @@ Comfort rules:
 
 ## 13. Block/material-aware feedback
 
-The canonical block registry maps blocks to feedback families.
+The canonical block registry maps block IDs to feedback families.
 
-| Block | Family | Break Audio Variant | VFX Tint / Shape |
+| Canonical Block ID | Family | Break Audio Variant | VFX Tint / Shape |
 |---|---|---|---|
-| Meadow Turf | Soil/grass | Soft crumble | Green-brown dust. |
-| Loam | Soil | Soft crumble | Brown dust. |
-| Slate | Stone | Stone grit | Gray chips. |
-| Timber | Wood | Wood knock/splinter | Amber chips. |
-| Leafmass | Leaf | Soft rustle | Green flecks. |
-| Clearstone | Crystal/glass | Bright chip | Cyan shards, low brightness. |
-| Coalstone | Ore/stone | Dense grit | Dark chips with ember specks. |
-| Copperstone | Ore/stone | Metallic grit | Gray/orange flecks. |
-| Ironstone | Ore/stone | Heavy metallic grit | Gray/pale flecks. |
-| Workbench | Crafted wood | Wooden thump | Small wood chips. |
-| Torchbud | Light/plant | Soft pop | Tiny warm spark. |
-| Storage Crate | Crafted wood | Wooden thump | Wood chips. |
+| `meadow_turf` | Soil/grass | Soft crumble | Green-brown dust. |
+| `loose_loam` | Soil | Soft crumble | Brown dust. |
+| `graystone` | Stone | Stone grit | Gray chips. |
+| `dark_slate` | Stone | Stone grit | Dark gray chips. |
+| `branchwood_log` | Wood | Wood knock/splinter | Amber chips. |
+| `work_plank` | Crafted wood | Wooden thump | Small wood chips. |
+| `leafmoss` | Leaf | Soft rustle | Green flecks. |
+| `lumen_quartz_cluster` | Crystal | Bright chip | Cyan shards, low brightness. |
+| `clearpane_glass` | Glass | Bright chip | Pale transparent shards. |
+| `embercoal_seam` | Ore/stone | Dense grit | Dark chips with ember specks. |
+| `rosycopper_bloom` | Ore/stone | Metallic grit | Gray/orange flecks. |
+| `rustcore_ore` | Ore/stone | Heavy metallic grit | Gray/pale flecks. |
+| `build_table` | Crafted wood/station | Wooden thump | Small wood chips. |
+| `glowwick` | Light/plant | Soft pop | Tiny warm spark. |
+| `storage_crate` | Crafted wood/container | Wooden thump | Wood chips. |
 
-Future full-survival block families should use the same mapping concept rather than bespoke code paths for each block.
+Future block families should use canonical block IDs rather than bespoke code paths or legacy display-name aliases.
 
 ---
 
