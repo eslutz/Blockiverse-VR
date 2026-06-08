@@ -91,6 +91,8 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.RustcoreOre,        HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.BuildTable,         HarvestToolKind.Mallet);
             rules.RegisterForBlock(BlockRegistry.Glowwick,           HarvestToolKind.Hand);
+            rules.RegisterForBlock(BlockRegistry.LumenLamp,          HarvestToolKind.Hand);
+            rules.RegisterForBlock(BlockRegistry.SparkFlare,         HarvestToolKind.Hand);
             rules.RegisterForBlock(BlockRegistry.StorageCrate,       HarvestToolKind.Mallet);
 
             // ── Additional canonical terrain ─────────────────────────────────

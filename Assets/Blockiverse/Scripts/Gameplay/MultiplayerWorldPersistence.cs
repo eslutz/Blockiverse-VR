@@ -120,6 +120,7 @@ namespace Blockiverse.Gameplay
 
             result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
             worldManager.RestoreWeatherState(result.Data.WeatherState);
+            worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
