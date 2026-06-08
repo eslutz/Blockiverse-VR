@@ -81,7 +81,7 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed) && parsed != WeatherState.Clear)
+            if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed))
             {
                 uint seed = Settings != null ? (uint)Settings.Seed : 1u;
                 weatherService = new WeatherService(seed, parsed);

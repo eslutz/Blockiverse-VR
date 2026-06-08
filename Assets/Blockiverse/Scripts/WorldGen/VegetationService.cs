@@ -159,12 +159,15 @@ namespace Blockiverse.WorldGen
             }
             else if (current == BlockRegistry.Sapling_S2)
             {
+                // Clear the sapling first so TrunkClear can evaluate the full trunk volume,
+                // then restore it if there isn't room yet.
+                world.SetBlock(pos, BlockRegistry.Air);
                 if (!TrunkClear(world, pos, trunkHeight: 4))
                 {
+                    world.SetBlock(pos, BlockRegistry.Sapling_S2);
                     saplingTicks[pos] = remainder;
                     return;
                 }
-                world.SetBlock(pos, BlockRegistry.Air);
                 saplingTicks.Remove(pos);
                 PlaceStandardTree(world, pos);
             }
