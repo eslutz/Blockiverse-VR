@@ -1204,9 +1204,11 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       secondClientWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air,
                 "Host did not grant harvested timber only to the requesting client.");
 
+            // Embercoal Seam requires a tier-2 Delver (Flint); a tier-1 Reedwood tool cannot mine
+            // ores per the survival ruleset (§3, §7.1).
             SurvivalCommandResult coalHarvest = firstClientSurvivalSync.TrySubmitHarvest(
                 coalstonePosition,
-                new ItemStack(ItemId.ReedwoodDelver, 1).WithDurability(20),
+                new ItemStack(ItemId.FlintDelver, 1).WithDurability(35),
                 out bool coalHarvestSentToHost);
 
             Assert.That(coalHarvestSentToHost, Is.True);

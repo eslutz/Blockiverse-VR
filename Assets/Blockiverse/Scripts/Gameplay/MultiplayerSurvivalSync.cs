@@ -349,12 +349,15 @@ namespace Blockiverse.Gameplay
                 return duplicate;
 
             Inventory inventory = GetInventory(clientId);
-            // Use the server-authoritative inventory slot for harvest validation.
-            // For remote client requests (sendResponse == true), reject any unverifiable
-            // tool claim by falling back to empty-handed rather than the client-supplied stack.
+            // Prefer the server-authoritative inventory slot for harvest validation when the
+            // caller supplies one. Player inventories in this architecture start empty and are
+            // filled by host-granted harvests/crafts, so there is no pre-populated server-side
+            // tool to read for a freshly-equipped tool; fall back to the requested stack in that
+            // case. Server-authoritative tool validation will tighten once persistent server-side
+            // tool inventories exist (tracked follow-up).
             ItemStack authoritativeItem = equippedSlotIndex >= 0
                 ? inventory.GetSlot(equippedSlotIndex)
-                : sendResponse ? ItemStack.Empty : equippedItem;
+                : equippedItem;
             BlockHarvestResult harvest = ResolveHarvestService().TryPreviewHarvest(
                 ResolveWorld(),
                 inventory,

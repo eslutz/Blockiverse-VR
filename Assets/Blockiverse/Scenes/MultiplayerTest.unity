@@ -2334,7 +2334,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9406921a9e6ff4e63b355ebb1cfb4aad, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.WorldTimeClock
-  dayLengthSeconds: 600
+  dayLengthSeconds: 1200
   normalizedTime: 0.22
   timeScale: 1
 --- !u!114 &2012316156

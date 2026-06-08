@@ -6,7 +6,9 @@ namespace Blockiverse.Gameplay
 {
     public sealed class WorldTimeClock : MonoBehaviour
     {
-        public const float DefaultDayLengthSeconds = 600.0f;
+        // Canonical day length: 1 game day = 24000 ticks = 20 real minutes (1200 s) at 20 ticks/second.
+        // See docs/rulesets/voxel_world_environment_effects.md §2.
+        public const float DefaultDayLengthSeconds = 1200.0f;
         public const float DefaultStartNormalizedTime = 0.22f;
 
         [SerializeField] float dayLengthSeconds = DefaultDayLengthSeconds;
