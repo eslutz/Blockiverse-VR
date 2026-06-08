@@ -14,7 +14,7 @@ namespace Blockiverse.Survival
 
     public sealed class ItemDefinition
     {
-        public ItemDefinition(ItemId id, string name, ItemKind kind, int maxStackSize, BlockId? blockId = null, HarvestToolKind toolClass = HarvestToolKind.Hand, int toolTier = 0)
+        public ItemDefinition(ItemId id, string name, ItemKind kind, int maxStackSize, BlockId? blockId = null, HarvestToolKind toolClass = HarvestToolKind.Hand, int toolTier = 0, int maxDurability = 0)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException("Item names must be non-empty.", nameof(name));
@@ -43,6 +43,7 @@ namespace Blockiverse.Survival
             BlockId = blockId;
             ToolClass = toolClass;
             ToolTier = toolTier;
+            MaxDurability = maxDurability;
         }
 
         public ItemId Id { get; }
@@ -52,6 +53,7 @@ namespace Blockiverse.Survival
         public BlockId? BlockId { get; }
         public HarvestToolKind ToolClass { get; }
         public int ToolTier { get; }
+        public int MaxDurability { get; }
         public bool IsStackable => MaxStackSize > 1;
         public bool HasBlockMapping => BlockId.HasValue;
     }

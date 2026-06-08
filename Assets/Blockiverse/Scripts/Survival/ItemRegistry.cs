@@ -86,22 +86,22 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.StaropalGeode,  "Staropal Geode",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
 
             // ── Tier-1 (Reedwood) tools ───────────────────────────────────────
-            registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 1));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodSpade,  "Reedwood Spade",  ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Spade,  toolTier: 1));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodFeller, "Reedwood Feller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Feller, toolTier: 1));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodSickle, "Reedwood Sickle", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Sickle, toolTier: 1));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodMallet, "Reedwood Mallet", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Mallet, toolTier: 1));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodCarver, "Reedwood Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 1));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodTiller, "Reedwood Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 1));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 1, maxDurability: 20));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodSpade,  "Reedwood Spade",  ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Spade,  toolTier: 1, maxDurability: 20));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodFeller, "Reedwood Feller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Feller, toolTier: 1, maxDurability: 20));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodSickle, "Reedwood Sickle", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Sickle, toolTier: 1, maxDurability: 20));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodMallet, "Reedwood Mallet", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Mallet, toolTier: 1, maxDurability: 20));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodCarver, "Reedwood Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 1, maxDurability: 20));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodTiller, "Reedwood Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 1, maxDurability: 20));
 
             // ── Tier-2 (Flint) tools ──────────────────────────────────────────
-            registry.Register(new ItemDefinition(ItemId.FlintDelver, "Flint Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 2));
-            registry.Register(new ItemDefinition(ItemId.FlintSpade,  "Flint Spade",  ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Spade,  toolTier: 2));
-            registry.Register(new ItemDefinition(ItemId.FlintFeller, "Flint Feller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Feller, toolTier: 2));
-            registry.Register(new ItemDefinition(ItemId.FlintSickle, "Flint Sickle", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Sickle, toolTier: 2));
-            registry.Register(new ItemDefinition(ItemId.FlintMallet, "Flint Mallet", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Mallet, toolTier: 2));
-            registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 2));
-            registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 2));
+            registry.Register(new ItemDefinition(ItemId.FlintDelver, "Flint Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 2, maxDurability: 35));
+            registry.Register(new ItemDefinition(ItemId.FlintSpade,  "Flint Spade",  ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Spade,  toolTier: 2, maxDurability: 35));
+            registry.Register(new ItemDefinition(ItemId.FlintFeller, "Flint Feller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Feller, toolTier: 2, maxDurability: 35));
+            registry.Register(new ItemDefinition(ItemId.FlintSickle, "Flint Sickle", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Sickle, toolTier: 2, maxDurability: 35));
+            registry.Register(new ItemDefinition(ItemId.FlintMallet, "Flint Mallet", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Mallet, toolTier: 2, maxDurability: 35));
+            registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 2, maxDurability: 35));
+            registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 2, maxDurability: 35));
 
             // ── Consumables ───────────────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
@@ -156,6 +156,13 @@ namespace Blockiverse.Survival
             return TryGetItemForBlock(blockId, out ItemDefinition definition)
                 ? new ItemStack(definition.Id, count)
                 : ItemStack.Empty;
+        }
+
+        public ItemStack CreateItemStack(ItemId id, int count = 1)
+        {
+            ItemDefinition def = Get(id);
+            ItemStack stack = new ItemStack(id, count);
+            return def.MaxDurability > 0 ? stack.WithDurability(def.MaxDurability) : stack;
         }
     }
 }

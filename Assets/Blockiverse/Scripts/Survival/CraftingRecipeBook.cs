@@ -37,18 +37,18 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.BranchwoodLog, 8)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodFeller, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodFeller),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 3)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodMallet, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodMallet),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 2),
                 new ItemStack(ItemId.Graystone, 2)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodDelver, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodDelver),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 2),
                 new ItemStack(ItemId.RawRosycopper, 3)));
@@ -73,7 +73,7 @@ namespace Blockiverse.Survival
 
             // ── Bellows Forge (timed smelt) ───────────────────────────────────
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.FlintDelver, 1),
+                itemRegistry.CreateItemStack(ItemId.FlintDelver),
                 CraftingStation.BellowsForge, 400,
                 new[] { new ItemStack(ItemId.RawRosycopper, 4), new ItemStack(ItemId.BranchwoodLog, 2) }));
 
@@ -85,7 +85,7 @@ namespace Blockiverse.Survival
 
             // ── Mend Bench (instant craft) ────────────────────────────────────
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodSpade, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodSpade),
                 CraftingStation.MendBench, 0,
                 new[] { new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.ShingleGravel, 1) }));
 

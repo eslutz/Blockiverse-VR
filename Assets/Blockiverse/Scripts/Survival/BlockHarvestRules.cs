@@ -93,6 +93,50 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.Glowwick,           HarvestToolKind.Hand);
             rules.RegisterForBlock(BlockRegistry.StorageCrate,       HarvestToolKind.Mallet);
 
+            // ── Additional canonical terrain ─────────────────────────────────
+            rules.RegisterForBlock(BlockRegistry.DryTurf,            HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.SnowcapTurf,        HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.Rootsoil,           HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.Claybed,            HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.RiverSilt,          HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.PaleSand,           HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.ShingleGravel,      HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.DarkSlate,          HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.WarmGranite,        HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.WhiteLimestone,     HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.BlackBasalt,        HarvestToolKind.Delver);
+
+            // ── Additional canonical vegetation ──────────────────────────────
+            rules.RegisterForBlock(BlockRegistry.Thornbrush,         HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass,          HarvestToolKind.Sickle);
+
+            // ── Additional canonical crafted blocks ──────────────────────────
+            rules.RegisterForBlock(BlockRegistry.WorkPlank,          HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.CutstoneBlock,      HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.FiredBrick,         HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.ClearpaneGlass,     HarvestToolKind.Mallet);
+
+            // ── Crafting stations ────────────────────────────────────────────
+            rules.RegisterForBlock(BlockRegistry.Campfire,           HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.ClayKiln,           HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.BellowsForge,       HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.PrepBoard,          HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.MendBench,          HarvestToolKind.Mallet);
+
+            // ── Additional canonical resource nodes ──────────────────────────
+            rules.RegisterForBlock(BlockRegistry.SurfacePebbles,     HarvestToolKind.Hand);
+            rules.RegisterForBlock(BlockRegistry.FlintyShingle,      HarvestToolKind.Hand);
+            rules.RegisterForBlock(BlockRegistry.PaletinThread,      HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.SunmetalFleck,      HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.NiterstonePocket,   HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.BrightsaltCrust,    HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.ShellgritBed,       HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.ResinKnot,          HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.Berrybush,          HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.GrainStalk,         HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.UmbraliteNode,      HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.StaropalGeode,      HarvestToolKind.Delver);
+
             return rules;
         }
 

@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/Blockiverse/Art/Textures/Blocks/Source/berrybush_s2.png.meta
 guid: aa2b189ab0a94187bbd79e802181fd39
+========
+guid: d29780a9d29780a9d29780a9d29780a9
+>>>>>>>> origin/main:Assets/Blockiverse/Art/Textures/Blocks/Source/branchwood_log.png.meta
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}

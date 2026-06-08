@@ -9,15 +9,16 @@ namespace Blockiverse.Tests.Survival.EditMode
         [Test]
         public void DefaultRecipeBookContainsCoreCraftingRecipes()
         {
-            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
 
             Assert.That(recipeBook.All.Count, Is.EqualTo(12));
             AssertRecipe(recipeBook, ItemId.BuildTable, CraftingStation.None, new ItemStack(ItemId.BuildTable, 1), new ItemStack(ItemId.BranchwoodLog, 4));
             AssertRecipe(recipeBook, ItemId.Glowwick, CraftingStation.BuildTable, new ItemStack(ItemId.Glowwick, 4), new ItemStack(ItemId.BranchwoodLog, 1), new ItemStack(ItemId.Embercoal, 1));
             AssertRecipe(recipeBook, ItemId.StorageCrate, CraftingStation.BuildTable, new ItemStack(ItemId.StorageCrate, 1), new ItemStack(ItemId.BranchwoodLog, 8));
-            AssertRecipe(recipeBook, ItemId.ReedwoodFeller, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodFeller, 1), new ItemStack(ItemId.BranchwoodLog, 3));
-            AssertRecipe(recipeBook, ItemId.ReedwoodMallet, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodMallet, 1), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.Graystone, 2));
-            AssertRecipe(recipeBook, ItemId.ReedwoodDelver, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodDelver, 1), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.RawRosycopper, 3));
+            AssertRecipe(recipeBook, ItemId.ReedwoodFeller, CraftingStation.BuildTable, itemRegistry.CreateItemStack(ItemId.ReedwoodFeller), new ItemStack(ItemId.BranchwoodLog, 3));
+            AssertRecipe(recipeBook, ItemId.ReedwoodMallet, CraftingStation.BuildTable, itemRegistry.CreateItemStack(ItemId.ReedwoodMallet), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.Graystone, 2));
+            AssertRecipe(recipeBook, ItemId.ReedwoodDelver, CraftingStation.BuildTable, itemRegistry.CreateItemStack(ItemId.ReedwoodDelver), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.RawRosycopper, 3));
             AssertRecipe(recipeBook, ItemId.FieldBandage, CraftingStation.BuildTable, new ItemStack(ItemId.FieldBandage, 2), new ItemStack(ItemId.Leafmoss, 3), new ItemStack(ItemId.BranchwoodLog, 1));
         }
 
