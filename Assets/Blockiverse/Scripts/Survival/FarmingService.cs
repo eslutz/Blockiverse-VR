@@ -69,7 +69,7 @@ namespace Blockiverse.Survival
                 return;
 
             var toRemove  = new List<BlockPosition>();
-            var toAdvance = new List<BlockPosition>();
+            var toAdvance = new List<(BlockPosition pos, int remainder)>();
             var toUpdate  = new List<(BlockPosition pos, int value)>();
 
             foreach (var kv in tickAccumulator)
@@ -84,12 +84,9 @@ namespace Blockiverse.Survival
 
                 int accumulated = kv.Value + ticks;
                 if (accumulated >= GrowthIntervalTicks)
-                {
-                    toAdvance.Add(pos);
-                    accumulated -= GrowthIntervalTicks;
-                }
-
-                toUpdate.Add((pos, accumulated));
+                    toAdvance.Add((pos, accumulated - GrowthIntervalTicks));
+                else
+                    toUpdate.Add((pos, accumulated));
             }
 
             foreach (BlockPosition pos in toRemove)
@@ -98,12 +95,13 @@ namespace Blockiverse.Survival
             foreach (var (pos, val) in toUpdate)
                 tickAccumulator[pos] = val;
 
-            foreach (BlockPosition pos in toAdvance)
+            foreach (var (pos, remainder) in toAdvance)
             {
                 BlockId current = world.GetBlock(pos);
                 if (NextGrowthStage.TryGetValue(current, out BlockId next))
                 {
                     world.SetBlock(pos, next);
+                    tickAccumulator[pos] = remainder;
                 }
                 else
                 {

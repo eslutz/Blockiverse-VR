@@ -20,10 +20,9 @@ namespace Blockiverse.Gameplay
 
         public int ActiveLightCount => lightsByPosition.Count;
 
-        public static bool IsLightEmitter(BlockId block, BlockRegistry registry = null)
+        public static bool IsLightEmitter(BlockId block, BlockRegistry registry)
         {
-            registry ??= BlockRegistry.CreateDefault();
-            return registry.TryGet(block, out BlockDefinition def) && def.EmissiveLight > 0;
+            return registry != null && registry.TryGet(block, out BlockDefinition def) && def.EmissiveLight > 0;
         }
 
         public static Vector3 GetLightPosition(BlockPosition position)

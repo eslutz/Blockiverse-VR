@@ -58,6 +58,7 @@ namespace Blockiverse.Gameplay
                 }
             }
 
+            survivalSnapshot = null;
             mode = PlayerModeState.Survival;
             return true;
         }

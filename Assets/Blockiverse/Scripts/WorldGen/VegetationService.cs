@@ -149,6 +149,8 @@ namespace Blockiverse.WorldGen
 
             leafDecayAccumulator -= LeafDecayIntervalTicks;
 
+            // O(W×H×D) scan per decay interval. Acceptable for current world sizes; use a
+            // dirty-block set if worlds grow significantly larger.
             WorldBounds bounds = world.Bounds;
             for (int y = 0; y < bounds.Height; y++)
             for (int z = 0; z < bounds.Depth; z++)
@@ -163,6 +165,8 @@ namespace Blockiverse.WorldGen
             }
         }
 
+        // Searches a cube of half-extent maxDist, not a sphere. Corner-diagonal leaves
+        // (up to maxDist * √3 actual distance) are preserved — intentional, consistent behaviour.
         static bool HasNearbyLog(VoxelWorld world, BlockPosition pos, int maxDist)
         {
             int x0 = Math.Max(0, pos.X - maxDist);

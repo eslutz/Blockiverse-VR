@@ -12,6 +12,7 @@ namespace Blockiverse.Gameplay
         NoClipboard,
         NothingToUndo,
         NothingToRedo,
+        NothingToReplace,
     }
 
     public sealed class WorldEditService
@@ -75,9 +76,10 @@ namespace Blockiverse.Gameplay
                 changes.Add(new BlockChange(pos, previous, replacement));
             }
 
-            if (changes.Count > 0)
-                PushUndo(changes);
+            if (changes.Count == 0)
+                return WorldEditResult.NothingToReplace;
 
+            PushUndo(changes);
             return WorldEditResult.Success;
         }
 

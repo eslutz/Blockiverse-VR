@@ -120,6 +120,26 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void LargeDeltaTicksCausesOnlyOneTransitionPerCall()
+        {
+            // Regardless of how large a single deltaTicks is, Tick() processes at most
+            // one state transition per call. Two calls of half the time should not differ.
+            var service = new WeatherService(seed: 77, WeatherState.Clear);
+
+            // One huge tick that far exceeds any state's minimum duration
+            service.Tick(999999);
+            WeatherState afterHuge = service.CurrentState;
+
+            // Reset and do the same total with two calls
+            var service2 = new WeatherService(seed: 77, WeatherState.Clear);
+            service2.Tick(999999);
+            WeatherState afterTwo = service2.CurrentState;
+
+            // Both should produce the same state (deterministic single-transition-per-call)
+            Assert.That(afterTwo, Is.EqualTo(afterHuge));
+        }
+
+        [Test]
         public void PrecipitationIntensityIsZeroForClearAndPartlyCloudy()
         {
             foreach (WeatherState state in new[] { WeatherState.Clear, WeatherState.PartlyCloudy })

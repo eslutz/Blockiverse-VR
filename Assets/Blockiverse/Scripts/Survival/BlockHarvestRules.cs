@@ -184,22 +184,14 @@ namespace Blockiverse.Survival
             if (itemRegistry != null && itemRegistry.TryGet(equippedItem.ItemId, out ItemDefinition def) && def.ToolClass != HarvestToolKind.Hand)
                 return def.ToolClass;
 
-            ItemId id = equippedItem.ItemId;
-
-            if (id == ItemId.ReedwoodDelver || id == ItemId.FlintDelver) return HarvestToolKind.Delver;
-            if (id == ItemId.ReedwoodSpade  || id == ItemId.FlintSpade)  return HarvestToolKind.Spade;
-            if (id == ItemId.ReedwoodFeller || id == ItemId.FlintFeller) return HarvestToolKind.Feller;
-            if (id == ItemId.ReedwoodSickle || id == ItemId.FlintSickle) return HarvestToolKind.Sickle;
-            if (id == ItemId.ReedwoodMallet || id == ItemId.FlintMallet) return HarvestToolKind.Mallet;
-            if (id == ItemId.ReedwoodCarver || id == ItemId.FlintCarver) return HarvestToolKind.Carver;
-            if (id == ItemId.ReedwoodTiller || id == ItemId.FlintTiller) return HarvestToolKind.Tiller;
-
             return HarvestToolKind.Hand;
         }
 
         void RegisterForBlock(BlockId blockId, HarvestToolKind effectiveTool)
         {
             ItemStack drop = itemRegistry.CreateDropForBlock(blockId);
+            if (drop.IsEmpty)
+                throw new InvalidOperationException($"No item mapping found for block '{blockId}' — add an ItemDefinition with blockId set before registering a harvest rule.");
             blockRegistry.TryGet(blockId, out BlockDefinition def);
             Register(new BlockHarvestRule(
                 blockId, drop, effectiveTool,

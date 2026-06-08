@@ -33,7 +33,8 @@ namespace Blockiverse.Survival
 
         public bool CanStackWith(ItemStack other)
         {
-            return !IsEmpty && !other.IsEmpty && ItemId == other.ItemId;
+            return !IsEmpty && !other.IsEmpty && ItemId == other.ItemId
+                && Durability == 0 && other.Durability == 0;
         }
 
         public ItemStack WithCount(int count)

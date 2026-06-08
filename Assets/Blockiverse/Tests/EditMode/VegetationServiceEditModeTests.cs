@@ -105,6 +105,17 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void TickLeafDecayWithZeroTicksIsNoop()
+        {
+            var isolatedLeaf = new BlockPosition(8, 16, 8);
+            world.SetBlock(isolatedLeaf, BlockRegistry.Leafmoss);
+
+            vegetation.TickLeafDecay(world, 0);
+
+            Assert.That(world.GetBlock(isolatedLeaf), Is.EqualTo(BlockRegistry.Leafmoss));
+        }
+
+        [Test]
         public void TickLeafDecayRemovesLeafmossFarFromLogs()
         {
             // Place isolated Leafmoss with no nearby log

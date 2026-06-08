@@ -74,6 +74,17 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ReplaceWithNoMatchingBlocksReturnsNothingToReplace()
+        {
+            var min = new BlockPosition(0, 0, 0);
+            var max = new BlockPosition(2, 0, 0);
+
+            WorldEditResult result = service.Replace(world, min, max, BlockRegistry.Graystone, BlockRegistry.BranchwoodLog);
+
+            Assert.That(result, Is.EqualTo(WorldEditResult.NothingToReplace));
+        }
+
+        [Test]
         public void DeleteClearsRegionToAir()
         {
             service.Fill(world, new BlockPosition(0, 0, 0), new BlockPosition(2, 2, 2), BlockRegistry.Graystone);

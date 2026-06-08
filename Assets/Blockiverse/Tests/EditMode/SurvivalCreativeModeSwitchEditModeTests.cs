@@ -106,5 +106,17 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(inventory.CountOf(ItemId.FlintFeller), Is.EqualTo(0));
         }
+
+        [Test]
+        public void HasSurvivalSnapshotIsFalseAfterSwitchBackToSurvival()
+        {
+            inventory.Add(new ItemStack(ItemId.ReedwoodSpade, 1));
+
+            modeSwitch.SwitchToCreative(inventory);
+            Assert.That(modeSwitch.HasSurvivalSnapshot, Is.True);
+
+            modeSwitch.SwitchToSurvival(inventory);
+            Assert.That(modeSwitch.HasSurvivalSnapshot, Is.False);
+        }
     }
 }
