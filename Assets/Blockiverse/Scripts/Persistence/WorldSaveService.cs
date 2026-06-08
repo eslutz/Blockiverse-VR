@@ -28,6 +28,7 @@ namespace Blockiverse.Persistence
         public int ItemId;          // legacy (schema v1-v2): integer item ID
         public string CanonicalId;  // canonical (schema v3+): string item ID
         public int Count;
+        public int Durability;      // 0 = no tracking
     }
 
     [Serializable]
@@ -37,6 +38,7 @@ namespace Blockiverse.Persistence
         public int HotbarSlotCount;
         public int SelectedHotbarSlotIndex;
         public SavedInventorySlot[] Slots;
+        public SavedInventorySlot[] SurvivalInventorySnapshot;
     }
 
     [Serializable]
@@ -129,7 +131,10 @@ namespace Blockiverse.Persistence
                 if (!itemRegistry.TryGet(itemId, out _))
                     continue;
 
-                inventory.SetSlot(slot.SlotIndex, new ItemStack(itemId, slot.Count));
+                ItemStack stack = new ItemStack(itemId, slot.Count);
+                if (slot.Durability > 0)
+                    stack = stack.WithDurability(slot.Durability);
+                inventory.SetSlot(slot.SlotIndex, stack);
             }
 
             return inventory;
@@ -211,7 +216,7 @@ namespace Blockiverse.Persistence
             Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0);
         }
 
-        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0)
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -278,7 +283,10 @@ namespace Blockiverse.Persistence
                 SlotCount = inventory.SlotCount,
                 HotbarSlotCount = inventory.HotbarSlotCount,
                 SelectedHotbarSlotIndex = selectedHotbarSlotIndex,
-                Slots = BuildInventorySlots(inventory, selectedHotbarSlotIndex)
+                Slots = BuildInventorySlots(inventory, selectedHotbarSlotIndex),
+                SurvivalInventorySnapshot = survivalSnapshot != null
+                    ? BuildInventorySlots(survivalSnapshot, 0)
+                    : null
             };
 
             // Write all files atomically using .tmp → rename
@@ -582,7 +590,8 @@ namespace Blockiverse.Persistence
                 SlotCount = playerSave.SlotCount,
                 HotbarSlotCount = playerSave.HotbarSlotCount,
                 SelectedHotbarSlotIndex = playerSave.SelectedHotbarSlotIndex,
-                Slots = playerSave.Slots ?? Array.Empty<SavedInventorySlot>()
+                Slots = playerSave.Slots ?? Array.Empty<SavedInventorySlot>(),
+                SurvivalInventorySnapshot = playerSave.SurvivalInventorySnapshot
             };
         }
 
@@ -773,7 +782,8 @@ namespace Blockiverse.Persistence
                     SlotIndex = i,
                     ItemId = 0,
                     CanonicalId = stack.ItemId.Value,
-                    Count = stack.Count
+                    Count = stack.Count,
+                    Durability = stack.Durability
                 });
             }
             return slots.ToArray();

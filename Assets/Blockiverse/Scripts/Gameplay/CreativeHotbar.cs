@@ -62,6 +62,17 @@ namespace Blockiverse.Gameplay
                 selectedLabel);
         }
 
+        public void ConfigureFromCatalog(CreativeCatalog catalog, BlockRegistry blockRegistry, TMP_Text selectedLabel)
+        {
+            if (catalog == null)
+                throw new ArgumentNullException(nameof(catalog));
+
+            Configure(
+                blockRegistry ?? BlockRegistry.CreateDefault(),
+                catalog.All.Select(entry => entry.BlockId),
+                selectedLabel);
+        }
+
         public void SelectIndex(int index)
         {
             if (blockIds.Count == 0)

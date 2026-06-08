@@ -76,5 +76,32 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Glowwick), Is.True);
             Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.BuildTable), Is.False);
         }
+
+        [Test]
+        public void BlockEmissiveLightValuesMatchCanonical()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+
+            registry.TryGet(BlockRegistry.Glowwick,   out BlockDefinition glowwick);
+            registry.TryGet(BlockRegistry.Campfire,   out BlockDefinition campfire);
+            registry.TryGet(BlockRegistry.LumenLamp,  out BlockDefinition lumenLamp);
+            registry.TryGet(BlockRegistry.SparkFlare, out BlockDefinition sparkFlare);
+            registry.TryGet(BlockRegistry.Graystone,  out BlockDefinition graystone);
+
+            Assert.That(glowwick.EmissiveLight,   Is.EqualTo(9));
+            Assert.That(campfire.EmissiveLight,   Is.EqualTo(12));
+            Assert.That(lumenLamp.EmissiveLight,  Is.EqualTo(14));
+            Assert.That(sparkFlare.EmissiveLight, Is.EqualTo(15));
+            Assert.That(graystone.EmissiveLight,  Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AllFourEmissiveBlocksAreRecognizedAsLightEmitters()
+        {
+            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Glowwick),   Is.True);
+            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Campfire),   Is.True);
+            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.LumenLamp),  Is.True);
+            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.SparkFlare), Is.True);
+        }
     }
 }
