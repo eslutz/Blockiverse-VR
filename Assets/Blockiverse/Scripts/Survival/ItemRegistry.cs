@@ -82,6 +82,13 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.ResinKnot,      "Resin Knot",       ItemKind.Resource, BlockStackSize,  BlockRegistry.ResinKnot));
             registry.Register(new ItemDefinition(ItemId.Berrybush,      "Berrybush",        ItemKind.Resource, FoodStackSize,   BlockRegistry.Berrybush));
             registry.Register(new ItemDefinition(ItemId.GrainStalk,     "Grain Stalk",      ItemKind.Resource, FoodStackSize,   BlockRegistry.GrainStalk));
+
+            // Grown crop stage blocks share the same drop as their base block
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S1, ItemId.GrainStalk);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S2, ItemId.GrainStalk);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.Berrybush);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.Berrybush);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.Reedgrass);
             registry.Register(new ItemDefinition(ItemId.UmbraliteNode,  "Umbralite Node",   ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
             registry.Register(new ItemDefinition(ItemId.StaropalGeode,  "Staropal Geode",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
 
@@ -107,6 +114,17 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
 
             return registry;
+        }
+
+        // Maps an additional block (e.g. a grown crop stage) to an already-registered item's drop,
+        // without creating a new ItemDefinition or ItemId.
+        public void RegisterDropAlias(BlockId blockId, ItemId itemId)
+        {
+            if (!definitionsById.TryGetValue(itemId, out ItemDefinition definition))
+                throw new KeyNotFoundException($"Item ID is not registered: {itemId}");
+            if (definitionsByBlock.ContainsKey(blockId))
+                throw new InvalidOperationException($"Block ID already has an item mapping: {blockId}");
+            definitionsByBlock.Add(blockId, definition);
         }
 
         public void Register(ItemDefinition definition)

@@ -133,7 +133,12 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.ShellgritBed,       HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.ResinKnot,          HarvestToolKind.Feller);
             rules.RegisterForBlock(BlockRegistry.Berrybush,          HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Berrybush_S1,       HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Berrybush_S2,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.GrainStalk,         HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.GrainStalk_S1,      HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.GrainStalk_S2,      HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass_S1,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.UmbraliteNode,      HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.StaropalGeode,      HarvestToolKind.Delver);
 

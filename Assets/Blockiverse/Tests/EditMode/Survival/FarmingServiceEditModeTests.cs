@@ -128,5 +128,50 @@ namespace Blockiverse.Tests.Survival.EditMode
             farming.TickGrowth(world, FarmingService.GrowthIntervalTicks * 5);
             Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Reedgrass_S1));
         }
+
+        [Test]
+        public void FullyGrownCropStageIsHarvestableAndDropsBaseItem()
+        {
+            // Grow GrainStalk through S1 → S2 (fully grown)
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks);
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk_S2));
+
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(),
+                itemRegistry,
+                BlockHarvestRuleSet.CreateDefault(itemRegistry));
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, CropPos, ItemStack.Empty);
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(inventory.CountOf(ItemId.GrainStalk), Is.EqualTo(1));
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
+        public void IntermediateCropStageIsAlsoHarvestable()
+        {
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.Berrybush);
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Berrybush_S1));
+
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(),
+                itemRegistry,
+                BlockHarvestRuleSet.CreateDefault(itemRegistry));
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, CropPos, ItemStack.Empty);
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(inventory.CountOf(ItemId.Berrybush), Is.EqualTo(1));
+        }
     }
 }
