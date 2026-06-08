@@ -8,7 +8,7 @@ namespace Blockiverse.Survival
         Success,
         OutOfBounds,
         NotTillableBlock,
-        NotTilledSoil,
+        NotTendedSoil,
         BlockAboveNotAir,
         UnknownCrop,
     }
@@ -38,7 +38,7 @@ namespace Blockiverse.Survival
             if (world.GetBlock(position) != BlockRegistry.LooseLoam)
                 return FarmingResult.NotTillableBlock;
 
-            world.SetBlock(position, BlockRegistry.TilledSoil);
+            world.SetBlock(position, BlockRegistry.TendedSoil);
             return FarmingResult.Success;
         }
 
@@ -47,8 +47,8 @@ namespace Blockiverse.Survival
             if (!world.Bounds.Contains(soilPosition))
                 return FarmingResult.OutOfBounds;
 
-            if (world.GetBlock(soilPosition) != BlockRegistry.TilledSoil)
-                return FarmingResult.NotTilledSoil;
+            if (world.GetBlock(soilPosition) != BlockRegistry.TendedSoil)
+                return FarmingResult.NotTendedSoil;
 
             if (!CropBlocks.Contains(cropKind))
                 return FarmingResult.UnknownCrop;

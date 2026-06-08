@@ -82,6 +82,21 @@ namespace Blockiverse.WorldGen
 
         // ── Sapling growth ───────────────────────────────────────────────────
 
+        public void ScanAndTrackSaplings(VoxelWorld world)
+        {
+            saplingTicks.Clear();
+            WorldBounds bounds = world.Bounds;
+            for (int y = 0; y < bounds.Height; y++)
+            for (int z = 0; z < bounds.Depth; z++)
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                var pos = new BlockPosition(x, y, z);
+                BlockId block = world.GetBlock(pos);
+                if (block == BlockRegistry.Sapling || block == BlockRegistry.Sapling_S1 || block == BlockRegistry.Sapling_S2)
+                    saplingTicks[pos] = 0;
+            }
+        }
+
         public void TrackSapling(BlockPosition position)
         {
             saplingTicks[position] = 0;

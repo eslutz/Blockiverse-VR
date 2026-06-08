@@ -21,12 +21,12 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void TillConvertsLooseLoamToTilledSoil()
+        public void TillConvertsLooseLoamToTendedSoil()
         {
             FarmingResult result = farming.Till(world, SoilPos);
 
             Assert.That(result, Is.EqualTo(FarmingResult.Success));
-            Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TilledSoil));
+            Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TendedSoil));
         }
 
         [Test]
@@ -41,7 +41,7 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void PlantCropPlacesCropAboveTilledSoil()
+        public void PlantCropPlacesCropAboveTendedSoil()
         {
             farming.Till(world, SoilPos);
 
@@ -52,11 +52,11 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void PlantCropRejectsNonTilledSoilBelow()
+        public void PlantCropRejectsNonTendedSoilBelow()
         {
             FarmingResult result = farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
 
-            Assert.That(result, Is.EqualTo(FarmingResult.NotTilledSoil));
+            Assert.That(result, Is.EqualTo(FarmingResult.NotTendedSoil));
         }
 
         [Test]

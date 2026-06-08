@@ -187,7 +187,7 @@ namespace Blockiverse.Voxel
         public static readonly BlockId SparkFlare           = new(52);
 
         // ── Farming / tilling blocks ─────────────────────────────────────────
-        public static readonly BlockId TilledSoil           = new(53);
+        public static readonly BlockId TendedSoil            = new(53);
 
         // ── Crop growth stages (S0 = existing GrainStalk/Berrybush/Reedgrass)
         public static readonly BlockId GrainStalk_S1        = new(54);
@@ -277,7 +277,7 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(SparkFlare, "spark_flare",  "Spark Flare", BlockCategory.Crafted, isSolid: false, isRenderable: true, emissiveLight: 15));
 
             // ── Farming / tilling blocks ─────────────────────────────────────
-            registry.Register(new BlockDefinition(TilledSoil,    "tilled_soil",    "Tilled Soil",    BlockCategory.Terrain, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(TendedSoil,     "tended_soil",    "Tended Soil",    BlockCategory.Terrain, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
 
             // ── Crop growth stages (stage 0 = existing GrainStalk/Berrybush/Reedgrass) ─
             registry.Register(new BlockDefinition(GrainStalk_S1, "grain_stalk_s1", "Grain Stalk S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));

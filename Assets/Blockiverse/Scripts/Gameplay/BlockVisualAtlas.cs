@@ -71,7 +71,7 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.MendBench.Value,          49 },
             { BlockRegistry.LumenLamp.Value,          50 },
             { BlockRegistry.SparkFlare.Value,         51 },
-            { BlockRegistry.TilledSoil.Value,         52 },
+            { BlockRegistry.TendedSoil.Value,          52 },
             { BlockRegistry.GrainStalk_S1.Value,      53 },
             { BlockRegistry.GrainStalk_S2.Value,      54 },
             { BlockRegistry.Berrybush_S1.Value,       55 },

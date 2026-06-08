@@ -66,7 +66,7 @@ namespace Blockiverse.Gameplay
                 new(BlockRegistry.RiverSilt,       CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.PaleSand,        CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.ShingleGravel,   CreativeCatalogCategory.Terrain),
-                new(BlockRegistry.TilledSoil,      CreativeCatalogCategory.Terrain),
+                new(BlockRegistry.TendedSoil,      CreativeCatalogCategory.Terrain),
 
                 // Stone
                 new(BlockRegistry.Graystone,       CreativeCatalogCategory.Stone),

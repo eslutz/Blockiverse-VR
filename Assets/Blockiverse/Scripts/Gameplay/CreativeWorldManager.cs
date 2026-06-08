@@ -171,27 +171,44 @@ namespace Blockiverse.Gameplay
             if (worldTimeClock != null)
                 worldTimeClock.Ticked -= OnWorldTick;
 
+            if (vegetationService != null && World != null)
+                World.BlockChanged -= OnBlockChanged;
+
             worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
                 return;
 
             uint seed = settings != null ? (uint)settings.Seed : 1u;
-            weatherService   = new WeatherService(seed);
+            weatherService    = new WeatherService(seed);
             vegetationService = new VegetationService();
+            vegetationService.ScanAndTrackSaplings(World);
+            World.BlockChanged += OnBlockChanged;
             worldTimeClock.Ticked += OnWorldTick;
+        }
+
+        void OnBlockChanged(BlockChange change)
+        {
+            BlockId b = change.NewBlock;
+            if (b == BlockRegistry.Sapling || b == BlockRegistry.Sapling_S1 || b == BlockRegistry.Sapling_S2)
+                vegetationService?.TrackSapling(change.Position);
         }
 
         void OnWorldTick(int ticks)
         {
             weatherService?.Tick(ticks);
             if (World != null)
+            {
                 vegetationService?.TickLeafDecay(World, ticks);
+                vegetationService?.TickSapling(World, ticks);
+            }
         }
 
         void OnDestroy()
         {
             if (worldTimeClock != null)
                 worldTimeClock.Ticked -= OnWorldTick;
+            if (vegetationService != null && World != null)
+                World.BlockChanged -= OnBlockChanged;
         }
 
         void ConfigureInteractionController(WorldGenerationSettings settings)
