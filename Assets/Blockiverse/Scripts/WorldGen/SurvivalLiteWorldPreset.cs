@@ -40,6 +40,7 @@ namespace Blockiverse.WorldGen
             CarveCaves(world, surfaceHeights);
             PlaceResourceVeins(world, surfaceHeights);
             PlaceSparseVegetation(world, surfaceHeights, biomeMap);
+            StructureService.PlaceStructures(world, registry, settings, settings.Seed);
             ApplySpawnSafety(world);
 
             return world;
@@ -436,6 +437,7 @@ namespace Blockiverse.WorldGen
         void PlaceSparseVegetation(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
         {
             WorldBounds bounds = world.Bounds;
+            var vegetation = new VegetationService();
 
             for (int x = 0; x < bounds.Width; x++)
             {
@@ -455,40 +457,23 @@ namespace Blockiverse.WorldGen
                         continue;
 
                     int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
-                    int trunkHeight = 3 + (int)(hash % 3u);
-                    PlaceTree(world, x, surfaceY + 1, z, trunkHeight);
+                    var basePos  = new BlockPosition(x, surfaceY + 1, z);
+                    PlaceBiomeTree(vegetation, world, basePos, biome);
                 }
             }
         }
 
-        void PlaceTree(VoxelWorld world, int baseX, int baseY, int baseZ, int trunkHeight)
+        static void PlaceBiomeTree(VegetationService vegetation, VoxelWorld world, BlockPosition basePos, TerrainBiome biome)
         {
-            WorldBounds bounds = world.Bounds;
-
-            for (int dy = 0; dy < trunkHeight; dy++)
+            switch (biome)
             {
-                var trunkPos = new BlockPosition(baseX, baseY + dy, baseZ);
-                if (!bounds.Contains(trunkPos))
-                    return;
-
-                world.SetBlock(trunkPos, BlockRegistry.BranchwoodLog, trackChange: false);
-            }
-
-            int canopyY = baseY + trunkHeight;
-            for (int layer = 0; layer <= 1; layer++)
-            {
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    for (int dz = -1; dz <= 1; dz++)
-                    {
-                        var leafPos = new BlockPosition(baseX + dx, canopyY + layer, baseZ + dz);
-                        if (!bounds.Contains(leafPos))
-                            continue;
-
-                        if (world.GetBlock(leafPos) == BlockRegistry.Air)
-                            world.SetBlock(leafPos, BlockRegistry.Leafmoss, trackChange: false);
-                    }
-                }
+                case TerrainBiome.Pinewild:   vegetation.PlaceConicalTree(world, basePos);  break;
+                case TerrainBiome.Wetland:    vegetation.PlaceWillowTree(world, basePos);   break;
+                case TerrainBiome.Drybrush:   vegetation.PlaceShrubTree(world, basePos);    break;
+                case TerrainBiome.Tundra:     vegetation.PlaceSparseTree(world, basePos);   break;
+                case TerrainBiome.Highlands:  vegetation.PlaceTallTree(world, basePos);     break;
+                case TerrainBiome.Dunes:      vegetation.PlaceShrubTree(world, basePos);    break;
+                default:                      vegetation.PlaceStandardTree(world, basePos); break;
             }
         }
 

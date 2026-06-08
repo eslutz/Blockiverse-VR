@@ -53,6 +53,7 @@ namespace Blockiverse.Persistence
         public int Seed;
         public SavedBlockDelta[] ChangedBlocks;
         public SavedPlayerInventory PlayerInventory;
+        public string WeatherState;
     }
 
     public sealed class WorldLoadResult
@@ -216,7 +217,7 @@ namespace Blockiverse.Persistence
             Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0);
         }
 
-        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null)
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -265,7 +266,7 @@ namespace Blockiverse.Persistence
             var environment = new VxlwEnvironment
             {
                 WorldTimeTicks = 0,
-                WeatherState = "CLEAR"
+                WeatherState = !string.IsNullOrEmpty(weatherState) ? weatherState : "CLEAR"
             };
 
             var registryManifest = new VxlwRegistryManifest
@@ -370,6 +371,8 @@ namespace Blockiverse.Persistence
             SavedPlayerInventory playerInventory = LoadPlayerInventory(path) ?? CreateEmptyInventoryData();
             EnsurePlayerInventoryDefaults(ref playerInventory);
 
+            string savedWeatherState = LoadEnvironmentWeatherState(path);
+
             var data = new WorldSaveData
             {
                 SchemaVersion = CurrentSchemaVersion,
@@ -380,7 +383,8 @@ namespace Blockiverse.Persistence
                 ChunkSize = manifest.ChunkSize,
                 Seed = manifest.Seed,
                 ChangedBlocks = changedBlocks.ToArray(),
-                PlayerInventory = playerInventory
+                PlayerInventory = playerInventory,
+                WeatherState = savedWeatherState
             };
 
             if (!IsValidInventory(data.PlayerInventory, out string inventoryError))
@@ -593,6 +597,20 @@ namespace Blockiverse.Persistence
                 Slots = playerSave.Slots ?? Array.Empty<SavedInventorySlot>(),
                 SurvivalInventorySnapshot = playerSave.SurvivalInventorySnapshot
             };
+        }
+
+        static string LoadEnvironmentWeatherState(string savePath)
+        {
+            string envPath = Path.Combine(savePath, "dimensions", "main", "environment.json");
+            if (!File.Exists(envPath))
+                return null;
+
+            string json = File.ReadAllText(envPath);
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            VxlwEnvironment env = JsonUtility.FromJson<VxlwEnvironment>(json);
+            return env?.WeatherState;
         }
 
         // ── Legacy flat JSON format (schema v1-v3) ────────────────────────────

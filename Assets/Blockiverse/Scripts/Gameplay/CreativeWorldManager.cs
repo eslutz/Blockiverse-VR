@@ -54,6 +54,9 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
         MultiplayerChunkAuthoritySync authoritySync;
         TorchbudLightManager torchbudLightManager;
+        WeatherService weatherService;
+        VegetationService vegetationService;
+        WorldTimeClock worldTimeClock;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -143,6 +146,7 @@ namespace Blockiverse.Gameplay
                 interactionLayer);
 
             ConfigureTorchbudLights();
+            ConfigureEnvironmentServices(settings);
             ConfigureVoidSafetyFloor();
 
             if (authoritySyncOverride != null)
@@ -160,6 +164,34 @@ namespace Blockiverse.Gameplay
                 torchbudLightManager = gameObject.AddComponent<TorchbudLightManager>();
 
             torchbudLightManager.Configure(World, Registry);
+        }
+
+        void ConfigureEnvironmentServices(WorldGenerationSettings settings)
+        {
+            if (worldTimeClock != null)
+                worldTimeClock.Ticked -= OnWorldTick;
+
+            worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
+            if (worldTimeClock == null)
+                return;
+
+            uint seed = settings != null ? (uint)settings.Seed : 1u;
+            weatherService   = new WeatherService(seed);
+            vegetationService = new VegetationService();
+            worldTimeClock.Ticked += OnWorldTick;
+        }
+
+        void OnWorldTick(int ticks)
+        {
+            weatherService?.Tick(ticks);
+            if (World != null)
+                vegetationService?.TickLeafDecay(World, ticks);
+        }
+
+        void OnDestroy()
+        {
+            if (worldTimeClock != null)
+                worldTimeClock.Ticked -= OnWorldTick;
         }
 
         void ConfigureInteractionController(WorldGenerationSettings settings)
