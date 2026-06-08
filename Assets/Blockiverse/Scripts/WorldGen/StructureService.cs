@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blockiverse.Voxel;
 
 namespace Blockiverse.WorldGen
@@ -27,6 +28,8 @@ namespace Blockiverse.WorldGen
             int regionsX = Math.Max(1, bounds.Width  / RegionSize);
             int regionsZ = Math.Max(1, bounds.Depth  / RegionSize);
 
+            var accepted = new List<(int x, int z)>();
+
             for (int rx = 0; rx < regionsX; rx++)
             {
                 for (int rz = 0; rz < regionsZ; rz++)
@@ -44,9 +47,13 @@ namespace Blockiverse.WorldGen
                     if (IsTooCloseToSpawn(worldX, worldZ, settings))
                         continue;
 
+                    if (IsTooCloseToAccepted(worldX, worldZ, accepted))
+                        continue;
+
                     int surfaceY = FindSurfaceY(world, worldX, worldZ);
                     if (surfaceY < 0) continue;
 
+                    accepted.Add((worldX, worldZ));
                     var degradation = (StructureDegradation)(hash % 4u);
                     PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed);
                 }
@@ -105,6 +112,18 @@ namespace Blockiverse.WorldGen
             int dx = x - settings.SpawnPosition.X;
             int dz = z - settings.SpawnPosition.Z;
             return dx * dx + dz * dz < SpawnExclusion * SpawnExclusion;
+        }
+
+        static bool IsTooCloseToAccepted(int x, int z, List<(int x, int z)> accepted)
+        {
+            foreach (var (ax, az) in accepted)
+            {
+                int dx = x - ax;
+                int dz = z - az;
+                if (dx * dx + dz * dz < MinSpacing * MinSpacing)
+                    return true;
+            }
+            return false;
         }
 
         static uint Hash(int seed, int x, int y, int z, int salt)

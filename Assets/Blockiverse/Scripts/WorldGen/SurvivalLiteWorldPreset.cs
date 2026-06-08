@@ -39,8 +39,8 @@ namespace Blockiverse.WorldGen
             FillTerrain(world, surfaceHeights, biomeMap);
             CarveCaves(world, surfaceHeights);
             PlaceResourceVeins(world, surfaceHeights);
-            PlaceSparseVegetation(world, surfaceHeights, biomeMap);
             StructureService.PlaceStructures(world, registry, settings, settings.Seed);
+            PlaceSparseVegetation(world, surfaceHeights, biomeMap);
             ApplySpawnSafety(world);
 
             return world;
