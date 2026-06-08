@@ -385,12 +385,16 @@ namespace Blockiverse.Gameplay
 
             inventory.TryAddAll(harvest.Drop);
 
-            if (equippedSlotIndex >= 0 && !equippedItem.IsEmpty && equippedItem.Durability > 0)
+            if (equippedSlotIndex >= 0)
             {
-                int remaining = equippedItem.Durability - 1;
-                inventory.SetSlot(equippedSlotIndex, remaining > 0
-                    ? equippedItem.WithDurability(remaining)
-                    : ItemStack.Empty);
+                ItemStack serverSlot = inventory.GetSlot(equippedSlotIndex);
+                if (!serverSlot.IsEmpty && serverSlot.Durability > 0)
+                {
+                    int remaining = serverSlot.Durability - 1;
+                    inventory.SetSlot(equippedSlotIndex, remaining > 0
+                        ? serverSlot.WithDurability(remaining)
+                        : ItemStack.Empty);
+                }
             }
 
             AcceptedHarvestCount++;

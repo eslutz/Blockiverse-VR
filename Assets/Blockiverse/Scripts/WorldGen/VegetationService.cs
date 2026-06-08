@@ -159,6 +159,11 @@ namespace Blockiverse.WorldGen
             }
             else if (current == BlockRegistry.Sapling_S2)
             {
+                if (!TrunkClear(world, pos, trunkHeight: 4))
+                {
+                    saplingTicks[pos] = remainder;
+                    return;
+                }
                 world.SetBlock(pos, BlockRegistry.Air);
                 saplingTicks.Remove(pos);
                 PlaceStandardTree(world, pos);
