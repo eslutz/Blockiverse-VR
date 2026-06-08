@@ -8,8 +8,8 @@ namespace Blockiverse.Gameplay
 {
     public static class BlockVisualAtlas
     {
-        public const int Columns = 4;
-        public const int Rows = 4;
+        public const int Columns = 8;
+        public const int Rows = 7;
         public const int TilePixels = 16;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
@@ -30,7 +30,45 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.RustcoreOre.Value,        8 },
             { BlockRegistry.BuildTable.Value,         9 },
             { BlockRegistry.Glowwick.Value,           10 },
-            { BlockRegistry.StorageCrate.Value,       11 }
+            { BlockRegistry.StorageCrate.Value,       11 },
+            { BlockRegistry.Worldroot.Value,          12 },
+            { BlockRegistry.Deepmantle.Value,         13 },
+            { BlockRegistry.DarkSlate.Value,          14 },
+            { BlockRegistry.WarmGranite.Value,        15 },
+            { BlockRegistry.WhiteLimestone.Value,     16 },
+            { BlockRegistry.BlackBasalt.Value,        17 },
+            { BlockRegistry.DryTurf.Value,            18 },
+            { BlockRegistry.SnowcapTurf.Value,        19 },
+            { BlockRegistry.Rootsoil.Value,           20 },
+            { BlockRegistry.Claybed.Value,            21 },
+            { BlockRegistry.RiverSilt.Value,          22 },
+            { BlockRegistry.PaleSand.Value,           23 },
+            { BlockRegistry.ShingleGravel.Value,      24 },
+            { BlockRegistry.Snowpack.Value,           25 },
+            { BlockRegistry.Frostglass.Value,         26 },
+            { BlockRegistry.Thornbrush.Value,         27 },
+            { BlockRegistry.Reedgrass.Value,          28 },
+            { BlockRegistry.WorkPlank.Value,          29 },
+            { BlockRegistry.CutstoneBlock.Value,      30 },
+            { BlockRegistry.FiredBrick.Value,         31 },
+            { BlockRegistry.ClearpaneGlass.Value,     32 },
+            { BlockRegistry.SurfacePebbles.Value,     33 },
+            { BlockRegistry.FlintyShingle.Value,      34 },
+            { BlockRegistry.PaletinThread.Value,      35 },
+            { BlockRegistry.SunmetalFleck.Value,      36 },
+            { BlockRegistry.NiterstonePocket.Value,   37 },
+            { BlockRegistry.BrightsaltCrust.Value,    38 },
+            { BlockRegistry.ShellgritBed.Value,       39 },
+            { BlockRegistry.ResinKnot.Value,          40 },
+            { BlockRegistry.Berrybush.Value,          41 },
+            { BlockRegistry.GrainStalk.Value,         42 },
+            { BlockRegistry.UmbraliteNode.Value,      43 },
+            { BlockRegistry.StaropalGeode.Value,      44 },
+            { BlockRegistry.Campfire.Value,           45 },
+            { BlockRegistry.ClayKiln.Value,           46 },
+            { BlockRegistry.BellowsForge.Value,       47 },
+            { BlockRegistry.PrepBoard.Value,          48 },
+            { BlockRegistry.MendBench.Value,          49 }
         };
 
         public static Rect GetTileRect(BlockId blockId)

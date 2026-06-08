@@ -431,24 +431,35 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigPrefabHasAllM6AudioCueClipsAssigned()
+        public void XrRigPrefabHasFeedbackServicesAndAllAudioCueClipsAssigned()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
 
+            BlockiverseFeedbackSettings feedbackSettings = prefab.GetComponent<BlockiverseFeedbackSettings>();
             BlockiverseAudioCuePlayer audioCuePlayer = prefab.GetComponent<BlockiverseAudioCuePlayer>();
+            BlockiverseVfxPool vfxPool = prefab.GetComponent<BlockiverseVfxPool>();
+            BlockiverseVfxCuePlayer vfxCuePlayer = prefab.GetComponent<BlockiverseVfxCuePlayer>();
+            BlockiverseInteractionHaptics interactionHaptics = prefab.GetComponent<BlockiverseInteractionHaptics>();
+            BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
 
+            Assert.That(feedbackSettings, Is.Not.Null);
             Assert.That(audioCuePlayer, Is.Not.Null);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.BlockBreak), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.BlockPlace), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.UiSelect), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.UiConfirm), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.UiCancel), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.InventoryOpen), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.InventoryClose), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.CraftSuccess), Is.True);
-            Assert.That(audioCuePlayer.HasClipForCue(BlockiverseAudioCue.CraftFail), Is.True);
+            Assert.That(vfxPool, Is.Not.Null);
+            Assert.That(vfxCuePlayer, Is.Not.Null);
+            Assert.That(interactionHaptics, Is.Not.Null);
+            Assert.That(inputRig, Is.Not.Null);
+            Assert.That(audioCuePlayer.FeedbackSettings, Is.SameAs(feedbackSettings));
+            Assert.That(vfxCuePlayer.FeedbackSettings, Is.SameAs(feedbackSettings));
+            Assert.That(vfxCuePlayer.Pool, Is.SameAs(vfxPool));
+            Assert.That(interactionHaptics.FeedbackSettings, Is.SameAs(feedbackSettings));
+            Assert.That(interactionHaptics.DominantHandHaptics, Is.Not.Null);
+            Assert.That(inputRig.AudioCuePlayer, Is.SameAs(audioCuePlayer));
+
+            foreach (BlockiverseAudioCue cue in System.Enum.GetValues(typeof(BlockiverseAudioCue)))
+                Assert.That(audioCuePlayer.HasClipForCue(cue), Is.True, $"{cue} should have an assigned generated clip.");
+
             Assert.That(audioCuePlayer.FootstepClipCount, Is.EqualTo(2));
         }
 

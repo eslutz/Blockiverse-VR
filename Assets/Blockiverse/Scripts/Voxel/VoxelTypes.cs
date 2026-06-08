@@ -174,55 +174,55 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Glowwick, "glowwick", "Glowwick", BlockCategory.Crafted, isSolid: false, isRenderable: true));
             registry.Register(new BlockDefinition(StorageCrate, "storage_crate", "Storage Crate", BlockCategory.Crafted, isSolid: true, isRenderable: true));
 
-            // ── Additional canonical terrain (no atlas tile yet) ─────────────
-            registry.Register(new BlockDefinition(Worldroot, "worldroot", "Worldroot", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(Deepmantle, "deepmantle", "Deepmantle", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(DarkSlate, "dark_slate", "Dark Slate", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(WarmGranite, "warm_granite", "Warm Granite", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(WhiteLimestone, "white_limestone", "White Limestone", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(BlackBasalt, "black_basalt", "Black Basalt", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            // ── Additional canonical terrain (atlas tiles generated) ─────────
+            registry.Register(new BlockDefinition(Worldroot, "worldroot", "Worldroot", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Deepmantle, "deepmantle", "Deepmantle", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(DarkSlate, "dark_slate", "Dark Slate", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(WarmGranite, "warm_granite", "Warm Granite", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(WhiteLimestone, "white_limestone", "White Limestone", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(BlackBasalt, "black_basalt", "Black Basalt", BlockCategory.Terrain, isSolid: true, isRenderable: true));
 
-            // ── Additional canonical soil/surface (no atlas tile yet) ────────
-            registry.Register(new BlockDefinition(DryTurf, "dry_turf", "Dry Turf", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(SnowcapTurf, "snowcap_turf", "Snowcap Turf", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(Rootsoil, "rootsoil", "Rootsoil", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(Claybed, "claybed", "Claybed", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(RiverSilt, "river_silt", "River Silt", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(PaleSand, "pale_sand", "Pale Sand", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(ShingleGravel, "shingle_gravel", "Shingle Gravel", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(Snowpack, "snowpack", "Snowpack", BlockCategory.Terrain, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(Frostglass, "frostglass", "Frostglass", BlockCategory.Terrain, isSolid: true, isRenderable: false));
+            // ── Additional canonical soil/surface (atlas tiles generated) ────
+            registry.Register(new BlockDefinition(DryTurf, "dry_turf", "Dry Turf", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(SnowcapTurf, "snowcap_turf", "Snowcap Turf", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Rootsoil, "rootsoil", "Rootsoil", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Claybed, "claybed", "Claybed", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(RiverSilt, "river_silt", "River Silt", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(PaleSand, "pale_sand", "Pale Sand", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(ShingleGravel, "shingle_gravel", "Shingle Gravel", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Snowpack, "snowpack", "Snowpack", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(Frostglass, "frostglass", "Frostglass", BlockCategory.Terrain, isSolid: true, isRenderable: true));
 
-            // ── Additional canonical vegetation (no atlas tile yet) ──────────
-            registry.Register(new BlockDefinition(Thornbrush, "thornbrush", "Thornbrush", BlockCategory.Organic, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(Reedgrass, "reedgrass", "Reedgrass", BlockCategory.Organic, isSolid: false, isRenderable: false));
+            // ── Additional canonical vegetation (atlas tiles generated) ──────
+            registry.Register(new BlockDefinition(Thornbrush, "thornbrush", "Thornbrush", BlockCategory.Organic, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(Reedgrass, "reedgrass", "Reedgrass", BlockCategory.Organic, isSolid: false, isRenderable: true));
 
-            // ── Additional canonical crafted (no atlas tile yet) ─────────────
-            registry.Register(new BlockDefinition(WorkPlank, "work_plank", "Work Plank", BlockCategory.Crafted, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(FiredBrick, "fired_brick", "Fired Brick", BlockCategory.Crafted, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(ClearpaneGlass, "clearpane_glass", "Clearpane Glass", BlockCategory.Crafted, isSolid: false, isRenderable: false));
+            // ── Additional canonical crafted (atlas tiles generated) ─────────
+            registry.Register(new BlockDefinition(WorkPlank, "work_plank", "Work Plank", BlockCategory.Crafted, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(FiredBrick, "fired_brick", "Fired Brick", BlockCategory.Crafted, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(ClearpaneGlass, "clearpane_glass", "Clearpane Glass", BlockCategory.Crafted, isSolid: false, isRenderable: true));
 
-            // ── Additional canonical resource nodes (no atlas tile yet) ──────
-            registry.Register(new BlockDefinition(SurfacePebbles, "surface_pebbles", "Surface Pebbles", BlockCategory.Resource, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(FlintyShingle, "flinty_shingle", "Flinty Shingle", BlockCategory.Resource, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(PaletinThread, "paletin_thread", "Paletin Thread", BlockCategory.Resource, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(SunmetalFleck, "sunmetal_fleck", "Sunmetal Fleck", BlockCategory.Resource, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(NiterstonePocket, "niterstone_pocket", "Niterstone Pocket", BlockCategory.Resource, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(BrightsaltCrust, "brightsalt_crust", "Brightsalt Crust", BlockCategory.Resource, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(ShellgritBed, "shellgrit_bed", "Shellgrit Bed", BlockCategory.Resource, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(ResinKnot, "resin_knot", "Resin Knot", BlockCategory.Resource, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(Berrybush, "berrybush", "Berrybush", BlockCategory.Organic, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(GrainStalk, "grain_stalk", "Grain Stalk", BlockCategory.Organic, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(UmbraliteNode, "umbralite_node", "Umbralite Node", BlockCategory.Resource, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(StaropalGeode, "staropal_geode", "Staropal Geode", BlockCategory.Resource, isSolid: true, isRenderable: false));
+            // ── Additional canonical resource nodes (atlas tiles generated) ──
+            registry.Register(new BlockDefinition(SurfacePebbles, "surface_pebbles", "Surface Pebbles", BlockCategory.Resource, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(FlintyShingle, "flinty_shingle", "Flinty Shingle", BlockCategory.Resource, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(PaletinThread, "paletin_thread", "Paletin Thread", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(SunmetalFleck, "sunmetal_fleck", "Sunmetal Fleck", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(NiterstonePocket, "niterstone_pocket", "Niterstone Pocket", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(BrightsaltCrust, "brightsalt_crust", "Brightsalt Crust", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(ShellgritBed, "shellgrit_bed", "Shellgrit Bed", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(ResinKnot, "resin_knot", "Resin Knot", BlockCategory.Resource, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(Berrybush, "berrybush", "Berrybush", BlockCategory.Organic, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(GrainStalk, "grain_stalk", "Grain Stalk", BlockCategory.Organic, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(UmbraliteNode, "umbralite_node", "Umbralite Node", BlockCategory.Resource, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(StaropalGeode, "staropal_geode", "Staropal Geode", BlockCategory.Resource, isSolid: true, isRenderable: true));
 
-            // ── Additional canonical stations (no atlas tile yet) ─────────────
-            registry.Register(new BlockDefinition(Campfire, "campfire", "Campfire", BlockCategory.Station, isSolid: false, isRenderable: false));
-            registry.Register(new BlockDefinition(ClayKiln, "clay_kiln", "Clay Kiln", BlockCategory.Station, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(BellowsForge, "bellows_forge", "Bellows Forge", BlockCategory.Station, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(PrepBoard, "prep_board", "Prep Board", BlockCategory.Station, isSolid: true, isRenderable: false));
-            registry.Register(new BlockDefinition(MendBench, "mend_bench", "Mend Bench", BlockCategory.Station, isSolid: true, isRenderable: false));
+            // ── Additional canonical stations (atlas tiles generated) ────────
+            registry.Register(new BlockDefinition(Campfire, "campfire", "Campfire", BlockCategory.Station, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(ClayKiln, "clay_kiln", "Clay Kiln", BlockCategory.Station, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(BellowsForge, "bellows_forge", "Bellows Forge", BlockCategory.Station, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(PrepBoard, "prep_board", "Prep Board", BlockCategory.Station, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(MendBench, "mend_bench", "Mend Bench", BlockCategory.Station, isSolid: true, isRenderable: true));
 
             return registry;
         }

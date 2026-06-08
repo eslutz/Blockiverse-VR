@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added the Phase 13/14 feedback and asset review pass: the reusable audio generator now produces the expanded original cue set, the reusable art generator produces canonical block/item/UI/VFX sprites, the XR rig prefab wires shared audio, haptics, VFX pooling, and feedback settings, and validation now covers generated cue and visual-asset coverage.
 - Adopted the canonical Blockiverse ruleset documentation as the development/design source of truth, added `docs/rulesets/`, replaced the execution plan, aligned agent and contributor guidance, and added a root `.CLAUDE.md` pointer to `AGENTS.md`.
 - Simplified GitHub tracking policy so issues and the `Blockiverse VR Roadmap` project act as lightweight active-work aids instead of a required feature/story hierarchy.
 - Added real world lighting for the day/night slice: a shadow-casting sun,
@@ -30,12 +31,12 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 - Added the M6 signed-release APK pipeline path, including a Unity release build entry point,
   secret-based Android signing script, checksum generation, GitHub Release artifact publishing,
   store-document validation, and a Quest screenshot/capture plan.
-- Expanded and refined the M6 audio generator to cover eleven original WAV cues:
+- Expanded and refined the reusable audio generator to cover eleven original WAV cues:
   block break/place, select/confirm/cancel, footstep alternates, inventory open/close,
   and craft success/fail, with layered synthesis and peak-headroom regression checks.
 - Added M6 performance instrumentation: ProfilerMarkers around survival-lite world generation, chunk meshing, and renderer rebuild paths; an engine-free `FrameStatisticsSampler` with EditMode coverage; a local-only in-game performance overlay (FPS, frame time, chunk/triangle counts, rebuild queue) that stays hidden in release builds; and a max-world generation/meshing stress test plus a performance report template.
 - Added M6 store readiness documentation: drafted privacy policy, store listing/metadata, VRC working checklist, data-use and safety declarations, known-issues/support notes, and a release-notes template, with hardware/account-dependent items marked as external follow-ups.
-- Added M6 audio and haptics feedback: a block-mutation event on the creative interaction controller drives an audio cue player (break/place plus UI cues) and dominant-hand haptic patterns, with a generator script for original synthesized sound effects (Git LFS).
+- Added audio and haptics feedback: a block-mutation event on the creative interaction controller drives an audio cue player (break/place plus UI cues) and dominant-hand haptic patterns, with a generator script for original synthesized sound effects (Git LFS).
 - Fixed a codebase analysis pass: corrected the survival-lite spawn headroom clearing so the reserved air column matches the validated headroom, made the world save fallback path keep a recoverable backup if an atomic replace is unavailable, removed the duplicate `ItemId.Air` alias of `ItemId.None`, and deleted the unused multiplayer host delta tracking helper.
 - Added M5 multiplayer simulator validation for active block edits under 100ms latency and packet loss, plus recorded bandwidth estimates for host-authoritative chunk mutation messages.
 - Added host-authoritative multiplayer survival-lite sync for resource harvesting, per-player inventory snapshots, shared crate transfers, and crafting validation across two clients.

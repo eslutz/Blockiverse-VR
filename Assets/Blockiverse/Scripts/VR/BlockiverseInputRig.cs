@@ -81,6 +81,7 @@ namespace Blockiverse.VR
         public GravityProvider GravityProvider => gravityProvider;
         public JumpProvider JumpProvider => jumpProvider;
         public CharacterController CharacterController => characterController;
+        public BlockiverseAudioCuePlayer AudioCuePlayer => audioCuePlayer;
 
         public void Configure(InputActionAsset actions)
         {

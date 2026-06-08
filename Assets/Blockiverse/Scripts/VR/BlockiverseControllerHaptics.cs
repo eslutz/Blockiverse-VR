@@ -17,6 +17,13 @@ namespace Blockiverse.VR
         public static BlockiverseHapticPattern BlockBreak => new(0.6f, 0.05f);
         public static BlockiverseHapticPattern BlockPlace => new(0.4f, 0.04f);
         public static BlockiverseHapticPattern UiTick => new(0.25f, 0.02f);
+        public static BlockiverseHapticPattern CraftSuccess => new(0.28f, 0.04f);
+        public static BlockiverseHapticPattern CraftFail => new(0.18f, 0.06f);
+
+        public BlockiverseHapticPattern Scale(float intensity)
+        {
+            return new BlockiverseHapticPattern(Amplitude * Mathf.Clamp01(intensity), DurationSeconds);
+        }
     }
 
     public sealed class BlockiverseControllerHaptics : MonoBehaviour

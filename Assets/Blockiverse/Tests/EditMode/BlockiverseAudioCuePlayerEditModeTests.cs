@@ -69,6 +69,97 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void Phase13CuesResolveConfiguredClipsAndCategories()
+        {
+            BlockiverseAudioCuePlayer player = CreateCuePlayer();
+            var playedCues = new List<BlockiverseAudioCue>();
+
+            foreach (BlockiverseAudioCue cue in System.Enum.GetValues(typeof(BlockiverseAudioCue)))
+            {
+                if (cue == BlockiverseAudioCue.Footstep)
+                    player.ConfigureFootstepClips(CreateClip("footstep_01"), CreateClip("footstep_02"));
+                else
+                    player.ConfigureClip(cue, CreateClip(cue.ToString()));
+            }
+
+            player.CuePlayed += (cue, _) => playedCues.Add(cue);
+
+            player.PlayCue(BlockiverseAudioCue.ToolHitSoft);
+            player.PlayCue(BlockiverseAudioCue.ToolHitStone);
+            player.PlayCue(BlockiverseAudioCue.PickupItem);
+            player.PlayCue(BlockiverseAudioCue.ContainerOpen);
+            player.PlayCue(BlockiverseAudioCue.TorchIgnite);
+            player.PlayCue(BlockiverseAudioCue.RainLightLoop);
+            player.PlayCueAt(BlockiverseAudioCue.BlockBreak, Vector3.one);
+
+            Assert.That(playedCues, Is.EqualTo(new[]
+            {
+                BlockiverseAudioCue.ToolHitSoft,
+                BlockiverseAudioCue.ToolHitStone,
+                BlockiverseAudioCue.PickupItem,
+                BlockiverseAudioCue.ContainerOpen,
+                BlockiverseAudioCue.TorchIgnite,
+                BlockiverseAudioCue.RainLightLoop,
+                BlockiverseAudioCue.BlockBreak
+            }));
+            Assert.That(BlockiverseAudioCuePlayer.GetCategory(BlockiverseAudioCue.UiConfirm), Is.EqualTo(BlockiverseAudioCategory.Ui));
+            Assert.That(BlockiverseAudioCuePlayer.GetCategory(BlockiverseAudioCue.RainLightLoop), Is.EqualTo(BlockiverseAudioCategory.Weather));
+            Assert.That(BlockiverseAudioCuePlayer.GetCategory(BlockiverseAudioCue.BlockBreak), Is.EqualTo(BlockiverseAudioCategory.Effects));
+        }
+
+        [Test]
+        public void LoopCuesUsePersistentSourcesUntilStopped()
+        {
+            BlockiverseAudioCuePlayer player = CreateCuePlayer();
+            AudioClip loopClip = CreateClip("rain_light_loop");
+            var playedCues = new List<BlockiverseAudioCue>();
+
+            player.ConfigureClip(BlockiverseAudioCue.RainLightLoop, loopClip);
+            player.CuePlayed += (cue, _) => playedCues.Add(cue);
+
+            bool started = player.StartLoop(BlockiverseAudioCue.RainLightLoop);
+            bool duplicateStart = player.StartLoop(BlockiverseAudioCue.RainLightLoop);
+
+            Assert.That(started, Is.True);
+            Assert.That(duplicateStart, Is.False);
+            Assert.That(player.ActiveLoopCount, Is.EqualTo(1));
+            Assert.That(player.IsLoopActive(BlockiverseAudioCue.RainLightLoop), Is.True);
+            Assert.That(BlockiverseAudioCuePlayer.IsLoopCue(BlockiverseAudioCue.RainLightLoop), Is.True);
+            Assert.That(BlockiverseAudioCuePlayer.IsLoopCue(BlockiverseAudioCue.ThunderNear), Is.False);
+            Assert.That(playedCues, Is.EqualTo(new[] { BlockiverseAudioCue.RainLightLoop }));
+
+            player.StopLoop(BlockiverseAudioCue.RainLightLoop);
+
+            Assert.That(player.ActiveLoopCount, Is.Zero);
+            Assert.That(player.IsLoopActive(BlockiverseAudioCue.RainLightLoop), Is.False);
+        }
+
+        [Test]
+        public void FeedbackSettingsScaleAudioAndHaptics()
+        {
+            var gameObject = new GameObject("Feedback Settings");
+            objectsToDestroy.Add(gameObject);
+            BlockiverseFeedbackSettings settings = gameObject.AddComponent<BlockiverseFeedbackSettings>();
+
+            settings.MasterVolume = 0.5f;
+            settings.EffectsVolume = 0.5f;
+            settings.UiVolume = 0.25f;
+            settings.WeatherVolume = 0.2f;
+            settings.HapticIntensity = 0.4f;
+
+            Assert.That(settings.ResolveVolume(BlockiverseAudioCategory.Effects), Is.EqualTo(0.25f).Within(0.001f));
+            Assert.That(settings.ResolveVolume(BlockiverseAudioCategory.Ui), Is.EqualTo(0.125f).Within(0.001f));
+            Assert.That(settings.ResolveVolume(BlockiverseAudioCategory.Weather), Is.EqualTo(0.1f).Within(0.001f));
+            Assert.That(BlockiverseHapticPattern.BlockBreak.Scale(settings.ResolveHapticIntensity()).Amplitude, Is.EqualTo(0.24f).Within(0.001f));
+
+            settings.MuteAll = true;
+            settings.HapticsEnabled = false;
+
+            Assert.That(settings.ResolveVolume(BlockiverseAudioCategory.Effects), Is.Zero);
+            Assert.That(BlockiverseHapticPattern.BlockBreak.Scale(settings.ResolveHapticIntensity()).Amplitude, Is.Zero);
+        }
+
+        [Test]
         public void CreativeHotbarShowSelectionAndHidePlayInventoryFeedback()
         {
             GameObject hotbarObject = new("Creative Hotbar");

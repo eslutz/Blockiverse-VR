@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using NUnit.Framework;
 using UnityEditor;
@@ -13,34 +14,6 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class M4ArtAssetValidationEditModeTests
     {
-        static readonly string[] BlockTextureNames =
-        {
-            "meadow_turf",
-            "loam",
-            "slate",
-            "clearstone",
-            "timber",
-            "leafmass",
-            "coalstone",
-            "copperstone",
-            "ironstone",
-            "workbench",
-            "storage_crate",
-            "torchbud"
-        };
-
-        static readonly string[] ItemIconNames =
-        {
-            "timber_chunk",
-            "slate_shard",
-            "copper_nugget",
-            "iron_nugget",
-            "workbench_kit",
-            "crate_kit",
-            "chipper_tool",
-            "pick_tool"
-        };
-
         static readonly string[] UiSpriteNames =
         {
             "hotbar_frame",
@@ -48,7 +21,21 @@ namespace Blockiverse.Tests.EditMode
             "health_pip",
             "inventory_panel",
             "crafting_panel",
-            "multiplayer_status_badge"
+            "multiplayer_status_badge",
+            "settings_panel",
+            "feedback_toast"
+        };
+
+        static readonly string[] VfxSpriteNames =
+        {
+            "block_dust_particle",
+            "block_puff_particle",
+            "resource_spark_particle",
+            "craft_spark_particle",
+            "rain_splash_particle",
+            "snowflake_particle",
+            "fog_wisp_particle",
+            "ember_particle"
         };
 
         [Test]
@@ -87,13 +74,18 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void RequiredM4ArtAssetsAreCommittedWithMetaFiles()
+        public void RequiredPhase14ArtAssetsAreCommittedWithMetaFiles()
         {
             var expectedPaths = new List<string>();
             expectedPaths.Add(BlockVisualAtlas.AuthoredAtlasPath);
-            expectedPaths.AddRange(BlockTextureNames.Select(name => $"Assets/Blockiverse/Art/Textures/Blocks/Source/{name}.png"));
-            expectedPaths.AddRange(ItemIconNames.Select(name => $"Assets/Blockiverse/Art/Textures/Items/{name}.png"));
+            expectedPaths.AddRange(BlockRegistry.CreateDefault().All
+                .Where(block => block.Id != BlockRegistry.Air)
+                .Select(block => $"Assets/Blockiverse/Art/Textures/Blocks/Source/{block.CanonicalId}.png"));
+            expectedPaths.AddRange(ItemRegistry.CreateDefault().All
+                .Where(item => !item.Id.IsNone)
+                .Select(item => $"Assets/Blockiverse/Art/Textures/Items/{item.Id.Value}.png"));
             expectedPaths.AddRange(UiSpriteNames.Select(name => $"Assets/Blockiverse/Art/Sprites/UI/{name}.png"));
+            expectedPaths.AddRange(VfxSpriteNames.Select(name => $"Assets/Blockiverse/Art/Sprites/VFX/{name}.png"));
 
             foreach (string path in expectedPaths)
             {
