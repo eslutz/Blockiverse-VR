@@ -1,19 +1,37 @@
+using System;
 using UnityEngine;
+using Blockiverse.WorldGen;
 
 namespace Blockiverse.Gameplay
 {
     public sealed class WorldTimeClock : MonoBehaviour
     {
-        public const float DefaultDayLengthSeconds = 600.0f;
+        // Canonical day length: 1 game day = 24000 ticks = 20 real minutes (1200 s) at 20 ticks/second.
+        // See docs/rulesets/voxel_world_environment_effects.md §2.
+        public const float DefaultDayLengthSeconds = 1200.0f;
         public const float DefaultStartNormalizedTime = 0.22f;
 
         [SerializeField] float dayLengthSeconds = DefaultDayLengthSeconds;
         [SerializeField] float normalizedTime = DefaultStartNormalizedTime;
         [SerializeField] float timeScale = 1.0f;
 
+        float tickAccumulator;
+        long totalElapsedTicks;
+
+        public event Action<int> Ticked;
+
         public float DayLengthSeconds => dayLengthSeconds;
         public float NormalizedTime => normalizedTime;
         public float TimeScale => timeScale;
+        public long TotalElapsedTicks => totalElapsedTicks;
+
+        public void RestoreElapsedTicks(long ticks)
+        {
+            totalElapsedTicks = ticks;
+            long ticksPerDay = (long)(dayLengthSeconds * WorldConstants.TicksPerSecond);
+            if (ticksPerDay > 0)
+                normalizedTime = (float)((ticks % ticksPerDay) / (double)ticksPerDay);
+        }
 
         public void Configure(float dayLengthSeconds, float startNormalizedTime, float timeScale)
         {
@@ -33,6 +51,18 @@ namespace Blockiverse.Gameplay
         void Update()
         {
             Tick(Time.deltaTime);
+
+            if (!Mathf.Approximately(timeScale, 0.0f))
+            {
+                tickAccumulator += Time.deltaTime * timeScale * WorldConstants.TicksPerSecond;
+                int elapsed = (int)tickAccumulator;
+                if (elapsed > 0)
+                {
+                    tickAccumulator -= elapsed;
+                    totalElapsedTicks += elapsed;
+                    Ticked?.Invoke(elapsed);
+                }
+            }
         }
 
         static float Normalize(float value)

@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Core;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using UnityEngine;
@@ -54,12 +55,38 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
         MultiplayerChunkAuthoritySync authoritySync;
         TorchbudLightManager torchbudLightManager;
+        WeatherService weatherService;
+        VegetationService vegetationService;
+        FarmingService farmingService;
+        WorldTimeClock worldTimeClock;
+        string pendingWeatherState;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
         public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
+
+        public string CurrentWeatherState => weatherService?.CurrentState.ToString();
+        public WorldTimeClock WorldTimeClock => worldTimeClock;
+
+        public void RestoreWeatherState(string weatherStateString)
+        {
+            if (string.IsNullOrEmpty(weatherStateString))
+                return;
+
+            if (weatherService == null)
+            {
+                pendingWeatherState = weatherStateString;
+                return;
+            }
+
+            if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed))
+            {
+                uint seed = Settings != null ? (uint)Settings.Seed : 1u;
+                weatherService = new WeatherService(seed, parsed);
+            }
+        }
 
         public void Configure(
             Material material,
@@ -143,6 +170,7 @@ namespace Blockiverse.Gameplay
                 interactionLayer);
 
             ConfigureTorchbudLights();
+            ConfigureEnvironmentServices(settings);
             ConfigureVoidSafetyFloor();
 
             if (authoritySyncOverride != null)
@@ -160,6 +188,62 @@ namespace Blockiverse.Gameplay
                 torchbudLightManager = gameObject.AddComponent<TorchbudLightManager>();
 
             torchbudLightManager.Configure(World, Registry);
+        }
+
+        void ConfigureEnvironmentServices(WorldGenerationSettings settings)
+        {
+            if (worldTimeClock != null)
+                worldTimeClock.Ticked -= OnWorldTick;
+
+            if (vegetationService != null && World != null)
+                World.BlockChanged -= OnBlockChanged;
+
+            worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
+            if (worldTimeClock == null)
+                return;
+
+            uint seed = settings != null ? (uint)settings.Seed : 1u;
+            weatherService    = new WeatherService(seed);
+            vegetationService = new VegetationService();
+            farmingService    = new FarmingService();
+            vegetationService.ScanAndTrackSaplings(World);
+            farmingService.ScanAndTrackCrops(World);
+            World.BlockChanged += OnBlockChanged;
+            worldTimeClock.Ticked += OnWorldTick;
+
+            if (!string.IsNullOrEmpty(pendingWeatherState))
+            {
+                RestoreWeatherState(pendingWeatherState);
+                pendingWeatherState = null;
+            }
+        }
+
+        void OnBlockChanged(BlockChange change)
+        {
+            BlockId b = change.NewBlock;
+            if (b == BlockRegistry.Sapling || b == BlockRegistry.Sapling_S1 || b == BlockRegistry.Sapling_S2)
+                vegetationService?.TrackSapling(change.Position);
+            if (FarmingService.IsCropBlock(b))
+                farmingService?.TrackCrop(change.Position);
+        }
+
+        void OnWorldTick(int ticks)
+        {
+            weatherService?.Tick(ticks);
+            if (World != null)
+            {
+                vegetationService?.TickLeafDecay(World, ticks);
+                vegetationService?.TickSapling(World, ticks);
+                farmingService?.TickGrowth(World, ticks);
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (worldTimeClock != null)
+                worldTimeClock.Ticked -= OnWorldTick;
+            if (vegetationService != null && World != null)
+                World.BlockChanged -= OnBlockChanged;
         }
 
         void ConfigureInteractionController(WorldGenerationSettings settings)

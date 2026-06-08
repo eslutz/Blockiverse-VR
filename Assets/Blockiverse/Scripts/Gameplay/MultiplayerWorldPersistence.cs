@@ -119,6 +119,8 @@ namespace Blockiverse.Gameplay
             }
 
             result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
+            worldManager.RestoreWeatherState(result.Data.WeatherState);
+            worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
@@ -154,7 +156,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World);
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L);
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,

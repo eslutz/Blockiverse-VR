@@ -142,7 +142,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(entry.Message, Does.Contain($"schema={WorldSaveService.CurrentSchemaVersion}"));
                 Assert.That(entry.Message, Does.Contain("dimensions=32x16x32"));
                 Assert.That(entry.Message, Does.Contain("changedBlocks=1"));
-                Assert.That(entry.Message, Does.Contain("inventorySlots=24"));
+                Assert.That(entry.Message, Does.Contain("inventorySlots=44"));
                 Assert.That(entry.Message, Does.Contain("occupiedInventorySlots=1"));
                 Assert.That(entry.Message, Does.Contain(new DirectoryInfo(path).Name));
                 Assert.That(entry.Message, Does.Not.Contain(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar)));

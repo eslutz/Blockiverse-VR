@@ -54,9 +54,9 @@ namespace Blockiverse.Tests.Survival.EditMode
             var inventory = new Inventory(ItemRegistry.CreateDefault());
 
             Assert.That(inventory.SlotCount, Is.EqualTo(Inventory.DefaultSlotCount));
-            Assert.That(inventory.SlotCount, Is.EqualTo(24));
+            Assert.That(inventory.SlotCount, Is.EqualTo(44));
             Assert.That(inventory.HotbarSlotCount, Is.EqualTo(Inventory.DefaultHotbarSlotCount));
-            Assert.That(inventory.HotbarSlotCount, Is.EqualTo(6));
+            Assert.That(inventory.HotbarSlotCount, Is.EqualTo(10));
             Assert.That(Enumerable.Range(0, inventory.SlotCount).All(slot => inventory.GetSlot(slot).IsEmpty), Is.True);
         }
 

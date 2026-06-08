@@ -37,27 +37,57 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.BranchwoodLog, 8)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodFeller, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodFeller),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 3)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodMallet, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodMallet),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 2),
                 new ItemStack(ItemId.Graystone, 2)));
 
             recipeBook.Register(new CraftingRecipe(
-                new ItemStack(ItemId.ReedwoodDelver, 1),
+                itemRegistry.CreateItemStack(ItemId.ReedwoodDelver),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 2),
-                new ItemStack(ItemId.RawRosycopper, 3)));
+                new ItemStack(ItemId.FlintyShingle, 3)));
 
             recipeBook.Register(new CraftingRecipe(
                 new ItemStack(ItemId.FieldBandage, 2),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.Leafmoss, 3),
                 new ItemStack(ItemId.BranchwoodLog, 1)));
+
+            // ── Campfire (instant heat-cure) ──────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.CutstoneBlock, 2),
+                CraftingStation.Campfire, 0,
+                new[] { new ItemStack(ItemId.Graystone, 4), new ItemStack(ItemId.Embercoal, 1) }));
+
+            // ── Clay Kiln (timed fire) ────────────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.FiredBrick, 4),
+                CraftingStation.ClayKiln, 600,
+                new[] { new ItemStack(ItemId.Claybed, 4), new ItemStack(ItemId.Embercoal, 1) }));
+
+            // ── Flint tools (at Build Table, instant) ────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                itemRegistry.CreateItemStack(ItemId.FlintDelver),
+                CraftingStation.BuildTable, 0,
+                new[] { new ItemStack(ItemId.FlintyShingle, 5), new ItemStack(ItemId.BranchwoodLog, 2) }));
+
+            // ── Prep Board (instant process) ─────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.WorkPlank, 2),
+                CraftingStation.PrepBoard, 0,
+                new[] { new ItemStack(ItemId.BranchwoodLog, 1) }));
+
+            // ── Mend Bench (instant craft) ────────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                itemRegistry.CreateItemStack(ItemId.ReedwoodSpade),
+                CraftingStation.MendBench, 0,
+                new[] { new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.ShingleGravel, 1) }));
 
             return recipeBook;
         }

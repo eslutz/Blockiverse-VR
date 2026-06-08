@@ -4,8 +4,8 @@ namespace Blockiverse.Survival
 {
     public sealed class Inventory
     {
-        public const int DefaultSlotCount = 24;
-        public const int DefaultHotbarSlotCount = 6;
+        public const int DefaultSlotCount = 44;
+        public const int DefaultHotbarSlotCount = 10;
         public const int MaxSlotCount = 128;
 
         readonly ItemRegistry registry;
@@ -75,11 +75,11 @@ namespace Blockiverse.Survival
                     continue;
 
                 int moved = Math.Min(definition.MaxStackSize, remaining);
-                slots[i] = new ItemStack(stack.ItemId, moved);
+                slots[i] = stack.WithCount(moved);
                 remaining -= moved;
             }
 
-            return remaining > 0 ? new ItemStack(stack.ItemId, remaining) : ItemStack.Empty;
+            return remaining > 0 ? stack.WithCount(remaining) : ItemStack.Empty;
         }
 
         public bool TryAddAll(ItemStack stack)
@@ -108,7 +108,7 @@ namespace Blockiverse.Survival
             if (count > existing.Count)
                 throw new InvalidOperationException("Cannot split more items than the slot contains.");
 
-            var split = new ItemStack(existing.ItemId, count);
+            var split = existing.WithCount(count);
             slots[slotIndex] = existing.Count == count ? ItemStack.Empty : existing.WithCount(existing.Count - count);
             return split;
         }

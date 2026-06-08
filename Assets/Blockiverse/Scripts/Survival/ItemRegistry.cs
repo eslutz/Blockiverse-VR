@@ -60,6 +60,8 @@ namespace Blockiverse.Survival
             // ── Block items (placeable stations/lights) ───────────────────────
             registry.Register(new ItemDefinition(ItemId.BuildTable, "Build Table", ItemKind.Placeable, BlockStackSize, BlockRegistry.BuildTable));
             registry.Register(new ItemDefinition(ItemId.Glowwick, "Glowwick", ItemKind.Placeable, BlockStackSize, BlockRegistry.Glowwick));
+            registry.Register(new ItemDefinition(ItemId.LumenLamp, "Lumen Lamp", ItemKind.Placeable, BlockStackSize, BlockRegistry.LumenLamp));
+            registry.Register(new ItemDefinition(ItemId.SparkFlare, "Spark Flare", ItemKind.Placeable, BlockStackSize, BlockRegistry.SparkFlare));
             registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, BlockStackSize, BlockRegistry.StorageCrate));
             registry.Register(new ItemDefinition(ItemId.Campfire, "Campfire", ItemKind.Placeable, BlockStackSize, BlockRegistry.Campfire));
             registry.Register(new ItemDefinition(ItemId.ClayKiln, "Clay Kiln", ItemKind.Placeable, BlockStackSize, BlockRegistry.ClayKiln));
@@ -82,31 +84,49 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.ResinKnot,      "Resin Knot",       ItemKind.Resource, BlockStackSize,  BlockRegistry.ResinKnot));
             registry.Register(new ItemDefinition(ItemId.Berrybush,      "Berrybush",        ItemKind.Resource, FoodStackSize,   BlockRegistry.Berrybush));
             registry.Register(new ItemDefinition(ItemId.GrainStalk,     "Grain Stalk",      ItemKind.Resource, FoodStackSize,   BlockRegistry.GrainStalk));
+
+            // Grown crop stage blocks share the same drop as their base block
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S1, ItemId.GrainStalk);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S2, ItemId.GrainStalk);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.Berrybush);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.Berrybush);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.Reedgrass);
             registry.Register(new ItemDefinition(ItemId.UmbraliteNode,  "Umbralite Node",   ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
             registry.Register(new ItemDefinition(ItemId.StaropalGeode,  "Staropal Geode",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
 
-            // ── Tier-1 (Reedwood) tools ───────────────────────────────────────
-            registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodSpade, "Reedwood Spade", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodFeller, "Reedwood Feller", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodSickle, "Reedwood Sickle", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodMallet, "Reedwood Mallet", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodCarver, "Reedwood Carver", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.ReedwoodTiller, "Reedwood Tiller", ItemKind.Tool, ToolStackSize));
+            // ── Tier-1 (Reedwood) tools — base 48, scaled by class multiplier ─
+            registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 1, maxDurability: 48));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodSpade,  "Reedwood Spade",  ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Spade,  toolTier: 1, maxDurability: 38));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodFeller, "Reedwood Feller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Feller, toolTier: 1, maxDurability: 43));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodSickle, "Reedwood Sickle", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Sickle, toolTier: 1, maxDurability: 34));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodMallet, "Reedwood Mallet", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Mallet, toolTier: 1, maxDurability: 58));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodCarver, "Reedwood Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 1, maxDurability: 29));
+            registry.Register(new ItemDefinition(ItemId.ReedwoodTiller, "Reedwood Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 1, maxDurability: 38));
 
-            // ── Tier-2 (Flint) tools ──────────────────────────────────────────
-            registry.Register(new ItemDefinition(ItemId.FlintDelver, "Flint Delver", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.FlintSpade, "Flint Spade", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.FlintFeller, "Flint Feller", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.FlintSickle, "Flint Sickle", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.FlintMallet, "Flint Mallet", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize));
-            registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize));
+            // ── Tier-2 (Flint) tools — base 90, scaled by class multiplier ────
+            registry.Register(new ItemDefinition(ItemId.FlintDelver, "Flint Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 2, maxDurability: 90));
+            registry.Register(new ItemDefinition(ItemId.FlintSpade,  "Flint Spade",  ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Spade,  toolTier: 2, maxDurability: 72));
+            registry.Register(new ItemDefinition(ItemId.FlintFeller, "Flint Feller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Feller, toolTier: 2, maxDurability: 81));
+            registry.Register(new ItemDefinition(ItemId.FlintSickle, "Flint Sickle", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Sickle, toolTier: 2, maxDurability: 63));
+            registry.Register(new ItemDefinition(ItemId.FlintMallet, "Flint Mallet", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Mallet, toolTier: 2, maxDurability: 108));
+            registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 2, maxDurability: 54));
+            registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 2, maxDurability: 72));
 
             // ── Consumables ───────────────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
 
             return registry;
+        }
+
+        // Maps an additional block (e.g. a grown crop stage) to an already-registered item's drop,
+        // without creating a new ItemDefinition or ItemId.
+        public void RegisterDropAlias(BlockId blockId, ItemId itemId)
+        {
+            if (!definitionsById.TryGetValue(itemId, out ItemDefinition definition))
+                throw new KeyNotFoundException($"Item ID is not registered: {itemId}");
+            if (definitionsByBlock.ContainsKey(blockId))
+                throw new InvalidOperationException($"Block ID already has an item mapping: {blockId}");
+            definitionsByBlock.Add(blockId, definition);
         }
 
         public void Register(ItemDefinition definition)
@@ -156,6 +176,13 @@ namespace Blockiverse.Survival
             return TryGetItemForBlock(blockId, out ItemDefinition definition)
                 ? new ItemStack(definition.Id, count)
                 : ItemStack.Empty;
+        }
+
+        public ItemStack CreateItemStack(ItemId id, int count = 1)
+        {
+            ItemDefinition def = Get(id);
+            ItemStack stack = new ItemStack(id, count);
+            return def.MaxDurability > 0 ? stack.WithDurability(def.MaxDurability) : stack;
         }
     }
 }

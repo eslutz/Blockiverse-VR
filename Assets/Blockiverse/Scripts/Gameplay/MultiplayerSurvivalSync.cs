@@ -246,7 +246,8 @@ namespace Blockiverse.Gameplay
         public SurvivalCommandResult TrySubmitHarvest(
             BlockPosition position,
             ItemStack equippedItem,
-            out bool requestSentToHost)
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
         {
             requestSentToHost = false;
 
@@ -261,13 +262,13 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendHarvestRequest(requestId, position, equippedItem);
+                SendHarvestRequest(requestId, position, equippedItem, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.HarvestResource, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostHarvest(ResolveLocalClientId(), requestId: 0, position, equippedItem, sendResponse: false);
+            LastCommandResult = ProcessHostHarvest(ResolveLocalClientId(), requestId: 0, position, equippedItem, sendResponse: false, equippedSlotIndex);
             return LastCommandResult;
         }
 
@@ -339,7 +340,8 @@ namespace Blockiverse.Gameplay
             uint requestId,
             BlockPosition position,
             ItemStack equippedItem,
-            bool sendResponse)
+            bool sendResponse,
+            int equippedSlotIndex = -1)
         {
             ReceivedHarvestRequestCount++;
 
@@ -347,11 +349,20 @@ namespace Blockiverse.Gameplay
                 return duplicate;
 
             Inventory inventory = GetInventory(clientId);
+            // Prefer the server-authoritative inventory slot for harvest validation when the
+            // caller supplies one. Player inventories in this architecture start empty and are
+            // filled by host-granted harvests/crafts, so there is no pre-populated server-side
+            // tool to read for a freshly-equipped tool; fall back to the requested stack in that
+            // case. Server-authoritative tool validation will tighten once persistent server-side
+            // tool inventories exist (tracked follow-up).
+            ItemStack authoritativeItem = equippedSlotIndex >= 0
+                ? inventory.GetSlot(equippedSlotIndex)
+                : equippedItem;
             BlockHarvestResult harvest = ResolveHarvestService().TryPreviewHarvest(
                 ResolveWorld(),
                 inventory,
                 position,
-                equippedItem);
+                authoritativeItem);
 
             if (!harvest.Succeeded)
             {
@@ -382,6 +393,19 @@ namespace Blockiverse.Gameplay
             }
 
             inventory.TryAddAll(harvest.Drop);
+
+            if (equippedSlotIndex >= 0)
+            {
+                ItemStack serverSlot = inventory.GetSlot(equippedSlotIndex);
+                if (!serverSlot.IsEmpty && serverSlot.Durability > 0)
+                {
+                    int remaining = serverSlot.Durability - 1;
+                    inventory.SetSlot(equippedSlotIndex, remaining > 0
+                        ? serverSlot.WithDurability(remaining)
+                        : ItemStack.Empty);
+                }
+            }
+
             AcceptedHarvestCount++;
             SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
                 SurvivalCommandKind.HarvestResource,
@@ -570,7 +594,8 @@ namespace Blockiverse.Gameplay
             reader.ReadValueSafe(out uint requestId);
             BlockPosition position = ReadBlockPosition(ref reader);
             ItemStack equippedItem = ReadItemStack(ref reader);
-            ProcessHostHarvest(senderClientId, requestId, position, equippedItem, sendResponse: true);
+            reader.ReadValueSafe(out int equippedSlotIndex);
+            ProcessHostHarvest(senderClientId, requestId, position, equippedItem, sendResponse: true, equippedSlotIndex);
         }
 
         void HandleCraftRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -634,7 +659,7 @@ namespace Blockiverse.Gameplay
             ReceivedSharedCrateSnapshotCount++;
         }
 
-        void SendHarvestRequest(uint requestId, BlockPosition position, ItemStack equippedItem)
+        void SendHarvestRequest(uint requestId, BlockPosition position, ItemStack equippedItem, int equippedSlotIndex = -1)
         {
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
@@ -647,6 +672,7 @@ namespace Blockiverse.Gameplay
                 writer.WriteValueSafe(requestId);
                 WriteBlockPosition(ref writer, position);
                 WriteItemStack(ref writer, equippedItem);
+                writer.WriteValueSafe(equippedSlotIndex);
                 networkManager.CustomMessagingManager.SendNamedMessage(
                     HarvestRequestMessage,
                     NetworkManager.ServerClientId,
@@ -1152,13 +1178,17 @@ namespace Blockiverse.Gameplay
         {
             writer.WriteValueSafe(stack.ItemId.Value);
             writer.WriteValueSafe(stack.Count);
+            writer.WriteValueSafe(stack.Durability);
         }
 
         static ItemStack ReadItemStack(ref FastBufferReader reader)
         {
             reader.ReadValueSafe(out string itemId);
             reader.ReadValueSafe(out int count);
-            return count > 0 ? new ItemStack(new ItemId(itemId), count) : ItemStack.Empty;
+            reader.ReadValueSafe(out int durability);
+            if (count <= 0) return ItemStack.Empty;
+            ItemStack stack = new ItemStack(new ItemId(itemId), count);
+            return durability > 0 ? stack.WithDurability(durability) : stack;
         }
 
         static void WriteBlockPosition(ref FastBufferWriter writer, BlockPosition position)

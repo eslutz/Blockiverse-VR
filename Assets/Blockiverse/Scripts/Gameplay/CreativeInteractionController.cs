@@ -7,7 +7,7 @@ namespace Blockiverse.Gameplay
 {
     public sealed class CreativeInteractionController : MonoBehaviour
     {
-        readonly Stack<SetBlockCommand> undoStack = new();
+        readonly List<SetBlockCommand> undoStack = new();
 
         VoxelWorld world;
         BlockRegistry registry;
@@ -131,14 +131,14 @@ namespace Blockiverse.Gameplay
 
             if (!blockEditingEnabled)
             {
-                BlockPosition position = undoStack.Count > 0 ? undoStack.Peek().Position : default;
+                BlockPosition position = undoStack.Count > 0 ? undoStack[undoStack.Count - 1].Position : default;
                 return RejectBlockEditingDisabled(position);
             }
 
             if (undoStack.Count == 0)
                 return false;
 
-            SetBlockCommand command = undoStack.Peek();
+            SetBlockCommand command = undoStack[undoStack.Count - 1];
 
             ChunkAuthorityBoundary boundary = ResolveEffectiveBoundary();
 
@@ -164,7 +164,7 @@ namespace Blockiverse.Gameplay
             if (!result.Accepted)
                 return requestSentToHost;
 
-            undoStack.Pop();
+            undoStack.RemoveAt(undoStack.Count - 1);
             RebuildChangedChunks();
 
             if (undoCommand.HasAppliedChange)
@@ -231,7 +231,11 @@ namespace Blockiverse.Gameplay
                 return requestSentToHost;
 
             if (pushUndo)
-                undoStack.Push(command);
+            {
+                if (undoStack.Count >= GameModeConstants.CreativeUndoHistoryLimit)
+                    undoStack.RemoveAt(0);
+                undoStack.Add(command);
+            }
 
             RebuildChangedChunks();
 

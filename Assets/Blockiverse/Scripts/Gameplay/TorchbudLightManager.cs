@@ -16,12 +16,13 @@ namespace Blockiverse.Gameplay
         readonly Dictionary<BlockPosition, Light> lightsByPosition = new();
 
         VoxelWorld world;
+        BlockRegistry blockRegistry;
 
         public int ActiveLightCount => lightsByPosition.Count;
 
-        public static bool IsLightEmitter(BlockId block)
+        public static bool IsLightEmitter(BlockId block, BlockRegistry registry)
         {
-            return block == BlockRegistry.Glowwick;
+            return registry != null && registry.TryGet(block, out BlockDefinition def) && def.EmissiveLight > 0;
         }
 
         public static Vector3 GetLightPosition(BlockPosition position)
@@ -35,7 +36,7 @@ namespace Blockiverse.Gameplay
                 world.BlockChanged -= OnBlockChanged;
 
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
-            _ = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
+            this.blockRegistry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             world.BlockChanged += OnBlockChanged;
             RebuildAllLights();
         }
@@ -56,7 +57,7 @@ namespace Blockiverse.Gameplay
                     for (int x = 0; x < world.Bounds.Width; x++)
                     {
                         var position = new BlockPosition(x, y, z);
-                        if (IsLightEmitter(world.GetBlock(position)))
+                        if (IsLightEmitter(world.GetBlock(position), blockRegistry))
                             AddLight(position);
                     }
                 }
@@ -65,10 +66,10 @@ namespace Blockiverse.Gameplay
 
         void OnBlockChanged(BlockChange change)
         {
-            if (IsLightEmitter(change.PreviousBlock))
+            if (IsLightEmitter(change.PreviousBlock, blockRegistry))
                 RemoveLight(change.Position);
 
-            if (IsLightEmitter(change.NewBlock))
+            if (IsLightEmitter(change.NewBlock, blockRegistry))
                 AddLight(change.Position);
         }
 

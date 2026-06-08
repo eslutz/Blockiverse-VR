@@ -10,6 +10,7 @@ namespace Blockiverse.Survival
         AirBlock,
         UnknownBlock,
         NoHarvestRule,
+        InsufficientTool,
         InventoryFull
     }
 
@@ -42,7 +43,7 @@ namespace Blockiverse.Survival
         public int WorkRequired { get; }
         public bool UsedEffectiveTool => UsedTool == EffectiveTool;
 
-        public static BlockHarvestResult Success(BlockHarvestRule rule, HarvestToolKind usedTool)
+        public static BlockHarvestResult Success(BlockHarvestRule rule, HarvestToolKind usedTool, int toolTier = 1)
         {
             if (rule == null)
                 throw new ArgumentNullException(nameof(rule));
@@ -54,7 +55,7 @@ namespace Blockiverse.Survival
                 rule.Drop,
                 usedTool,
                 rule.EffectiveTool,
-                rule.GetWorkRequired(usedTool));
+                rule.GetWorkRequired(usedTool, toolTier));
         }
 
         public static BlockHarvestResult Failure(
@@ -75,6 +76,7 @@ namespace Blockiverse.Survival
     public sealed class ResourceHarvestService
     {
         readonly BlockRegistry blockRegistry;
+        readonly ItemRegistry itemRegistry;
         readonly BlockHarvestRuleSet harvestRules;
 
         public ResourceHarvestService(
@@ -82,12 +84,12 @@ namespace Blockiverse.Survival
             ItemRegistry itemRegistry = null,
             BlockHarvestRuleSet harvestRules = null)
         {
-            itemRegistry ??= ItemRegistry.CreateDefault();
+            this.itemRegistry  = itemRegistry  ?? ItemRegistry.CreateDefault();
             this.blockRegistry = blockRegistry ?? BlockRegistry.CreateDefault();
-            this.harvestRules = harvestRules ?? BlockHarvestRuleSet.CreateDefault(itemRegistry);
+            this.harvestRules  = harvestRules  ?? BlockHarvestRuleSet.CreateDefault(this.itemRegistry, this.blockRegistry);
         }
 
-        public BlockHarvestResult TryHarvest(VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem)
+        public BlockHarvestResult TryHarvest(VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem, int equippedSlotIndex = -1)
         {
             BlockHarvestResult result = TryPreviewHarvest(world, inventory, position, equippedItem);
 
@@ -95,8 +97,11 @@ namespace Blockiverse.Survival
                 return result;
 
             inventory.TryAddAll(result.Drop);
-
             world.SetBlock(position, BlockRegistry.Air);
+
+            if (equippedSlotIndex >= 0 && equippedItem.Durability > 0)
+                ApplyDurabilityCost(inventory, equippedSlotIndex, equippedItem);
+
             return result;
         }
 
@@ -118,11 +123,16 @@ namespace Blockiverse.Survival
             if (!blockRegistry.TryGet(blockId, out _))
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.UnknownBlock, blockId);
 
-            HarvestToolKind usedTool = BlockHarvestRuleSet.GetToolKind(equippedItem);
+            HarvestToolKind usedTool = BlockHarvestRuleSet.GetToolKind(equippedItem, itemRegistry);
+            int toolTier = GetToolTier(equippedItem);
+
             if (!harvestRules.TryGet(blockId, out BlockHarvestRule rule))
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.NoHarvestRule, blockId, usedTool: usedTool);
 
-            int workRequired = rule.GetWorkRequired(usedTool);
+            if (rule.HarvestTierMin > 0 && (usedTool != rule.EffectiveTool || toolTier < rule.HarvestTierMin))
+                return BlockHarvestResult.Failure(BlockHarvestFailureReason.InsufficientTool, blockId, usedTool: usedTool, effectiveTool: rule.EffectiveTool);
+
+            int workRequired = rule.GetWorkRequired(usedTool, toolTier);
             if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.Drop.Count)
             {
                 return BlockHarvestResult.Failure(
@@ -134,7 +144,22 @@ namespace Blockiverse.Survival
                     workRequired);
             }
 
-            return BlockHarvestResult.Success(rule, usedTool);
+            return BlockHarvestResult.Success(rule, usedTool, toolTier);
+        }
+
+        int GetToolTier(ItemStack equippedItem)
+        {
+            if (!equippedItem.IsEmpty && itemRegistry.TryGet(equippedItem.ItemId, out ItemDefinition def))
+                return def.ToolTier;
+            return 0;
+        }
+
+        static void ApplyDurabilityCost(Inventory inventory, int slotIndex, ItemStack equippedItem)
+        {
+            int remaining = equippedItem.Durability - 1;
+            inventory.SetSlot(slotIndex, remaining > 0
+                ? equippedItem.WithDurability(remaining)
+                : ItemStack.Empty);
         }
     }
 }

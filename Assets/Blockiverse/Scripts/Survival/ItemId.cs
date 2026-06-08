@@ -46,6 +46,8 @@ namespace Blockiverse.Survival
         public static readonly ItemId ClearpaneGlass       = new("clearpane_glass");
         public static readonly ItemId BuildTable           = new("build_table");
         public static readonly ItemId Glowwick             = new("glowwick");
+        public static readonly ItemId LumenLamp            = new("lumen_lamp");
+        public static readonly ItemId SparkFlare           = new("spark_flare");
         public static readonly ItemId StorageCrate         = new("storage_crate");
         public static readonly ItemId Campfire             = new("campfire");
         public static readonly ItemId ClayKiln             = new("clay_kiln");

@@ -9,15 +9,16 @@ namespace Blockiverse.Tests.Survival.EditMode
         [Test]
         public void DefaultRecipeBookContainsCoreCraftingRecipes()
         {
-            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
 
-            Assert.That(recipeBook.All.Count, Is.EqualTo(7));
+            Assert.That(recipeBook.All.Count, Is.EqualTo(12));
             AssertRecipe(recipeBook, ItemId.BuildTable, CraftingStation.None, new ItemStack(ItemId.BuildTable, 1), new ItemStack(ItemId.BranchwoodLog, 4));
             AssertRecipe(recipeBook, ItemId.Glowwick, CraftingStation.BuildTable, new ItemStack(ItemId.Glowwick, 4), new ItemStack(ItemId.BranchwoodLog, 1), new ItemStack(ItemId.Embercoal, 1));
             AssertRecipe(recipeBook, ItemId.StorageCrate, CraftingStation.BuildTable, new ItemStack(ItemId.StorageCrate, 1), new ItemStack(ItemId.BranchwoodLog, 8));
-            AssertRecipe(recipeBook, ItemId.ReedwoodFeller, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodFeller, 1), new ItemStack(ItemId.BranchwoodLog, 3));
-            AssertRecipe(recipeBook, ItemId.ReedwoodMallet, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodMallet, 1), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.Graystone, 2));
-            AssertRecipe(recipeBook, ItemId.ReedwoodDelver, CraftingStation.BuildTable, new ItemStack(ItemId.ReedwoodDelver, 1), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.RawRosycopper, 3));
+            AssertRecipe(recipeBook, ItemId.ReedwoodFeller, CraftingStation.BuildTable, itemRegistry.CreateItemStack(ItemId.ReedwoodFeller), new ItemStack(ItemId.BranchwoodLog, 3));
+            AssertRecipe(recipeBook, ItemId.ReedwoodMallet, CraftingStation.BuildTable, itemRegistry.CreateItemStack(ItemId.ReedwoodMallet), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.Graystone, 2));
+            AssertRecipe(recipeBook, ItemId.ReedwoodDelver, CraftingStation.BuildTable, itemRegistry.CreateItemStack(ItemId.ReedwoodDelver), new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.FlintyShingle, 3));
             AssertRecipe(recipeBook, ItemId.FieldBandage, CraftingStation.BuildTable, new ItemStack(ItemId.FieldBandage, 2), new ItemStack(ItemId.Leafmoss, 3), new ItemStack(ItemId.BranchwoodLog, 1));
         }
 
@@ -47,7 +48,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             Inventory inventory = new(itemRegistry);
             inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2));
-            inventory.SetSlot(1, new ItemStack(ItemId.RawRosycopper, 3));
+            inventory.SetSlot(1, new ItemStack(ItemId.FlintyShingle, 3));
 
             CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.ReedwoodDelver);
             CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.BuildTable);
@@ -55,7 +56,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(result.Succeeded, Is.True);
             Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.None));
             Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
-            Assert.That(inventory.CountOf(ItemId.RawRosycopper), Is.Zero);
+            Assert.That(inventory.CountOf(ItemId.FlintyShingle), Is.Zero);
             Assert.That(inventory.CountOf(ItemId.ReedwoodDelver), Is.EqualTo(1));
         }
 
@@ -98,6 +99,47 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(result.FailedItemId, Is.EqualTo(ItemId.BranchwoodLog));
             Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 2)));
             Assert.That(inventory.CountOf(ItemId.Glowwick), Is.Zero);
+        }
+
+        [Test]
+        public void CampfireRecipeIsInstant()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.CutstoneBlock);
+
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.Campfire));
+            Assert.That(recipe.TimeTicks, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ClayKilnRecipeHasNonZeroTimeTicks()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.FiredBrick);
+
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.ClayKiln));
+            Assert.That(recipe.TimeTicks, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void FlintDelverRecipeIsAtBuildTableAndInstant()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.FlintDelver);
+
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            Assert.That(recipe.TimeTicks, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void PrepBoardAndMendBenchRecipesAreInstant()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+
+            Assert.That(recipeBook.GetByOutput(ItemId.WorkPlank).RequiredStation, Is.EqualTo(CraftingStation.PrepBoard));
+            Assert.That(recipeBook.GetByOutput(ItemId.WorkPlank).TimeTicks, Is.EqualTo(0));
+            Assert.That(recipeBook.GetByOutput(ItemId.ReedwoodSpade).RequiredStation, Is.EqualTo(CraftingStation.MendBench));
+            Assert.That(recipeBook.GetByOutput(ItemId.ReedwoodSpade).TimeTicks, Is.EqualTo(0));
         }
 
         static void AssertRecipe(CraftingRecipeBook recipeBook, ItemId outputItemId, CraftingStation requiredStation, ItemStack output, params ItemStack[] ingredients)

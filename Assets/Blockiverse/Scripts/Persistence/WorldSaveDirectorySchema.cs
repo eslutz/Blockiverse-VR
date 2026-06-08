@@ -48,6 +48,7 @@ namespace Blockiverse.Persistence
         public int HotbarSlotCount;
         public int SelectedHotbarSlotIndex;
         public SavedInventorySlot[] Slots;
+        public SavedInventorySlot[] SurvivalInventorySnapshot;
     }
 
     [Serializable]
