@@ -174,5 +174,22 @@ namespace Blockiverse.Tests.EditMode
             WorldEditResult result = service.Copy(hugeWorld, new BlockPosition(0, 0, 0), new BlockPosition(40, 40, 40));
             Assert.That(result, Is.EqualTo(WorldEditResult.VolumeLimitExceeded));
         }
+
+        [Test]
+        public void PasteDoesNotOverwriteExistingBlocksWithAir()
+        {
+            // Region (0,0,0)-(1,0,0): Graystone at x=0, Air at x=1
+            world.SetBlock(new BlockPosition(0, 0, 0), BlockRegistry.Graystone);
+
+            service.Copy(world, new BlockPosition(0, 0, 0), new BlockPosition(1, 0, 0));
+
+            // Destination: LooseLoam at x=5 (where the clipboard's air slot would land)
+            world.SetBlock(new BlockPosition(5, 0, 0), BlockRegistry.LooseLoam);
+
+            service.Paste(world, new BlockPosition(4, 0, 0));
+
+            Assert.That(world.GetBlock(new BlockPosition(4, 0, 0)), Is.EqualTo(BlockRegistry.Graystone));
+            Assert.That(world.GetBlock(new BlockPosition(5, 0, 0)), Is.EqualTo(BlockRegistry.LooseLoam));
+        }
     }
 }

@@ -105,6 +105,32 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
+        public void HarvestTierMinBlockFailsWithWrongToolOrInsufficientTier()
+        {
+            // RosycopperBloom: EffectiveTool=Delver, HarvestTierMin=2
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.RosycopperBloom);
+            var service = CreateService(itemRegistry);
+
+            // Bare hand — wrong tool, no tier
+            BlockHarvestResult handResult = service.TryPreviewHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
+            Assert.That(handResult.Succeeded, Is.False);
+            Assert.That(handResult.FailureReason, Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+
+            // Tier-1 delver — right tool, insufficient tier
+            ItemStack tier1Delver = new ItemStack(ItemId.ReedwoodDelver, 1).WithDurability(20);
+            BlockHarvestResult tier1Result = service.TryPreviewHarvest(world, inventory, HarvestPosition, tier1Delver);
+            Assert.That(tier1Result.Succeeded, Is.False);
+            Assert.That(tier1Result.FailureReason, Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+
+            // Tier-2 delver — right tool, meets tier
+            ItemStack tier2Delver = new ItemStack(ItemId.FlintDelver, 1).WithDurability(35);
+            BlockHarvestResult tier2Result = service.TryPreviewHarvest(world, inventory, HarvestPosition, tier2Delver);
+            Assert.That(tier2Result.Succeeded, Is.True);
+        }
+
+        [Test]
         public void DefaultScarcityTuningKeepsResourceOrderingAndDepthBands()
         {
             SurvivalResourceTuning tuning = SurvivalResourceTuning.CreateDefault();

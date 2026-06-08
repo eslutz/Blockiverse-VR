@@ -10,6 +10,7 @@ namespace Blockiverse.Survival
         AirBlock,
         UnknownBlock,
         NoHarvestRule,
+        InsufficientTool,
         InventoryFull
     }
 
@@ -127,6 +128,9 @@ namespace Blockiverse.Survival
 
             if (!harvestRules.TryGet(blockId, out BlockHarvestRule rule))
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.NoHarvestRule, blockId, usedTool: usedTool);
+
+            if (rule.HarvestTierMin > 0 && (usedTool != rule.EffectiveTool || toolTier < rule.HarvestTierMin))
+                return BlockHarvestResult.Failure(BlockHarvestFailureReason.InsufficientTool, blockId, usedTool: usedTool, effectiveTool: rule.EffectiveTool);
 
             int workRequired = rule.GetWorkRequired(usedTool, toolTier);
             if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.Drop.Count)

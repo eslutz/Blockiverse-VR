@@ -1206,7 +1206,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             SurvivalCommandResult coalHarvest = firstClientSurvivalSync.TrySubmitHarvest(
                 coalstonePosition,
-                ItemStack.Empty,
+                new ItemStack(ItemId.ReedwoodDelver, 1).WithDurability(20),
                 out bool coalHarvestSentToHost);
 
             Assert.That(coalHarvestSentToHost, Is.True);

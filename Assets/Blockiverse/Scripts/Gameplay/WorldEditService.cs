@@ -134,9 +134,11 @@ namespace Blockiverse.Gameplay
             for (int z = 0; z < clipboardDepth; z++)
             for (int x = 0; x < clipboardWidth; x++)
             {
+                BlockId newBlock = clipboard[idx++];
+                if (newBlock == BlockRegistry.Air) continue;
+
                 var pos = new BlockPosition(origin.X + x, origin.Y + y, origin.Z + z);
                 BlockId previous = world.GetBlock(pos);
-                BlockId newBlock = clipboard[idx++];
                 world.SetBlock(pos, newBlock);
                 changes.Add(new BlockChange(pos, previous, newBlock));
             }
