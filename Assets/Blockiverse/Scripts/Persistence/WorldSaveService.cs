@@ -212,9 +212,9 @@ namespace Blockiverse.Persistence
 
         // ── Save ─────────────────────────────────────────────────────────────
 
-        public void Save(string path, string worldName, VoxelWorld world)
+        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null)
         {
-            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0);
+            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState);
         }
 
         public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null)

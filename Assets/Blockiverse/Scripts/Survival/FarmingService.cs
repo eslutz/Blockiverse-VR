@@ -30,6 +30,28 @@ namespace Blockiverse.Survival
 
         readonly Dictionary<BlockPosition, int> tickAccumulator = new();
 
+        public void ScanAndTrackCrops(VoxelWorld world)
+        {
+            tickAccumulator.Clear();
+            WorldBounds bounds = world.Bounds;
+            for (int y = 0; y < bounds.Height; y++)
+            for (int z = 0; z < bounds.Depth; z++)
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                var pos = new BlockPosition(x, y, z);
+                if (CropBlocks.Contains(world.GetBlock(pos)))
+                    tickAccumulator[pos] = 0;
+            }
+        }
+
+        public static bool IsCropBlock(BlockId blockId) => CropBlocks.Contains(blockId);
+
+        public void TrackCrop(BlockPosition position)
+        {
+            if (!tickAccumulator.ContainsKey(position))
+                tickAccumulator[position] = 0;
+        }
+
         public FarmingResult Till(VoxelWorld world, BlockPosition position)
         {
             if (!world.Bounds.Contains(position))

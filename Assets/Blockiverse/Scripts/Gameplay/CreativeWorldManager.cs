@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Core;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using UnityEngine;
@@ -56,6 +57,7 @@ namespace Blockiverse.Gameplay
         TorchbudLightManager torchbudLightManager;
         WeatherService weatherService;
         VegetationService vegetationService;
+        FarmingService farmingService;
         WorldTimeClock worldTimeClock;
 
         public BlockRegistry Registry { get; private set; }
@@ -63,6 +65,19 @@ namespace Blockiverse.Gameplay
         public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
+
+        public string CurrentWeatherState => weatherService?.CurrentState.ToString();
+
+        public void RestoreWeatherState(string weatherStateString)
+        {
+            if (weatherService == null || string.IsNullOrEmpty(weatherStateString))
+                return;
+            if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed) && parsed != WeatherState.Clear)
+            {
+                uint seed = Settings != null ? (uint)Settings.Seed : 1u;
+                weatherService = new WeatherService(seed, parsed);
+            }
+        }
 
         public void Configure(
             Material material,
@@ -181,7 +196,9 @@ namespace Blockiverse.Gameplay
             uint seed = settings != null ? (uint)settings.Seed : 1u;
             weatherService    = new WeatherService(seed);
             vegetationService = new VegetationService();
+            farmingService    = new FarmingService();
             vegetationService.ScanAndTrackSaplings(World);
+            farmingService.ScanAndTrackCrops(World);
             World.BlockChanged += OnBlockChanged;
             worldTimeClock.Ticked += OnWorldTick;
         }
@@ -191,6 +208,8 @@ namespace Blockiverse.Gameplay
             BlockId b = change.NewBlock;
             if (b == BlockRegistry.Sapling || b == BlockRegistry.Sapling_S1 || b == BlockRegistry.Sapling_S2)
                 vegetationService?.TrackSapling(change.Position);
+            if (FarmingService.IsCropBlock(b))
+                farmingService?.TrackCrop(change.Position);
         }
 
         void OnWorldTick(int ticks)
@@ -200,6 +219,7 @@ namespace Blockiverse.Gameplay
             {
                 vegetationService?.TickLeafDecay(World, ticks);
                 vegetationService?.TickSapling(World, ticks);
+                farmingService?.TickGrowth(World, ticks);
             }
         }
 
