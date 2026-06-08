@@ -342,6 +342,7 @@ Blockiverse.Tests.PlayMode
 | M6 | Survival systems | Mining, tools, inventory, crafting, stations, farming, containers, and player survival stats |
 | M7 | Save/load, migration, and versioning | Stable save schema, migrations from temporary IDs, autosave, and recovery |
 | M8 | LAN multiplayer | Host-authoritative co-op with canonical world sync, inventories, structures, and environment state |
+| M8.5 | Rendering and menu completion gate | Phase 4 chunk rendering/authored visual validation and Phase 10 menu/VR UI flows are fully implemented before polish |
 | M9 | Audio, VFX, haptics, art polish | Original feedback, ambience, weather effects, block VFX, UI sounds, and Quest-readable assets |
 | M10 | Quest performance and store candidate | Performance budget, release APK, Meta release channels, and store submission package |
 | M11 | Full survival expansion | Original NPCs/mobs, combat, armor, deeper progression, and multiplayer survival interactions |
@@ -600,6 +601,13 @@ kg/20260606-survival-terrain-generates
 ### Deliverable
 
 Canonical worlds render efficiently with original authored voxel art.
+
+### Completion timing
+
+```text
+Baseline rendering may be implemented earlier as needed for world, creative, survival, and multiplayer validation.
+Full Phase 4 completion is scheduled in the M8-to-M9 gate, after LAN multiplayer and before audio/VFX/art polish.
+```
 
 ### Scope
 
@@ -912,6 +920,13 @@ Player can store items and recover from basic damage/resource needs.
 ### Deliverable
 
 All major menus, actions, transitions, and state flows match the menu specification.
+
+### Completion timing
+
+```text
+M8 may implement the LAN multiplayer menu, reconnect/session-ended flow, and required connection/error dialogs as LAN validation scope.
+Full Phase 10 completion is scheduled in the M8-to-M9 gate, before M9 UI sounds, UI panels, art polish, and Quest-readable asset polish.
+```
 
 ### Scope
 
@@ -1883,6 +1898,23 @@ FEATURE: Survival co-op sync
   STORY: Host-validated crafting
 ```
 
+## EPIC-08.5 — Rendering and menu completion gate
+
+```text
+FEATURE: Phase 4 chunk rendering completion
+  STORY: Complete canonical chunk mesh builder
+  STORY: Complete authored block atlas lookup and validation
+  STORY: Complete dirty chunk rebuild and collider throttling
+  STORY: Validate canonical worlds have no missing materials in PlayMode
+
+FEATURE: Phase 10 menu and VR UI flow completion
+  STORY: Complete main, new world, load world, world settings, and mode selection menus
+  STORY: Complete pause, inventory, crafting, creative catalog, and creative tool menus
+  STORY: Complete environment, structure, vegetation, LAN multiplayer, reconnect, and session-ended flows
+  STORY: Complete settings, comfort, audio, controls, confirmation, and error dialogs
+  STORY: Validate menu action routing, UI/world-edit suppression, and Quest readability
+```
+
 ## EPIC-09 — Audio, VFX, haptics, and art polish
 
 ```text
@@ -1994,13 +2026,14 @@ FEATURE: Cloud persistence
 13. Implement survival mining, inventory, tools, crafting, and farming.
 14. Implement unified save/load and migrations.
 15. Add LAN host-authoritative canonical world sync.
-16. Add audio, haptics, and VFX.
-17. Harden Quest performance.
-18. Produce signed release candidate.
-19. Validate through Meta release channels.
-20. Prepare Store / Early Access submission.
-21. Expand with mobs, combat, and deeper progression.
-22. Add cloud private worlds.
+16. Fully implement Phase 4 chunk rendering/authored visual validation and Phase 10 menu/VR UI flows.
+17. Add audio, haptics, and VFX.
+18. Harden Quest performance.
+19. Produce signed release candidate.
+20. Validate through Meta release channels.
+21. Prepare Store / Early Access submission.
+22. Expand with mobs, combat, and deeper progression.
+23. Add cloud private worlds.
 ```
 
 ---
@@ -2102,6 +2135,18 @@ Environment/structure/vegetation state syncs.
 Host save/load works.
 Host disconnect UX is clear.
 kg checkpoint exists.
+```
+
+## M8.5 — Rendering and menu completion gate
+
+```text
+Phase 4 chunk rendering is fully implemented.
+Canonical worlds render with authored block visuals and no missing materials.
+Dirty chunk rebuilds and collider rebuilds are throttled and validated.
+Phase 10 menu and VR UI flows are fully implemented.
+All major menus, settings, confirmations, and error dialogs match the menu specification.
+UI/world-edit suppression works consistently in VR.
+Quest readability and interaction validation passes before M9 polish begins.
 ```
 
 ## M9 — Audio/VFX/art polish
