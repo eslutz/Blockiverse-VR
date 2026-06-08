@@ -59,6 +59,36 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.Leafmoss, 3),
                 new ItemStack(ItemId.BranchwoodLog, 1)));
 
+            // ── Campfire (instant heat-cure) ──────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.CutstoneBlock, 2),
+                CraftingStation.Campfire, 0,
+                new[] { new ItemStack(ItemId.Graystone, 4), new ItemStack(ItemId.Embercoal, 1) }));
+
+            // ── Clay Kiln (timed fire) ────────────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.FiredBrick, 4),
+                CraftingStation.ClayKiln, 600,
+                new[] { new ItemStack(ItemId.Claybed, 4), new ItemStack(ItemId.Embercoal, 1) }));
+
+            // ── Bellows Forge (timed smelt) ───────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.FlintDelver, 1),
+                CraftingStation.BellowsForge, 400,
+                new[] { new ItemStack(ItemId.RawRosycopper, 4), new ItemStack(ItemId.BranchwoodLog, 2) }));
+
+            // ── Prep Board (instant process) ─────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.WorkPlank, 2),
+                CraftingStation.PrepBoard, 0,
+                new[] { new ItemStack(ItemId.BranchwoodLog, 1) }));
+
+            // ── Mend Bench (instant craft) ────────────────────────────────────
+            recipeBook.Register(new CraftingRecipe(
+                new ItemStack(ItemId.ReedwoodSpade, 1),
+                CraftingStation.MendBench, 0,
+                new[] { new ItemStack(ItemId.BranchwoodLog, 2), new ItemStack(ItemId.ShingleGravel, 1) }));
+
             return recipeBook;
         }
 

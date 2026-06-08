@@ -46,14 +46,62 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             BlockHarvestRuleSet rules = BlockHarvestRuleSet.CreateDefault(ItemRegistry.CreateDefault());
 
-            BlockHarvestRule log = rules.Get(BlockRegistry.BranchwoodLog);
+            BlockHarvestRule log        = rules.Get(BlockRegistry.BranchwoodLog);
             BlockHarvestRule rosycopper = rules.Get(BlockRegistry.RosycopperBloom);
             BlockHarvestRule buildTable = rules.Get(BlockRegistry.BuildTable);
 
-            Assert.That(log.GetWorkRequired(HarvestToolKind.Feller), Is.LessThan(log.GetWorkRequired(HarvestToolKind.Hand)));
-            Assert.That(log.GetWorkRequired(HarvestToolKind.Delver), Is.EqualTo(log.GetWorkRequired(HarvestToolKind.Hand)));
-            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver), Is.LessThan(rosycopper.GetWorkRequired(HarvestToolKind.Hand)));
-            Assert.That(buildTable.GetWorkRequired(HarvestToolKind.Mallet), Is.LessThan(buildTable.GetWorkRequired(HarvestToolKind.Hand)));
+            Assert.That(log.GetWorkRequired(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(log.HandWork));
+            Assert.That(log.GetWorkRequired(HarvestToolKind.Delver, toolTier: 1), Is.EqualTo(log.HandWork));
+            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver, toolTier: 2), Is.LessThan(rosycopper.HandWork));
+            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver, toolTier: 1), Is.EqualTo(rosycopper.HandWork));
+            Assert.That(buildTable.GetWorkRequired(HarvestToolKind.Mallet, toolTier: 1), Is.LessThan(buildTable.HandWork));
+        }
+
+        [Test]
+        public void HarvestWithTrackedDurabilityToolConsumesDurability()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            ItemStack feller = new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(5);
+            inventory.SetSlot(0, feller);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
+            var service = CreateService(itemRegistry);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, feller, equippedSlotIndex: 0);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(inventory.GetSlot(0).Durability, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void HarvestBreaksToolWhenDurabilityReachesZero()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            ItemStack feller = new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(1);
+            inventory.SetSlot(0, feller);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
+            var service = CreateService(itemRegistry);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, feller, equippedSlotIndex: 0);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(inventory.GetSlot(0).IsEmpty, Is.True);
+        }
+
+        [Test]
+        public void HarvestWithUntrackedDurabilityToolDoesNotConsumeDurability()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            ItemStack feller = new ItemStack(ItemId.ReedwoodFeller, 1); // Durability = 0 (no tracking)
+            inventory.SetSlot(0, feller);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
+            var service = CreateService(itemRegistry);
+
+            service.TryHarvest(world, inventory, HarvestPosition, feller, equippedSlotIndex: 0);
+
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(feller)); // unchanged
         }
 
         [Test]

@@ -18,38 +18,45 @@ namespace Blockiverse.Survival
 
     public sealed class BlockHarvestRule
     {
+        static readonly int[] BaseWorkByClass   = { 4, 8, 16, 32 };
+        static readonly float[] SpeedByClass    = { 2f, 2f, 2.5f, 4f };
+
         public BlockHarvestRule(
             BlockId blockId,
             ItemStack drop,
             HarvestToolKind effectiveTool,
-            int handWork,
-            int effectiveToolWork)
+            BlockHardnessClass hardnessClass,
+            int harvestTierMin)
         {
             if (drop.IsEmpty)
                 throw new ArgumentException("Harvest rules must produce a drop.", nameof(drop));
 
-            if (handWork <= 0)
-                throw new ArgumentOutOfRangeException(nameof(handWork), "Harvest work must be positive.");
-
-            if (effectiveToolWork <= 0 || effectiveToolWork > handWork)
-                throw new ArgumentOutOfRangeException(nameof(effectiveToolWork), "Effective tool work must be positive and no slower than hand work.");
-
             BlockId = blockId;
             Drop = drop;
             EffectiveTool = effectiveTool;
-            HandWork = handWork;
-            EffectiveToolWork = effectiveToolWork;
+            HardnessClass = hardnessClass;
+            HarvestTierMin = harvestTierMin;
         }
 
         public BlockId BlockId { get; }
         public ItemStack Drop { get; }
         public HarvestToolKind EffectiveTool { get; }
-        public int HandWork { get; }
-        public int EffectiveToolWork { get; }
+        public BlockHardnessClass HardnessClass { get; }
+        public int HarvestTierMin { get; }
 
-        public int GetWorkRequired(HarvestToolKind toolKind)
+        public int HandWork => BaseWorkByClass[(int)HardnessClass];
+
+        public int GetWorkRequired(HarvestToolKind toolKind) => GetWorkRequired(toolKind, toolTier: 1);
+
+        public int GetWorkRequired(HarvestToolKind toolKind, int toolTier)
         {
-            return toolKind == EffectiveTool ? EffectiveToolWork : HandWork;
+            int baseWork = BaseWorkByClass[(int)HardnessClass];
+            if (toolKind != EffectiveTool || toolTier < HarvestTierMin)
+                return baseWork;
+
+            float tierMult  = 1f + (toolTier - HarvestTierMin);
+            float classBonus = SpeedByClass[(int)HardnessClass];
+            return Math.Max(1, (int)(baseWork / (tierMult * classBonus)));
         }
     }
 
@@ -57,31 +64,34 @@ namespace Blockiverse.Survival
     {
         readonly Dictionary<BlockId, BlockHarvestRule> rulesByBlock = new();
         readonly ItemRegistry itemRegistry;
+        readonly BlockRegistry blockRegistry;
 
-        public BlockHarvestRuleSet(ItemRegistry itemRegistry = null)
+        public BlockHarvestRuleSet(ItemRegistry itemRegistry = null, BlockRegistry blockRegistry = null)
         {
-            this.itemRegistry = itemRegistry ?? ItemRegistry.CreateDefault();
+            this.itemRegistry  = itemRegistry  ?? ItemRegistry.CreateDefault();
+            this.blockRegistry = blockRegistry ?? BlockRegistry.CreateDefault();
         }
 
         public IReadOnlyCollection<BlockHarvestRule> All => rulesByBlock.Values;
 
-        public static BlockHarvestRuleSet CreateDefault(ItemRegistry itemRegistry = null)
+        public static BlockHarvestRuleSet CreateDefault(ItemRegistry itemRegistry = null, BlockRegistry blockRegistry = null)
         {
-            itemRegistry ??= ItemRegistry.CreateDefault();
-            var rules = new BlockHarvestRuleSet(itemRegistry);
+            itemRegistry  ??= ItemRegistry.CreateDefault();
+            blockRegistry ??= BlockRegistry.CreateDefault();
+            var rules = new BlockHarvestRuleSet(itemRegistry, blockRegistry);
 
-            rules.RegisterForBlock(BlockRegistry.MeadowTurf,        HarvestToolKind.Mallet, handWork: 4,  effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.LooseLoam,          HarvestToolKind.Spade,  handWork: 4,  effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Graystone,          HarvestToolKind.Delver, handWork: 8,  effectiveToolWork: 3);
-            rules.RegisterForBlock(BlockRegistry.BranchwoodLog,      HarvestToolKind.Feller, handWork: 6,  effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Leafmoss,           HarvestToolKind.Feller, handWork: 3,  effectiveToolWork: 1);
-            rules.RegisterForBlock(BlockRegistry.LumenQuartzCluster, HarvestToolKind.Delver, handWork: 8,  effectiveToolWork: 3);
-            rules.RegisterForBlock(BlockRegistry.EmbercoalSeam,      HarvestToolKind.Delver, handWork: 10, effectiveToolWork: 4);
-            rules.RegisterForBlock(BlockRegistry.RosycopperBloom,    HarvestToolKind.Delver, handWork: 12, effectiveToolWork: 4);
-            rules.RegisterForBlock(BlockRegistry.RustcoreOre,        HarvestToolKind.Delver, handWork: 14, effectiveToolWork: 5);
-            rules.RegisterForBlock(BlockRegistry.BuildTable,         HarvestToolKind.Mallet, handWork: 6,  effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.Glowwick,           HarvestToolKind.Hand,   handWork: 2,  effectiveToolWork: 2);
-            rules.RegisterForBlock(BlockRegistry.StorageCrate,       HarvestToolKind.Mallet, handWork: 6,  effectiveToolWork: 2);
+            rules.RegisterForBlock(BlockRegistry.MeadowTurf,        HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.LooseLoam,          HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.Graystone,          HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.BranchwoodLog,      HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.Leafmoss,           HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.LumenQuartzCluster, HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.EmbercoalSeam,      HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.RosycopperBloom,    HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.RustcoreOre,        HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.BuildTable,         HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.Glowwick,           HarvestToolKind.Hand);
+            rules.RegisterForBlock(BlockRegistry.StorageCrate,       HarvestToolKind.Mallet);
 
             return rules;
         }
@@ -111,41 +121,46 @@ namespace Blockiverse.Survival
             return rulesByBlock.TryGetValue(blockId, out rule);
         }
 
-        public static HarvestToolKind GetToolKind(ItemStack equippedItem)
+        public HarvestToolKind GetToolKind(ItemStack equippedItem)
         {
             if (equippedItem.IsEmpty)
                 return HarvestToolKind.Hand;
 
-            ItemId id = equippedItem.ItemId;
-
-            if (id == ItemId.ReedwoodDelver || id == ItemId.FlintDelver)
-                return HarvestToolKind.Delver;
-
-            if (id == ItemId.ReedwoodSpade || id == ItemId.FlintSpade)
-                return HarvestToolKind.Spade;
-
-            if (id == ItemId.ReedwoodFeller || id == ItemId.FlintFeller)
-                return HarvestToolKind.Feller;
-
-            if (id == ItemId.ReedwoodSickle || id == ItemId.FlintSickle)
-                return HarvestToolKind.Sickle;
-
-            if (id == ItemId.ReedwoodMallet || id == ItemId.FlintMallet)
-                return HarvestToolKind.Mallet;
-
-            if (id == ItemId.ReedwoodCarver || id == ItemId.FlintCarver)
-                return HarvestToolKind.Carver;
-
-            if (id == ItemId.ReedwoodTiller || id == ItemId.FlintTiller)
-                return HarvestToolKind.Tiller;
+            if (itemRegistry.TryGet(equippedItem.ItemId, out ItemDefinition def) && def.ToolClass != HarvestToolKind.Hand)
+                return def.ToolClass;
 
             return HarvestToolKind.Hand;
         }
 
-        void RegisterForBlock(BlockId blockId, HarvestToolKind effectiveTool, int handWork, int effectiveToolWork)
+        public static HarvestToolKind GetToolKind(ItemStack equippedItem, ItemRegistry itemRegistry = null)
+        {
+            if (equippedItem.IsEmpty)
+                return HarvestToolKind.Hand;
+
+            if (itemRegistry != null && itemRegistry.TryGet(equippedItem.ItemId, out ItemDefinition def) && def.ToolClass != HarvestToolKind.Hand)
+                return def.ToolClass;
+
+            ItemId id = equippedItem.ItemId;
+
+            if (id == ItemId.ReedwoodDelver || id == ItemId.FlintDelver) return HarvestToolKind.Delver;
+            if (id == ItemId.ReedwoodSpade  || id == ItemId.FlintSpade)  return HarvestToolKind.Spade;
+            if (id == ItemId.ReedwoodFeller || id == ItemId.FlintFeller) return HarvestToolKind.Feller;
+            if (id == ItemId.ReedwoodSickle || id == ItemId.FlintSickle) return HarvestToolKind.Sickle;
+            if (id == ItemId.ReedwoodMallet || id == ItemId.FlintMallet) return HarvestToolKind.Mallet;
+            if (id == ItemId.ReedwoodCarver || id == ItemId.FlintCarver) return HarvestToolKind.Carver;
+            if (id == ItemId.ReedwoodTiller || id == ItemId.FlintTiller) return HarvestToolKind.Tiller;
+
+            return HarvestToolKind.Hand;
+        }
+
+        void RegisterForBlock(BlockId blockId, HarvestToolKind effectiveTool)
         {
             ItemStack drop = itemRegistry.CreateDropForBlock(blockId);
-            Register(new BlockHarvestRule(blockId, drop, effectiveTool, handWork, effectiveToolWork));
+            blockRegistry.TryGet(blockId, out BlockDefinition def);
+            Register(new BlockHarvestRule(
+                blockId, drop, effectiveTool,
+                def?.HardnessClass  ?? BlockHardnessClass.Soft,
+                def?.HarvestTierMin ?? 0));
         }
     }
 }

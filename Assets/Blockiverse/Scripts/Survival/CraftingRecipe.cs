@@ -17,6 +17,9 @@ namespace Blockiverse.Survival
     public sealed class CraftingRecipe
     {
         public CraftingRecipe(ItemStack output, CraftingStation requiredStation, params ItemStack[] ingredients)
+            : this(output, requiredStation, 0, ingredients) { }
+
+        public CraftingRecipe(ItemStack output, CraftingStation requiredStation, int timeTicks, ItemStack[] ingredients)
         {
             if (output.IsEmpty)
                 throw new ArgumentException("Crafting recipes must produce an output item.", nameof(output));
@@ -38,11 +41,13 @@ namespace Blockiverse.Survival
 
             Output = output;
             RequiredStation = requiredStation;
+            TimeTicks = timeTicks;
             Ingredients = Array.AsReadOnly(ingredientCopy);
         }
 
         public ItemStack Output { get; }
         public CraftingStation RequiredStation { get; }
+        public int TimeTicks { get; }
         public IReadOnlyList<ItemStack> Ingredients { get; }
     }
 }

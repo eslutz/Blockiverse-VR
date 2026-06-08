@@ -11,7 +11,7 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
 
-            Assert.That(recipeBook.All.Count, Is.EqualTo(7));
+            Assert.That(recipeBook.All.Count, Is.EqualTo(12));
             AssertRecipe(recipeBook, ItemId.BuildTable, CraftingStation.None, new ItemStack(ItemId.BuildTable, 1), new ItemStack(ItemId.BranchwoodLog, 4));
             AssertRecipe(recipeBook, ItemId.Glowwick, CraftingStation.BuildTable, new ItemStack(ItemId.Glowwick, 4), new ItemStack(ItemId.BranchwoodLog, 1), new ItemStack(ItemId.Embercoal, 1));
             AssertRecipe(recipeBook, ItemId.StorageCrate, CraftingStation.BuildTable, new ItemStack(ItemId.StorageCrate, 1), new ItemStack(ItemId.BranchwoodLog, 8));
@@ -98,6 +98,47 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(result.FailedItemId, Is.EqualTo(ItemId.BranchwoodLog));
             Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 2)));
             Assert.That(inventory.CountOf(ItemId.Glowwick), Is.Zero);
+        }
+
+        [Test]
+        public void CampfireRecipeIsInstant()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.CutstoneBlock);
+
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.Campfire));
+            Assert.That(recipe.TimeTicks, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ClayKilnRecipeHasNonZeroTimeTicks()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.FiredBrick);
+
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.ClayKiln));
+            Assert.That(recipe.TimeTicks, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void BellowsForgeRecipeHasNonZeroTimeTicks()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+            CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.FlintDelver);
+
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.BellowsForge));
+            Assert.That(recipe.TimeTicks, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void PrepBoardAndMendBenchRecipesAreInstant()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+
+            Assert.That(recipeBook.GetByOutput(ItemId.WorkPlank).RequiredStation, Is.EqualTo(CraftingStation.PrepBoard));
+            Assert.That(recipeBook.GetByOutput(ItemId.WorkPlank).TimeTicks, Is.EqualTo(0));
+            Assert.That(recipeBook.GetByOutput(ItemId.ReedwoodSpade).RequiredStation, Is.EqualTo(CraftingStation.MendBench));
+            Assert.That(recipeBook.GetByOutput(ItemId.ReedwoodSpade).TimeTicks, Is.EqualTo(0));
         }
 
         static void AssertRecipe(CraftingRecipeBook recipeBook, ItemId outputItemId, CraftingStation requiredStation, ItemStack output, params ItemStack[] ingredients)
