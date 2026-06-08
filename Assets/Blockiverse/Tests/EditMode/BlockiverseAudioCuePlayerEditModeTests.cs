@@ -108,6 +108,33 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void LoopCuesUsePersistentSourcesUntilStopped()
+        {
+            BlockiverseAudioCuePlayer player = CreateCuePlayer();
+            AudioClip loopClip = CreateClip("rain_light_loop");
+            var playedCues = new List<BlockiverseAudioCue>();
+
+            player.ConfigureClip(BlockiverseAudioCue.RainLightLoop, loopClip);
+            player.CuePlayed += (cue, _) => playedCues.Add(cue);
+
+            bool started = player.StartLoop(BlockiverseAudioCue.RainLightLoop);
+            bool duplicateStart = player.StartLoop(BlockiverseAudioCue.RainLightLoop);
+
+            Assert.That(started, Is.True);
+            Assert.That(duplicateStart, Is.False);
+            Assert.That(player.ActiveLoopCount, Is.EqualTo(1));
+            Assert.That(player.IsLoopActive(BlockiverseAudioCue.RainLightLoop), Is.True);
+            Assert.That(BlockiverseAudioCuePlayer.IsLoopCue(BlockiverseAudioCue.RainLightLoop), Is.True);
+            Assert.That(BlockiverseAudioCuePlayer.IsLoopCue(BlockiverseAudioCue.ThunderNear), Is.False);
+            Assert.That(playedCues, Is.EqualTo(new[] { BlockiverseAudioCue.RainLightLoop }));
+
+            player.StopLoop(BlockiverseAudioCue.RainLightLoop);
+
+            Assert.That(player.ActiveLoopCount, Is.Zero);
+            Assert.That(player.IsLoopActive(BlockiverseAudioCue.RainLightLoop), Is.False);
+        }
+
+        [Test]
         public void FeedbackSettingsScaleAudioAndHaptics()
         {
             var gameObject = new GameObject("Feedback Settings");

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -38,9 +39,10 @@ namespace Blockiverse.Gameplay
     }
 
     /// <summary>
-    /// Central one-shot sound player. Auto-plays break/place cues from a creative interaction
-    /// controller's mutation events and exposes <see cref="PlayCue"/> for UI feedback. Clips are
-    /// generated original cues under Assets/Blockiverse/Audio and assigned on the prefab.
+    /// Central sound player for one-shot and persistent loop cues. Auto-plays break/place cues from
+    /// a creative interaction controller's mutation events and exposes cue APIs for UI and world
+    /// feedback. Clips are generated original cues under Assets/Blockiverse/Audio and assigned on
+    /// the prefab.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(AudioSource))]
@@ -85,9 +87,11 @@ namespace Blockiverse.Gameplay
         int footstepClipIndex;
         AudioSource[] worldSpaceSources = Array.Empty<AudioSource>();
         int worldSpaceSourceIndex;
+        readonly Dictionary<BlockiverseAudioCue, AudioSource> loopSources = new();
 
         public event Action<BlockiverseAudioCue, AudioClip> CuePlayed;
         public int FootstepClipCount => CountAssignedFootstepClips();
+        public int ActiveLoopCount => CountActiveLoopSources();
         public BlockiverseFeedbackSettings FeedbackSettings => feedbackSettings;
         public CreativeInteractionController InteractionController => interactionController;
 
@@ -101,10 +105,17 @@ namespace Blockiverse.Gameplay
         public void ConfigureFeedbackSettings(BlockiverseFeedbackSettings settings)
         {
             feedbackSettings = settings;
+            RefreshLoopVolumes();
         }
 
         public void PlayCue(BlockiverseAudioCue cue)
         {
+            if (IsLoopCue(cue))
+            {
+                StartLoop(cue);
+                return;
+            }
+
             EnsureReferences();
             AudioClip clip = ResolveClip(cue);
             if (clip == null || audioSource == null)
@@ -120,6 +131,12 @@ namespace Blockiverse.Gameplay
 
         public void PlayCueAt(BlockiverseAudioCue cue, Vector3 worldPosition)
         {
+            if (IsLoopCue(cue))
+            {
+                StartLoopAt(cue, worldPosition);
+                return;
+            }
+
             EnsureReferences();
             AudioClip clip = ResolveClip(cue);
             if (clip == null)
@@ -136,6 +153,41 @@ namespace Blockiverse.Gameplay
             source.transform.position = worldPosition;
             source.PlayOneShot(clip, resolvedVolume);
             CuePlayed?.Invoke(cue, clip);
+        }
+
+        public bool StartLoop(BlockiverseAudioCue cue)
+        {
+            return StartLoopInternal(cue, null);
+        }
+
+        public bool StartLoopAt(BlockiverseAudioCue cue, Vector3 worldPosition)
+        {
+            return StartLoopInternal(cue, worldPosition);
+        }
+
+        public bool StopLoop(BlockiverseAudioCue cue)
+        {
+            if (!loopSources.TryGetValue(cue, out AudioSource source))
+                return false;
+
+            loopSources.Remove(cue);
+            DestroyLoopSource(source);
+            return true;
+        }
+
+        public void StopAllLoops()
+        {
+            if (loopSources.Count == 0)
+                return;
+
+            var cues = new List<BlockiverseAudioCue>(loopSources.Keys);
+            foreach (BlockiverseAudioCue cue in cues)
+                StopLoop(cue);
+        }
+
+        public bool IsLoopActive(BlockiverseAudioCue cue)
+        {
+            return loopSources.TryGetValue(cue, out AudioSource source) && source != null;
         }
 
         public void ConfigureClip(BlockiverseAudioCue cue, AudioClip clip)
@@ -258,6 +310,7 @@ namespace Blockiverse.Gameplay
 
         void OnDisable()
         {
+            StopAllLoops();
             Unsubscribe();
         }
 
@@ -371,12 +424,107 @@ namespace Blockiverse.Gameplay
             };
         }
 
+        public static bool IsLoopCue(BlockiverseAudioCue cue)
+        {
+            return cue is BlockiverseAudioCue.TorchLoop or
+                BlockiverseAudioCue.CampfireLoop or
+                BlockiverseAudioCue.RainLightLoop or
+                BlockiverseAudioCue.RainHeavyLoop or
+                BlockiverseAudioCue.SnowWindLoop or
+                BlockiverseAudioCue.CaveAmbienceLoop or
+                BlockiverseAudioCue.DayAmbienceLoop or
+                BlockiverseAudioCue.NightAmbienceLoop;
+        }
+
         float ResolveVolume(BlockiverseAudioCue cue)
         {
             float categoryVolume = feedbackSettings != null
                 ? feedbackSettings.ResolveVolume(GetCategory(cue))
                 : 1.0f;
             return Mathf.Clamp01(volume * categoryVolume);
+        }
+
+        bool StartLoopInternal(BlockiverseAudioCue cue, Vector3? worldPosition)
+        {
+            if (!IsLoopCue(cue))
+                return false;
+
+            EnsureReferences();
+            AudioClip clip = ResolveClip(cue);
+            if (clip == null)
+                return false;
+
+            float resolvedVolume = ResolveVolume(cue);
+            if (resolvedVolume <= 0f)
+                return false;
+
+            if (loopSources.TryGetValue(cue, out AudioSource existingSource) && existingSource != null)
+            {
+                ApplyLoopSourceSettings(existingSource, cue, worldPosition);
+                return false;
+            }
+
+            AudioSource source = CreateLoopSource(cue);
+            source.clip = clip;
+            source.loop = true;
+            ApplyLoopSourceSettings(source, cue, worldPosition);
+            loopSources[cue] = source;
+            source.Play();
+            CuePlayed?.Invoke(cue, clip);
+            return true;
+        }
+
+        AudioSource CreateLoopSource(BlockiverseAudioCue cue)
+        {
+            GameObject sourceObject = new($"{cue} Loop Audio Source");
+            sourceObject.transform.SetParent(transform, worldPositionStays: false);
+            AudioSource source = sourceObject.AddComponent<AudioSource>();
+            source.playOnAwake = false;
+            return source;
+        }
+
+        void ApplyLoopSourceSettings(AudioSource source, BlockiverseAudioCue cue, Vector3? worldPosition)
+        {
+            source.volume = ResolveVolume(cue);
+            source.spatialBlend = worldPosition.HasValue ? 1f : 0f;
+            if (worldPosition.HasValue)
+                source.transform.position = worldPosition.Value;
+            else
+                source.transform.localPosition = Vector3.zero;
+        }
+
+        void RefreshLoopVolumes()
+        {
+            foreach (KeyValuePair<BlockiverseAudioCue, AudioSource> loopSource in loopSources)
+            {
+                if (loopSource.Value != null)
+                    loopSource.Value.volume = ResolveVolume(loopSource.Key);
+            }
+        }
+
+        int CountActiveLoopSources()
+        {
+            int count = 0;
+            foreach (AudioSource source in loopSources.Values)
+            {
+                if (source != null)
+                    count++;
+            }
+
+            return count;
+        }
+
+        static void DestroyLoopSource(AudioSource source)
+        {
+            if (source == null)
+                return;
+
+            GameObject sourceObject = source.gameObject;
+            source.Stop();
+            if (Application.isPlaying)
+                Destroy(sourceObject);
+            else
+                DestroyImmediate(sourceObject);
         }
 
         AudioSource ResolveWorldSpaceSource()
