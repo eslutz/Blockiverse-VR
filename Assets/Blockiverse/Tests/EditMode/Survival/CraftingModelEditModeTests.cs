@@ -122,13 +122,13 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void BellowsForgeRecipeHasNonZeroTimeTicks()
+        public void FlintDelverRecipeIsAtBuildTableAndInstant()
         {
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
             CraftingRecipe recipe = recipeBook.GetByOutput(ItemId.FlintDelver);
 
-            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.BellowsForge));
-            Assert.That(recipe.TimeTicks, Is.GreaterThan(0));
+            Assert.That(recipe.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            Assert.That(recipe.TimeTicks, Is.EqualTo(0));
         }
 
         [Test]

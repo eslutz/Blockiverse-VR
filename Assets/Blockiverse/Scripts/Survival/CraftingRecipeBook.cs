@@ -71,11 +71,11 @@ namespace Blockiverse.Survival
                 CraftingStation.ClayKiln, 600,
                 new[] { new ItemStack(ItemId.Claybed, 4), new ItemStack(ItemId.Embercoal, 1) }));
 
-            // ── Bellows Forge (timed smelt) ───────────────────────────────────
+            // ── Flint tools (at Build Table, instant) ────────────────────────
             recipeBook.Register(new CraftingRecipe(
                 itemRegistry.CreateItemStack(ItemId.FlintDelver),
-                CraftingStation.BellowsForge, 400,
-                new[] { new ItemStack(ItemId.RawRosycopper, 4), new ItemStack(ItemId.BranchwoodLog, 2) }));
+                CraftingStation.BuildTable, 0,
+                new[] { new ItemStack(ItemId.FlintyShingle, 5), new ItemStack(ItemId.BranchwoodLog, 2) }));
 
             // ── Prep Board (instant process) ─────────────────────────────────
             recipeBook.Register(new CraftingRecipe(

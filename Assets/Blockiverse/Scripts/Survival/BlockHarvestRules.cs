@@ -80,11 +80,11 @@ namespace Blockiverse.Survival
             blockRegistry ??= BlockRegistry.CreateDefault();
             var rules = new BlockHarvestRuleSet(itemRegistry, blockRegistry);
 
-            rules.RegisterForBlock(BlockRegistry.MeadowTurf,        HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.MeadowTurf,        HarvestToolKind.Spade);
             rules.RegisterForBlock(BlockRegistry.LooseLoam,          HarvestToolKind.Spade);
             rules.RegisterForBlock(BlockRegistry.Graystone,          HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.BranchwoodLog,      HarvestToolKind.Feller);
-            rules.RegisterForBlock(BlockRegistry.Leafmoss,           HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.Leafmoss,           HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.LumenQuartzCluster, HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.EmbercoalSeam,      HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.RosycopperBloom,    HarvestToolKind.Delver);
@@ -111,9 +111,9 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.Reedgrass,          HarvestToolKind.Sickle);
 
             // ── Additional canonical crafted blocks ──────────────────────────
-            rules.RegisterForBlock(BlockRegistry.WorkPlank,          HarvestToolKind.Mallet);
-            rules.RegisterForBlock(BlockRegistry.CutstoneBlock,      HarvestToolKind.Delver);
-            rules.RegisterForBlock(BlockRegistry.FiredBrick,         HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.WorkPlank,          HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.CutstoneBlock,      HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.FiredBrick,         HarvestToolKind.Mallet);
             rules.RegisterForBlock(BlockRegistry.ClearpaneGlass,     HarvestToolKind.Mallet);
 
             // ── Crafting stations ────────────────────────────────────────────
@@ -125,13 +125,13 @@ namespace Blockiverse.Survival
 
             // ── Additional canonical resource nodes ──────────────────────────
             rules.RegisterForBlock(BlockRegistry.SurfacePebbles,     HarvestToolKind.Hand);
-            rules.RegisterForBlock(BlockRegistry.FlintyShingle,      HarvestToolKind.Hand);
+            rules.RegisterForBlock(BlockRegistry.FlintyShingle,      HarvestToolKind.Spade);
             rules.RegisterForBlock(BlockRegistry.PaletinThread,      HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.SunmetalFleck,      HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.NiterstonePocket,   HarvestToolKind.Delver);
-            rules.RegisterForBlock(BlockRegistry.BrightsaltCrust,    HarvestToolKind.Delver);
-            rules.RegisterForBlock(BlockRegistry.ShellgritBed,       HarvestToolKind.Delver);
-            rules.RegisterForBlock(BlockRegistry.ResinKnot,          HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.BrightsaltCrust,    HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.ShellgritBed,       HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.ResinKnot,          HarvestToolKind.Carver);
             rules.RegisterForBlock(BlockRegistry.Berrybush,          HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Berrybush_S1,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Berrybush_S2,       HarvestToolKind.Sickle);

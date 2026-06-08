@@ -57,7 +57,8 @@ namespace Blockiverse.Survival
             if (!world.Bounds.Contains(position))
                 return FarmingResult.OutOfBounds;
 
-            if (world.GetBlock(position) != BlockRegistry.LooseLoam)
+            BlockId block = world.GetBlock(position);
+            if (block != BlockRegistry.LooseLoam && block != BlockRegistry.Rootsoil && block != BlockRegistry.RiverSilt)
                 return FarmingResult.NotTillableBlock;
 
             world.SetBlock(position, BlockRegistry.TendedSoil);

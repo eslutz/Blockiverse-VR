@@ -214,10 +214,10 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Graystone,           "graystone",          "Graystone",            BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(BranchwoodLog,       "branchwood_log",     "Branchwood Log",       BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
-            registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 1));
+            registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3));
+            registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
             registry.Register(new BlockDefinition(RosycopperBloom,     "rosycopper_bloom",   "Rosycopper Bloom",     BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
-            registry.Register(new BlockDefinition(RustcoreOre,         "rustcore_ore",       "Rustcore Ore",         BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
+            registry.Register(new BlockDefinition(RustcoreOre,         "rustcore_ore",       "Rustcore Ore",         BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3));
             registry.Register(new BlockDefinition(BuildTable,          "build_table",        "Build Table",          BlockCategory.Station,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(Glowwick,            "glowwick",           "Glowwick",             BlockCategory.Crafted,  isSolid: false, isRenderable: true,  emissiveLight: 9));
             registry.Register(new BlockDefinition(StorageCrate,        "storage_crate",      "Storage Crate",        BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
@@ -226,9 +226,9 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Worldroot,    "worldroot",     "Worldroot",     BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: 3));
             registry.Register(new BlockDefinition(Deepmantle,   "deepmantle",    "Deepmantle",    BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: 3));
             registry.Register(new BlockDefinition(DarkSlate,    "dark_slate",    "Dark Slate",    BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Medium,   harvestTierMin: 1));
-            registry.Register(new BlockDefinition(WarmGranite,  "warm_granite",  "Warm Granite",  BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Medium,   harvestTierMin: 1));
+            registry.Register(new BlockDefinition(WarmGranite,  "warm_granite",  "Warm Granite",  BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Medium,   harvestTierMin: 2));
             registry.Register(new BlockDefinition(WhiteLimestone,"white_limestone","White Limestone",BlockCategory.Terrain, isSolid: true, isRenderable: true, hardnessClass: BlockHardnessClass.Medium,  harvestTierMin: 1));
-            registry.Register(new BlockDefinition(BlackBasalt,  "black_basalt",  "Black Basalt",  BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,     harvestTierMin: 2));
+            registry.Register(new BlockDefinition(BlackBasalt,  "black_basalt",  "Black Basalt",  BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,     harvestTierMin: 3));
 
             // ── Additional canonical soil/surface (atlas tiles generated) ────
             registry.Register(new BlockDefinition(DryTurf,       "dry_turf",       "Dry Turf",       BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
@@ -248,22 +248,22 @@ namespace Blockiverse.Voxel
             // ── Additional canonical crafted (atlas tiles generated) ─────────
             registry.Register(new BlockDefinition(WorkPlank,     "work_plank",     "Work Plank",     BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(FiredBrick,    "fired_brick",    "Fired Brick",    BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(ClearpaneGlass,"clearpane_glass","Clearpane Glass",BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(FiredBrick,    "fired_brick_block","Fired Brick",  BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
+            registry.Register(new BlockDefinition(ClearpaneGlass,"clearpane_glass","Clearpane Glass",BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft,  harvestTierMin: 1));
 
             // ── Additional canonical resource nodes (atlas tiles generated) ──
             registry.Register(new BlockDefinition(SurfacePebbles,   "surface_pebbles",   "Surface Pebbles",   BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(FlintyShingle,    "flinty_shingle",    "Flinty Shingle",    BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(PaletinThread,    "paletin_thread",    "Paletin Thread",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 2));
-            registry.Register(new BlockDefinition(SunmetalFleck,    "sunmetal_fleck",    "Sunmetal Fleck",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 2));
+            registry.Register(new BlockDefinition(SunmetalFleck,    "sunmetal_fleck",    "Sunmetal Fleck",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 4));
             registry.Register(new BlockDefinition(NiterstonePocket, "niterstone_pocket", "Niterstone Pocket", BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 2));
-            registry.Register(new BlockDefinition(BrightsaltCrust,  "brightsalt_crust",  "Brightsalt Crust",  BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 2));
-            registry.Register(new BlockDefinition(ShellgritBed,     "shellgrit_bed",     "Shellgrit Bed",     BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 2));
+            registry.Register(new BlockDefinition(BrightsaltCrust,  "brightsalt_crust",  "Brightsalt Crust",  BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(ShellgritBed,     "shellgrit_bed",     "Shellgrit Bed",     BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(ResinKnot,        "resin_knot",        "Resin Knot",        BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Berrybush,        "berrybush",         "Berrybush",         BlockCategory.Organic,  isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(GrainStalk,       "grain_stalk",       "Grain Stalk",       BlockCategory.Organic,  isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(UmbraliteNode,    "umbralite_node",    "Umbralite Node",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 3));
-            registry.Register(new BlockDefinition(StaropalGeode,    "staropal_geode",    "Staropal Geode",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 3));
+            registry.Register(new BlockDefinition(UmbraliteNode,    "umbralite_node",    "Umbralite Node",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 5));
+            registry.Register(new BlockDefinition(StaropalGeode,    "staropal_geode",    "Staropal Geode",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 6));
 
             // ── Additional canonical stations (atlas tiles generated) ────────
             registry.Register(new BlockDefinition(Campfire,     "campfire",      "Campfire",      BlockCategory.Station, isSolid: false, isRenderable: true, emissiveLight: 12));
