@@ -14,12 +14,21 @@ namespace Blockiverse.Survival
 
             ItemId = itemId;
             Count = count;
+            Durability = 0;
+        }
+
+        ItemStack(ItemId itemId, int count, int durability)
+        {
+            ItemId = itemId;
+            Count = count;
+            Durability = durability;
         }
 
         public static ItemStack Empty => default;
 
         public ItemId ItemId { get; }
         public int Count { get; }
+        public int Durability { get; }
         public bool IsEmpty => Count == 0;
 
         public bool CanStackWith(ItemStack other)
@@ -32,12 +41,20 @@ namespace Blockiverse.Survival
             if (count == 0)
                 return Empty;
 
-            return new ItemStack(ItemId, count);
+            return new ItemStack(ItemId, count, Durability);
+        }
+
+        public ItemStack WithDurability(int durability)
+        {
+            if (IsEmpty)
+                return Empty;
+
+            return new ItemStack(ItemId, Count, durability);
         }
 
         public bool Equals(ItemStack other)
         {
-            return ItemId == other.ItemId && Count == other.Count;
+            return ItemId == other.ItemId && Count == other.Count && Durability == other.Durability;
         }
 
         public override bool Equals(object obj)
@@ -49,13 +66,15 @@ namespace Blockiverse.Survival
         {
             unchecked
             {
-                return (ItemId.GetHashCode() * 397) ^ Count;
+                int hash = (ItemId.GetHashCode() * 397) ^ Count;
+                return (hash * 397) ^ Durability;
             }
         }
 
         public override string ToString()
         {
-            return IsEmpty ? "Empty" : $"{ItemId} x{Count}";
+            if (IsEmpty) return "Empty";
+            return Durability > 0 ? $"{ItemId} x{Count} [{Durability}dur]" : $"{ItemId} x{Count}";
         }
 
         public static bool operator ==(ItemStack left, ItemStack right)

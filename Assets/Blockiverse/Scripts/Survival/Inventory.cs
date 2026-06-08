@@ -4,8 +4,8 @@ namespace Blockiverse.Survival
 {
     public sealed class Inventory
     {
-        public const int DefaultSlotCount = 24;
-        public const int DefaultHotbarSlotCount = 6;
+        public const int DefaultSlotCount = 44;
+        public const int DefaultHotbarSlotCount = 10;
         public const int MaxSlotCount = 128;
 
         readonly ItemRegistry registry;

@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using Blockiverse.WorldGen;
 
 namespace Blockiverse.Gameplay
 {
@@ -10,6 +12,10 @@ namespace Blockiverse.Gameplay
         [SerializeField] float dayLengthSeconds = DefaultDayLengthSeconds;
         [SerializeField] float normalizedTime = DefaultStartNormalizedTime;
         [SerializeField] float timeScale = 1.0f;
+
+        float tickAccumulator;
+
+        public event Action<int> Ticked;
 
         public float DayLengthSeconds => dayLengthSeconds;
         public float NormalizedTime => normalizedTime;
@@ -33,6 +39,14 @@ namespace Blockiverse.Gameplay
         void Update()
         {
             Tick(Time.deltaTime);
+
+            tickAccumulator += Time.deltaTime * WorldConstants.TicksPerSecond;
+            int elapsed = (int)tickAccumulator;
+            if (elapsed > 0)
+            {
+                tickAccumulator -= elapsed;
+                Ticked?.Invoke(elapsed);
+            }
         }
 
         static float Normalize(float value)
