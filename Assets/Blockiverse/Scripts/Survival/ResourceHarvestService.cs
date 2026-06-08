@@ -55,7 +55,7 @@ namespace Blockiverse.Survival
                 rule.Drop,
                 usedTool,
                 rule.EffectiveTool,
-                rule.GetWorkRequired(usedTool, toolTier));
+                rule.GetMineTicks(usedTool, toolTier));
         }
 
         public static BlockHarvestResult Failure(
@@ -100,9 +100,24 @@ namespace Blockiverse.Survival
             world.SetBlock(position, BlockRegistry.Air);
 
             if (equippedSlotIndex >= 0 && equippedItem.Durability > 0)
-                ApplyDurabilityCost(inventory, equippedSlotIndex, equippedItem);
+                ApplyDurabilityCost(inventory, equippedSlotIndex, equippedItem, ComputeDurabilityCost(result, equippedItem));
 
             return result;
+        }
+
+        int ComputeDurabilityCost(BlockHarvestResult result, ItemStack equippedItem)
+        {
+            BlockCategory category = BlockCategory.Terrain;
+            int harvestTierMin = 0;
+            if (blockRegistry.TryGet(result.BlockId, out BlockDefinition def))
+            {
+                category = def.Category;
+                harvestTierMin = def.HarvestTierMin;
+            }
+
+            bool correctTool = result.UsedTool == result.EffectiveTool;
+            bool sufficientTier = GetToolTier(equippedItem) >= harvestTierMin;
+            return MiningFormula.DurabilityCost(category, harvestTierMin, correctTool, sufficientTier);
         }
 
         public BlockHarvestResult TryPreviewHarvest(VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem)
@@ -132,7 +147,7 @@ namespace Blockiverse.Survival
             if (rule.HarvestTierMin > 0 && (usedTool != rule.EffectiveTool || toolTier < rule.HarvestTierMin))
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.InsufficientTool, blockId, usedTool: usedTool, effectiveTool: rule.EffectiveTool);
 
-            int workRequired = rule.GetWorkRequired(usedTool, toolTier);
+            int workRequired = rule.GetMineTicks(usedTool, toolTier);
             if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.Drop.Count)
             {
                 return BlockHarvestResult.Failure(
@@ -154,9 +169,9 @@ namespace Blockiverse.Survival
             return 0;
         }
 
-        static void ApplyDurabilityCost(Inventory inventory, int slotIndex, ItemStack equippedItem)
+        static void ApplyDurabilityCost(Inventory inventory, int slotIndex, ItemStack equippedItem, int cost)
         {
-            int remaining = equippedItem.Durability - 1;
+            int remaining = equippedItem.Durability - Math.Max(1, cost);
             inventory.SetSlot(slotIndex, remaining > 0
                 ? equippedItem.WithDurability(remaining)
                 : ItemStack.Empty);

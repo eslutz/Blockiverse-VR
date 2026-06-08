@@ -18,15 +18,13 @@ namespace Blockiverse.Survival
 
     public sealed class BlockHarvestRule
     {
-        static readonly int[] BaseWorkByClass   = { 4, 8, 16, 32 };
-        static readonly float[] SpeedByClass    = { 2f, 2f, 2.5f, 4f };
-
         public BlockHarvestRule(
             BlockId blockId,
             ItemStack drop,
             HarvestToolKind effectiveTool,
             BlockHardnessClass hardnessClass,
-            int harvestTierMin)
+            int harvestTierMin,
+            float hardness)
         {
             if (drop.IsEmpty)
                 throw new ArgumentException("Harvest rules must produce a drop.", nameof(drop));
@@ -36,6 +34,7 @@ namespace Blockiverse.Survival
             EffectiveTool = effectiveTool;
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
+            Hardness = hardness;
         }
 
         public BlockId BlockId { get; }
@@ -43,21 +42,16 @@ namespace Blockiverse.Survival
         public HarvestToolKind EffectiveTool { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
+        public float Hardness { get; }
 
-        public int HandWork => BaseWorkByClass[(int)HardnessClass];
+        // Mining time in ticks with bare hands.
+        public int HandMineTicks => GetMineTicks(HarvestToolKind.Hand, toolTier: 0);
 
-        public int GetWorkRequired(HarvestToolKind toolKind) => GetWorkRequired(toolKind, toolTier: 1);
+        public int GetMineTicks(HarvestToolKind toolKind) => GetMineTicks(toolKind, toolTier: 1);
 
-        public int GetWorkRequired(HarvestToolKind toolKind, int toolTier)
-        {
-            int baseWork = BaseWorkByClass[(int)HardnessClass];
-            if (toolKind != EffectiveTool || toolTier < HarvestTierMin)
-                return baseWork;
-
-            float tierMult  = 1f + (toolTier - HarvestTierMin);
-            float classBonus = SpeedByClass[(int)HardnessClass];
-            return Math.Max(1, (int)(baseWork / (tierMult * classBonus)));
-        }
+        // Mining time in ticks for the given tool (voxel_survival_ruleset §6.1).
+        public int GetMineTicks(HarvestToolKind toolKind, int toolTier) =>
+            MiningFormula.MineTicks(Hardness, EffectiveTool, HarvestTierMin, toolKind, toolTier);
     }
 
     public sealed class BlockHarvestRuleSet
@@ -203,7 +197,8 @@ namespace Blockiverse.Survival
             Register(new BlockHarvestRule(
                 blockId, drop, effectiveTool,
                 def?.HardnessClass  ?? BlockHardnessClass.Soft,
-                def?.HarvestTierMin ?? 0));
+                def?.HarvestTierMin ?? 0,
+                def != null ? def.Hardness : 1.0f));
         }
     }
 }

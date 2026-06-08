@@ -42,7 +42,7 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void MatchingToolsReduceHarvestWorkComparedWithHand()
+        public void MatchingToolsReduceMiningTimeComparedWithHand()
         {
             BlockHarvestRuleSet rules = BlockHarvestRuleSet.CreateDefault(ItemRegistry.CreateDefault());
 
@@ -50,11 +50,17 @@ namespace Blockiverse.Tests.Survival.EditMode
             BlockHarvestRule rosycopper = rules.Get(BlockRegistry.RosycopperBloom);
             BlockHarvestRule buildTable = rules.Get(BlockRegistry.BuildTable);
 
-            Assert.That(log.GetWorkRequired(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(log.HandWork));
-            Assert.That(log.GetWorkRequired(HarvestToolKind.Delver, toolTier: 1), Is.EqualTo(log.HandWork));
-            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver, toolTier: 2), Is.LessThan(rosycopper.HandWork));
-            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver, toolTier: 1), Is.EqualTo(rosycopper.HandWork));
-            Assert.That(buildTable.GetWorkRequired(HarvestToolKind.Mallet, toolTier: 1), Is.LessThan(buildTable.HandWork));
+            // Canonical mining formula (§6.1): correct tool mines faster than bare hands,
+            // wrong tool class mines slower than the correct tool, and meeting the tier
+            // requirement mines faster than being below tier.
+            Assert.That(log.HandMineTicks, Is.GreaterThan(0));
+            Assert.That(log.GetMineTicks(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(log.HandMineTicks));
+            Assert.That(log.GetMineTicks(HarvestToolKind.Delver, toolTier: 1),
+                Is.GreaterThan(log.GetMineTicks(HarvestToolKind.Feller, toolTier: 1)));
+            Assert.That(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 2),
+                Is.LessThan(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 1)));
+            Assert.That(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 2), Is.LessThan(rosycopper.HandMineTicks));
+            Assert.That(buildTable.GetMineTicks(HarvestToolKind.Mallet, toolTier: 1), Is.LessThan(buildTable.HandMineTicks));
         }
 
         [Test]
@@ -145,6 +151,35 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(coal.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(copper.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(coal.MinY, Is.GreaterThanOrEqualTo(iron.MinY));
+        }
+
+        [Test]
+        public void DurabilityCostFollowsBlockCategoryAndToolMatch()
+        {
+            // Plants, soil, wood, stone, crafted → 1 (§6.3).
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Organic, 0, correctTool: true, sufficientTier: true), Is.EqualTo(1));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Terrain, 1, correctTool: true, sufficientTier: true), Is.EqualTo(1));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Crafted, 1, correctTool: true, sufficientTier: true), Is.EqualTo(1));
+            // Common ore (resource, tier < 5) → 2; deep ore (tier ≥ 5) → 3.
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Resource, 2, correctTool: true, sufficientTier: true), Is.EqualTo(2));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Resource, 5, correctTool: true, sufficientTier: true), Is.EqualTo(3));
+            // Wrong tool adds +1; insufficient tier adds +2.
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Terrain, 1, correctTool: false, sufficientTier: true), Is.EqualTo(2));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Terrain, 1, correctTool: true, sufficientTier: false), Is.EqualTo(3));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Resource, 5, correctTool: false, sufficientTier: false), Is.EqualTo(6));
+        }
+
+        [Test]
+        public void ToolSpeedScalesWithMaterialTierAndClass()
+        {
+            // Higher material tier mines faster (§7.1).
+            Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Delver, 2),
+                Is.GreaterThan(MiningFormula.ToolSpeed(HarvestToolKind.Delver, 1)));
+            // Sickle has a higher class multiplier than Mallet at the same tier (§7.2).
+            Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Sickle, 2),
+                Is.GreaterThan(MiningFormula.ToolSpeed(HarvestToolKind.Mallet, 2)));
+            // Bare hand is the slow baseline.
+            Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Hand, 0), Is.EqualTo(MiningFormula.HandSpeed));
         }
 
         static readonly BlockPosition HarvestPosition = new(1, 1, 1);

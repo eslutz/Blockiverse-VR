@@ -75,7 +75,8 @@ namespace Blockiverse.Voxel
             bool isRenderable,
             int emissiveLight = 0,
             BlockHardnessClass hardnessClass = BlockHardnessClass.Soft,
-            int harvestTierMin = 0)
+            int harvestTierMin = 0,
+            float hardness = -1f)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -98,6 +99,21 @@ namespace Blockiverse.Voxel
             EmissiveLight = emissiveLight;
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
+            // Canonical mining hardness (voxel_survival_ruleset §2/§3). When not specified
+            // explicitly, derive a representative value from the hardness class.
+            Hardness = hardness >= 0f ? hardness : HardnessFromClass(hardnessClass);
+        }
+
+        static float HardnessFromClass(BlockHardnessClass hardnessClass)
+        {
+            return hardnessClass switch
+            {
+                BlockHardnessClass.Soft     => 0.5f,
+                BlockHardnessClass.Medium   => 2.0f,
+                BlockHardnessClass.Hard     => 3.5f,
+                BlockHardnessClass.VeryHard => 6.0f,
+                _                           => 1.0f,
+            };
         }
 
         public BlockId Id { get; }
@@ -109,6 +125,7 @@ namespace Blockiverse.Voxel
         public int EmissiveLight { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
+        public float Hardness { get; }
     }
 
     public sealed class BlockRegistry
