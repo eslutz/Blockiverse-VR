@@ -54,7 +54,10 @@ namespace Blockiverse.Survival
             // ── Block items (crafted) ─────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.WorkPlank, "Work Plank", ItemKind.Resource, BlockStackSize, BlockRegistry.WorkPlank));
             registry.Register(new ItemDefinition(ItemId.CutstoneBlock, "Cutstone Block", ItemKind.Resource, BlockStackSize, BlockRegistry.CutstoneBlock));
-            registry.Register(new ItemDefinition(ItemId.FiredBrick, "Fired Brick", ItemKind.Resource, BlockStackSize, BlockRegistry.FiredBrick));
+            // Fired Brick is a kiln-smelted intermediate item (not placeable); the placeable
+            // building block is Fired Brick Block, crafted from fired bricks at the Build Table (§9.2/§9.3).
+            registry.Register(new ItemDefinition(ItemId.FiredBrick, "Fired Brick", ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.FiredBrickBlock, "Fired Brick Block", ItemKind.Resource, BlockStackSize, BlockRegistry.FiredBrickBlock));
             registry.Register(new ItemDefinition(ItemId.ClearpaneGlass, "Clearpane Glass", ItemKind.Resource, BlockStackSize, BlockRegistry.ClearpaneGlass));
 
             // ── Block items (placeable stations/lights) ───────────────────────

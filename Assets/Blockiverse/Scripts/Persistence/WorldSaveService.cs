@@ -93,8 +93,15 @@ namespace Blockiverse.Persistence
             foreach (SavedBlockDelta delta in Data.ChangedBlocks ?? Array.Empty<SavedBlockDelta>())
             {
                 BlockId blockId;
-                if (!string.IsNullOrEmpty(delta.CanonicalId) &&
-                    blockRegistry.TryGetByCanonicalId(delta.CanonicalId, out BlockDefinition def))
+                string canonicalId = delta.CanonicalId;
+                if (!string.IsNullOrEmpty(canonicalId) &&
+                    WorldSaveService.LegacyBlockCanonicalIdAliases.TryGetValue(canonicalId, out string aliasedBlockId))
+                {
+                    canonicalId = aliasedBlockId;
+                }
+
+                if (!string.IsNullOrEmpty(canonicalId) &&
+                    blockRegistry.TryGetByCanonicalId(canonicalId, out BlockDefinition def))
                 {
                     blockId = def.Id;
                 }
@@ -705,6 +712,14 @@ namespace Blockiverse.Persistence
         internal static readonly Dictionary<string, string> LegacyItemCanonicalIdAliases = new()
         {
             { "lumen_quartz", "lumen_crystal" },
+        };
+
+        // Saves written before the fired_brick item/block split stored the placed building block
+        // under the canonical id "fired_brick"; that id is now the kiln-smelted intermediate item
+        // and the placed block is "fired_brick_block". Remap legacy placed blocks on load (§9.2/§9.3).
+        internal static readonly Dictionary<string, string> LegacyBlockCanonicalIdAliases = new()
+        {
+            { "fired_brick", "fired_brick_block" },
         };
 
         static readonly Dictionary<int, string> LegacyItemIdToCanonical = new()

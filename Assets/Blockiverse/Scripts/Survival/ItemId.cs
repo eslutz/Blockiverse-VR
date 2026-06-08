@@ -43,6 +43,7 @@ namespace Blockiverse.Survival
         public static readonly ItemId WorkPlank            = new("work_plank");
         public static readonly ItemId CutstoneBlock        = new("cutstone_block");
         public static readonly ItemId FiredBrick           = new("fired_brick");
+        public static readonly ItemId FiredBrickBlock      = new("fired_brick_block");
         public static readonly ItemId ClearpaneGlass       = new("clearpane_glass");
         public static readonly ItemId BuildTable           = new("build_table");
         public static readonly ItemId Glowwick             = new("glowwick");

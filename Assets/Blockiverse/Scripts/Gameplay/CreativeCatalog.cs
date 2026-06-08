@@ -124,7 +124,7 @@ namespace Blockiverse.Gameplay
 
                 // Crafted
                 new(BlockRegistry.CutstoneBlock,    CreativeCatalogCategory.Crafted),
-                new(BlockRegistry.FiredBrick,       CreativeCatalogCategory.Crafted),
+                new(BlockRegistry.FiredBrickBlock,  CreativeCatalogCategory.Crafted),
                 new(BlockRegistry.ClearpaneGlass,   CreativeCatalogCategory.Crafted),
 
                 // Lighting

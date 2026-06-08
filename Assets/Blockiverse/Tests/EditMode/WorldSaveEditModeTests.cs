@@ -190,6 +190,39 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void LegacyFiredBrickBlocksMigrateToFiredBrickBlockOnLoad()
+        {
+            // Saves predating the fired_brick item/block split stored the placed building block
+            // under the canonical id "fired_brick"; on load it must resolve to fired_brick_block.
+            var data = new WorldSaveData
+            {
+                SchemaVersion = WorldSaveService.CurrentSchemaVersion,
+                WorldName = "legacy-brick",
+                Width = 4,
+                Height = 4,
+                Depth = 4,
+                ChunkSize = 16,
+                Seed = 1,
+                ChangedBlocks = new[]
+                {
+                    new SavedBlockDelta { X = 2, Y = 1, Z = 2, CanonicalId = "fired_brick" }
+                },
+                PlayerInventory = new SavedPlayerInventory
+                {
+                    SlotCount = Inventory.DefaultSlotCount,
+                    HotbarSlotCount = Inventory.DefaultHotbarSlotCount,
+                    SelectedHotbarSlotIndex = 0,
+                    Slots = new SavedInventorySlot[0]
+                }
+            };
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 1);
+
+            WorldLoadResult.Loaded(data).ApplyTo(world);
+
+            Assert.That(world.GetBlock(new BlockPosition(2, 1, 2)), Is.EqualTo(BlockRegistry.FiredBrickBlock));
+        }
+
+        [Test]
         public void SaveThenLoadReproducesPlayerInventory()
         {
             string path = CreateTempSavePath();

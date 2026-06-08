@@ -109,7 +109,7 @@ namespace Blockiverse.Survival
             // ── Additional canonical crafted blocks ──────────────────────────
             rules.RegisterForBlock(BlockRegistry.WorkPlank,          HarvestToolKind.Feller);
             rules.RegisterForBlock(BlockRegistry.CutstoneBlock,      HarvestToolKind.Mallet);
-            rules.RegisterForBlock(BlockRegistry.FiredBrick,         HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.FiredBrickBlock,    HarvestToolKind.Mallet);
             rules.RegisterForBlock(BlockRegistry.ClearpaneGlass,     HarvestToolKind.Mallet);
 
             // ── Crafting stations ────────────────────────────────────────────

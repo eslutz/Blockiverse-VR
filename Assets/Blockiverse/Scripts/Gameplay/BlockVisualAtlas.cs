@@ -9,7 +9,7 @@ namespace Blockiverse.Gameplay
     public static class BlockVisualAtlas
     {
         public const int Columns = 8;
-        public const int Rows = 8;
+        public const int Rows = 9;
         public const int TilePixels = 16;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
@@ -50,7 +50,7 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Reedgrass.Value,          28 },
             { BlockRegistry.WorkPlank.Value,          29 },
             { BlockRegistry.CutstoneBlock.Value,      30 },
-            { BlockRegistry.FiredBrick.Value,         31 },
+            { BlockRegistry.FiredBrickBlock.Value,    31 },
             { BlockRegistry.ClearpaneGlass.Value,     32 },
             { BlockRegistry.SurfacePebbles.Value,     33 },
             { BlockRegistry.FlintyShingle.Value,      34 },
