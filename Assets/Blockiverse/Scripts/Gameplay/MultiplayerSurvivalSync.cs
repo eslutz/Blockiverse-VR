@@ -246,7 +246,8 @@ namespace Blockiverse.Gameplay
         public SurvivalCommandResult TrySubmitHarvest(
             BlockPosition position,
             ItemStack equippedItem,
-            out bool requestSentToHost)
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
         {
             requestSentToHost = false;
 
@@ -261,13 +262,13 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendHarvestRequest(requestId, position, equippedItem);
+                SendHarvestRequest(requestId, position, equippedItem, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.HarvestResource, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostHarvest(ResolveLocalClientId(), requestId: 0, position, equippedItem, sendResponse: false);
+            LastCommandResult = ProcessHostHarvest(ResolveLocalClientId(), requestId: 0, position, equippedItem, sendResponse: false, equippedSlotIndex);
             return LastCommandResult;
         }
 
@@ -339,7 +340,8 @@ namespace Blockiverse.Gameplay
             uint requestId,
             BlockPosition position,
             ItemStack equippedItem,
-            bool sendResponse)
+            bool sendResponse,
+            int equippedSlotIndex = -1)
         {
             ReceivedHarvestRequestCount++;
 
@@ -382,6 +384,15 @@ namespace Blockiverse.Gameplay
             }
 
             inventory.TryAddAll(harvest.Drop);
+
+            if (equippedSlotIndex >= 0 && !equippedItem.IsEmpty && equippedItem.Durability > 0)
+            {
+                int remaining = equippedItem.Durability - 1;
+                inventory.SetSlot(equippedSlotIndex, remaining > 0
+                    ? equippedItem.WithDurability(remaining)
+                    : ItemStack.Empty);
+            }
+
             AcceptedHarvestCount++;
             SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
                 SurvivalCommandKind.HarvestResource,
@@ -570,7 +581,8 @@ namespace Blockiverse.Gameplay
             reader.ReadValueSafe(out uint requestId);
             BlockPosition position = ReadBlockPosition(ref reader);
             ItemStack equippedItem = ReadItemStack(ref reader);
-            ProcessHostHarvest(senderClientId, requestId, position, equippedItem, sendResponse: true);
+            reader.ReadValueSafe(out int equippedSlotIndex);
+            ProcessHostHarvest(senderClientId, requestId, position, equippedItem, sendResponse: true, equippedSlotIndex);
         }
 
         void HandleCraftRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -634,7 +646,7 @@ namespace Blockiverse.Gameplay
             ReceivedSharedCrateSnapshotCount++;
         }
 
-        void SendHarvestRequest(uint requestId, BlockPosition position, ItemStack equippedItem)
+        void SendHarvestRequest(uint requestId, BlockPosition position, ItemStack equippedItem, int equippedSlotIndex = -1)
         {
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
@@ -647,6 +659,7 @@ namespace Blockiverse.Gameplay
                 writer.WriteValueSafe(requestId);
                 WriteBlockPosition(ref writer, position);
                 WriteItemStack(ref writer, equippedItem);
+                writer.WriteValueSafe(equippedSlotIndex);
                 networkManager.CustomMessagingManager.SendNamedMessage(
                     HarvestRequestMessage,
                     NetworkManager.ServerClientId,
