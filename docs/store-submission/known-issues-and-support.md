@@ -19,7 +19,7 @@
   should match the canonical rulesets under `../rulesets/`.
 - Interaction, movement, inventory, and crafting sounds are generated original cues in
   `Assets/Blockiverse/Audio` (Git LFS). Regenerate the current cue set by running
-  `python3 scripts/audio/generate-m6-audio.py`.
+  `python3 scripts/audio/generate-audio.py`.
 - Quest headset acceptance for audio timing/output is still pending on the linked audio
   stories; do not mark the audio stories Done until device evidence is recorded.
 

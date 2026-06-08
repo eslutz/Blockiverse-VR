@@ -15,7 +15,7 @@ Use a readable, blocky, colorful voxel style with a distinct identity:
 
 ## Historical Authored Visual Pass
 
-The earlier M4 Art and Texture Assets milestone committed a small authored texture set for headset readability validation. Those assets remain useful as migration input and renderer validation coverage, but canonical names and target content now come from [../rulesets/](../rulesets/).
+The earlier Art and Texture Assets milestone committed a small authored texture set for headset readability validation. Those assets remain useful as migration input and renderer validation coverage, but canonical names and target content now come from [../rulesets/](../rulesets/).
 
 Missing or incorrectly wired block atlases should fail validation instead of silently falling back to runtime-generated visuals.
 
@@ -48,6 +48,7 @@ Committed authored texture assets now live under:
 - `Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png`
 - `Assets/Blockiverse/Art/Textures/Items/`
 - `Assets/Blockiverse/Art/Sprites/UI/`
+- `Assets/Blockiverse/Art/Sprites/VFX/`
 - `Assets/Blockiverse/Art/Sprites/Branding/`
 
 ## Branding Assets
@@ -77,7 +78,7 @@ The palette should stay bright, readable, and varied:
 Block textures:
 
 - Source tiles are 16x16 RGBA PNG files.
-- The runtime atlas is a committed 4x4, 64x64 RGBA PNG.
+- The runtime atlas is a committed 8x7, 128x112 RGBA PNG.
 - Tile order follows the runtime atlas mapping for the current canonical registry. Historical temporary atlas ordering may be retained only while migration tests still cover old saved worlds.
 - Use point filtering, clamp wrapping, and no mipmaps unless headset validation proves a different import profile is readable.
 - Keep silhouettes and color families distinct enough to read in Quest headset validation.
@@ -85,7 +86,8 @@ Block textures:
 Item and UI textures:
 
 - Item icons are transparent 64x64 PNG sprites.
-- UI sprites are transparent PNG sprites sized for their immediate use: hotbar frame, selected slot, health pip, inventory panel, crafting panel, and multiplayer status badge.
+- UI sprites are transparent PNG sprites sized for their immediate use: hotbar frame, selected slot, health pip, inventory panel, crafting panel, settings panel, feedback toast, and multiplayer status badge.
+- VFX sprites are transparent 32x32 PNG sprites for pooled particles and transient feedback.
 - Do not embed text in icon or UI sprites.
 
 Quest import policy:

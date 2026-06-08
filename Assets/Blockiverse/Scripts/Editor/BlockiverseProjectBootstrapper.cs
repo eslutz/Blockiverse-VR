@@ -135,6 +135,37 @@ namespace Blockiverse.Editor
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
         static readonly Color HighlightColor = new(1.0f, 0.85f, 0.18f, 1.0f);
         static readonly Color TestBlockColor = new(0.22f, 0.56f, 0.43f, 1.0f);
+        static readonly (BlockiverseAudioCue Cue, string AssetName)[] AudioCueAssets =
+        {
+            (BlockiverseAudioCue.BlockBreak, "block_break"),
+            (BlockiverseAudioCue.BlockPlace, "block_place"),
+            (BlockiverseAudioCue.UiSelect, "ui_select"),
+            (BlockiverseAudioCue.UiConfirm, "ui_confirm"),
+            (BlockiverseAudioCue.UiCancel, "ui_cancel"),
+            (BlockiverseAudioCue.InventoryOpen, "inventory_open"),
+            (BlockiverseAudioCue.InventoryClose, "inventory_close"),
+            (BlockiverseAudioCue.CraftSuccess, "craft_success"),
+            (BlockiverseAudioCue.CraftFail, "craft_fail"),
+            (BlockiverseAudioCue.ToolHitSoft, "tool_hit_soft"),
+            (BlockiverseAudioCue.ToolHitStone, "tool_hit_stone"),
+            (BlockiverseAudioCue.ToolWrong, "tool_wrong"),
+            (BlockiverseAudioCue.PickupItem, "pickup_item"),
+            (BlockiverseAudioCue.ContainerOpen, "container_open"),
+            (BlockiverseAudioCue.ContainerClose, "container_close"),
+            (BlockiverseAudioCue.TorchIgnite, "torch_ignite"),
+            (BlockiverseAudioCue.TorchLoop, "torch_loop"),
+            (BlockiverseAudioCue.CampfireLoop, "campfire_loop"),
+            (BlockiverseAudioCue.RainLightLoop, "rain_light_loop"),
+            (BlockiverseAudioCue.RainHeavyLoop, "rain_heavy_loop"),
+            (BlockiverseAudioCue.ThunderNear, "thunder_near"),
+            (BlockiverseAudioCue.ThunderFar, "thunder_far"),
+            (BlockiverseAudioCue.SnowWindLoop, "snow_wind_loop"),
+            (BlockiverseAudioCue.CaveAmbienceLoop, "cave_ambience_loop"),
+            (BlockiverseAudioCue.DayAmbienceLoop, "day_ambience_loop"),
+            (BlockiverseAudioCue.NightAmbienceLoop, "night_ambience_loop"),
+            (BlockiverseAudioCue.MultiplayerJoin, "multiplayer_join"),
+            (BlockiverseAudioCue.MultiplayerLeave, "multiplayer_leave"),
+        };
 
         [MenuItem("Blockiverse/Bootstrap Unity Quest Project")]
         public static void Run()
@@ -1413,6 +1444,7 @@ namespace Blockiverse.Editor
             XRRayInteractor interactionRay = FindInteractionRay(rig);
             BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
             bridge.Configure(inputRig, interactionRay, controller);
+            EnsureXrRigFeedback(rig, inputRig, controller);
             EditorUtility.SetDirty(bridge);
         }
 
@@ -1486,6 +1518,7 @@ namespace Blockiverse.Editor
             EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
+            EnsureXrRigFeedback(rig, inputRig);
             return rig;
         }
 
@@ -1553,6 +1586,7 @@ namespace Blockiverse.Editor
             EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
+            EnsureXrRigFeedback(rig, inputRig);
         }
 
         static void EnsureControllerAnchor(
@@ -2035,6 +2069,95 @@ namespace Blockiverse.Editor
             BlockiverseCreativeInputBridge bridge = EnsureComponent<BlockiverseCreativeInputBridge>(rig);
             bridge.Configure(inputRig, interactionRay, null);
             EditorUtility.SetDirty(bridge);
+        }
+
+        static void EnsureXrRigFeedback(
+            GameObject rig,
+            BlockiverseInputRig inputRig,
+            CreativeInteractionController controller = null)
+        {
+            BlockiverseFeedbackSettings feedbackSettings = EnsureComponent<BlockiverseFeedbackSettings>(rig);
+
+            BlockiverseAudioCuePlayer audioCuePlayer = EnsureComponent<BlockiverseAudioCuePlayer>(rig);
+            ConfigureGeneratedAudioClips(audioCuePlayer);
+            audioCuePlayer.Configure(controller);
+            audioCuePlayer.ConfigureFeedbackSettings(feedbackSettings);
+
+            BlockiverseVfxPool vfxPool = EnsureComponent<BlockiverseVfxPool>(rig);
+            BlockiverseVfxCuePlayer vfxCuePlayer = EnsureComponent<BlockiverseVfxCuePlayer>(rig);
+            vfxCuePlayer.Configure(controller, vfxPool, feedbackSettings);
+
+            BlockiverseInteractionHaptics interactionHaptics = EnsureComponent<BlockiverseInteractionHaptics>(rig);
+            interactionHaptics.Configure(controller, FindControllerHaptics(rig, BlockiverseControllerRole.Right));
+            interactionHaptics.ConfigureFeedbackSettings(feedbackSettings);
+
+            inputRig?.ConfigureTeleportFeedback(audioCuePlayer);
+            ConfigurePanelFeedbackReferences(rig, audioCuePlayer, interactionHaptics);
+
+            EditorUtility.SetDirty(feedbackSettings);
+            EditorUtility.SetDirty(audioCuePlayer);
+            EditorUtility.SetDirty(vfxPool);
+            EditorUtility.SetDirty(vfxCuePlayer);
+            EditorUtility.SetDirty(interactionHaptics);
+
+            if (inputRig != null)
+                EditorUtility.SetDirty(inputRig);
+        }
+
+        static void ConfigureGeneratedAudioClips(BlockiverseAudioCuePlayer audioCuePlayer)
+        {
+            foreach ((BlockiverseAudioCue cue, string assetName) in AudioCueAssets)
+                audioCuePlayer.ConfigureClip(cue, LoadAudioClip(assetName));
+
+            audioCuePlayer.ConfigureFootstepClips(
+                LoadAudioClip("footstep_01"),
+                LoadAudioClip("footstep_02"));
+        }
+
+        static AudioClip LoadAudioClip(string assetName)
+        {
+            return AssetDatabase.LoadAssetAtPath<AudioClip>($"Assets/Blockiverse/Audio/{assetName}.wav");
+        }
+
+        static BlockiverseControllerHaptics FindControllerHaptics(GameObject rig, BlockiverseControllerRole role)
+        {
+            foreach (BlockiverseControllerHaptics haptics in rig.GetComponentsInChildren<BlockiverseControllerHaptics>(true))
+            {
+                if (haptics.Role == role)
+                    return haptics;
+            }
+
+            return rig.GetComponentInChildren<BlockiverseControllerHaptics>(true);
+        }
+
+        static void ConfigurePanelFeedbackReferences(
+            GameObject rig,
+            BlockiverseAudioCuePlayer audioCuePlayer,
+            BlockiverseInteractionHaptics interactionHaptics)
+        {
+            foreach (CreativeHotbar hotbar in rig.GetComponentsInChildren<CreativeHotbar>(true))
+            {
+                hotbar.ConfigureFeedback(audioCuePlayer);
+                EditorUtility.SetDirty(hotbar);
+            }
+
+            foreach (BlockiverseComfortMenu menu in rig.GetComponentsInChildren<BlockiverseComfortMenu>(true))
+            {
+                menu.ConfigureFeedback(audioCuePlayer, interactionHaptics);
+                EditorUtility.SetDirty(menu);
+            }
+
+            foreach (BlockiverseWorldSpacePanelPresenter presenter in rig.GetComponentsInChildren<BlockiverseWorldSpacePanelPresenter>(true))
+            {
+                presenter.ConfigureFeedback(
+                    audioCuePlayer,
+                    interactionHaptics,
+                    presenter.ShowFeedbackCue,
+                    presenter.HideFeedbackCue,
+                    presenter.PlaysShowFeedback,
+                    presenter.PlaysHideFeedback);
+                EditorUtility.SetDirty(presenter);
+            }
         }
 
         static void EnsureBlockMenuPlaceholder(GameObject rig, BlockiverseInputRig inputRig)

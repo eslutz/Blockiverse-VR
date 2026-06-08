@@ -14,10 +14,14 @@ namespace Blockiverse.VR
     {
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] BlockiverseControllerHaptics dominantHandHaptics;
+        [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
 
         bool subscribed;
 
         public event Action UiTickRequested;
+        public CreativeInteractionController InteractionController => interactionController;
+        public BlockiverseControllerHaptics DominantHandHaptics => dominantHandHaptics;
+        public BlockiverseFeedbackSettings FeedbackSettings => feedbackSettings;
 
         public void Configure(CreativeInteractionController controller, BlockiverseControllerHaptics haptics)
         {
@@ -27,10 +31,15 @@ namespace Blockiverse.VR
             Subscribe();
         }
 
+        public void ConfigureFeedbackSettings(BlockiverseFeedbackSettings settings)
+        {
+            feedbackSettings = settings;
+        }
+
         public void PlayUiTick()
         {
             UiTickRequested?.Invoke();
-            dominantHandHaptics?.SendPattern(BlockiverseHapticPattern.UiTick);
+            SendPattern(BlockiverseHapticPattern.UiTick);
         }
 
         void OnEnable()
@@ -48,6 +57,9 @@ namespace Blockiverse.VR
         {
             if (dominantHandHaptics == null)
                 dominantHandHaptics = GetComponentInChildren<BlockiverseControllerHaptics>(true);
+
+            if (feedbackSettings == null)
+                feedbackSettings = GetComponent<BlockiverseFeedbackSettings>();
 
             if (interactionController == null && Application.isPlaying)
                 interactionController = FindFirstObjectByType<CreativeInteractionController>();
@@ -76,10 +88,21 @@ namespace Blockiverse.VR
             if (dominantHandHaptics == null)
                 return;
 
-            dominantHandHaptics.SendPattern(
+            SendPattern(
                 change.NewBlock == BlockRegistry.Air
                     ? BlockiverseHapticPattern.BlockBreak
                     : BlockiverseHapticPattern.BlockPlace);
+        }
+
+        void SendPattern(BlockiverseHapticPattern pattern)
+        {
+            if (dominantHandHaptics == null)
+                return;
+
+            dominantHandHaptics.SendPattern(
+                feedbackSettings != null
+                    ? pattern.Scale(feedbackSettings.ResolveHapticIntensity())
+                    : pattern);
         }
     }
 }
