@@ -1152,13 +1152,17 @@ namespace Blockiverse.Gameplay
         {
             writer.WriteValueSafe(stack.ItemId.Value);
             writer.WriteValueSafe(stack.Count);
+            writer.WriteValueSafe(stack.Durability);
         }
 
         static ItemStack ReadItemStack(ref FastBufferReader reader)
         {
             reader.ReadValueSafe(out string itemId);
             reader.ReadValueSafe(out int count);
-            return count > 0 ? new ItemStack(new ItemId(itemId), count) : ItemStack.Empty;
+            reader.ReadValueSafe(out int durability);
+            if (count <= 0) return ItemStack.Empty;
+            ItemStack stack = new ItemStack(new ItemId(itemId), count);
+            return durability > 0 ? stack.WithDurability(durability) : stack;
         }
 
         static void WriteBlockPosition(ref FastBufferWriter writer, BlockPosition position)
