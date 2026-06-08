@@ -112,10 +112,45 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 2, maxDurability: 54));
             registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 2, maxDurability: 72));
 
+            // ── Tier-3..7 metal tools (§7.1/§7.2): durability = material base × class multiplier ─
+            RegisterToolTier(registry, "rosycopper", "Rosycopper", tier: 3, baseDurability: 160);
+            RegisterToolTier(registry, "bronze",     "Bronze",     tier: 4, baseDurability: 300);
+            RegisterToolTier(registry, "ironroot",   "Ironroot",   tier: 5, baseDurability: 550);
+            RegisterToolTier(registry, "deepsteel",  "Deepsteel",  tier: 6, baseDurability: 1000);
+            RegisterToolTier(registry, "starforged", "Starforged", tier: 7, baseDurability: 1800);
+
             // ── Consumables ───────────────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
 
             return registry;
+        }
+
+        // Canonical tool classes with their durability multipliers (§7.2).
+        static readonly (HarvestToolKind kind, string idSuffix, string nameSuffix, float durabilityMultiplier)[] ToolClasses =
+        {
+            (HarvestToolKind.Delver, "delver", "Delver", 1.00f),
+            (HarvestToolKind.Spade,  "spade",  "Spade",  0.80f),
+            (HarvestToolKind.Feller, "feller", "Feller", 0.90f),
+            (HarvestToolKind.Sickle, "sickle", "Sickle", 0.70f),
+            (HarvestToolKind.Mallet, "mallet", "Mallet", 1.20f),
+            (HarvestToolKind.Carver, "carver", "Carver", 0.60f),
+            (HarvestToolKind.Tiller, "tiller", "Tiller", 0.80f),
+        };
+
+        // Registers all seven tool classes for one material tier.
+        static void RegisterToolTier(ItemRegistry registry, string materialId, string materialName, int tier, int baseDurability)
+        {
+            foreach ((HarvestToolKind kind, string idSuffix, string nameSuffix, float durabilityMultiplier) in ToolClasses)
+            {
+                registry.Register(new ItemDefinition(
+                    new ItemId($"{materialId}_{idSuffix}"),
+                    $"{materialName} {nameSuffix}",
+                    ItemKind.Tool,
+                    ToolStackSize,
+                    toolClass: kind,
+                    toolTier: tier,
+                    maxDurability: (int)Math.Round(baseDurability * durabilityMultiplier)));
+            }
         }
 
         // Maps an additional block (e.g. a grown crop stage) to an already-registered item's drop,

@@ -182,6 +182,42 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Hand, 0), Is.EqualTo(MiningFormula.HandSpeed));
         }
 
+        [Test]
+        public void TierThreeToolUnlocksTierThreeOreHarvest()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.RustcoreOre);
+            var service = CreateService(itemRegistry);
+
+            // Tier-2 Flint Delver cannot mine iron (Rustcore is Delver/3).
+            ItemStack flint = itemRegistry.CreateItemStack(ItemId.FlintDelver);
+            Assert.That(service.TryPreviewHarvest(world, inventory, HarvestPosition, flint).FailureReason,
+                Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+
+            // Tier-3 Rosycopper Delver (from the new tool ladder) can.
+            ItemStack rosycopper = itemRegistry.CreateItemStack(new ItemId("rosycopper_delver"));
+            Assert.That(service.TryPreviewHarvest(world, inventory, HarvestPosition, rosycopper).Succeeded, Is.True);
+        }
+
+        [Test]
+        public void MetalToolLadderRegistersAllTiersAndClasses()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+
+            // Durability = material base × class multiplier (§7.1/§7.2).
+            Assert.That(itemRegistry.Get(new ItemId("rosycopper_delver")).MaxDurability, Is.EqualTo(160));
+            Assert.That(itemRegistry.Get(new ItemId("rosycopper_sickle")).MaxDurability, Is.EqualTo(112)); // 160 × 0.70
+            Assert.That(itemRegistry.Get(new ItemId("starforged_mallet")).MaxDurability, Is.EqualTo(2160)); // 1800 × 1.20
+
+            // Tiers ascend Rosycopper(3) → Starforged(7).
+            Assert.That(itemRegistry.Get(new ItemId("rosycopper_delver")).ToolTier, Is.EqualTo(3));
+            Assert.That(itemRegistry.Get(new ItemId("bronze_delver")).ToolTier, Is.EqualTo(4));
+            Assert.That(itemRegistry.Get(new ItemId("ironroot_delver")).ToolTier, Is.EqualTo(5));
+            Assert.That(itemRegistry.Get(new ItemId("deepsteel_delver")).ToolTier, Is.EqualTo(6));
+            Assert.That(itemRegistry.Get(new ItemId("starforged_delver")).ToolTier, Is.EqualTo(7));
+        }
+
         static readonly BlockPosition HarvestPosition = new(1, 1, 1);
 
         static ResourceHarvestService CreateService(ItemRegistry itemRegistry)
