@@ -173,5 +173,64 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
             Assert.That(inventory.CountOf(ItemId.Berrybush), Is.EqualTo(1));
         }
+
+        [Test]
+        public void TillConvertsRootsoilToTendedSoil()
+        {
+            world.SetBlock(SoilPos, BlockRegistry.Rootsoil, trackChange: false);
+
+            FarmingResult result = farming.Till(world, SoilPos);
+
+            Assert.That(result, Is.EqualTo(FarmingResult.Success));
+            Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TendedSoil));
+        }
+
+        [Test]
+        public void TillConvertsRiverSiltToTendedSoil()
+        {
+            world.SetBlock(SoilPos, BlockRegistry.RiverSilt, trackChange: false);
+
+            FarmingResult result = farming.Till(world, SoilPos);
+
+            Assert.That(result, Is.EqualTo(FarmingResult.Success));
+            Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TendedSoil));
+        }
+
+        [Test]
+        public void ScanAndTrackCropsPreservesExistingTickAccumulators()
+        {
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks - 100);
+
+            // Re-scan mid-growth; accumulated ticks must survive.
+            farming.ScanAndTrackCrops(world);
+            farming.TickGrowth(world, 100);
+
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk_S1),
+                "ScanAndTrackCrops must not reset accumulated growth ticks for already-tracked crops.");
+        }
+
+        [Test]
+        public void TrackCropResetsAccumulatorWhenCropIsReplacedAtSamePosition()
+        {
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
+            // Simulate partial growth accumulation by ticking almost to threshold.
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks - 100);
+
+            // Player breaks and immediately replants at same position.
+            world.SetBlock(CropPos, BlockRegistry.Air, trackChange: false);
+            farming.TrackCrop(CropPos);
+            world.SetBlock(CropPos, BlockRegistry.GrainStalk, trackChange: false);
+
+            // The new crop should need a full interval, not just 100 more ticks.
+            farming.TickGrowth(world, 100);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk),
+                "TrackCrop must reset ticks to 0 so a re-planted crop starts fresh.");
+
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks - 100);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk_S1));
+        }
     }
 }

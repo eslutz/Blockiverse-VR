@@ -59,6 +59,7 @@ namespace Blockiverse.Gameplay
         VegetationService vegetationService;
         FarmingService farmingService;
         WorldTimeClock worldTimeClock;
+        string pendingWeatherState;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -67,11 +68,19 @@ namespace Blockiverse.Gameplay
         public VoxelWorldRenderer Renderer { get; private set; }
 
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
+        public WorldTimeClock WorldTimeClock => worldTimeClock;
 
         public void RestoreWeatherState(string weatherStateString)
         {
-            if (weatherService == null || string.IsNullOrEmpty(weatherStateString))
+            if (string.IsNullOrEmpty(weatherStateString))
                 return;
+
+            if (weatherService == null)
+            {
+                pendingWeatherState = weatherStateString;
+                return;
+            }
+
             if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed) && parsed != WeatherState.Clear)
             {
                 uint seed = Settings != null ? (uint)Settings.Seed : 1u;
@@ -201,6 +210,12 @@ namespace Blockiverse.Gameplay
             farmingService.ScanAndTrackCrops(World);
             World.BlockChanged += OnBlockChanged;
             worldTimeClock.Ticked += OnWorldTick;
+
+            if (!string.IsNullOrEmpty(pendingWeatherState))
+            {
+                RestoreWeatherState(pendingWeatherState);
+                pendingWeatherState = null;
+            }
         }
 
         void OnBlockChanged(BlockChange change)

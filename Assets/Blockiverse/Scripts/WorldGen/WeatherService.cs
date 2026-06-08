@@ -96,12 +96,11 @@ namespace Blockiverse.WorldGen
 
             ticksInCurrentState += deltaTicks;
 
-            int minDuration = MinDurationTicks[(int)currentState];
-            if (ticksInCurrentState < minDuration)
-                return;
-
-            ticksInCurrentState -= minDuration;
-            currentState = PickNextState(currentState);
+            while (ticksInCurrentState >= MinDurationTicks[(int)currentState])
+            {
+                ticksInCurrentState -= MinDurationTicks[(int)currentState];
+                currentState = PickNextState(currentState);
+            }
         }
 
         WeatherState PickNextState(WeatherState from)

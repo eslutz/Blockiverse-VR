@@ -120,23 +120,39 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LargeDeltaTicksCausesOnlyOneTransitionPerCall()
+        public void LargeDeltaTicksAdvancesMultipleTransitions()
         {
-            // Regardless of how large a single deltaTicks is, Tick() processes at most
-            // one state transition per call. Two calls of half the time should not differ.
+            // A single Tick() with a large delta must advance through multiple state
+            // transitions, not just one.
             var service = new WeatherService(seed: 77, WeatherState.Clear);
 
-            // One huge tick that far exceeds any state's minimum duration
+            // 999999 ticks far exceeds any single state's minimum duration (max 6000),
+            // so the service must advance through many states.
             service.Tick(999999);
-            WeatherState afterHuge = service.CurrentState;
 
-            // Reset and do the same total with two calls
+            // The result should match two separate services that together consumed
+            // the same total ticks — deterministic regardless of how many batches.
             var service2 = new WeatherService(seed: 77, WeatherState.Clear);
-            service2.Tick(999999);
-            WeatherState afterTwo = service2.CurrentState;
+            service2.Tick(500000);
+            service2.Tick(499999);
 
-            // Both should produce the same state (deterministic single-transition-per-call)
-            Assert.That(afterTwo, Is.EqualTo(afterHuge));
+            Assert.That(service.CurrentState, Is.EqualTo(service2.CurrentState));
+        }
+
+        [Test]
+        public void LargeDeltaTicksInOneCallMatchesSameTotalInManySmallCalls()
+        {
+            // Tick() with a large delta must be equivalent to many small Tick() calls
+            // totalling the same amount — confirming all intervals are consumed.
+            var single = new WeatherService(seed: 55, WeatherState.Clear);
+            var batched = new WeatherService(seed: 55, WeatherState.Clear);
+
+            single.Tick(30000);
+
+            for (int i = 0; i < 30; i++)
+                batched.Tick(1000);
+
+            Assert.That(single.CurrentState, Is.EqualTo(batched.CurrentState));
         }
 
         [Test]

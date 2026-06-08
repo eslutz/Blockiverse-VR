@@ -137,13 +137,15 @@ namespace Blockiverse.Gameplay
             for (int x = 0; x < clipboardWidth; x++)
             {
                 BlockId newBlock = clipboard[idx++];
-                if (newBlock == BlockRegistry.Air) continue;
-
                 var pos = new BlockPosition(origin.X + x, origin.Y + y, origin.Z + z);
                 BlockId previous = world.GetBlock(pos);
+                if (newBlock == previous) continue;
                 world.SetBlock(pos, newBlock);
                 changes.Add(new BlockChange(pos, previous, newBlock));
             }
+
+            if (changes.Count == 0)
+                return WorldEditResult.Success;
 
             PushUndo(changes);
             return WorldEditResult.Success;
@@ -179,6 +181,8 @@ namespace Blockiverse.Gameplay
             for (int i = 0; i < changes.Length; i++)
                 world.SetBlock(changes[i].Position, changes[i].NewBlock);
 
+            if (undoHistory.Count >= GameModeConstants.CreativeUndoHistoryLimit)
+                undoHistory.RemoveAt(0);
             undoHistory.Add(changes);
             return WorldEditResult.Success;
         }

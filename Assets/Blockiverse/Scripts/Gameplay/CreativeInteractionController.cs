@@ -231,9 +231,11 @@ namespace Blockiverse.Gameplay
                 return requestSentToHost;
 
             if (pushUndo)
+            {
                 if (undoStack.Count >= GameModeConstants.CreativeUndoHistoryLimit)
                     undoStack.RemoveAt(0);
                 undoStack.Add(command);
+            }
 
             RebuildChangedChunks();
 

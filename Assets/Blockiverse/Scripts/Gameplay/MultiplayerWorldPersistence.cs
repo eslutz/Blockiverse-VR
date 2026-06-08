@@ -155,7 +155,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState);
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L);
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,

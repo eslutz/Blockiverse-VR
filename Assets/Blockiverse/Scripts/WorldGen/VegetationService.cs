@@ -84,7 +84,18 @@ namespace Blockiverse.WorldGen
 
         public void ScanAndTrackSaplings(VoxelWorld world)
         {
-            saplingTicks.Clear();
+            // Prune entries for positions no longer holding sapling blocks.
+            var toRemove = new List<BlockPosition>();
+            foreach (BlockPosition pos in saplingTicks.Keys)
+            {
+                BlockId b = world.GetBlock(pos);
+                if (b != BlockRegistry.Sapling && b != BlockRegistry.Sapling_S1 && b != BlockRegistry.Sapling_S2)
+                    toRemove.Add(pos);
+            }
+            foreach (BlockPosition pos in toRemove)
+                saplingTicks.Remove(pos);
+
+            // Add newly found saplings without resetting ticks for already-tracked ones.
             WorldBounds bounds = world.Bounds;
             for (int y = 0; y < bounds.Height; y++)
             for (int z = 0; z < bounds.Depth; z++)
@@ -92,14 +103,16 @@ namespace Blockiverse.WorldGen
             {
                 var pos = new BlockPosition(x, y, z);
                 BlockId block = world.GetBlock(pos);
-                if (block == BlockRegistry.Sapling || block == BlockRegistry.Sapling_S1 || block == BlockRegistry.Sapling_S2)
+                if ((block == BlockRegistry.Sapling || block == BlockRegistry.Sapling_S1 || block == BlockRegistry.Sapling_S2)
+                    && !saplingTicks.ContainsKey(pos))
                     saplingTicks[pos] = 0;
             }
         }
 
         public void TrackSapling(BlockPosition position)
         {
-            saplingTicks[position] = 0;
+            if (!saplingTicks.ContainsKey(position))
+                saplingTicks[position] = 0;
         }
 
         public void TickSapling(VoxelWorld world, int ticks)
@@ -107,7 +120,7 @@ namespace Blockiverse.WorldGen
             if (ticks <= 0) return;
 
             var toRemove  = new List<BlockPosition>();
-            var toAdvance = new List<BlockPosition>();
+            var toAdvance = new List<(BlockPosition pos, int accumulated)>();
             var toUpdate  = new List<(BlockPosition pos, int value)>();
 
             foreach (var kv in saplingTicks)
@@ -121,28 +134,28 @@ namespace Blockiverse.WorldGen
 
                 int accumulated = kv.Value + ticks;
                 if (accumulated >= SaplingGrowthIntervalTicks)
-                    toAdvance.Add(kv.Key);
+                    toAdvance.Add((kv.Key, accumulated));
                 else
                     toUpdate.Add((kv.Key, accumulated));
             }
 
             foreach (var pos in toRemove)         saplingTicks.Remove(pos);
             foreach (var (pos, val) in toUpdate)  saplingTicks[pos] = val;
-            foreach (var pos in toAdvance)         AdvanceSapling(world, pos);
+            foreach (var (pos, accumulated) in toAdvance) AdvanceSapling(world, pos, accumulated - SaplingGrowthIntervalTicks);
         }
 
-        void AdvanceSapling(VoxelWorld world, BlockPosition pos)
+        void AdvanceSapling(VoxelWorld world, BlockPosition pos, int remainder)
         {
             BlockId current = world.GetBlock(pos);
             if (current == BlockRegistry.Sapling)
             {
                 world.SetBlock(pos, BlockRegistry.Sapling_S1);
-                saplingTicks[pos] = 0;
+                saplingTicks[pos] = remainder;
             }
             else if (current == BlockRegistry.Sapling_S1)
             {
                 world.SetBlock(pos, BlockRegistry.Sapling_S2);
-                saplingTicks[pos] = 0;
+                saplingTicks[pos] = remainder;
             }
             else if (current == BlockRegistry.Sapling_S2)
             {
@@ -162,21 +175,24 @@ namespace Blockiverse.WorldGen
             if (leafDecayAccumulator < LeafDecayIntervalTicks)
                 return;
 
-            leafDecayAccumulator -= LeafDecayIntervalTicks;
-
-            // O(W×H×D) scan per decay interval. Acceptable for current world sizes; use a
-            // dirty-block set if worlds grow significantly larger.
-            WorldBounds bounds = world.Bounds;
-            for (int y = 0; y < bounds.Height; y++)
-            for (int z = 0; z < bounds.Depth; z++)
-            for (int x = 0; x < bounds.Width; x++)
+            while (leafDecayAccumulator >= LeafDecayIntervalTicks)
             {
-                var pos = new BlockPosition(x, y, z);
-                if (world.GetBlock(pos) != BlockRegistry.Leafmoss)
-                    continue;
+                leafDecayAccumulator -= LeafDecayIntervalTicks;
 
-                if (!HasNearbyLog(world, pos, LeafDecayMaxDistance))
-                    world.SetBlock(pos, BlockRegistry.Air);
+                // O(W×H×D) scan per decay interval. Acceptable for current world sizes; use a
+                // dirty-block set if worlds grow significantly larger.
+                WorldBounds bounds = world.Bounds;
+                for (int y = 0; y < bounds.Height; y++)
+                for (int z = 0; z < bounds.Depth; z++)
+                for (int x = 0; x < bounds.Width; x++)
+                {
+                    var pos = new BlockPosition(x, y, z);
+                    if (world.GetBlock(pos) != BlockRegistry.Leafmoss)
+                        continue;
+
+                    if (!HasNearbyLog(world, pos, LeafDecayMaxDistance))
+                        world.SetBlock(pos, BlockRegistry.Air);
+                }
             }
         }
 

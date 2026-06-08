@@ -187,20 +187,66 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void PasteDoesNotOverwriteExistingBlocksWithAir()
+        public void PasteAppliesAirCellsFromClipboard()
         {
-            // Region (0,0,0)-(1,0,0): Graystone at x=0, Air at x=1
+            // Clipboard: Graystone at x=0, Air at x=1.
             world.SetBlock(new BlockPosition(0, 0, 0), BlockRegistry.Graystone);
-
             service.Copy(world, new BlockPosition(0, 0, 0), new BlockPosition(1, 0, 0));
 
-            // Destination: LooseLoam at x=5 (where the clipboard's air slot would land)
+            // Destination: LooseLoam at x=5 (where the clipboard's Air cell will land).
             world.SetBlock(new BlockPosition(5, 0, 0), BlockRegistry.LooseLoam);
-
             service.Paste(world, new BlockPosition(4, 0, 0));
 
             Assert.That(world.GetBlock(new BlockPosition(4, 0, 0)), Is.EqualTo(BlockRegistry.Graystone));
+            Assert.That(world.GetBlock(new BlockPosition(5, 0, 0)), Is.EqualTo(BlockRegistry.Air),
+                "Air cells in the clipboard must overwrite existing blocks to enable hollow-structure paste.");
+        }
+
+        [Test]
+        public void PasteAirCellsAreUndoable()
+        {
+            world.SetBlock(new BlockPosition(0, 0, 0), BlockRegistry.Graystone);
+            service.Copy(world, new BlockPosition(0, 0, 0), new BlockPosition(1, 0, 0));
+            world.SetBlock(new BlockPosition(5, 0, 0), BlockRegistry.LooseLoam);
+
+            service.Paste(world, new BlockPosition(4, 0, 0));
+            Assert.That(world.GetBlock(new BlockPosition(5, 0, 0)), Is.EqualTo(BlockRegistry.Air));
+
+            service.Undo(world);
             Assert.That(world.GetBlock(new BlockPosition(5, 0, 0)), Is.EqualTo(BlockRegistry.LooseLoam));
+        }
+
+        [Test]
+        public void PasteWithAllAirClipboardDoesNotConsumeUndoSlot()
+        {
+            // Clipboard of all Air — paste should be a no-op and not push an undo entry.
+            service.Copy(world, new BlockPosition(0, 0, 0), new BlockPosition(1, 0, 0));
+            int undoBefore = service.UndoCount;
+
+            service.Paste(world, new BlockPosition(4, 0, 0));
+
+            Assert.That(service.UndoCount, Is.EqualTo(undoBefore));
+        }
+
+        [Test]
+        public void RedoDoesNotGrowUndoHistoryBeyondLimit()
+        {
+            var pos = new BlockPosition(0, 0, 0);
+
+            // Fill the undo history to the cap.
+            for (int i = 0; i <= GameModeConstants.CreativeUndoHistoryLimit; i++)
+                service.Fill(world, pos, pos, i % 2 == 0 ? BlockRegistry.Graystone : BlockRegistry.Air);
+
+            Assert.That(service.UndoCount, Is.EqualTo(GameModeConstants.CreativeUndoHistoryLimit));
+
+            // Undo everything, then redo everything — undo history must not exceed the cap.
+            for (int i = 0; i < GameModeConstants.CreativeUndoHistoryLimit; i++)
+                service.Undo(world);
+
+            for (int i = 0; i < GameModeConstants.CreativeUndoHistoryLimit; i++)
+                service.Redo(world);
+
+            Assert.That(service.UndoCount, Is.EqualTo(GameModeConstants.CreativeUndoHistoryLimit));
         }
     }
 }

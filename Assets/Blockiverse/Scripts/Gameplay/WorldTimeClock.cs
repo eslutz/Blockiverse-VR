@@ -14,12 +14,22 @@ namespace Blockiverse.Gameplay
         [SerializeField] float timeScale = 1.0f;
 
         float tickAccumulator;
+        long totalElapsedTicks;
 
         public event Action<int> Ticked;
 
         public float DayLengthSeconds => dayLengthSeconds;
         public float NormalizedTime => normalizedTime;
         public float TimeScale => timeScale;
+        public long TotalElapsedTicks => totalElapsedTicks;
+
+        public void RestoreElapsedTicks(long ticks)
+        {
+            totalElapsedTicks = ticks;
+            long ticksPerDay = (long)(dayLengthSeconds * WorldConstants.TicksPerSecond);
+            if (ticksPerDay > 0)
+                normalizedTime = (float)((ticks % ticksPerDay) / (double)ticksPerDay);
+        }
 
         public void Configure(float dayLengthSeconds, float startNormalizedTime, float timeScale)
         {
@@ -47,6 +57,7 @@ namespace Blockiverse.Gameplay
                 if (elapsed > 0)
                 {
                     tickAccumulator -= elapsed;
+                    totalElapsedTicks += elapsed;
                     Ticked?.Invoke(elapsed);
                 }
             }

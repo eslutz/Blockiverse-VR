@@ -54,6 +54,8 @@ namespace Blockiverse.Persistence
         public SavedBlockDelta[] ChangedBlocks;
         public SavedPlayerInventory PlayerInventory;
         public string WeatherState;
+        public long WorldTimeTicks;
+        public string GameMode;
     }
 
     public sealed class WorldLoadResult
@@ -212,12 +214,12 @@ namespace Blockiverse.Persistence
 
         // ── Save ─────────────────────────────────────────────────────────────
 
-        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null)
+        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0)
         {
-            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState);
+            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState, gameMode: gameMode, worldTimeTicks: worldTimeTicks);
         }
 
-        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null)
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -247,7 +249,7 @@ namespace Blockiverse.Persistence
                 Depth = world.Bounds.Depth,
                 ChunkSize = world.ChunkSize,
                 WorldPreset = "survival_terrain",
-                GameMode = "creative",
+                GameMode = gameMode,
                 CreatedAtUtc = createdAt,
                 ModifiedAtUtc = now,
                 BlockRegistryHash = blockHash,
@@ -265,7 +267,7 @@ namespace Blockiverse.Persistence
 
             var environment = new VxlwEnvironment
             {
-                WorldTimeTicks = 0,
+                WorldTimeTicks = worldTimeTicks,
                 WeatherState = !string.IsNullOrEmpty(weatherState) ? weatherState : "CLEAR"
             };
 
@@ -280,7 +282,7 @@ namespace Blockiverse.Persistence
             var playerSave = new VxlwPlayerSave
             {
                 PlayerId = "local_player",
-                GameMode = "creative",
+                GameMode = gameMode,
                 SlotCount = inventory.SlotCount,
                 HotbarSlotCount = inventory.HotbarSlotCount,
                 SelectedHotbarSlotIndex = selectedHotbarSlotIndex,
@@ -371,7 +373,7 @@ namespace Blockiverse.Persistence
             SavedPlayerInventory playerInventory = LoadPlayerInventory(path) ?? CreateEmptyInventoryData();
             EnsurePlayerInventoryDefaults(ref playerInventory);
 
-            string savedWeatherState = LoadEnvironmentWeatherState(path);
+            (string savedWeatherState, long savedWorldTimeTicks) = LoadEnvironmentState(path);
 
             var data = new WorldSaveData
             {
@@ -384,7 +386,9 @@ namespace Blockiverse.Persistence
                 Seed = manifest.Seed,
                 ChangedBlocks = changedBlocks.ToArray(),
                 PlayerInventory = playerInventory,
-                WeatherState = savedWeatherState
+                WeatherState = savedWeatherState,
+                WorldTimeTicks = savedWorldTimeTicks,
+                GameMode = !string.IsNullOrEmpty(manifest.GameMode) ? manifest.GameMode : "survival"
             };
 
             if (!IsValidInventory(data.PlayerInventory, out string inventoryError))
@@ -599,18 +603,18 @@ namespace Blockiverse.Persistence
             };
         }
 
-        static string LoadEnvironmentWeatherState(string savePath)
+        static (string weatherState, long worldTimeTicks) LoadEnvironmentState(string savePath)
         {
             string envPath = Path.Combine(savePath, "dimensions", "main", "environment.json");
             if (!File.Exists(envPath))
-                return null;
+                return (null, 0L);
 
             string json = File.ReadAllText(envPath);
             if (string.IsNullOrWhiteSpace(json))
-                return null;
+                return (null, 0L);
 
             VxlwEnvironment env = JsonUtility.FromJson<VxlwEnvironment>(json);
-            return env?.WeatherState;
+            return (env?.WeatherState, env?.WorldTimeTicks ?? 0L);
         }
 
         // ── Legacy flat JSON format (schema v1-v3) ────────────────────────────

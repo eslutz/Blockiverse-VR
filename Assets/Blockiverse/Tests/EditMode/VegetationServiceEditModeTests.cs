@@ -140,6 +140,37 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(world.GetBlock(leafPos), Is.EqualTo(BlockRegistry.Leafmoss));
         }
 
+        [Test]
+        public void ScanAndTrackSaplingsPreservesExistingTickAccumulators()
+        {
+            world.SetBlock(BasePos, BlockRegistry.Sapling);
+            vegetation.TrackSapling(BasePos);
+            vegetation.TickSapling(world, 1100);
+
+            // Re-scan mid-growth; accumulated ticks must survive.
+            vegetation.ScanAndTrackSaplings(world);
+            vegetation.TickSapling(world, 100);
+
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Sapling_S1),
+                "ScanAndTrackSaplings must not reset accumulated growth ticks for already-tracked saplings.");
+        }
+
+        [Test]
+        public void TickSaplingPreservesRemainderAfterGrowthThreshold()
+        {
+            world.SetBlock(BasePos, BlockRegistry.Sapling);
+            vegetation.TrackSapling(BasePos);
+
+            // 1700 = 1200 + 500 remainder
+            vegetation.TickSapling(world, 1700);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Sapling_S1));
+
+            // Only 700 more needed (1200 - 500 remainder) to reach S2
+            vegetation.TickSapling(world, 700);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Sapling_S2),
+                "TickSapling must carry over remainder ticks so the next stage uses the correct threshold.");
+        }
+
         int CountBlocks(BlockId blockId)
         {
             int count = 0;

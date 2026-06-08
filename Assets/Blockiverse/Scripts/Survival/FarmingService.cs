@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Blockiverse.Voxel;
 
@@ -32,14 +33,22 @@ namespace Blockiverse.Survival
 
         public void ScanAndTrackCrops(VoxelWorld world)
         {
-            tickAccumulator.Clear();
+            // Prune entries for positions no longer holding crop blocks.
+            var toRemove = new List<BlockPosition>();
+            foreach (BlockPosition pos in tickAccumulator.Keys)
+                if (!CropBlocks.Contains(world.GetBlock(pos)))
+                    toRemove.Add(pos);
+            foreach (BlockPosition pos in toRemove)
+                tickAccumulator.Remove(pos);
+
+            // Add newly found crops without resetting ticks for already-tracked ones.
             WorldBounds bounds = world.Bounds;
             for (int y = 0; y < bounds.Height; y++)
             for (int z = 0; z < bounds.Depth; z++)
             for (int x = 0; x < bounds.Width; x++)
             {
                 var pos = new BlockPosition(x, y, z);
-                if (CropBlocks.Contains(world.GetBlock(pos)))
+                if (CropBlocks.Contains(world.GetBlock(pos)) && !tickAccumulator.ContainsKey(pos))
                     tickAccumulator[pos] = 0;
             }
         }
@@ -48,8 +57,7 @@ namespace Blockiverse.Survival
 
         public void TrackCrop(BlockPosition position)
         {
-            if (!tickAccumulator.ContainsKey(position))
-                tickAccumulator[position] = 0;
+            tickAccumulator[position] = 0;
         }
 
         public FarmingResult Till(VoxelWorld world, BlockPosition position)
@@ -105,7 +113,7 @@ namespace Blockiverse.Survival
                     continue;
                 }
 
-                int accumulated = kv.Value + ticks;
+                int accumulated = (int)Math.Min((long)kv.Value + ticks, (long)int.MaxValue);
                 if (accumulated >= GrowthIntervalTicks)
                     toAdvance.Add((pos, accumulated - GrowthIntervalTicks));
                 else
