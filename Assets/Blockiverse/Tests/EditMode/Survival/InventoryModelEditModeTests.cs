@@ -29,6 +29,33 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.BuildTable,         ItemId.BuildTable);
             AssertBlockMapsToItem(registry, BlockRegistry.Glowwick,           ItemId.Glowwick);
             AssertBlockMapsToItem(registry, BlockRegistry.StorageCrate,       ItemId.StorageCrate);
+
+            // Metal/crystal nodes drop their canonical raw resource (§3).
+            AssertBlockMapsToItem(registry, BlockRegistry.PaletinThread,      ItemId.RawPaletin);
+            AssertBlockMapsToItem(registry, BlockRegistry.SunmetalFleck,      ItemId.RawSunmetal);
+            AssertBlockMapsToItem(registry, BlockRegistry.NiterstonePocket,   ItemId.SparkNiter);
+            AssertBlockMapsToItem(registry, BlockRegistry.UmbraliteNode,      ItemId.RawUmbralite);
+            AssertBlockMapsToItem(registry, BlockRegistry.StaropalGeode,      ItemId.StaropalShard);
+        }
+
+        [Test]
+        public void DefaultRegistryContainsCraftedSmeltingIntermediates()
+        {
+            ItemRegistry registry = ItemRegistry.CreateDefault();
+
+            // Smelted bars and work parts are non-placeable crafted resource items (§9).
+            foreach (ItemId id in new[]
+            {
+                ItemId.StoutPole, ItemId.FiberCord, ItemId.ReedFiber, ItemId.StoneRubble,
+                ItemId.ClayLump, ItemId.GlassShard, ItemId.LumenDust, ItemId.EmbercoalBlock,
+                ItemId.RosycopperBar, ItemId.PaletinBar, ItemId.BronzeBar, ItemId.IronrootBar,
+                ItemId.SunmetalBar, ItemId.DeepsteelBar, ItemId.StarforgedCore,
+            })
+            {
+                Assert.That(registry.TryGet(id, out ItemDefinition def), Is.True, $"Expected {id} to be registered.");
+                Assert.That(def.Kind, Is.EqualTo(ItemKind.Resource));
+                Assert.That(def.HasBlockMapping, Is.False, $"{id} should not be a placeable block item.");
+            }
         }
 
         [Test]

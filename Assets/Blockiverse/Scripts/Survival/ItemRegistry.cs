@@ -77,11 +77,11 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.FlintyShingle,  "Flinty Shingle",  ItemKind.Resource, BlockStackSize,  BlockRegistry.FlintyShingle));
             registry.Register(new ItemDefinition(ItemId.Embercoal,      "Embercoal",        ItemKind.Resource, OreStackSize,    BlockRegistry.EmbercoalSeam));
             registry.Register(new ItemDefinition(ItemId.RawRosycopper,  "Raw Rosycopper",   ItemKind.Resource, OreStackSize,    BlockRegistry.RosycopperBloom));
-            registry.Register(new ItemDefinition(ItemId.PaletinThread,  "Paletin Thread",   ItemKind.Resource, OreStackSize,    BlockRegistry.PaletinThread));
+            registry.Register(new ItemDefinition(ItemId.RawPaletin,     "Raw Paletin",      ItemKind.Resource, OreStackSize,    BlockRegistry.PaletinThread));
             registry.Register(new ItemDefinition(ItemId.RawRustcore,    "Raw Rustcore",     ItemKind.Resource, OreStackSize,    BlockRegistry.RustcoreOre));
-            registry.Register(new ItemDefinition(ItemId.SunmetalFleck,  "Sunmetal Fleck",   ItemKind.Resource, OreStackSize,    BlockRegistry.SunmetalFleck));
+            registry.Register(new ItemDefinition(ItemId.RawSunmetal,    "Raw Sunmetal",     ItemKind.Resource, OreStackSize,    BlockRegistry.SunmetalFleck));
             registry.Register(new ItemDefinition(ItemId.LumenCrystal,   "Lumen Crystal",    ItemKind.Resource, CrystalStackSize, BlockRegistry.LumenQuartzCluster));
-            registry.Register(new ItemDefinition(ItemId.Niterstone,     "Niterstone",       ItemKind.Resource, OreStackSize,    BlockRegistry.NiterstonePocket));
+            registry.Register(new ItemDefinition(ItemId.SparkNiter,     "Spark Niter",      ItemKind.Resource, OreStackSize,    BlockRegistry.NiterstonePocket));
             registry.Register(new ItemDefinition(ItemId.Brightsalt,     "Brightsalt",       ItemKind.Resource, OreStackSize,    BlockRegistry.BrightsaltCrust));
             registry.Register(new ItemDefinition(ItemId.Shellgrit,      "Shellgrit",        ItemKind.Resource, OreStackSize,    BlockRegistry.ShellgritBed));
             registry.Register(new ItemDefinition(ItemId.ResinKnot,      "Resin Knot",       ItemKind.Resource, BlockStackSize,  BlockRegistry.ResinKnot));
@@ -94,8 +94,25 @@ namespace Blockiverse.Survival
             registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.Berrybush);
             registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.Berrybush);
             registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.Reedgrass);
-            registry.Register(new ItemDefinition(ItemId.UmbraliteNode,  "Umbralite Node",   ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
-            registry.Register(new ItemDefinition(ItemId.StaropalGeode,  "Staropal Geode",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
+            registry.Register(new ItemDefinition(ItemId.RawUmbralite,   "Raw Umbralite",    ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
+            registry.Register(new ItemDefinition(ItemId.StaropalShard,  "Staropal Shard",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
+
+            // ── Crafted intermediates: work parts, smelted bars/dust (§9) ─────
+            registry.Register(new ItemDefinition(ItemId.StoutPole,      "Stout Pole",       ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.FiberCord,      "Fiber Cord",       ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedFiber,      "Reed Fiber",       ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.StoneRubble,    "Stone Rubble",     ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.ClayLump,       "Clay Lump",        ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.GlassShard,     "Glass Shard",      ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.LumenDust,      "Lumen Dust",       ItemKind.Resource, CrystalStackSize));
+            registry.Register(new ItemDefinition(ItemId.EmbercoalBlock, "Embercoal Block",  ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.RosycopperBar,  "Rosycopper Bar",   ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.PaletinBar,     "Paletin Bar",      ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.BronzeBar,      "Bronze Bar",       ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.IronrootBar,    "Ironroot Bar",     ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.SunmetalBar,    "Sunmetal Bar",     ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.DeepsteelBar,   "Deepsteel Bar",    ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.StarforgedCore, "Starforged Core",  ItemKind.Resource, CrystalStackSize));
 
             // ── Tier-1 (Reedwood) tools — base 48, scaled by class multiplier ─
             registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 1, maxDurability: 48));

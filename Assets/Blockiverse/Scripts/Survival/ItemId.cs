@@ -56,23 +56,40 @@ namespace Blockiverse.Survival
         public static readonly ItemId PrepBoard            = new("prep_board");
         public static readonly ItemId MendBench            = new("mend_bench");
 
-        // ── Resource items ───────────────────────────────────────────────────
+        // ── Raw resource drops (node block → raw item, voxel_survival_ruleset §3) ─
         public static readonly ItemId SurfacePebbles       = new("surface_pebbles");
         public static readonly ItemId FlintyShingle        = new("flinty_shingle");
         public static readonly ItemId Embercoal            = new("embercoal");
         public static readonly ItemId RawRosycopper        = new("raw_rosycopper");
-        public static readonly ItemId PaletinThread        = new("paletin_thread");
+        public static readonly ItemId RawPaletin           = new("raw_paletin");
         public static readonly ItemId RawRustcore          = new("raw_rustcore");
-        public static readonly ItemId SunmetalFleck        = new("sunmetal_fleck");
+        public static readonly ItemId RawSunmetal          = new("raw_sunmetal");
         public static readonly ItemId LumenCrystal         = new("lumen_crystal");
-        public static readonly ItemId Niterstone           = new("niterstone");
+        public static readonly ItemId SparkNiter           = new("spark_niter");
         public static readonly ItemId Brightsalt           = new("brightsalt");
         public static readonly ItemId Shellgrit            = new("shellgrit");
         public static readonly ItemId ResinKnot            = new("resin_knot");
         public static readonly ItemId Berrybush            = new("berrybush");
         public static readonly ItemId GrainStalk           = new("grain_stalk");
-        public static readonly ItemId UmbraliteNode        = new("umbralite_node");
-        public static readonly ItemId StaropalGeode        = new("staropal_geode");
+        public static readonly ItemId RawUmbralite         = new("raw_umbralite");
+        public static readonly ItemId StaropalShard        = new("staropal_shard");
+
+        // ── Crafted intermediates (work parts, smelted bars, §9) ──────────────
+        public static readonly ItemId StoutPole            = new("stout_pole");
+        public static readonly ItemId FiberCord            = new("fiber_cord");
+        public static readonly ItemId ReedFiber            = new("reed_fiber");
+        public static readonly ItemId StoneRubble          = new("stone_rubble");
+        public static readonly ItemId ClayLump             = new("clay_lump");
+        public static readonly ItemId GlassShard           = new("glass_shard");
+        public static readonly ItemId LumenDust            = new("lumen_dust");
+        public static readonly ItemId EmbercoalBlock       = new("embercoal_block");
+        public static readonly ItemId RosycopperBar        = new("rosycopper_bar");
+        public static readonly ItemId PaletinBar           = new("paletin_bar");
+        public static readonly ItemId BronzeBar            = new("bronze_bar");
+        public static readonly ItemId IronrootBar          = new("ironroot_bar");
+        public static readonly ItemId SunmetalBar          = new("sunmetal_bar");
+        public static readonly ItemId DeepsteelBar         = new("deepsteel_bar");
+        public static readonly ItemId StarforgedCore       = new("starforged_core");
 
         // ── Tier-1 (Reedwood) tools ──────────────────────────────────────────
         public static readonly ItemId ReedwoodDelver       = new("reedwood_delver");
