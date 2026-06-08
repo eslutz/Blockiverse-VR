@@ -349,15 +349,14 @@ namespace Blockiverse.Gameplay
                 return duplicate;
 
             Inventory inventory = GetInventory(clientId);
-            // Prefer the server-authoritative inventory slot for harvest validation when the
-            // caller supplies one. Player inventories in this architecture start empty and are
-            // filled by host-granted harvests/crafts, so there is no pre-populated server-side
-            // tool to read for a freshly-equipped tool; fall back to the requested stack in that
-            // case. Server-authoritative tool validation will tighten once persistent server-side
-            // tool inventories exist (tracked follow-up).
-            ItemStack authoritativeItem = equippedSlotIndex >= 0
-                ? inventory.GetSlot(equippedSlotIndex)
-                : equippedItem;
+            // Server-authoritative tool resolution (M8). Remote client requests
+            // (sendResponse == true) never trust the client-supplied stack: the equipped tool is
+            // read from the host's authoritative copy of that client's inventory at the requested
+            // slot, so a client cannot fabricate a high-tier tool to bypass harvest tier gates.
+            // A request without a valid slot index is treated as empty-handed. Host-local requests
+            // (the host's own player) use the local equipped item directly, as it is already
+            // authoritative on this peer.
+            ItemStack authoritativeItem = ResolveAuthoritativeTool(inventory, equippedItem, equippedSlotIndex, sendResponse);
             BlockHarvestResult harvest = ResolveHarvestService().TryPreviewHarvest(
                 ResolveWorld(),
                 inventory,
@@ -416,6 +415,18 @@ namespace Blockiverse.Gameplay
             RefreshLocalInventoryReference();
             LastCommandResult = accepted;
             return accepted;
+        }
+
+        // Resolves the tool the host will validate a harvest against.
+        // Remote requests are validated against the host-owned inventory slot only; the
+        // client-supplied stack is never trusted. Host-local requests use the local stack,
+        // falling back to the slot when one is supplied.
+        static ItemStack ResolveAuthoritativeTool(Inventory inventory, ItemStack equippedItem, int equippedSlotIndex, bool sendResponse)
+        {
+            bool slotIsValid = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount;
+            if (sendResponse)
+                return slotIsValid ? inventory.GetSlot(equippedSlotIndex) : ItemStack.Empty;
+            return slotIsValid ? inventory.GetSlot(equippedSlotIndex) : equippedItem;
         }
 
         SurvivalCommandResult ProcessHostCraft(

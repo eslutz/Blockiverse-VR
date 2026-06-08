@@ -1205,11 +1205,20 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Host did not grant harvested timber only to the requesting client.");
 
             // Embercoal Seam requires a tier-2 Delver (Flint); a tier-1 Reedwood tool cannot mine
-            // ores per the survival ruleset (§3, §7.1).
+            // ores per the survival ruleset (§3, §7.1). Harvest validation is server-authoritative:
+            // the host reads the equipped tool from its own copy of the client's inventory at the
+            // supplied slot, so the client's claimed stack is ignored. Seed the host-authoritative
+            // inventory with the tool and reference it by slot — the client passes no claimed item.
+            ulong firstClientId = firstClientChunkSync.CurrentBoundary.LocalClientId;
+            const int coalToolSlotIndex = 9;
+            hostSurvivalSync.GetInventory(firstClientId).SetSlot(
+                coalToolSlotIndex, new ItemStack(ItemId.FlintDelver, 1).WithDurability(35));
+
             SurvivalCommandResult coalHarvest = firstClientSurvivalSync.TrySubmitHarvest(
                 coalstonePosition,
-                new ItemStack(ItemId.FlintDelver, 1).WithDurability(35),
-                out bool coalHarvestSentToHost);
+                ItemStack.Empty,
+                out bool coalHarvestSentToHost,
+                equippedSlotIndex: coalToolSlotIndex);
 
             Assert.That(coalHarvestSentToHost, Is.True);
             Assert.That(coalHarvest.PendingHostValidation, Is.True);
