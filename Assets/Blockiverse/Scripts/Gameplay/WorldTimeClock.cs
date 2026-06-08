@@ -40,12 +40,15 @@ namespace Blockiverse.Gameplay
         {
             Tick(Time.deltaTime);
 
-            tickAccumulator += Time.deltaTime * WorldConstants.TicksPerSecond;
-            int elapsed = (int)tickAccumulator;
-            if (elapsed > 0)
+            if (!Mathf.Approximately(timeScale, 0.0f))
             {
-                tickAccumulator -= elapsed;
-                Ticked?.Invoke(elapsed);
+                tickAccumulator += Time.deltaTime * timeScale * WorldConstants.TicksPerSecond;
+                int elapsed = (int)tickAccumulator;
+                if (elapsed > 0)
+                {
+                    tickAccumulator -= elapsed;
+                    Ticked?.Invoke(elapsed);
+                }
             }
         }
 

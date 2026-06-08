@@ -51,7 +51,7 @@ namespace Blockiverse.Survival
                 itemRegistry.CreateItemStack(ItemId.ReedwoodDelver),
                 CraftingStation.BuildTable,
                 new ItemStack(ItemId.BranchwoodLog, 2),
-                new ItemStack(ItemId.RawRosycopper, 3)));
+                new ItemStack(ItemId.FlintyShingle, 3)));
 
             recipeBook.Register(new CraftingRecipe(
                 new ItemStack(ItemId.FieldBandage, 2),
