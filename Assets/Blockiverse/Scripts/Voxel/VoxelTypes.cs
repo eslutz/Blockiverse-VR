@@ -248,7 +248,7 @@ namespace Blockiverse.Voxel
             // ── Additional canonical crafted (atlas tiles generated) ─────────
             registry.Register(new BlockDefinition(WorkPlank,     "work_plank",     "Work Plank",     BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(FiredBrick,    "fired_brick_block","Fired Brick",  BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
+            registry.Register(new BlockDefinition(FiredBrick,    "fired_brick",      "Fired Brick",  BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(ClearpaneGlass,"clearpane_glass","Clearpane Glass",BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft,  harvestTierMin: 1));
 
             // ── Additional canonical resource nodes (atlas tiles generated) ──

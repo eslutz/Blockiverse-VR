@@ -349,11 +349,12 @@ namespace Blockiverse.Gameplay
                 return duplicate;
 
             Inventory inventory = GetInventory(clientId);
-            // Use the server-authoritative inventory slot for harvest validation so a client
-            // cannot fabricate a high-tier tool to bypass tier gates.
+            // Use the server-authoritative inventory slot for harvest validation.
+            // For remote client requests (sendResponse == true), reject any unverifiable
+            // tool claim by falling back to empty-handed rather than the client-supplied stack.
             ItemStack authoritativeItem = equippedSlotIndex >= 0
                 ? inventory.GetSlot(equippedSlotIndex)
-                : equippedItem;
+                : sendResponse ? ItemStack.Empty : equippedItem;
             BlockHarvestResult harvest = ResolveHarvestService().TryPreviewHarvest(
                 ResolveWorld(),
                 inventory,
