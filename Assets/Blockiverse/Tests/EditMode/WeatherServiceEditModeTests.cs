@@ -1,5 +1,6 @@
 using Blockiverse.WorldGen;
 using NUnit.Framework;
+using System;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -164,6 +165,77 @@ namespace Blockiverse.Tests.EditMode
                 EnvironmentState env = service.Evaluate(0.25f, WorldConstants.SeaLevel);
                 Assert.That(env.PrecipitationIntensity, Is.EqualTo(0f), $"Expected no precipitation for {state}.");
             }
+        }
+
+        // ── M4-C: Environment effects plumbing ───────────────────────────────
+
+        [Test]
+        public void CloudCoverageIsHighForThunderstorm()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Thunderstorm);
+            Assert.That(service.CloudCoverage, Is.EqualTo(1.0f));
+        }
+
+        [Test]
+        public void CloudCoverageIsLowForClear()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            Assert.That(service.CloudCoverage, Is.LessThan(0.25f));
+        }
+
+        [Test]
+        public void AmbientLightLevelReducedByStorm()
+        {
+            var clear = new WeatherService(seed: 1, WeatherState.Clear);
+            var storm = new WeatherService(seed: 1, WeatherState.Thunderstorm);
+
+            int clearLight = clear.AmbientLightLevel(baseSkyLight: 15);
+            int stormLight = storm.AmbientLightLevel(baseSkyLight: 15);
+
+            Assert.That(stormLight, Is.LessThan(clearLight), "Thunderstorm must reduce ambient light more than Clear.");
+        }
+
+        [Test]
+        public void AmbientLightLevelIsNeverNegative()
+        {
+            var blizzard = new WeatherService(seed: 1, WeatherState.Blizzard);
+            Assert.That(blizzard.AmbientLightLevel(baseSkyLight: 0), Is.GreaterThanOrEqualTo(0));
+        }
+
+        [Test]
+        public void EnvironmentStateIncludesCloudCoverage()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.HeavyRain);
+            EnvironmentState env = service.Evaluate(0.25f, WorldConstants.SeaLevel);
+            Assert.That(env.CloudCoverage, Is.GreaterThan(0.5f));
+        }
+
+        [Test]
+        public void GetBaseSkyLightReturnsFifteenDuringDay()
+        {
+            Assert.That(EnvironmentLightComputer.GetBaseSkyLight(0.25f), Is.EqualTo(15));
+        }
+
+        [Test]
+        public void GetBaseSkyLightReturnsLowValueAtNight()
+        {
+            int nightLight = EnvironmentLightComputer.GetBaseSkyLight(0.70f, moonPhaseIndex: 0);
+            Assert.That(nightLight, Is.GreaterThanOrEqualTo(0).And.LessThanOrEqualTo(4));
+        }
+
+        [Test]
+        public void GetAmbientLightIsReducedByWeatherPenalty()
+        {
+            // Full moon, midday, thunderstorm
+            int withStorm = EnvironmentLightComputer.GetAmbientLight(
+                normalizedTime: 0.25f, moonPhaseIndex: 4,
+                cloudCoverage: 1.0f, precipitationIntensity: 0.9f, stormIntensity: 1.0f);
+            // Same time, clear sky
+            int clearSky = EnvironmentLightComputer.GetAmbientLight(
+                normalizedTime: 0.25f, moonPhaseIndex: 4,
+                cloudCoverage: 0.1f, precipitationIntensity: 0f, stormIntensity: 0f);
+
+            Assert.That(withStorm, Is.LessThan(clearSky));
         }
     }
 }

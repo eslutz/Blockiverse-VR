@@ -23,6 +23,7 @@ namespace Blockiverse.WorldGen
         public float PrecipitationIntensity;
         public float FogDensity;
         public float StormIntensity;
+        public float CloudCoverage;
     }
 
     public sealed class WeatherService
@@ -72,6 +73,19 @@ namespace Blockiverse.WorldGen
 
         public WeatherState CurrentState => currentState;
 
+        public float CloudCoverage => TargetCloudCoverage(currentState);
+
+        // Returns the ambient light level (0–15) after applying weather penalties to the base sky light.
+        // weatherLightPenalty = round(cloudCoverage×3 + precipIntensity×2 + stormIntensity×2)
+        // per voxel_world_environment_effects.md §5.4
+        public int AmbientLightLevel(int baseSkyLight)
+        {
+            float penalty = CloudCoverage * 3f
+                + PrecipitationIntensityFor(currentState) * 2f
+                + StormIntensityFor(currentState) * 2f;
+            return Math.Max(0, Math.Min(15, baseSkyLight - (int)Math.Round(penalty)));
+        }
+
         public EnvironmentState Evaluate(float normalizedTimeOfDay, int altitudeY)
         {
             float baseTemp = ComputeBaseTemperature(currentState);
@@ -86,6 +100,7 @@ namespace Blockiverse.WorldGen
                 PrecipitationIntensity = PrecipitationIntensityFor(currentState),
                 FogDensity           = FogDensityFor(currentState),
                 StormIntensity       = StormIntensityFor(currentState),
+                CloudCoverage        = CloudCoverage,
             };
         }
 
@@ -197,5 +212,21 @@ namespace Blockiverse.WorldGen
         {
             return normalizedTime > 0.6f || normalizedTime < 0.1f;
         }
+
+        // Target cloud coverage per state (voxel_world_environment_effects.md §8.3 target values).
+        static float TargetCloudCoverage(WeatherState state) => state switch
+        {
+            WeatherState.Clear        => 0.10f,
+            WeatherState.PartlyCloudy => 0.45f,
+            WeatherState.Overcast     => 0.80f,
+            WeatherState.LightRain    => 0.85f,
+            WeatherState.HeavyRain    => 0.95f,
+            WeatherState.Thunderstorm => 1.00f,
+            WeatherState.LightSnow    => 0.85f,
+            WeatherState.HeavySnow    => 0.95f,
+            WeatherState.Blizzard     => 1.00f,
+            WeatherState.Fog          => 0.65f,
+            _                         => 0.50f,
+        };
     }
 }
