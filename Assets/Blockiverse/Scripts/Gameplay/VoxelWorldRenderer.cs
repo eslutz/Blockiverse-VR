@@ -16,8 +16,15 @@ namespace Blockiverse.Gameplay
         static readonly ProfilerMarker RebuildDirtyMarker = new("Blockiverse.VoxelWorldRenderer.RebuildDirty");
         static readonly ProfilerMarker RebuildChunkMarker = new("Blockiverse.VoxelWorldRenderer.RebuildChunk");
 
+        // MeshCollider cooking is the expensive part of a rebuild on Quest; cap how many colliders
+        // are rebaked per RebuildDirty call / frame and let the rest catch up over later frames.
+        public const int DefaultColliderRebuildBudget = 4;
+
         readonly Dictionary<ChunkCoordinate, GameObject> chunkObjects = new();
         readonly Dictionary<ChunkCoordinate, int> chunkTriangleCounts = new();
+        readonly Queue<ChunkCoordinate> pendingColliderRebuilds = new();
+        readonly HashSet<ChunkCoordinate> pendingColliderSet = new();
+        readonly Dictionary<ChunkCoordinate, Mesh> colliderMeshByChunk = new();
 
         VoxelWorld world;
         BlockRegistry registry;
@@ -29,6 +36,12 @@ namespace Blockiverse.Gameplay
 
         public VoxelWorld World => world;
         public VoxelRenderStats Stats => stats;
+
+        // Colliders awaiting a (throttled) rebake. Visual meshes are always current.
+        public int PendingColliderRebuildCount => pendingColliderRebuilds.Count;
+
+        // Maximum MeshCollider rebakes performed per RebuildDirty call and per frame.
+        public int ColliderRebuildBudget { get; set; } = DefaultColliderRebuildBudget;
 
         public void Configure(
             VoxelWorld voxelWorld,
@@ -68,6 +81,10 @@ namespace Blockiverse.Gameplay
                 }
             }
 
+            // A fresh world needs full collision immediately (spawn, teleport, walking), so flush
+            // every queued collider rebuild rather than throttling the initial bake.
+            ProcessPendingColliderRebuilds(int.MaxValue);
+
             stats = new VoxelRenderStats(chunkCount, totalTriangleCount, rebuildQueue.Count);
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Renderer,
@@ -85,6 +102,10 @@ namespace Blockiverse.Gameplay
 
             foreach (ChunkCoordinate chunk in dirtyChunks)
                 RebuildChunk(chunk);
+
+            // Visual meshes are now current; rebake colliders within this call's budget and leave the
+            // remainder for the per-frame pump.
+            ProcessPendingColliderRebuilds(ColliderRebuildBudget);
 
             RefreshStats();
 
@@ -117,9 +138,13 @@ namespace Blockiverse.Gameplay
             Mesh previousMesh = filter.sharedMesh;
             filter.sharedMesh = mesh;
 
-            MeshCollider collider = chunkObject.GetComponent<MeshCollider>();
-            collider.sharedMesh = null;
-            collider.sharedMesh = mesh;
+            // The collider rebake is throttled, so the previous visual mesh may still be in use by
+            // the not-yet-updated collider; only destroy it once it is no longer referenced there.
+            colliderMeshByChunk.TryGetValue(chunk, out Mesh colliderMesh);
+            if (previousMesh != null && !ReferenceEquals(previousMesh, colliderMesh))
+                DestroyGeneratedObject(previousMesh);
+
+            EnqueueColliderRebuild(chunk);
 
             int previousTriangleCount = chunkTriangleCounts.TryGetValue(chunk, out int existingTriangleCount)
                 ? existingTriangleCount
@@ -128,9 +153,48 @@ namespace Blockiverse.Gameplay
             chunkTriangleCounts[chunk] = meshData.TriangleCount;
             totalTriangleCount += meshData.TriangleCount - previousTriangleCount;
 
-            DestroyGeneratedObject(previousMesh);
-
             return meshData.TriangleCount;
+        }
+
+        void EnqueueColliderRebuild(ChunkCoordinate chunk)
+        {
+            if (pendingColliderSet.Add(chunk))
+                pendingColliderRebuilds.Enqueue(chunk);
+        }
+
+        // Rebakes up to budget pending colliders to the current chunk mesh, destroying the mesh the
+        // collider previously used once it is released.
+        public void ProcessPendingColliderRebuilds(int budget)
+        {
+            int processed = 0;
+            while (processed < budget && pendingColliderRebuilds.Count > 0)
+            {
+                ChunkCoordinate chunk = pendingColliderRebuilds.Dequeue();
+                pendingColliderSet.Remove(chunk);
+
+                if (!chunkObjects.TryGetValue(chunk, out GameObject chunkObject) || chunkObject == null)
+                    continue;
+
+                Mesh currentMesh = chunkObject.GetComponent<MeshFilter>().sharedMesh;
+                MeshCollider collider = chunkObject.GetComponent<MeshCollider>();
+                colliderMeshByChunk.TryGetValue(chunk, out Mesh previousColliderMesh);
+
+                collider.sharedMesh = null;
+                collider.sharedMesh = currentMesh;
+                colliderMeshByChunk[chunk] = currentMesh;
+
+                if (previousColliderMesh != null && !ReferenceEquals(previousColliderMesh, currentMesh))
+                    DestroyGeneratedObject(previousColliderMesh);
+
+                processed++;
+            }
+        }
+
+        // Per-frame pump so a throttled collider backlog drains even without further edits.
+        void Update()
+        {
+            if (pendingColliderRebuilds.Count > 0)
+                ProcessPendingColliderRebuilds(ColliderRebuildBudget);
         }
 
         GameObject GetOrCreateChunkObject(ChunkCoordinate chunk)
@@ -212,9 +276,17 @@ namespace Blockiverse.Gameplay
                 DestroyGeneratedObject(mesh);
             }
 
+            // Release any collider meshes still deferred behind the throttle (DestroyGeneratedObject
+            // is null-safe, so meshes already freed via the filter loop are skipped).
+            foreach (Mesh colliderMesh in colliderMeshByChunk.Values)
+                DestroyGeneratedObject(colliderMesh);
+
             DestroyGeneratedObject(chunkMaterial);
             chunkObjects.Clear();
             chunkTriangleCounts.Clear();
+            colliderMeshByChunk.Clear();
+            pendingColliderRebuilds.Clear();
+            pendingColliderSet.Clear();
             totalTriangleCount = 0;
         }
 
