@@ -11,7 +11,7 @@
 **Primary game target:** Ruleset-defined voxel survival/creative game using the canonical Blockiverse world, registries, menus, save schema, environment, structures, vegetation, multiplayer, and audio/VFX rulesets
 **World model:** Bounded canonical worlds first; world presets are `survival_terrain`, `flat_builder`, and `void_builder`
 **Player representation:** Meta Horizon avatars for local and remote players; original voxel characters for NPCs/mobs
-**Multiplayer:** LAN host-authoritative co-op first; cloud-hosted private worlds are a later upgrade
+**Multiplayer:** LAN host-authoritative co-op first; cloud-hosted private worlds are tracked as future expansion
 **Voice:** Meta Quest party chat; no in-app voice chat in the initial multiplayer scope
 **Release path:** Meta release channels and Meta Horizon Store / Early Access; signed APK fallback through GitHub Releases
 **Repo model:** Public GitHub repo, trunk-based development, protected `main`, short-lived branches, releases from `main` only
@@ -97,16 +97,9 @@ Original audio, haptics, and lightweight VFX feedback
 Quest-readable menus and menu flows
 ```
 
-### Later expansion target
+### Future expansion target
 
-```text
-Original voxel NPCs and mobs
-Combat, armor, and deeper progression
-Expanded biome and structure variety
-Cloud-hosted persistent private worlds
-Owner/member invite access
-Cloud save, spin-down, spin-up, and reconnect flow
-```
+Future features and later expansion scope are tracked in [14. Future features and later expansion](#14-future-features-and-later-expansion) so the initial playable target stays separate from post-candidate work.
 
 ---
 
@@ -345,8 +338,7 @@ Blockiverse.Tests.PlayMode
 | M8.5 | Rendering and menu completion gate | Phase 4 chunk rendering/authored visual validation and Phase 10 menu/VR UI flows are fully implemented before polish |
 | M9 | Audio, VFX, haptics, art polish | Original feedback, ambience, weather effects, block VFX, UI sounds, and Quest-readable assets |
 | M10 | Quest performance and store candidate | Performance budget, release APK, Meta release channels, and store submission package |
-| M11 | Full survival expansion | Original NPCs/mobs, combat, armor, deeper progression, and multiplayer survival interactions |
-| M12 | Cloud private worlds | Owner/member cloud worlds with invite access, persistence, spin-down, and reconnect |
+| Future features | Later expansion section | Seasons, full survival expansion, and cloud private worlds stay outside the first Store / Early Access candidate until explicitly promoted |
 
 ---
 
@@ -1418,7 +1410,7 @@ No analytics beyond documented diagnostics unless explicitly added
 Local saves remain local unless user shares them
 LAN multiplayer exchanges local network connection data only for the active session
 Meta Horizon Avatar/profile data use is disclosed when avatar integration ships
-Cloud-hosted private worlds are later scope
+Cloud-hosted private worlds remain outside the first public candidate and are tracked in the future expansion section
 ```
 
 ### Tests
@@ -1440,145 +1432,6 @@ Submission can be sent to Meta without missing metadata.
 If rejected, rejection reasons become tracked work.
 If approved, release remains Early Access/Beta until save and multiplayer stability are proven.
 ```
-
----
-
-## Phase 19 — Full survival expansion
-
-### Deliverable
-
-A deeper survival game with original NPCs/mobs, combat, armor, progression, and expanded multiplayer survival interactions.
-
-### Scope
-
-```text
-Original passive creatures
-Original hostile creatures
-NPCs/mobs use original voxel character designs
-Mob spawning
-Mob pathfinding
-Combat
-Armor
-Weapons/tools progression
-Status effects
-Difficulty settings
-Biome expansion
-Dungeon/cave points of interest
-Advanced structures
-Advanced crafting
-Multiplayer combat sync
-```
-
-### Out of scope
-
-```text
-Minecraft mob names
-Minecraft mob silhouettes
-Creeper-like behavior identity
-Meta Horizon avatars for NPCs/mobs
-Public matchmaking
-Marketplace/modding
-```
-
-### Tests
-
-```text
-Unit: spawn rules obey safe zones.
-Unit: combat damage and armor formulas are deterministic.
-PlayMode: hostile mob can navigate simple test arena.
-PlayMode: combat damage syncs in multiplayer.
-Performance: mob counts stay within Quest budget.
-```
-
-### Validation
-
-```text
-Survival mode feels distinct from creative.
-Mobs and combat remain comfortable in VR.
-NPCs/mobs are original.
-Multiplayer remains stable.
-```
-
----
-
-## Phase 20 — Cloud-hosted persistent private worlds
-
-### Deliverable
-
-Cloud-hosted, owner-scoped private worlds persist when empty and can be joined by invited members over the internet. LAN remains available as a separate low-cost mode.
-
-### Scope
-
-```text
-Cloud-hosted dedicated/private world runtime
-Server-authoritative world simulation
-Stable cloud world IDs
-Owner identity
-Durable member list
-Owner-only invite code generation/regeneration
-One active reusable invite code per world
-Invite codes expire 48 hours after generation
-Auto-accept invite redemption by default
-Owner-approval-required invite mode
-Pending member requests
-Permanent membership until owner removal or self-removal
-Owner management: remove, block, approve, deny, regenerate invite
-Meta identity, entitlement, membership, and access-state validation on join
-Cloud persistent storage
-Save versioning and migration
-Atomic writes
-Restore validation
-Corruption recovery
-Idle spin-down with final save
-On-demand spin-up
-Session registry/routing
-Lifecycle diagnostics
-Cost and quota guardrails
-Privacy/data-use/store documentation
-```
-
-### Out of scope
-
-```text
-Public matchmaking
-Public/community world browser
-Community world discovery
-Public moderation/reporting surfaces
-Marketplace or mod distribution
-In-app voice chat
-Members generating invite codes
-Single-use per-recipient invite codes
-Replacing LAN multiplayer
-```
-
-### Tests
-
-```text
-Unit: invite code generation prevents collisions.
-Unit: expired invite codes are rejected.
-Unit: membership persists after code expiration.
-Unit: removed/blocked members cannot rejoin.
-Integration: session registry routes authorized players.
-Integration: cloud save/load restores terrain, structures, inventories, environment, vegetation, and metadata.
-Integration: idle spin-down saves before teardown.
-Integration: spin-up restores latest world state before admitting players.
-Network simulation: edit/save/spin-down/reconnect remain stable under expected latency.
-```
-
-### Validation
-
-```text
-Owner can create a cloud private world.
-Owner can share a 48-hour invite code.
-Entitled signed-in redeemers become members in auto-accept mode.
-Owner can approve/deny/remove/block members.
-Cloud world saves when empty and spins down.
-Authorized members reconnect and trigger spin-up.
-Two Quest devices can resume a persisted world over the internet.
-LAN mode still works without cloud dependencies.
-```
-
----
 
 # 10. Testing strategy
 
@@ -1968,43 +1821,7 @@ FEATURE: Meta store
   STORY: Private release channel validation
 ```
 
-## EPIC-11 — Full survival expansion
-
-```text
-FEATURE: NPCs/mobs
-  STORY: Original passive creature
-  STORY: Original hostile creature
-  STORY: AI and pathfinding
-  STORY: Spawn rules
-
-FEATURE: Combat/progression
-  STORY: Weapons/tools progression
-  STORY: Armor
-  STORY: Damage/status effects
-  STORY: Multiplayer combat sync
-```
-
-## EPIC-12 — Cloud private worlds
-
-```text
-FEATURE: Cloud architecture
-  SPIKE: Choose hosting/runtime/provider model
-  STORY: Define cost, quota, region, privacy guardrails
-  STORY: Define server-authoritative runtime
-
-FEATURE: Owner/member access
-  STORY: Stable cloud world IDs
-  STORY: Owner model
-  STORY: Member list
-  STORY: Invite codes
-  STORY: Removal/block/approval flows
-
-FEATURE: Cloud persistence
-  STORY: Cloud save schema
-  STORY: Spin-down final save
-  STORY: On-demand spin-up
-  STORY: Reconnect sync
-```
+Future-feature epics are tracked in [14. Future features and later expansion](#14-future-features-and-later-expansion) instead of the active implementation outline.
 
 ---
 
@@ -2032,8 +1849,7 @@ FEATURE: Cloud persistence
 19. Produce signed release candidate.
 20. Validate through Meta release channels.
 21. Prepare Store / Early Access submission.
-22. Expand with mobs, combat, and deeper progression.
-23. Add cloud private worlds.
+22. Promote selected future features from Section 14 into active roadmap phases only after M10 is stable or Eric explicitly changes the release plan.
 ```
 
 ---
@@ -2170,7 +1986,179 @@ Store metadata and privacy docs are ready.
 Submission package is complete.
 ```
 
-## M11 — Full survival expansion
+Future feature definitions of done are tracked in [14. Future features and later expansion](#14-future-features-and-later-expansion).
+
+---
+
+# 14. Future features and later expansion
+
+Future features are intentionally outside the first Store / Early Access candidate. Do not implement them as part of M0-M10 unless the roadmap is updated and the linked issue or pull request explicitly promotes the work into active scope.
+
+This is the canonical home for later expansion feature definitions. When a future feature becomes active, move its relevant scope into the roadmap overview, phase plan, implementation outline, testing plan, and milestone definition of done in the same change.
+
+| Feature | Status | Promotion trigger |
+|---|---|---|
+| Seasons | Future feature | Promote after Phase 5 weather/day-night systems are stable and seasonal variation is needed for survival or world feel. |
+| Full survival expansion | Future feature | Promote after the Store / Early Access candidate is stable and deeper survival is the next product goal. |
+| Cloud private worlds | Future feature | Promote after LAN multiplayer, save/load, entitlement, privacy, and cost guardrails are proven enough for internet-hosted worlds. |
+
+## Future feature — Seasons
+
+### Deliverable
+
+Spring, summer, fall, and winter seasons affect day/night timing, weather probabilities, precipitation types, snow behavior, and environment presentation while preserving deterministic world simulation.
+
+### Scope
+
+```text
+Season state in world environment save data
+Deterministic season calendar progression
+Optional fixed-season world preset or creative override
+Season-aware day/night duration curves
+Season-aware sunrise/sunset transition timing
+Season-aware weather probability tables
+Spring: lengthening days, frequent rain/fog, thawing snow, and crop/regrowth tuning hooks
+Summer: longest days, warmer clear weather, thunderstorms, and rare snow only in cold biome/elevation conditions
+Fall: shortening days, increased fog/wind/rain, harvest/regrowth tuning hooks, and vegetation-color hooks
+Winter: shortest days, longer nights, higher snow/cloud probability, snow accumulation, and reduced rain except warm biomes
+Biome and elevation modifiers layered over season defaults
+Audio/VFX hooks for seasonal ambience and weather intensity
+Save/load and migration support for worlds created before seasons
+```
+
+### Out of scope
+
+```text
+Real-world calendar dates
+Paid or time-limited seasonal events
+Public live-service event scheduling
+Region-specific climate simulation beyond biome/elevation modifiers
+New third-party seasonal art identity
+```
+
+### Implementation outline
+
+```text
+FEATURE: Seasonal environment state
+  STORY: Add season enum and deterministic calendar progression
+  STORY: Persist season state and migrate pre-season saves
+  STORY: Add creative/world settings override for fixed season and season-cycle speed
+
+FEATURE: Seasonal day/night and weather
+  STORY: Add season-aware day/night curves
+  STORY: Add season-aware weather probability tables
+  STORY: Layer biome/elevation modifiers over season defaults
+
+FEATURE: Seasonal feedback
+  STORY: Add seasonal ambience hooks
+  STORY: Add seasonal VFX/readability hooks for rain, fog, snow, and vegetation tinting
+```
+
+### Tests
+
+```text
+Unit: season calendar advances deterministically from world time.
+Unit: fixed-season override prevents automatic season changes.
+Unit: day/night curves vary by season and preserve valid sunrise/sunset ordering.
+Unit: weather probabilities change by season and remain deterministic for a given seed.
+Unit: winter snow accumulation only occurs in valid cold conditions.
+Integration: season state saves, loads, and migrates from older world saves.
+PlayMode: creative/world settings can override season without corrupting weather state.
+```
+
+### Validation
+
+```text
+Spring, summer, fall, and winter are readable in headset without relying only on UI labels.
+Season changes visibly affect day length and weather mix.
+Weather remains comfortable and readable in VR.
+Season simulation does not break existing biome, vegetation, structure, or save/load behavior.
+```
+
+### Definition of done
+
+```text
+All four seasons exist.
+Day/night cycle changes by season.
+Weather patterns change by season.
+Season state is deterministic and saved.
+Pre-season saves migrate or default cleanly.
+Quest readability and comfort validation passes.
+```
+
+## Future feature — Full survival expansion
+
+### Deliverable
+
+A deeper survival game with original NPCs/mobs, combat, armor, progression, and expanded multiplayer survival interactions.
+
+### Scope
+
+```text
+Original passive creatures
+Original hostile creatures
+NPCs/mobs use original voxel character designs
+Mob spawning
+Mob pathfinding
+Combat
+Armor
+Weapons/tools progression
+Status effects
+Difficulty settings
+Biome expansion
+Dungeon/cave points of interest
+Advanced structures
+Advanced crafting
+Multiplayer combat sync
+```
+
+### Out of scope
+
+```text
+Minecraft mob names
+Minecraft mob silhouettes
+Creeper-like behavior identity
+Meta Horizon avatars for NPCs/mobs
+Public matchmaking
+Marketplace/modding
+```
+
+### Implementation outline
+
+```text
+FEATURE: NPCs/mobs
+  STORY: Original passive creature
+  STORY: Original hostile creature
+  STORY: AI and pathfinding
+  STORY: Spawn rules
+
+FEATURE: Combat/progression
+  STORY: Weapons/tools progression
+  STORY: Armor
+  STORY: Damage/status effects
+  STORY: Multiplayer combat sync
+```
+
+### Tests
+
+```text
+Unit: spawn rules obey safe zones.
+Unit: combat damage and armor formulas are deterministic.
+PlayMode: hostile mob can navigate simple test arena.
+PlayMode: combat damage syncs in multiplayer.
+Performance: mob counts stay within Quest budget.
+```
+
+### Validation
+
+```text
+Survival mode feels distinct from creative.
+Mobs and combat remain comfortable in VR.
+NPCs/mobs are original.
+Multiplayer remains stable.
+```
+
+### Definition of done
 
 ```text
 Original mobs/NPCs exist.
@@ -2179,7 +2167,106 @@ Multiplayer survival remains stable.
 Quest performance remains acceptable.
 ```
 
-## M12 — Cloud private worlds
+## Future feature — Cloud private worlds
+
+### Deliverable
+
+Cloud-hosted, owner-scoped private worlds persist when empty and can be joined by invited members over the internet. LAN remains available as a separate low-cost mode.
+
+### Scope
+
+```text
+Cloud-hosted dedicated/private world runtime
+Server-authoritative world simulation
+Stable cloud world IDs
+Owner identity
+Durable member list
+Owner-only invite code generation/regeneration
+One active reusable invite code per world
+Invite codes expire 48 hours after generation
+Auto-accept invite redemption by default
+Owner-approval-required invite mode
+Pending member requests
+Permanent membership until owner removal or self-removal
+Owner management: remove, block, approve, deny, regenerate invite
+Meta identity, entitlement, membership, and access-state validation on join
+Cloud persistent storage
+Save versioning and migration
+Atomic writes
+Restore validation
+Corruption recovery
+Idle spin-down with final save
+On-demand spin-up
+Session registry/routing
+Lifecycle diagnostics
+Cost and quota guardrails
+Privacy/data-use/store documentation
+```
+
+### Out of scope
+
+```text
+Public matchmaking
+Public/community world browser
+Community world discovery
+Public moderation/reporting surfaces
+Marketplace or mod distribution
+In-app voice chat
+Members generating invite codes
+Single-use per-recipient invite codes
+Replacing LAN multiplayer
+```
+
+### Implementation outline
+
+```text
+FEATURE: Cloud architecture
+  SPIKE: Choose hosting/runtime/provider model
+  STORY: Define cost, quota, region, privacy guardrails
+  STORY: Define server-authoritative runtime
+
+FEATURE: Owner/member access
+  STORY: Stable cloud world IDs
+  STORY: Owner model
+  STORY: Member list
+  STORY: Invite codes
+  STORY: Removal/block/approval flows
+
+FEATURE: Cloud persistence
+  STORY: Cloud save schema
+  STORY: Spin-down final save
+  STORY: On-demand spin-up
+  STORY: Reconnect sync
+```
+
+### Tests
+
+```text
+Unit: invite code generation prevents collisions.
+Unit: expired invite codes are rejected.
+Unit: membership persists after code expiration.
+Unit: removed/blocked members cannot rejoin.
+Integration: session registry routes authorized players.
+Integration: cloud save/load restores terrain, structures, inventories, environment, vegetation, and metadata.
+Integration: idle spin-down saves before teardown.
+Integration: spin-up restores latest world state before admitting players.
+Network simulation: edit/save/spin-down/reconnect remain stable under expected latency.
+```
+
+### Validation
+
+```text
+Owner can create a cloud private world.
+Owner can share a 48-hour invite code.
+Entitled signed-in redeemers become members in auto-accept mode.
+Owner can approve/deny/remove/block members.
+Cloud world saves when empty and spins down.
+Authorized members reconnect and trigger spin-up.
+Two Quest devices can resume a persisted world over the internet.
+LAN mode still works without cloud dependencies.
+```
+
+### Definition of done
 
 ```text
 LAN remains available.
@@ -2192,7 +2279,7 @@ Privacy/cost/quota diagnostics are documented.
 
 ---
 
-# 14. Source references to re-check before implementation
+# 15. Source references to re-check before implementation
 
 Re-check external references before implementation because pricing, SDKs, platform rules, and store requirements can change.
 

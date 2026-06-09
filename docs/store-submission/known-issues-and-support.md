@@ -12,7 +12,7 @@
 ## Known limitations (current build)
 
 - Multiplayer is **local LAN only**; there is no cloud-hosted/online matchmaking yet
-  (cloud private worlds are a later roadmap item).
+  (cloud private worlds are tracked in the execution plan's future-features section).
 - Worlds are bounded (fixed dimensions), not infinite/streaming terrain.
 - Voice communication uses Meta Quest party chat; there is no in-app voice.
 - Gameplay, save, environment, vegetation, structures, multiplayer, and feedback behavior

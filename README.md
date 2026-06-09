@@ -17,7 +17,7 @@ Blockiverse VR is a VR voxel sandbox prototype for Meta Quest 3 and Quest 3S, bu
 - Save/load with explicit schema versioning and temporary-ID migrations
 - LAN host-authoritative co-op with Meta Horizon avatars or fallback proxies
 
-Original NPCs/mobs, combat, deeper progression, and cloud-hosted private worlds are later expansions.
+Future expansion scope, including seasons, full survival expansion, and cloud-hosted private worlds, is tracked in the execution plan's future-features section.
 
 ## Development Model
 
