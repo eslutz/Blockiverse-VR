@@ -227,6 +227,13 @@ namespace Blockiverse.Voxel
         public static readonly BlockId Reedgrass_S2         = new(67);
         public static readonly BlockId Reedgrass_S3         = new(68);
 
+        // ── Crafted/decorative blocks needed by M6-F containers and feller strip-log output ─
+        public static readonly BlockId SmoothBranchwood     = new(69);
+        public static readonly BlockId ReedBasket           = new(70);
+        public static readonly BlockId ToolRack             = new(71);
+        public static readonly BlockId PantryJar            = new(72);
+        public static readonly BlockId DeepLocker           = new(73);
+
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
 
         public static BlockRegistry CreateDefault()
@@ -239,6 +246,7 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(LooseLoam,           "loose_loam",         "Loose Loam",           BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Graystone,           "graystone",          "Graystone",            BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(BranchwoodLog,       "branchwood_log",     "Branchwood Log",       BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(SmoothBranchwood,    "smooth_branchwood",  "Smooth Branchwood",    BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
@@ -247,6 +255,10 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(BuildTable,          "build_table",        "Build Table",          BlockCategory.Station,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(Glowwick,            "glowwick",           "Glowwick",             BlockCategory.Crafted,  isSolid: false, isRenderable: true,  emissiveLight: 9));
             registry.Register(new BlockDefinition(StorageCrate,        "storage_crate",      "Storage Crate",        BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(ReedBasket,          "reed_basket",        "Reed Basket",          BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(ToolRack,            "tool_rack",          "Tool Rack",            BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(PantryJar,           "pantry_jar",         "Pantry Jar",           BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(DeepLocker,          "deep_locker",        "Deep Locker",          BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 5));
 
             // ── Additional canonical terrain (atlas tiles generated) ─────────
             registry.Register(new BlockDefinition(Worldroot,    "worldroot",     "Worldroot",     BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: 3));

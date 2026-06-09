@@ -21,6 +21,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.LooseLoam,          ItemId.LooseLoam);
             AssertBlockMapsToItem(registry, BlockRegistry.Graystone,          ItemId.Graystone);
             AssertBlockMapsToItem(registry, BlockRegistry.BranchwoodLog,      ItemId.BranchwoodLog);
+            AssertBlockMapsToItem(registry, BlockRegistry.SmoothBranchwood,   ItemId.SmoothBranchwood);
             AssertBlockMapsToItem(registry, BlockRegistry.Leafmoss,           ItemId.Leafmoss);
             AssertBlockMapsToItem(registry, BlockRegistry.LumenQuartzCluster, ItemId.LumenCrystal);
             AssertBlockMapsToItem(registry, BlockRegistry.EmbercoalSeam,      ItemId.Embercoal);
@@ -29,6 +30,10 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.BuildTable,         ItemId.BuildTable);
             AssertBlockMapsToItem(registry, BlockRegistry.Glowwick,           ItemId.Glowwick);
             AssertBlockMapsToItem(registry, BlockRegistry.StorageCrate,       ItemId.StorageCrate);
+            AssertBlockMapsToItem(registry, BlockRegistry.ReedBasket,         ItemId.ReedBasket);
+            AssertBlockMapsToItem(registry, BlockRegistry.ToolRack,           ItemId.ToolRack);
+            AssertBlockMapsToItem(registry, BlockRegistry.PantryJar,          ItemId.PantryJar);
+            AssertBlockMapsToItem(registry, BlockRegistry.DeepLocker,         ItemId.DeepLocker);
 
             // Metal/crystal nodes drop their canonical raw resource (§3).
             AssertBlockMapsToItem(registry, BlockRegistry.PaletinThread,      ItemId.RawPaletin);
@@ -69,6 +74,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(registry.Get(ItemId.LumenCrystal).MaxStackSize,   Is.EqualTo(ItemRegistry.CrystalStackSize));
             Assert.That(registry.Get(ItemId.BuildTable).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize,   Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.DeepLocker).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodFeller).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodMallet).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodDelver).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));

@@ -37,6 +37,7 @@ namespace Blockiverse.Survival
         public static readonly ItemId Worldroot            = new("worldroot");
         public static readonly ItemId Deepmantle           = new("deepmantle");
         public static readonly ItemId BranchwoodLog        = new("branchwood_log");
+        public static readonly ItemId SmoothBranchwood     = new("smooth_branchwood");
         public static readonly ItemId Leafmoss             = new("leafmoss");
         public static readonly ItemId Thornbrush           = new("thornbrush");
         public static readonly ItemId Reedgrass            = new("reedgrass");
@@ -50,6 +51,10 @@ namespace Blockiverse.Survival
         public static readonly ItemId LumenLamp            = new("lumen_lamp");
         public static readonly ItemId SparkFlare           = new("spark_flare");
         public static readonly ItemId StorageCrate         = new("storage_crate");
+        public static readonly ItemId ReedBasket           = new("reed_basket");
+        public static readonly ItemId ToolRack             = new("tool_rack");
+        public static readonly ItemId PantryJar            = new("pantry_jar");
+        public static readonly ItemId DeepLocker           = new("deep_locker");
         public static readonly ItemId Campfire             = new("campfire");
         public static readonly ItemId ClayKiln             = new("clay_kiln");
         public static readonly ItemId BellowsForge         = new("bellows_forge");

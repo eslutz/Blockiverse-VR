@@ -83,6 +83,7 @@ namespace Blockiverse.Gameplay
 
                 // Wood
                 new(BlockRegistry.BranchwoodLog,   CreativeCatalogCategory.Wood),
+                new(BlockRegistry.SmoothBranchwood, CreativeCatalogCategory.Wood),
                 new(BlockRegistry.WorkPlank,       CreativeCatalogCategory.Wood),
                 new(BlockRegistry.ResinKnot,       CreativeCatalogCategory.Wood),
 
@@ -141,6 +142,10 @@ namespace Blockiverse.Gameplay
 
                 // Storage
                 new(BlockRegistry.StorageCrate,     CreativeCatalogCategory.Storage),
+                new(BlockRegistry.ReedBasket,       CreativeCatalogCategory.Storage),
+                new(BlockRegistry.ToolRack,         CreativeCatalogCategory.Storage),
+                new(BlockRegistry.PantryJar,        CreativeCatalogCategory.Storage),
+                new(BlockRegistry.DeepLocker,       CreativeCatalogCategory.Storage),
 
                 // Stations
                 new(BlockRegistry.BuildTable,       CreativeCatalogCategory.Stations),

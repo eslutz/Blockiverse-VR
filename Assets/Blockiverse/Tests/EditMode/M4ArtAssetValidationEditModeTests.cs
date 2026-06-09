@@ -62,7 +62,7 @@ namespace Blockiverse.Tests.EditMode
 
             TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
             Assert.That(androidSettings.overridden, Is.True);
-            // The atlas is non-square (8×9 tiles → 128×144 px). Android max texture size must be large
+            // The atlas is non-square; Android max texture size must be large
             // enough to hold the larger dimension without downscaling (which would misalign tiles), and
             // no larger than the next power of two above it to keep the Quest texture budget tight.
             int largestAtlasDimension = Math.Max(BlockVisualAtlas.Columns, BlockVisualAtlas.Rows) * BlockVisualAtlas.TilePixels;

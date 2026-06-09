@@ -47,6 +47,7 @@ namespace Blockiverse.Survival
 
             // ── Block items (vegetation) ──────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.BranchwoodLog, "Branchwood Log", ItemKind.Resource, BlockStackSize, BlockRegistry.BranchwoodLog));
+            registry.Register(new ItemDefinition(ItemId.SmoothBranchwood, "Smooth Branchwood", ItemKind.Resource, BlockStackSize, BlockRegistry.SmoothBranchwood));
             registry.Register(new ItemDefinition(ItemId.Leafmoss, "Leafmoss", ItemKind.Resource, BlockStackSize, BlockRegistry.Leafmoss));
             registry.Register(new ItemDefinition(ItemId.Thornbrush, "Thornbrush", ItemKind.Resource, BlockStackSize, BlockRegistry.Thornbrush));
             // Reedgrass drops reed_fiber (§3); the crop blocks' drops are aliased below.
@@ -66,6 +67,10 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.LumenLamp, "Lumen Lamp", ItemKind.Placeable, BlockStackSize, BlockRegistry.LumenLamp));
             registry.Register(new ItemDefinition(ItemId.SparkFlare, "Spark Flare", ItemKind.Placeable, BlockStackSize, BlockRegistry.SparkFlare));
             registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, BlockStackSize, BlockRegistry.StorageCrate));
+            registry.Register(new ItemDefinition(ItemId.ReedBasket, "Reed Basket", ItemKind.Placeable, BlockStackSize, BlockRegistry.ReedBasket));
+            registry.Register(new ItemDefinition(ItemId.ToolRack, "Tool Rack", ItemKind.Placeable, BlockStackSize, BlockRegistry.ToolRack));
+            registry.Register(new ItemDefinition(ItemId.PantryJar, "Pantry Jar", ItemKind.Placeable, BlockStackSize, BlockRegistry.PantryJar));
+            registry.Register(new ItemDefinition(ItemId.DeepLocker, "Deep Locker", ItemKind.Placeable, BlockStackSize, BlockRegistry.DeepLocker));
             registry.Register(new ItemDefinition(ItemId.Campfire, "Campfire", ItemKind.Placeable, BlockStackSize, BlockRegistry.Campfire));
             registry.Register(new ItemDefinition(ItemId.ClayKiln, "Clay Kiln", ItemKind.Placeable, BlockStackSize, BlockRegistry.ClayKiln));
             registry.Register(new ItemDefinition(ItemId.BellowsForge, "Bellows Forge", ItemKind.Placeable, BlockStackSize, BlockRegistry.BellowsForge));

@@ -47,8 +47,10 @@ namespace Blockiverse.Tests.Survival.EditMode
             BlockHarvestRuleSet rules = BlockHarvestRuleSet.CreateDefault(ItemRegistry.CreateDefault());
 
             BlockHarvestRule log        = rules.Get(BlockRegistry.BranchwoodLog);
+            BlockHarvestRule stripped   = rules.Get(BlockRegistry.SmoothBranchwood);
             BlockHarvestRule rosycopper = rules.Get(BlockRegistry.RosycopperBloom);
             BlockHarvestRule buildTable = rules.Get(BlockRegistry.BuildTable);
+            BlockHarvestRule locker     = rules.Get(BlockRegistry.DeepLocker);
 
             // Canonical mining formula (§6.1): correct tool mines faster than bare hands,
             // wrong tool class mines slower than the correct tool, and meeting the tier
@@ -57,10 +59,12 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(log.GetMineTicks(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(log.HandMineTicks));
             Assert.That(log.GetMineTicks(HarvestToolKind.Delver, toolTier: 1),
                 Is.GreaterThan(log.GetMineTicks(HarvestToolKind.Feller, toolTier: 1)));
+            Assert.That(stripped.GetMineTicks(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(stripped.HandMineTicks));
             Assert.That(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 2),
                 Is.LessThan(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 1)));
             Assert.That(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 2), Is.LessThan(rosycopper.HandMineTicks));
             Assert.That(buildTable.GetMineTicks(HarvestToolKind.Mallet, toolTier: 1), Is.LessThan(buildTable.HandMineTicks));
+            Assert.That(locker.GetMineTicks(HarvestToolKind.Mallet, toolTier: 5), Is.LessThan(locker.HandMineTicks));
         }
 
         [Test]

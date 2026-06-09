@@ -360,7 +360,12 @@ namespace Blockiverse.Gameplay
             block == BlockRegistry.GrainStalk || block == BlockRegistry.Reedgrass || block == BlockRegistry.Thornbrush;
 
         // Blocks that carry per-position container contents.
-        static bool IsContainerBlock(BlockId block) => block == BlockRegistry.StorageCrate;
+        static bool IsContainerBlock(BlockId block) =>
+            block == BlockRegistry.StorageCrate ||
+            block == BlockRegistry.ReedBasket ||
+            block == BlockRegistry.ToolRack ||
+            block == BlockRegistry.PantryJar ||
+            block == BlockRegistry.DeepLocker;
 
         long CurrentWorldTick => worldTimeClock != null ? worldTimeClock.TotalElapsedTicks : 0L;
 

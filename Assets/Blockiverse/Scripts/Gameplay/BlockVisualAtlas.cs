@@ -9,7 +9,7 @@ namespace Blockiverse.Gameplay
     public static class BlockVisualAtlas
     {
         public const int Columns = 8;
-        public const int Rows = 9;
+        public const int Rows = 10;
         public const int TilePixels = 16;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
@@ -87,6 +87,11 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Berrybush_S5.Value,       65 },
             { BlockRegistry.Reedgrass_S2.Value,       66 },
             { BlockRegistry.Reedgrass_S3.Value,       67 },
+            { BlockRegistry.SmoothBranchwood.Value,   68 },
+            { BlockRegistry.ReedBasket.Value,          69 },
+            { BlockRegistry.ToolRack.Value,            70 },
+            { BlockRegistry.PantryJar.Value,           71 },
+            { BlockRegistry.DeepLocker.Value,          72 },
         };
 
         public static Rect GetTileRect(BlockId blockId)

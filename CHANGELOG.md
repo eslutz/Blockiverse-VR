@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Expanded the authored block atlas to `8×10` / `128×160`, added Smooth Branchwood plus container block/item textures for Reed Basket, Tool Rack, Pantry Jar, and Deep Locker, and wired their block/item registry coverage.
 - Completed the M4–M6–M8 canonical depth slice and tied it into the runtime: biome-aware sapling growth and tree variants, wild-plant generation with a harvest→regrowth queue, the full structure catalog with biome-filtered placement and rolled container loot (saved/restored per world), environment effects (weather now dims lighting and raises fog), tool-action drop bonuses (Sickle double-roll, Carver full yield), and multiplayer environment-state sync on late-join.
 - Wired the survival interaction loop to runtime input: server-authoritative break→harvest and place→consume commands, a survival/creative mode toggle, equipped-hotbar tool/block selection, container loot on crate break, authoritative crafting, and a shared co-op crate UI (deposit/withdraw).
 - Consolidated later-expansion roadmap content into a dedicated execution-plan future-features section and added seasons as a future feature that changes day/night timing and weather patterns.

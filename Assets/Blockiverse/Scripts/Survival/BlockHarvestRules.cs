@@ -83,6 +83,7 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.LooseLoam,          HarvestToolKind.Spade);
             rules.RegisterForBlock(BlockRegistry.Graystone,          HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.BranchwoodLog,      HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.SmoothBranchwood,   HarvestToolKind.Feller);
             rules.RegisterForBlock(BlockRegistry.Leafmoss,           HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.LumenQuartzCluster, HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.EmbercoalSeam,      HarvestToolKind.Delver);
@@ -93,6 +94,10 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.LumenLamp,          HarvestToolKind.Hand);
             rules.RegisterForBlock(BlockRegistry.SparkFlare,         HarvestToolKind.Hand);
             rules.RegisterForBlock(BlockRegistry.StorageCrate,       HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.ReedBasket,         HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.ToolRack,           HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.PantryJar,          HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.DeepLocker,         HarvestToolKind.Mallet);
 
             // ── Additional canonical terrain ─────────────────────────────────
             rules.RegisterForBlock(BlockRegistry.DryTurf,            HarvestToolKind.Spade);
