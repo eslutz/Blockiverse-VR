@@ -480,7 +480,11 @@ namespace Blockiverse.Gameplay
                 return result;
             }
 
-            inventory.TryAddAll(harvest.Drop);
+            // Apply the rule's drop table so tool-action bonuses (Sickle double-roll, Carver full
+            // yield) take effect on the authoritative path, not only in the local TryHarvest helper.
+            // Capacity for the maximum was already validated by TryPreviewHarvest above.
+            ItemStack drop = ResolveHarvestService().RollHarvestDrop(harvest.BlockId, harvest.UsedTool);
+            inventory.TryAddAll(drop);
 
             if (equippedSlotIndex >= 0)
             {
@@ -498,7 +502,7 @@ namespace Blockiverse.Gameplay
             SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
                 SurvivalCommandKind.HarvestResource,
                 requestId,
-                harvest.Drop);
+                drop);
             SendInventorySnapshot(clientId);
             SendCommandResult(clientId, accepted, sendResponse);
             RefreshLocalInventoryReference();

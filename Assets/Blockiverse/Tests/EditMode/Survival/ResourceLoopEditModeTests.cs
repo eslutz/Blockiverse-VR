@@ -341,6 +341,53 @@ namespace Blockiverse.Tests.Survival.EditMode
                 "Without Carver, ResinKnot must drop exactly 1.");
         }
 
+        [Test]
+        public void RollHarvestDropAppliesSickleBonusForReedgrass()
+        {
+            // RollHarvestDrop is the shared roll used by the authoritative survival harvest path.
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            bool sawAboveMinimum = false;
+
+            for (uint seed = 1; seed <= 60 && !sawAboveMinimum; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: seed);
+                ItemStack drop = service.RollHarvestDrop(BlockRegistry.Reedgrass, HarvestToolKind.Sickle);
+                Assert.That(drop.ItemId, Is.EqualTo(ItemId.ReedFiber));
+                Assert.That(drop.Count, Is.InRange(1, 3));
+                if (drop.Count > 1) sawAboveMinimum = true;
+            }
+
+            Assert.That(sawAboveMinimum, Is.True, "Sickle bonus should sometimes yield more than the minimum.");
+        }
+
+        [Test]
+        public void RollHarvestDropReturnsBaseDropForNonBonusTool()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 7);
+
+            // Hand on ResinKnot (a Carver block) → fixed base drop of 1, regardless of the table.
+            for (int i = 0; i < 20; i++)
+            {
+                ItemStack drop = service.RollHarvestDrop(BlockRegistry.ResinKnot, HarvestToolKind.Hand);
+                Assert.That(drop.Count, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void RollHarvestDropReturnsBaseDropWhenRuleHasNoTable()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 3);
+
+            // BranchwoodLog has no drop table → always the base 1× log.
+            ItemStack drop = service.RollHarvestDrop(BlockRegistry.BranchwoodLog, HarvestToolKind.Feller);
+            Assert.That(drop, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
+        }
+
         static readonly BlockPosition HarvestPosition = new(1, 1, 1);
 
         static ResourceHarvestService CreateService(ItemRegistry itemRegistry)

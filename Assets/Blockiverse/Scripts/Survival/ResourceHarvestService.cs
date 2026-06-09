@@ -126,6 +126,24 @@ namespace Blockiverse.Survival
                 result = BlockHarvestResult.Success(rule, rolledDrop, usedTool, GetToolTier(equippedItem));
             }
 
+            return ApplyHarvestToInventory(result, world, inventory, position, equippedItem, equippedSlotIndex);
+        }
+
+        // Rolls the final drop for an already-validated harvest, applying the rule's drop table
+        // (Sickle double-roll / Carver full yield) when present, else the fixed base drop. Used by the
+        // authoritative survival harvest path so tool-action bonuses apply there too — not only in the
+        // local TryHarvest helper. Capacity for the maximum was already checked during preview.
+        public ItemStack RollHarvestDrop(BlockId blockId, HarvestToolKind usedTool)
+        {
+            if (!harvestRules.TryGet(blockId, out BlockHarvestRule rule))
+                return ItemStack.Empty;
+            return rule.Table != null ? RollDrop(rule, usedTool) : rule.Drop;
+        }
+
+        BlockHarvestResult ApplyHarvestToInventory(
+            BlockHarvestResult result, VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem, int equippedSlotIndex)
+        {
+
             // Defensive: the preview already verified capacity for the maximum possible drop, so this
             // add should always succeed. If it somehow cannot, do not clear the block — that would
             // silently destroy the resource.
