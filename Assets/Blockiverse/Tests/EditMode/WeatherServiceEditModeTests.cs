@@ -1,5 +1,6 @@
 using Blockiverse.WorldGen;
 using NUnit.Framework;
+using System;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -163,6 +164,121 @@ namespace Blockiverse.Tests.EditMode
                 var service = new WeatherService(seed: 1, state);
                 EnvironmentState env = service.Evaluate(0.25f, WorldConstants.SeaLevel);
                 Assert.That(env.PrecipitationIntensity, Is.EqualTo(0f), $"Expected no precipitation for {state}.");
+            }
+        }
+
+        // ── M4-C: Environment effects plumbing ───────────────────────────────
+
+        [Test]
+        public void CloudCoverageIsHighForThunderstorm()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Thunderstorm);
+            Assert.That(service.CloudCoverage, Is.EqualTo(1.0f));
+        }
+
+        [Test]
+        public void CloudCoverageIsLowForClear()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            Assert.That(service.CloudCoverage, Is.LessThan(0.25f));
+        }
+
+        [Test]
+        public void EnvironmentStateIncludesCloudCoverage()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.HeavyRain);
+            EnvironmentState env = service.Evaluate(0.25f, WorldConstants.SeaLevel);
+            Assert.That(env.CloudCoverage, Is.GreaterThan(0.5f));
+        }
+
+        [Test]
+        public void GetBaseSkyLightReturnsFifteenDuringDay()
+        {
+            Assert.That(EnvironmentLightComputer.GetBaseSkyLight(0.25f), Is.EqualTo(15));
+        }
+
+        [Test]
+        public void GetBaseSkyLightReturnsLowValueAtNight()
+        {
+            int nightLight = EnvironmentLightComputer.GetBaseSkyLight(0.70f, moonPhaseIndex: 0);
+            Assert.That(nightLight, Is.GreaterThanOrEqualTo(0).And.LessThanOrEqualTo(4));
+        }
+
+        [Test]
+        public void GetAmbientLightIsReducedByWeatherPenalty()
+        {
+            // Full moon, midday, thunderstorm
+            int withStorm = EnvironmentLightComputer.GetAmbientLight(
+                normalizedTime: 0.25f, moonPhaseIndex: 4,
+                cloudCoverage: 1.0f, precipitationIntensity: 0.9f, stormIntensity: 1.0f);
+            // Same time, clear sky
+            int clearSky = EnvironmentLightComputer.GetAmbientLight(
+                normalizedTime: 0.25f, moonPhaseIndex: 4,
+                cloudCoverage: 0.1f, precipitationIntensity: 0f, stormIntensity: 0f);
+
+            Assert.That(withStorm, Is.LessThan(clearSky));
+        }
+
+        // ── M8-4: Environment snapshot sync ──────────────────────────────────
+
+        [Test]
+        public void RestoreStatePreservesWeatherStateTicksAndRng()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            service.Tick(3000); // accumulate some ticks
+
+            service.RestoreState(WeatherState.Thunderstorm, 800, rng: 0xABCDEF01u);
+
+            Assert.That(service.CurrentState, Is.EqualTo(WeatherState.Thunderstorm));
+            Assert.That(service.TicksInCurrentState, Is.EqualTo(800));
+            Assert.That(service.RngState, Is.EqualTo(0xABCDEF01u));
+        }
+
+        [Test]
+        public void RestoreStateClampsNegativeTicksToZero()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            service.RestoreState(WeatherState.Fog, -500, rng: 12345u);
+            Assert.That(service.TicksInCurrentState, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RestoreStateNormalizesZeroRngToValidState()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            service.RestoreState(WeatherState.Overcast, 0, rng: 0u);
+            // A zero xorshift state is degenerate; it must be normalized to a non-zero value.
+            Assert.That(service.RngState, Is.Not.EqualTo(0u));
+        }
+
+        [Test]
+        public void TicksInCurrentStateMatchesAccumulatedTicks()
+        {
+            var service = new WeatherService(seed: 99, WeatherState.Clear);
+            service.Tick(2000);
+            // Clear min duration is 6000; no transition yet, so accumulated = 2000.
+            Assert.That(service.TicksInCurrentState, Is.EqualTo(2000));
+        }
+
+        [Test]
+        public void RestoringFullStateKeepsTwoServicesInLockstep()
+        {
+            // Simulates a host that has run for a while and a client that joins and restores the
+            // host's full weather snapshot (state + ticks + RNG). After restore, ticking both by the
+            // same total must produce identical weather sequences — no divergence.
+            var host = new WeatherService(seed: 7777, WeatherState.Clear);
+            for (int i = 0; i < 25; i++)
+                host.Tick(3000);
+
+            var client = new WeatherService(seed: 1, WeatherState.Clear); // different seed on purpose
+            client.RestoreState(host.CurrentState, host.TicksInCurrentState, host.RngState);
+
+            for (int i = 0; i < 40; i++)
+            {
+                host.Tick(2500);
+                client.Tick(2500);
+                Assert.That(client.CurrentState, Is.EqualTo(host.CurrentState),
+                    $"Weather diverged at iteration {i}; RNG sync should keep them locked.");
             }
         }
     }

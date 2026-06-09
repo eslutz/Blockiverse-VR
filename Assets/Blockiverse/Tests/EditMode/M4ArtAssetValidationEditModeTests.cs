@@ -14,6 +14,14 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class M4ArtAssetValidationEditModeTests
     {
+        static int NextPowerOfTwo(int value)
+        {
+            int power = 1;
+            while (power < value)
+                power <<= 1;
+            return power;
+        }
+
         static readonly string[] UiSpriteNames =
         {
             "hotbar_frame",
@@ -54,7 +62,12 @@ namespace Blockiverse.Tests.EditMode
 
             TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
             Assert.That(androidSettings.overridden, Is.True);
-            Assert.That(androidSettings.maxTextureSize, Is.LessThanOrEqualTo(BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels));
+            // The atlas is non-square; Android max texture size must be large
+            // enough to hold the larger dimension without downscaling (which would misalign tiles), and
+            // no larger than the next power of two above it to keep the Quest texture budget tight.
+            int largestAtlasDimension = Math.Max(BlockVisualAtlas.Columns, BlockVisualAtlas.Rows) * BlockVisualAtlas.TilePixels;
+            Assert.That(androidSettings.maxTextureSize, Is.GreaterThanOrEqualTo(largestAtlasDimension));
+            Assert.That(androidSettings.maxTextureSize, Is.LessThanOrEqualTo(NextPowerOfTwo(largestAtlasDimension)));
         }
 
         [Test]

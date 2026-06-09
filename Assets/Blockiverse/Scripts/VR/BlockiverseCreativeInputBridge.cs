@@ -20,6 +20,7 @@ namespace Blockiverse.VR
         [SerializeField] LineRenderer interactionLineRenderer;
         [SerializeField] XRInteractorLineVisual interactionLineVisual;
         [SerializeField] CreativeInteractionController interactionController;
+        [SerializeField] MultiplayerSurvivalSync survivalSync;
 
         UnityAction breakAction;
         UnityAction placeAction;
@@ -124,7 +125,23 @@ namespace Blockiverse.VR
 
             if (interactionController == null && Application.isPlaying)
                 interactionController = FindFirstObjectByType<CreativeInteractionController>();
+
+            if (survivalSync == null && Application.isPlaying)
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>();
         }
+
+        // The current interaction mode for this player (resolved from the survival sync).
+        public PlayerModeState CurrentMode =>
+            survivalSync != null ? survivalSync.CurrentMode : PlayerModeState.Creative;
+
+        // Flips between survival and creative interaction. Invoked by the mode-toggle menu action.
+        public void ToggleSurvivalCreativeMode()
+        {
+            DiscoverDependencies();
+            survivalSync?.ToggleMode();
+        }
+
+        bool SurvivalInteractionActive => survivalSync != null && survivalSync.CurrentMode == PlayerModeState.Survival;
 
         void DiscoverInteractionRayVisuals()
         {
@@ -162,14 +179,34 @@ namespace Blockiverse.VR
 
         void TryBreakTarget()
         {
-            if (TryGetTarget(out BlockPosition target, out _))
+            if (!TryGetTarget(out BlockPosition target, out _))
+                return;
+
+            // Survival mode: server-authoritative harvest (resource drops, tool tier/durability,
+            // container loot). Creative mode: direct delete.
+            if (SurvivalInteractionActive)
+                survivalSync.TrySubmitHarvest(target, out _);
+            else
                 interactionController.TryBreakBlock(target);
         }
 
         void TryPlaceTarget()
         {
-            if (TryGetTarget(out BlockPosition target, out Vector3 normal))
+            if (!TryGetTarget(out BlockPosition target, out Vector3 normal))
+                return;
+
+            // Survival mode: use the held item authoritatively — place the held block into the adjacent
+            // cell, or (Feller held on a branchwood_log) strip the log into smooth_branchwood. The sync
+            // decides based on the held item. Creative mode: free placement of the selected catalog block.
+            if (SurvivalInteractionActive)
+            {
+                BlockPosition placement = CreativeInteractionController.ComputePlacementPosition(target, normal);
+                survivalSync.TrySubmitUse(target, placement, out _);
+            }
+            else
+            {
                 interactionController.TryPlaceBlock(target, normal);
+            }
         }
 
         void TryUndo()

@@ -9,7 +9,7 @@ namespace Blockiverse.Gameplay
     public static class BlockVisualAtlas
     {
         public const int Columns = 8;
-        public const int Rows = 8;
+        public const int Rows = 10;
         public const int TilePixels = 16;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
@@ -50,7 +50,7 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Reedgrass.Value,          28 },
             { BlockRegistry.WorkPlank.Value,          29 },
             { BlockRegistry.CutstoneBlock.Value,      30 },
-            { BlockRegistry.FiredBrick.Value,         31 },
+            { BlockRegistry.FiredBrickBlock.Value,    31 },
             { BlockRegistry.ClearpaneGlass.Value,     32 },
             { BlockRegistry.SurfacePebbles.Value,     33 },
             { BlockRegistry.FlintyShingle.Value,      34 },
@@ -80,6 +80,18 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Sapling.Value,            58 },
             { BlockRegistry.Sapling_S1.Value,         59 },
             { BlockRegistry.Sapling_S2.Value,         60 },
+            { BlockRegistry.GrainStalk_S3.Value,      61 },
+            { BlockRegistry.GrainStalk_S4.Value,      62 },
+            { BlockRegistry.Berrybush_S3.Value,       63 },
+            { BlockRegistry.Berrybush_S4.Value,       64 },
+            { BlockRegistry.Berrybush_S5.Value,       65 },
+            { BlockRegistry.Reedgrass_S2.Value,       66 },
+            { BlockRegistry.Reedgrass_S3.Value,       67 },
+            { BlockRegistry.SmoothBranchwood.Value,   68 },
+            { BlockRegistry.ReedBasket.Value,          69 },
+            { BlockRegistry.ToolRack.Value,            70 },
+            { BlockRegistry.PantryJar.Value,           71 },
+            { BlockRegistry.DeepLocker.Value,          72 },
         };
 
         public static Rect GetTileRect(BlockId blockId)

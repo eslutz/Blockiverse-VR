@@ -83,6 +83,7 @@ namespace Blockiverse.Gameplay
 
                 // Wood
                 new(BlockRegistry.BranchwoodLog,   CreativeCatalogCategory.Wood),
+                new(BlockRegistry.SmoothBranchwood, CreativeCatalogCategory.Wood),
                 new(BlockRegistry.WorkPlank,       CreativeCatalogCategory.Wood),
                 new(BlockRegistry.ResinKnot,       CreativeCatalogCategory.Wood),
 
@@ -91,14 +92,21 @@ namespace Blockiverse.Gameplay
                 new(BlockRegistry.Thornbrush,      CreativeCatalogCategory.Foliage),
                 new(BlockRegistry.Reedgrass,       CreativeCatalogCategory.Foliage),
                 new(BlockRegistry.Reedgrass_S1,    CreativeCatalogCategory.Foliage),
+                new(BlockRegistry.Reedgrass_S2,    CreativeCatalogCategory.Foliage),
+                new(BlockRegistry.Reedgrass_S3,    CreativeCatalogCategory.Foliage),
 
                 // Crops
                 new(BlockRegistry.GrainStalk,      CreativeCatalogCategory.Crops),
                 new(BlockRegistry.GrainStalk_S1,   CreativeCatalogCategory.Crops),
                 new(BlockRegistry.GrainStalk_S2,   CreativeCatalogCategory.Crops),
+                new(BlockRegistry.GrainStalk_S3,   CreativeCatalogCategory.Crops),
+                new(BlockRegistry.GrainStalk_S4,   CreativeCatalogCategory.Crops),
                 new(BlockRegistry.Berrybush,       CreativeCatalogCategory.Crops),
                 new(BlockRegistry.Berrybush_S1,    CreativeCatalogCategory.Crops),
                 new(BlockRegistry.Berrybush_S2,    CreativeCatalogCategory.Crops),
+                new(BlockRegistry.Berrybush_S3,    CreativeCatalogCategory.Crops),
+                new(BlockRegistry.Berrybush_S4,    CreativeCatalogCategory.Crops),
+                new(BlockRegistry.Berrybush_S5,    CreativeCatalogCategory.Crops),
 
                 // Saplings
                 new(BlockRegistry.Sapling,         CreativeCatalogCategory.Saplings),
@@ -124,7 +132,7 @@ namespace Blockiverse.Gameplay
 
                 // Crafted
                 new(BlockRegistry.CutstoneBlock,    CreativeCatalogCategory.Crafted),
-                new(BlockRegistry.FiredBrick,       CreativeCatalogCategory.Crafted),
+                new(BlockRegistry.FiredBrickBlock,  CreativeCatalogCategory.Crafted),
                 new(BlockRegistry.ClearpaneGlass,   CreativeCatalogCategory.Crafted),
 
                 // Lighting
@@ -134,6 +142,10 @@ namespace Blockiverse.Gameplay
 
                 // Storage
                 new(BlockRegistry.StorageCrate,     CreativeCatalogCategory.Storage),
+                new(BlockRegistry.ReedBasket,       CreativeCatalogCategory.Storage),
+                new(BlockRegistry.ToolRack,         CreativeCatalogCategory.Storage),
+                new(BlockRegistry.PantryJar,        CreativeCatalogCategory.Storage),
+                new(BlockRegistry.DeepLocker,       CreativeCatalogCategory.Storage),
 
                 // Stations
                 new(BlockRegistry.BuildTable,       CreativeCatalogCategory.Stations),

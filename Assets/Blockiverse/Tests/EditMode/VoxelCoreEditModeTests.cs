@@ -14,7 +14,7 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(registry.All.Count, Is.EqualTo(62));
+            Assert.That(registry.All.Count, Is.EqualTo(74));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
             Assert.That(registry.Get(BlockRegistry.BranchwoodLog).Category, Is.EqualTo(BlockCategory.Organic));
@@ -23,6 +23,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Graystone"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Dark Slate"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Glowwick"));
+            Assert.That(registry.All.Select(b => b.Name), Has.Member("Smooth Branchwood"));
+            Assert.That(registry.All.Select(b => b.Name), Has.Member("Deep Locker"));
         }
 
         [Test]

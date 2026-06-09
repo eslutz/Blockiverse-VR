@@ -75,7 +75,8 @@ namespace Blockiverse.Voxel
             bool isRenderable,
             int emissiveLight = 0,
             BlockHardnessClass hardnessClass = BlockHardnessClass.Soft,
-            int harvestTierMin = 0)
+            int harvestTierMin = 0,
+            float hardness = -1f)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -98,6 +99,21 @@ namespace Blockiverse.Voxel
             EmissiveLight = emissiveLight;
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
+            // Canonical mining hardness (voxel_survival_ruleset §2/§3). When not specified
+            // explicitly, derive a representative value from the hardness class.
+            Hardness = hardness >= 0f ? hardness : HardnessFromClass(hardnessClass);
+        }
+
+        static float HardnessFromClass(BlockHardnessClass hardnessClass)
+        {
+            return hardnessClass switch
+            {
+                BlockHardnessClass.Soft     => 0.5f,
+                BlockHardnessClass.Medium   => 2.0f,
+                BlockHardnessClass.Hard     => 3.5f,
+                BlockHardnessClass.VeryHard => 6.0f,
+                _                           => 1.0f,
+            };
         }
 
         public BlockId Id { get; }
@@ -109,6 +125,7 @@ namespace Blockiverse.Voxel
         public int EmissiveLight { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
+        public float Hardness { get; }
     }
 
     public sealed class BlockRegistry
@@ -158,7 +175,7 @@ namespace Blockiverse.Voxel
         // ── Canonical crafted blocks ─────────────────────────────────────────
         public static readonly BlockId WorkPlank            = new(30);
         public static readonly BlockId CutstoneBlock        = new(31);
-        public static readonly BlockId FiredBrick           = new(32);
+        public static readonly BlockId FiredBrickBlock      = new(32);
         public static readonly BlockId ClearpaneGlass       = new(33);
 
         // ── Canonical resource nodes ─────────────────────────────────────────
@@ -201,6 +218,22 @@ namespace Blockiverse.Voxel
         public static readonly BlockId Sapling_S1           = new(60);
         public static readonly BlockId Sapling_S2           = new(61);
 
+        // ── Additional crop growth stages (full canonical stage counts, §11.2) ─
+        public static readonly BlockId GrainStalk_S3        = new(62);
+        public static readonly BlockId GrainStalk_S4        = new(63);
+        public static readonly BlockId Berrybush_S3         = new(64);
+        public static readonly BlockId Berrybush_S4         = new(65);
+        public static readonly BlockId Berrybush_S5         = new(66);
+        public static readonly BlockId Reedgrass_S2         = new(67);
+        public static readonly BlockId Reedgrass_S3         = new(68);
+
+        // ── Crafted/decorative blocks needed by M6-F containers and feller strip-log output ─
+        public static readonly BlockId SmoothBranchwood     = new(69);
+        public static readonly BlockId ReedBasket           = new(70);
+        public static readonly BlockId ToolRack             = new(71);
+        public static readonly BlockId PantryJar            = new(72);
+        public static readonly BlockId DeepLocker           = new(73);
+
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
 
         public static BlockRegistry CreateDefault()
@@ -213,6 +246,7 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(LooseLoam,           "loose_loam",         "Loose Loam",           BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Graystone,           "graystone",          "Graystone",            BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(BranchwoodLog,       "branchwood_log",     "Branchwood Log",       BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(SmoothBranchwood,    "smooth_branchwood",  "Smooth Branchwood",    BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
@@ -221,6 +255,10 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(BuildTable,          "build_table",        "Build Table",          BlockCategory.Station,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(Glowwick,            "glowwick",           "Glowwick",             BlockCategory.Crafted,  isSolid: false, isRenderable: true,  emissiveLight: 9));
             registry.Register(new BlockDefinition(StorageCrate,        "storage_crate",      "Storage Crate",        BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(ReedBasket,          "reed_basket",        "Reed Basket",          BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(ToolRack,            "tool_rack",          "Tool Rack",            BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(PantryJar,           "pantry_jar",         "Pantry Jar",           BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(DeepLocker,          "deep_locker",        "Deep Locker",          BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 5));
 
             // ── Additional canonical terrain (atlas tiles generated) ─────────
             registry.Register(new BlockDefinition(Worldroot,    "worldroot",     "Worldroot",     BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: 3));
@@ -248,7 +286,7 @@ namespace Blockiverse.Voxel
             // ── Additional canonical crafted (atlas tiles generated) ─────────
             registry.Register(new BlockDefinition(WorkPlank,     "work_plank",     "Work Plank",     BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(FiredBrick,    "fired_brick",      "Fired Brick",  BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
+            registry.Register(new BlockDefinition(FiredBrickBlock, "fired_brick_block", "Fired Brick Block", BlockCategory.Crafted, isSolid: true, isRenderable: true, hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1, hardness: 2.6f));
             registry.Register(new BlockDefinition(ClearpaneGlass,"clearpane_glass","Clearpane Glass",BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft,  harvestTierMin: 1));
 
             // ── Additional canonical resource nodes (atlas tiles generated) ──
@@ -282,9 +320,16 @@ namespace Blockiverse.Voxel
             // ── Crop growth stages (stage 0 = existing GrainStalk/Berrybush/Reedgrass) ─
             registry.Register(new BlockDefinition(GrainStalk_S1, "grain_stalk_s1", "Grain Stalk S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(GrainStalk_S2, "grain_stalk_s2", "Grain Stalk S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(GrainStalk_S3, "grain_stalk_s3", "Grain Stalk S3", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(GrainStalk_S4, "grain_stalk_s4", "Grain Stalk S4", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Berrybush_S1,  "berrybush_s1",   "Berrybush S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Berrybush_S2,  "berrybush_s2",   "Berrybush S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush_S3,  "berrybush_s3",   "Berrybush S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush_S4,  "berrybush_s4",   "Berrybush S4",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush_S5,  "berrybush_s5",   "Berrybush S5",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Reedgrass_S1,  "reedgrass_s1",   "Reedgrass S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Reedgrass_S2,  "reedgrass_s2",   "Reedgrass S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Reedgrass_S3,  "reedgrass_s3",   "Reedgrass S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
 
             // ── Sapling growth stages ─────────────────────────────────────────
             registry.Register(new BlockDefinition(Sapling,    "sapling",    "Sapling",    BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));

@@ -23,6 +23,7 @@ namespace Blockiverse.WorldGen
         public float PrecipitationIntensity;
         public float FogDensity;
         public float StormIntensity;
+        public float CloudCoverage;
     }
 
     public sealed class WeatherService
@@ -72,6 +73,27 @@ namespace Blockiverse.WorldGen
 
         public WeatherState CurrentState => currentState;
 
+        // Ticks the service has accumulated in the current state — used for environment sync snapshots.
+        public int TicksInCurrentState => ticksInCurrentState;
+
+        // Current xorshift RNG position — part of the environment sync snapshot so a late-joining
+        // client resumes the host's exact transition stream and stays in deterministic lockstep.
+        public uint RngState => rngState;
+
+        // Restore weather state received from a host snapshot (multiplayer late-join / reconnect).
+        // Restoring rngState as well keeps client and host weather sequences identical going forward.
+        public void RestoreState(WeatherState state, int ticks, uint rng)
+        {
+            currentState = state;
+            ticksInCurrentState = Math.Max(0, ticks);
+            rngState = rng == 0 ? 1u : rng;
+        }
+
+        public float CloudCoverage => TargetCloudCoverage(currentState);
+
+        // The runtime weather→light penalty lives in EnvironmentLightComputer.GetAmbientLight, which the
+        // lighting controller consumes via EnvironmentLightingSolver; CloudCoverage feeds that path.
+
         public EnvironmentState Evaluate(float normalizedTimeOfDay, int altitudeY)
         {
             float baseTemp = ComputeBaseTemperature(currentState);
@@ -86,6 +108,7 @@ namespace Blockiverse.WorldGen
                 PrecipitationIntensity = PrecipitationIntensityFor(currentState),
                 FogDensity           = FogDensityFor(currentState),
                 StormIntensity       = StormIntensityFor(currentState),
+                CloudCoverage        = CloudCoverage,
             };
         }
 
@@ -197,5 +220,21 @@ namespace Blockiverse.WorldGen
         {
             return normalizedTime > 0.6f || normalizedTime < 0.1f;
         }
+
+        // Target cloud coverage per state (voxel_world_environment_effects.md §8.3 target values).
+        static float TargetCloudCoverage(WeatherState state) => state switch
+        {
+            WeatherState.Clear        => 0.10f,
+            WeatherState.PartlyCloudy => 0.45f,
+            WeatherState.Overcast     => 0.80f,
+            WeatherState.LightRain    => 0.85f,
+            WeatherState.HeavyRain    => 0.95f,
+            WeatherState.Thunderstorm => 1.00f,
+            WeatherState.LightSnow    => 0.85f,
+            WeatherState.HeavySnow    => 0.95f,
+            WeatherState.Blizzard     => 1.00f,
+            WeatherState.Fog          => 0.65f,
+            _                         => 0.50f,
+        };
     }
 }

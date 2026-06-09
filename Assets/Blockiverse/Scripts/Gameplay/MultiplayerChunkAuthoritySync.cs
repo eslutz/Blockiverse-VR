@@ -16,11 +16,14 @@ namespace Blockiverse.Gameplay
         const string MutationDeltaMessage = "Blockiverse.ChunkAuthority.MutationDelta";
         const string ChunkSnapshotMessage = "Blockiverse.ChunkAuthority.ChunkSnapshot";
         const string MutationResultMessage = "Blockiverse.ChunkAuthority.MutationResult";
+        const string EnvironmentSnapshotMessage = "Blockiverse.ChunkAuthority.EnvironmentSnapshot";
         const int MutationRequestMessageBytes = 128;
         const int MutationDeltaMessageBytes = 160;
         const int MutationResultMessageBytes = 128;
         const int SnapshotHeaderBytes = 80;
         const int SnapshotBlockBytes = 32;
+        // WeatherState (int) + ticksInCurrentState (int) + weatherRng (uint) + totalElapsedTicks (long) = 20 bytes
+        const int EnvironmentSnapshotMessageBytes = 20;
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
@@ -45,6 +48,8 @@ namespace Blockiverse.Gameplay
         public int AppliedChunkDeltaCount { get; private set; }
         public int IgnoredOutOfOrderChunkDeltaCount { get; private set; }
         public int SentLateJoinSnapshotCount { get; private set; }
+        public int SentEnvironmentSnapshotCount { get; private set; }
+        public int AppliedEnvironmentSnapshotCount { get; private set; }
         public int AppliedGenerationSnapshotCount { get; private set; }
         public int AppliedSnapshotBlockCount { get; private set; }
         public int ReceivedMutationRejectionCount { get; private set; }
@@ -205,6 +210,7 @@ namespace Blockiverse.Gameplay
             }
 
             SendLateJoinSnapshot(clientId);
+            SendEnvironmentSnapshot(clientId);
         }
 
         void HandleServerStopped(bool wasHost)
@@ -482,6 +488,58 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        void SendEnvironmentSnapshot(ulong clientId)
+        {
+            if (worldManager == null) return;
+
+            var writer = new FastBufferWriter(EnvironmentSnapshotMessageBytes, Allocator.Temp);
+            try
+            {
+                CreativeWorldManager.WeatherSyncState weather = worldManager.GetWeatherSyncState();
+                long worldTimeTicks = worldManager.WorldTimeClock != null
+                    ? worldManager.WorldTimeClock.TotalElapsedTicks
+                    : 0L;
+
+                writer.WriteValueSafe((int)weather.State);
+                writer.WriteValueSafe(weather.Ticks);
+                writer.WriteValueSafe(weather.RngState);
+                writer.WriteValueSafe(worldTimeTicks);
+
+                ResolveNetworkManager().CustomMessagingManager.SendNamedMessage(
+                    EnvironmentSnapshotMessage,
+                    clientId,
+                    writer);
+                SentEnvironmentSnapshotCount++;
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        void HandleEnvironmentSnapshotMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
+                return;
+
+            reader.ReadValueSafe(out int weatherStateInt);
+            reader.ReadValueSafe(out int weatherTicks);
+            reader.ReadValueSafe(out uint weatherRng);
+            reader.ReadValueSafe(out long worldTimeTicks);
+
+            if (worldManager != null)
+            {
+                // Both helpers buffer-and-defer if the services are not yet initialized, so weather
+                // ticks/RNG and world time survive regardless of message ordering relative to the
+                // generation snapshot.
+                worldManager.RestoreWeatherSyncState(
+                    new CreativeWorldManager.WeatherSyncState((WeatherState)weatherStateInt, weatherTicks, weatherRng));
+                worldManager.RestoreWorldTimeTicks(worldTimeTicks);
+            }
+
+            AppliedEnvironmentSnapshotCount++;
+        }
+
         void ApplyAuthoritativeBlock(BlockPosition position, BlockId block, bool trackChange = true)
         {
             VoxelWorld world = ResolveWorld();
@@ -734,6 +792,7 @@ namespace Blockiverse.Gameplay
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MutationDeltaMessage, HandleMutationDeltaMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ChunkSnapshotMessage, HandleChunkSnapshotMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MutationResultMessage, HandleMutationResultMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(EnvironmentSnapshotMessage, HandleEnvironmentSnapshotMessage);
             messagesRegistered = true;
         }
 
@@ -751,6 +810,7 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MutationDeltaMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ChunkSnapshotMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MutationResultMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(EnvironmentSnapshotMessage);
             messagesRegistered = false;
         }
 
@@ -829,10 +889,21 @@ namespace Blockiverse.Gameplay
             var preset = (CreativeWorldGenerationPreset)generationPreset;
             var settings = new WorldGenerationSettings(width, height, depth, chunkSize, seed, groundHeight);
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            VoxelWorld world = preset == CreativeWorldGenerationPreset.FlatCreative
-                ? new FlatCreativeWorldPreset(registry, settings).Generate()
-                : new SurvivalTerrainPreset(registry, settings).Generate();
-            worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset), this);
+            VoxelWorld world;
+            IReadOnlyList<StructureContainerLoot> containerLoot = null;
+            if (preset == CreativeWorldGenerationPreset.FlatCreative)
+            {
+                world = new FlatCreativeWorldPreset(registry, settings).Generate();
+            }
+            else
+            {
+                // Loot is deterministic from the seed, so the client regenerates the exact same
+                // container contents the host generated — no per-container network sync needed.
+                var survivalPreset = new SurvivalTerrainPreset(registry, settings);
+                world = survivalPreset.Generate();
+                containerLoot = survivalPreset.ContainerLoot;
+            }
+            worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset, containerLoot), this);
             LastAppliedChunkDeltaSequence = hostDeltaSequence;
             hasHostGenerationSnapshotForSession = true;
             AppliedGenerationSnapshotCount++;

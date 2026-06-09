@@ -1205,11 +1205,20 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Host did not grant harvested timber only to the requesting client.");
 
             // Embercoal Seam requires a tier-2 Delver (Flint); a tier-1 Reedwood tool cannot mine
-            // ores per the survival ruleset (§3, §7.1).
+            // ores per the survival ruleset (§3, §7.1). Harvest validation is server-authoritative:
+            // the host reads the equipped tool from its own copy of the client's inventory at the
+            // supplied slot, so the client's claimed stack is ignored. Seed the host-authoritative
+            // inventory with the tool and reference it by slot — the client passes no claimed item.
+            ulong firstClientId = firstClientChunkSync.CurrentBoundary.LocalClientId;
+            const int coalToolSlotIndex = 9;
+            hostSurvivalSync.GetInventory(firstClientId).SetSlot(
+                coalToolSlotIndex, new ItemStack(ItemId.FlintDelver, 1).WithDurability(35));
+
             SurvivalCommandResult coalHarvest = firstClientSurvivalSync.TrySubmitHarvest(
                 coalstonePosition,
-                new ItemStack(ItemId.FlintDelver, 1).WithDurability(35),
-                out bool coalHarvestSentToHost);
+                ItemStack.Empty,
+                out bool coalHarvestSentToHost,
+                equippedSlotIndex: coalToolSlotIndex);
 
             Assert.That(coalHarvestSentToHost, Is.True);
             Assert.That(coalHarvest.PendingHostValidation, Is.True);
@@ -1218,19 +1227,20 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 1,
                 "Host did not grant harvested coalstone to the requesting client.");
 
-            SurvivalCommandResult craftTorchbud = firstClientSurvivalSync.TrySubmitCraft(
-                ItemId.Glowwick,
+            // Craft is server-authoritative: Work Plank is the canonical handcraft recipe
+            // (branchwood_log ×1 → work_plank ×6, §9.1) and is achievable from the harvested log.
+            SurvivalCommandResult craftPlanks = firstClientSurvivalSync.TrySubmitCraft(
+                ItemId.WorkPlank,
                 CraftingStation.BuildTable,
                 out bool craftSentToHost);
 
             Assert.That(craftSentToHost, Is.True);
-            Assert.That(craftTorchbud.PendingHostValidation, Is.True);
+            Assert.That(craftPlanks.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Glowwick) == 4 &&
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.WorkPlank) == 6 &&
                       firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 0 &&
-                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 0 &&
-                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Glowwick) == 4,
+                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.WorkPlank) == 6,
                 "Host did not validate crafting consistently for the requesting client.");
 
             SurvivalCommandResult crateTimberHarvest = firstClientSurvivalSync.TrySubmitHarvest(
@@ -1278,6 +1288,209 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSurvivalSync.AcceptedCrateTransferCount, Is.EqualTo(2));
             Assert.That(firstClientSurvivalSync.PendingCommandRequestCount, Is.Zero);
             Assert.That(secondClientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator NetworkedSurvivalPlaceConsumesHeldBlockAuthoritatively()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Place World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Place World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 5112, groundHeight: 2));
+
+            var placePosition = new BlockPosition(2, 4, 2); // an air cell above the ground band
+            Assert.That(hostWorldManager.World.GetBlock(placePosition), Is.EqualTo(BlockRegistry.Air));
+
+            MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientChunkSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
+
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for survival place.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for survival place.");
+
+            yield return WaitFor(
+                () => clientChunkSync.HasHostGenerationSnapshotForSession &&
+                      clientSurvivalSync.ReceivedInventorySnapshotCount > 0,
+                "Client did not receive host-owned survival and world snapshots.");
+
+            // Seed the host-authoritative copy of the client's inventory with a placeable block item.
+            ulong clientId = clientChunkSync.CurrentBoundary.LocalClientId;
+            const int blockSlotIndex = 0;
+            hostSurvivalSync.GetInventory(clientId).SetSlot(blockSlotIndex, new ItemStack(ItemId.BranchwoodLog, 2));
+
+            SurvivalCommandResult place = clientSurvivalSync.TrySubmitPlace(
+                placePosition,
+                out bool placeSentToHost,
+                blockSlotIndex);
+
+            Assert.That(placeSentToHost, Is.True);
+            Assert.That(place.PendingHostValidation, Is.True);
+            Assert.That(place.CommandKind, Is.EqualTo(SurvivalCommandKind.PlaceBlock));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(placePosition) == BlockRegistry.BranchwoodLog &&
+                      clientWorldManager.World.GetBlock(placePosition) == BlockRegistry.BranchwoodLog &&
+                      hostSurvivalSync.GetInventory(clientId).CountOf(ItemId.BranchwoodLog) == 1,
+                "Host did not place the held block authoritatively and consume one item.");
+
+            Assert.That(hostSurvivalSync.AcceptedPlaceCount, Is.EqualTo(1));
+            Assert.That(clientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator NetworkedFellerStripLogConvertsBranchwoodAuthoritatively()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Strip World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Strip World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6112, groundHeight: 2));
+
+            var logPosition = new BlockPosition(2, 4, 2);
+            hostWorldManager.World.SetBlock(logPosition, BlockRegistry.BranchwoodLog);
+
+            MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientChunkSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
+
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for strip-log.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for strip-log.");
+
+            yield return WaitFor(
+                () => clientChunkSync.HasHostGenerationSnapshotForSession &&
+                      clientSurvivalSync.ReceivedInventorySnapshotCount > 0,
+                "Client did not receive host-owned survival and world snapshots.");
+
+            // Seed the host-authoritative copy of the client's inventory with a Feller in a slot.
+            ulong clientId = clientChunkSync.CurrentBoundary.LocalClientId;
+            const int fellerSlotIndex = 0;
+            hostSurvivalSync.GetInventory(clientId).SetSlot(fellerSlotIndex, new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(10));
+
+            SurvivalCommandResult strip = clientSurvivalSync.TrySubmitStripLog(
+                logPosition,
+                out bool stripSentToHost,
+                fellerSlotIndex);
+
+            Assert.That(stripSentToHost, Is.True);
+            Assert.That(strip.CommandKind, Is.EqualTo(SurvivalCommandKind.StripLog));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(logPosition) == BlockRegistry.SmoothBranchwood &&
+                      clientWorldManager.World.GetBlock(logPosition) == BlockRegistry.SmoothBranchwood &&
+                      hostSurvivalSync.GetInventory(clientId).GetSlot(fellerSlotIndex).Durability == 9,
+                "Feller strip-log did not convert the log to smooth_branchwood and spend durability.");
+
+            Assert.That(hostSurvivalSync.AcceptedStripLogCount, Is.EqualTo(1));
+            Assert.That(clientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator SurvivalHudPanelsRouteCraftAndCrateThroughAuthoritativeSync()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Panel Routing World");
+            MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
+
+            ushort port = NextPort();
+            hostSession.Configure(new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port));
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for panel routing.");
+
+            // After StartHost the host's LocalInventory is the authoritative local-player inventory.
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            hostSurvivalSync.LocalInventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2));
+            hostSurvivalSync.SelectedHotbarSlotIndex = 0;
+
+            // Crafting panel → authoritative TrySubmitCraft (Work Plank: branchwood_log ×1 → ×6, §9.1).
+            var craftingObject = new GameObject("Test Crafting Panel");
+            SurvivalCraftingPanel craftingPanel = craftingObject.AddComponent<SurvivalCraftingPanel>();
+            craftingPanel.ConfigureSurvivalSync(hostSurvivalSync);
+            craftingPanel.Bind(CraftingRecipeBook.CreateDefault(itemRegistry), hostSurvivalSync.LocalInventory, itemRegistry, CraftingStation.BuildTable);
+            craftingPanel.TryCraftByOutput(ItemId.WorkPlank);
+
+            Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6),
+                "Crafting panel should craft through the authoritative sync into the shared inventory.");
+            Assert.That(hostSurvivalSync.AcceptedCraftCount, Is.EqualTo(1));
+
+            // Crate panel → authoritative deposit/withdraw of the held item (the remaining branchwood_log).
+            var crateObject = new GameObject("Test Crate Panel");
+            SurvivalCratePanel cratePanel = crateObject.AddComponent<SurvivalCratePanel>();
+            cratePanel.Bind(hostSurvivalSync, itemRegistry);
+
+            cratePanel.DepositHeld();
+            Assert.That(hostSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1),
+                "Crate panel deposit should move the held item into the shared crate.");
+            Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(0));
+
+            int crateSlot = FindSlotWith(hostSurvivalSync.SharedCrateInventory, ItemId.BranchwoodLog);
+            Assert.That(crateSlot, Is.GreaterThanOrEqualTo(0));
+            cratePanel.WithdrawSlot(crateSlot);
+            Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1),
+                "Crate panel withdraw should return the item to the player inventory.");
+            Assert.That(hostSurvivalSync.AcceptedCrateTransferCount, Is.EqualTo(2));
+
+            UnityEngine.Object.Destroy(craftingObject);
+            UnityEngine.Object.Destroy(crateObject);
+        }
+
+        static int FindSlotWith(Inventory inventory, ItemId itemId)
+        {
+            for (int i = 0; i < inventory.SlotCount; i++)
+                if (inventory.GetSlot(i).ItemId.Equals(itemId) && !inventory.GetSlot(i).IsEmpty)
+                    return i;
+            return -1;
         }
 
         [Test]

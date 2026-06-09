@@ -13,6 +13,13 @@ namespace Blockiverse.WorldGen
         readonly Dictionary<BlockPosition, int> saplingTicks = new();
         int leafDecayAccumulator;
 
+        Func<int, int, int> biomeResolver; // (x, z) → TerrainBiome as int; null = default Meadow
+
+        public void Configure(Func<int, int, int> biomeAt)
+        {
+            biomeResolver = biomeAt;
+        }
+
         // ── 7 tree variants ─────────────────────────────────────────────────
 
         public void PlaceStandardTree(VoxelWorld world, BlockPosition basePos)
@@ -78,6 +85,22 @@ namespace Blockiverse.WorldGen
 
             var canopyBase = new BlockPosition(basePos.X, basePos.Y + 6, basePos.Z);
             PlaceCanopyRound(world, canopyBase, radius: 4, layers: 3);
+        }
+
+        // ── Biome-aware tree dispatch ────────────────────────────────────────
+
+        void PlaceBiomeTree(VoxelWorld world, BlockPosition pos, TerrainBiome biome)
+        {
+            switch (biome)
+            {
+                case TerrainBiome.Pinewild:   PlaceConicalTree(world, pos);  break;
+                case TerrainBiome.Wetland:    PlaceWillowTree(world, pos);   break;
+                case TerrainBiome.Drybrush:   PlaceShrubTree(world, pos);    break;
+                case TerrainBiome.Tundra:     PlaceSparseTree(world, pos);   break;
+                case TerrainBiome.Highlands:  PlaceTallTree(world, pos);     break;
+                case TerrainBiome.Dunes:      PlaceShrubTree(world, pos);    break;
+                default:                      PlaceStandardTree(world, pos); break;
+            }
         }
 
         // ── Sapling growth ───────────────────────────────────────────────────
@@ -146,31 +169,126 @@ namespace Blockiverse.WorldGen
 
         void AdvanceSapling(VoxelWorld world, BlockPosition pos, int remainder)
         {
-            BlockId current = world.GetBlock(pos);
-            if (current == BlockRegistry.Sapling)
+            while (true)
             {
-                world.SetBlock(pos, BlockRegistry.Sapling_S1);
-                saplingTicks[pos] = remainder;
-            }
-            else if (current == BlockRegistry.Sapling_S1)
-            {
-                world.SetBlock(pos, BlockRegistry.Sapling_S2);
-                saplingTicks[pos] = remainder;
-            }
-            else if (current == BlockRegistry.Sapling_S2)
-            {
-                // Clear the sapling first so TrunkClear can evaluate the full trunk volume,
-                // then restore it if there isn't room yet.
-                world.SetBlock(pos, BlockRegistry.Air);
-                if (!TrunkClear(world, pos, trunkHeight: 4))
+                BlockId current = world.GetBlock(pos);
+                if (current == BlockRegistry.Sapling)
+                {
+                    world.SetBlock(pos, BlockRegistry.Sapling_S1);
+                }
+                else if (current == BlockRegistry.Sapling_S1)
                 {
                     world.SetBlock(pos, BlockRegistry.Sapling_S2);
+                }
+                else if (current == BlockRegistry.Sapling_S2)
+                {
+                    world.SetBlock(pos, BlockRegistry.Air);
+                    if (!TrunkClear(world, pos, trunkHeight: 4))
+                    {
+                        world.SetBlock(pos, BlockRegistry.Sapling_S2);
+                        saplingTicks[pos] = remainder;
+                        return;
+                    }
+                    saplingTicks.Remove(pos);
+                    int biomeIndex = biomeResolver != null ? biomeResolver(pos.X, pos.Z) : 0;
+                    PlaceBiomeTree(world, pos, (TerrainBiome)biomeIndex);
+                    return;
+                }
+                else
+                {
                     saplingTicks[pos] = remainder;
                     return;
                 }
-                saplingTicks.Remove(pos);
-                PlaceStandardTree(world, pos);
+
+                if (remainder < SaplingGrowthIntervalTicks)
+                {
+                    saplingTicks[pos] = remainder;
+                    return;
+                }
+                remainder -= SaplingGrowthIntervalTicks;
             }
+        }
+
+        // ── Wild regrowth queue ──────────────────────────────────────────────
+
+        public readonly struct WildRegrowthMarker
+        {
+            public readonly BlockId BlockId;
+            public readonly BlockPosition Position;
+            public readonly long RegrowAfterTick;  // absolute world tick when regrowth may happen
+            public readonly int AttemptsLeft;
+
+            public WildRegrowthMarker(BlockId blockId, BlockPosition position, long regrowAfterTick, int attemptsLeft = 5)
+            {
+                BlockId = blockId;
+                Position = position;
+                RegrowAfterTick = regrowAfterTick;
+                AttemptsLeft = attemptsLeft;
+            }
+        }
+
+        const long WildRegrowthRetryDelayTicks = 24000; // one game day before retrying a blocked spot
+
+        readonly List<WildRegrowthMarker> wildRegrowthQueue = new();
+
+        // Call when a wild plant is harvested. currentTick is the absolute world time in ticks
+        // (long, matching WorldTimeClock.TotalElapsedTicks).
+        public void MarkWildHarvest(BlockId blockId, BlockPosition position, long currentTick)
+        {
+            int delay = WildRegrowthDelayTicks(blockId);
+            if (delay <= 0) return;
+            wildRegrowthQueue.Add(new WildRegrowthMarker(blockId, position, currentTick + delay));
+        }
+
+        // Call every game tick with the current absolute world time. Restores harvested wild plants.
+        public void TickWildRegrowth(VoxelWorld world, long currentTick)
+        {
+            for (int i = wildRegrowthQueue.Count - 1; i >= 0; i--)
+            {
+                WildRegrowthMarker marker = wildRegrowthQueue[i];
+                if (currentTick < marker.RegrowAfterTick) continue;
+
+                BlockId current = world.GetBlock(marker.Position);
+                if (current != BlockRegistry.Air)
+                {
+                    // Position was filled by something else — remove marker.
+                    wildRegrowthQueue.RemoveAt(i);
+                    continue;
+                }
+
+                BlockPosition below = new BlockPosition(marker.Position.X, marker.Position.Y - 1, marker.Position.Z);
+                bool hasGround = world.Bounds.Contains(below) && world.GetBlock(below) != BlockRegistry.Air;
+
+                if (hasGround)
+                {
+                    world.SetBlock(marker.Position, marker.BlockId);
+                    wildRegrowthQueue.RemoveAt(i);
+                }
+                else if (marker.AttemptsLeft > 1)
+                {
+                    // Spot is unsupported (no ground below) — delay and retry.
+                    wildRegrowthQueue[i] = new WildRegrowthMarker(
+                        marker.BlockId, marker.Position,
+                        currentTick + WildRegrowthRetryDelayTicks,
+                        marker.AttemptsLeft - 1);
+                }
+                else
+                {
+                    wildRegrowthQueue.RemoveAt(i);
+                }
+            }
+        }
+
+        // Exposes current regrowth queue count for tests and save/load.
+        public int WildRegrowthQueueCount => wildRegrowthQueue.Count;
+
+        static int WildRegrowthDelayTicks(BlockId blockId)
+        {
+            if (blockId == BlockRegistry.Berrybush)   return 48000;
+            if (blockId == BlockRegistry.GrainStalk)  return 72000;
+            if (blockId == BlockRegistry.Reedgrass)   return 24000;
+            if (blockId == BlockRegistry.Thornbrush)  return 96000;
+            return 48000; // default 2 days for any other small plant
         }
 
         // ── Leaf decay ───────────────────────────────────────────────────────

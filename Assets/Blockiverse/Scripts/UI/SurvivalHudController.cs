@@ -1,3 +1,4 @@
+using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using UnityEngine;
 
@@ -8,6 +9,7 @@ namespace Blockiverse.UI
         [SerializeField] SurvivalInventoryPanel inventoryPanel;
         [SerializeField] SurvivalCraftingPanel craftingPanel;
         [SerializeField] SurvivalHealthPanel healthPanel;
+        [SerializeField] SurvivalCratePanel cratePanel;
         [SerializeField] int selectedHotbarSlotIndex;
 
         public Inventory Inventory { get; private set; }
@@ -18,11 +20,13 @@ namespace Blockiverse.UI
             SurvivalInventoryPanel targetInventoryPanel,
             SurvivalCraftingPanel targetCraftingPanel,
             SurvivalHealthPanel targetHealthPanel,
+            SurvivalCratePanel targetCratePanel = null,
             int targetSelectedHotbarSlotIndex = 0)
         {
             inventoryPanel = targetInventoryPanel;
             craftingPanel = targetCraftingPanel;
             healthPanel = targetHealthPanel;
+            cratePanel = targetCratePanel;
             selectedHotbarSlotIndex = targetSelectedHotbarSlotIndex;
         }
 
@@ -36,20 +40,48 @@ namespace Blockiverse.UI
             inventoryPanel ??= GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true);
             craftingPanel ??= GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true);
             healthPanel ??= GetComponentInChildren<SurvivalHealthPanel>(includeInactive: true);
+            cratePanel ??= GetComponentInChildren<SurvivalCratePanel>(includeInactive: true);
 
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
-            Inventory = new Inventory(itemRegistry);
+
+            // Bind to the authoritative survival inventory when the runtime survival sync is present so
+            // the HUD, harvesting, crafting, and container loot all share one inventory. Falls back to a
+            // standalone inventory for isolated validation/tests.
+            var survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+            Inventory = survivalSync != null ? survivalSync.LocalInventory : new Inventory(itemRegistry);
             RecipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             Vitals = new PlayerVitals();
 
+            // Register this inventory as the container-loot destination so breaking a crate fills it.
+            var worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+            worldManager?.SetActivePlayerInventory(Inventory);
+
+            // Mirror the selected hotbar slot into the survival sync so VR break/place use the held item.
+            if (survivalSync != null && inventoryPanel != null)
+            {
+                survivalSync.SelectedHotbarSlotIndex = selectedHotbarSlotIndex;
+                inventoryPanel.SelectionChanged -= survivalSync.SetSelectedHotbarSlot;
+                inventoryPanel.SelectionChanged += survivalSync.SetSelectedHotbarSlot;
+            }
+
             inventoryPanel?.Bind(Inventory, itemRegistry, selectedHotbarSlotIndex);
+            // Route crafting through the authoritative sync (when present) so client crafts are
+            // host-validated, not applied to the local mirror.
+            craftingPanel?.ConfigureSurvivalSync(survivalSync);
             craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
             healthPanel?.Bind(Vitals);
+            cratePanel?.Bind(survivalSync, itemRegistry);
 
             if (craftingPanel != null)
             {
                 craftingPanel.CraftingChanged -= RefreshPanels;
                 craftingPanel.CraftingChanged += RefreshPanels;
+            }
+
+            if (cratePanel != null)
+            {
+                cratePanel.CrateChanged -= RefreshPanels;
+                cratePanel.CrateChanged += RefreshPanels;
             }
         }
 
@@ -58,6 +90,7 @@ namespace Blockiverse.UI
             inventoryPanel?.Refresh();
             craftingPanel?.Refresh();
             healthPanel?.Refresh();
+            cratePanel?.Refresh();
         }
     }
 }

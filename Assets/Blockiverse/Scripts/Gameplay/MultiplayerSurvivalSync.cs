@@ -15,7 +15,9 @@ namespace Blockiverse.Gameplay
         HarvestResource,
         CraftRecipe,
         SharedCrateDeposit,
-        SharedCrateWithdraw
+        SharedCrateWithdraw,
+        PlaceBlock,
+        StripLog
     }
 
     public enum SurvivalCommandFailureReason
@@ -30,7 +32,11 @@ namespace Blockiverse.Gameplay
         InvalidTransfer,
         InventoryFull,
         SharedCrateEmpty,
-        DuplicateRequest
+        DuplicateRequest,
+        NotPlaceable,
+        PlacementRejected,
+        NotStrippable,
+        StripRejected
     }
 
     public readonly struct SurvivalCommandResult
@@ -140,6 +146,8 @@ namespace Blockiverse.Gameplay
     public sealed class MultiplayerSurvivalSync : MonoBehaviour
     {
         const string HarvestRequestMessage = "Blockiverse.Survival.HarvestRequest";
+        const string PlaceRequestMessage = "Blockiverse.Survival.PlaceRequest";
+        const string StripLogRequestMessage = "Blockiverse.Survival.StripLogRequest";
         const string CraftRequestMessage = "Blockiverse.Survival.CraftRequest";
         const string CrateTransferRequestMessage = "Blockiverse.Survival.CrateTransferRequest";
         const string CommandResultMessage = "Blockiverse.Survival.CommandResult";
@@ -171,7 +179,54 @@ namespace Blockiverse.Gameplay
         public Inventory SharedCrateInventory => sharedCrateInventory ??= CreateSharedCrateInventory();
         public SurvivalCommandResult LastCommandResult { get; private set; }
         public int PendingCommandRequestCount => pendingCommandRequests.Count;
+
+        // The local player's selected hotbar slot — set by the survival inventory UI, read by the VR
+        // interaction bridge so harvest/place use the held tool/block. Lives here (Gameplay) because the
+        // VR bridge cannot reference the UI assembly.
+        int selectedHotbarSlotIndex;
+        public int SelectedHotbarSlotIndex
+        {
+            get => selectedHotbarSlotIndex;
+            set
+            {
+                int hotbar = LocalInventory.HotbarSlotCount;
+                selectedHotbarSlotIndex = hotbar > 0 ? Mathf.Clamp(value, 0, hotbar - 1) : 0;
+            }
+        }
+
+        // Event-friendly setter for the selected hotbar slot (subscribed to the survival inventory UI).
+        public void SetSelectedHotbarSlot(int slotIndex) => SelectedHotbarSlotIndex = slotIndex;
+
+        // Survival/creative interaction mode for the local player, with inventory snapshotting on switch.
+        readonly SurvivalCreativeModeSwitch modeSwitch = new();
+        public PlayerModeState CurrentMode => modeSwitch.CurrentMode;
+
+        // Flips between survival and creative interaction, snapshotting/restoring the survival inventory.
+        public void ToggleMode()
+        {
+            if (modeSwitch.CurrentMode == PlayerModeState.Survival)
+                modeSwitch.SwitchToCreative(LocalInventory);
+            else
+                modeSwitch.SwitchToSurvival(LocalInventory);
+        }
+
+        // The item in the selected hotbar slot (bare hand when empty/out of range).
+        public ItemStack EquippedItem
+        {
+            get
+            {
+                Inventory inv = LocalInventory;
+                return selectedHotbarSlotIndex >= 0 && selectedHotbarSlotIndex < inv.SlotCount
+                    ? inv.GetSlot(selectedHotbarSlotIndex)
+                    : ItemStack.Empty;
+            }
+        }
+
         public int ReceivedHarvestRequestCount { get; private set; }
+        public int ReceivedPlaceRequestCount { get; private set; }
+        public int AcceptedPlaceCount { get; private set; }
+        public int ReceivedStripLogRequestCount { get; private set; }
+        public int AcceptedStripLogCount { get; private set; }
         public int ReceivedCraftRequestCount { get; private set; }
         public int ReceivedCrateTransferRequestCount { get; private set; }
         public int AcceptedHarvestCount { get; private set; }
@@ -272,6 +327,92 @@ namespace Blockiverse.Gameplay
             return LastCommandResult;
         }
 
+        // Harvest convenience used by the VR interaction bridge: harvests with the currently selected
+        // hotbar item, so callers in assemblies that don't reference Survival need not build an ItemStack.
+        public SurvivalCommandResult TrySubmitHarvest(BlockPosition position, out bool requestSentToHost)
+            => TrySubmitHarvest(position, EquippedItem, out requestSentToHost, SelectedHotbarSlotIndex);
+
+        // Place convenience: places using the currently selected hotbar slot.
+        public SurvivalCommandResult TrySubmitPlace(BlockPosition position, out bool requestSentToHost)
+            => TrySubmitPlace(position, out requestSentToHost, SelectedHotbarSlotIndex);
+
+        // Places the block mapped to the equipped hotbar item at the target, consuming one item.
+        // Authoritative: the host validates the item maps to a placeable block and decrements the
+        // host-owned inventory; clients send a request and reconcile from the inventory snapshot.
+        public SurvivalCommandResult TrySubmitPlace(
+            BlockPosition position,
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
+        {
+            requestSentToHost = false;
+
+            if (IsActiveClientOnly())
+            {
+                if (chunkAuthoritySync != null && !chunkAuthoritySync.HasHostGenerationSnapshotForSession)
+                {
+                    LastCommandResult = SurvivalCommandResult.Reject(
+                        SurvivalCommandKind.PlaceBlock,
+                        SurvivalCommandFailureReason.AwaitingHostWorldSnapshot);
+                    return LastCommandResult;
+                }
+
+                uint requestId = AllocateCommandRequestId();
+                SendPlaceRequest(requestId, position, equippedSlotIndex);
+                requestSentToHost = true;
+                LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PlaceBlock, requestId);
+                return LastCommandResult;
+            }
+
+            LastCommandResult = ProcessHostPlace(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
+            return LastCommandResult;
+        }
+
+        // The survival "use" action with the held item: strips a targeted branchwood_log into
+        // smooth_branchwood when a Feller is held (the §7.4 Feller alternate action), otherwise places
+        // the held block into the adjacent cell. The choice lives here (not the VR bridge) because it
+        // depends on the held item's tool/block mapping, which is Survival data; the host re-validates.
+        public SurvivalCommandResult TrySubmitUse(BlockPosition targetBlock, BlockPosition placement, out bool requestSentToHost)
+        {
+            ItemStack held = EquippedItem;
+            bool heldIsFeller = !held.IsEmpty &&
+                itemRegistry.TryGet(held.ItemId, out ItemDefinition def) &&
+                def.ToolClass == HarvestToolKind.Feller;
+
+            return heldIsFeller
+                ? TrySubmitStripLog(targetBlock, out requestSentToHost, SelectedHotbarSlotIndex)
+                : TrySubmitPlace(placement, out requestSentToHost, SelectedHotbarSlotIndex);
+        }
+
+        // Feller strip-log: turns a targeted branchwood_log into smooth_branchwood in place (no drop),
+        // consuming Feller durability. Server-authoritative like harvest/place.
+        public SurvivalCommandResult TrySubmitStripLog(
+            BlockPosition position,
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
+        {
+            requestSentToHost = false;
+
+            if (IsActiveClientOnly())
+            {
+                if (chunkAuthoritySync != null && !chunkAuthoritySync.HasHostGenerationSnapshotForSession)
+                {
+                    LastCommandResult = SurvivalCommandResult.Reject(
+                        SurvivalCommandKind.StripLog,
+                        SurvivalCommandFailureReason.AwaitingHostWorldSnapshot);
+                    return LastCommandResult;
+                }
+
+                uint requestId = AllocateCommandRequestId();
+                SendStripLogRequest(requestId, position, equippedSlotIndex);
+                requestSentToHost = true;
+                LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.StripLog, requestId);
+                return LastCommandResult;
+            }
+
+            LastCommandResult = ProcessHostStripLog(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
+            return LastCommandResult;
+        }
+
         public SurvivalCommandResult TrySubmitCraft(
             ItemId outputItemId,
             CraftingStation availableStation,
@@ -349,15 +490,14 @@ namespace Blockiverse.Gameplay
                 return duplicate;
 
             Inventory inventory = GetInventory(clientId);
-            // Prefer the server-authoritative inventory slot for harvest validation when the
-            // caller supplies one. Player inventories in this architecture start empty and are
-            // filled by host-granted harvests/crafts, so there is no pre-populated server-side
-            // tool to read for a freshly-equipped tool; fall back to the requested stack in that
-            // case. Server-authoritative tool validation will tighten once persistent server-side
-            // tool inventories exist (tracked follow-up).
-            ItemStack authoritativeItem = equippedSlotIndex >= 0
-                ? inventory.GetSlot(equippedSlotIndex)
-                : equippedItem;
+            // Server-authoritative tool resolution (M8). Remote client requests
+            // (sendResponse == true) never trust the client-supplied stack: the equipped tool is
+            // read from the host's authoritative copy of that client's inventory at the requested
+            // slot, so a client cannot fabricate a high-tier tool to bypass harvest tier gates.
+            // A request without a valid slot index is treated as empty-handed. Host-local requests
+            // (the host's own player) use the local equipped item directly, as it is already
+            // authoritative on this peer.
+            ItemStack authoritativeItem = ResolveAuthoritativeTool(inventory, equippedItem, equippedSlotIndex, sendResponse);
             BlockHarvestResult harvest = ResolveHarvestService().TryPreviewHarvest(
                 ResolveWorld(),
                 inventory,
@@ -392,7 +532,11 @@ namespace Blockiverse.Gameplay
                 return result;
             }
 
-            inventory.TryAddAll(harvest.Drop);
+            // Apply the rule's drop table so tool-action bonuses (Sickle double-roll, Carver full
+            // yield) take effect on the authoritative path, not only in the local TryHarvest helper.
+            // Capacity for the maximum was already validated by TryPreviewHarvest above.
+            ItemStack drop = ResolveHarvestService().RollHarvestDrop(harvest.BlockId, harvest.UsedTool);
+            inventory.TryAddAll(drop);
 
             if (equippedSlotIndex >= 0)
             {
@@ -410,12 +554,158 @@ namespace Blockiverse.Gameplay
             SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
                 SurvivalCommandKind.HarvestResource,
                 requestId,
-                harvest.Drop);
+                drop);
             SendInventorySnapshot(clientId);
             SendCommandResult(clientId, accepted, sendResponse);
             RefreshLocalInventoryReference();
             LastCommandResult = accepted;
             return accepted;
+        }
+
+        SurvivalCommandResult ProcessHostPlace(
+            ulong clientId,
+            uint requestId,
+            BlockPosition position,
+            int equippedSlotIndex,
+            bool sendResponse)
+        {
+            ReceivedPlaceRequestCount++;
+
+            if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.PlaceBlock, sendResponse, out SurvivalCommandResult duplicate))
+                return duplicate;
+
+            Inventory inventory = GetInventory(clientId);
+
+            // The placed block is derived from the host-owned inventory slot, never trusted from the
+            // client. An empty/out-of-range slot or a non-block item cannot place anything.
+            ItemStack held = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount
+                ? inventory.GetSlot(equippedSlotIndex)
+                : ItemStack.Empty;
+
+            if (held.IsEmpty ||
+                !itemRegistry.TryGet(held.ItemId, out ItemDefinition def) ||
+                !def.HasBlockMapping)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.PlaceBlock,
+                    SurvivalCommandFailureReason.NotPlaceable,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            BlockId block = def.BlockId.Value;
+            BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
+                new BlockMutationRequest(clientId, position, block, BlockRegistry.Air),
+                out _,
+                out _);
+
+            if (!mutation.Accepted)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.PlaceBlock,
+                    SurvivalCommandFailureReason.PlacementRejected,
+                    requestId,
+                    new ItemStack(held.ItemId, 1));
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            inventory.Remove(held.ItemId, 1);
+
+            AcceptedPlaceCount++;
+            SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
+                SurvivalCommandKind.PlaceBlock,
+                requestId,
+                new ItemStack(held.ItemId, 1));
+            SendInventorySnapshot(clientId);
+            SendCommandResult(clientId, accepted, sendResponse);
+            RefreshLocalInventoryReference();
+            LastCommandResult = accepted;
+            return accepted;
+        }
+
+        SurvivalCommandResult ProcessHostStripLog(
+            ulong clientId,
+            uint requestId,
+            BlockPosition position,
+            int equippedSlotIndex,
+            bool sendResponse)
+        {
+            ReceivedStripLogRequestCount++;
+
+            if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.StripLog, sendResponse, out SurvivalCommandResult duplicate))
+                return duplicate;
+
+            Inventory inventory = GetInventory(clientId);
+
+            // The held tool is read from the host-owned slot, never trusted from the client: a Feller is
+            // required, and the target must be a branchwood_log.
+            ItemStack held = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount
+                ? inventory.GetSlot(equippedSlotIndex)
+                : ItemStack.Empty;
+
+            bool heldIsFeller = !held.IsEmpty &&
+                itemRegistry.TryGet(held.ItemId, out ItemDefinition def) &&
+                def.ToolClass == HarvestToolKind.Feller;
+
+            if (!heldIsFeller || ResolveWorld().GetBlock(position) != BlockRegistry.BranchwoodLog)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.StripLog,
+                    SurvivalCommandFailureReason.NotStrippable,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
+                new BlockMutationRequest(clientId, position, BlockRegistry.SmoothBranchwood, BlockRegistry.BranchwoodLog),
+                out _,
+                out _);
+
+            if (!mutation.Accepted)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.StripLog,
+                    SurvivalCommandFailureReason.StripRejected,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            // Strip-log costs Feller durability (no item drop — the block converts in place).
+            if (equippedSlotIndex >= 0)
+            {
+                ItemStack serverSlot = inventory.GetSlot(equippedSlotIndex);
+                if (!serverSlot.IsEmpty && serverSlot.Durability > 0)
+                {
+                    int remaining = serverSlot.Durability - 1;
+                    inventory.SetSlot(equippedSlotIndex, remaining > 0
+                        ? serverSlot.WithDurability(remaining)
+                        : ItemStack.Empty);
+                }
+            }
+
+            AcceptedStripLogCount++;
+            SurvivalCommandResult accepted = SurvivalCommandResult.Accept(SurvivalCommandKind.StripLog, requestId);
+            SendInventorySnapshot(clientId);
+            SendCommandResult(clientId, accepted, sendResponse);
+            RefreshLocalInventoryReference();
+            LastCommandResult = accepted;
+            return accepted;
+        }
+
+        // Resolves the tool the host will validate a harvest against.
+        // Remote requests are validated against the host-owned inventory slot only; the
+        // client-supplied stack is never trusted. Host-local requests use the local stack,
+        // falling back to the slot when one is supplied.
+        static ItemStack ResolveAuthoritativeTool(Inventory inventory, ItemStack equippedItem, int equippedSlotIndex, bool sendResponse)
+        {
+            bool slotIsValid = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount;
+            if (sendResponse)
+                return slotIsValid ? inventory.GetSlot(equippedSlotIndex) : ItemStack.Empty;
+            return slotIsValid ? inventory.GetSlot(equippedSlotIndex) : equippedItem;
         }
 
         SurvivalCommandResult ProcessHostCraft(
@@ -596,6 +886,76 @@ namespace Blockiverse.Gameplay
             ItemStack equippedItem = ReadItemStack(ref reader);
             reader.ReadValueSafe(out int equippedSlotIndex);
             ProcessHostHarvest(senderClientId, requestId, position, equippedItem, sendResponse: true, equippedSlotIndex);
+        }
+
+        void SendPlaceRequest(uint requestId, BlockPosition position, int equippedSlotIndex)
+        {
+            NetworkManager networkManager = ResolveNetworkManager();
+            RegisterMessageHandlers();
+            pendingCommandRequests[requestId] = SurvivalCommandKind.PlaceBlock;
+            LastSentCommandRequestId = requestId;
+            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
+
+            try
+            {
+                writer.WriteValueSafe(requestId);
+                WriteBlockPosition(ref writer, position);
+                writer.WriteValueSafe(equippedSlotIndex);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    PlaceRequestMessage,
+                    NetworkManager.ServerClientId,
+                    writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        void HandlePlaceRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!CanProcessHostRequests())
+                return;
+
+            reader.ReadValueSafe(out uint requestId);
+            BlockPosition position = ReadBlockPosition(ref reader);
+            reader.ReadValueSafe(out int equippedSlotIndex);
+            ProcessHostPlace(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+        }
+
+        void SendStripLogRequest(uint requestId, BlockPosition position, int equippedSlotIndex)
+        {
+            NetworkManager networkManager = ResolveNetworkManager();
+            RegisterMessageHandlers();
+            pendingCommandRequests[requestId] = SurvivalCommandKind.StripLog;
+            LastSentCommandRequestId = requestId;
+            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
+
+            try
+            {
+                writer.WriteValueSafe(requestId);
+                WriteBlockPosition(ref writer, position);
+                writer.WriteValueSafe(equippedSlotIndex);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    StripLogRequestMessage,
+                    NetworkManager.ServerClientId,
+                    writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        void HandleStripLogRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!CanProcessHostRequests())
+                return;
+
+            reader.ReadValueSafe(out uint requestId);
+            BlockPosition position = ReadBlockPosition(ref reader);
+            reader.ReadValueSafe(out int equippedSlotIndex);
+            ProcessHostStripLog(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
         }
 
         void HandleCraftRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -951,6 +1311,8 @@ namespace Blockiverse.Gameplay
             }
 
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(HarvestRequestMessage, HandleHarvestRequestMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlaceRequestMessage, HandlePlaceRequestMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(StripLogRequestMessage, HandleStripLogRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CraftRequestMessage, HandleCraftRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CrateTransferRequestMessage, HandleCrateTransferRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CommandResultMessage, HandleCommandResultMessage);
@@ -970,6 +1332,8 @@ namespace Blockiverse.Gameplay
             }
 
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(HarvestRequestMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlaceRequestMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(StripLogRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CraftRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CrateTransferRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CommandResultMessage);

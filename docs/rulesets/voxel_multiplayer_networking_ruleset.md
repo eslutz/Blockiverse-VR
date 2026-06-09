@@ -975,7 +975,7 @@ Creative world edit tools, structure placement, weather overrides, and registry-
 
 ## 18. Cloud private worlds upgrade path
 
-Cloud-hosted persistent private worlds are a later milestone. The current protocol should evolve without rewriting gameplay logic.
+Cloud-hosted persistent private worlds are a future feature tracked in the execution plan. The current protocol should evolve without rewriting gameplay logic.
 
 | Current LAN Host | Future Cloud Host |
 |---|---|

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Blockiverse.Core;
 using Blockiverse.Networking;
 using Blockiverse.Persistence;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Unity.Netcode;
 using UnityEngine;
@@ -118,9 +120,21 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
-            worldManager.RestoreWeatherState(result.Data.WeatherState);
-            worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
+            // Suppress container auto-loot while applying the save: loaded block deltas that remove
+            // crates must not dump their (generated) loot into the player. The authoritative container
+            // contents are restored explicitly below.
+            worldManager.SuppressContainerAutoLoot = true;
+            try
+            {
+                result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
+                worldManager.RestoreWeatherState(result.Data.WeatherState);
+                worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
+                RestoreContainers(result.Data.Containers);
+            }
+            finally
+            {
+                worldManager.SuppressContainerAutoLoot = false;
+            }
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
@@ -156,7 +170,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L);
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore));
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,
@@ -173,6 +187,59 @@ namespace Blockiverse.Gameplay
                     context: this);
                 return false;
             }
+        }
+
+        // Snapshots the manager's live container contents into the persistence model.
+        static IReadOnlyList<SavedContainer> BuildSavedContainers(ContainerInventoryStore store)
+        {
+            if (store == null || store.Count == 0)
+                return null;
+
+            var result = new List<SavedContainer>(store.Count);
+            foreach (BlockPosition position in store.Positions)
+            {
+                if (!store.TryGet(position, out Inventory inventory) || inventory == null)
+                    continue;
+
+                var slots = new List<SavedContainerSlot>();
+                for (int i = 0; i < inventory.SlotCount; i++)
+                {
+                    ItemStack stack = inventory.GetSlot(i);
+                    if (stack.IsEmpty)
+                        continue;
+                    slots.Add(new SavedContainerSlot { CanonicalId = stack.ItemId.Value, Count = stack.Count });
+                }
+
+                // Persist the position even when empty so an emptied crate stays empty across reloads
+                // (otherwise the generated loot would refill it).
+                result.Add(new SavedContainer
+                {
+                    X = position.X,
+                    Y = position.Y,
+                    Z = position.Z,
+                    Slots = slots.ToArray()
+                });
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
+        void RestoreContainers(SavedContainer[] saved)
+        {
+            if (saved == null || saved.Length == 0)
+                return;
+
+            var restored = new List<(BlockPosition, IEnumerable<(string, int)>)>(saved.Length);
+            foreach (SavedContainer container in saved)
+            {
+                SavedContainerSlot[] slots = container.Slots ?? Array.Empty<SavedContainerSlot>();
+                var items = new List<(string, int)>(slots.Length);
+                foreach (SavedContainerSlot slot in slots)
+                    items.Add((slot.CanonicalId, slot.Count));
+                restored.Add((new BlockPosition(container.X, container.Y, container.Z), items));
+            }
+
+            worldManager.RestoreContainerStore(restored);
         }
 
         void ResolveReferences()

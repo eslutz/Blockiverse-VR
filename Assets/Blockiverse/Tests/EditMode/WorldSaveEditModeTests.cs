@@ -190,6 +190,39 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void LegacyFiredBrickBlocksMigrateToFiredBrickBlockOnLoad()
+        {
+            // Saves predating the fired_brick item/block split stored the placed building block
+            // under the canonical id "fired_brick"; on load it must resolve to fired_brick_block.
+            var data = new WorldSaveData
+            {
+                SchemaVersion = WorldSaveService.CurrentSchemaVersion,
+                WorldName = "legacy-brick",
+                Width = 4,
+                Height = 4,
+                Depth = 4,
+                ChunkSize = 16,
+                Seed = 1,
+                ChangedBlocks = new[]
+                {
+                    new SavedBlockDelta { X = 2, Y = 1, Z = 2, CanonicalId = "fired_brick" }
+                },
+                PlayerInventory = new SavedPlayerInventory
+                {
+                    SlotCount = Inventory.DefaultSlotCount,
+                    HotbarSlotCount = Inventory.DefaultHotbarSlotCount,
+                    SelectedHotbarSlotIndex = 0,
+                    Slots = new SavedInventorySlot[0]
+                }
+            };
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 1);
+
+            WorldLoadResult.Loaded(data).ApplyTo(world);
+
+            Assert.That(world.GetBlock(new BlockPosition(2, 1, 2)), Is.EqualTo(BlockRegistry.FiredBrickBlock));
+        }
+
+        [Test]
         public void SaveThenLoadReproducesPlayerInventory()
         {
             string path = CreateTempSavePath();
@@ -581,6 +614,74 @@ namespace Blockiverse.Tests.EditMode
             finally
             {
                 if (File.Exists(flatPath)) File.Delete(flatPath);
+            }
+        }
+
+        [Test]
+        public void ContainerContentsRoundTripThroughSave()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            var containers = new[]
+            {
+                new SavedContainer
+                {
+                    X = 2, Y = 3, Z = 4,
+                    Slots = new[]
+                    {
+                        new SavedContainerSlot { CanonicalId = "reed_fiber", Count = 6 },
+                        new SavedContainerSlot { CanonicalId = "stout_pole", Count = 2 },
+                    }
+                },
+                new SavedContainer { X = 5, Y = 6, Z = 7, Slots = System.Array.Empty<SavedContainerSlot>() },
+            };
+
+            try
+            {
+                var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+                service.Save(path, "container-test", world, containers: containers);
+
+                Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "containers.json")), Is.True,
+                    "Containers file should be written when containers are supplied.");
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.Containers, Is.Not.Null);
+                Assert.That(result.Data.Containers.Length, Is.EqualTo(2));
+
+                SavedContainer full = result.Data.Containers.First(c => c.X == 2 && c.Y == 3 && c.Z == 4);
+                Assert.That(full.Slots.Length, Is.EqualTo(2));
+                Assert.That(full.Slots.First(s => s.CanonicalId == "reed_fiber").Count, Is.EqualTo(6));
+
+                SavedContainer emptied = result.Data.Containers.First(c => c.X == 5);
+                Assert.That(emptied.Slots, Is.Empty, "An emptied container persists as a zero-slot entry.");
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SaveWithoutContainersOmitsContainerFile()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+            try
+            {
+                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "no-containers", world);
+
+                Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "containers.json")), Is.False,
+                    "No containers file should be written when none are supplied (backward compatible).");
+
+                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.Containers, Is.Null);
+            }
+            finally
+            {
+                DeleteIfExists(path);
             }
         }
 

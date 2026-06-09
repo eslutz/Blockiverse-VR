@@ -171,6 +171,57 @@ namespace Blockiverse.Tests.EditMode
                 "TickSapling must carry over remainder ticks so the next stage uses the correct threshold.");
         }
 
+        [Test]
+        public void TickSaplingUsesCorrespondingBiomeTreeVariantViaBiomeResolver()
+        {
+            // Biome 1 = Pinewild → ConicalTree (PlaceConicalTree places logs at trunk center column)
+            vegetation.Configure((x, z) => 1); // 1 = Pinewild
+
+            world.SetBlock(BasePos, BlockRegistry.Sapling);
+            vegetation.TrackSapling(BasePos);
+            vegetation.TickSapling(world, 3600); // 3 × 1200 ticks to reach S2 + grow
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.BranchwoodLog),
+                "Sapling should grow into a tree using the biome-specified variant.");
+        }
+
+        [Test]
+        public void TickSaplingDefaultsToStandardTreeWhenNoBiomeResolverSet()
+        {
+            // No Configure call — resolver is null
+            world.SetBlock(BasePos, BlockRegistry.Sapling);
+            vegetation.TrackSapling(BasePos);
+            vegetation.TickSapling(world, 3600);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.BranchwoodLog));
+        }
+
+        [Test]
+        public void MarkWildHarvestAddsToRegrowthQueue()
+        {
+            vegetation.MarkWildHarvest(BlockRegistry.Berrybush, BasePos, currentTick: 0);
+            Assert.That(vegetation.WildRegrowthQueueCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TickWildRegrowthRestoresBlockAfterDelay()
+        {
+            // Plant a berrybush, mark it harvested (position is Air), tick past the delay.
+            // The position's block below (BasePos.Y - 1) must be solid.
+            var surface = new BlockPosition(BasePos.X, BasePos.Y - 1, BasePos.Z);
+            world.SetBlock(surface, BlockRegistry.MeadowTurf);
+            // BasePos itself is Air (default)
+
+            vegetation.MarkWildHarvest(BlockRegistry.Berrybush, BasePos, currentTick: 0);
+
+            // Berrybush delay = 48000; tick to just before — should not restore.
+            vegetation.TickWildRegrowth(world, 47999);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Air));
+
+            // Tick past delay — should restore.
+            vegetation.TickWildRegrowth(world, 48001);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Berrybush));
+            Assert.That(vegetation.WildRegrowthQueueCount, Is.EqualTo(0));
+        }
+
         int CountBlocks(BlockId blockId)
         {
             int count = 0;

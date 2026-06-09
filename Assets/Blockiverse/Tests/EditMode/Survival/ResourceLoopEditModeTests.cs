@@ -42,19 +42,29 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void MatchingToolsReduceHarvestWorkComparedWithHand()
+        public void MatchingToolsReduceMiningTimeComparedWithHand()
         {
             BlockHarvestRuleSet rules = BlockHarvestRuleSet.CreateDefault(ItemRegistry.CreateDefault());
 
             BlockHarvestRule log        = rules.Get(BlockRegistry.BranchwoodLog);
+            BlockHarvestRule stripped   = rules.Get(BlockRegistry.SmoothBranchwood);
             BlockHarvestRule rosycopper = rules.Get(BlockRegistry.RosycopperBloom);
             BlockHarvestRule buildTable = rules.Get(BlockRegistry.BuildTable);
+            BlockHarvestRule locker     = rules.Get(BlockRegistry.DeepLocker);
 
-            Assert.That(log.GetWorkRequired(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(log.HandWork));
-            Assert.That(log.GetWorkRequired(HarvestToolKind.Delver, toolTier: 1), Is.EqualTo(log.HandWork));
-            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver, toolTier: 2), Is.LessThan(rosycopper.HandWork));
-            Assert.That(rosycopper.GetWorkRequired(HarvestToolKind.Delver, toolTier: 1), Is.EqualTo(rosycopper.HandWork));
-            Assert.That(buildTable.GetWorkRequired(HarvestToolKind.Mallet, toolTier: 1), Is.LessThan(buildTable.HandWork));
+            // Canonical mining formula (§6.1): correct tool mines faster than bare hands,
+            // wrong tool class mines slower than the correct tool, and meeting the tier
+            // requirement mines faster than being below tier.
+            Assert.That(log.HandMineTicks, Is.GreaterThan(0));
+            Assert.That(log.GetMineTicks(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(log.HandMineTicks));
+            Assert.That(log.GetMineTicks(HarvestToolKind.Delver, toolTier: 1),
+                Is.GreaterThan(log.GetMineTicks(HarvestToolKind.Feller, toolTier: 1)));
+            Assert.That(stripped.GetMineTicks(HarvestToolKind.Feller, toolTier: 1), Is.LessThan(stripped.HandMineTicks));
+            Assert.That(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 2),
+                Is.LessThan(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 1)));
+            Assert.That(rosycopper.GetMineTicks(HarvestToolKind.Delver, toolTier: 2), Is.LessThan(rosycopper.HandMineTicks));
+            Assert.That(buildTable.GetMineTicks(HarvestToolKind.Mallet, toolTier: 1), Is.LessThan(buildTable.HandMineTicks));
+            Assert.That(locker.GetMineTicks(HarvestToolKind.Mallet, toolTier: 5), Is.LessThan(locker.HandMineTicks));
         }
 
         [Test]
@@ -145,6 +155,241 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(coal.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(copper.MaxY, Is.GreaterThan(iron.MaxY));
             Assert.That(coal.MinY, Is.GreaterThanOrEqualTo(iron.MinY));
+        }
+
+        [Test]
+        public void DurabilityCostFollowsBlockCategoryAndToolMatch()
+        {
+            // Plants, soil, wood, stone, crafted → 1 (§6.3).
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Organic, 0, correctTool: true, sufficientTier: true), Is.EqualTo(1));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Terrain, 1, correctTool: true, sufficientTier: true), Is.EqualTo(1));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Crafted, 1, correctTool: true, sufficientTier: true), Is.EqualTo(1));
+            // Common ore (resource, tier < 5) → 2; deep ore (tier ≥ 5) → 3.
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Resource, 2, correctTool: true, sufficientTier: true), Is.EqualTo(2));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Resource, 5, correctTool: true, sufficientTier: true), Is.EqualTo(3));
+            // Wrong tool adds +1; insufficient tier adds +2.
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Terrain, 1, correctTool: false, sufficientTier: true), Is.EqualTo(2));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Terrain, 1, correctTool: true, sufficientTier: false), Is.EqualTo(3));
+            Assert.That(MiningFormula.DurabilityCost(BlockCategory.Resource, 5, correctTool: false, sufficientTier: false), Is.EqualTo(6));
+        }
+
+        [Test]
+        public void ToolSpeedScalesWithMaterialTierAndClass()
+        {
+            // Higher material tier mines faster (§7.1).
+            Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Delver, 2),
+                Is.GreaterThan(MiningFormula.ToolSpeed(HarvestToolKind.Delver, 1)));
+            // Sickle has a higher class multiplier than Mallet at the same tier (§7.2).
+            Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Sickle, 2),
+                Is.GreaterThan(MiningFormula.ToolSpeed(HarvestToolKind.Mallet, 2)));
+            // Bare hand is the slow baseline.
+            Assert.That(MiningFormula.ToolSpeed(HarvestToolKind.Hand, 0), Is.EqualTo(MiningFormula.HandSpeed));
+        }
+
+        [Test]
+        public void TierThreeToolUnlocksTierThreeOreHarvest()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.RustcoreOre);
+            var service = CreateService(itemRegistry);
+
+            // Tier-2 Flint Delver cannot mine iron (Rustcore is Delver/3).
+            ItemStack flint = itemRegistry.CreateItemStack(ItemId.FlintDelver);
+            Assert.That(service.TryPreviewHarvest(world, inventory, HarvestPosition, flint).FailureReason,
+                Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+
+            // Tier-3 Rosycopper Delver (from the new tool ladder) can.
+            ItemStack rosycopper = itemRegistry.CreateItemStack(new ItemId("rosycopper_delver"));
+            Assert.That(service.TryPreviewHarvest(world, inventory, HarvestPosition, rosycopper).Succeeded, Is.True);
+        }
+
+        [Test]
+        public void MetalToolLadderRegistersAllTiersAndClasses()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+
+            // Durability = material base × class multiplier (§7.1/§7.2).
+            Assert.That(itemRegistry.Get(new ItemId("rosycopper_delver")).MaxDurability, Is.EqualTo(160));
+            Assert.That(itemRegistry.Get(new ItemId("rosycopper_sickle")).MaxDurability, Is.EqualTo(112)); // 160 × 0.70
+            Assert.That(itemRegistry.Get(new ItemId("starforged_mallet")).MaxDurability, Is.EqualTo(2160)); // 1800 × 1.20
+
+            // Tiers ascend Rosycopper(3) → Starforged(7).
+            Assert.That(itemRegistry.Get(new ItemId("rosycopper_delver")).ToolTier, Is.EqualTo(3));
+            Assert.That(itemRegistry.Get(new ItemId("bronze_delver")).ToolTier, Is.EqualTo(4));
+            Assert.That(itemRegistry.Get(new ItemId("ironroot_delver")).ToolTier, Is.EqualTo(5));
+            Assert.That(itemRegistry.Get(new ItemId("deepsteel_delver")).ToolTier, Is.EqualTo(6));
+            Assert.That(itemRegistry.Get(new ItemId("starforged_delver")).ToolTier, Is.EqualTo(7));
+        }
+
+        // ── M6-F: Drop table + special tool actions ──────────────────────────
+
+        [Test]
+        public void DropTableRollsPrimaryCountWithinBounds()
+        {
+            var table = new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 3));
+            uint rng = 1u;
+            for (int i = 0; i < 100; i++)
+            {
+                ItemStack[] result = table.Roll(ref rng);
+                Assert.That(result.Length, Is.EqualTo(1));
+                Assert.That(result[0].Count, Is.InRange(1, 3));
+                Assert.That(result[0].ItemId, Is.EqualTo(ItemId.ReedFiber));
+            }
+        }
+
+        [Test]
+        public void DropTableSecondaryEntryRespectsChance()
+        {
+            // 0% chance entry should never produce a drop.
+            var table = new DropTable(
+                new DropTableEntry(ItemId.ReedFiber, 1, 1),
+                new DropTableEntry(ItemId.Leafmoss,  1, 1, chance: 0f));
+            uint rng = 1u;
+            for (int i = 0; i < 50; i++)
+            {
+                ItemStack[] result = table.Roll(ref rng);
+                Assert.That(result.Length, Is.EqualTo(1), "Zero-chance secondary entry must never roll a drop.");
+            }
+        }
+
+        [Test]
+        public void SickleDoubleRollNeverDropsLessThanMinimum()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            ItemStack sickle = new ItemStack(ItemId.ReedwoodSickle, 1);
+
+            for (uint seed = 1; seed <= 30; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir,
+                    BlockHarvestRuleSet.CreateDefault(ir),
+                    rngSeed: seed);
+                var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+                var world = CreateSingleBlockWorld(BlockRegistry.Reedgrass);
+
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, sickle);
+                Assert.That(result.Succeeded, Is.True, $"Seed {seed}: harvest should succeed.");
+                Assert.That(result.Drop.Count, Is.GreaterThanOrEqualTo(1),
+                    $"Seed {seed}: Sickle double-roll must yield at least the minimum count.");
+                Assert.That(result.Drop.Count, Is.LessThanOrEqualTo(3),
+                    $"Seed {seed}: Sickle double-roll must not exceed the maximum count.");
+            }
+        }
+
+        [Test]
+        public void SickleDoubleRollYieldsHigherAverageThanSingleRoll()
+        {
+            // Over many harvests, Sickle double-roll should average strictly above the raw minimum (1).
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            int totalSickle = 0;
+
+            for (uint seed = 1; seed <= 200; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir,
+                    BlockHarvestRuleSet.CreateDefault(ir),
+                    rngSeed: seed);
+                var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+                var world = CreateSingleBlockWorld(BlockRegistry.Reedgrass);
+                ItemStack sickle = new ItemStack(ItemId.ReedwoodSickle, 1);
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, sickle);
+                if (result.Succeeded) totalSickle += result.Drop.Count;
+            }
+
+            // Average should be well above 1 (minimum) given a uniform 1-3 distribution with double-roll.
+            float avg = totalSickle / 200f;
+            Assert.That(avg, Is.GreaterThan(1.5f),
+                "Sickle double-roll average should exceed the minimum drop count.");
+        }
+
+        [Test]
+        public void CarverOnResinKnotCanDropMoreThanOne()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+
+            bool sawTwo = false;
+            for (uint seed = 1; seed <= 100; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir,
+                    BlockHarvestRuleSet.CreateDefault(ir),
+                    rngSeed: seed);
+                var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+                var world = CreateSingleBlockWorld(BlockRegistry.ResinKnot);
+                ItemStack carver = new ItemStack(ItemId.ReedwoodCarver, 1);
+
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, carver);
+                if (result.Succeeded && result.Drop.Count == 2) { sawTwo = true; break; }
+            }
+
+            Assert.That(sawTwo, Is.True, "Carver on ResinKnot must be able to yield 2 drops.");
+        }
+
+        [Test]
+        public void NonCarverOnResinKnotDropsExactlyOne()
+        {
+            // Without Carver, fixed Drop (1 resin_knot) is returned even though a table is present.
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir,
+                BlockHarvestRuleSet.CreateDefault(ir),
+                rngSeed: 42);
+            var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.ResinKnot);
+
+            // Hand harvest — no effective tool bonus.
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.Drop.Count, Is.EqualTo(1),
+                "Without Carver, ResinKnot must drop exactly 1.");
+        }
+
+        [Test]
+        public void RollHarvestDropAppliesSickleBonusForReedgrass()
+        {
+            // RollHarvestDrop is the shared roll used by the authoritative survival harvest path.
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            bool sawAboveMinimum = false;
+
+            for (uint seed = 1; seed <= 60 && !sawAboveMinimum; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: seed);
+                ItemStack drop = service.RollHarvestDrop(BlockRegistry.Reedgrass, HarvestToolKind.Sickle);
+                Assert.That(drop.ItemId, Is.EqualTo(ItemId.ReedFiber));
+                Assert.That(drop.Count, Is.InRange(1, 3));
+                if (drop.Count > 1) sawAboveMinimum = true;
+            }
+
+            Assert.That(sawAboveMinimum, Is.True, "Sickle bonus should sometimes yield more than the minimum.");
+        }
+
+        [Test]
+        public void RollHarvestDropReturnsBaseDropForNonBonusTool()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 7);
+
+            // Hand on ResinKnot (a Carver block) → fixed base drop of 1, regardless of the table.
+            for (int i = 0; i < 20; i++)
+            {
+                ItemStack drop = service.RollHarvestDrop(BlockRegistry.ResinKnot, HarvestToolKind.Hand);
+                Assert.That(drop.Count, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void RollHarvestDropReturnsBaseDropWhenRuleHasNoTable()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 3);
+
+            // BranchwoodLog has no drop table → always the base 1× log.
+            ItemStack drop = service.RollHarvestDrop(BlockRegistry.BranchwoodLog, HarvestToolKind.Feller);
+            Assert.That(drop, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
         }
 
         static readonly BlockPosition HarvestPosition = new(1, 1, 1);

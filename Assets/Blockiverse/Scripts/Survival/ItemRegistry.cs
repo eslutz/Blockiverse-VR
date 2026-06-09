@@ -47,14 +47,18 @@ namespace Blockiverse.Survival
 
             // ── Block items (vegetation) ──────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.BranchwoodLog, "Branchwood Log", ItemKind.Resource, BlockStackSize, BlockRegistry.BranchwoodLog));
+            registry.Register(new ItemDefinition(ItemId.SmoothBranchwood, "Smooth Branchwood", ItemKind.Resource, BlockStackSize, BlockRegistry.SmoothBranchwood));
             registry.Register(new ItemDefinition(ItemId.Leafmoss, "Leafmoss", ItemKind.Resource, BlockStackSize, BlockRegistry.Leafmoss));
             registry.Register(new ItemDefinition(ItemId.Thornbrush, "Thornbrush", ItemKind.Resource, BlockStackSize, BlockRegistry.Thornbrush));
-            registry.Register(new ItemDefinition(ItemId.Reedgrass, "Reedgrass", ItemKind.Resource, BlockStackSize, BlockRegistry.Reedgrass));
+            // Reedgrass drops reed_fiber (§3); the crop blocks' drops are aliased below.
 
             // ── Block items (crafted) ─────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.WorkPlank, "Work Plank", ItemKind.Resource, BlockStackSize, BlockRegistry.WorkPlank));
             registry.Register(new ItemDefinition(ItemId.CutstoneBlock, "Cutstone Block", ItemKind.Resource, BlockStackSize, BlockRegistry.CutstoneBlock));
-            registry.Register(new ItemDefinition(ItemId.FiredBrick, "Fired Brick", ItemKind.Resource, BlockStackSize, BlockRegistry.FiredBrick));
+            // Fired Brick is a kiln-smelted intermediate item (not placeable); the placeable
+            // building block is Fired Brick Block, crafted from fired bricks at the Build Table (§9.2/§9.3).
+            registry.Register(new ItemDefinition(ItemId.FiredBrick, "Fired Brick", ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.FiredBrickBlock, "Fired Brick Block", ItemKind.Resource, BlockStackSize, BlockRegistry.FiredBrickBlock));
             registry.Register(new ItemDefinition(ItemId.ClearpaneGlass, "Clearpane Glass", ItemKind.Resource, BlockStackSize, BlockRegistry.ClearpaneGlass));
 
             // ── Block items (placeable stations/lights) ───────────────────────
@@ -63,6 +67,10 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.LumenLamp, "Lumen Lamp", ItemKind.Placeable, BlockStackSize, BlockRegistry.LumenLamp));
             registry.Register(new ItemDefinition(ItemId.SparkFlare, "Spark Flare", ItemKind.Placeable, BlockStackSize, BlockRegistry.SparkFlare));
             registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, BlockStackSize, BlockRegistry.StorageCrate));
+            registry.Register(new ItemDefinition(ItemId.ReedBasket, "Reed Basket", ItemKind.Placeable, BlockStackSize, BlockRegistry.ReedBasket));
+            registry.Register(new ItemDefinition(ItemId.ToolRack, "Tool Rack", ItemKind.Placeable, BlockStackSize, BlockRegistry.ToolRack));
+            registry.Register(new ItemDefinition(ItemId.PantryJar, "Pantry Jar", ItemKind.Placeable, BlockStackSize, BlockRegistry.PantryJar));
+            registry.Register(new ItemDefinition(ItemId.DeepLocker, "Deep Locker", ItemKind.Placeable, BlockStackSize, BlockRegistry.DeepLocker));
             registry.Register(new ItemDefinition(ItemId.Campfire, "Campfire", ItemKind.Placeable, BlockStackSize, BlockRegistry.Campfire));
             registry.Register(new ItemDefinition(ItemId.ClayKiln, "Clay Kiln", ItemKind.Placeable, BlockStackSize, BlockRegistry.ClayKiln));
             registry.Register(new ItemDefinition(ItemId.BellowsForge, "Bellows Forge", ItemKind.Placeable, BlockStackSize, BlockRegistry.BellowsForge));
@@ -74,25 +82,33 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.FlintyShingle,  "Flinty Shingle",  ItemKind.Resource, BlockStackSize,  BlockRegistry.FlintyShingle));
             registry.Register(new ItemDefinition(ItemId.Embercoal,      "Embercoal",        ItemKind.Resource, OreStackSize,    BlockRegistry.EmbercoalSeam));
             registry.Register(new ItemDefinition(ItemId.RawRosycopper,  "Raw Rosycopper",   ItemKind.Resource, OreStackSize,    BlockRegistry.RosycopperBloom));
-            registry.Register(new ItemDefinition(ItemId.PaletinThread,  "Paletin Thread",   ItemKind.Resource, OreStackSize,    BlockRegistry.PaletinThread));
+            registry.Register(new ItemDefinition(ItemId.RawPaletin,     "Raw Paletin",      ItemKind.Resource, OreStackSize,    BlockRegistry.PaletinThread));
             registry.Register(new ItemDefinition(ItemId.RawRustcore,    "Raw Rustcore",     ItemKind.Resource, OreStackSize,    BlockRegistry.RustcoreOre));
-            registry.Register(new ItemDefinition(ItemId.SunmetalFleck,  "Sunmetal Fleck",   ItemKind.Resource, OreStackSize,    BlockRegistry.SunmetalFleck));
+            registry.Register(new ItemDefinition(ItemId.RawSunmetal,    "Raw Sunmetal",     ItemKind.Resource, OreStackSize,    BlockRegistry.SunmetalFleck));
             registry.Register(new ItemDefinition(ItemId.LumenCrystal,   "Lumen Crystal",    ItemKind.Resource, CrystalStackSize, BlockRegistry.LumenQuartzCluster));
-            registry.Register(new ItemDefinition(ItemId.Niterstone,     "Niterstone",       ItemKind.Resource, OreStackSize,    BlockRegistry.NiterstonePocket));
+            registry.Register(new ItemDefinition(ItemId.SparkNiter,     "Spark Niter",      ItemKind.Resource, OreStackSize,    BlockRegistry.NiterstonePocket));
             registry.Register(new ItemDefinition(ItemId.Brightsalt,     "Brightsalt",       ItemKind.Resource, OreStackSize,    BlockRegistry.BrightsaltCrust));
             registry.Register(new ItemDefinition(ItemId.Shellgrit,      "Shellgrit",        ItemKind.Resource, OreStackSize,    BlockRegistry.ShellgritBed));
             registry.Register(new ItemDefinition(ItemId.ResinKnot,      "Resin Knot",       ItemKind.Resource, BlockStackSize,  BlockRegistry.ResinKnot));
-            registry.Register(new ItemDefinition(ItemId.Berrybush,      "Berrybush",        ItemKind.Resource, FoodStackSize,   BlockRegistry.Berrybush));
-            registry.Register(new ItemDefinition(ItemId.GrainStalk,     "Grain Stalk",      ItemKind.Resource, FoodStackSize,   BlockRegistry.GrainStalk));
+            registry.Register(new ItemDefinition(ItemId.RawUmbralite,   "Raw Umbralite",    ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
+            registry.Register(new ItemDefinition(ItemId.StaropalShard,  "Staropal Shard",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
 
-            // Grown crop stage blocks share the same drop as their base block
-            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S1, ItemId.GrainStalk);
-            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S2, ItemId.GrainStalk);
-            registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.Berrybush);
-            registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.Berrybush);
-            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.Reedgrass);
-            registry.Register(new ItemDefinition(ItemId.UmbraliteNode,  "Umbralite Node",   ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
-            registry.Register(new ItemDefinition(ItemId.StaropalGeode,  "Staropal Geode",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
+            // ── Crafted intermediates: work parts, smelted bars/dust (§9) ─────
+            registry.Register(new ItemDefinition(ItemId.StoutPole,      "Stout Pole",       ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.FiberCord,      "Fiber Cord",       ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedFiber,      "Reed Fiber",       ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.StoneRubble,    "Stone Rubble",     ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.ClayLump,       "Clay Lump",        ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.GlassShard,     "Glass Shard",      ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.LumenDust,      "Lumen Dust",       ItemKind.Resource, CrystalStackSize));
+            registry.Register(new ItemDefinition(ItemId.EmbercoalBlock, "Embercoal Block",  ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.RosycopperBar,  "Rosycopper Bar",   ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.PaletinBar,     "Paletin Bar",      ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.BronzeBar,      "Bronze Bar",       ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.IronrootBar,    "Ironroot Bar",     ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.SunmetalBar,    "Sunmetal Bar",     ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.DeepsteelBar,   "Deepsteel Bar",    ItemKind.Resource, OreStackSize));
+            registry.Register(new ItemDefinition(ItemId.StarforgedCore, "Starforged Core",  ItemKind.Resource, CrystalStackSize));
 
             // ── Tier-1 (Reedwood) tools — base 48, scaled by class multiplier ─
             registry.Register(new ItemDefinition(ItemId.ReedwoodDelver, "Reedwood Delver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Delver, toolTier: 1, maxDurability: 48));
@@ -112,10 +128,71 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.FlintCarver, "Flint Carver", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Carver, toolTier: 2, maxDurability: 54));
             registry.Register(new ItemDefinition(ItemId.FlintTiller, "Flint Tiller", ItemKind.Tool, ToolStackSize, toolClass: HarvestToolKind.Tiller, toolTier: 2, maxDurability: 72));
 
+            // ── Tier-3..7 metal tools (§7.1/§7.2): durability = material base × class multiplier ─
+            RegisterToolTier(registry, "rosycopper", "Rosycopper", tier: 3, baseDurability: 160);
+            RegisterToolTier(registry, "bronze",     "Bronze",     tier: 4, baseDurability: 300);
+            RegisterToolTier(registry, "ironroot",   "Ironroot",   tier: 5, baseDurability: 550);
+            RegisterToolTier(registry, "deepsteel",  "Deepsteel",  tier: 6, baseDurability: 1000);
+            RegisterToolTier(registry, "starforged", "Starforged", tier: 7, baseDurability: 1800);
+
+            // ── Farming: canonical crop drops, seeds, and stage aliases (§3, §11.2) ─
+            registry.Register(new ItemDefinition(ItemId.GrainBundle, "Grain Bundle",  ItemKind.Resource, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.BerryCluster, "Berry Cluster", ItemKind.Resource, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.MeadowSeed,   "Meadow Seed",   ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.DrygrassSeed, "Drygrass Seed", ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedCutting,  "Reed Cutting",  ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.BerrySeed,    "Berry Seed",    ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.CleanWaterFlask, "Clean Water Flask", ItemKind.Consumable, ConsumableStackSize));
+
+            // Every grain/berry/reed stage (base + grown) drops the canonical crop resource.
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk,    ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S1, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S2, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S3, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S4, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush,     ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S3,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S4,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S5,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass,     ItemId.ReedFiber);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.ReedFiber);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S2,  ItemId.ReedFiber);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S3,  ItemId.ReedFiber);
+
             // ── Consumables ───────────────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
 
             return registry;
+        }
+
+        // Canonical tool classes with their durability multipliers (§7.2).
+        static readonly (HarvestToolKind kind, string idSuffix, string nameSuffix, float durabilityMultiplier)[] ToolClasses =
+        {
+            (HarvestToolKind.Delver, "delver", "Delver", 1.00f),
+            (HarvestToolKind.Spade,  "spade",  "Spade",  0.80f),
+            (HarvestToolKind.Feller, "feller", "Feller", 0.90f),
+            (HarvestToolKind.Sickle, "sickle", "Sickle", 0.70f),
+            (HarvestToolKind.Mallet, "mallet", "Mallet", 1.20f),
+            (HarvestToolKind.Carver, "carver", "Carver", 0.60f),
+            (HarvestToolKind.Tiller, "tiller", "Tiller", 0.80f),
+        };
+
+        // Registers all seven tool classes for one material tier.
+        static void RegisterToolTier(ItemRegistry registry, string materialId, string materialName, int tier, int baseDurability)
+        {
+            foreach ((HarvestToolKind kind, string idSuffix, string nameSuffix, float durabilityMultiplier) in ToolClasses)
+            {
+                registry.Register(new ItemDefinition(
+                    new ItemId($"{materialId}_{idSuffix}"),
+                    $"{materialName} {nameSuffix}",
+                    ItemKind.Tool,
+                    ToolStackSize,
+                    toolClass: kind,
+                    toolTier: tier,
+                    maxDurability: (int)Math.Round(baseDurability * durabilityMultiplier)));
+            }
         }
 
         // Maps an additional block (e.g. a grown crop stage) to an already-registered item's drop,

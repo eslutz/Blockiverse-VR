@@ -149,6 +149,52 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ColliderRebuildsAreThrottledAndDrainViaPump()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            var editedPosition = new BlockPosition(1, 0, 1);
+            world.SetBlock(editedPosition, BlockRegistry.MeadowTurf, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                // The initial bake flushes every collider so a fresh world has full collision.
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
+
+                MeshFilter filter = worldObject.GetComponentInChildren<MeshFilter>();
+                MeshCollider collider = worldObject.GetComponentInChildren<MeshCollider>();
+
+                // With a zero budget, an edit updates the visual mesh immediately but defers the
+                // collider rebake.
+                renderer.ColliderRebuildBudget = 0;
+                world.SetBlock(editedPosition, BlockRegistry.Air);
+                renderer.RebuildDirty();
+
+                Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0), "Collider rebakes should be throttled by the budget.");
+                Assert.That(collider.sharedMesh, Is.Not.SameAs(filter.sharedMesh), "Collider should still use the pre-edit mesh until the rebake runs.");
+
+                // Draining the backlog brings the collider up to the current visual mesh.
+                renderer.ProcessPendingColliderRebuilds(int.MaxValue);
+
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
+                Assert.That(collider.sharedMesh, Is.SameAs(filter.sharedMesh));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
         public void RendererConfigureLogsOneDevelopmentRebuildSummary()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

@@ -21,6 +21,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.LooseLoam,          ItemId.LooseLoam);
             AssertBlockMapsToItem(registry, BlockRegistry.Graystone,          ItemId.Graystone);
             AssertBlockMapsToItem(registry, BlockRegistry.BranchwoodLog,      ItemId.BranchwoodLog);
+            AssertBlockMapsToItem(registry, BlockRegistry.SmoothBranchwood,   ItemId.SmoothBranchwood);
             AssertBlockMapsToItem(registry, BlockRegistry.Leafmoss,           ItemId.Leafmoss);
             AssertBlockMapsToItem(registry, BlockRegistry.LumenQuartzCluster, ItemId.LumenCrystal);
             AssertBlockMapsToItem(registry, BlockRegistry.EmbercoalSeam,      ItemId.Embercoal);
@@ -29,6 +30,37 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.BuildTable,         ItemId.BuildTable);
             AssertBlockMapsToItem(registry, BlockRegistry.Glowwick,           ItemId.Glowwick);
             AssertBlockMapsToItem(registry, BlockRegistry.StorageCrate,       ItemId.StorageCrate);
+            AssertBlockMapsToItem(registry, BlockRegistry.ReedBasket,         ItemId.ReedBasket);
+            AssertBlockMapsToItem(registry, BlockRegistry.ToolRack,           ItemId.ToolRack);
+            AssertBlockMapsToItem(registry, BlockRegistry.PantryJar,          ItemId.PantryJar);
+            AssertBlockMapsToItem(registry, BlockRegistry.DeepLocker,         ItemId.DeepLocker);
+
+            // Metal/crystal nodes drop their canonical raw resource (§3).
+            AssertBlockMapsToItem(registry, BlockRegistry.PaletinThread,      ItemId.RawPaletin);
+            AssertBlockMapsToItem(registry, BlockRegistry.SunmetalFleck,      ItemId.RawSunmetal);
+            AssertBlockMapsToItem(registry, BlockRegistry.NiterstonePocket,   ItemId.SparkNiter);
+            AssertBlockMapsToItem(registry, BlockRegistry.UmbraliteNode,      ItemId.RawUmbralite);
+            AssertBlockMapsToItem(registry, BlockRegistry.StaropalGeode,      ItemId.StaropalShard);
+        }
+
+        [Test]
+        public void DefaultRegistryContainsCraftedSmeltingIntermediates()
+        {
+            ItemRegistry registry = ItemRegistry.CreateDefault();
+
+            // Smelted bars and work parts are non-placeable crafted resource items (§9).
+            foreach (ItemId id in new[]
+            {
+                ItemId.StoutPole, ItemId.FiberCord, ItemId.ReedFiber, ItemId.StoneRubble,
+                ItemId.ClayLump, ItemId.GlassShard, ItemId.LumenDust, ItemId.EmbercoalBlock,
+                ItemId.RosycopperBar, ItemId.PaletinBar, ItemId.BronzeBar, ItemId.IronrootBar,
+                ItemId.SunmetalBar, ItemId.DeepsteelBar, ItemId.StarforgedCore,
+            })
+            {
+                Assert.That(registry.TryGet(id, out ItemDefinition def), Is.True, $"Expected {id} to be registered.");
+                Assert.That(def.Kind, Is.EqualTo(ItemKind.Resource));
+                Assert.That(def.HasBlockMapping, Is.False, $"{id} should not be a placeable block item.");
+            }
         }
 
         [Test]
@@ -42,6 +74,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(registry.Get(ItemId.LumenCrystal).MaxStackSize,   Is.EqualTo(ItemRegistry.CrystalStackSize));
             Assert.That(registry.Get(ItemId.BuildTable).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize,   Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.DeepLocker).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodFeller).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodMallet).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodDelver).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));

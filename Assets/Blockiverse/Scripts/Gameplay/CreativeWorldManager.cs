@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -24,18 +25,22 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry,
             WorldGenerationSettings settings,
             VoxelWorld world,
-            CreativeWorldGenerationPreset generationPreset)
+            CreativeWorldGenerationPreset generationPreset,
+            IReadOnlyList<StructureContainerLoot> containerLoot = null)
         {
             Registry = registry;
             Settings = settings;
             World = world;
             GenerationPreset = generationPreset;
+            ContainerLoot = containerLoot;
         }
 
         public BlockRegistry Registry { get; }
         public WorldGenerationSettings Settings { get; }
         public VoxelWorld World { get; }
         public CreativeWorldGenerationPreset GenerationPreset { get; }
+        // Container loot rolled during generation (null when the preset places none).
+        public IReadOnlyList<StructureContainerLoot> ContainerLoot { get; }
 
         static CreativeWorldGenerationPreset InferGenerationPreset(WorldGenerationSettings settings)
         {
@@ -60,6 +65,19 @@ namespace Blockiverse.Gameplay
         FarmingService farmingService;
         WorldTimeClock worldTimeClock;
         string pendingWeatherState;
+        // Environment sync values received before the services existed (message-ordering safety net).
+        WeatherSyncState? pendingWeatherSync;
+        long? pendingWorldTimeTicks;
+        // Per-block container contents (structure loot crates). Built from generation loot, then
+        // overridden by any saved contents on load.
+        ContainerInventoryStore containerStore;
+        ItemRegistry containerItemRegistry;
+        IReadOnlyList<StructureContainerLoot> pendingContainerLoot;
+        // The inventory that receives container loot when a crate is broken (the active player's
+        // survival inventory). When a save is being applied, auto-loot is suppressed so loaded block
+        // deltas that remove crates don't dump loot into the player.
+        Inventory activePlayerInventory;
+        bool suppressContainerAutoLoot;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -69,6 +87,69 @@ namespace Blockiverse.Gameplay
 
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
         public WorldTimeClock WorldTimeClock => worldTimeClock;
+
+        // Evaluates the current environment (weather-derived temperature, fog, precipitation, storm,
+        // cloud coverage) at the given altitude. Returns false until the weather service exists.
+        // Lets runtime systems (lighting, fog, future VFX/audio) react to live weather.
+        public bool TryEvaluateEnvironment(int altitudeY, out EnvironmentState environment)
+        {
+            if (weatherService == null)
+            {
+                environment = default;
+                return false;
+            }
+
+            float normalizedTime = worldTimeClock != null ? worldTimeClock.NormalizedTime : 0.25f;
+            environment = weatherService.Evaluate(normalizedTime, altitudeY);
+            return true;
+        }
+
+        // Full weather snapshot: state + tick accumulator + RNG position. The RNG position is
+        // what keeps a late-joining client in deterministic lockstep with the host's weather.
+        public readonly struct WeatherSyncState
+        {
+            public readonly WeatherState State;
+            public readonly int Ticks;
+            public readonly uint RngState;
+
+            public WeatherSyncState(WeatherState state, int ticks, uint rngState)
+            {
+                State = state;
+                Ticks = ticks;
+                RngState = rngState;
+            }
+        }
+
+        // Returns the weather state, accumulated ticks, and RNG position for a network snapshot.
+        // Returns a Clear default when the weather service is not yet initialized.
+        public WeatherSyncState GetWeatherSyncState() =>
+            weatherService != null
+                ? new WeatherSyncState(weatherService.CurrentState, weatherService.TicksInCurrentState, weatherService.RngState)
+                : new WeatherSyncState(WeatherState.Clear, 0, 1u);
+
+        // Restores weather state (incl. RNG) received from a host snapshot, preserving lockstep.
+        // If the service does not exist yet (snapshot arrived before world init), the full state is
+        // buffered and applied at the end of ConfigureEnvironmentServices — no ticks/RNG are lost.
+        public void RestoreWeatherSyncState(WeatherSyncState sync)
+        {
+            if (weatherService == null)
+            {
+                pendingWeatherSync = sync;
+                return;
+            }
+            weatherService.RestoreState(sync.State, sync.Ticks, sync.RngState);
+        }
+
+        // Restores the world-time clock from a host snapshot, buffering if the clock is not ready.
+        public void RestoreWorldTimeTicks(long totalElapsedTicks)
+        {
+            if (worldTimeClock == null)
+            {
+                pendingWorldTimeTicks = totalElapsedTicks;
+                return;
+            }
+            worldTimeClock.RestoreElapsedTicks(totalElapsedTicks);
+        }
 
         public void RestoreWeatherState(string weatherStateString)
         {
@@ -123,6 +204,7 @@ namespace Blockiverse.Gameplay
             Settings = settings;
             GenerationPreset = generatedWorld.GenerationPreset;
             World = generatedWorld.World;
+            pendingContainerLoot = generatedWorld.ContainerLoot;
             ConfigureWorldRuntime(settings, authoritySyncOverride);
             PositionRigAtSpawn(settings.SpawnPosition);
         }
@@ -198,6 +280,10 @@ namespace Blockiverse.Gameplay
             if (vegetationService != null && World != null)
                 World.BlockChanged -= OnBlockChanged;
 
+            // Build container contents (structure loot crates) from generation loot. Done before the
+            // WorldTimeClock check so containers exist even in scenes/tests without a clock.
+            BuildContainerStore();
+
             worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
                 return;
@@ -206,15 +292,37 @@ namespace Blockiverse.Gameplay
             weatherService    = new WeatherService(seed);
             vegetationService = new VegetationService();
             farmingService    = new FarmingService();
+
+            // Wire biome-aware sapling growth for survival terrain worlds. The resolver is a pure
+            // function of (seed, worldHeight), so host and late-joining clients (which receive the
+            // seed in the generation snapshot) resolve identical biomes and stay in growth lockstep.
+            if (settings != null && GenerationPreset == CreativeWorldGenerationPreset.SurvivalLite)
+            {
+                var biomeResolver = new SurvivalBiomeResolver(settings.Seed, World.Bounds.Height);
+                vegetationService.Configure(biomeResolver.BiomeIndexAt);
+            }
+
             vegetationService.ScanAndTrackSaplings(World);
             farmingService.ScanAndTrackCrops(World);
             World.BlockChanged += OnBlockChanged;
             worldTimeClock.Ticked += OnWorldTick;
 
-            if (!string.IsNullOrEmpty(pendingWeatherState))
+            // Apply any environment state received before the services existed (message ordering).
+            if (pendingWeatherSync.HasValue)
+            {
+                weatherService.RestoreState(pendingWeatherSync.Value.State, pendingWeatherSync.Value.Ticks, pendingWeatherSync.Value.RngState);
+                pendingWeatherSync = null;
+            }
+            else if (!string.IsNullOrEmpty(pendingWeatherState))
             {
                 RestoreWeatherState(pendingWeatherState);
                 pendingWeatherState = null;
+            }
+
+            if (pendingWorldTimeTicks.HasValue)
+            {
+                worldTimeClock.RestoreElapsedTicks(pendingWorldTimeTicks.Value);
+                pendingWorldTimeTicks = null;
             }
         }
 
@@ -225,6 +333,104 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TrackSapling(change.Position);
             if (FarmingService.IsCropBlock(b))
                 farmingService?.TrackCrop(change.Position);
+
+            // Harvesting a berrybush (cleared to air) queues it to regrow after two game days (§3).
+            // Berrybush is owned by FarmingService (it replants a fresh stage-0 bush and tracks its
+            // growth); the wild-regrowth queue below handles the other wild plants so the two paths
+            // never both fire for the same block.
+            if (b == BlockRegistry.Air && FarmingService.IsBerrybushStage(change.PreviousBlock))
+                farmingService?.OnBlockHarvested(change.PreviousBlock, change.Position);
+            else if (b == BlockRegistry.Air && IsWildRegrowthPlant(change.PreviousBlock))
+                vegetationService?.MarkWildHarvest(change.PreviousBlock, change.Position, CurrentWorldTick);
+
+            // A container block that is removed (broken, or replaced by a loaded save delta): deposit
+            // its contents into the active player inventory (best effort) then drop the store entry so
+            // the store stays consistent with the world. Auto-loot is skipped while applying a save.
+            if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b) && containerStore != null)
+            {
+                if (!suppressContainerAutoLoot && activePlayerInventory != null)
+                    TryLootContainerInto(change.Position, activePlayerInventory);
+                containerStore.Remove(change.Position);
+            }
+        }
+
+        // Wild (non-cultivated) plants that the vegetation service restores after a regrow delay.
+        // Berrybush is intentionally excluded — FarmingService owns its regrowth.
+        static bool IsWildRegrowthPlant(BlockId block) =>
+            block == BlockRegistry.GrainStalk || block == BlockRegistry.Reedgrass || block == BlockRegistry.Thornbrush;
+
+        // Blocks that carry per-position container contents.
+        static bool IsContainerBlock(BlockId block) =>
+            block == BlockRegistry.StorageCrate ||
+            block == BlockRegistry.ReedBasket ||
+            block == BlockRegistry.ToolRack ||
+            block == BlockRegistry.PantryJar ||
+            block == BlockRegistry.DeepLocker;
+
+        long CurrentWorldTick => worldTimeClock != null ? worldTimeClock.TotalElapsedTicks : 0L;
+
+        // ── Container contents (structure loot crates) ───────────────────────
+
+        ItemRegistry ContainerItemRegistry => containerItemRegistry ??= ItemRegistry.CreateDefault();
+
+        void BuildContainerStore()
+        {
+            containerStore = new ContainerInventoryStore(ContainerItemRegistry);
+
+            if (pendingContainerLoot != null)
+            {
+                foreach (StructureContainerLoot loot in pendingContainerLoot)
+                {
+                    if (loot?.Items == null)
+                        continue;
+                    var stacks = new List<(string, int)>(loot.Items.Count);
+                    foreach (ContainerLootItem item in loot.Items)
+                        stacks.Add((item.ItemId, item.Count));
+                    containerStore.Populate(loot.Position, stacks);
+                }
+            }
+
+            pendingContainerLoot = null;
+        }
+
+        // The container contents store (structure loot crates). May be null before a world is loaded.
+        public ContainerInventoryStore ContainerStore => containerStore;
+
+        // The inventory that receives loot when a player breaks a container. Set by the survival
+        // runtime (the active player's inventory). Null disables auto-loot.
+        public Inventory ActivePlayerInventory => activePlayerInventory;
+        public void SetActivePlayerInventory(Inventory inventory) => activePlayerInventory = inventory;
+
+        // Persistence sets this while applying a save so loaded crate-removal deltas don't dump loot
+        // into the player; cleared once the saved container store has been restored.
+        public bool SuppressContainerAutoLoot
+        {
+            get => suppressContainerAutoLoot;
+            set => suppressContainerAutoLoot = value;
+        }
+
+        // Moves all contents from the container at a position into the target inventory. Returns true
+        // when the container was fully emptied. Safe to call on a position with no container. Used by
+        // the break-to-loot path; a future container-open UI can reuse it or read ContainerStore.
+        public bool TryLootContainerInto(BlockPosition position, Inventory target)
+        {
+            if (containerStore == null || target == null)
+                return false;
+            if (!containerStore.Contains(position))
+                return false;
+            return containerStore.TransferAllInto(position, target);
+        }
+
+        // Replaces the live container store with saved contents on load (saved state is authoritative
+        // over regenerated loot, so emptied crates stay empty across reloads).
+        public void RestoreContainerStore(IEnumerable<(BlockPosition position, IEnumerable<(string itemId, int count)> items)> savedContainers)
+        {
+            containerStore ??= new ContainerInventoryStore(ContainerItemRegistry);
+            if (savedContainers == null)
+                return;
+
+            foreach ((BlockPosition position, IEnumerable<(string itemId, int count)> items) in savedContainers)
+                containerStore.Populate(position, items);
         }
 
         void OnWorldTick(int ticks)
@@ -234,7 +440,9 @@ namespace Blockiverse.Gameplay
             {
                 vegetationService?.TickLeafDecay(World, ticks);
                 vegetationService?.TickSapling(World, ticks);
+                vegetationService?.TickWildRegrowth(World, CurrentWorldTick);
                 farmingService?.TickGrowth(World, ticks);
+                farmingService?.TickRegrowth(World, ticks);
             }
         }
 
@@ -296,8 +504,9 @@ namespace Blockiverse.Gameplay
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
-            VoxelWorld world = new SurvivalTerrainPreset(registry, settings).Generate();
-            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite);
+            var preset = new SurvivalTerrainPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite, preset.ContainerLoot);
         }
 
         void Awake()

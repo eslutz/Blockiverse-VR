@@ -78,14 +78,14 @@ The palette should stay bright, readable, and varied:
 Block textures:
 
 - Source tiles are 16x16 RGBA PNG files.
-- The runtime atlas is a committed 8x7, 128x112 RGBA PNG.
+- The runtime atlas is a committed 8x10, 128x160 RGBA PNG.
 - Tile order follows the runtime atlas mapping for the current canonical registry. Historical temporary atlas ordering may be retained only while migration tests still cover old saved worlds.
 - Use point filtering, clamp wrapping, and no mipmaps unless headset validation proves a different import profile is readable.
 - Keep silhouettes and color families distinct enough to read in Quest headset validation.
 
 Item and UI textures:
 
-- Item icons are transparent 64x64 PNG sprites.
+- Item icons are transparent 16x16 PNG sprites.
 - UI sprites are transparent PNG sprites sized for their immediate use: hotbar frame, selected slot, health pip, inventory panel, crafting panel, settings panel, feedback toast, and multiplayer status badge.
 - VFX sprites are transparent 32x32 PNG sprites for pooled particles and transient feedback.
 - Do not embed text in icon or UI sprites.
