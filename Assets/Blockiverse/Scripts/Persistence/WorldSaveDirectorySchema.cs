@@ -52,6 +52,30 @@ namespace Blockiverse.Persistence
     }
 
     [Serializable]
+    public sealed class VxlwContainerFile
+    {
+        public string Format;
+        public string SaveFormatVersion;
+        public VxlwContainer[] Containers;
+    }
+
+    [Serializable]
+    public sealed class VxlwContainer
+    {
+        public int X;
+        public int Y;
+        public int Z;
+        public VxlwContainerSlot[] Slots;
+    }
+
+    [Serializable]
+    public sealed class VxlwContainerSlot
+    {
+        public string CanonicalId;
+        public int Count;
+    }
+
+    [Serializable]
     public sealed class VxlwRegistryManifest
     {
         public string BlockRegistryHash;

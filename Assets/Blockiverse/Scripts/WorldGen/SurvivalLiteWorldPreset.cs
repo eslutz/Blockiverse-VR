@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blockiverse.Voxel;
 using Unity.Profiling;
 
@@ -18,6 +19,7 @@ namespace Blockiverse.WorldGen
         readonly WorldGenerationSettings settings;
         readonly SurvivalResourceTuning resourceTuning;
         readonly SurvivalBiomeResolver biomeResolver;
+        readonly List<StructureContainerLoot> containerLoot = new();
 
         public SurvivalTerrainPreset(BlockRegistry registry, WorldGenerationSettings settings, SurvivalResourceTuning resourceTuning = null)
         {
@@ -26,6 +28,11 @@ namespace Blockiverse.WorldGen
             this.resourceTuning = resourceTuning ?? SurvivalResourceTuning.CreateDefault();
             this.biomeResolver = new SurvivalBiomeResolver(settings.Seed, settings.Bounds.Height);
         }
+
+        // Container loot rolled during the most recent Generate() call (structure crates → contents).
+        // Deterministic from the world seed, so callers can build container inventories without
+        // transmitting them across the network.
+        public IReadOnlyList<StructureContainerLoot> ContainerLoot => containerLoot;
 
         public VoxelWorld Generate()
         {
@@ -41,8 +48,10 @@ namespace Blockiverse.WorldGen
             FillTerrain(world, surfaceHeights, biomeMap);
             CarveCaves(world, surfaceHeights);
             PlaceResourceVeins(world, surfaceHeights);
-            StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt);
+            containerLoot.Clear();
+            StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt, containerLoot);
             PlaceSparseVegetation(world, surfaceHeights, biomeMap);
+            PlaceWildPlants(world, surfaceHeights, biomeMap);
             ApplySpawnSafety(world);
 
             return world;
@@ -460,6 +469,61 @@ namespace Blockiverse.WorldGen
                 TerrainBiome.Dunes     => 3,
                 _                      => 0,
             };
+        }
+
+        // Scatters single-block wild plants (berrybush, reedgrass, thornbrush, grain stalk) on the
+        // surface by biome. These feed the harvest → regrowth loop (FarmingService owns berrybush;
+        // VegetationService's wild-regrowth queue owns grain/reed/thorn). Placement is deterministic
+        // from the seed and only lands on a clear column with a solid surface block below.
+        void PlaceWildPlants(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
+        {
+            WorldBounds bounds = world.Bounds;
+
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                for (int z = 0; z < bounds.Depth; z++)
+                {
+                    if (IsInsideSpawnProtectedColumn(x, z))
+                        continue;
+
+                    TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
+                    BlockId plant = WildPlantForBiome(biome, out int densityThreshold);
+                    if (densityThreshold == 0)
+                        continue;
+
+                    uint hash = Hash(settings.Seed, x, 0, z, salt: 2389);
+                    if (hash % 1000u >= (uint)densityThreshold)
+                        continue;
+
+                    int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
+                    var plantPos = new BlockPosition(x, surfaceY + 1, z);
+                    if (!world.Bounds.Contains(plantPos))
+                        continue;
+
+                    // Only place on an empty column above a solid surface (don't overwrite trees/structures).
+                    if (world.GetBlock(plantPos) != BlockRegistry.Air)
+                        continue;
+                    if (world.GetBlock(new BlockPosition(x, surfaceY, z)) == BlockRegistry.Air)
+                        continue;
+
+                    world.SetBlock(plantPos, plant, trackChange: false);
+                }
+            }
+        }
+
+        // Per-biome wild plant choice and density in tenths-of-a-percent (0–1000 → 0–100%).
+        static BlockId WildPlantForBiome(TerrainBiome biome, out int densityPermille)
+        {
+            switch (biome)
+            {
+                case TerrainBiome.Meadow:   densityPermille = 28; return BlockRegistry.Berrybush;
+                case TerrainBiome.Pinewild: densityPermille = 18; return BlockRegistry.Berrybush;
+                case TerrainBiome.Wetland:  densityPermille = 45; return BlockRegistry.Reedgrass;
+                case TerrainBiome.Drybrush: densityPermille = 30; return BlockRegistry.Thornbrush;
+                case TerrainBiome.Dunes:    densityPermille = 12; return BlockRegistry.Thornbrush;
+                case TerrainBiome.Highlands:densityPermille = 14; return BlockRegistry.GrainStalk;
+                default:                    densityPermille = 0;  return BlockRegistry.Air;
+            }
         }
 
         void ApplySpawnSafety(VoxelWorld world)

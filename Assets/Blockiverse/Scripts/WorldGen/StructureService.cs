@@ -7,6 +7,33 @@ namespace Blockiverse.WorldGen
     public enum StructureDegradation { Intact, Weathered, Ruined, Crumbled }
     public enum StructureTerrainFit  { SnapToSurface, Flatten }
 
+    // One stack of rolled container loot (canonical item id + count). Kept string-based so the
+    // WorldGen assembly need not depend on the Survival item registry.
+    public readonly struct ContainerLootItem
+    {
+        public readonly string ItemId;
+        public readonly int Count;
+
+        public ContainerLootItem(string itemId, int count)
+        {
+            ItemId = itemId;
+            Count = count;
+        }
+    }
+
+    // The rolled contents of a single container placed by a structure, at a world block position.
+    public sealed class StructureContainerLoot
+    {
+        public BlockPosition Position { get; }
+        public IReadOnlyList<ContainerLootItem> Items { get; }
+
+        public StructureContainerLoot(BlockPosition position, IReadOnlyList<ContainerLootItem> items)
+        {
+            Position = position;
+            Items = items;
+        }
+    }
+
     // Minimal structure definition for catalog dispatch
     sealed class StructureDefinition
     {
@@ -17,6 +44,7 @@ namespace Blockiverse.WorldGen
         public readonly StructureDegradation MaxDegradation;
         public readonly bool HasLoot;
         public readonly bool HasStation;
+        public readonly string LootTableId; // which StructureLootTable fills this structure's crate
 
         public StructureDefinition(
             string id,
@@ -25,7 +53,8 @@ namespace Blockiverse.WorldGen
             int minDistanceFromSpawn = 80,
             StructureDegradation maxDegradation = StructureDegradation.Ruined,
             bool hasLoot = false,
-            bool hasStation = false)
+            bool hasStation = false,
+            string lootTableId = null)
         {
             Id = id;
             AllowedBiomes = allowedBiomes;
@@ -34,6 +63,7 @@ namespace Blockiverse.WorldGen
             MaxDegradation = maxDegradation;
             HasLoot = hasLoot;
             HasStation = hasStation;
+            LootTableId = lootTableId ?? StructureLootTable.CommonSupply.Id;
         }
     }
 
@@ -51,7 +81,7 @@ namespace Blockiverse.WorldGen
         static readonly StructureDefinition[] Catalog =
         {
             new("pathmark_stones",     new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Wetland, TerrainBiome.Drybrush, TerrainBiome.Highlands, TerrainBiome.Tundra }, 80, minDistanceFromSpawn: 20, StructureDegradation.Weathered),
-            new("forager_lean_to",     new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Drybrush }, 55, hasLoot: true),
+            new("forager_lean_to",     new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Drybrush }, 55, hasLoot: true, lootTableId: "loot_forager_food"),
             new("resin_tap_grove",     new[]{ TerrainBiome.Pinewild, TerrainBiome.Meadow }, 35, hasLoot: true, hasStation: false),
             new("frost_shelter",       new[]{ TerrainBiome.Tundra, TerrainBiome.Highlands }, 30, hasLoot: true, hasStation: true),
             new("drybrush_niter_pit",  new[]{ TerrainBiome.Drybrush, TerrainBiome.Dunes }, 30, hasLoot: true),
@@ -63,7 +93,8 @@ namespace Blockiverse.WorldGen
             BlockRegistry registry,
             WorldGenerationSettings settings,
             int seed,
-            Func<int, int, int> biomeAt = null)  // (x, z) → TerrainBiome as int; null = Meadow everywhere
+            Func<int, int, int> biomeAt = null,    // (x, z) → TerrainBiome as int; null = Meadow everywhere
+            List<StructureContainerLoot> lootSink = null) // receives rolled loot for each placed crate
         {
             if (world == null)    throw new ArgumentNullException(nameof(world));
             if (registry == null) throw new ArgumentNullException(nameof(registry));
@@ -106,7 +137,7 @@ namespace Blockiverse.WorldGen
 
                     accepted.Add((worldX, worldZ));
                     var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(regionHash % 4u)));
-                    PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed, def);
+                    PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed, def, lootSink);
                 }
             }
         }
@@ -125,7 +156,7 @@ namespace Blockiverse.WorldGen
             return -1;
         }
 
-        static void PlaceRuin(VoxelWorld world, int baseX, int baseY, int baseZ, StructureDegradation degradation, int seed, StructureDefinition def = null)
+        static void PlaceRuin(VoxelWorld world, int baseX, int baseY, int baseZ, StructureDegradation degradation, int seed, StructureDefinition def = null, List<StructureContainerLoot> lootSink = null)
         {
             // 5×5 footprint, 3-block-high walls
             const int wallH = 3;
@@ -156,7 +187,20 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(baseX + 2, baseY, baseZ + 2);
                 if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
+                {
                     world.SetBlock(lootPos, BlockRegistry.StorageCrate);
+
+                    // Roll this structure's loot table deterministically from the crate position so the
+                    // host and any client that regenerates the world produce identical contents.
+                    if (lootSink != null)
+                    {
+                        uint lootSeed = Hash(seed, baseX, baseY, baseZ, salt: 6151);
+                        StructureLootTable table = StructureLootTable.GetById(def.LootTableId);
+                        List<ContainerLootItem> items = table.Roll(lootSeed);
+                        if (items.Count > 0)
+                            lootSink.Add(new StructureContainerLoot(lootPos, items));
+                    }
+                }
             }
 
             if (def != null && def.HasStation)
@@ -289,17 +333,56 @@ namespace Blockiverse.WorldGen
             return Entries[Entries.Length - 1];
         }
 
+        // Deterministically roll this table MinRolls..MaxRolls times from a single seed and return the
+        // aggregated (itemId, count) results. Same seed → same loot, so host and a client that
+        // regenerates the world from the world seed produce identical container contents.
+        public List<ContainerLootItem> Roll(uint seed)
+        {
+            uint rng = seed == 0 ? 1u : seed;
+            int span = Math.Max(1, MaxRolls - MinRolls + 1);
+            int rolls = MinRolls + (int)(NextRng(ref rng) % (uint)span);
+
+            var aggregate = new Dictionary<string, int>();
+            for (int i = 0; i < rolls; i++)
+            {
+                StructureLootEntry entry = Pick(NextRng(ref rng));
+                int countSpan = Math.Max(1, entry.MaxCount - entry.MinCount + 1);
+                int count = entry.MinCount + (int)(NextRng(ref rng) % (uint)countSpan);
+                aggregate.TryGetValue(entry.ItemId, out int existing);
+                aggregate[entry.ItemId] = existing + count;
+            }
+
+            var result = new List<ContainerLootItem>(aggregate.Count);
+            foreach (KeyValuePair<string, int> kv in aggregate)
+                result.Add(new ContainerLootItem(kv.Key, kv.Value));
+            return result;
+        }
+
+        static uint NextRng(ref uint state)
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return state;
+        }
+
+        public static StructureLootTable GetById(string id)
+        {
+            if (id == ForagerFood.Id) return ForagerFood;
+            return CommonSupply;
+        }
+
         // Canonical common supply loot table
         public static readonly StructureLootTable CommonSupply = new("loot_common_supply", 2, 4,
             new[]
             {
-                new StructureLootEntry("reed_fiber",   2, 8, 16),
-                new StructureLootEntry("fiber_cord",   1, 4, 12),
-                new StructureLootEntry("stout_pole",   1, 5, 12),
-                new StructureLootEntry("stone_pebble", 2, 8, 10),
-                new StructureLootEntry("flint_shard",  1, 4,  8),
-                new StructureLootEntry("glowwick",     1, 3,  6),
-                new StructureLootEntry("berry_cluster",1, 4,  5),
+                new StructureLootEntry("reed_fiber",     2, 8, 16),
+                new StructureLootEntry("fiber_cord",     1, 4, 12),
+                new StructureLootEntry("stout_pole",     1, 5, 12),
+                new StructureLootEntry("surface_pebbles", 2, 8, 10),
+                new StructureLootEntry("flinty_shingle", 1, 4,  8),
+                new StructureLootEntry("glowwick",       1, 3,  6),
+                new StructureLootEntry("berry_cluster",  1, 4,  5),
             });
 
         // Canonical forager food loot table
@@ -308,7 +391,7 @@ namespace Blockiverse.WorldGen
             {
                 new StructureLootEntry("berry_cluster",    2, 8, 14),
                 new StructureLootEntry("grain_bundle",     2, 6, 12),
-                new StructureLootEntry("trail_ration",     1, 3,  7),
+                new StructureLootEntry("meadow_seed",      1, 3,  7),
                 new StructureLootEntry("clean_water_flask",1, 2,  5),
                 new StructureLootEntry("brightsalt",       1, 4,  4),
                 new StructureLootEntry("field_bandage",    1, 2,  3),

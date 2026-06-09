@@ -283,6 +283,54 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(world.GetBlock(new BlockPosition(cx, 65, cz)), Is.EqualTo(BlockRegistry.Air));
         }
 
+        [Test]
+        public void SurvivalTerrainGeneratesWildPlants()
+        {
+            VoxelWorld world = GenerateSurvivalWorld(seed: 6401);
+
+            int wild = CountBlocks(world, BlockRegistry.Berrybush)
+                     + CountBlocks(world, BlockRegistry.Reedgrass)
+                     + CountBlocks(world, BlockRegistry.Thornbrush)
+                     + CountBlocks(world, BlockRegistry.GrainStalk);
+
+            Assert.That(wild, Is.GreaterThan(0), "The survival preset should scatter wild plants across biomes.");
+        }
+
+        [Test]
+        public void SurvivalTerrainExposesDeterministicContainerLoot()
+        {
+            // Loot is biome-weighted toward the no-loot pathmark_stones, so any single seed may place
+            // zero loot crates. Search a handful of seeds for one that does, then assert the contents
+            // are deterministic and correctly anchored on StorageCrate blocks.
+            int seedWithLoot = -1;
+            for (int seed = 1; seed <= 30 && seedWithLoot < 0; seed++)
+            {
+                var probe = new SurvivalTerrainPreset(BlockRegistry.CreateDefault(),
+                    WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed));
+                probe.Generate();
+                if (probe.ContainerLoot.Count > 0)
+                    seedWithLoot = seed;
+            }
+
+            Assert.That(seedWithLoot, Is.GreaterThan(0),
+                "At least one of the probed seeds should place a loot-bearing structure.");
+
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seedWithLoot);
+            var presetA = new SurvivalTerrainPreset(BlockRegistry.CreateDefault(), settings);
+            VoxelWorld world = presetA.Generate();
+            var presetB = new SurvivalTerrainPreset(BlockRegistry.CreateDefault(), settings);
+            presetB.Generate();
+
+            Assert.That(presetB.ContainerLoot.Count, Is.EqualTo(presetA.ContainerLoot.Count),
+                "Container loot must be deterministic for the same seed.");
+
+            foreach (StructureContainerLoot loot in presetA.ContainerLoot)
+            {
+                Assert.That(world.GetBlock(loot.Position), Is.EqualTo(BlockRegistry.StorageCrate));
+                Assert.That(loot.Items.Count, Is.GreaterThan(0));
+            }
+        }
+
         static VoxelWorld GenerateSurvivalWorld(int seed)
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

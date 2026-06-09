@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -24,18 +25,22 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry,
             WorldGenerationSettings settings,
             VoxelWorld world,
-            CreativeWorldGenerationPreset generationPreset)
+            CreativeWorldGenerationPreset generationPreset,
+            IReadOnlyList<StructureContainerLoot> containerLoot = null)
         {
             Registry = registry;
             Settings = settings;
             World = world;
             GenerationPreset = generationPreset;
+            ContainerLoot = containerLoot;
         }
 
         public BlockRegistry Registry { get; }
         public WorldGenerationSettings Settings { get; }
         public VoxelWorld World { get; }
         public CreativeWorldGenerationPreset GenerationPreset { get; }
+        // Container loot rolled during generation (null when the preset places none).
+        public IReadOnlyList<StructureContainerLoot> ContainerLoot { get; }
 
         static CreativeWorldGenerationPreset InferGenerationPreset(WorldGenerationSettings settings)
         {
@@ -63,6 +68,11 @@ namespace Blockiverse.Gameplay
         // Environment sync values received before the services existed (message-ordering safety net).
         WeatherSyncState? pendingWeatherSync;
         long? pendingWorldTimeTicks;
+        // Per-block container contents (structure loot crates). Built from generation loot, then
+        // overridden by any saved contents on load.
+        ContainerInventoryStore containerStore;
+        ItemRegistry containerItemRegistry;
+        IReadOnlyList<StructureContainerLoot> pendingContainerLoot;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -173,6 +183,7 @@ namespace Blockiverse.Gameplay
             Settings = settings;
             GenerationPreset = generatedWorld.GenerationPreset;
             World = generatedWorld.World;
+            pendingContainerLoot = generatedWorld.ContainerLoot;
             ConfigureWorldRuntime(settings, authoritySyncOverride);
             PositionRigAtSpawn(settings.SpawnPosition);
         }
@@ -248,6 +259,10 @@ namespace Blockiverse.Gameplay
             if (vegetationService != null && World != null)
                 World.BlockChanged -= OnBlockChanged;
 
+            // Build container contents (structure loot crates) from generation loot. Done before the
+            // WorldTimeClock check so containers exist even in scenes/tests without a clock.
+            BuildContainerStore();
+
             worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
                 return;
@@ -306,6 +321,11 @@ namespace Blockiverse.Gameplay
                 farmingService?.OnBlockHarvested(change.PreviousBlock, change.Position);
             else if (b == BlockRegistry.Air && IsWildRegrowthPlant(change.PreviousBlock))
                 vegetationService?.MarkWildHarvest(change.PreviousBlock, change.Position, CurrentWorldTick);
+
+            // A container block that is removed (broken, or replaced by a loaded save delta) no longer
+            // has contents — drop its store entry so the store stays consistent with the world.
+            if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b))
+                containerStore?.Remove(change.Position);
         }
 
         // Wild (non-cultivated) plants that the vegetation service restores after a regrow delay.
@@ -313,7 +333,63 @@ namespace Blockiverse.Gameplay
         static bool IsWildRegrowthPlant(BlockId block) =>
             block == BlockRegistry.GrainStalk || block == BlockRegistry.Reedgrass || block == BlockRegistry.Thornbrush;
 
+        // Blocks that carry per-position container contents.
+        static bool IsContainerBlock(BlockId block) => block == BlockRegistry.StorageCrate;
+
         long CurrentWorldTick => worldTimeClock != null ? worldTimeClock.TotalElapsedTicks : 0L;
+
+        // ── Container contents (structure loot crates) ───────────────────────
+
+        ItemRegistry ContainerItemRegistry => containerItemRegistry ??= ItemRegistry.CreateDefault();
+
+        void BuildContainerStore()
+        {
+            containerStore = new ContainerInventoryStore(ContainerItemRegistry);
+
+            if (pendingContainerLoot != null)
+            {
+                foreach (StructureContainerLoot loot in pendingContainerLoot)
+                {
+                    if (loot?.Items == null)
+                        continue;
+                    var stacks = new List<(string, int)>(loot.Items.Count);
+                    foreach (ContainerLootItem item in loot.Items)
+                        stacks.Add((item.ItemId, item.Count));
+                    containerStore.Populate(loot.Position, stacks);
+                }
+            }
+
+            pendingContainerLoot = null;
+        }
+
+        // The container contents store (structure loot crates). May be null before a world is loaded.
+        public ContainerInventoryStore ContainerStore => containerStore;
+
+        // Returns the inventory of the container at a position (for a container UI), or null if none.
+        public Inventory OpenContainer(BlockPosition position) => containerStore?.GetOrNull(position);
+
+        // Moves all contents from the container at a position into the target inventory. Returns true
+        // when the container was fully emptied. Safe to call on a position with no container.
+        public bool TryLootContainerInto(BlockPosition position, Inventory target)
+        {
+            if (containerStore == null || target == null)
+                return false;
+            if (!containerStore.Contains(position))
+                return false;
+            return containerStore.TransferAllInto(position, target);
+        }
+
+        // Replaces the live container store with saved contents on load (saved state is authoritative
+        // over regenerated loot, so emptied crates stay empty across reloads).
+        public void RestoreContainerStore(IEnumerable<(BlockPosition position, IEnumerable<(string itemId, int count)> items)> savedContainers)
+        {
+            containerStore ??= new ContainerInventoryStore(ContainerItemRegistry);
+            if (savedContainers == null)
+                return;
+
+            foreach ((BlockPosition position, IEnumerable<(string itemId, int count)> items) in savedContainers)
+                containerStore.Populate(position, items);
+        }
 
         void OnWorldTick(int ticks)
         {
@@ -386,8 +462,9 @@ namespace Blockiverse.Gameplay
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
-            VoxelWorld world = new SurvivalTerrainPreset(registry, settings).Generate();
-            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite);
+            var preset = new SurvivalTerrainPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite, preset.ContainerLoot);
         }
 
         void Awake()

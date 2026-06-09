@@ -889,10 +889,21 @@ namespace Blockiverse.Gameplay
             var preset = (CreativeWorldGenerationPreset)generationPreset;
             var settings = new WorldGenerationSettings(width, height, depth, chunkSize, seed, groundHeight);
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            VoxelWorld world = preset == CreativeWorldGenerationPreset.FlatCreative
-                ? new FlatCreativeWorldPreset(registry, settings).Generate()
-                : new SurvivalTerrainPreset(registry, settings).Generate();
-            worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset), this);
+            VoxelWorld world;
+            IReadOnlyList<StructureContainerLoot> containerLoot = null;
+            if (preset == CreativeWorldGenerationPreset.FlatCreative)
+            {
+                world = new FlatCreativeWorldPreset(registry, settings).Generate();
+            }
+            else
+            {
+                // Loot is deterministic from the seed, so the client regenerates the exact same
+                // container contents the host generated — no per-container network sync needed.
+                var survivalPreset = new SurvivalTerrainPreset(registry, settings);
+                world = survivalPreset.Generate();
+                containerLoot = survivalPreset.ContainerLoot;
+            }
+            worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset, containerLoot), this);
             LastAppliedChunkDeltaSequence = hostDeltaSequence;
             hasHostGenerationSnapshotForSession = true;
             AppliedGenerationSnapshotCount++;

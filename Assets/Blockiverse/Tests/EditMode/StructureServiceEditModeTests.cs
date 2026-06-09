@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
@@ -155,6 +156,75 @@ namespace Blockiverse.Tests.EditMode
             var entry = table.Pick(rng: 12345u);
             Assert.That(entry.ItemId, Is.Not.Null.And.Not.Empty);
             Assert.That(entry.MinCount, Is.LessThanOrEqualTo(entry.MaxCount));
+        }
+
+        [Test]
+        public void LootTableRollIsDeterministicAndWithinRanges()
+        {
+            foreach (StructureLootTable table in new[] { StructureLootTable.CommonSupply, StructureLootTable.ForagerFood })
+            {
+                List<ContainerLootItem> a = table.Roll(seed: 4242u);
+                List<ContainerLootItem> b = table.Roll(seed: 4242u);
+
+                Assert.That(a.Count, Is.EqualTo(b.Count), $"{table.Id} roll must be deterministic.");
+                for (int i = 0; i < a.Count; i++)
+                {
+                    Assert.That(a[i].ItemId, Is.EqualTo(b[i].ItemId));
+                    Assert.That(a[i].Count, Is.EqualTo(b[i].Count));
+                    Assert.That(a[i].Count, Is.GreaterThan(0));
+                }
+            }
+        }
+
+        [Test]
+        public void EveryLootTableItemIsRegistered()
+        {
+            // Container population skips unknown items; guard that the canonical tables reference only
+            // real registered items so generated crates are never silently empty.
+            ItemRegistry registry = ItemRegistry.CreateDefault();
+            foreach (StructureLootTable table in new[] { StructureLootTable.CommonSupply, StructureLootTable.ForagerFood })
+            foreach (StructureLootEntry entry in table.Entries)
+                Assert.That(registry.TryGet(new ItemId(entry.ItemId), out _), Is.True,
+                    $"Loot item '{entry.ItemId}' in table '{table.Id}' is not registered.");
+        }
+
+        [Test]
+        public void PlaceStructuresEmitsContainerLootForLootCrates()
+        {
+            var settings = MakeSettings(seed: 2024);
+            var world = FlatWorld(settings);
+            var loot = new List<StructureContainerLoot>();
+
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 2024,
+                biomeAt: (x, z) => 0, lootSink: loot);
+
+            // Every emitted loot record must sit exactly on a StorageCrate block and carry items.
+            foreach (StructureContainerLoot record in loot)
+            {
+                Assert.That(world.GetBlock(record.Position), Is.EqualTo(BlockRegistry.StorageCrate),
+                    "Loot must be emitted at a StorageCrate position.");
+                Assert.That(record.Items.Count, Is.GreaterThan(0), "Emitted loot must be non-empty.");
+            }
+        }
+
+        [Test]
+        public void ContainerLootIsDeterministicForSameSeed()
+        {
+            var settings = MakeSettings(seed: 555);
+            var a = new List<StructureContainerLoot>();
+            var b = new List<StructureContainerLoot>();
+
+            var worldA = FlatWorld(settings);
+            var worldB = FlatWorld(settings);
+            StructureService.PlaceStructures(worldA, BlockRegistry.CreateDefault(), settings, 555, (x, z) => 0, a);
+            StructureService.PlaceStructures(worldB, BlockRegistry.CreateDefault(), settings, 555, (x, z) => 0, b);
+
+            Assert.That(a.Count, Is.EqualTo(b.Count));
+            for (int i = 0; i < a.Count; i++)
+            {
+                Assert.That(a[i].Position, Is.EqualTo(b[i].Position));
+                Assert.That(a[i].Items.Count, Is.EqualTo(b[i].Items.Count));
+            }
         }
 
         [Test]

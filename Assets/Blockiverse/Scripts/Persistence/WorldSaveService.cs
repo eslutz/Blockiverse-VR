@@ -42,6 +42,22 @@ namespace Blockiverse.Persistence
     }
 
     [Serializable]
+    public sealed class SavedContainerSlot
+    {
+        public string CanonicalId;
+        public int Count;
+    }
+
+    [Serializable]
+    public sealed class SavedContainer
+    {
+        public int X;
+        public int Y;
+        public int Z;
+        public SavedContainerSlot[] Slots;
+    }
+
+    [Serializable]
     public sealed class WorldSaveData
     {
         public int SchemaVersion;
@@ -56,6 +72,7 @@ namespace Blockiverse.Persistence
         public string WeatherState;
         public long WorldTimeTicks;
         public string GameMode;
+        public SavedContainer[] Containers;
     }
 
     public sealed class WorldLoadResult
@@ -221,12 +238,12 @@ namespace Blockiverse.Persistence
 
         // ── Save ─────────────────────────────────────────────────────────────
 
-        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0)
+        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null)
         {
-            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState, gameMode: gameMode, worldTimeTicks: worldTimeTicks);
+            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState, gameMode: gameMode, worldTimeTicks: worldTimeTicks, containers: containers);
         }
 
-        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0)
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -306,6 +323,7 @@ namespace Blockiverse.Persistence
             Directory.CreateDirectory(dimDir);
             WriteJsonAtomic(Path.Combine(dimDir, "dimension.json"), dimension);
             WriteJsonAtomic(Path.Combine(dimDir, "environment.json"), environment);
+            WriteContainerFile(dimDir, containers);
 
             WriteRegionFiles(path, world, blockRegistry);
 
@@ -381,6 +399,7 @@ namespace Blockiverse.Persistence
             EnsurePlayerInventoryDefaults(ref playerInventory);
 
             (string savedWeatherState, long savedWorldTimeTicks) = LoadEnvironmentState(path);
+            SavedContainer[] containers = LoadContainerFile(path);
 
             var data = new WorldSaveData
             {
@@ -395,7 +414,8 @@ namespace Blockiverse.Persistence
                 PlayerInventory = playerInventory,
                 WeatherState = savedWeatherState,
                 WorldTimeTicks = savedWorldTimeTicks,
-                GameMode = !string.IsNullOrEmpty(manifest.GameMode) ? manifest.GameMode : "survival"
+                GameMode = !string.IsNullOrEmpty(manifest.GameMode) ? manifest.GameMode : "survival",
+                Containers = containers
             };
 
             if (!IsValidInventory(data.PlayerInventory, out string inventoryError))
@@ -622,6 +642,63 @@ namespace Blockiverse.Persistence
 
             VxlwEnvironment env = JsonUtility.FromJson<VxlwEnvironment>(json);
             return (env?.WeatherState, env?.WorldTimeTicks ?? 0L);
+        }
+
+        void WriteContainerFile(string dimDir, IReadOnlyList<SavedContainer> containers)
+        {
+            // Containers are optional and additive — only write the file when there is content, so old
+            // saves and worlds without containers remain byte-identical and validation is unaffected.
+            if (containers == null || containers.Count == 0)
+                return;
+
+            var file = new VxlwContainerFile
+            {
+                Format = "blockiverse-containers",
+                SaveFormatVersion = SaveFormatVersion,
+                Containers = new VxlwContainer[containers.Count]
+            };
+
+            for (int i = 0; i < containers.Count; i++)
+            {
+                SavedContainer c = containers[i];
+                SavedContainerSlot[] slots = c.Slots ?? Array.Empty<SavedContainerSlot>();
+                var outSlots = new VxlwContainerSlot[slots.Length];
+                for (int s = 0; s < slots.Length; s++)
+                    outSlots[s] = new VxlwContainerSlot { CanonicalId = slots[s].CanonicalId, Count = slots[s].Count };
+
+                file.Containers[i] = new VxlwContainer { X = c.X, Y = c.Y, Z = c.Z, Slots = outSlots };
+            }
+
+            WriteJsonAtomic(Path.Combine(dimDir, "containers.json"), file);
+        }
+
+        static SavedContainer[] LoadContainerFile(string savePath)
+        {
+            string containerPath = Path.Combine(savePath, "dimensions", "main", "containers.json");
+            if (!File.Exists(containerPath))
+                return null;
+
+            string json = File.ReadAllText(containerPath);
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            VxlwContainerFile file = JsonUtility.FromJson<VxlwContainerFile>(json);
+            if (file?.Containers == null || file.Containers.Length == 0)
+                return null;
+
+            var result = new SavedContainer[file.Containers.Length];
+            for (int i = 0; i < file.Containers.Length; i++)
+            {
+                VxlwContainer c = file.Containers[i];
+                VxlwContainerSlot[] slots = c.Slots ?? Array.Empty<VxlwContainerSlot>();
+                var outSlots = new SavedContainerSlot[slots.Length];
+                for (int s = 0; s < slots.Length; s++)
+                    outSlots[s] = new SavedContainerSlot { CanonicalId = slots[s].CanonicalId, Count = slots[s].Count };
+
+                result[i] = new SavedContainer { X = c.X, Y = c.Y, Z = c.Z, Slots = outSlots };
+            }
+
+            return result;
         }
 
         // ── Legacy flat JSON format (schema v1-v3) ────────────────────────────
