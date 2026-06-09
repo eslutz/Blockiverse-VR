@@ -137,6 +137,7 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.DrygrassSeed, "Drygrass Seed", ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.ReedCutting,  "Reed Cutting",  ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.BerrySeed,    "Berry Seed",    ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.CleanWaterFlask, "Clean Water Flask", ItemKind.Consumable, ConsumableStackSize));
 
             // Every grain/berry/reed stage (base + grown) drops the canonical crop resource.
             registry.RegisterDropAlias(BlockRegistry.GrainStalk,    ItemId.GrainBundle);

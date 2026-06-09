@@ -81,6 +81,7 @@ namespace Blockiverse.Survival
         public static readonly ItemId DrygrassSeed         = new("drygrass_seed");
         public static readonly ItemId ReedCutting          = new("reed_cutting");
         public static readonly ItemId BerrySeed            = new("berry_seed");
+        public static readonly ItemId CleanWaterFlask      = new("clean_water_flask");
 
         // ── Crafted intermediates (work parts, smelted bars, §9) ──────────────
         public static readonly ItemId StoutPole            = new("stout_pole");

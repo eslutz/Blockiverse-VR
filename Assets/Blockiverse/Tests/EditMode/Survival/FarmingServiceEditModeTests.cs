@@ -56,6 +56,45 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TendedSoil));
         }
 
+        [Test]
+        public void TillWithoutNearbyWaterConsumesCleanWaterFlask()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            inventory.SetSlot(0, new ItemStack(ItemId.CleanWaterFlask, 2));
+
+            FarmingResult result = farming.Till(world, SoilPos, inventory, hasFreshwaterNearby: (_, _) => false);
+
+            Assert.That(result, Is.EqualTo(FarmingResult.Success));
+            Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TendedSoil));
+            Assert.That(inventory.CountOf(ItemId.CleanWaterFlask), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TillWithoutWaterOrFlaskRequiresWater()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+
+            FarmingResult result = farming.Till(world, SoilPos, inventory, hasFreshwaterNearby: (_, _) => false);
+
+            Assert.That(result, Is.EqualTo(FarmingResult.RequiresWater));
+            Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.LooseLoam));
+        }
+
+        [Test]
+        public void TillWithNearbyWaterDoesNotConsumeFlask()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            inventory.SetSlot(0, new ItemStack(ItemId.CleanWaterFlask, 1));
+
+            FarmingResult result = farming.Till(world, SoilPos, inventory, hasFreshwaterNearby: (_, _) => true);
+
+            Assert.That(result, Is.EqualTo(FarmingResult.Success));
+            Assert.That(inventory.CountOf(ItemId.CleanWaterFlask), Is.EqualTo(1));
+        }
+
         // ── Planting ─────────────────────────────────────────────────────────
 
         [Test]
@@ -226,6 +265,42 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
             Assert.That(inventory.CountOf(ItemId.BerryCluster), Is.EqualTo(1));
+        }
+
+        // ── Berrybush regrowth (§3) ──────────────────────────────────────────
+
+        [Test]
+        public void HarvestedBerrybushRegrowsAfterTwoGameDays()
+        {
+            world.SetBlock(CropPos, BlockRegistry.Air, trackChange: false);
+            farming.OnBlockHarvested(BlockRegistry.Berrybush_S5, CropPos);
+            Assert.That(farming.HasPendingRegrowth(CropPos), Is.True);
+
+            farming.TickRegrowth(world, FarmingService.BerrybushRegrowTicks - 1);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Air), "Berrybush must not regrow before two game days.");
+
+            farming.TickRegrowth(world, 1);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Berrybush), "Berrybush regrows to stage 0 after two game days.");
+            Assert.That(farming.HasPendingRegrowth(CropPos), Is.False);
+        }
+
+        [Test]
+        public void NonBerrybushHarvestDoesNotQueueRegrowth()
+        {
+            farming.OnBlockHarvested(BlockRegistry.GrainStalk_S4, CropPos);
+            Assert.That(farming.HasPendingRegrowth(CropPos), Is.False);
+        }
+
+        [Test]
+        public void RegrowthIsSkippedWhenPositionIsOccupied()
+        {
+            farming.OnBlockHarvested(BlockRegistry.Berrybush, CropPos);
+            world.SetBlock(CropPos, BlockRegistry.Graystone, trackChange: false);
+
+            farming.TickRegrowth(world, FarmingService.BerrybushRegrowTicks);
+
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Graystone));
+            Assert.That(farming.HasPendingRegrowth(CropPos), Is.False);
         }
 
         // ── Tick accumulator bookkeeping ─────────────────────────────────────

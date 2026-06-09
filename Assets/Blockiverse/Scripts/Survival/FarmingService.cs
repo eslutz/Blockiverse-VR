@@ -12,6 +12,7 @@ namespace Blockiverse.Survival
         NotTendedSoil,
         BlockAboveNotAir,
         UnknownCrop,
+        RequiresWater,
     }
 
     // Environmental inputs to a crop growth roll (§11.2). Supplied per crop position so growth can
@@ -103,8 +104,21 @@ namespace Blockiverse.Survival
             { ItemId.ReedCutting,  BlockRegistry.Reedgrass },
         };
 
+        // Berrybush regrows two game days after harvest (§3); 1 game day = 24000 ticks.
+        public const int TicksPerGameDay = 24000;
+        public const int BerrybushRegrowTicks = 2 * TicksPerGameDay;
+
+        static readonly HashSet<BlockId> BerrybushStages = new()
+        {
+            BlockRegistry.Berrybush, BlockRegistry.Berrybush_S1, BlockRegistry.Berrybush_S2,
+            BlockRegistry.Berrybush_S3, BlockRegistry.Berrybush_S4, BlockRegistry.Berrybush_S5,
+        };
+
+        public static bool IsBerrybushStage(BlockId blockId) => BerrybushStages.Contains(blockId);
+
         readonly Random defaultRandom = new();
         readonly Dictionary<BlockPosition, int> tickAccumulator = new();
+        readonly Dictionary<BlockPosition, int> berrybushRegrowAccumulator = new();
 
         public void ScanAndTrackCrops(VoxelWorld world)
         {
@@ -135,7 +149,19 @@ namespace Blockiverse.Survival
             tickAccumulator[position] = 0;
         }
 
-        public FarmingResult Till(VoxelWorld world, BlockPosition position)
+        // Horizontal/vertical reach of the tended-soil freshwater check (§11.1).
+        public const int TillWaterHorizontalReach = 4;
+        public const int TillWaterVerticalReach = 1;
+
+        // Converts eligible soil to tended soil (§11.1). When no freshwater is nearby, the action
+        // consumes one clean_water_flask from the inventory; with neither, it returns RequiresWater.
+        // hasFreshwaterNearby is injected by callers that model a water supply; until fluid blocks
+        // exist it defaults to "water present" so creative/legacy tilling is unaffected.
+        public FarmingResult Till(
+            VoxelWorld world,
+            BlockPosition position,
+            Inventory inventory = null,
+            Func<VoxelWorld, BlockPosition, bool> hasFreshwaterNearby = null)
         {
             if (!world.Bounds.Contains(position))
                 return FarmingResult.OutOfBounds;
@@ -143,6 +169,10 @@ namespace Blockiverse.Survival
             BlockId block = world.GetBlock(position);
             if (block != BlockRegistry.LooseLoam && block != BlockRegistry.Rootsoil && block != BlockRegistry.RiverSilt)
                 return FarmingResult.NotTillableBlock;
+
+            bool waterNearby = hasFreshwaterNearby?.Invoke(world, position) ?? true;
+            if (!waterNearby && (inventory == null || !inventory.Remove(ItemId.CleanWaterFlask, 1)))
+                return FarmingResult.RequiresWater;
 
             world.SetBlock(position, BlockRegistry.TendedSoil);
             return FarmingResult.Success;
@@ -227,6 +257,43 @@ namespace Blockiverse.Survival
                     tickAccumulator[pos] = (int)Math.Min(accumulated, int.MaxValue);
                 else
                     tickAccumulator.Remove(pos); // matured — stop tracking
+            }
+        }
+
+        // Call after a block is harvested; queues a berrybush to regrow two game days later (§3).
+        // Non-berrybush blocks are ignored.
+        public void OnBlockHarvested(BlockId harvestedBlock, BlockPosition position)
+        {
+            if (IsBerrybushStage(harvestedBlock))
+                berrybushRegrowAccumulator[position] = 0;
+        }
+
+        public bool HasPendingRegrowth(BlockPosition position) => berrybushRegrowAccumulator.ContainsKey(position);
+
+        // Advances queued berrybush regrowth. When the regrow delay elapses and the spot is clear,
+        // a fresh berrybush (stage 0) is planted and tracked for growth; if the spot is occupied the
+        // pending regrow is dropped.
+        public void TickRegrowth(VoxelWorld world, int ticks)
+        {
+            if (ticks <= 0 || berrybushRegrowAccumulator.Count == 0)
+                return;
+
+            foreach (BlockPosition pos in new List<BlockPosition>(berrybushRegrowAccumulator.Keys))
+            {
+                long accumulated = (long)berrybushRegrowAccumulator[pos] + ticks;
+                if (accumulated < BerrybushRegrowTicks)
+                {
+                    berrybushRegrowAccumulator[pos] = (int)Math.Min(accumulated, int.MaxValue);
+                    continue;
+                }
+
+                berrybushRegrowAccumulator.Remove(pos);
+
+                if (world.Bounds.Contains(pos) && world.GetBlock(pos) == BlockRegistry.Air)
+                {
+                    world.SetBlock(pos, BlockRegistry.Berrybush);
+                    tickAccumulator[pos] = 0;
+                }
             }
         }
     }

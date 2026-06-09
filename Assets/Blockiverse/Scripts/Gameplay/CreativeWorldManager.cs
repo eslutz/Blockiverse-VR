@@ -225,6 +225,10 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TrackSapling(change.Position);
             if (FarmingService.IsCropBlock(b))
                 farmingService?.TrackCrop(change.Position);
+
+            // Harvesting a berrybush (cleared to air) queues it to regrow after two game days (§3).
+            if (b == BlockRegistry.Air && FarmingService.IsBerrybushStage(change.PreviousBlock))
+                farmingService?.OnBlockHarvested(change.PreviousBlock, change.Position);
         }
 
         void OnWorldTick(int ticks)
@@ -235,6 +239,7 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TickLeafDecay(World, ticks);
                 vegetationService?.TickSapling(World, ticks);
                 farmingService?.TickGrowth(World, ticks);
+                farmingService?.TickRegrowth(World, ticks);
             }
         }
 
