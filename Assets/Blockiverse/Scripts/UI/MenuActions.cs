@@ -40,6 +40,17 @@ namespace Blockiverse.UI
         public const string DeathRespawnWorldSpawn = "death.respawn_world_spawn";
         public const string DeathReturnToTitle = "death.return_to_title";
 
+        // ── New World actions (§6.3) ─────────────────────────────────────────
+        public const string NewWorldCreate = "new_world.create";
+        public const string NewWorldCancel = "new_world.cancel";
+
+        // ── Load World actions (§6.4) ─────────────────────────────────────────
+        public const string LoadWorldLoad = "load_world.load";
+        public const string LoadWorldCancel = "load_world.cancel";
+
+        // ── Settings actions ──────────────────────────────────────────────────
+        public const string SettingsClose = "settings.close";
+
         // ── Confirmation actions (§6.22) ─────────────────────────────────────
         public const string ConfirmAccept = "confirm.accept";
         public const string ConfirmCancel = "confirm.cancel";

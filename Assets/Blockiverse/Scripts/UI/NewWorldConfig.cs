@@ -52,11 +52,11 @@ namespace Blockiverse.UI
             SeedText = value.ToString();
         }
 
-        public void CycleGameMode() => gameModeIndex = Next(gameModeIndex, GameModeOptions.Length);
-        public void CycleDifficulty() => difficultyIndex = Next(difficultyIndex, DifficultyOptions.Length);
-        public void CycleWorldSize() => worldSizeIndex = Next(worldSizeIndex, WorldSizeOptions.Length);
-        public void CycleWorldPreset() => worldPresetIndex = Next(worldPresetIndex, WorldPresetOptions.Length);
-        public void CycleStartingBiome() => startingBiomeIndex = Next(startingBiomeIndex, StartingBiomeOptions.Length);
+        public void CycleGameMode(bool forward = true) => gameModeIndex = Step(gameModeIndex, GameModeOptions.Length, forward);
+        public void CycleDifficulty(bool forward = true) => difficultyIndex = Step(difficultyIndex, DifficultyOptions.Length, forward);
+        public void CycleWorldSize(bool forward = true) => worldSizeIndex = Step(worldSizeIndex, WorldSizeOptions.Length, forward);
+        public void CycleWorldPreset(bool forward = true) => worldPresetIndex = Step(worldPresetIndex, WorldPresetOptions.Length, forward);
+        public void CycleStartingBiome(bool forward = true) => startingBiomeIndex = Step(startingBiomeIndex, StartingBiomeOptions.Length, forward);
         public void ToggleExperimentalRules() => ExperimentalRulesEnabled = !ExperimentalRulesEnabled;
 
         // Validates settings before world creation (§6.3): the name must be non-empty after trimming.
@@ -74,7 +74,8 @@ namespace Blockiverse.UI
 
         public bool IsCreativeMode => string.Equals(GameMode, "creative", StringComparison.OrdinalIgnoreCase);
 
-        static int Next(int index, int length) => (index + 1) % length;
+        static int Step(int index, int length, bool forward) =>
+            forward ? (index + 1) % length : (index - 1 + length) % length;
 
         public static ulong HashSeed(string seedText)
         {

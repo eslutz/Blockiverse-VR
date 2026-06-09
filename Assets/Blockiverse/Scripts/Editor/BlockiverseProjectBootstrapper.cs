@@ -75,6 +75,25 @@ namespace Blockiverse.Editor
             "com.meta.openxr.feature.foveation"
         };
 
+        // ── Game menu panel names ────────────────────────────────────────────────
+        const string TitleMenuName = "Title Menu";
+        const string PauseMenuName = "Pause Menu";
+        const string DeathScreenName = "Death Screen";
+        const string ConfirmDialogName = "Confirm Dialog";
+        const string NewWorldPanelName = "New World Panel";
+        const string LoadWorldPanelName = "Load World Panel";
+        const string SettingsPanelName = "Settings Panel";
+        const string StationPanelName = "Station Panel";
+        const float GameMenuScale = 0.0013f;
+        // All game menu panels share one world-space position; only one is visible at a time.
+        static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.42f, 1.1f);
+        static readonly Vector2 ActionMenuSize = new(440.0f, 540.0f);
+        static readonly Vector2 ConfirmDialogSize = new(440.0f, 320.0f);
+        static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
+        static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
+        static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
+        static readonly Vector2 StationPanelSize = new(540.0f, 540.0f);
+
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
         const string SurvivalHudName = "Survival HUD";
@@ -1519,6 +1538,7 @@ namespace Blockiverse.Editor
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             EnsureXrRigFeedback(rig, inputRig);
+            EnsureXrRigGameMenus(rig, inputRig);
             return rig;
         }
 
@@ -1587,6 +1607,7 @@ namespace Blockiverse.Editor
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             EnsureXrRigFeedback(rig, inputRig);
+            EnsureXrRigGameMenus(rig, inputRig);
         }
 
         static void EnsureControllerAnchor(
@@ -3397,6 +3418,571 @@ namespace Blockiverse.Editor
 
             BlockiverseAudioCuePlayer audioCuePlayer = rig.GetComponent<BlockiverseAudioCuePlayer>();
             inputRig.ConfigureTeleportFeedback(audioCuePlayer);
+        }
+
+        // ── Game menu system ─────────────────────────────────────────────────────────────────────
+
+        static void EnsureXrRigGameMenus(GameObject rig, BlockiverseInputRig inputRig)
+        {
+            Transform cameraOffset = rig.transform.Find("Camera Offset");
+            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
+
+            if (cameraOffset == null)
+                return;
+
+            var (titleMenu, titlePresenter) = EnsureActionMenuPanel(
+                cameraOffset, TitleMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
+            var (pauseMenu, pausePresenter) = EnsureActionMenuPanel(
+                cameraOffset, PauseMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
+            var (deathMenu, deathPresenter) = EnsureActionMenuPanel(
+                cameraOffset, DeathScreenName, ActionMenuSize, head, buttonCount: 3, sortOrder: 25);
+            var (confirmMenu, confirmPresenter) = EnsureActionMenuPanel(
+                cameraOffset, ConfirmDialogName, ConfirmDialogSize, head, buttonCount: 2, sortOrder: 30);
+
+            var (newWorldPanel, newWorldPresenter) = EnsureNewWorldMenuPanel(cameraOffset, head);
+            var (loadWorldPanel, loadWorldPresenter) = EnsureLoadWorldMenuPanel(cameraOffset, head);
+            var (settingsMenu, settingsPresenter) = EnsureSettingsMenuPanel(cameraOffset, head);
+            BlockiverseWorldSpacePanelPresenter stationPresenter = EnsureStationMenuPanel(cameraOffset, head);
+
+            BlockiverseMenuController controller = EnsureComponent<BlockiverseMenuController>(rig);
+            controller.Configure(inputRig, titleMenu, pauseMenu, deathMenu, confirmMenu,
+                newWorldPanel, loadWorldPanel, settingsMenu);
+            controller.ConfigurePresenters(
+                titlePresenter, pausePresenter, deathPresenter, confirmPresenter,
+                newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter);
+
+            if (inputRig != null)
+            {
+                RemovePersistentListeners(inputRig.MenuPressed, controller, nameof(BlockiverseMenuController.OnMenuPressed));
+                UnityEventTools.AddPersistentListener(inputRig.MenuPressed, controller.OnMenuPressed);
+                EditorUtility.SetDirty(inputRig);
+            }
+
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(rig);
+        }
+
+        // Builds a world-space panel canvas with a background, title label, N full-width action
+        // buttons (text-button style), and a status label. Returns the wired BlockiverseActionMenu
+        // and its presenter so callers can chain further configuration.
+        static (BlockiverseActionMenu menu, BlockiverseWorldSpacePanelPresenter presenter) EnsureActionMenuPanel(
+            Transform parent,
+            string name,
+            Vector2 size,
+            Transform head,
+            int buttonCount = 5,
+            int sortOrder = 25)
+        {
+            GameObject panelRoot = EnsureRectChild(parent, name);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, size.x);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, size.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = sortOrder;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            // Header divider strip
+            GameObject header = EnsureRectChild(bg.transform, "Header");
+            RectTransform headerRect = header.GetComponent<RectTransform>();
+            headerRect.anchorMin = new Vector2(0.0f, 1.0f);
+            headerRect.anchorMax = new Vector2(1.0f, 1.0f);
+            headerRect.pivot = new Vector2(0.0f, 1.0f);
+            headerRect.anchoredPosition = Vector2.zero;
+            headerRect.sizeDelta = new Vector2(0.0f, 72.0f);
+            Image headerImage = EnsureComponent<Image>(header);
+            headerImage.color = PanelHeaderColor;
+
+            TMP_Text titleLabel = EnsureLabel(
+                bg.transform, "Title", name, 30, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28.0f, -18.0f), new Vector2(size.x - 56.0f, 48.0f));
+
+            var buttons = new Button[buttonCount];
+            var labels = new TMP_Text[buttonCount];
+            for (int i = 0; i < buttonCount; i++)
+            {
+                float buttonY = -100.0f - i * 58.0f;
+                Button btn = EnsureButtonControl(
+                    bg.transform,
+                    $"Action {i + 1}",
+                    string.Empty,
+                    new Vector2(28.0f, buttonY),
+                    new Vector2(size.x - 56.0f, 50.0f));
+                Transform labelTransform = btn.transform.Find("Label");
+                buttons[i] = btn;
+                labels[i] = labelTransform != null ? labelTransform.GetComponent<TMP_Text>() : null;
+            }
+
+            TMP_Text statusLabel = EnsureLabel(
+                bg.transform, "Status", string.Empty, 20, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28.0f, -100.0f - buttonCount * 58.0f), new Vector2(size.x - 56.0f, 36.0f),
+                TextDimColor);
+
+            BlockiverseActionMenu actionMenu = EnsureComponent<BlockiverseActionMenu>(panelRoot);
+            actionMenu.Configure(titleLabel, buttons, labels, statusLabel);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(actionMenu);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+
+            return (actionMenu, presenter);
+        }
+
+        // Builds the New World config panel: name/seed text inputs + 5 cycle-selector rows
+        // (GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome) + Create/Cancel buttons.
+        static (BlockiverseNewWorldPanel panel, BlockiverseWorldSpacePanelPresenter presenter) EnsureNewWorldMenuPanel(
+            Transform parent,
+            Transform head)
+        {
+            const float W = 620.0f;
+            const float H = 720.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, NewWorldPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            // Header
+            GameObject header = EnsureRectChild(bg.transform, "Header");
+            RectTransform headerRect = header.GetComponent<RectTransform>();
+            headerRect.anchorMin = new Vector2(0, 1);
+            headerRect.anchorMax = new Vector2(1, 1);
+            headerRect.pivot = new Vector2(0, 1);
+            headerRect.anchoredPosition = Vector2.zero;
+            headerRect.sizeDelta = new Vector2(0, 72);
+            EnsureComponent<Image>(header).color = PanelHeaderColor;
+
+            EnsureLabel(bg.transform, "Title", "New World", 30, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -18), new Vector2(W - 56, 48));
+
+            // Name input row
+            EnsureLabel(bg.transform, "Name Label", "World Name", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -96), new Vector2(150, 44), TextDimColor);
+            TMP_InputField nameInput = EnsureInputFieldControl(
+                bg.transform, "Name Input", "Enter name...", NewWorldConfig.DefaultName,
+                new Vector2(186, -96), new Vector2(W - 214, 48));
+
+            // Seed input row
+            EnsureLabel(bg.transform, "Seed Label", "Seed", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -158), new Vector2(150, 44), TextDimColor);
+            TMP_InputField seedInput = EnsureInputFieldControl(
+                bg.transform, "Seed Input", "0", "0",
+                new Vector2(186, -158), new Vector2(W - 214, 48));
+
+            // 5 cycle rows: GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome
+            string[] rowLabels = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome" };
+            string[] defaultValues = { "survival", "normal", "small", "survival_terrain", "balanced" };
+            const float rowStartY = -230;
+            const float rowH = 56;
+            var backButtons = new Button[rowLabels.Length];
+            var nextButtons = new Button[rowLabels.Length];
+            var valueLabels = new TMP_Text[rowLabels.Length];
+
+            for (int i = 0; i < rowLabels.Length; i++)
+            {
+                float rowY = rowStartY - i * rowH;
+
+                // Row background
+                GameObject rowBg = EnsureRectChild(bg.transform, $"Row {rowLabels[i]}");
+                RectTransform rowRect = rowBg.GetComponent<RectTransform>();
+                ConfigureTopLeftRect(rowRect, new Vector2(28, rowY), new Vector2(W - 56, rowH - 4));
+                EnsureComponent<Image>(rowBg).color = PanelHeaderColor;
+
+                // Field name
+                EnsureLabel(rowBg.transform, "Label", rowLabels[i], 20, TextAnchor.MiddleLeft,
+                    Vector2.zero, Vector2.one, new Vector2(0, 0.5f),
+                    new Vector2(8, 0), new Vector2(160, rowH - 4), TextDimColor);
+
+                // Back button ◀
+                backButtons[i] = EnsureButtonControl(rowBg.transform, "Back",
+                    "<", new Vector2(172, -(rowH - 4) * 0.5f + (rowH - 4) * 0.5f - 22), new Vector2(44, 44));
+                ConfigureTopLeftRect(
+                    backButtons[i].GetComponent<RectTransform>(),
+                    new Vector2(172, -((rowH - 4) / 2 - 22)), new Vector2(44, 44));
+
+                // Value label (center)
+                valueLabels[i] = EnsureLabel(rowBg.transform, "Value", defaultValues[i], 22, TextAnchor.MiddleCenter,
+                    Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f),
+                    new Vector2(0, 0), new Vector2(0, 0));
+                // Position value label between the two buttons
+                RectTransform valRect = valueLabels[i].GetComponent<RectTransform>();
+                valRect.anchorMin = new Vector2(0, 0);
+                valRect.anchorMax = new Vector2(1, 1);
+                valRect.offsetMin = new Vector2(224, 0);
+                valRect.offsetMax = new Vector2(-52, 0);
+
+                // Next button ▶
+                nextButtons[i] = EnsureButtonControl(rowBg.transform, "Next",
+                    ">", Vector2.zero, new Vector2(44, 44));
+                ConfigureTopLeftRect(
+                    nextButtons[i].GetComponent<RectTransform>(),
+                    new Vector2(W - 56 - 52, -((rowH - 4) / 2 - 22)), new Vector2(44, 44));
+            }
+
+            // Create / Cancel buttons
+            float actionRowY = rowStartY - rowLabels.Length * rowH - 32;
+            Button createButton = EnsureButtonControl(bg.transform, "Create Button", "Create World",
+                new Vector2(28, actionRowY), new Vector2((W - 84) / 2, 52));
+            Button cancelButton = EnsureButtonControl(bg.transform, "Cancel Button", "Cancel",
+                new Vector2(28 + (W - 84) / 2 + 28, actionRowY), new Vector2((W - 84) / 2, 52));
+
+            // Error label
+            TMP_Text errorLabel = EnsureLabel(bg.transform, "Error", string.Empty, 20, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, actionRowY - 60), new Vector2(W - 56, 44),
+                new Color(0.95f, 0.40f, 0.30f, 1.0f));
+
+            BlockiverseNewWorldPanel panel = EnsureComponent<BlockiverseNewWorldPanel>(panelRoot);
+            panel.Configure(nameInput, seedInput, backButtons, nextButtons, valueLabels,
+                createButton, cancelButton, errorLabel);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(panel);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+
+            return (panel, presenter);
+        }
+
+        // Builds the Load World panel: up to 6 save-entry buttons + Load/Cancel footer buttons.
+        static (BlockiverseLoadWorldPanel panel, BlockiverseWorldSpacePanelPresenter presenter) EnsureLoadWorldMenuPanel(
+            Transform parent,
+            Transform head)
+        {
+            const float W = 620.0f;
+            const float H = 600.0f;
+            const int MaxEntries = 6;
+
+            GameObject panelRoot = EnsureRectChild(parent, LoadWorldPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            // Header
+            GameObject header = EnsureRectChild(bg.transform, "Header");
+            RectTransform headerRect = header.GetComponent<RectTransform>();
+            headerRect.anchorMin = new Vector2(0, 1);
+            headerRect.anchorMax = new Vector2(1, 1);
+            headerRect.pivot = new Vector2(0, 1);
+            headerRect.anchoredPosition = Vector2.zero;
+            headerRect.sizeDelta = new Vector2(0, 72);
+            EnsureComponent<Image>(header).color = PanelHeaderColor;
+
+            EnsureLabel(bg.transform, "Title", "Load World", 30, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -18), new Vector2(W - 56, 48));
+
+            // Save entry rows
+            var entryButtons = new Button[MaxEntries];
+            var entryLabels = new TMP_Text[MaxEntries];
+            for (int i = 0; i < MaxEntries; i++)
+            {
+                float rowY = -96 - i * 54;
+                entryLabels[i] = EnsureLabel(bg.transform, $"Save {i + 1}", string.Empty, 20,
+                    TextAnchor.MiddleLeft,
+                    new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                    new Vector2(28, rowY), new Vector2(W - 56, 48));
+                entryButtons[i] = EnsureTextButton(entryLabels[i]);
+            }
+
+            // Selection label
+            TMP_Text selectionLabel = EnsureLabel(bg.transform, "Selection", "No save selected", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -96 - MaxEntries * 54 - 12), new Vector2(W - 56, 36));
+
+            // Load / Cancel buttons
+            float footerY = -96 - MaxEntries * 54 - 64;
+            Button loadButton = EnsureButtonControl(bg.transform, "Load Button", "Load World",
+                new Vector2(28, footerY), new Vector2((W - 84) / 2, 52));
+            Button cancelButton = EnsureButtonControl(bg.transform, "Cancel Button", "Cancel",
+                new Vector2(28 + (W - 84) / 2 + 28, footerY), new Vector2((W - 84) / 2, 52));
+
+            BlockiverseLoadWorldPanel panel = EnsureComponent<BlockiverseLoadWorldPanel>(panelRoot);
+            panel.Configure(entryButtons, entryLabels, loadButton, cancelButton, selectionLabel);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(panel);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+
+            return (panel, presenter);
+        }
+
+        // Builds a placeholder Settings panel with a close button.
+        static (BlockiverseActionMenu menu, BlockiverseWorldSpacePanelPresenter presenter) EnsureSettingsMenuPanel(
+            Transform parent, Transform head)
+        {
+            const float W = 480.0f;
+            const float H = 300.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, SettingsPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            EnsureLabel(bg.transform, "Title", "Settings", 32, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -28), new Vector2(W - 56, 52));
+
+            EnsureLabel(bg.transform, "Placeholder", "Settings will appear here.", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -110), new Vector2(W - 56, 40), TextDimColor);
+
+            Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
+                new Vector2(28, -190), new Vector2(160, 52));
+
+            // Wrap the close button in a BlockiverseActionMenu so the menu controller can dispatch
+            // the SettingsClose action id at runtime via its HandleAction → PopScreen path.
+            TMP_Text titleLabel = bg.transform.Find("Title")?.GetComponent<TMP_Text>();
+            var buttons = new Button[] { closeButton };
+            Transform labelTransform = closeButton.transform.Find("Label");
+            var labels = new TMP_Text[] { labelTransform != null ? labelTransform.GetComponent<TMP_Text>() : null };
+
+            BlockiverseActionMenu settingsMenu = EnsureComponent<BlockiverseActionMenu>(panelRoot);
+            settingsMenu.Configure(titleLabel, buttons, labels);
+            settingsMenu.SetMenu("Settings", new[]
+            {
+                new MenuAction(MenuActions.SettingsClose, "Close"),
+            });
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(settingsMenu);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+
+            return (settingsMenu, presenter);
+        }
+
+        // Builds the smelting-station panel: up to 3 input slots, 1 fuel slot, output, progress
+        // slider, and a Close button. Used for both Clay Kiln (1 input) and Bellows Forge (3).
+        static BlockiverseWorldSpacePanelPresenter EnsureStationMenuPanel(Transform parent, Transform head)
+        {
+            const float W = 540.0f;
+            const float H = 540.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, StationPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            // Header
+            GameObject header = EnsureRectChild(bg.transform, "Header");
+            RectTransform headerRect = header.GetComponent<RectTransform>();
+            headerRect.anchorMin = new Vector2(0, 1);
+            headerRect.anchorMax = new Vector2(1, 1);
+            headerRect.pivot = new Vector2(0, 1);
+            headerRect.anchoredPosition = Vector2.zero;
+            headerRect.sizeDelta = new Vector2(0, 72);
+            EnsureComponent<Image>(header).color = PanelHeaderColor;
+
+            TMP_Text titleLabel = EnsureLabel(bg.transform, "Title", "Station", 30, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -18), new Vector2(W - 56, 48));
+
+            // Input slots (3 max; unused ones stay empty when model has fewer)
+            var inputLabels = new TMP_Text[3];
+            string[] inputNames = { "Input Slot 1", "Input Slot 2", "Input Slot 3" };
+            for (int i = 0; i < 3; i++)
+            {
+                EnsureLabel(bg.transform, $"Input Label {i + 1}", $"Input {i + 1}", 20, TextAnchor.MiddleLeft,
+                    new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                    new Vector2(28, -94 - i * 46), new Vector2(160, 40), TextDimColor);
+                inputLabels[i] = EnsureLabel(bg.transform, inputNames[i], "—", 22, TextAnchor.MiddleLeft,
+                    new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                    new Vector2(200, -94 - i * 46), new Vector2(W - 228, 40));
+            }
+
+            // Fuel slot
+            EnsureLabel(bg.transform, "Fuel Label", "Fuel", 20, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -240), new Vector2(160, 40), TextDimColor);
+            TMP_Text fuelLabel = EnsureLabel(bg.transform, "Fuel Slot", "No fuel", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(200, -240), new Vector2(W - 228, 40));
+
+            // Output slot
+            EnsureLabel(bg.transform, "Output Label", "Output", 20, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -290), new Vector2(160, 40), TextDimColor);
+            TMP_Text outputLabel = EnsureLabel(bg.transform, "Output Slot", "—", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(200, -290), new Vector2(W - 228, 40));
+
+            // Progress slider
+            Slider progressSlider = EnsureHudSlider(bg.transform, "Progress", new Vector2(28, -354), new Vector2(W - 56, 20));
+
+            // Status label
+            TMP_Text statusLabel = EnsureLabel(bg.transform, "Status", "Idle", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -394), new Vector2(W - 56, 36), TextDimColor);
+
+            // Close button
+            Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
+                new Vector2(28, -452), new Vector2(160, 52));
+
+            BlockiverseStationPanel stationPanel = EnsureComponent<BlockiverseStationPanel>(panelRoot);
+            stationPanel.Configure(titleLabel, inputLabels, fuelLabel, outputLabel, statusLabel,
+                progressSlider, closeButton);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.ContainerOpen, BlockiverseAudioCue.ContainerClose);
+
+            EditorUtility.SetDirty(stationPanel);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+
+            return presenter;
         }
     }
 }
