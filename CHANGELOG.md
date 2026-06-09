@@ -11,7 +11,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 - Wired the survival interaction loop to runtime input: server-authoritative break→harvest and place→consume commands, a survival/creative mode toggle, equipped-hotbar tool/block selection, container loot on crate break, authoritative crafting, and a shared co-op crate UI (deposit/withdraw).
 - Consolidated later-expansion roadmap content into a dedicated execution-plan future-features section and added seasons as a future feature that changes day/night timing and weather patterns.
 - Added the Phase 13/14 feedback and asset review pass: the reusable audio generator now produces the expanded original cue set, the reusable art generator produces canonical block/item/UI/VFX sprites, the XR rig prefab wires shared audio, haptics, VFX pooling, and feedback settings, and validation now covers generated cue and visual-asset coverage.
-- Adopted the canonical Blockiverse ruleset documentation as the development/design source of truth, added `docs/rulesets/`, replaced the execution plan, aligned agent and contributor guidance, and added a root `.CLAUDE.md` pointer to `AGENTS.md`.
+- Adopted the canonical Blockiverse ruleset documentation as the development/design source of truth, added `docs/rulesets/`, replaced the execution plan, aligned agent and contributor guidance, and added a root `CLAUDE.md` pointer to `AGENTS.md`.
 - Simplified GitHub tracking policy so issues and the `Blockiverse VR Roadmap` project act as lightweight active-work aids instead of a required feature/story hierarchy.
 - Added real world lighting for the day/night slice: a shadow-casting sun,
   voxel face light falloff for caves and tunnels, and Torchbud point lights at
