@@ -43,6 +43,10 @@ namespace Blockiverse.WorldGen
         const int RegionSize      = 32;
         const int MinSpacing      = 48;
         const int SpawnExclusion  = 40;
+        // ~30% of regions hold a structure (matches the original pre-catalog density).
+        const uint RegionSpawnChancePercent = 30;
+        // Number of TerrainBiome enum values; biome indices are wrapped into this range.
+        const int BiomeCount = 7;
 
         static readonly StructureDefinition[] Catalog =
         {
@@ -75,13 +79,20 @@ namespace Blockiverse.WorldGen
             {
                 for (int rz = 0; rz < regionsZ; rz++)
                 {
+                    uint regionHash = Hash(seed, rx, 0, rz, salt: 7919);
+
+                    // Per-region spawn gate: only ~RegionSpawnChancePercent of regions hold a
+                    // structure, preserving the original world density independent of how many
+                    // catalog entries happen to be valid for the region's biome.
+                    if (regionHash % 100u >= RegionSpawnChancePercent) continue;
+
                     int localX = (int)(Hash(seed, rx, 1, rz, salt: 3571) % (uint)RegionSize);
                     int localZ = (int)(Hash(seed, rx, 2, rz, salt: 5381) % (uint)RegionSize);
                     int worldX = rx * RegionSize + localX;
                     int worldZ = rz * RegionSize + localZ;
 
                     TerrainBiome biome = biomeAt != null
-                        ? (TerrainBiome)(biomeAt(worldX, worldZ) % 7)
+                        ? (TerrainBiome)(((biomeAt(worldX, worldZ) % BiomeCount) + BiomeCount) % BiomeCount)
                         : TerrainBiome.Meadow;
 
                     StructureDefinition def = PickStructureForBiome(biome, seed, rx, rz);
@@ -94,8 +105,7 @@ namespace Blockiverse.WorldGen
                     if (surfaceY < 0) continue;
 
                     accepted.Add((worldX, worldZ));
-                    uint hash = Hash(seed, rx, 0, rz, salt: 7919);
-                    var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(hash % 4u)));
+                    var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(regionHash % 4u)));
                     PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed, def);
                 }
             }

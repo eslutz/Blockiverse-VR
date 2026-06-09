@@ -60,6 +60,9 @@ namespace Blockiverse.Gameplay
         FarmingService farmingService;
         WorldTimeClock worldTimeClock;
         string pendingWeatherState;
+        // Environment sync values received before the services existed (message-ordering safety net).
+        WeatherSyncState? pendingWeatherSync;
+        long? pendingWorldTimeTicks;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -70,24 +73,51 @@ namespace Blockiverse.Gameplay
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
         public WorldTimeClock WorldTimeClock => worldTimeClock;
 
-        // Returns the weather state + accumulated ticks needed for a network snapshot.
-        // Returns (Clear, 0) when the weather service is not yet initialized.
-        public (WeatherState state, int ticks) GetWeatherSyncState() =>
-            weatherService != null
-                ? (weatherService.CurrentState, weatherService.TicksInCurrentState)
-                : (WeatherState.Clear, 0);
+        // Full weather snapshot: state + tick accumulator + RNG position. The RNG position is
+        // what keeps a late-joining client in deterministic lockstep with the host's weather.
+        public readonly struct WeatherSyncState
+        {
+            public readonly WeatherState State;
+            public readonly int Ticks;
+            public readonly uint RngState;
 
-        // Restores weather state received from a host snapshot — preserves the existing
-        // RNG stream by calling RestoreState rather than recreating the service.
-        public void RestoreWeatherSyncState(WeatherState state, int ticks)
+            public WeatherSyncState(WeatherState state, int ticks, uint rngState)
+            {
+                State = state;
+                Ticks = ticks;
+                RngState = rngState;
+            }
+        }
+
+        // Returns the weather state, accumulated ticks, and RNG position for a network snapshot.
+        // Returns a Clear default when the weather service is not yet initialized.
+        public WeatherSyncState GetWeatherSyncState() =>
+            weatherService != null
+                ? new WeatherSyncState(weatherService.CurrentState, weatherService.TicksInCurrentState, weatherService.RngState)
+                : new WeatherSyncState(WeatherState.Clear, 0, 1u);
+
+        // Restores weather state (incl. RNG) received from a host snapshot, preserving lockstep.
+        // If the service does not exist yet (snapshot arrived before world init), the full state is
+        // buffered and applied at the end of ConfigureEnvironmentServices — no ticks/RNG are lost.
+        public void RestoreWeatherSyncState(WeatherSyncState sync)
         {
             if (weatherService == null)
             {
-                // Service not yet created; store for deferred apply in ConfigureEnvironmentServices.
-                pendingWeatherState = state.ToString();
+                pendingWeatherSync = sync;
                 return;
             }
-            weatherService.RestoreState(state, ticks);
+            weatherService.RestoreState(sync.State, sync.Ticks, sync.RngState);
+        }
+
+        // Restores the world-time clock from a host snapshot, buffering if the clock is not ready.
+        public void RestoreWorldTimeTicks(long totalElapsedTicks)
+        {
+            if (worldTimeClock == null)
+            {
+                pendingWorldTimeTicks = totalElapsedTicks;
+                return;
+            }
+            worldTimeClock.RestoreElapsedTicks(totalElapsedTicks);
         }
 
         public void RestoreWeatherState(string weatherStateString)
@@ -226,15 +256,37 @@ namespace Blockiverse.Gameplay
             weatherService    = new WeatherService(seed);
             vegetationService = new VegetationService();
             farmingService    = new FarmingService();
+
+            // Wire biome-aware sapling growth for survival terrain worlds. The resolver is a pure
+            // function of (seed, worldHeight), so host and late-joining clients (which receive the
+            // seed in the generation snapshot) resolve identical biomes and stay in growth lockstep.
+            if (settings != null && GenerationPreset == CreativeWorldGenerationPreset.SurvivalLite)
+            {
+                var biomeResolver = new SurvivalBiomeResolver(settings.Seed, World.Bounds.Height);
+                vegetationService.Configure(biomeResolver.BiomeIndexAt);
+            }
+
             vegetationService.ScanAndTrackSaplings(World);
             farmingService.ScanAndTrackCrops(World);
             World.BlockChanged += OnBlockChanged;
             worldTimeClock.Ticked += OnWorldTick;
 
-            if (!string.IsNullOrEmpty(pendingWeatherState))
+            // Apply any environment state received before the services existed (message ordering).
+            if (pendingWeatherSync.HasValue)
+            {
+                weatherService.RestoreState(pendingWeatherSync.Value.State, pendingWeatherSync.Value.Ticks, pendingWeatherSync.Value.RngState);
+                pendingWeatherSync = null;
+            }
+            else if (!string.IsNullOrEmpty(pendingWeatherState))
             {
                 RestoreWeatherState(pendingWeatherState);
                 pendingWeatherState = null;
+            }
+
+            if (pendingWorldTimeTicks.HasValue)
+            {
+                worldTimeClock.RestoreElapsedTicks(pendingWorldTimeTicks.Value);
+                pendingWorldTimeTicks = null;
             }
         }
 
@@ -247,9 +299,21 @@ namespace Blockiverse.Gameplay
                 farmingService?.TrackCrop(change.Position);
 
             // Harvesting a berrybush (cleared to air) queues it to regrow after two game days (§3).
+            // Berrybush is owned by FarmingService (it replants a fresh stage-0 bush and tracks its
+            // growth); the wild-regrowth queue below handles the other wild plants so the two paths
+            // never both fire for the same block.
             if (b == BlockRegistry.Air && FarmingService.IsBerrybushStage(change.PreviousBlock))
                 farmingService?.OnBlockHarvested(change.PreviousBlock, change.Position);
+            else if (b == BlockRegistry.Air && IsWildRegrowthPlant(change.PreviousBlock))
+                vegetationService?.MarkWildHarvest(change.PreviousBlock, change.Position, CurrentWorldTick);
         }
+
+        // Wild (non-cultivated) plants that the vegetation service restores after a regrow delay.
+        // Berrybush is intentionally excluded — FarmingService owns its regrowth.
+        static bool IsWildRegrowthPlant(BlockId block) =>
+            block == BlockRegistry.GrainStalk || block == BlockRegistry.Reedgrass || block == BlockRegistry.Thornbrush;
+
+        long CurrentWorldTick => worldTimeClock != null ? worldTimeClock.TotalElapsedTicks : 0L;
 
         void OnWorldTick(int ticks)
         {
@@ -258,6 +322,7 @@ namespace Blockiverse.Gameplay
             {
                 vegetationService?.TickLeafDecay(World, ticks);
                 vegetationService?.TickSapling(World, ticks);
+                vegetationService?.TickWildRegrowth(World, CurrentWorldTick);
                 farmingService?.TickGrowth(World, ticks);
                 farmingService?.TickRegrowth(World, ticks);
             }

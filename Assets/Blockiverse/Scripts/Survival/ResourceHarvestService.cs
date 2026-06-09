@@ -104,6 +104,10 @@ namespace Blockiverse.Survival
             this.itemRegistry  = itemRegistry  ?? ItemRegistry.CreateDefault();
             this.blockRegistry = blockRegistry ?? BlockRegistry.CreateDefault();
             this.harvestRules  = harvestRules  ?? BlockHarvestRuleSet.CreateDefault(this.itemRegistry, this.blockRegistry);
+            // Drop-table rolls are deterministic only when an explicit rngSeed is supplied (tests and
+            // any future replay/save use). The default falls back to a wall-clock seed; this is safe
+            // because harvest rolls are host-authoritative (only the host rolls, then broadcasts an
+            // inventory snapshot), so clients never need to reproduce the host's roll locally.
             rngState = rngSeed == 0 ? (uint)Math.Abs(Environment.TickCount) | 1u : rngSeed;
         }
 
@@ -122,13 +126,42 @@ namespace Blockiverse.Survival
                 result = BlockHarvestResult.Success(rule, rolledDrop, usedTool, GetToolTier(equippedItem));
             }
 
-            inventory.TryAddAll(result.Drop);
+            // Defensive: the preview already verified capacity for the maximum possible drop, so this
+            // add should always succeed. If it somehow cannot, do not clear the block — that would
+            // silently destroy the resource.
+            if (!inventory.TryAddAll(result.Drop))
+            {
+                return BlockHarvestResult.Failure(
+                    BlockHarvestFailureReason.InventoryFull,
+                    result.BlockId,
+                    result.Drop,
+                    result.UsedTool,
+                    result.EffectiveTool,
+                    result.WorkRequired);
+            }
+
             world.SetBlock(position, BlockRegistry.Air);
 
             if (equippedSlotIndex >= 0 && equippedItem.Durability > 0)
                 ApplyDurabilityCost(inventory, equippedSlotIndex, equippedItem, ComputeDurabilityCost(result, equippedItem));
 
             return result;
+        }
+
+        // Maximum drop count the equipped tool can actually produce for this rule.
+        // Only the matching bonus tool (Sickle/Carver) can reach the table's full range; every other
+        // tool yields the fixed minimum, so the capacity pre-check stays tight and avoids spurious
+        // InventoryFull failures (e.g. hand-harvesting a 1–2 ResinKnot with room for exactly one).
+        static int MaxDropCountForTool(BlockHarvestRule rule, HarvestToolKind usedTool)
+        {
+            if (rule.Table == null)
+                return rule.Drop.Count;
+
+            bool toolGetsBonus =
+                (usedTool == HarvestToolKind.Sickle && rule.EffectiveTool == HarvestToolKind.Sickle) ||
+                (usedTool == HarvestToolKind.Carver && rule.EffectiveTool == HarvestToolKind.Carver);
+
+            return toolGetsBonus ? rule.MaxDropCount : rule.Drop.Count;
         }
 
         ItemStack RollDrop(BlockHarvestRule rule, HarvestToolKind usedTool)
@@ -195,7 +228,7 @@ namespace Blockiverse.Survival
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.InsufficientTool, blockId, usedTool: usedTool, effectiveTool: rule.EffectiveTool);
 
             int workRequired = rule.GetMineTicks(usedTool, toolTier);
-            if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.MaxDropCount)
+            if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < MaxDropCountForTool(rule, usedTool))
             {
                 return BlockHarvestResult.Failure(
                     BlockHarvestFailureReason.InventoryFull,

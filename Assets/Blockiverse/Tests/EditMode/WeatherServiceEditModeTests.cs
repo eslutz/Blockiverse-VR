@@ -241,23 +241,33 @@ namespace Blockiverse.Tests.EditMode
         // ── M8-4: Environment snapshot sync ──────────────────────────────────
 
         [Test]
-        public void RestoreStatePreservesWeatherStateAndTicks()
+        public void RestoreStatePreservesWeatherStateTicksAndRng()
         {
             var service = new WeatherService(seed: 1, WeatherState.Clear);
             service.Tick(3000); // accumulate some ticks
 
-            service.RestoreState(WeatherState.Thunderstorm, 800);
+            service.RestoreState(WeatherState.Thunderstorm, 800, rng: 0xABCDEF01u);
 
             Assert.That(service.CurrentState, Is.EqualTo(WeatherState.Thunderstorm));
             Assert.That(service.TicksInCurrentState, Is.EqualTo(800));
+            Assert.That(service.RngState, Is.EqualTo(0xABCDEF01u));
         }
 
         [Test]
         public void RestoreStateClampsNegativeTicksToZero()
         {
             var service = new WeatherService(seed: 1, WeatherState.Clear);
-            service.RestoreState(WeatherState.Fog, -500);
+            service.RestoreState(WeatherState.Fog, -500, rng: 12345u);
             Assert.That(service.TicksInCurrentState, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RestoreStateNormalizesZeroRngToValidState()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            service.RestoreState(WeatherState.Overcast, 0, rng: 0u);
+            // A zero xorshift state is degenerate; it must be normalized to a non-zero value.
+            Assert.That(service.RngState, Is.Not.EqualTo(0u));
         }
 
         [Test]
@@ -267,6 +277,28 @@ namespace Blockiverse.Tests.EditMode
             service.Tick(2000);
             // Clear min duration is 6000; no transition yet, so accumulated = 2000.
             Assert.That(service.TicksInCurrentState, Is.EqualTo(2000));
+        }
+
+        [Test]
+        public void RestoringFullStateKeepsTwoServicesInLockstep()
+        {
+            // Simulates a host that has run for a while and a client that joins and restores the
+            // host's full weather snapshot (state + ticks + RNG). After restore, ticking both by the
+            // same total must produce identical weather sequences — no divergence.
+            var host = new WeatherService(seed: 7777, WeatherState.Clear);
+            for (int i = 0; i < 25; i++)
+                host.Tick(3000);
+
+            var client = new WeatherService(seed: 1, WeatherState.Clear); // different seed on purpose
+            client.RestoreState(host.CurrentState, host.TicksInCurrentState, host.RngState);
+
+            for (int i = 0; i < 40; i++)
+            {
+                host.Tick(2500);
+                client.Tick(2500);
+                Assert.That(client.CurrentState, Is.EqualTo(host.CurrentState),
+                    $"Weather diverged at iteration {i}; RNG sync should keep them locked.");
+            }
         }
     }
 }

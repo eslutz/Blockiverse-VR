@@ -76,11 +76,17 @@ namespace Blockiverse.WorldGen
         // Ticks the service has accumulated in the current state — used for environment sync snapshots.
         public int TicksInCurrentState => ticksInCurrentState;
 
-        // Restore state received from a host snapshot (multiplayer late-join / reconnect).
-        public void RestoreState(WeatherState state, int ticks)
+        // Current xorshift RNG position — part of the environment sync snapshot so a late-joining
+        // client resumes the host's exact transition stream and stays in deterministic lockstep.
+        public uint RngState => rngState;
+
+        // Restore weather state received from a host snapshot (multiplayer late-join / reconnect).
+        // Restoring rngState as well keeps client and host weather sequences identical going forward.
+        public void RestoreState(WeatherState state, int ticks, uint rng)
         {
             currentState = state;
             ticksInCurrentState = Math.Max(0, ticks);
+            rngState = rng == 0 ? 1u : rng;
         }
 
         public float CloudCoverage => TargetCloudCoverage(currentState);

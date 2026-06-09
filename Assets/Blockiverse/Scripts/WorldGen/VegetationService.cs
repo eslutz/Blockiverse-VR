@@ -215,10 +215,10 @@ namespace Blockiverse.WorldGen
         {
             public readonly BlockId BlockId;
             public readonly BlockPosition Position;
-            public readonly int RegrowAfterTick;  // absolute tick when regrowth may happen
+            public readonly long RegrowAfterTick;  // absolute world tick when regrowth may happen
             public readonly int AttemptsLeft;
 
-            public WildRegrowthMarker(BlockId blockId, BlockPosition position, int regrowAfterTick, int attemptsLeft = 5)
+            public WildRegrowthMarker(BlockId blockId, BlockPosition position, long regrowAfterTick, int attemptsLeft = 5)
             {
                 BlockId = blockId;
                 Position = position;
@@ -227,18 +227,21 @@ namespace Blockiverse.WorldGen
             }
         }
 
+        const long WildRegrowthRetryDelayTicks = 24000; // one game day before retrying a blocked spot
+
         readonly List<WildRegrowthMarker> wildRegrowthQueue = new();
 
-        // Call when a wild plant is harvested. currentTick is the world time in ticks.
-        public void MarkWildHarvest(BlockId blockId, BlockPosition position, int currentTick)
+        // Call when a wild plant is harvested. currentTick is the absolute world time in ticks
+        // (long, matching WorldTimeClock.TotalElapsedTicks).
+        public void MarkWildHarvest(BlockId blockId, BlockPosition position, long currentTick)
         {
             int delay = WildRegrowthDelayTicks(blockId);
             if (delay <= 0) return;
             wildRegrowthQueue.Add(new WildRegrowthMarker(blockId, position, currentTick + delay));
         }
 
-        // Call every game tick with the current world time. Restores harvested wild plants.
-        public void TickWildRegrowth(VoxelWorld world, int currentTick)
+        // Call every game tick with the current absolute world time. Restores harvested wild plants.
+        public void TickWildRegrowth(VoxelWorld world, long currentTick)
         {
             for (int i = wildRegrowthQueue.Count - 1; i >= 0; i--)
             {
@@ -263,10 +266,10 @@ namespace Blockiverse.WorldGen
                 }
                 else if (marker.AttemptsLeft > 1)
                 {
-                    // Delay and retry.
+                    // Spot is unsupported (no ground below) — delay and retry.
                     wildRegrowthQueue[i] = new WildRegrowthMarker(
                         marker.BlockId, marker.Position,
-                        currentTick + 24000,
+                        currentTick + WildRegrowthRetryDelayTicks,
                         marker.AttemptsLeft - 1);
                 }
                 else

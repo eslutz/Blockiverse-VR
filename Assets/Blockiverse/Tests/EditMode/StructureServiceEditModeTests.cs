@@ -158,6 +158,54 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PlaceStructuresLeavesMostRegionsEmpty()
+        {
+            // The per-region spawn gate (~30%) must keep most regions empty even when every biome
+            // has many valid catalog entries. Without the gate, nearly every region would build one.
+            var settings = MakeSettings(seed: 314);
+            var world = FlatWorld(settings);
+
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 314,
+                biomeAt: (x, z) => 0); // Meadow allows several catalog entries
+
+            const int regionSize = 32;
+            int regionsX = settings.Bounds.Width / regionSize;
+            int regionsZ = settings.Bounds.Depth / regionSize;
+            int totalRegions = regionsX * regionsZ;
+
+            int regionsWithStructure = 0;
+            for (int rx = 0; rx < regionsX; rx++)
+            for (int rz = 0; rz < regionsZ; rz++)
+            {
+                bool found = false;
+                for (int x = rx * regionSize; x < (rx + 1) * regionSize && !found; x++)
+                for (int z = rz * regionSize; z < (rz + 1) * regionSize && !found; z++)
+                for (int y = WorldConstants.SeaLevel; y < WorldConstants.SeaLevel + 6; y++)
+                    if (world.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.Graystone)
+                    {
+                        found = true;
+                        break;
+                    }
+                if (found) regionsWithStructure++;
+            }
+
+            Assert.That(regionsWithStructure, Is.GreaterThan(0), "Expected at least one structure region.");
+            Assert.That(regionsWithStructure, Is.LessThan(totalRegions),
+                "The spawn gate must leave some regions empty; structures should not fill every region.");
+        }
+
+        [Test]
+        public void PlaceStructuresHandlesOutOfRangeBiomeIndex()
+        {
+            // A biome resolver returning an out-of-range index must be wrapped, not throw.
+            var settings = MakeSettings(seed: 8);
+            var world = FlatWorld(settings);
+            Assert.DoesNotThrow(() =>
+                StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 8,
+                    biomeAt: (x, z) => 999)); // wraps to a valid biome via modulo
+        }
+
+        [Test]
         public void PickStructureForBiomeReturnsBiomeCompatibleStructure()
         {
             // Pinewild biome (index 1) should return forager_lean_to or resin_tap_grove, not pathmark_stones only

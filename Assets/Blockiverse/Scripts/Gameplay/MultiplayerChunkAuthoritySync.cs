@@ -22,8 +22,8 @@ namespace Blockiverse.Gameplay
         const int MutationResultMessageBytes = 128;
         const int SnapshotHeaderBytes = 80;
         const int SnapshotBlockBytes = 32;
-        // WeatherState (int) + ticksInCurrentState (int) + totalElapsedTicks (long) = 16 bytes
-        const int EnvironmentSnapshotMessageBytes = 16;
+        // WeatherState (int) + ticksInCurrentState (int) + weatherRng (uint) + totalElapsedTicks (long) = 20 bytes
+        const int EnvironmentSnapshotMessageBytes = 20;
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
@@ -495,13 +495,14 @@ namespace Blockiverse.Gameplay
             var writer = new FastBufferWriter(EnvironmentSnapshotMessageBytes, Allocator.Temp);
             try
             {
-                (WeatherState weatherState, int weatherTicks) = worldManager.GetWeatherSyncState();
+                CreativeWorldManager.WeatherSyncState weather = worldManager.GetWeatherSyncState();
                 long worldTimeTicks = worldManager.WorldTimeClock != null
                     ? worldManager.WorldTimeClock.TotalElapsedTicks
                     : 0L;
 
-                writer.WriteValueSafe((int)weatherState);
-                writer.WriteValueSafe(weatherTicks);
+                writer.WriteValueSafe((int)weather.State);
+                writer.WriteValueSafe(weather.Ticks);
+                writer.WriteValueSafe(weather.RngState);
                 writer.WriteValueSafe(worldTimeTicks);
 
                 ResolveNetworkManager().CustomMessagingManager.SendNamedMessage(
@@ -523,12 +524,17 @@ namespace Blockiverse.Gameplay
 
             reader.ReadValueSafe(out int weatherStateInt);
             reader.ReadValueSafe(out int weatherTicks);
+            reader.ReadValueSafe(out uint weatherRng);
             reader.ReadValueSafe(out long worldTimeTicks);
 
             if (worldManager != null)
             {
-                worldManager.RestoreWeatherSyncState((WeatherState)weatherStateInt, weatherTicks);
-                worldManager.WorldTimeClock?.RestoreElapsedTicks(worldTimeTicks);
+                // Both helpers buffer-and-defer if the services are not yet initialized, so weather
+                // ticks/RNG and world time survive regardless of message ordering relative to the
+                // generation snapshot.
+                worldManager.RestoreWeatherSyncState(
+                    new CreativeWorldManager.WeatherSyncState((WeatherState)weatherStateInt, weatherTicks, weatherRng));
+                worldManager.RestoreWorldTimeTicks(worldTimeTicks);
             }
 
             AppliedEnvironmentSnapshotCount++;

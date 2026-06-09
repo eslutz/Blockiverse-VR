@@ -17,12 +17,14 @@ namespace Blockiverse.WorldGen
         readonly BlockRegistry registry;
         readonly WorldGenerationSettings settings;
         readonly SurvivalResourceTuning resourceTuning;
+        readonly SurvivalBiomeResolver biomeResolver;
 
         public SurvivalTerrainPreset(BlockRegistry registry, WorldGenerationSettings settings, SurvivalResourceTuning resourceTuning = null)
         {
             this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.resourceTuning = resourceTuning ?? SurvivalResourceTuning.CreateDefault();
+            this.biomeResolver = new SurvivalBiomeResolver(settings.Seed, settings.Bounds.Height);
         }
 
         public VoxelWorld Generate()
@@ -39,7 +41,7 @@ namespace Blockiverse.WorldGen
             FillTerrain(world, surfaceHeights, biomeMap);
             CarveCaves(world, surfaceHeights);
             PlaceResourceVeins(world, surfaceHeights);
-            StructureService.PlaceStructures(world, registry, settings, settings.Seed);
+            StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt);
             PlaceSparseVegetation(world, surfaceHeights, biomeMap);
             ApplySpawnSafety(world);
 
@@ -88,32 +90,8 @@ namespace Blockiverse.WorldGen
             return biomeMap;
         }
 
-        TerrainBiome ClassifyBiome(int x, int z, int surfaceY)
-        {
-            if (surfaceY >= 130)
-                return TerrainBiome.Highlands;
-
-            double temperature = ValueNoise2D(x, z, scale: 250, settings.Seed + 11, salt: 511);
-            double moisture = ValueNoise2D(x, z, scale: 250, settings.Seed + 23, salt: 737);
-            temperature -= Math.Max(0, surfaceY - 120) * 0.006;
-
-            if (temperature < 0.25)
-                return TerrainBiome.Tundra;
-
-            if (temperature > 0.72 && moisture < 0.28)
-                return TerrainBiome.Dunes;
-
-            if (temperature > 0.58 && moisture < 0.45)
-                return TerrainBiome.Drybrush;
-
-            if (moisture > 0.65)
-                return TerrainBiome.Wetland;
-
-            if (temperature < 0.45 && moisture > 0.52)
-                return TerrainBiome.Pinewild;
-
-            return TerrainBiome.Meadow;
-        }
+        TerrainBiome ClassifyBiome(int x, int z, int surfaceY) =>
+            biomeResolver.Classify(x, z, surfaceY);
 
         int[] BuildSurfaceHeights(TerrainBiome[] biomeMap)
         {
@@ -130,15 +108,7 @@ namespace Blockiverse.WorldGen
             return surfaceHeights;
         }
 
-        int CalculateSurfaceHeight(int x, int z)
-        {
-            double continent = (ValueNoise2D(x, z, scale: 500, settings.Seed, salt: 101) - 0.5) * 2.0;
-            double hills = (ValueNoise2D(x, z, scale: 67, settings.Seed, salt: 211) - 0.5) * 2.0;
-            double detail = (ValueNoise2D(x, z, scale: 17, settings.Seed, salt: 323) - 0.5) * 2.0;
-
-            int height = (int)Math.Round(WorldConstants.SeaLevel + continent * 42 + hills * 18 + detail * 5);
-            return Clamp(height, 40, settings.Bounds.Height - 1);
-        }
+        int CalculateSurfaceHeight(int x, int z) => biomeResolver.SurfaceHeight(x, z);
 
         void FlattenSpawnSurface(int[] surfaceHeights)
         {
@@ -544,23 +514,6 @@ namespace Blockiverse.WorldGen
             return x + settings.Bounds.Width * z;
         }
 
-        static double ValueNoise2D(int x, int z, int scale, int seed, int salt)
-        {
-            int cellX = x / scale;
-            int cellZ = z / scale;
-            double fractionX = (x - cellX * scale) / (double)scale;
-            double fractionZ = (z - cellZ * scale) / (double)scale;
-            double smoothX = SmoothStep(fractionX);
-            double smoothZ = SmoothStep(fractionZ);
-
-            double a = HashUnit(seed, cellX, 0, cellZ, salt);
-            double b = HashUnit(seed, cellX + 1, 0, cellZ, salt);
-            double c = HashUnit(seed, cellX, 0, cellZ + 1, salt);
-            double d = HashUnit(seed, cellX + 1, 0, cellZ + 1, salt);
-
-            return Lerp(Lerp(a, b, smoothX), Lerp(c, d, smoothX), smoothZ);
-        }
-
         static uint Hash(int seed, int x, int y, int z, int salt)
         {
             unchecked
@@ -590,24 +543,9 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        static double HashUnit(int seed, int x, int y, int z, int salt)
-        {
-            return (Hash(seed, x, y, z, salt) & 0x00ffffffu) / 16777215d;
-        }
-
         static int Range(uint hash, int shift, int count)
         {
             return (int)((hash >> shift) % (uint)count);
-        }
-
-        static double SmoothStep(double value)
-        {
-            return value * value * (3d - 2d * value);
-        }
-
-        static double Lerp(double a, double b, double t)
-        {
-            return a + (b - a) * t;
         }
 
         static int Clamp(int value, int min, int max)
