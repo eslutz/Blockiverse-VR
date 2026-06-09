@@ -58,6 +58,21 @@ namespace Blockiverse.Survival
                 rule.GetMineTicks(usedTool, toolTier));
         }
 
+        public static BlockHarvestResult Success(BlockHarvestRule rule, ItemStack rolledDrop, HarvestToolKind usedTool, int toolTier = 1)
+        {
+            if (rule == null)
+                throw new ArgumentNullException(nameof(rule));
+
+            return new BlockHarvestResult(
+                true,
+                BlockHarvestFailureReason.None,
+                rule.BlockId,
+                rolledDrop.IsEmpty ? rule.Drop : rolledDrop,
+                usedTool,
+                rule.EffectiveTool,
+                rule.GetMineTicks(usedTool, toolTier));
+        }
+
         public static BlockHarvestResult Failure(
             BlockHarvestFailureReason failureReason,
             BlockId blockId = default,
@@ -78,15 +93,18 @@ namespace Blockiverse.Survival
         readonly BlockRegistry blockRegistry;
         readonly ItemRegistry itemRegistry;
         readonly BlockHarvestRuleSet harvestRules;
+        uint rngState;
 
         public ResourceHarvestService(
             BlockRegistry blockRegistry = null,
             ItemRegistry itemRegistry = null,
-            BlockHarvestRuleSet harvestRules = null)
+            BlockHarvestRuleSet harvestRules = null,
+            uint rngSeed = 0)
         {
             this.itemRegistry  = itemRegistry  ?? ItemRegistry.CreateDefault();
             this.blockRegistry = blockRegistry ?? BlockRegistry.CreateDefault();
             this.harvestRules  = harvestRules  ?? BlockHarvestRuleSet.CreateDefault(this.itemRegistry, this.blockRegistry);
+            rngState = rngSeed == 0 ? (uint)Math.Abs(Environment.TickCount) | 1u : rngSeed;
         }
 
         public BlockHarvestResult TryHarvest(VoxelWorld world, Inventory inventory, BlockPosition position, ItemStack equippedItem, int equippedSlotIndex = -1)
@@ -96,6 +114,14 @@ namespace Blockiverse.Survival
             if (!result.Succeeded)
                 return result;
 
+            // Apply variable drop table when the rule has one (Sickle double-roll, Carver full yield).
+            if (harvestRules.TryGet(result.BlockId, out BlockHarvestRule rule) && rule.Table != null)
+            {
+                HarvestToolKind usedTool = BlockHarvestRuleSet.GetToolKind(equippedItem, itemRegistry);
+                ItemStack rolledDrop = RollDrop(rule, usedTool);
+                result = BlockHarvestResult.Success(rule, rolledDrop, usedTool, GetToolTier(equippedItem));
+            }
+
             inventory.TryAddAll(result.Drop);
             world.SetBlock(position, BlockRegistry.Air);
 
@@ -103,6 +129,27 @@ namespace Blockiverse.Survival
                 ApplyDurabilityCost(inventory, equippedSlotIndex, equippedItem, ComputeDurabilityCost(result, equippedItem));
 
             return result;
+        }
+
+        ItemStack RollDrop(BlockHarvestRule rule, HarvestToolKind usedTool)
+        {
+            if (usedTool == HarvestToolKind.Sickle && rule.EffectiveTool == HarvestToolKind.Sickle)
+            {
+                // Double-roll: roll twice, keep the primary drop with the higher count.
+                ItemStack[] r1 = rule.Table.Roll(ref rngState);
+                ItemStack[] r2 = rule.Table.Roll(ref rngState);
+                int c1 = r1.Length > 0 ? r1[0].Count : 0;
+                int c2 = r2.Length > 0 ? r2[0].Count : 0;
+                return c1 >= c2 ? (r1.Length > 0 ? r1[0] : rule.Drop) : (r2.Length > 0 ? r2[0] : rule.Drop);
+            }
+            if (usedTool == HarvestToolKind.Carver && rule.EffectiveTool == HarvestToolKind.Carver)
+            {
+                // Full yield: single table roll.
+                ItemStack[] drops = rule.Table.Roll(ref rngState);
+                return drops.Length > 0 ? drops[0] : rule.Drop;
+            }
+            // Other tools: fixed minimum (rule.Drop) — full yield requires the correct tool.
+            return rule.Drop;
         }
 
         int ComputeDurabilityCost(BlockHarvestResult result, ItemStack equippedItem)
@@ -148,7 +195,7 @@ namespace Blockiverse.Survival
                 return BlockHarvestResult.Failure(BlockHarvestFailureReason.InsufficientTool, blockId, usedTool: usedTool, effectiveTool: rule.EffectiveTool);
 
             int workRequired = rule.GetMineTicks(usedTool, toolTier);
-            if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.Drop.Count)
+            if (inventory.GetAvailableCapacity(rule.Drop.ItemId) < rule.MaxDropCount)
             {
                 return BlockHarvestResult.Failure(
                     BlockHarvestFailureReason.InventoryFull,

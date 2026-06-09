@@ -24,7 +24,8 @@ namespace Blockiverse.Survival
             HarvestToolKind effectiveTool,
             BlockHardnessClass hardnessClass,
             int harvestTierMin,
-            float hardness)
+            float hardness,
+            DropTable table = null)
         {
             if (drop.IsEmpty)
                 throw new ArgumentException("Harvest rules must produce a drop.", nameof(drop));
@@ -35,10 +36,14 @@ namespace Blockiverse.Survival
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
             Hardness = hardness;
+            Table = table;
         }
 
         public BlockId BlockId { get; }
         public ItemStack Drop { get; }
+        public DropTable Table { get; }
+        // Max possible primary drop count — used for inventory-capacity checks when a DropTable is present.
+        public int MaxDropCount => Table?.PrimaryMaxCount ?? Drop.Count;
         public HarvestToolKind EffectiveTool { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
@@ -104,7 +109,12 @@ namespace Blockiverse.Survival
 
             // ── Additional canonical vegetation ──────────────────────────────
             rules.RegisterForBlock(BlockRegistry.Thornbrush,         HarvestToolKind.Sickle);
-            rules.RegisterForBlock(BlockRegistry.Reedgrass,          HarvestToolKind.Sickle);
+            // Reedgrass: variable fiber yield (1–3); Sickle double-roll applies.
+            var reedFiberTable = new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 3));
+            rules.RegisterForBlock(BlockRegistry.Reedgrass,   HarvestToolKind.Sickle, reedFiberTable);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass_S1, HarvestToolKind.Sickle, reedFiberTable);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass_S2, HarvestToolKind.Sickle, reedFiberTable);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass_S3, HarvestToolKind.Sickle, reedFiberTable);
 
             // ── Additional canonical crafted blocks ──────────────────────────
             rules.RegisterForBlock(BlockRegistry.WorkPlank,          HarvestToolKind.Feller);
@@ -127,7 +137,9 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.NiterstonePocket,   HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.BrightsaltCrust,    HarvestToolKind.Spade);
             rules.RegisterForBlock(BlockRegistry.ShellgritBed,       HarvestToolKind.Spade);
-            rules.RegisterForBlock(BlockRegistry.ResinKnot,          HarvestToolKind.Carver);
+            // ResinKnot: Carver gives full yield (1–2); without Carver, only 1 drops (fixed Drop).
+            rules.RegisterForBlock(BlockRegistry.ResinKnot, HarvestToolKind.Carver,
+                new DropTable(new DropTableEntry(ItemId.ResinKnot, 1, 2)));
             rules.RegisterForBlock(BlockRegistry.Berrybush,          HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Berrybush_S1,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Berrybush_S2,       HarvestToolKind.Sickle);
@@ -139,9 +151,6 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.GrainStalk_S2,      HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.GrainStalk_S3,      HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.GrainStalk_S4,      HarvestToolKind.Sickle);
-            rules.RegisterForBlock(BlockRegistry.Reedgrass_S1,       HarvestToolKind.Sickle);
-            rules.RegisterForBlock(BlockRegistry.Reedgrass_S2,       HarvestToolKind.Sickle);
-            rules.RegisterForBlock(BlockRegistry.Reedgrass_S3,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.UmbraliteNode,      HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.StaropalGeode,      HarvestToolKind.Delver);
 
@@ -195,7 +204,7 @@ namespace Blockiverse.Survival
             return HarvestToolKind.Hand;
         }
 
-        void RegisterForBlock(BlockId blockId, HarvestToolKind effectiveTool)
+        void RegisterForBlock(BlockId blockId, HarvestToolKind effectiveTool, DropTable table = null)
         {
             ItemStack drop = itemRegistry.CreateDropForBlock(blockId);
             if (drop.IsEmpty)
@@ -205,7 +214,8 @@ namespace Blockiverse.Survival
                 blockId, drop, effectiveTool,
                 def?.HardnessClass  ?? BlockHardnessClass.Soft,
                 def?.HarvestTierMin ?? 0,
-                def != null ? def.Hardness : 1.0f));
+                def != null ? def.Hardness : 1.0f,
+                table));
         }
     }
 }

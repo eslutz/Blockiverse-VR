@@ -218,6 +218,129 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(itemRegistry.Get(new ItemId("starforged_delver")).ToolTier, Is.EqualTo(7));
         }
 
+        // ── M6-F: Drop table + special tool actions ──────────────────────────
+
+        [Test]
+        public void DropTableRollsPrimaryCountWithinBounds()
+        {
+            var table = new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 3));
+            uint rng = 1u;
+            for (int i = 0; i < 100; i++)
+            {
+                ItemStack[] result = table.Roll(ref rng);
+                Assert.That(result.Length, Is.EqualTo(1));
+                Assert.That(result[0].Count, Is.InRange(1, 3));
+                Assert.That(result[0].ItemId, Is.EqualTo(ItemId.ReedFiber));
+            }
+        }
+
+        [Test]
+        public void DropTableSecondaryEntryRespectsChance()
+        {
+            // 0% chance entry should never produce a drop.
+            var table = new DropTable(
+                new DropTableEntry(ItemId.ReedFiber, 1, 1),
+                new DropTableEntry(ItemId.Leafmoss,  1, 1, chance: 0f));
+            uint rng = 1u;
+            for (int i = 0; i < 50; i++)
+            {
+                ItemStack[] result = table.Roll(ref rng);
+                Assert.That(result.Length, Is.EqualTo(1), "Zero-chance secondary entry must never roll a drop.");
+            }
+        }
+
+        [Test]
+        public void SickleDoubleRollNeverDropsLessThanMinimum()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            ItemStack sickle = new ItemStack(ItemId.ReedwoodSickle, 1);
+
+            for (uint seed = 1; seed <= 30; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir,
+                    BlockHarvestRuleSet.CreateDefault(ir),
+                    rngSeed: seed);
+                var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+                var world = CreateSingleBlockWorld(BlockRegistry.Reedgrass);
+
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, sickle);
+                Assert.That(result.Succeeded, Is.True, $"Seed {seed}: harvest should succeed.");
+                Assert.That(result.Drop.Count, Is.GreaterThanOrEqualTo(1),
+                    $"Seed {seed}: Sickle double-roll must yield at least the minimum count.");
+                Assert.That(result.Drop.Count, Is.LessThanOrEqualTo(3),
+                    $"Seed {seed}: Sickle double-roll must not exceed the maximum count.");
+            }
+        }
+
+        [Test]
+        public void SickleDoubleRollYieldsHigherAverageThanSingleRoll()
+        {
+            // Over many harvests, Sickle double-roll should average strictly above the raw minimum (1).
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            int totalSickle = 0;
+
+            for (uint seed = 1; seed <= 200; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir,
+                    BlockHarvestRuleSet.CreateDefault(ir),
+                    rngSeed: seed);
+                var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+                var world = CreateSingleBlockWorld(BlockRegistry.Reedgrass);
+                ItemStack sickle = new ItemStack(ItemId.ReedwoodSickle, 1);
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, sickle);
+                if (result.Succeeded) totalSickle += result.Drop.Count;
+            }
+
+            // Average should be well above 1 (minimum) given a uniform 1-3 distribution with double-roll.
+            float avg = totalSickle / 200f;
+            Assert.That(avg, Is.GreaterThan(1.5f),
+                "Sickle double-roll average should exceed the minimum drop count.");
+        }
+
+        [Test]
+        public void CarverOnResinKnotCanDropMoreThanOne()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+
+            bool sawTwo = false;
+            for (uint seed = 1; seed <= 100; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir,
+                    BlockHarvestRuleSet.CreateDefault(ir),
+                    rngSeed: seed);
+                var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+                var world = CreateSingleBlockWorld(BlockRegistry.ResinKnot);
+                ItemStack carver = new ItemStack(ItemId.ReedwoodCarver, 1);
+
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, carver);
+                if (result.Succeeded && result.Drop.Count == 2) { sawTwo = true; break; }
+            }
+
+            Assert.That(sawTwo, Is.True, "Carver on ResinKnot must be able to yield 2 drops.");
+        }
+
+        [Test]
+        public void NonCarverOnResinKnotDropsExactlyOne()
+        {
+            // Without Carver, fixed Drop (1 resin_knot) is returned even though a table is present.
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir,
+                BlockHarvestRuleSet.CreateDefault(ir),
+                rngSeed: 42);
+            var inventory = new Inventory(ir, slotCount: 10, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.ResinKnot);
+
+            // Hand harvest — no effective tool bonus.
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.Drop.Count, Is.EqualTo(1),
+                "Without Carver, ResinKnot must drop exactly 1.");
+        }
+
         static readonly BlockPosition HarvestPosition = new(1, 1, 1);
 
         static ResourceHarvestService CreateService(ItemRegistry itemRegistry)
