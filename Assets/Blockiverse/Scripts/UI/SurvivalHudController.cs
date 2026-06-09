@@ -9,6 +9,7 @@ namespace Blockiverse.UI
         [SerializeField] SurvivalInventoryPanel inventoryPanel;
         [SerializeField] SurvivalCraftingPanel craftingPanel;
         [SerializeField] SurvivalHealthPanel healthPanel;
+        [SerializeField] SurvivalCratePanel cratePanel;
         [SerializeField] int selectedHotbarSlotIndex;
 
         public Inventory Inventory { get; private set; }
@@ -19,11 +20,13 @@ namespace Blockiverse.UI
             SurvivalInventoryPanel targetInventoryPanel,
             SurvivalCraftingPanel targetCraftingPanel,
             SurvivalHealthPanel targetHealthPanel,
+            SurvivalCratePanel targetCratePanel = null,
             int targetSelectedHotbarSlotIndex = 0)
         {
             inventoryPanel = targetInventoryPanel;
             craftingPanel = targetCraftingPanel;
             healthPanel = targetHealthPanel;
+            cratePanel = targetCratePanel;
             selectedHotbarSlotIndex = targetSelectedHotbarSlotIndex;
         }
 
@@ -37,6 +40,7 @@ namespace Blockiverse.UI
             inventoryPanel ??= GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true);
             craftingPanel ??= GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true);
             healthPanel ??= GetComponentInChildren<SurvivalHealthPanel>(includeInactive: true);
+            cratePanel ??= GetComponentInChildren<SurvivalCratePanel>(includeInactive: true);
 
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
 
@@ -61,13 +65,23 @@ namespace Blockiverse.UI
             }
 
             inventoryPanel?.Bind(Inventory, itemRegistry, selectedHotbarSlotIndex);
+            // Route crafting through the authoritative sync (when present) so client crafts are
+            // host-validated, not applied to the local mirror.
+            craftingPanel?.ConfigureSurvivalSync(survivalSync);
             craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
             healthPanel?.Bind(Vitals);
+            cratePanel?.Bind(survivalSync, itemRegistry);
 
             if (craftingPanel != null)
             {
                 craftingPanel.CraftingChanged -= RefreshPanels;
                 craftingPanel.CraftingChanged += RefreshPanels;
+            }
+
+            if (cratePanel != null)
+            {
+                cratePanel.CrateChanged -= RefreshPanels;
+                cratePanel.CrateChanged += RefreshPanels;
             }
         }
 
@@ -76,6 +90,7 @@ namespace Blockiverse.UI
             inventoryPanel?.Refresh();
             craftingPanel?.Refresh();
             healthPanel?.Refresh();
+            cratePanel?.Refresh();
         }
     }
 }

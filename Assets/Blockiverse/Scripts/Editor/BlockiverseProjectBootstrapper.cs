@@ -118,7 +118,7 @@ namespace Blockiverse.Editor
         const float JumpHeightMeters = 1.3f;
         static readonly Vector2 ComfortMenuSize = new(520.0f, 580.0f);
         static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
-        static readonly Vector2 SurvivalHudSize = new(720.0f, 420.0f);
+        static readonly Vector2 SurvivalHudSize = new(940.0f, 420.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
@@ -2518,9 +2518,10 @@ namespace Blockiverse.Editor
             SurvivalHealthPanel healthPanel = EnsureSurvivalHealthSection(panelObject.transform);
             SurvivalInventoryPanel inventoryPanel = EnsureSurvivalInventorySection(panelObject.transform);
             SurvivalCraftingPanel craftingPanel = EnsureSurvivalCraftingSection(panelObject.transform);
+            SurvivalCratePanel cratePanel = EnsureSurvivalCrateSection(panelObject.transform);
 
             SurvivalHudController controller = EnsureComponent<SurvivalHudController>(hudObject);
-            controller.Configure(inventoryPanel, craftingPanel, healthPanel);
+            controller.Configure(inventoryPanel, craftingPanel, healthPanel, cratePanel);
 
             EditorUtility.SetDirty(hudObject);
             EditorUtility.SetDirty(controller);
@@ -2677,6 +2678,72 @@ namespace Blockiverse.Editor
 
             SurvivalCraftingPanel panel = EnsureComponent<SurvivalCraftingPanel>(sectionObject);
             panel.Configure(recipeButtons, recipeLabels, statusLabel);
+            EditorUtility.SetDirty(panel);
+            return panel;
+        }
+
+        static SurvivalCratePanel EnsureSurvivalCrateSection(Transform parent)
+        {
+            GameObject sectionObject = EnsureHudSection(parent, "Shared Crate", new Vector2(706.0f, -82.0f), new Vector2(216.0f, 300.0f));
+
+            EnsureLabel(
+                sectionObject.transform,
+                "Label",
+                "Shared Crate",
+                24,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -10.0f),
+                new Vector2(180.0f, 34.0f));
+
+            TMP_Text statusLabel = EnsureLabel(
+                sectionObject.transform,
+                "Status",
+                "Shared crate",
+                20,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -44.0f),
+                new Vector2(180.0f, 28.0f),
+                TextDimColor);
+
+            TMP_Text[] slotLabels = new TMP_Text[4];
+            Button[] slotButtons = new Button[slotLabels.Length];
+            for (int index = 0; index < slotLabels.Length; index++)
+            {
+                slotLabels[index] = EnsureLabel(
+                    sectionObject.transform,
+                    $"Slot {index + 1}",
+                    "Empty",
+                    15,
+                    TextAnchor.MiddleLeft,
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(0.0f, 1.0f),
+                    new Vector2(16.0f, -82.0f - index * 40.0f),
+                    new Vector2(180.0f, 36.0f));
+                slotButtons[index] = EnsureTextButton(slotLabels[index]);
+            }
+
+            TMP_Text depositLabel = EnsureLabel(
+                sectionObject.transform,
+                "Deposit",
+                "Deposit Held",
+                16,
+                TextAnchor.MiddleCenter,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -82.0f - slotLabels.Length * 40.0f),
+                new Vector2(180.0f, 36.0f));
+            Button depositButton = EnsureTextButton(depositLabel);
+
+            SurvivalCratePanel panel = EnsureComponent<SurvivalCratePanel>(sectionObject);
+            panel.Configure(slotButtons, slotLabels, statusLabel, depositButton);
             EditorUtility.SetDirty(panel);
             return panel;
         }

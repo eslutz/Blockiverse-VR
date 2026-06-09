@@ -16,6 +16,7 @@ namespace Blockiverse.UI
         [SerializeField] TMP_Text statusLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        [SerializeField] MultiplayerSurvivalSync survivalSync;
 
         CraftingRecipeBook recipeBook;
         Inventory inventory;
@@ -23,6 +24,11 @@ namespace Blockiverse.UI
         CraftingStation availableStation;
 
         public event Action CraftingChanged;
+
+        // Routes crafting through the host-authoritative survival sync when present, so a remote client
+        // cannot craft against its local inventory mirror without host validation. Falls back to local
+        // CraftingService for isolated/single-component use (tests, no networking).
+        public void ConfigureSurvivalSync(MultiplayerSurvivalSync sync) => survivalSync = sync;
 
         public void ConfigureFeedback(
             BlockiverseAudioCuePlayer targetAudioCuePlayer,
@@ -92,6 +98,9 @@ namespace Blockiverse.UI
 
         CraftingResult TryCraft(CraftingRecipe recipe)
         {
+            if (survivalSync != null)
+                return TryCraftAuthoritative(recipe);
+
             CraftingResult result = CraftingService.TryCraft(inventory, recipe, availableStation);
             SetStatus(result.Succeeded
                 ? $"Crafted {FormatStack(recipe.Output)}"
@@ -103,6 +112,30 @@ namespace Blockiverse.UI
                 CraftingChanged?.Invoke();
 
             return result;
+        }
+
+        // Host-authoritative craft: the host validates and mutates the inventory, then broadcasts the
+        // result/snapshot. On the host/offline peer this resolves immediately; on a remote client it is
+        // pending until the host responds (the inventory mirror updates from the snapshot).
+        CraftingResult TryCraftAuthoritative(CraftingRecipe recipe)
+        {
+            SurvivalCommandResult command = survivalSync.TrySubmitCraft(recipe.Output.ItemId, availableStation, out bool sentToHost);
+            bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
+
+            SetStatus(command.Accepted
+                ? $"Crafted {FormatStack(recipe.Output)}"
+                : sentToHost
+                    ? $"Crafting {itemRegistry.Get(recipe.Output.ItemId).Name}…"
+                    : $"Cannot craft {itemRegistry.Get(recipe.Output.ItemId).Name}: {command.CraftingFailureReason}");
+            Refresh();
+            PlayFeedback(acceptedOrPending ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+
+            if (command.Accepted)
+                CraftingChanged?.Invoke();
+
+            return acceptedOrPending
+                ? CraftingResult.Success()
+                : CraftingResult.Failure(command.CraftingFailureReason, recipe.Output.ItemId);
         }
 
         public void Refresh()
