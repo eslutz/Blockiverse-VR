@@ -16,7 +16,8 @@ namespace Blockiverse.Gameplay
         CraftRecipe,
         SharedCrateDeposit,
         SharedCrateWithdraw,
-        PlaceBlock
+        PlaceBlock,
+        StripLog
     }
 
     public enum SurvivalCommandFailureReason
@@ -33,7 +34,9 @@ namespace Blockiverse.Gameplay
         SharedCrateEmpty,
         DuplicateRequest,
         NotPlaceable,
-        PlacementRejected
+        PlacementRejected,
+        NotStrippable,
+        StripRejected
     }
 
     public readonly struct SurvivalCommandResult
@@ -144,6 +147,7 @@ namespace Blockiverse.Gameplay
     {
         const string HarvestRequestMessage = "Blockiverse.Survival.HarvestRequest";
         const string PlaceRequestMessage = "Blockiverse.Survival.PlaceRequest";
+        const string StripLogRequestMessage = "Blockiverse.Survival.StripLogRequest";
         const string CraftRequestMessage = "Blockiverse.Survival.CraftRequest";
         const string CrateTransferRequestMessage = "Blockiverse.Survival.CrateTransferRequest";
         const string CommandResultMessage = "Blockiverse.Survival.CommandResult";
@@ -221,6 +225,8 @@ namespace Blockiverse.Gameplay
         public int ReceivedHarvestRequestCount { get; private set; }
         public int ReceivedPlaceRequestCount { get; private set; }
         public int AcceptedPlaceCount { get; private set; }
+        public int ReceivedStripLogRequestCount { get; private set; }
+        public int AcceptedStripLogCount { get; private set; }
         public int ReceivedCraftRequestCount { get; private set; }
         public int ReceivedCrateTransferRequestCount { get; private set; }
         public int AcceptedHarvestCount { get; private set; }
@@ -358,6 +364,52 @@ namespace Blockiverse.Gameplay
             }
 
             LastCommandResult = ProcessHostPlace(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
+            return LastCommandResult;
+        }
+
+        // The survival "use" action with the held item: strips a targeted branchwood_log into
+        // smooth_branchwood when a Feller is held (the §7.4 Feller alternate action), otherwise places
+        // the held block into the adjacent cell. The choice lives here (not the VR bridge) because it
+        // depends on the held item's tool/block mapping, which is Survival data; the host re-validates.
+        public SurvivalCommandResult TrySubmitUse(BlockPosition targetBlock, BlockPosition placement, out bool requestSentToHost)
+        {
+            ItemStack held = EquippedItem;
+            bool heldIsFeller = !held.IsEmpty &&
+                itemRegistry.TryGet(held.ItemId, out ItemDefinition def) &&
+                def.ToolClass == HarvestToolKind.Feller;
+
+            return heldIsFeller
+                ? TrySubmitStripLog(targetBlock, out requestSentToHost, SelectedHotbarSlotIndex)
+                : TrySubmitPlace(placement, out requestSentToHost, SelectedHotbarSlotIndex);
+        }
+
+        // Feller strip-log: turns a targeted branchwood_log into smooth_branchwood in place (no drop),
+        // consuming Feller durability. Server-authoritative like harvest/place.
+        public SurvivalCommandResult TrySubmitStripLog(
+            BlockPosition position,
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
+        {
+            requestSentToHost = false;
+
+            if (IsActiveClientOnly())
+            {
+                if (chunkAuthoritySync != null && !chunkAuthoritySync.HasHostGenerationSnapshotForSession)
+                {
+                    LastCommandResult = SurvivalCommandResult.Reject(
+                        SurvivalCommandKind.StripLog,
+                        SurvivalCommandFailureReason.AwaitingHostWorldSnapshot);
+                    return LastCommandResult;
+                }
+
+                uint requestId = AllocateCommandRequestId();
+                SendStripLogRequest(requestId, position, equippedSlotIndex);
+                requestSentToHost = true;
+                LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.StripLog, requestId);
+                return LastCommandResult;
+            }
+
+            LastCommandResult = ProcessHostStripLog(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
             return LastCommandResult;
         }
 
@@ -566,6 +618,77 @@ namespace Blockiverse.Gameplay
                 SurvivalCommandKind.PlaceBlock,
                 requestId,
                 new ItemStack(held.ItemId, 1));
+            SendInventorySnapshot(clientId);
+            SendCommandResult(clientId, accepted, sendResponse);
+            RefreshLocalInventoryReference();
+            LastCommandResult = accepted;
+            return accepted;
+        }
+
+        SurvivalCommandResult ProcessHostStripLog(
+            ulong clientId,
+            uint requestId,
+            BlockPosition position,
+            int equippedSlotIndex,
+            bool sendResponse)
+        {
+            ReceivedStripLogRequestCount++;
+
+            if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.StripLog, sendResponse, out SurvivalCommandResult duplicate))
+                return duplicate;
+
+            Inventory inventory = GetInventory(clientId);
+
+            // The held tool is read from the host-owned slot, never trusted from the client: a Feller is
+            // required, and the target must be a branchwood_log.
+            ItemStack held = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount
+                ? inventory.GetSlot(equippedSlotIndex)
+                : ItemStack.Empty;
+
+            bool heldIsFeller = !held.IsEmpty &&
+                itemRegistry.TryGet(held.ItemId, out ItemDefinition def) &&
+                def.ToolClass == HarvestToolKind.Feller;
+
+            if (!heldIsFeller || ResolveWorld().GetBlock(position) != BlockRegistry.BranchwoodLog)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.StripLog,
+                    SurvivalCommandFailureReason.NotStrippable,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
+                new BlockMutationRequest(clientId, position, BlockRegistry.SmoothBranchwood, BlockRegistry.BranchwoodLog),
+                out _,
+                out _);
+
+            if (!mutation.Accepted)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.StripLog,
+                    SurvivalCommandFailureReason.StripRejected,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            // Strip-log costs Feller durability (no item drop — the block converts in place).
+            if (equippedSlotIndex >= 0)
+            {
+                ItemStack serverSlot = inventory.GetSlot(equippedSlotIndex);
+                if (!serverSlot.IsEmpty && serverSlot.Durability > 0)
+                {
+                    int remaining = serverSlot.Durability - 1;
+                    inventory.SetSlot(equippedSlotIndex, remaining > 0
+                        ? serverSlot.WithDurability(remaining)
+                        : ItemStack.Empty);
+                }
+            }
+
+            AcceptedStripLogCount++;
+            SurvivalCommandResult accepted = SurvivalCommandResult.Accept(SurvivalCommandKind.StripLog, requestId);
             SendInventorySnapshot(clientId);
             SendCommandResult(clientId, accepted, sendResponse);
             RefreshLocalInventoryReference();
@@ -798,6 +921,41 @@ namespace Blockiverse.Gameplay
             BlockPosition position = ReadBlockPosition(ref reader);
             reader.ReadValueSafe(out int equippedSlotIndex);
             ProcessHostPlace(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+        }
+
+        void SendStripLogRequest(uint requestId, BlockPosition position, int equippedSlotIndex)
+        {
+            NetworkManager networkManager = ResolveNetworkManager();
+            RegisterMessageHandlers();
+            pendingCommandRequests[requestId] = SurvivalCommandKind.StripLog;
+            LastSentCommandRequestId = requestId;
+            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
+
+            try
+            {
+                writer.WriteValueSafe(requestId);
+                WriteBlockPosition(ref writer, position);
+                writer.WriteValueSafe(equippedSlotIndex);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    StripLogRequestMessage,
+                    NetworkManager.ServerClientId,
+                    writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        void HandleStripLogRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!CanProcessHostRequests())
+                return;
+
+            reader.ReadValueSafe(out uint requestId);
+            BlockPosition position = ReadBlockPosition(ref reader);
+            reader.ReadValueSafe(out int equippedSlotIndex);
+            ProcessHostStripLog(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
         }
 
         void HandleCraftRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -1154,6 +1312,7 @@ namespace Blockiverse.Gameplay
 
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(HarvestRequestMessage, HandleHarvestRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlaceRequestMessage, HandlePlaceRequestMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(StripLogRequestMessage, HandleStripLogRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CraftRequestMessage, HandleCraftRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CrateTransferRequestMessage, HandleCrateTransferRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CommandResultMessage, HandleCommandResultMessage);
@@ -1174,6 +1333,7 @@ namespace Blockiverse.Gameplay
 
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(HarvestRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlaceRequestMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(StripLogRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CraftRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CrateTransferRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CommandResultMessage);

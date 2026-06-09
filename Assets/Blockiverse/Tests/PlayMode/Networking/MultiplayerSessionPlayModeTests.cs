@@ -1361,6 +1361,73 @@ namespace Blockiverse.Tests.Networking.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator NetworkedFellerStripLogConvertsBranchwoodAuthoritatively()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Strip World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Strip World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6112, groundHeight: 2));
+
+            var logPosition = new BlockPosition(2, 4, 2);
+            hostWorldManager.World.SetBlock(logPosition, BlockRegistry.BranchwoodLog);
+
+            MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientChunkSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
+
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for strip-log.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for strip-log.");
+
+            yield return WaitFor(
+                () => clientChunkSync.HasHostGenerationSnapshotForSession &&
+                      clientSurvivalSync.ReceivedInventorySnapshotCount > 0,
+                "Client did not receive host-owned survival and world snapshots.");
+
+            // Seed the host-authoritative copy of the client's inventory with a Feller in a slot.
+            ulong clientId = clientChunkSync.CurrentBoundary.LocalClientId;
+            const int fellerSlotIndex = 0;
+            hostSurvivalSync.GetInventory(clientId).SetSlot(fellerSlotIndex, new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(10));
+
+            SurvivalCommandResult strip = clientSurvivalSync.TrySubmitStripLog(
+                logPosition,
+                out bool stripSentToHost,
+                fellerSlotIndex);
+
+            Assert.That(stripSentToHost, Is.True);
+            Assert.That(strip.CommandKind, Is.EqualTo(SurvivalCommandKind.StripLog));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(logPosition) == BlockRegistry.SmoothBranchwood &&
+                      clientWorldManager.World.GetBlock(logPosition) == BlockRegistry.SmoothBranchwood &&
+                      hostSurvivalSync.GetInventory(clientId).GetSlot(fellerSlotIndex).Durability == 9,
+                "Feller strip-log did not convert the log to smooth_branchwood and spend durability.");
+
+            Assert.That(hostSurvivalSync.AcceptedStripLogCount, Is.EqualTo(1));
+            Assert.That(clientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+        }
+
+        [UnityTest]
         public IEnumerator SurvivalHudPanelsRouteCraftAndCrateThroughAuthoritativeSync()
         {
             yield return LoadMultiplayerTestScene();

@@ -195,12 +195,13 @@ namespace Blockiverse.VR
             if (!TryGetTarget(out BlockPosition target, out Vector3 normal))
                 return;
 
-            // Survival mode: place the held block into the adjacent cell, consuming one from the
-            // inventory (authoritative). Creative mode: free placement of the selected catalog block.
+            // Survival mode: use the held item authoritatively — place the held block into the adjacent
+            // cell, or (Feller held on a branchwood_log) strip the log into smooth_branchwood. The sync
+            // decides based on the held item. Creative mode: free placement of the selected catalog block.
             if (SurvivalInteractionActive)
             {
                 BlockPosition placement = CreativeInteractionController.ComputePlacementPosition(target, normal);
-                survivalSync.TrySubmitPlace(placement, out _);
+                survivalSync.TrySubmitUse(target, placement, out _);
             }
             else
             {
