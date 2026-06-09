@@ -120,10 +120,21 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
-            worldManager.RestoreWeatherState(result.Data.WeatherState);
-            worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
-            RestoreContainers(result.Data.Containers);
+            // Suppress container auto-loot while applying the save: loaded block deltas that remove
+            // crates must not dump their (generated) loot into the player. The authoritative container
+            // contents are restored explicitly below.
+            worldManager.SuppressContainerAutoLoot = true;
+            try
+            {
+                result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
+                worldManager.RestoreWeatherState(result.Data.WeatherState);
+                worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
+                RestoreContainers(result.Data.Containers);
+            }
+            finally
+            {
+                worldManager.SuppressContainerAutoLoot = false;
+            }
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(

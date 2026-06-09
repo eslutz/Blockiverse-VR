@@ -73,6 +73,11 @@ namespace Blockiverse.Gameplay
         ContainerInventoryStore containerStore;
         ItemRegistry containerItemRegistry;
         IReadOnlyList<StructureContainerLoot> pendingContainerLoot;
+        // The inventory that receives container loot when a crate is broken (the active player's
+        // survival inventory). When a save is being applied, auto-loot is suppressed so loaded block
+        // deltas that remove crates don't dump loot into the player.
+        Inventory activePlayerInventory;
+        bool suppressContainerAutoLoot;
 
         public BlockRegistry Registry { get; private set; }
         public WorldGenerationSettings Settings { get; private set; }
@@ -82,6 +87,22 @@ namespace Blockiverse.Gameplay
 
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
         public WorldTimeClock WorldTimeClock => worldTimeClock;
+
+        // Evaluates the current environment (weather-derived temperature, fog, precipitation, storm,
+        // cloud coverage) at the given altitude. Returns false until the weather service exists.
+        // Lets runtime systems (lighting, fog, future VFX/audio) react to live weather.
+        public bool TryEvaluateEnvironment(int altitudeY, out EnvironmentState environment)
+        {
+            if (weatherService == null)
+            {
+                environment = default;
+                return false;
+            }
+
+            float normalizedTime = worldTimeClock != null ? worldTimeClock.NormalizedTime : 0.25f;
+            environment = weatherService.Evaluate(normalizedTime, altitudeY);
+            return true;
+        }
 
         // Full weather snapshot: state + tick accumulator + RNG position. The RNG position is
         // what keeps a late-joining client in deterministic lockstep with the host's weather.
@@ -322,10 +343,15 @@ namespace Blockiverse.Gameplay
             else if (b == BlockRegistry.Air && IsWildRegrowthPlant(change.PreviousBlock))
                 vegetationService?.MarkWildHarvest(change.PreviousBlock, change.Position, CurrentWorldTick);
 
-            // A container block that is removed (broken, or replaced by a loaded save delta) no longer
-            // has contents — drop its store entry so the store stays consistent with the world.
-            if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b))
-                containerStore?.Remove(change.Position);
+            // A container block that is removed (broken, or replaced by a loaded save delta): deposit
+            // its contents into the active player inventory (best effort) then drop the store entry so
+            // the store stays consistent with the world. Auto-loot is skipped while applying a save.
+            if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b) && containerStore != null)
+            {
+                if (!suppressContainerAutoLoot && activePlayerInventory != null)
+                    containerStore.TransferAllInto(change.Position, activePlayerInventory);
+                containerStore.Remove(change.Position);
+            }
         }
 
         // Wild (non-cultivated) plants that the vegetation service restores after a regrow delay.
@@ -364,6 +390,19 @@ namespace Blockiverse.Gameplay
 
         // The container contents store (structure loot crates). May be null before a world is loaded.
         public ContainerInventoryStore ContainerStore => containerStore;
+
+        // The inventory that receives loot when a player breaks a container. Set by the survival
+        // runtime (the active player's inventory). Null disables auto-loot.
+        public Inventory ActivePlayerInventory => activePlayerInventory;
+        public void SetActivePlayerInventory(Inventory inventory) => activePlayerInventory = inventory;
+
+        // Persistence sets this while applying a save so loaded crate-removal deltas don't dump loot
+        // into the player; cleared once the saved container store has been restored.
+        public bool SuppressContainerAutoLoot
+        {
+            get => suppressContainerAutoLoot;
+            set => suppressContainerAutoLoot = value;
+        }
 
         // Returns the inventory of the container at a position (for a container UI), or null if none.
         public Inventory OpenContainer(BlockPosition position) => containerStore?.GetOrNull(position);

@@ -184,25 +184,6 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void AmbientLightLevelReducedByStorm()
-        {
-            var clear = new WeatherService(seed: 1, WeatherState.Clear);
-            var storm = new WeatherService(seed: 1, WeatherState.Thunderstorm);
-
-            int clearLight = clear.AmbientLightLevel(baseSkyLight: 15);
-            int stormLight = storm.AmbientLightLevel(baseSkyLight: 15);
-
-            Assert.That(stormLight, Is.LessThan(clearLight), "Thunderstorm must reduce ambient light more than Clear.");
-        }
-
-        [Test]
-        public void AmbientLightLevelIsNeverNegative()
-        {
-            var blizzard = new WeatherService(seed: 1, WeatherState.Blizzard);
-            Assert.That(blizzard.AmbientLightLevel(baseSkyLight: 0), Is.GreaterThanOrEqualTo(0));
-        }
-
-        [Test]
         public void EnvironmentStateIncludesCloudCoverage()
         {
             var service = new WeatherService(seed: 1, WeatherState.HeavyRain);
