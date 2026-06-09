@@ -25,8 +25,8 @@ namespace Blockiverse.Tests.EditMode
         public void ActionMenuSetsTitleAndLabelsAndEmitsActionOnClick()
         {
             BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("PauseMenu");
-            Button[] buttons = CreateButtons(6);
-            TMP_Text[] labels = CreateTexts(6);
+            Button[] buttons = CreateButtons(7);
+            TMP_Text[] labels = CreateTexts(7);
             TMP_Text title = CreateText("Title");
             menu.Configure(title, buttons, labels);
 
@@ -34,7 +34,8 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(title.text, Is.EqualTo("Paused"));
             Assert.That(labels[0].text, Is.EqualTo("Resume"));
-            Assert.That(labels[4].text, Is.EqualTo("Return to Title"));
+            Assert.That(labels[2].text, Is.EqualTo("Switch Survival/Creative"));
+            Assert.That(labels[5].text, Is.EqualTo("Return to Title"));
 
             string invoked = null;
             menu.ActionInvoked += id => invoked = id;
@@ -42,7 +43,10 @@ namespace Blockiverse.Tests.EditMode
             buttons[0].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseResume));
 
-            buttons[4].onClick.Invoke();
+            buttons[2].onClick.Invoke();
+            Assert.That(invoked, Is.EqualTo(MenuActions.PauseToggleMode));
+
+            buttons[5].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseReturnToTitle));
         }
 

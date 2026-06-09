@@ -1290,6 +1290,76 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(secondClientSurvivalSync.PendingCommandRequestCount, Is.Zero);
         }
 
+        [UnityTest]
+        public IEnumerator NetworkedSurvivalPlaceConsumesHeldBlockAuthoritatively()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Place World");
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+                "Client Place World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 5112, groundHeight: 2));
+
+            var placePosition = new BlockPosition(2, 4, 2); // an air cell above the ground band
+            Assert.That(hostWorldManager.World.GetBlock(placePosition), Is.EqualTo(BlockRegistry.Air));
+
+            MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientChunkSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
+
+            ushort port = NextPort();
+            var testConfig = new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port);
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for survival place.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for survival place.");
+
+            yield return WaitFor(
+                () => clientChunkSync.HasHostGenerationSnapshotForSession &&
+                      clientSurvivalSync.ReceivedInventorySnapshotCount > 0,
+                "Client did not receive host-owned survival and world snapshots.");
+
+            // Seed the host-authoritative copy of the client's inventory with a placeable block item.
+            ulong clientId = clientChunkSync.CurrentBoundary.LocalClientId;
+            const int blockSlotIndex = 0;
+            hostSurvivalSync.GetInventory(clientId).SetSlot(blockSlotIndex, new ItemStack(ItemId.BranchwoodLog, 2));
+
+            SurvivalCommandResult place = clientSurvivalSync.TrySubmitPlace(
+                placePosition,
+                out bool placeSentToHost,
+                blockSlotIndex);
+
+            Assert.That(placeSentToHost, Is.True);
+            Assert.That(place.PendingHostValidation, Is.True);
+            Assert.That(place.CommandKind, Is.EqualTo(SurvivalCommandKind.PlaceBlock));
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(placePosition) == BlockRegistry.BranchwoodLog &&
+                      clientWorldManager.World.GetBlock(placePosition) == BlockRegistry.BranchwoodLog &&
+                      hostSurvivalSync.GetInventory(clientId).CountOf(ItemId.BranchwoodLog) == 1,
+                "Host did not place the held block authoritatively and consume one item.");
+
+            Assert.That(hostSurvivalSync.AcceptedPlaceCount, Is.EqualTo(1));
+            Assert.That(clientSurvivalSync.PendingCommandRequestCount, Is.Zero);
+        }
+
         [Test]
         public void HostRejectsUnknownCrateTransferItemWithoutThrowing()
         {

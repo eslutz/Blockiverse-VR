@@ -52,6 +52,14 @@ namespace Blockiverse.UI
             var worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             worldManager?.SetActivePlayerInventory(Inventory);
 
+            // Mirror the selected hotbar slot into the survival sync so VR break/place use the held item.
+            if (survivalSync != null && inventoryPanel != null)
+            {
+                survivalSync.SelectedHotbarSlotIndex = selectedHotbarSlotIndex;
+                inventoryPanel.SelectionChanged -= survivalSync.SetSelectedHotbarSlot;
+                inventoryPanel.SelectionChanged += survivalSync.SetSelectedHotbarSlot;
+            }
+
             inventoryPanel?.Bind(Inventory, itemRegistry, selectedHotbarSlotIndex);
             craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
             healthPanel?.Bind(Vitals);

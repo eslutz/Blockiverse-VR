@@ -25,6 +25,10 @@ namespace Blockiverse.UI
 
         public int SelectedHotbarSlotIndex => selectedHotbarSlotIndex;
 
+        // Raised when the selected hotbar slot changes, so the survival runtime can mirror the held
+        // tool/block for harvest and placement.
+        public event Action<int> SelectionChanged;
+
         public void Configure(TMP_Text[] targetSlotLabels, TMP_Text targetSelectedHotbarLabel)
         {
             Configure(null, targetSlotLabels, targetSelectedHotbarLabel);
@@ -61,6 +65,7 @@ namespace Blockiverse.UI
 
             selectedHotbarSlotIndex = slotIndex;
             Refresh();
+            SelectionChanged?.Invoke(selectedHotbarSlotIndex);
         }
 
         public void Refresh()

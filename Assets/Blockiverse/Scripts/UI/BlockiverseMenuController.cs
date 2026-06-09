@@ -168,6 +168,12 @@ namespace Blockiverse.UI
                 case MenuActions.PauseSaveGame:
                     ActionRequested?.Invoke(actionId);
                     break;
+                case MenuActions.PauseToggleMode:
+                    FindFirstObjectByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include)
+                        ?.ToggleSurvivalCreativeMode();
+                    ActionRequested?.Invoke(actionId);
+                    router.PopScreen();
+                    break;
                 case MenuActions.PauseSettings:
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
                     break;

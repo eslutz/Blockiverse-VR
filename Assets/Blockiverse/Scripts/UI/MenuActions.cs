@@ -30,6 +30,7 @@ namespace Blockiverse.UI
         // ── Pause actions (§6.7) ─────────────────────────────────────────────
         public const string PauseResume = "pause.resume";
         public const string PauseSaveGame = "pause.save_game";
+        public const string PauseToggleMode = "pause.toggle_survival_creative";
         public const string PauseSettings = "pause.open_settings";
         public const string PauseControls = "pause.open_controls";
         public const string PauseReturnToTitle = "pause.return_to_title_requested";
@@ -75,6 +76,7 @@ namespace Blockiverse.UI
         {
             new MenuAction(PauseResume, "Resume"),
             new MenuAction(PauseSaveGame, "Save Game"),
+            new MenuAction(PauseToggleMode, "Switch Survival/Creative"),
             new MenuAction(PauseSettings, "Settings"),
             new MenuAction(PauseControls, "Controls"),
             new MenuAction(PauseReturnToTitle, "Return to Title"),
