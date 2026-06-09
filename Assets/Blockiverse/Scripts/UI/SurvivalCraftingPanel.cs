@@ -131,8 +131,9 @@ namespace Blockiverse.UI
             if (recipeBook == null)
                 return recipes;
 
+            // Registration order (basics → stations → smelting → tools → utility) keeps early-game
+            // recipes at the top of the limited recipe slots, which alphabetical order would bury.
             recipes.AddRange(recipeBook.All);
-            recipes.Sort((left, right) => string.Compare(left.Output.ItemId.Value, right.Output.ItemId.Value, StringComparison.OrdinalIgnoreCase));
             return recipes;
         }
 

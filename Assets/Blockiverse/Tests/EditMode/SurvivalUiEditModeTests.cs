@@ -73,14 +73,15 @@ namespace Blockiverse.Tests.EditMode
             panel.Configure(recipeLabels, statusLabel);
             panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
 
-            Assert.That(recipeLabels[0].text, Does.Contain("Build Table x1"));
+            // Work Plank is the first handcraft recipe (§9.1): branchwood_log ×1 → work_plank ×6.
+            Assert.That(recipeLabels[0].text, Does.Contain("Work Plank x6"));
 
-            CraftingResult result = panel.TryCraftByOutput(ItemId.BuildTable);
+            CraftingResult result = panel.TryCraftByOutput(ItemId.WorkPlank);
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
-            Assert.That(inventory.CountOf(ItemId.BuildTable), Is.EqualTo(1));
-            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
-            Assert.That(statusLabel.text, Is.EqualTo("Crafted Build Table x1"));
+            Assert.That(inventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6));
+            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(3));
+            Assert.That(statusLabel.text, Is.EqualTo("Crafted Work Plank x6"));
         }
 
         [Test]
@@ -100,8 +101,9 @@ namespace Blockiverse.Tests.EditMode
 
             recipeButtons[0].onClick.Invoke();
 
-            Assert.That(inventory.CountOf(ItemId.BuildTable), Is.EqualTo(1));
-            Assert.That(statusLabel.text, Is.EqualTo("Crafted Build Table x1"));
+            // Button 0 is bound to the first recipe (Work Plank).
+            Assert.That(inventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6));
+            Assert.That(statusLabel.text, Is.EqualTo("Crafted Work Plank x6"));
         }
 
         [Test]
@@ -158,7 +160,8 @@ namespace Blockiverse.Tests.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
             var inventory = new Inventory(itemRegistry);
-            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 4));
+            // One log allows exactly one Work Plank craft; the second attempt fails.
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 1));
             TMP_Text[] recipeLabels = CreateTexts(4);
             TMP_Text statusLabel = CreateText("CraftStatus");
             SurvivalCraftingPanel panel = CreateComponent<SurvivalCraftingPanel>("CraftingPanel");
@@ -176,8 +179,8 @@ namespace Blockiverse.Tests.EditMode
             panel.ConfigureFeedback(audioCuePlayer, haptics);
             panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
 
-            CraftingResult success = panel.TryCraftByOutput(ItemId.BuildTable);
-            CraftingResult failure = panel.TryCraftByOutput(ItemId.BuildTable);
+            CraftingResult success = panel.TryCraftByOutput(ItemId.WorkPlank);
+            CraftingResult failure = panel.TryCraftByOutput(ItemId.WorkPlank);
 
             Assert.That(success.Succeeded, Is.True);
             Assert.That(failure.Succeeded, Is.False);

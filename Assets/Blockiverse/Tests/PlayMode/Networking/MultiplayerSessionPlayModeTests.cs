@@ -1227,19 +1227,20 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 1,
                 "Host did not grant harvested coalstone to the requesting client.");
 
-            SurvivalCommandResult craftTorchbud = firstClientSurvivalSync.TrySubmitCraft(
-                ItemId.Glowwick,
+            // Craft is server-authoritative: Work Plank is the canonical handcraft recipe
+            // (branchwood_log ×1 → work_plank ×6, §9.1) and is achievable from the harvested log.
+            SurvivalCommandResult craftPlanks = firstClientSurvivalSync.TrySubmitCraft(
+                ItemId.WorkPlank,
                 CraftingStation.BuildTable,
                 out bool craftSentToHost);
 
             Assert.That(craftSentToHost, Is.True);
-            Assert.That(craftTorchbud.PendingHostValidation, Is.True);
+            Assert.That(craftPlanks.PendingHostValidation, Is.True);
 
             yield return WaitFor(
-                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Glowwick) == 4 &&
+                () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.WorkPlank) == 6 &&
                       firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 0 &&
-                      firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 0 &&
-                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.Glowwick) == 4,
+                      hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.WorkPlank) == 6,
                 "Host did not validate crafting consistently for the requesting client.");
 
             SurvivalCommandResult crateTimberHarvest = firstClientSurvivalSync.TrySubmitHarvest(
