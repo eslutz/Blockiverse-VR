@@ -349,7 +349,7 @@ namespace Blockiverse.Gameplay
             if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b) && containerStore != null)
             {
                 if (!suppressContainerAutoLoot && activePlayerInventory != null)
-                    containerStore.TransferAllInto(change.Position, activePlayerInventory);
+                    TryLootContainerInto(change.Position, activePlayerInventory);
                 containerStore.Remove(change.Position);
             }
         }
@@ -404,11 +404,9 @@ namespace Blockiverse.Gameplay
             set => suppressContainerAutoLoot = value;
         }
 
-        // Returns the inventory of the container at a position (for a container UI), or null if none.
-        public Inventory OpenContainer(BlockPosition position) => containerStore?.GetOrNull(position);
-
         // Moves all contents from the container at a position into the target inventory. Returns true
-        // when the container was fully emptied. Safe to call on a position with no container.
+        // when the container was fully emptied. Safe to call on a position with no container. Used by
+        // the break-to-loot path; a future container-open UI can reuse it or read ContainerStore.
         public bool TryLootContainerInto(BlockPosition position, Inventory target)
         {
             if (containerStore == null || target == null)
