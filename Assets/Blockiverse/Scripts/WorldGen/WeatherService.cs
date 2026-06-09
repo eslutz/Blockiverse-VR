@@ -73,6 +73,16 @@ namespace Blockiverse.WorldGen
 
         public WeatherState CurrentState => currentState;
 
+        // Ticks the service has accumulated in the current state — used for environment sync snapshots.
+        public int TicksInCurrentState => ticksInCurrentState;
+
+        // Restore state received from a host snapshot (multiplayer late-join / reconnect).
+        public void RestoreState(WeatherState state, int ticks)
+        {
+            currentState = state;
+            ticksInCurrentState = Math.Max(0, ticks);
+        }
+
         public float CloudCoverage => TargetCloudCoverage(currentState);
 
         // Returns the ambient light level (0–15) after applying weather penalties to the base sky light.

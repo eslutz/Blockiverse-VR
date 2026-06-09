@@ -70,6 +70,26 @@ namespace Blockiverse.Gameplay
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
         public WorldTimeClock WorldTimeClock => worldTimeClock;
 
+        // Returns the weather state + accumulated ticks needed for a network snapshot.
+        // Returns (Clear, 0) when the weather service is not yet initialized.
+        public (WeatherState state, int ticks) GetWeatherSyncState() =>
+            weatherService != null
+                ? (weatherService.CurrentState, weatherService.TicksInCurrentState)
+                : (WeatherState.Clear, 0);
+
+        // Restores weather state received from a host snapshot — preserves the existing
+        // RNG stream by calling RestoreState rather than recreating the service.
+        public void RestoreWeatherSyncState(WeatherState state, int ticks)
+        {
+            if (weatherService == null)
+            {
+                // Service not yet created; store for deferred apply in ConfigureEnvironmentServices.
+                pendingWeatherState = state.ToString();
+                return;
+            }
+            weatherService.RestoreState(state, ticks);
+        }
+
         public void RestoreWeatherState(string weatherStateString)
         {
             if (string.IsNullOrEmpty(weatherStateString))

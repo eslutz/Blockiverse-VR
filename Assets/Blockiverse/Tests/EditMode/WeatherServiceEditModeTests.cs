@@ -237,5 +237,36 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(withStorm, Is.LessThan(clearSky));
         }
+
+        // ── M8-4: Environment snapshot sync ──────────────────────────────────
+
+        [Test]
+        public void RestoreStatePreservesWeatherStateAndTicks()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            service.Tick(3000); // accumulate some ticks
+
+            service.RestoreState(WeatherState.Thunderstorm, 800);
+
+            Assert.That(service.CurrentState, Is.EqualTo(WeatherState.Thunderstorm));
+            Assert.That(service.TicksInCurrentState, Is.EqualTo(800));
+        }
+
+        [Test]
+        public void RestoreStateClampsNegativeTicksToZero()
+        {
+            var service = new WeatherService(seed: 1, WeatherState.Clear);
+            service.RestoreState(WeatherState.Fog, -500);
+            Assert.That(service.TicksInCurrentState, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void TicksInCurrentStateMatchesAccumulatedTicks()
+        {
+            var service = new WeatherService(seed: 99, WeatherState.Clear);
+            service.Tick(2000);
+            // Clear min duration is 6000; no transition yet, so accumulated = 2000.
+            Assert.That(service.TicksInCurrentState, Is.EqualTo(2000));
+        }
     }
 }
