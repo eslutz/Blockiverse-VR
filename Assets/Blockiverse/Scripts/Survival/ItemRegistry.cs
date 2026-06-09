@@ -49,7 +49,7 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.BranchwoodLog, "Branchwood Log", ItemKind.Resource, BlockStackSize, BlockRegistry.BranchwoodLog));
             registry.Register(new ItemDefinition(ItemId.Leafmoss, "Leafmoss", ItemKind.Resource, BlockStackSize, BlockRegistry.Leafmoss));
             registry.Register(new ItemDefinition(ItemId.Thornbrush, "Thornbrush", ItemKind.Resource, BlockStackSize, BlockRegistry.Thornbrush));
-            registry.Register(new ItemDefinition(ItemId.Reedgrass, "Reedgrass", ItemKind.Resource, BlockStackSize, BlockRegistry.Reedgrass));
+            // Reedgrass drops reed_fiber (§3); the crop blocks' drops are aliased below.
 
             // ── Block items (crafted) ─────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.WorkPlank, "Work Plank", ItemKind.Resource, BlockStackSize, BlockRegistry.WorkPlank));
@@ -85,15 +85,6 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.Brightsalt,     "Brightsalt",       ItemKind.Resource, OreStackSize,    BlockRegistry.BrightsaltCrust));
             registry.Register(new ItemDefinition(ItemId.Shellgrit,      "Shellgrit",        ItemKind.Resource, OreStackSize,    BlockRegistry.ShellgritBed));
             registry.Register(new ItemDefinition(ItemId.ResinKnot,      "Resin Knot",       ItemKind.Resource, BlockStackSize,  BlockRegistry.ResinKnot));
-            registry.Register(new ItemDefinition(ItemId.Berrybush,      "Berrybush",        ItemKind.Resource, FoodStackSize,   BlockRegistry.Berrybush));
-            registry.Register(new ItemDefinition(ItemId.GrainStalk,     "Grain Stalk",      ItemKind.Resource, FoodStackSize,   BlockRegistry.GrainStalk));
-
-            // Grown crop stage blocks share the same drop as their base block
-            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S1, ItemId.GrainStalk);
-            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S2, ItemId.GrainStalk);
-            registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.Berrybush);
-            registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.Berrybush);
-            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.Reedgrass);
             registry.Register(new ItemDefinition(ItemId.RawUmbralite,   "Raw Umbralite",    ItemKind.Resource, CrystalStackSize, BlockRegistry.UmbraliteNode));
             registry.Register(new ItemDefinition(ItemId.StaropalShard,  "Staropal Shard",   ItemKind.Resource, CrystalStackSize, BlockRegistry.StaropalGeode));
 
@@ -138,6 +129,31 @@ namespace Blockiverse.Survival
             RegisterToolTier(registry, "ironroot",   "Ironroot",   tier: 5, baseDurability: 550);
             RegisterToolTier(registry, "deepsteel",  "Deepsteel",  tier: 6, baseDurability: 1000);
             RegisterToolTier(registry, "starforged", "Starforged", tier: 7, baseDurability: 1800);
+
+            // ── Farming: canonical crop drops, seeds, and stage aliases (§3, §11.2) ─
+            registry.Register(new ItemDefinition(ItemId.GrainBundle, "Grain Bundle",  ItemKind.Resource, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.BerryCluster, "Berry Cluster", ItemKind.Resource, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.MeadowSeed,   "Meadow Seed",   ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.DrygrassSeed, "Drygrass Seed", ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.ReedCutting,  "Reed Cutting",  ItemKind.Resource, BlockStackSize));
+            registry.Register(new ItemDefinition(ItemId.BerrySeed,    "Berry Seed",    ItemKind.Resource, BlockStackSize));
+
+            // Every grain/berry/reed stage (base + grown) drops the canonical crop resource.
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk,    ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S1, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S2, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S3, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.GrainStalk_S4, ItemId.GrainBundle);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush,     ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S1,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S2,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S3,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S4,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Berrybush_S5,  ItemId.BerryCluster);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass,     ItemId.ReedFiber);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S1,  ItemId.ReedFiber);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S2,  ItemId.ReedFiber);
+            registry.RegisterDropAlias(BlockRegistry.Reedgrass_S3,  ItemId.ReedFiber);
 
             // ── Consumables ───────────────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));

@@ -80,6 +80,13 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Sapling.Value,            58 },
             { BlockRegistry.Sapling_S1.Value,         59 },
             { BlockRegistry.Sapling_S2.Value,         60 },
+            { BlockRegistry.GrainStalk_S3.Value,      61 },
+            { BlockRegistry.GrainStalk_S4.Value,      62 },
+            { BlockRegistry.Berrybush_S3.Value,       63 },
+            { BlockRegistry.Berrybush_S4.Value,       64 },
+            { BlockRegistry.Berrybush_S5.Value,       65 },
+            { BlockRegistry.Reedgrass_S2.Value,       66 },
+            { BlockRegistry.Reedgrass_S3.Value,       67 },
         };
 
         public static Rect GetTileRect(BlockId blockId)

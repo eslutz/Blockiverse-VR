@@ -131,10 +131,17 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.Berrybush,          HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Berrybush_S1,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Berrybush_S2,       HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Berrybush_S3,       HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Berrybush_S4,       HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Berrybush_S5,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.GrainStalk,         HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.GrainStalk_S1,      HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.GrainStalk_S2,      HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.GrainStalk_S3,      HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.GrainStalk_S4,      HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Reedgrass_S1,       HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass_S2,       HarvestToolKind.Sickle);
+            rules.RegisterForBlock(BlockRegistry.Reedgrass_S3,       HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.UmbraliteNode,      HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.StaropalGeode,      HarvestToolKind.Delver);
 

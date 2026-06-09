@@ -74,6 +74,14 @@ namespace Blockiverse.Survival
         public static readonly ItemId RawUmbralite         = new("raw_umbralite");
         public static readonly ItemId StaropalShard        = new("staropal_shard");
 
+        // ── Farming drops and seeds (§3, §11.2) ───────────────────────────────
+        public static readonly ItemId GrainBundle          = new("grain_bundle");
+        public static readonly ItemId BerryCluster         = new("berry_cluster");
+        public static readonly ItemId MeadowSeed           = new("meadow_seed");
+        public static readonly ItemId DrygrassSeed         = new("drygrass_seed");
+        public static readonly ItemId ReedCutting          = new("reed_cutting");
+        public static readonly ItemId BerrySeed            = new("berry_seed");
+
         // ── Crafted intermediates (work parts, smelted bars, §9) ──────────────
         public static readonly ItemId StoutPole            = new("stout_pole");
         public static readonly ItemId FiberCord            = new("fiber_cord");

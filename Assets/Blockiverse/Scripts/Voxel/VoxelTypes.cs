@@ -218,6 +218,15 @@ namespace Blockiverse.Voxel
         public static readonly BlockId Sapling_S1           = new(60);
         public static readonly BlockId Sapling_S2           = new(61);
 
+        // ── Additional crop growth stages (full canonical stage counts, §11.2) ─
+        public static readonly BlockId GrainStalk_S3        = new(62);
+        public static readonly BlockId GrainStalk_S4        = new(63);
+        public static readonly BlockId Berrybush_S3         = new(64);
+        public static readonly BlockId Berrybush_S4         = new(65);
+        public static readonly BlockId Berrybush_S5         = new(66);
+        public static readonly BlockId Reedgrass_S2         = new(67);
+        public static readonly BlockId Reedgrass_S3         = new(68);
+
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
 
         public static BlockRegistry CreateDefault()
@@ -299,9 +308,16 @@ namespace Blockiverse.Voxel
             // ── Crop growth stages (stage 0 = existing GrainStalk/Berrybush/Reedgrass) ─
             registry.Register(new BlockDefinition(GrainStalk_S1, "grain_stalk_s1", "Grain Stalk S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(GrainStalk_S2, "grain_stalk_s2", "Grain Stalk S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(GrainStalk_S3, "grain_stalk_s3", "Grain Stalk S3", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(GrainStalk_S4, "grain_stalk_s4", "Grain Stalk S4", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Berrybush_S1,  "berrybush_s1",   "Berrybush S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Berrybush_S2,  "berrybush_s2",   "Berrybush S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush_S3,  "berrybush_s3",   "Berrybush S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush_S4,  "berrybush_s4",   "Berrybush S4",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush_S5,  "berrybush_s5",   "Berrybush S5",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Reedgrass_S1,  "reedgrass_s1",   "Reedgrass S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Reedgrass_S2,  "reedgrass_s2",   "Reedgrass S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Reedgrass_S3,  "reedgrass_s3",   "Reedgrass S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
 
             // ── Sapling growth stages ─────────────────────────────────────────
             registry.Register(new BlockDefinition(Sapling,    "sapling",    "Sapling",    BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));

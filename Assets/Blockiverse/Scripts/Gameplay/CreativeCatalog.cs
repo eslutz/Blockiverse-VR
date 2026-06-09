@@ -91,14 +91,21 @@ namespace Blockiverse.Gameplay
                 new(BlockRegistry.Thornbrush,      CreativeCatalogCategory.Foliage),
                 new(BlockRegistry.Reedgrass,       CreativeCatalogCategory.Foliage),
                 new(BlockRegistry.Reedgrass_S1,    CreativeCatalogCategory.Foliage),
+                new(BlockRegistry.Reedgrass_S2,    CreativeCatalogCategory.Foliage),
+                new(BlockRegistry.Reedgrass_S3,    CreativeCatalogCategory.Foliage),
 
                 // Crops
                 new(BlockRegistry.GrainStalk,      CreativeCatalogCategory.Crops),
                 new(BlockRegistry.GrainStalk_S1,   CreativeCatalogCategory.Crops),
                 new(BlockRegistry.GrainStalk_S2,   CreativeCatalogCategory.Crops),
+                new(BlockRegistry.GrainStalk_S3,   CreativeCatalogCategory.Crops),
+                new(BlockRegistry.GrainStalk_S4,   CreativeCatalogCategory.Crops),
                 new(BlockRegistry.Berrybush,       CreativeCatalogCategory.Crops),
                 new(BlockRegistry.Berrybush_S1,    CreativeCatalogCategory.Crops),
                 new(BlockRegistry.Berrybush_S2,    CreativeCatalogCategory.Crops),
+                new(BlockRegistry.Berrybush_S3,    CreativeCatalogCategory.Crops),
+                new(BlockRegistry.Berrybush_S4,    CreativeCatalogCategory.Crops),
+                new(BlockRegistry.Berrybush_S5,    CreativeCatalogCategory.Crops),
 
                 // Saplings
                 new(BlockRegistry.Sapling,         CreativeCatalogCategory.Saplings),
