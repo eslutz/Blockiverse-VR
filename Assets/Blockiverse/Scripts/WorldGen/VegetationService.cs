@@ -13,6 +13,19 @@ namespace Blockiverse.WorldGen
         readonly Dictionary<BlockPosition, int> saplingTicks = new();
         int leafDecayAccumulator;
 
+        // Leaf decay works off a candidate set instead of a full-world scan per interval:
+        // seeded once from the world, then maintained incrementally as logs are removed and
+        // Leafmoss is placed. Supported leaves drop out of the set after a check and are
+        // re-marked when a nearby log disappears.
+        readonly HashSet<BlockPosition> leafDecayCandidates = new();
+        readonly List<BlockPosition> leafDecayScratch = new();
+        bool leafDecayCandidatesSeeded;
+
+        // Scratch lists reused across TickSapling calls to avoid per-tick allocations.
+        readonly List<BlockPosition> saplingRemoveScratch = new();
+        readonly List<(BlockPosition pos, int accumulated)> saplingAdvanceScratch = new();
+        readonly List<(BlockPosition pos, int value)> saplingUpdateScratch = new();
+
         Func<int, int, int> biomeResolver; // (x, z) → TerrainBiome as int; null = default Meadow
 
         public void Configure(Func<int, int, int> biomeAt)
@@ -142,9 +155,14 @@ namespace Blockiverse.WorldGen
         {
             if (ticks <= 0) return;
 
-            var toRemove  = new List<BlockPosition>();
-            var toAdvance = new List<(BlockPosition pos, int accumulated)>();
-            var toUpdate  = new List<(BlockPosition pos, int value)>();
+            // Reused scratch lists — this runs on every world tick batch, so per-call
+            // allocations would add steady GC pressure.
+            List<BlockPosition> toRemove = saplingRemoveScratch;
+            List<(BlockPosition pos, int accumulated)> toAdvance = saplingAdvanceScratch;
+            List<(BlockPosition pos, int value)> toUpdate = saplingUpdateScratch;
+            toRemove.Clear();
+            toAdvance.Clear();
+            toUpdate.Clear();
 
             foreach (var kv in saplingTicks)
             {
@@ -293,6 +311,33 @@ namespace Blockiverse.WorldGen
 
         // ── Leaf decay ───────────────────────────────────────────────────────
 
+        // Marks a single Leafmoss position for the next decay check (call when Leafmoss is placed).
+        public void MarkLeafDecayCandidate(BlockPosition position)
+        {
+            leafDecayCandidates.Add(position);
+        }
+
+        // Marks all Leafmoss within decay range of a removed log for re-checking — those leaves
+        // may have just lost their last supporting log.
+        public void MarkLeafDecayCandidates(VoxelWorld world, BlockPosition removedLogPosition)
+        {
+            int x0 = Math.Max(0, removedLogPosition.X - LeafDecayMaxDistance);
+            int x1 = Math.Min(world.Bounds.Width - 1, removedLogPosition.X + LeafDecayMaxDistance);
+            int y0 = Math.Max(0, removedLogPosition.Y - LeafDecayMaxDistance);
+            int y1 = Math.Min(world.Bounds.Height - 1, removedLogPosition.Y + LeafDecayMaxDistance);
+            int z0 = Math.Max(0, removedLogPosition.Z - LeafDecayMaxDistance);
+            int z1 = Math.Min(world.Bounds.Depth - 1, removedLogPosition.Z + LeafDecayMaxDistance);
+
+            for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+            {
+                var pos = new BlockPosition(x, y, z);
+                if (world.GetBlock(pos) == BlockRegistry.Leafmoss)
+                    leafDecayCandidates.Add(pos);
+            }
+        }
+
         public void TickLeafDecay(VoxelWorld world, int ticks)
         {
             if (ticks <= 0) return;
@@ -301,24 +346,49 @@ namespace Blockiverse.WorldGen
             if (leafDecayAccumulator < LeafDecayIntervalTicks)
                 return;
 
-            while (leafDecayAccumulator >= LeafDecayIntervalTicks)
+            // Consume all elapsed intervals up front: decay is idempotent within a call (removing
+            // an orphan leaf cannot orphan another — support comes from logs, not leaves), so one
+            // candidate pass covers any number of elapsed intervals.
+            leafDecayAccumulator %= LeafDecayIntervalTicks;
+
+            // First sweep seeds the candidate set with every Leafmoss in the world (covers
+            // worldgen canopies and loaded saves); afterwards the set is maintained
+            // incrementally by the Mark* calls.
+            if (!leafDecayCandidatesSeeded)
             {
-                leafDecayAccumulator -= LeafDecayIntervalTicks;
+                leafDecayCandidatesSeeded = true;
+                SeedLeafDecayCandidates(world);
+            }
 
-                // O(W×H×D) scan per decay interval. Acceptable for current world sizes; use a
-                // dirty-block set if worlds grow significantly larger.
-                WorldBounds bounds = world.Bounds;
-                for (int y = 0; y < bounds.Height; y++)
-                for (int z = 0; z < bounds.Depth; z++)
-                for (int x = 0; x < bounds.Width; x++)
-                {
-                    var pos = new BlockPosition(x, y, z);
-                    if (world.GetBlock(pos) != BlockRegistry.Leafmoss)
-                        continue;
+            if (leafDecayCandidates.Count == 0)
+                return;
 
-                    if (!HasNearbyLog(world, pos, LeafDecayMaxDistance))
-                        world.SetBlock(pos, BlockRegistry.Air);
-                }
+            leafDecayScratch.Clear();
+            leafDecayScratch.AddRange(leafDecayCandidates);
+            leafDecayCandidates.Clear();
+
+            foreach (BlockPosition pos in leafDecayScratch)
+            {
+                if (world.GetBlock(pos) != BlockRegistry.Leafmoss)
+                    continue;
+
+                if (!HasNearbyLog(world, pos, LeafDecayMaxDistance))
+                    world.SetBlock(pos, BlockRegistry.Air);
+                // Supported leaves leave the candidate set; MarkLeafDecayCandidates re-adds
+                // them when a nearby log is removed.
+            }
+        }
+
+        void SeedLeafDecayCandidates(VoxelWorld world)
+        {
+            WorldBounds bounds = world.Bounds;
+            for (int y = 0; y < bounds.Height; y++)
+            for (int z = 0; z < bounds.Depth; z++)
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                var pos = new BlockPosition(x, y, z);
+                if (world.GetBlock(pos) == BlockRegistry.Leafmoss)
+                    leafDecayCandidates.Add(pos);
             }
         }
 

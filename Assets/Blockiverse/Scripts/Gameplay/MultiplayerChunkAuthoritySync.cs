@@ -288,13 +288,18 @@ namespace Blockiverse.Gameplay
 
             ApplyWorldSnapshotHeader(ref reader, out int blockCount);
 
+            // Batch the renderer rebuild: applying a late-join snapshot block-by-block would
+            // otherwise rebuild every dirty chunk mesh once per block (O(blocks × rebuild)).
             for (int index = 0; index < blockCount; index++)
             {
                 BlockPosition position = ReadBlockPosition(ref reader);
                 reader.ReadValueSafe(out int blockId);
-                ApplyAuthoritativeBlock(position, new BlockId(blockId), trackChange: false);
+                ApplyAuthoritativeBlock(position, new BlockId(blockId), trackChange: false, rebuildRenderer: false);
                 AppliedSnapshotBlockCount++;
             }
+
+            if (blockCount > 0)
+                worldManager.Renderer?.RebuildDirty();
 
             ApplyBufferedChunkDeltas();
         }
@@ -540,7 +545,7 @@ namespace Blockiverse.Gameplay
             AppliedEnvironmentSnapshotCount++;
         }
 
-        void ApplyAuthoritativeBlock(BlockPosition position, BlockId block, bool trackChange = true)
+        void ApplyAuthoritativeBlock(BlockPosition position, BlockId block, bool trackChange = true, bool rebuildRenderer = true)
         {
             VoxelWorld world = ResolveWorld();
 
@@ -548,7 +553,8 @@ namespace Blockiverse.Gameplay
                 return;
 
             world.SetBlock(position, block, trackChange);
-            worldManager.Renderer?.RebuildDirty();
+            if (rebuildRenderer)
+                worldManager.Renderer?.RebuildDirty();
         }
 
         ChunkDeltaApplyState TryApplyChunkDelta(ChunkDelta delta)
