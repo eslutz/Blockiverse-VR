@@ -86,9 +86,11 @@ namespace Blockiverse.WorldGen
             new("drybrush_niter_pit",  new[]{ TerrainBiome.Drybrush, TerrainBiome.Dunes }, 30, hasLoot: true),
             new("weathered_watchpost", new[]{ TerrainBiome.Meadow, TerrainBiome.Drybrush, TerrainBiome.Highlands }, 20, minDistanceFromSpawn: 128, hasLoot: true, hasStation: true),
             // Rare finds: a shrine tucked into the first cave pocket under its column (surface
-            // fallback when the column has no cave), and a weathered plank crossing.
-            new("cave_shrine",         new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Wetland, TerrainBiome.Drybrush, TerrainBiome.Dunes, TerrainBiome.Tundra, TerrainBiome.Highlands }, 10, minDistanceFromSpawn: 64, StructureDegradation.Weathered, hasLoot: true),
-            new("bridge_segment",      new[]{ TerrainBiome.Meadow, TerrainBiome.Wetland, TerrainBiome.Pinewild }, 12, minDistanceFromSpawn: 48, StructureDegradation.Weathered),
+            // fallback when the column has no cave), and a weathered plank crossing. The shrine
+            // is the reliable all-biome loot source, so it stays placeable across the map (a small
+            // spawn keep-out only) rather than corner-confined like the high-minDistance ruins.
+            new("cave_shrine",         new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Wetland, TerrainBiome.Drybrush, TerrainBiome.Dunes, TerrainBiome.Tundra, TerrainBiome.Highlands }, 10, minDistanceFromSpawn: 28, StructureDegradation.Weathered, hasLoot: true),
+            new("bridge_segment",      new[]{ TerrainBiome.Meadow, TerrainBiome.Wetland, TerrainBiome.Pinewild }, 12, minDistanceFromSpawn: 28, StructureDegradation.Weathered),
         };
 
         public static void PlaceStructures(
@@ -242,6 +244,8 @@ namespace Blockiverse.WorldGen
         {
             int baseY = FindCaveFloorY(world, centerX, centerZ, surfaceY) ?? surfaceY + 1;
 
+            // 3×3 cutstone floor, with the interior cell above it cleared so the shrine always has
+            // headroom (a cave pocket may have rock where the lamp/crate go).
             for (int dx = -1; dx <= 1; dx++)
             {
                 for (int dz = -1; dz <= 1; dz++)
@@ -249,6 +253,11 @@ namespace Blockiverse.WorldGen
                     var floor = new BlockPosition(centerX + dx, baseY - 1, centerZ + dz);
                     if (world.Bounds.Contains(floor))
                         world.SetBlock(floor, BlockRegistry.CutstoneBlock, trackChange: false);
+
+                    bool isCorner = dx != 0 && dz != 0;
+                    var interior = new BlockPosition(centerX + dx, baseY, centerZ + dz);
+                    if (!isCorner && world.Bounds.Contains(interior))
+                        world.SetBlock(interior, BlockRegistry.Air, trackChange: false);
                 }
             }
 
@@ -257,19 +266,21 @@ namespace Blockiverse.WorldGen
                 for (int dy = 0; dy < 2; dy++)
                 {
                     var pillar = new BlockPosition(centerX + dx, baseY + dy, centerZ + dz);
-                    if (world.Bounds.Contains(pillar) && world.GetBlock(pillar) == BlockRegistry.Air)
+                    if (world.Bounds.Contains(pillar))
                         world.SetBlock(pillar, BlockRegistry.CutstoneBlock, trackChange: false);
                 }
             }
 
             var lamp = new BlockPosition(centerX, baseY, centerZ);
-            if (world.Bounds.Contains(lamp) && world.GetBlock(lamp) == BlockRegistry.Air)
+            if (world.Bounds.Contains(lamp))
                 world.SetBlock(lamp, BlockRegistry.LumenLamp, trackChange: false);
 
+            // The crate sits beside the lamp on the cleared interior, so a shrine always yields
+            // loot (it is the reliable all-biome loot source now that ruins skip flooded columns).
             if (def.HasLoot)
             {
                 var lootPos = new BlockPosition(centerX + 1, baseY, centerZ);
-                if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
+                if (world.Bounds.Contains(lootPos))
                 {
                     world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange: false);
 

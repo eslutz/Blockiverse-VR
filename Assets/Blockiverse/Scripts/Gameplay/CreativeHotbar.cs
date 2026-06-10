@@ -73,6 +73,13 @@ namespace Blockiverse.Gameplay
                 selectedLabel);
         }
 
+        // Configures the hotbar from the default creative catalog. Kept registry-free so callers
+        // in assemblies that don't reference Voxel (the editor bootstrapper) can use it.
+        public void ConfigureFromDefaultCatalog(TMP_Text selectedLabel)
+        {
+            ConfigureFromCatalog(CreativeCatalog.CreateDefault(), null, selectedLabel);
+        }
+
         public void SelectIndex(int index)
         {
             if (blockIds.Count == 0)

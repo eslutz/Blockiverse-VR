@@ -2322,6 +2322,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.BlockiverseLightingCycleController
   worldTimeClock: {fileID: 1797789710}
   sunLight: {fileID: 1797789707}
+  environmentSource: {fileID: 0}
 --- !u!114 &1797789710
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -207,6 +207,7 @@ namespace Blockiverse.Gameplay
 
             FillMesh(mesh, fluidData);
 
+            // FaceCount > 0 here, so the mesh has vertices and is safe to cook.
             MeshCollider collider = fluidObject.GetComponent<MeshCollider>();
             collider.sharedMesh = null;
             collider.sharedMesh = mesh;
@@ -261,8 +262,12 @@ namespace Blockiverse.Gameplay
                 Mesh currentMesh = chunkObject.GetComponent<MeshFilter>().sharedMesh;
                 MeshCollider collider = chunkObject.GetComponent<MeshCollider>();
 
+                // An empty chunk's pooled mesh has no vertices; assigning it to a MeshCollider
+                // logs a PhysX error and cooks nothing, so detach instead. The reassign forces a
+                // recook from the refilled geometry for non-empty chunks.
                 collider.sharedMesh = null;
-                collider.sharedMesh = currentMesh;
+                if (currentMesh != null && currentMesh.vertexCount > 0)
+                    collider.sharedMesh = currentMesh;
 
                 processed++;
             }

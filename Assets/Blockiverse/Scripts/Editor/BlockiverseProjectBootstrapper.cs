@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -717,7 +718,34 @@ namespace Blockiverse.Editor
             EnsureMaterial(BlockiverseProject.PointerLineMaterialPath, PointerLineColor, preferUnlit: true);
             EnsureMaterial(BlockiverseProject.HighlightMaterialPath, HighlightColor, preferUnlit: false);
             EnsureFluidAtlasTiles();
+            EnsureBlockItemIcons();
             EnsureBlockTextureMaterial();
+        }
+
+        // Every registered item needs a committed inventory icon. Block-mapped items (terrain,
+        // stone, deep rock) that lack an authored icon derive one from their 16×16 block source
+        // tile, so a newly registered block doesn't leave an icon gap. Additive: never overwrites
+        // an authored icon.
+        static void EnsureBlockItemIcons()
+        {
+            foreach (ItemDefinition item in ItemRegistry.CreateDefault().All)
+            {
+                if (item.Id.IsNone)
+                    continue;
+
+                string iconPath = $"Assets/Blockiverse/Art/Textures/Items/{item.Id.Value}.png";
+                if (File.Exists(iconPath))
+                    continue;
+
+                string sourcePath = $"Assets/Blockiverse/Art/Textures/Blocks/Source/{item.Id.Value}.png";
+                if (!File.Exists(sourcePath))
+                    continue;
+
+                Directory.CreateDirectory(Path.GetDirectoryName(iconPath));
+                File.Copy(sourcePath, iconPath);
+                AssetDatabase.ImportAsset(iconPath);
+                BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, $"Derived item icon {item.Id.Value}.png from its block source tile.");
+            }
         }
 
         // Atlas tile indexes assigned to the fluid blocks in BlockVisualAtlas.TileIndexByBlockId.
@@ -731,6 +759,11 @@ namespace Blockiverse.Editor
         // regenerate the whole atlas at the old size.
         static void EnsureFluidAtlasTiles()
         {
+            // Source tiles back the atlas tiles (every block needs a committed source PNG); write
+            // them from the same pixel functions so source and atlas stay consistent.
+            EnsureFluidSourceTile("freshwater", FreshwaterTilePixel);
+            EnsureFluidSourceTile("brine", BrineTilePixel);
+
             string path = BlockVisualAtlas.AuthoredAtlasPath;
             if (!File.Exists(path))
                 return;
@@ -762,6 +795,37 @@ namespace Blockiverse.Editor
             finally
             {
                 UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        // Writes a 16×16 source tile PNG for a fluid block (additive — never overwrites a committed
+        // source). The art-asset validation requires one source PNG per renderable block.
+        static void EnsureFluidSourceTile(string canonicalId, Func<int, int, Color32> pixelAt)
+        {
+            string path = $"Assets/Blockiverse/Art/Textures/Blocks/Source/{canonicalId}.png";
+            if (File.Exists(path))
+                return;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+
+            int size = BlockVisualAtlas.TilePixels;
+            var tile = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false);
+            try
+            {
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                        tile.SetPixel(x, y, pixelAt(x, y));
+                }
+
+                tile.Apply();
+                File.WriteAllBytes(path, tile.EncodeToPNG());
+                AssetDatabase.ImportAsset(path);
+                BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, $"Wrote fluid source tile {canonicalId}.png.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(tile);
             }
         }
 
@@ -2455,7 +2519,7 @@ namespace Blockiverse.Editor
             }
 
             CreativeHotbar menu = EnsureComponent<CreativeHotbar>(menuObject);
-            menu.ConfigureFromCatalog(CreativeCatalog.CreateDefault(), null, selectedLabel);
+            menu.ConfigureFromDefaultCatalog(selectedLabel);
             menu.ConfigureCanvas(canvas);
 
             BlockiverseCatalogBrowserPanel browser = EnsureComponent<BlockiverseCatalogBrowserPanel>(menuObject);
@@ -3820,8 +3884,10 @@ namespace Blockiverse.Editor
 
             if (inputRig != null)
             {
+                // The controller subscribes to MenuPressed at runtime (Start → AddListener), so a
+                // persistent listener here would double-fire the pause toggle. Only scrub any stale
+                // persistent listener a previous bootstrap left on the prefab.
                 RemovePersistentListeners(inputRig.MenuPressed, controller, nameof(BlockiverseMenuController.OnMenuPressed));
-                UnityEventTools.AddPersistentListener(inputRig.MenuPressed, controller.OnMenuPressed);
                 EditorUtility.SetDirty(inputRig);
             }
 

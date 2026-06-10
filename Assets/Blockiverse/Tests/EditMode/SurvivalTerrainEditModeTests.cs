@@ -360,11 +360,12 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void SurvivalTerrainExposesDeterministicContainerLoot()
         {
-            // Loot is biome-weighted toward the no-loot pathmark_stones, so any single seed may place
-            // zero loot crates. Search a handful of seeds for one that does, then assert the contents
-            // are deterministic and correctly anchored on StorageCrate blocks.
+            // Loot is biome-weighted toward the no-loot pathmark_stones, and §5.4 lakes/seas now
+            // skip structures on flooded columns, so any single seed may place zero loot crates.
+            // Search a range of seeds for one that does, then assert the contents are deterministic
+            // and correctly anchored on StorageCrate blocks.
             int seedWithLoot = -1;
-            for (int seed = 1; seed <= 30 && seedWithLoot < 0; seed++)
+            for (int seed = 1; seed <= 80 && seedWithLoot < 0; seed++)
             {
                 var probe = new SurvivalTerrainPreset(BlockRegistry.CreateDefault(),
                     WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed));

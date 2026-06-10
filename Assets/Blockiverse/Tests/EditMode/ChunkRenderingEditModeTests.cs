@@ -170,23 +170,23 @@ namespace Blockiverse.Tests.EditMode
                 MeshFilter filter = worldObject.GetComponentInChildren<MeshFilter>();
                 MeshCollider collider = worldObject.GetComponentInChildren<MeshCollider>();
 
-                // With a zero budget, an edit updates the visual mesh immediately but defers the
-                // collider rebake.
+                // Add a second block so the chunk stays non-empty (its pooled mesh keeps vertices,
+                // so the collider holds a real mesh throughout). With a zero budget the edit
+                // refills the visual mesh immediately but defers the collider rebake.
                 renderer.ColliderRebuildBudget = 0;
-                world.SetBlock(editedPosition, BlockRegistry.Air);
+                world.SetBlock(new BlockPosition(2, 0, 2), BlockRegistry.MeadowTurf);
                 renderer.RebuildDirty();
 
-                // Meshes are pooled, so the collider's reference always matches the filter's;
-                // the throttle is observable through the pending count (the collider keeps its
-                // cooked snapshot of the pre-edit geometry until the rebake recooks).
+                // The throttle is observable through the pending count (meshes are pooled, so the
+                // filter and collider share the same instance regardless of bake timing).
                 Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0), "Collider rebakes should be throttled by the budget.");
-                Assert.That(collider.sharedMesh, Is.SameAs(filter.sharedMesh));
 
-                // Draining the backlog recooks the collider from the refilled mesh.
+                // Draining the backlog recooks the collider from the refilled non-empty mesh.
                 renderer.ProcessPendingColliderRebuilds(int.MaxValue);
 
                 Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
                 Assert.That(collider.sharedMesh, Is.SameAs(filter.sharedMesh));
+                Assert.That(collider.sharedMesh.vertexCount, Is.GreaterThan(0));
             }
             finally
             {

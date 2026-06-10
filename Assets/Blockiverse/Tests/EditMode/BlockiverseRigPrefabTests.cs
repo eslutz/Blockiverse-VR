@@ -483,15 +483,15 @@ namespace Blockiverse.Tests.EditMode
             string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                 .Select(label => label.text));
 
+            // Canonical controller mapping (shared with the Settings → Controls screen).
             Assert.That(popupText, Does.Contain("Right trigger: press UI or break blocks"));
-            Assert.That(popupText, Does.Contain("Right grip: place blocks"));
+            Assert.That(popupText, Does.Contain("Right grip: place or use"));
             Assert.That(popupText, Does.Contain("Left grip: blocks menu"));
-            Assert.That(popupText, Does.Contain("Menu: comfort settings"));
-            Assert.That(popupText, Does.Contain("Right thumbstick: snap turn"));
+            Assert.That(popupText, Does.Contain("Menu: pause"));
+            Assert.That(popupText, Does.Contain("Right stick: snap turn"));
             Assert.That(popupText, Does.Contain("Right A: jump"));
-            Assert.That(popupText, Does.Contain("Left X: unassigned"));
-            Assert.That(popupText, Does.Contain("Left Y: unassigned"));
-            Assert.That(popupText, Does.Contain("Right B: unassigned"));
+            Assert.That(popupText, Does.Contain("Right B: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Left stick: move"));
             Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
             Assert.That(popupText, Does.Not.Contain("Left X: jump"));
             Assert.That(popupText, Does.Not.Contain("Left Y: undo"));

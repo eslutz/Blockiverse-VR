@@ -23,10 +23,11 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CatalogEnumHasExactlyThirteenValues()
+        public void CatalogEnumHasExactlyFourteenValues()
         {
+            // Terrain..Stations (0–12) plus Fluids (13) = 14 categories.
             int count = Enum.GetValues(typeof(CreativeCatalogCategory)).Length;
-            Assert.That(count, Is.EqualTo(13));
+            Assert.That(count, Is.EqualTo(14));
         }
 
         [Test]
