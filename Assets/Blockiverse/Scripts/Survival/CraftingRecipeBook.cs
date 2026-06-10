@@ -62,6 +62,11 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.StoneRubble, 8)));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.FiredBrickBlock, 4), CraftingStation.BuildTable,
                 new ItemStack(ItemId.FiredBrick, 8)));
+            // Buckets are crafted empty (§632); filled buckets come from the fill action at a
+            // fluid source, not from a recipe (deviation from §630, which also lists a crafted
+            // freshwater_bucket — the fill action makes that row redundant).
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.EmptyBucket, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.RosycopperBar, 3)));
 
             // ── §9.3 Clay Kiln recipes (timed) ───────────────────────────────
             book.Register(new CraftingRecipe(new ItemStack(ItemId.FiredBrick, 1), CraftingStation.ClayKiln, Seconds(8),
@@ -76,6 +81,18 @@ namespace Blockiverse.Survival
                 new[] { new ItemStack(ItemId.RawPaletin, 2) }));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.LumenDust, 2), CraftingStation.ClayKiln, Seconds(6),
                 new[] { new ItemStack(ItemId.LumenCrystal, 1) }));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.WaterFlask, 1), CraftingStation.ClayKiln, Seconds(8),
+                new[] { new ItemStack(ItemId.GlassShard, 3), new ItemStack(ItemId.ResinKnot, 1) }));
+
+            // ── §5.4/§13 Campfire fluid recipes (instant; consumed buckets return empty, §731).
+            // Deviation from §574: brine boiling is an instant Campfire craft instead of a timed
+            // Clay Kiln run, because the fueled station model cannot return the empty bucket.
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.CleanWaterFlask, 1), CraftingStation.Campfire, 0,
+                new[] { new ItemStack(ItemId.WaterFlask, 1), new ItemStack(ItemId.FreshwaterBucket, 1) },
+                new[] { new ItemStack(ItemId.EmptyBucket, 1) }));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.Brightsalt, 3), CraftingStation.Campfire, 0,
+                new[] { new ItemStack(ItemId.BrineBucket, 1) },
+                new[] { new ItemStack(ItemId.EmptyBucket, 1) }));
 
             // ── §9.4 Bellows Forge recipes ───────────────────────────────────
             book.Register(new CraftingRecipe(new ItemStack(ItemId.BellowsForge, 1), CraftingStation.BuildTable,
@@ -175,6 +192,8 @@ namespace Blockiverse.Survival
             itemRegistry.Get(recipe.Output.ItemId);
             foreach (ItemStack ingredient in recipe.Ingredients)
                 itemRegistry.Get(ingredient.ItemId);
+            foreach (ItemStack byproduct in recipe.Byproducts)
+                itemRegistry.Get(byproduct.ItemId);
 
             if (recipesByOutput.ContainsKey(recipe.Output.ItemId))
                 throw new InvalidOperationException($"A recipe is already registered for output item: {recipe.Output.ItemId}");

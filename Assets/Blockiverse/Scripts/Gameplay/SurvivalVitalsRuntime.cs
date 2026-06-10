@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Core;
+using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -22,6 +24,8 @@ namespace Blockiverse.Gameplay
         // damage amounts and rates live with the hazard table in BlockHazards.
         const float HazardScanIntervalSeconds = 0.25f;
         const float ClockSearchIntervalSeconds = 1.0f;
+        const float WorldDrinkCooldownSeconds = 1.5f;
+        public const int WorldDrinkThirstRestore = 15;
 
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] CreativeWorldManager worldManager;
@@ -29,6 +33,7 @@ namespace Blockiverse.Gameplay
         WorldTimeClock worldTimeClock;
         float nextClockSearchTime;
         float nextHazardScanTime;
+        float nextWorldDrinkTime;
         readonly Dictionary<string, float> nextHazardApplyTimes = new();
 
         public PlayerVitals Vitals { get; } = new PlayerVitals();
@@ -107,12 +112,17 @@ namespace Blockiverse.Gameplay
 
             survivalSync.ConsumableConsumed -= OnConsumableConsumed;
             survivalSync.ConsumableConsumed += OnConsumableConsumed;
+            survivalSync.WorldDrinkRequested -= OnWorldDrinkRequested;
+            survivalSync.WorldDrinkRequested += OnWorldDrinkRequested;
         }
 
         void UnwireSurvivalSync()
         {
-            if (survivalSync != null)
-                survivalSync.ConsumableConsumed -= OnConsumableConsumed;
+            if (survivalSync == null)
+                return;
+
+            survivalSync.ConsumableConsumed -= OnConsumableConsumed;
+            survivalSync.WorldDrinkRequested -= OnWorldDrinkRequested;
         }
 
         // Vitals only deplete (and hazards only damage) in survival mode; creative players are immune.
@@ -182,6 +192,60 @@ namespace Blockiverse.Gameplay
         {
             if (!consumed.IsEmpty)
                 ConsumableEffects.TryApply(consumed.ItemId, Vitals, SurvivalVitals);
+        }
+
+        void OnWorldDrinkRequested()
+        {
+            TryDrinkFromWorldSource();
+        }
+
+        // ── Player save state (world persistence) ────────────────────────────
+
+        // Captures the local player's presence (rig position/heading) and vitals for a save.
+        // Returns null when no rig exists (headless/server contexts).
+        public SavedPlayerState BuildPlayerSaveState()
+        {
+            GameObject rig = GameObject.Find(BlockiverseProject.XrRigRootName);
+            if (rig == null)
+                return null;
+
+            Vector3 position = rig.transform.position;
+            return new SavedPlayerState
+            {
+                PositionX = position.x,
+                PositionY = position.y,
+                PositionZ = position.z,
+                YawDegrees = rig.transform.eulerAngles.y,
+                Health = Vitals.CurrentHealth,
+                Hunger = SurvivalVitals.Hunger,
+                Thirst = SurvivalVitals.Thirst,
+                Stamina = SurvivalVitals.Stamina
+            };
+        }
+
+        // Restores the local player's presence and vitals from a save. No-op when null.
+        public void RestorePlayerSaveState(SavedPlayerState state)
+        {
+            if (state == null)
+                return;
+
+            CreativeWorldManager.PositionRig(
+                new Vector3(state.PositionX, state.PositionY, state.PositionZ),
+                state.YawDegrees);
+            Vitals.RestoreHealth(state.Health);
+            SurvivalVitals.RestoreFrom(state.Hunger, state.Thirst, state.Stamina);
+        }
+
+        // Drinks directly from a world fluid source (freshwater): restores thirst on a short
+        // cooldown. Vitals are local-player simulation state, so no host round-trip is needed.
+        public bool TryDrinkFromWorldSource()
+        {
+            if (!InSurvivalMode || Vitals.IsDead || Time.time < nextWorldDrinkTime)
+                return false;
+
+            nextWorldDrinkTime = Time.time + WorldDrinkCooldownSeconds;
+            SurvivalVitals.Drink(WorldDrinkThirstRestore);
+            return true;
         }
 
         void OnVitalsDied(HealthChangeResult result)

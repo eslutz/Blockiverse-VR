@@ -395,6 +395,16 @@ namespace Blockiverse.Gameplay
                 };
             }
 
+            if (preset == CreativeWorldGenerationPreset.VoidBuilder)
+            {
+                return new GeneratedSnapshotWorld
+                {
+                    Registry = registry,
+                    World = new VoidBuilderPreset(registry, settings).Generate(),
+                    ContainerLoot = null,
+                };
+            }
+
             // Loot is deterministic from the seed, so the client regenerates the exact same
             // container contents the host generated — no per-container network sync needed.
             var survivalPreset = new SurvivalTerrainPreset(registry, settings);

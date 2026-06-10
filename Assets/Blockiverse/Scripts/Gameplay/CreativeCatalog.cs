@@ -20,6 +20,7 @@ namespace Blockiverse.Gameplay
         Lighting  = 10,
         Storage   = 11,
         Stations  = 12,
+        Fluids    = 13,
     }
 
     public sealed class CreativeCatalogEntry
@@ -154,6 +155,10 @@ namespace Blockiverse.Gameplay
                 new(BlockRegistry.BellowsForge,     CreativeCatalogCategory.Stations),
                 new(BlockRegistry.PrepBoard,        CreativeCatalogCategory.Stations),
                 new(BlockRegistry.MendBench,        CreativeCatalogCategory.Stations),
+
+                // Fluids (creative placement of still sources)
+                new(BlockRegistry.Freshwater,       CreativeCatalogCategory.Fluids),
+                new(BlockRegistry.Brine,            CreativeCatalogCategory.Fluids),
             };
 
             foreach (CreativeCatalogEntry entry in list)

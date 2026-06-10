@@ -85,6 +85,10 @@ namespace Blockiverse.WorldGen
             new("frost_shelter",       new[]{ TerrainBiome.Tundra, TerrainBiome.Highlands }, 30, hasLoot: true, hasStation: true),
             new("drybrush_niter_pit",  new[]{ TerrainBiome.Drybrush, TerrainBiome.Dunes }, 30, hasLoot: true),
             new("weathered_watchpost", new[]{ TerrainBiome.Meadow, TerrainBiome.Drybrush, TerrainBiome.Highlands }, 20, minDistanceFromSpawn: 128, hasLoot: true, hasStation: true),
+            // Rare finds: a shrine tucked into the first cave pocket under its column (surface
+            // fallback when the column has no cave), and a weathered plank crossing.
+            new("cave_shrine",         new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Wetland, TerrainBiome.Drybrush, TerrainBiome.Dunes, TerrainBiome.Tundra, TerrainBiome.Highlands }, 10, minDistanceFromSpawn: 64, StructureDegradation.Weathered, hasLoot: true),
+            new("bridge_segment",      new[]{ TerrainBiome.Meadow, TerrainBiome.Wetland, TerrainBiome.Pinewild }, 12, minDistanceFromSpawn: 48, StructureDegradation.Weathered),
         };
 
         public static void PlaceStructures(
@@ -134,11 +138,30 @@ namespace Blockiverse.WorldGen
                     int surfaceY = FindSurfaceY(world, worldX, worldZ);
                     if (surfaceY < 0) continue;
 
+                    // Fluids are placed before structures, so the found "surface" over a lake is
+                    // the water top — ruins don't float on water (§5.4).
+                    BlockId surfaceBlock = world.GetBlock(new BlockPosition(worldX, surfaceY, worldZ));
+                    if (surfaceBlock == BlockRegistry.Freshwater || surfaceBlock == BlockRegistry.Brine) continue;
+
                     accepted.Add((worldX, worldZ));
                     var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(regionHash % 4u)));
-                    PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed, def, lootSink);
+
+                    if (def.Id == "cave_shrine")
+                        PlaceCaveShrine(world, worldX, surfaceY, worldZ, seed, def, lootSink);
+                    else if (def.Id == "bridge_segment")
+                        PlaceBridgeSegment(world, worldX, surfaceY + 1, worldZ, degradation, seed);
+                    else
+                        PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed, def, lootSink);
                 }
             }
+        }
+
+        // Creative spawner: places one default ruin with its base at the given position (no
+        // degradation, no loot roll). Offline/host creative tools only.
+        public static void PlaceStructureAt(VoxelWorld world, int baseX, int baseY, int baseZ, int seed = 0)
+        {
+            if (world == null) throw new ArgumentNullException(nameof(world));
+            PlaceRuin(world, baseX, baseY, baseZ, StructureDegradation.Intact, seed);
         }
 
         public static int FindSurfaceY(VoxelWorld world, int x, int z)
@@ -209,6 +232,107 @@ namespace Blockiverse.WorldGen
                 var lightPos = new BlockPosition(baseX + 2, baseY + 1, baseZ + 2);
                 if (world.Bounds.Contains(lightPos) && world.GetBlock(lightPos) == BlockRegistry.Air)
                     world.SetBlock(lightPos, BlockRegistry.Glowwick, trackChange: false);
+            }
+        }
+
+        // Small shrine: 3×3 cutstone base with four corner pillars and a lumen lamp, set into the
+        // first cave pocket beneath the column (the surface when the column has no cave). The
+        // loot crate sits beside the lamp.
+        static void PlaceCaveShrine(VoxelWorld world, int centerX, int surfaceY, int centerZ, int seed, StructureDefinition def, List<StructureContainerLoot> lootSink)
+        {
+            int baseY = FindCaveFloorY(world, centerX, centerZ, surfaceY) ?? surfaceY + 1;
+
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    var floor = new BlockPosition(centerX + dx, baseY - 1, centerZ + dz);
+                    if (world.Bounds.Contains(floor))
+                        world.SetBlock(floor, BlockRegistry.CutstoneBlock, trackChange: false);
+                }
+            }
+
+            foreach ((int dx, int dz) in new[] { (-1, -1), (-1, 1), (1, -1), (1, 1) })
+            {
+                for (int dy = 0; dy < 2; dy++)
+                {
+                    var pillar = new BlockPosition(centerX + dx, baseY + dy, centerZ + dz);
+                    if (world.Bounds.Contains(pillar) && world.GetBlock(pillar) == BlockRegistry.Air)
+                        world.SetBlock(pillar, BlockRegistry.CutstoneBlock, trackChange: false);
+                }
+            }
+
+            var lamp = new BlockPosition(centerX, baseY, centerZ);
+            if (world.Bounds.Contains(lamp) && world.GetBlock(lamp) == BlockRegistry.Air)
+                world.SetBlock(lamp, BlockRegistry.LumenLamp, trackChange: false);
+
+            if (def.HasLoot)
+            {
+                var lootPos = new BlockPosition(centerX + 1, baseY, centerZ);
+                if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
+                {
+                    world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange: false);
+
+                    if (lootSink != null)
+                    {
+                        uint lootSeed = Hash(seed, centerX, baseY, centerZ, salt: 6151);
+                        StructureLootTable table = StructureLootTable.GetById(def.LootTableId);
+                        List<ContainerLootItem> items = table.Roll(lootSeed);
+                        if (items.Count > 0)
+                            lootSink.Add(new StructureContainerLoot(lootPos, items));
+                    }
+                }
+            }
+        }
+
+        // First walkable cave pocket beneath the column: ≥2 cells of air over a solid floor,
+        // comfortably below the surface so the shrine never opens the column to the sky.
+        static int? FindCaveFloorY(VoxelWorld world, int x, int z, int surfaceY)
+        {
+            for (int y = surfaceY - 8; y >= 8; y--)
+            {
+                var cell = new BlockPosition(x, y, z);
+                var above = new BlockPosition(x, y + 1, z);
+                var below = new BlockPosition(x, y - 1, z);
+
+                if (world.Bounds.Contains(cell) && world.Bounds.Contains(above) && world.Bounds.Contains(below) &&
+                    world.GetBlock(cell) == BlockRegistry.Air &&
+                    world.GetBlock(above) == BlockRegistry.Air &&
+                    world.GetBlock(below) != BlockRegistry.Air)
+                {
+                    return y;
+                }
+            }
+
+            return null;
+        }
+
+        // Weathered plank crossing: a 3-wide × 9-long work-plank deck with stout corner posts,
+        // each deck plank rolling its own degradation skip like ruin walls.
+        static void PlaceBridgeSegment(VoxelWorld world, int baseX, int baseY, int baseZ, StructureDegradation degradation, int seed)
+        {
+            const int length = 9;
+            const int width = 3;
+
+            for (int dx = 0; dx < length; dx++)
+            {
+                for (int dz = 0; dz < width; dz++)
+                {
+                    var deck = new BlockPosition(baseX + dx, baseY, baseZ + dz);
+                    int skipChance = (int)degradation * 20;
+                    if (skipChance > 0 && Hash(seed, deck.X, deck.Y, deck.Z, salt: 4099) % 100u < (uint)skipChance)
+                        continue;
+
+                    if (world.Bounds.Contains(deck))
+                        world.SetBlock(deck, BlockRegistry.WorkPlank, trackChange: false);
+                }
+            }
+
+            foreach ((int dx, int dz) in new[] { (0, 0), (0, width - 1), (length - 1, 0), (length - 1, width - 1) })
+            {
+                var post = new BlockPosition(baseX + dx, baseY + 1, baseZ + dz);
+                if (world.Bounds.Contains(post) && world.GetBlock(post) == BlockRegistry.Air)
+                    world.SetBlock(post, BlockRegistry.SmoothBranchwood, trackChange: false);
             }
         }
 

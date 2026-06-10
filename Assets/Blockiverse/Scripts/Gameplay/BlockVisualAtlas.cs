@@ -92,6 +92,8 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.ToolRack.Value,            70 },
             { BlockRegistry.PantryJar.Value,           71 },
             { BlockRegistry.DeepLocker.Value,          72 },
+            { BlockRegistry.Freshwater.Value,          73 },
+            { BlockRegistry.Brine.Value,               74 },
         };
 
         public static Rect GetTileRect(BlockId blockId)

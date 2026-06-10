@@ -93,6 +93,43 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SaplingProgressExportRestoreRoundTripsAccumulatedTicks()
+        {
+            world.SetBlock(BasePos, BlockRegistry.Sapling);
+            vegetation.TrackSapling(BasePos);
+            vegetation.TickSapling(world, 700); // below the 1200-tick interval: progress only
+
+            var restored = new VegetationService();
+            restored.RestoreSaplingProgress(vegetation.ExportSaplingProgress());
+
+            // 700 saved + 500 new = 1200 → the restored service advances exactly on schedule.
+            restored.TickSapling(world, 499);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Sapling));
+            restored.TickSapling(world, 1);
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.Sapling_S1));
+        }
+
+        [Test]
+        public void WildRegrowthExportRestoreRoundTripsMarkers()
+        {
+            var harvested = new BlockPosition(8, 9, 8);
+            world.SetBlock(new BlockPosition(8, 8, 8), BlockRegistry.MeadowTurf);
+            vegetation.MarkWildHarvest(BlockRegistry.Thornbrush, harvested, currentTick: 1000);
+            Assert.That(vegetation.WildRegrowthQueueCount, Is.EqualTo(1));
+
+            var restored = new VegetationService();
+            restored.RestoreWildRegrowth(vegetation.ExportWildRegrowth());
+            Assert.That(restored.WildRegrowthQueueCount, Is.EqualTo(1));
+
+            // The marker keeps its absolute deadline: before it nothing happens, at it the
+            // harvested plant regrows.
+            restored.TickWildRegrowth(world, currentTick: 1001);
+            Assert.That(world.GetBlock(harvested), Is.EqualTo(BlockRegistry.Air));
+            restored.TickWildRegrowth(world, currentTick: 1000 + 100000);
+            Assert.That(world.GetBlock(harvested), Is.EqualTo(BlockRegistry.Thornbrush));
+        }
+
+        [Test]
         public void TickLeafDecayWithZeroTicksIsNoop()
         {
             var isolatedLeaf = new BlockPosition(8, 16, 8);

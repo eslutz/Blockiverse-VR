@@ -20,11 +20,14 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
+        [SerializeField] MultiplayerSurvivalSync survivalSync;
+        [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
         [SerializeField] string saveFileName = DefaultSaveFileName;
         [SerializeField] string worldName = DefaultWorldName;
 
         string configuredSavePath;
         bool subscribed;
+        float lastAutoSaveTime;
 
         public bool LastHostLoadAttempted { get; private set; }
         public bool LastHostLoadSucceeded { get; private set; }
@@ -127,10 +130,15 @@ namespace Blockiverse.Gameplay
             try
             {
                 result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
-                worldManager.RestoreWeatherState(result.Data.WeatherState);
+                worldManager.RestoreSimulationState(result.Data);
                 worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
                 worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(result.Data.GameMode));
                 RestoreContainers(result.Data.Containers);
+
+                if (survivalSync != null && result.Data.Stations != null)
+                    survivalSync.RestoreStationStates(WorldSaveStateMapper.FromSavedStations(result.Data.Stations));
+
+                vitalsRuntime?.RestorePlayerSaveState(result.Data.PlayerState);
             }
             finally
             {
@@ -171,7 +179,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService().Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore));
+                new WorldSaveService().Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), extras: BuildSaveExtras());
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,
@@ -187,6 +195,51 @@ namespace Blockiverse.Gameplay
                     $"Failed to save multiplayer host world before shutdown file={SanitizeSavePath(path)} exception={exception.GetType().Name}",
                     context: this);
                 return false;
+            }
+        }
+
+        // World-sim state beyond blocks/containers: weather machine, vegetation/farming queues,
+        // timed-station contents, and the hosting player's presence/vitals.
+        WorldSaveExtras BuildSaveExtras()
+        {
+            var extras = new WorldSaveExtras();
+            worldManager.FillSaveExtras(extras);
+
+            if (survivalSync != null)
+                extras.Stations = WorldSaveStateMapper.ToSavedStations(survivalSync.ExportStationStates());
+
+            extras.PlayerState = vitalsRuntime != null ? vitalsRuntime.BuildPlayerSaveState() : null;
+            return extras;
+        }
+
+        // Host autosave: while hosting with save authority, persist the world on the save-service
+        // cadence so a crash or battery death loses at most one interval (§6.7).
+        void Update()
+        {
+            if (session == null || !subscribed)
+                return;
+
+            if (Time.unscaledTime - lastAutoSaveTime < WorldSaveService.AutoSaveIntervalSeconds)
+                return;
+
+            lastAutoSaveTime = Time.unscaledTime;
+
+            if (session.NetworkManager == null || !session.NetworkManager.IsListening)
+                return;
+
+            if (!ResolveAuthorityBoundary().CanSaveMultiplayerWorld || worldManager == null || worldManager.World == null)
+                return;
+
+            try
+            {
+                new WorldSaveService().Save(ResolveSavePath(), ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), extras: BuildSaveExtras());
+            }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to autosave multiplayer host world file={SanitizeSavePath(ResolveSavePath())} exception={exception.GetType().Name}",
+                    context: this);
             }
         }
 
@@ -253,6 +306,13 @@ namespace Blockiverse.Gameplay
 
             if (chunkAuthoritySync == null)
                 chunkAuthoritySync = GetComponent<MultiplayerChunkAuthoritySync>();
+
+            if (survivalSync == null)
+                survivalSync = GetComponent<MultiplayerSurvivalSync>() ??
+                    FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+
+            if (vitalsRuntime == null)
+                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
         }
 
         bool TryResolveWorldManager(out string failureReason, string operation)

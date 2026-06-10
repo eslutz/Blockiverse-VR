@@ -14,12 +14,18 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(registry.All.Count, Is.EqualTo(74));
+            Assert.That(registry.All.Count, Is.EqualTo(76));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
             Assert.That(registry.Get(BlockRegistry.BranchwoodLog).Category, Is.EqualTo(BlockCategory.Organic));
             Assert.That(registry.Get(BlockRegistry.BuildTable).Category, Is.EqualTo(BlockCategory.Station));
             Assert.That(registry.Get(BlockRegistry.EmbercoalSeam).Category, Is.EqualTo(BlockCategory.Resource));
+            // Fluids (§5.4): renderable still sources the player can pass through.
+            Assert.That(registry.Get(BlockRegistry.Freshwater).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.Brine).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.Freshwater).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Brine).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Freshwater).IsRenderable, Is.True);
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Graystone"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Dark Slate"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Glowwick"));

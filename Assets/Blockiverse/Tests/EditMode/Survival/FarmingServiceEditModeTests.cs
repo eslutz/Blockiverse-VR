@@ -76,13 +76,17 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
-            inventory.SetSlot(0, new ItemStack(ItemId.CleanWaterFlask, 2));
+            // Flasks stack to 1 (§14), so a spare flask occupies its own slot.
+            inventory.SetSlot(0, new ItemStack(ItemId.CleanWaterFlask, 1));
+            inventory.SetSlot(1, new ItemStack(ItemId.CleanWaterFlask, 1));
 
             FarmingResult result = farming.Till(world, SoilPos, inventory, hasFreshwaterNearby: (_, _) => false);
 
             Assert.That(result, Is.EqualTo(FarmingResult.Success));
             Assert.That(world.GetBlock(SoilPos), Is.EqualTo(BlockRegistry.TendedSoil));
             Assert.That(inventory.CountOf(ItemId.CleanWaterFlask), Is.EqualTo(1));
+            // The emptied flask comes back (§731 container-return).
+            Assert.That(inventory.CountOf(ItemId.WaterFlask), Is.EqualTo(1));
         }
 
         [Test]
@@ -108,6 +112,53 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             Assert.That(result, Is.EqualTo(FarmingResult.Success));
             Assert.That(inventory.CountOf(ItemId.CleanWaterFlask), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void BerrybushRegrowthExportRestoreRoundTripsAccumulatedTicks()
+        {
+            var harvested = new BlockPosition(3, 3, 3);
+            farming.OnBlockHarvested(BlockRegistry.Berrybush_S5, harvested);
+            farming.TickRegrowth(world, FarmingService.BerrybushRegrowTicks - 100); // almost due
+
+            var restored = new FarmingService();
+            restored.RestoreBerrybushRegrowth(farming.ExportBerrybushRegrowth());
+            Assert.That(restored.HasPendingRegrowth(harvested), Is.True);
+
+            // 100 remaining ticks after restore: just before stays pending, at the boundary the
+            // bush replants.
+            restored.TickRegrowth(world, 99);
+            Assert.That(world.GetBlock(harvested), Is.EqualTo(BlockRegistry.Air));
+            restored.TickRegrowth(world, 1);
+            Assert.That(world.GetBlock(harvested), Is.EqualTo(BlockRegistry.Berrybush));
+        }
+
+        [Test]
+        public void HasFreshwaterNearbyFindsWaterWithinTheReachBox()
+        {
+            // dx=4, dy=+1: the far corner of the §11.1 reach box.
+            world.SetBlock(new BlockPosition(6, 3, 2), BlockRegistry.Freshwater, trackChange: false);
+
+            Assert.That(FarmingService.HasFreshwaterNearby(world, SoilPos), Is.True);
+        }
+
+        [Test]
+        public void HasFreshwaterNearbyIgnoresWaterOutsideTheReachBox()
+        {
+            // dx=5 and dy=+2 both sit one cell past the reach limits.
+            world.SetBlock(new BlockPosition(7, 2, 2), BlockRegistry.Freshwater, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 4, 2), BlockRegistry.Freshwater, trackChange: false);
+
+            Assert.That(FarmingService.HasFreshwaterNearby(world, SoilPos), Is.False);
+        }
+
+        [Test]
+        public void HasFreshwaterNearbyIgnoresBrine()
+        {
+            // Salt water does not irrigate (§5.4/§11.1).
+            world.SetBlock(new BlockPosition(3, 2, 2), BlockRegistry.Brine, trackChange: false);
+
+            Assert.That(FarmingService.HasFreshwaterNearby(world, SoilPos), Is.False);
         }
 
         // ── Planting ─────────────────────────────────────────────────────────

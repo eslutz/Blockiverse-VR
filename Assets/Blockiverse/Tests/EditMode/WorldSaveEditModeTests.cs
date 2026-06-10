@@ -695,6 +695,129 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
+        [Test]
+        public void SaveThenLoadReproducesSimulationStationAndPlayerExtras()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            var extras = new WorldSaveExtras
+            {
+                WeatherTicksInState = 432,
+                WeatherRngState = 48879u,
+                PlayerState = new SavedPlayerState
+                {
+                    PositionX = 12.5f, PositionY = 33f, PositionZ = 64.25f, YawDegrees = 90f,
+                    Health = 73, Hunger = 41, Thirst = 28, Stamina = 66
+                },
+                Saplings = new[] { new VxlwSaplingProgress { X = 1, Y = 2, Z = 3, AccumulatedTicks = 600 } },
+                WildRegrowth = new[] { new VxlwWildRegrowthMarker { CanonicalId = "thornbrush", X = 4, Y = 5, Z = 6, RegrowAfterTick = 48000, AttemptsLeft = 3 } },
+                BerrybushRegrowth = new[] { new VxlwBerrybushRegrowth { X = 7, Y = 8, Z = 9, AccumulatedTicks = 24000 } },
+                Stations = new[]
+                {
+                    new VxlwStation
+                    {
+                        X = 10, Y = 11, Z = 12,
+                        StationType = "ClayKiln",
+                        Inputs = new[] { new SavedContainerSlot { CanonicalId = "clay_lump", Count = 4 } },
+                        Fuel = new SavedContainerSlot { CanonicalId = "embercoal", Count = 2 },
+                        Output = new SavedContainerSlot { CanonicalId = "fired_brick", Count = 1 },
+                        ActiveRecipeOutputId = "fired_brick",
+                        ProgressTicks = 60
+                    }
+                }
+            };
+
+            try
+            {
+                new WorldSaveService().Save(path, "extras-test", world, extras: extras);
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+
+                WorldSaveData data = result.Data;
+                Assert.That(data.WeatherTicksInState, Is.EqualTo(432));
+                Assert.That(data.WeatherRngState, Is.EqualTo(48879u));
+
+                Assert.That(data.PlayerState, Is.Not.Null, "Player state must round-trip.");
+                Assert.That(data.PlayerState.PositionX, Is.EqualTo(12.5f));
+                Assert.That(data.PlayerState.PositionY, Is.EqualTo(33f));
+                Assert.That(data.PlayerState.PositionZ, Is.EqualTo(64.25f));
+                Assert.That(data.PlayerState.YawDegrees, Is.EqualTo(90f));
+                Assert.That(data.PlayerState.Health, Is.EqualTo(73));
+                Assert.That(data.PlayerState.Hunger, Is.EqualTo(41));
+                Assert.That(data.PlayerState.Thirst, Is.EqualTo(28));
+                Assert.That(data.PlayerState.Stamina, Is.EqualTo(66));
+
+                Assert.That(data.Saplings, Has.Length.EqualTo(1));
+                Assert.That(data.Saplings[0].X, Is.EqualTo(1));
+                Assert.That(data.Saplings[0].AccumulatedTicks, Is.EqualTo(600));
+
+                Assert.That(data.WildRegrowth, Has.Length.EqualTo(1));
+                Assert.That(data.WildRegrowth[0].CanonicalId, Is.EqualTo("thornbrush"));
+                Assert.That(data.WildRegrowth[0].RegrowAfterTick, Is.EqualTo(48000L));
+                Assert.That(data.WildRegrowth[0].AttemptsLeft, Is.EqualTo(3));
+
+                Assert.That(data.BerrybushRegrowth, Has.Length.EqualTo(1));
+                Assert.That(data.BerrybushRegrowth[0].Z, Is.EqualTo(9));
+                Assert.That(data.BerrybushRegrowth[0].AccumulatedTicks, Is.EqualTo(24000));
+
+                Assert.That(data.Stations, Has.Length.EqualTo(1));
+                Assert.That(data.Stations[0].StationType, Is.EqualTo("ClayKiln"));
+                Assert.That(data.Stations[0].Inputs, Has.Length.EqualTo(1));
+                Assert.That(data.Stations[0].Inputs[0].CanonicalId, Is.EqualTo("clay_lump"));
+                Assert.That(data.Stations[0].Inputs[0].Count, Is.EqualTo(4));
+                Assert.That(data.Stations[0].Fuel.CanonicalId, Is.EqualTo("embercoal"));
+                Assert.That(data.Stations[0].Output.CanonicalId, Is.EqualTo("fired_brick"));
+                Assert.That(data.Stations[0].ActiveRecipeOutputId, Is.EqualTo("fired_brick"));
+                Assert.That(data.Stations[0].ProgressTicks, Is.EqualTo(60));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void ResavingWithoutSimulationOrStationsRemovesTheStaleFiles()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            var extras = new WorldSaveExtras
+            {
+                Saplings = new[] { new VxlwSaplingProgress { X = 1, Y = 2, Z = 3, AccumulatedTicks = 600 } },
+                Stations = new[]
+                {
+                    new VxlwStation { X = 1, Y = 2, Z = 3, StationType = "ClayKiln", Inputs = new SavedContainerSlot[0] }
+                }
+            };
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "stale-test", world, extras: extras);
+                Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "simulation.json")), Is.True);
+                Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "stations.json")), Is.True);
+
+                // The queues drained and the stations were removed: a re-save without them must
+                // not leave the old files to resurrect dead state on the next load.
+                service.Save(path, "stale-test", world, extras: new WorldSaveExtras());
+                Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "simulation.json")), Is.False);
+                Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "stations.json")), Is.False);
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.Saplings, Is.Null);
+                Assert.That(result.Data.Stations, Is.Null);
+                Assert.That(result.Data.PlayerState, Is.Null);
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
         static string CreateTempSavePath()
         {
             return Path.Combine(Path.GetTempPath(), $"blockiverse-save-{System.Guid.NewGuid():N}.vxlworld");

@@ -110,7 +110,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void RendererDestroysReplacedChunkMeshesAfterDirtyRebuild()
+        public void RendererReusesThePooledChunkMeshAcrossDirtyRebuilds()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
@@ -119,7 +119,6 @@ namespace Blockiverse.Tests.EditMode
             var worldObject = new GameObject("Chunk Renderer");
             Texture2D atlasTexture = null;
             Material blockMaterial = null;
-            Mesh firstMesh = null;
 
             try
             {
@@ -128,23 +127,23 @@ namespace Blockiverse.Tests.EditMode
                 renderer.Configure(world, registry, blockMaterial, -1);
 
                 MeshFilter filter = worldObject.GetComponentInChildren<MeshFilter>();
-                firstMesh = filter.sharedMesh;
+                Mesh firstMesh = filter.sharedMesh;
                 Assert.That(firstMesh, Is.Not.Null);
+                Assert.That(firstMesh.vertexCount, Is.GreaterThan(0));
 
                 world.SetBlock(editedPosition, BlockRegistry.Air);
                 renderer.RebuildDirty();
 
-                Assert.That(filter.sharedMesh, Is.Not.SameAs(firstMesh));
-                Assert.That(firstMesh == null, Is.True, "Expected the replaced chunk mesh to be destroyed.");
+                // One pooled Mesh per chunk: rebuilds refill the same instance (no allocation
+                // churn), and the refilled geometry reflects the edit (block removed → no faces).
+                Assert.That(filter.sharedMesh, Is.SameAs(firstMesh));
+                Assert.That(firstMesh.vertexCount, Is.EqualTo(0), "Expected the pooled mesh to be refilled with the post-edit geometry.");
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(worldObject);
                 UnityEngine.Object.DestroyImmediate(blockMaterial);
                 UnityEngine.Object.DestroyImmediate(atlasTexture);
-
-                if (firstMesh != null)
-                    UnityEngine.Object.DestroyImmediate(firstMesh);
             }
         }
 
@@ -177,10 +176,13 @@ namespace Blockiverse.Tests.EditMode
                 world.SetBlock(editedPosition, BlockRegistry.Air);
                 renderer.RebuildDirty();
 
+                // Meshes are pooled, so the collider's reference always matches the filter's;
+                // the throttle is observable through the pending count (the collider keeps its
+                // cooked snapshot of the pre-edit geometry until the rebake recooks).
                 Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0), "Collider rebakes should be throttled by the budget.");
-                Assert.That(collider.sharedMesh, Is.Not.SameAs(filter.sharedMesh), "Collider should still use the pre-edit mesh until the rebake runs.");
+                Assert.That(collider.sharedMesh, Is.SameAs(filter.sharedMesh));
 
-                // Draining the backlog brings the collider up to the current visual mesh.
+                // Draining the backlog recooks the collider from the refilled mesh.
                 renderer.ProcessPendingColliderRebuilds(int.MaxValue);
 
                 Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));

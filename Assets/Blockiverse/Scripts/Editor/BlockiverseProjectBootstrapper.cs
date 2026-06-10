@@ -84,6 +84,10 @@ namespace Blockiverse.Editor
         const string NewWorldPanelName = "New World Panel";
         const string LoadWorldPanelName = "Load World Panel";
         const string SettingsPanelName = "Settings Panel";
+        const string AudioSettingsPanelName = "Audio Settings Panel";
+        const string ControlsPanelName = "Controls Panel";
+        const string WorldDetailsPanelName = "World Details Panel";
+        const string CreativeToolsPanelName = "Creative Tools Panel";
         const string StationPanelName = "Station Panel";
         const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
         const float GameMenuScale = 0.0013f;
@@ -120,7 +124,8 @@ namespace Blockiverse.Editor
         const string InteractionTestBlockName = "Interaction Test Block";
         const float JumpHeightMeters = 1.3f;
         static readonly Vector2 ComfortMenuSize = new(520.0f, 580.0f);
-        static readonly Vector2 BlockMenuSize = new(360.0f, 260.0f);
+        // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
+        static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
         static readonly Vector2 SurvivalHudSize = new(940.0f, 420.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
@@ -145,8 +150,6 @@ namespace Blockiverse.Editor
         static readonly Color ComfortMenuControlColor  = ControlNormalColor;
         static readonly Color ComfortMenuAccentColor   = AccentColor;
         static readonly Color BlockMenuPanelColor      = new(0.05f, 0.09f, 0.13f, 0.96f);
-        static readonly Color BlockMenuControlColor    = ControlNormalColor;
-        static readonly Color BlockMenuAccentColor     = new(0.94f, 0.78f, 0.24f, 1.0f);
         static readonly Color SurvivalHudPanelColor    = PanelBaseColor;
         static readonly Color SurvivalHudSectionColor  = PanelHeaderColor;
         static readonly Color SurvivalHudAccentColor   = AccentColor;
@@ -713,7 +716,124 @@ namespace Blockiverse.Editor
         {
             EnsureMaterial(BlockiverseProject.PointerLineMaterialPath, PointerLineColor, preferUnlit: true);
             EnsureMaterial(BlockiverseProject.HighlightMaterialPath, HighlightColor, preferUnlit: false);
+            EnsureFluidAtlasTiles();
             EnsureBlockTextureMaterial();
+        }
+
+        // Atlas tile indexes assigned to the fluid blocks in BlockVisualAtlas.TileIndexByBlockId.
+        const int FreshwaterAtlasTileIndex = 73;
+        const int BrineAtlasTileIndex = 74;
+
+        // Paints the freshwater/brine tiles into the authored block atlas. Strictly additive and
+        // deterministic: a tile is only painted while it is still blank (fully transparent or one
+        // uniform placeholder color), so authored pixels are never touched and reruns are no-ops.
+        // The stale Python art generator (ATLAS_ROWS=7) must NOT be used for this — it would
+        // regenerate the whole atlas at the old size.
+        static void EnsureFluidAtlasTiles()
+        {
+            string path = BlockVisualAtlas.AuthoredAtlasPath;
+            if (!File.Exists(path))
+                return;
+
+            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+            try
+            {
+                if (!texture.LoadImage(File.ReadAllBytes(path)) ||
+                    texture.width != BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels ||
+                    texture.height != BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels)
+                {
+                    BlockiverseLog.Warning(
+                        BlockiverseLogCategory.Bootstrap,
+                        $"Authored block atlas at {path} is missing or not the expected size; fluid tiles were not painted.");
+                    return;
+                }
+
+                bool painted = TryPaintAtlasTile(texture, FreshwaterAtlasTileIndex, FreshwaterTilePixel);
+                painted |= TryPaintAtlasTile(texture, BrineAtlasTileIndex, BrineTilePixel);
+
+                if (!painted)
+                    return;
+
+                texture.Apply();
+                File.WriteAllBytes(path, texture.EncodeToPNG());
+                AssetDatabase.ImportAsset(path);
+                BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Painted fluid tiles into the authored block atlas.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        static bool TryPaintAtlasTile(Texture2D atlas, int tileIndex, Func<int, int, Color32> pixelAt)
+        {
+            int column = tileIndex % BlockVisualAtlas.Columns;
+            int row = tileIndex / BlockVisualAtlas.Columns;
+            int originX = column * BlockVisualAtlas.TilePixels;
+            // Tile rows count from the top of the atlas; texture pixel rows from the bottom.
+            int originY = (BlockVisualAtlas.Rows - 1 - row) * BlockVisualAtlas.TilePixels;
+
+            if (!IsAtlasTileBlank(atlas, originX, originY))
+                return false;
+
+            for (int y = 0; y < BlockVisualAtlas.TilePixels; y++)
+            {
+                for (int x = 0; x < BlockVisualAtlas.TilePixels; x++)
+                    atlas.SetPixel(originX + x, originY + y, pixelAt(x, y));
+            }
+
+            return true;
+        }
+
+        // Blank = fully transparent or one uniform fill. Authored 16px tiles always vary, so this
+        // can never overwrite real art.
+        static bool IsAtlasTileBlank(Texture2D atlas, int originX, int originY)
+        {
+            Color32 first = atlas.GetPixel(originX, originY);
+            bool allTransparent = true;
+            bool allUniform = true;
+
+            for (int y = 0; y < BlockVisualAtlas.TilePixels; y++)
+            {
+                for (int x = 0; x < BlockVisualAtlas.TilePixels; x++)
+                {
+                    Color32 pixel = atlas.GetPixel(originX + x, originY + y);
+                    allTransparent &= pixel.a == 0;
+                    allUniform &= pixel.r == first.r && pixel.g == first.g && pixel.b == first.b && pixel.a == first.a;
+                }
+            }
+
+            return allTransparent || allUniform;
+        }
+
+        // Calm freshwater: blue body with wave crest/trough bands and sparse sparkle pixels.
+        static Color32 FreshwaterTilePixel(int x, int y)
+        {
+            if ((x * 7 + y * 13) % 23 == 0)
+                return new Color32(208, 232, 248, 255);
+
+            int band = (y + ((x + y * 3) % 4 == 0 ? 1 : 0)) % 4;
+            if (band == 0)
+                return new Color32(64, 124, 198, 255);
+            if (band == 2)
+                return new Color32(34, 76, 148, 255);
+
+            return new Color32(45, 96, 172, 255);
+        }
+
+        // Brine: muted teal-green body with pale salt flecks.
+        static Color32 BrineTilePixel(int x, int y)
+        {
+            if ((x * 11 + y * 7) % 19 == 0)
+                return new Color32(226, 234, 226, 255);
+
+            int band = (y + ((x + y * 2) % 5 == 0 ? 1 : 0)) % 4;
+            if (band == 0)
+                return new Color32(72, 138, 134, 255);
+            if (band == 2)
+                return new Color32(30, 84, 86, 255);
+
+            return new Color32(44, 108, 106, 255);
         }
 
         static void EnsureBlockTextureMaterial()
@@ -1048,6 +1168,7 @@ namespace Blockiverse.Editor
             EnsureComponent<MultiplayerSurvivalSync>(managerObject);
             EnsureComponent<SurvivalVitalsRuntime>(managerObject);
             EnsureComponent<MultiplayerWorldPersistence>(managerObject);
+            EnsureComponent<EnvironmentDynamicsController>(managerObject);
 
             EditorUtility.SetDirty(transport);
             EditorUtility.SetDirty(networkManager);
@@ -2138,6 +2259,11 @@ namespace Blockiverse.Editor
             SurvivalFeedbackBridge survivalFeedback = EnsureComponent<SurvivalFeedbackBridge>(rig);
             WeatherFeedbackController weatherFeedback = EnsureComponent<WeatherFeedbackController>(rig);
 
+            // Glide footsteps + landing thump from the rig's character controller.
+            BlockiverseLocomotionFeedback locomotionFeedback = EnsureComponent<BlockiverseLocomotionFeedback>(rig);
+            locomotionFeedback.Configure(rig.GetComponent<CharacterController>(), audioCuePlayer);
+            EditorUtility.SetDirty(locomotionFeedback);
+
             // Comfort + feedback settings persist across launches (PlayerPrefs).
             BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
             EditorUtility.SetDirty(settingsPersistence);
@@ -2282,13 +2408,62 @@ namespace Blockiverse.Editor
                 new Vector2(24.0f, -82.0f),
                 new Vector2(300.0f, 34.0f));
 
-            EnsureBlockMenuSwatch(panelObject.transform, "Swatch A", "Meadow Turf", BlockMenuAccentColor, new Vector2(24.0f, -128.0f));
-            EnsureBlockMenuSwatch(panelObject.transform, "Swatch B", "Loam", new Color(0.50f, 0.33f, 0.22f, 1.0f), new Vector2(24.0f, -182.0f));
-            EnsureBlockMenuSwatch(panelObject.transform, "Swatch C", "Clearstone", new Color(0.32f, 0.74f, 0.95f, 1.0f), new Vector2(24.0f, -236.0f));
+            // The browser replaced the decorative swatches; clear them out of older rigs.
+            foreach (string stale in new[] { "Swatch A", "Swatch B", "Swatch C" })
+            {
+                Transform staleSwatch = panelObject.transform.Find(stale);
+                if (staleSwatch != null)
+                    UnityEngine.Object.DestroyImmediate(staleSwatch.gameObject);
+            }
+
+            // Catalog browser controls: category cycle + page label/buttons + search field.
+            Button categoryButton = EnsureButtonControl(panelObject.transform, "Category Button", "Category",
+                new Vector2(24.0f, -124.0f), new Vector2(150.0f, 44.0f));
+            TMP_Text categoryLabel = EnsureLabel(panelObject.transform, "Category Label", "Terrain", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(190.0f, -128.0f), new Vector2(170.0f, 36.0f));
+
+            Button prevPageButton = EnsureButtonControl(panelObject.transform, "Prev Page Button", "<",
+                new Vector2(368.0f, -124.0f), new Vector2(52.0f, 44.0f));
+            TMP_Text pageLabel = EnsureLabel(panelObject.transform, "Page Label", "1/1", 22,
+                TextAnchor.MiddleCenter,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(424.0f, -128.0f), new Vector2(56.0f, 36.0f));
+            Button nextPageButton = EnsureButtonControl(panelObject.transform, "Next Page Button", ">",
+                new Vector2(484.0f, -124.0f), new Vector2(52.0f, 44.0f));
+
+            TMP_InputField searchField = EnsureInputFieldControl(panelObject.transform, "Search Field",
+                "Search blocks…", string.Empty, new Vector2(24.0f, -176.0f), new Vector2(512.0f, 48.0f));
+
+            // 12-entry grid (3 columns × 4 rows) of pick buttons.
+            const int gridColumns = 3;
+            const int gridEntries = 12;
+            var entryButtons = new Button[gridEntries];
+            var entryLabels = new TMP_Text[gridEntries];
+            for (int i = 0; i < gridEntries; i++)
+            {
+                int column = i % gridColumns;
+                int row = i / gridColumns;
+                var position = new Vector2(24.0f + column * 172.0f, -236.0f - row * 54.0f);
+                entryButtons[i] = EnsureButtonControl(panelObject.transform, $"Entry Button {i}", string.Empty,
+                    position, new Vector2(164.0f, 46.0f));
+                Transform entryLabelTransform = entryButtons[i].transform.Find("Label");
+                entryLabels[i] = entryLabelTransform != null ? entryLabelTransform.GetComponent<TMP_Text>() : null;
+                if (entryLabels[i] != null)
+                    entryLabels[i].fontSize = 18;
+            }
 
             CreativeHotbar menu = EnsureComponent<CreativeHotbar>(menuObject);
-            menu.ConfigureDefault(selectedLabel);
+            menu.ConfigureFromCatalog(CreativeCatalog.CreateDefault(), null, selectedLabel);
             menu.ConfigureCanvas(canvas);
+
+            BlockiverseCatalogBrowserPanel browser = EnsureComponent<BlockiverseCatalogBrowserPanel>(menuObject);
+            browser.Configure(menu, categoryLabel, pageLabel, searchField, entryButtons, entryLabels);
+            WireButton(categoryButton, browser, nameof(BlockiverseCatalogBrowserPanel.CycleCategory), browser.CycleCategory);
+            WireButton(prevPageButton, browser, nameof(BlockiverseCatalogBrowserPanel.PreviousPage), browser.PreviousPage);
+            WireButton(nextPageButton, browser, nameof(BlockiverseCatalogBrowserPanel.NextPage), browser.NextPage);
+            EditorUtility.SetDirty(browser);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             presenter.Configure(canvas, head, 1.12f, -0.34f, -0.18f, 0.0f);
             presenter.ConfigureFeedback(BlockiverseAudioCue.InventoryOpen, BlockiverseAudioCue.InventoryClose);
@@ -2458,7 +2633,7 @@ namespace Blockiverse.Editor
             EnsureLabel(
                 panelObject.transform,
                 "Mapping Text",
-                "Right trigger: press UI or break blocks\nRight grip: place blocks\nLeft grip: blocks menu\nMenu: comfort settings\nRight thumbstick: snap turn\nRight A: jump\nLeft X: unassigned\nLeft Y: unassigned\nRight B: unassigned",
+                ControllerMappingText,
                 20,
                 TextAnchor.UpperLeft,
                 new Vector2(0.0f, 1.0f),
@@ -2546,9 +2721,10 @@ namespace Blockiverse.Editor
                 new Vector2(24.0f, -24.0f),
                 new Vector2(280.0f, 48.0f));
 
+            BlockiverseItemIconLibrary iconLibrary = EnsureItemIconLibrary(rig);
             SurvivalHealthPanel healthPanel = EnsureSurvivalHealthSection(panelObject.transform);
-            SurvivalInventoryPanel inventoryPanel = EnsureSurvivalInventorySection(panelObject.transform);
-            SurvivalCraftingPanel craftingPanel = EnsureSurvivalCraftingSection(panelObject.transform);
+            SurvivalInventoryPanel inventoryPanel = EnsureSurvivalInventorySection(panelObject.transform, iconLibrary);
+            SurvivalCraftingPanel craftingPanel = EnsureSurvivalCraftingSection(panelObject.transform, iconLibrary);
             SurvivalCratePanel cratePanel = EnsureSurvivalCrateSection(panelObject.transform);
 
             SurvivalHudController controller = EnsureComponent<SurvivalHudController>(hudObject);
@@ -2606,7 +2782,44 @@ namespace Blockiverse.Editor
             return panel;
         }
 
-        static SurvivalInventoryPanel EnsureSurvivalInventorySection(Transform parent)
+        // Populates the rig's item icon library from the committed item icon sprites — one entry
+        // per Assets/Blockiverse/Art/Textures/Items/<canonical_id>.png, importer forced to Sprite.
+        static BlockiverseItemIconLibrary EnsureItemIconLibrary(GameObject rig)
+        {
+            const string itemsDir = "Assets/Blockiverse/Art/Textures/Items";
+
+            var ids = new List<string>();
+            var sprites = new List<Sprite>();
+
+            if (AssetDatabase.IsValidFolder(itemsDir))
+            {
+                foreach (string guid in AssetDatabase.FindAssets("t:Texture2D", new[] { itemsDir }))
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+
+                    if (AssetImporter.GetAtPath(path) is TextureImporter importer &&
+                        importer.textureType != TextureImporterType.Sprite)
+                    {
+                        importer.textureType = TextureImporterType.Sprite;
+                        importer.SaveAndReimport();
+                    }
+
+                    Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+                    if (sprite == null)
+                        continue;
+
+                    ids.Add(Path.GetFileNameWithoutExtension(path));
+                    sprites.Add(sprite);
+                }
+            }
+
+            BlockiverseItemIconLibrary library = EnsureComponent<BlockiverseItemIconLibrary>(rig);
+            library.Configure(ids.ToArray(), sprites.ToArray());
+            EditorUtility.SetDirty(library);
+            return library;
+        }
+
+        static SurvivalInventoryPanel EnsureSurvivalInventorySection(Transform parent, BlockiverseItemIconLibrary iconLibrary)
         {
             GameObject sectionObject = EnsureHudSection(parent, "Inventory", new Vector2(250.0f, -82.0f), new Vector2(206.0f, 300.0f));
 
@@ -2636,9 +2849,16 @@ namespace Blockiverse.Editor
 
             TMP_Text[] slotLabels = new TMP_Text[6];
             Button[] slotButtons = new Button[slotLabels.Length];
+            Image[] slotIcons = new Image[slotLabels.Length];
 
             for (int index = 0; index < slotLabels.Length; index++)
             {
+                slotIcons[index] = EnsureItemIconImage(
+                    sectionObject.transform,
+                    $"Slot Icon {index + 1}",
+                    new Vector2(16.0f, -82.0f - index * 34.0f),
+                    26.0f);
+
                 slotLabels[index] = EnsureLabel(
                     sectionObject.transform,
                     $"Slot {index + 1}",
@@ -2648,18 +2868,33 @@ namespace Blockiverse.Editor
                     new Vector2(0.0f, 1.0f),
                     new Vector2(0.0f, 1.0f),
                     new Vector2(0.0f, 1.0f),
-                    new Vector2(16.0f, -82.0f - index * 34.0f),
-                    new Vector2(170.0f, 28.0f));
+                    new Vector2(48.0f, -82.0f - index * 34.0f),
+                    new Vector2(140.0f, 28.0f));
                 slotButtons[index] = EnsureTextButton(slotLabels[index]);
             }
 
             SurvivalInventoryPanel panel = EnsureComponent<SurvivalInventoryPanel>(sectionObject);
-            panel.Configure(slotButtons, slotLabels, selectedHotbarLabel);
+            panel.Configure(slotButtons, slotLabels, selectedHotbarLabel, slotIcons, iconLibrary);
             EditorUtility.SetDirty(panel);
             return panel;
         }
 
-        static SurvivalCraftingPanel EnsureSurvivalCraftingSection(Transform parent)
+        // Small square icon image used by inventory slots and crafting rows; hidden until a
+        // sprite is assigned at runtime.
+        static Image EnsureItemIconImage(Transform parent, string name, Vector2 anchoredPosition, float size)
+        {
+            GameObject iconObject = EnsureRectChild(parent, name);
+            RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(iconRect, anchoredPosition, new Vector2(size, size));
+
+            Image icon = EnsureComponent<Image>(iconObject);
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            icon.enabled = false;
+            return icon;
+        }
+
+        static SurvivalCraftingPanel EnsureSurvivalCraftingSection(Transform parent, BlockiverseItemIconLibrary iconLibrary)
         {
             GameObject sectionObject = EnsureHudSection(parent, "Crafting", new Vector2(480.0f, -82.0f), new Vector2(216.0f, 340.0f));
 
@@ -2690,9 +2925,16 @@ namespace Blockiverse.Editor
 
             TMP_Text[] recipeLabels = new TMP_Text[5];
             Button[] recipeButtons = new Button[recipeLabels.Length];
+            Image[] recipeIcons = new Image[recipeLabels.Length];
 
             for (int index = 0; index < recipeLabels.Length; index++)
             {
+                recipeIcons[index] = EnsureItemIconImage(
+                    sectionObject.transform,
+                    $"Recipe Icon {index + 1}",
+                    new Vector2(16.0f, -84.0f - index * 40.0f),
+                    28.0f);
+
                 recipeLabels[index] = EnsureLabel(
                     sectionObject.transform,
                     $"Recipe {index + 1}",
@@ -2702,8 +2944,8 @@ namespace Blockiverse.Editor
                     new Vector2(0.0f, 1.0f),
                     new Vector2(0.0f, 1.0f),
                     new Vector2(0.0f, 1.0f),
-                    new Vector2(16.0f, -82.0f - index * 40.0f),
-                    new Vector2(180.0f, 36.0f));
+                    new Vector2(50.0f, -82.0f - index * 40.0f),
+                    new Vector2(146.0f, 36.0f));
                 recipeButtons[index] = EnsureTextButton(recipeLabels[index]);
             }
 
@@ -2722,7 +2964,7 @@ namespace Blockiverse.Editor
             Button repairButton = EnsureTextButton(repairLabel);
 
             SurvivalCraftingPanel panel = EnsureComponent<SurvivalCraftingPanel>(sectionObject);
-            panel.Configure(recipeButtons, recipeLabels, statusLabel);
+            panel.Configure(recipeButtons, recipeLabels, statusLabel, recipeIcons, iconLibrary);
             panel.ConfigureRepairButton(repairButton);
             EditorUtility.SetDirty(panel);
             return panel;
@@ -2850,39 +3092,6 @@ namespace Blockiverse.Editor
             slider.fillRect = fillRect;
             slider.targetGraphic = background;
             return slider;
-        }
-
-        static void EnsureBlockMenuSwatch(
-            Transform parent,
-            string name,
-            string label,
-            Color color,
-            Vector2 anchoredPosition)
-        {
-            GameObject rowObject = EnsureRectChild(parent, name);
-            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
-            ConfigureTopLeftRect(rowRect, anchoredPosition, new Vector2(300.0f, 42.0f));
-
-            GameObject swatchObject = EnsureRectChild(rowObject.transform, "Swatch");
-            RectTransform swatchRect = swatchObject.GetComponent<RectTransform>();
-            ConfigureTopLeftRect(swatchRect, Vector2.zero, new Vector2(38.0f, 38.0f));
-            Image swatchImage = EnsureComponent<Image>(swatchObject);
-            swatchImage.color = color;
-
-            Image rowImage = EnsureComponent<Image>(rowObject);
-            rowImage.color = BlockMenuControlColor;
-
-            EnsureLabel(
-                rowObject.transform,
-                "Label",
-                label,
-                24,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 0.0f),
-                new Vector2(1.0f, 1.0f),
-                new Vector2(0.0f, 0.5f),
-                new Vector2(52.0f, 0.0f),
-                new Vector2(228.0f, 42.0f));
         }
 
         static Toggle EnsureToggleControl(
@@ -3547,7 +3756,7 @@ namespace Blockiverse.Editor
             var (titleMenu, titlePresenter) = EnsureActionMenuPanel(
                 cameraOffset, TitleMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
             var (pauseMenu, pausePresenter) = EnsureActionMenuPanel(
-                cameraOffset, PauseMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
+                cameraOffset, PauseMenuName, ActionMenuSize, head, buttonCount: 7, sortOrder: 25);
             var (deathMenu, deathPresenter) = EnsureActionMenuPanel(
                 cameraOffset, DeathScreenName, ActionMenuSize, head, buttonCount: 3, sortOrder: 25);
             var (confirmMenu, confirmPresenter) = EnsureActionMenuPanel(
@@ -3558,15 +3767,29 @@ namespace Blockiverse.Editor
             var (settingsMenu, settingsPresenter) = EnsureSettingsMenuPanel(cameraOffset, head);
             var (stationPanel, stationPresenter) = EnsureStationMenuPanel(cameraOffset, head);
             var (lanPresenter, lanCloseButton) = EnsureLanMultiplayerMenuPanel(cameraOffset, head);
+            var (audioPanel, audioPresenter, audioCloseButton) = EnsureAudioSettingsMenuPanel(cameraOffset, head);
+            var (controlsPresenter, controlsCloseButton) = EnsureControlsMenuPanel(cameraOffset, head);
+            var (worldDetailsPanel, worldDetailsMenu, worldDetailsPresenter) = EnsureWorldDetailsMenuPanel(cameraOffset, head);
+            var (creativeToolsPanel, creativeToolsPresenter, creativeToolsCloseButton) = EnsureCreativeToolsMenuPanel(cameraOffset, head);
 
             BlockiverseMenuController controller = EnsureComponent<BlockiverseMenuController>(rig);
             controller.Configure(inputRig, titleMenu, pauseMenu, deathMenu, confirmMenu,
-                newWorldPanel, loadWorldPanel, settingsMenu);
+                newWorldPanel, loadWorldPanel, settingsMenu, worldDetailsPanel, worldDetailsMenu);
             controller.ConfigurePresenters(
                 titlePresenter, pausePresenter, deathPresenter, confirmPresenter,
                 newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter,
-                lanPresenter);
+                lanPresenter, audioPresenter, controlsPresenter, worldDetailsPresenter,
+                creativeToolsPresenter);
             controller.ConfigureStationPanel(stationPanel);
+
+            if (creativeToolsCloseButton != null)
+            {
+                RemovePersistentListeners(creativeToolsCloseButton.onClick, controller, nameof(BlockiverseMenuController.CloseCreativeToolsScreen));
+                UnityEventTools.AddPersistentListener(creativeToolsCloseButton.onClick, controller.CloseCreativeToolsScreen);
+                EditorUtility.SetDirty(creativeToolsCloseButton);
+            }
+
+            EditorUtility.SetDirty(creativeToolsPanel);
 
             if (lanCloseButton != null)
             {
@@ -3574,6 +3797,22 @@ namespace Blockiverse.Editor
                 UnityEventTools.AddPersistentListener(lanCloseButton.onClick, controller.CloseLanMultiplayerScreen);
                 EditorUtility.SetDirty(lanCloseButton);
             }
+
+            if (audioCloseButton != null)
+            {
+                RemovePersistentListeners(audioCloseButton.onClick, controller, nameof(BlockiverseMenuController.CloseAudioSettingsScreen));
+                UnityEventTools.AddPersistentListener(audioCloseButton.onClick, controller.CloseAudioSettingsScreen);
+                EditorUtility.SetDirty(audioCloseButton);
+            }
+
+            if (controlsCloseButton != null)
+            {
+                RemovePersistentListeners(controlsCloseButton.onClick, controller, nameof(BlockiverseMenuController.CloseControlsScreen));
+                UnityEventTools.AddPersistentListener(controlsCloseButton.onClick, controller.CloseControlsScreen);
+                EditorUtility.SetDirty(controlsCloseButton);
+            }
+
+            EditorUtility.SetDirty(audioPanel);
 
             // The session coordinator implements the menu's save/load/new-world/continue verbs.
             BlockiverseWorldSessionController sessionController = EnsureComponent<BlockiverseWorldSessionController>(rig);
@@ -3994,15 +4233,18 @@ namespace Blockiverse.Editor
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
                 new Vector2(28, -96 - MaxEntries * 54 - 12), new Vector2(W - 56, 36));
 
-            // Load / Cancel buttons
+            // Load / Details / Cancel buttons (Details opens the §6.5 World Details screen).
             float footerY = -96 - MaxEntries * 54 - 64;
+            float footerButtonWidth = (W - 112) / 3;
             Button loadButton = EnsureButtonControl(bg.transform, "Load Button", "Load World",
-                new Vector2(28, footerY), new Vector2((W - 84) / 2, 52));
+                new Vector2(28, footerY), new Vector2(footerButtonWidth, 52));
+            Button detailsButton = EnsureButtonControl(bg.transform, "Details Button", "Details",
+                new Vector2(28 + footerButtonWidth + 28, footerY), new Vector2(footerButtonWidth, 52));
             Button cancelButton = EnsureButtonControl(bg.transform, "Cancel Button", "Cancel",
-                new Vector2(28 + (W - 84) / 2 + 28, footerY), new Vector2((W - 84) / 2, 52));
+                new Vector2(28 + (footerButtonWidth + 28) * 2, footerY), new Vector2(footerButtonWidth, 52));
 
             BlockiverseLoadWorldPanel panel = EnsureComponent<BlockiverseLoadWorldPanel>(panelRoot);
-            panel.Configure(entryButtons, entryLabels, loadButton, cancelButton, selectionLabel);
+            panel.Configure(entryButtons, entryLabels, loadButton, cancelButton, selectionLabel, detailsButton);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
@@ -4015,14 +4257,48 @@ namespace Blockiverse.Editor
             return (panel, presenter);
         }
 
-        // Builds a placeholder Settings panel with a close button.
+        // Builds the Settings hub as a four-entry action menu (Comfort / Audio / Controls / Close).
         static (BlockiverseActionMenu menu, BlockiverseWorldSpacePanelPresenter presenter) EnsureSettingsMenuPanel(
             Transform parent, Transform head)
         {
-            const float W = 480.0f;
-            const float H = 300.0f;
+            // The settings hub is a plain four-entry action menu (Comfort / Audio / Controls /
+            // Close, set by the menu controller at Start). Rebuild the panel from scratch so the
+            // pre-hub placeholder layout (title + placeholder + lone close button) never lingers
+            // in regenerated rigs.
+            Transform stale = parent.Find(SettingsPanelName);
+            if (stale != null && stale.Find("Panel/Placeholder") != null)
+                UnityEngine.Object.DestroyImmediate(stale.gameObject);
 
-            GameObject panelRoot = EnsureRectChild(parent, SettingsPanelName);
+            (BlockiverseActionMenu settingsMenu, BlockiverseWorldSpacePanelPresenter presenter) =
+                EnsureActionMenuPanel(parent, SettingsPanelName, ActionMenuSize, head, buttonCount: 4, sortOrder: 25);
+            settingsMenu.SetMenu("Settings", MenuActions.Settings);
+
+            EditorUtility.SetDirty(settingsMenu);
+            return (settingsMenu, presenter);
+        }
+
+        // Canonical controller mapping description, shared by the first-launch mapping popup and
+        // the Settings → Controls reference screen so the two can never drift apart.
+        const string ControllerMappingText =
+            "Left stick: move\n" +
+            "Right stick: snap turn\n" +
+            "Right stick hold up: teleport aim, release to land\n" +
+            "Right trigger: press UI or break blocks\n" +
+            "Right grip: place or use\n" +
+            "Left grip: blocks menu\n" +
+            "Right A: jump\n" +
+            "Right B: toggle block editing\n" +
+            "Menu: pause";
+
+        // Builds the audio/feedback settings screen: volume sliders, feedback toggles, and a
+        // Close button (wired by the caller to the menu controller's close hook).
+        static (BlockiverseAudioSettingsPanel panel, BlockiverseWorldSpacePanelPresenter presenter, Button closeButton)
+            EnsureAudioSettingsMenuPanel(Transform parent, Transform head)
+        {
+            const float W = 540.0f;
+            const float H = 860.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, AudioSettingsPanelName);
             panelRoot.transform.localPosition = GameMenuLocalPosition;
             panelRoot.transform.localRotation = Quaternion.identity;
             panelRoot.transform.localScale = Vector3.one * GameMenuScale;
@@ -4054,40 +4330,402 @@ namespace Blockiverse.Editor
             if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
             bgImage.color = PanelBaseColor;
 
-            EnsureLabel(bg.transform, "Title", "Settings", 32, TextAnchor.MiddleLeft,
+            EnsureLabel(bg.transform, "Title", "Audio & Feedback", 32, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
                 new Vector2(28, -28), new Vector2(W - 56, 52));
 
-            EnsureLabel(bg.transform, "Placeholder", "Settings will appear here.", 22, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28, -110), new Vector2(W - 56, 40), TextDimColor);
+            Slider master = EnsureSettingsSlider(bg.transform, "Master Volume Slider", "Master Volume", 1.0f, new Vector2(28, -96));
+            Slider effects = EnsureSettingsSlider(bg.transform, "Effects Volume Slider", "Effects Volume", 1.0f, new Vector2(28, -192));
+            Slider ui = EnsureSettingsSlider(bg.transform, "UI Volume Slider", "UI Volume", 1.0f, new Vector2(28, -288));
+            Slider weather = EnsureSettingsSlider(bg.transform, "Weather Volume Slider", "Weather Volume", 1.0f, new Vector2(28, -384));
+            Slider hapticStrength = EnsureSettingsSlider(bg.transform, "Haptic Strength Slider", "Haptic Strength", 1.0f, new Vector2(28, -480));
+
+            Toggle mute = EnsureToggleControl(bg.transform, "Mute All Toggle", "Mute All", false, new Vector2(28, -576));
+            Toggle haptics = EnsureToggleControl(bg.transform, "Haptics Toggle", "Haptics", true, new Vector2(28, -632));
+            Toggle reducedFlash = EnsureToggleControl(bg.transform, "Reduced Flash Toggle", "Reduced Flash", false, new Vector2(28, -688));
+            Toggle reducedParticles = EnsureToggleControl(bg.transform, "Reduced Particles Toggle", "Reduced Particles", false, new Vector2(28, -744));
 
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
-                new Vector2(28, -190), new Vector2(160, 52));
+                new Vector2(28, -806), new Vector2(160, 48));
 
-            // Wrap the close button in a BlockiverseActionMenu so the menu controller can dispatch
-            // the SettingsClose action id at runtime via its HandleAction → PopScreen path.
-            TMP_Text titleLabel = bg.transform.Find("Title")?.GetComponent<TMP_Text>();
-            var buttons = new Button[] { closeButton };
-            Transform labelTransform = closeButton.transform.Find("Label");
-            var labels = new TMP_Text[] { labelTransform != null ? labelTransform.GetComponent<TMP_Text>() : null };
-
-            BlockiverseActionMenu settingsMenu = EnsureComponent<BlockiverseActionMenu>(panelRoot);
-            settingsMenu.Configure(titleLabel, buttons, labels);
-            settingsMenu.SetMenu("Settings", new[]
-            {
-                new MenuAction(MenuActions.SettingsClose, "Close"),
-            });
+            BlockiverseAudioSettingsPanel panel = EnsureComponent<BlockiverseAudioSettingsPanel>(panelRoot);
+            panel.Configure(
+                parent.GetComponentInParent<BlockiverseFeedbackSettings>(),
+                master, effects, ui, weather, hapticStrength,
+                mute, haptics, reducedFlash, reducedParticles);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
-            EditorUtility.SetDirty(settingsMenu);
+            EditorUtility.SetDirty(panel);
             EditorUtility.SetDirty(presenter);
             EditorUtility.SetDirty(panelRoot);
+            return (panel, presenter, closeButton);
+        }
 
-            return (settingsMenu, presenter);
+        // Builds the Creative Tools screen (§12): corner A/B region selection, fill/replace/
+        // delete/copy/paste with region undo/redo, tree/ruin spawners, pick-block, and the
+        // environment controls (time-of-day, day speed, weather cycle).
+        static (BlockiverseCreativeToolsPanel panel, BlockiverseWorldSpacePanelPresenter presenter, Button closeButton)
+            EnsureCreativeToolsMenuPanel(Transform parent, Transform head)
+        {
+            const float W = 560.0f;
+            const float H = 820.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, CreativeToolsPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            EnsureLabel(bg.transform, "Title", "Creative Tools", 32, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -28), new Vector2(W - 56, 52));
+
+            TMP_Text statusLabel = EnsureLabel(bg.transform, "Status", "Aim at blocks to select corners.", 20, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -78), new Vector2(W - 56, 34), TextDimColor);
+
+            TMP_Text cornersLabel = EnsureLabel(bg.transform, "Corners", "A: —    B: —", 20, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -116), new Vector2(W - 56, 32));
+
+            Button setAButton = EnsureButtonControl(bg.transform, "Set A Button", "Set A", new Vector2(28, -156), new Vector2(150, 48));
+            Button setBButton = EnsureButtonControl(bg.transform, "Set B Button", "Set B", new Vector2(196, -156), new Vector2(150, 48));
+            Button pickButton = EnsureButtonControl(bg.transform, "Pick Block Button", "Pick Block", new Vector2(364, -156), new Vector2(150, 48));
+
+            Button fillButton = EnsureButtonControl(bg.transform, "Fill Button", "Fill", new Vector2(28, -216), new Vector2(150, 48));
+            Button replaceButton = EnsureButtonControl(bg.transform, "Replace Button", "Replace", new Vector2(196, -216), new Vector2(150, 48));
+            Button deleteButton = EnsureButtonControl(bg.transform, "Delete Button", "Delete", new Vector2(364, -216), new Vector2(150, 48));
+
+            Button copyButton = EnsureButtonControl(bg.transform, "Copy Button", "Copy", new Vector2(28, -276), new Vector2(150, 48));
+            Button pasteButton = EnsureButtonControl(bg.transform, "Paste Button", "Paste", new Vector2(196, -276), new Vector2(150, 48));
+
+            Button undoButton = EnsureButtonControl(bg.transform, "Undo Button", "Undo Edit", new Vector2(28, -336), new Vector2(150, 48));
+            Button redoButton = EnsureButtonControl(bg.transform, "Redo Button", "Redo Edit", new Vector2(196, -336), new Vector2(150, 48));
+
+            Button treeButton = EnsureButtonControl(bg.transform, "Spawn Tree Button", "Spawn Tree", new Vector2(28, -396), new Vector2(150, 48));
+            Button ruinButton = EnsureButtonControl(bg.transform, "Spawn Ruin Button", "Spawn Ruin", new Vector2(196, -396), new Vector2(150, 48));
+
+            Slider timeSlider = EnsureSettingsSlider(bg.transform, "Time Of Day Slider", "Time of Day", 0.25f, new Vector2(28, -462));
+            Slider speedSlider = EnsureSettingsSlider(bg.transform, "Day Speed Slider", "Day Speed", 1.0f, new Vector2(28, -558), minValue: 0.0f, maxValue: 4.0f);
+
+            TMP_Text weatherLabel = EnsureLabel(bg.transform, "Weather Label", "Weather: Clear", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -660), new Vector2(300, 40));
+            Button weatherButton = EnsureButtonControl(bg.transform, "Cycle Weather Button", "Cycle Weather", new Vector2(346, -656), new Vector2(186, 48));
+
+            Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close", new Vector2(28, -730), new Vector2(150, 48));
+
+            BlockiverseCreativeToolsPanel panel = EnsureComponent<BlockiverseCreativeToolsPanel>(panelRoot);
+            panel.Configure(null, null, null, cornersLabel, statusLabel, weatherLabel, timeSlider, speedSlider);
+
+            WireButton(setAButton, panel, nameof(BlockiverseCreativeToolsPanel.SetCornerA), panel.SetCornerA);
+            WireButton(setBButton, panel, nameof(BlockiverseCreativeToolsPanel.SetCornerB), panel.SetCornerB);
+            WireButton(pickButton, panel, nameof(BlockiverseCreativeToolsPanel.PickBlock), panel.PickBlock);
+            WireButton(fillButton, panel, nameof(BlockiverseCreativeToolsPanel.FillRegion), panel.FillRegion);
+            WireButton(replaceButton, panel, nameof(BlockiverseCreativeToolsPanel.ReplaceRegion), panel.ReplaceRegion);
+            WireButton(deleteButton, panel, nameof(BlockiverseCreativeToolsPanel.DeleteRegion), panel.DeleteRegion);
+            WireButton(copyButton, panel, nameof(BlockiverseCreativeToolsPanel.CopyRegion), panel.CopyRegion);
+            WireButton(pasteButton, panel, nameof(BlockiverseCreativeToolsPanel.PasteRegion), panel.PasteRegion);
+            WireButton(undoButton, panel, nameof(BlockiverseCreativeToolsPanel.UndoEdit), panel.UndoEdit);
+            WireButton(redoButton, panel, nameof(BlockiverseCreativeToolsPanel.RedoEdit), panel.RedoEdit);
+            WireButton(treeButton, panel, nameof(BlockiverseCreativeToolsPanel.SpawnTree), panel.SpawnTree);
+            WireButton(ruinButton, panel, nameof(BlockiverseCreativeToolsPanel.SpawnRuin), panel.SpawnRuin);
+            WireButton(weatherButton, panel, nameof(BlockiverseCreativeToolsPanel.CycleWeather), panel.CycleWeather);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(panel);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+            return (panel, presenter, closeButton);
+        }
+
+        // Replaces any previous persistent listener for the same target/method, then adds it.
+        static void WireButton(Button button, UnityEngine.Object target, string methodName, UnityEngine.Events.UnityAction action)
+        {
+            RemovePersistentListeners(button.onClick, target, methodName);
+            UnityEventTools.AddPersistentListener(button.onClick, action);
+            EditorUtility.SetDirty(button);
+        }
+
+        // Builds the read-only controls reference screen (Settings → Controls).
+        static (BlockiverseWorldSpacePanelPresenter presenter, Button closeButton) EnsureControlsMenuPanel(
+            Transform parent, Transform head)
+        {
+            const float W = 540.0f;
+            const float H = 480.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, ControlsPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            EnsureLabel(bg.transform, "Title", "Controls", 32, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -28), new Vector2(W - 56, 52));
+
+            EnsureLabel(bg.transform, "Mapping Text", ControllerMappingText, 22, TextAnchor.UpperLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -96), new Vector2(W - 56, 290));
+
+            Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
+                new Vector2(28, -404), new Vector2(160, 48));
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+            return (presenter, closeButton);
+        }
+
+        // Builds the World Details screen (§6.5): save metadata, a rename field, and the
+        // Play/Rename/Duplicate/Delete/Back management actions.
+        static (BlockiverseWorldDetailsPanel panel, BlockiverseActionMenu menu, BlockiverseWorldSpacePanelPresenter presenter)
+            EnsureWorldDetailsMenuPanel(Transform parent, Transform head)
+        {
+            const float W = 560.0f;
+            const float H = 620.0f;
+
+            GameObject panelRoot = EnsureRectChild(parent, WorldDetailsPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            TMP_Text titleLabel = EnsureLabel(bg.transform, "Title", "World Details", 32, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -28), new Vector2(W - 56, 52));
+
+            TMP_Text metadataLabel = EnsureLabel(bg.transform, "Metadata", string.Empty, 22, TextAnchor.UpperLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -96), new Vector2(W - 56, 120));
+
+            EnsureLabel(bg.transform, "Rename Label", "Name", 22, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28, -232), new Vector2(120, 40), TextDimColor);
+
+            TMP_InputField renameField = EnsureInputFieldControl(bg.transform, "Rename Field",
+                "World name", string.Empty, new Vector2(28, -274), new Vector2(W - 56, 56));
+
+            // §6.5 management actions in two rows.
+            Button playButton = EnsureButtonControl(bg.transform, "Play Button", "Play", new Vector2(28, -356), new Vector2(150, 52));
+            Button renameButton = EnsureButtonControl(bg.transform, "Rename Button", "Rename", new Vector2(196, -356), new Vector2(150, 52));
+            Button duplicateButton = EnsureButtonControl(bg.transform, "Duplicate Button", "Duplicate", new Vector2(364, -356), new Vector2(150, 52));
+            Button deleteButton = EnsureButtonControl(bg.transform, "Delete Button", "Delete", new Vector2(28, -424), new Vector2(150, 52));
+            Button backButton = EnsureButtonControl(bg.transform, "Back Button", "Back", new Vector2(196, -424), new Vector2(150, 52));
+
+            var buttons = new[] { playButton, renameButton, duplicateButton, deleteButton, backButton };
+            var labels = new TMP_Text[buttons.Length];
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                Transform labelTransform = buttons[i].transform.Find("Label");
+                labels[i] = labelTransform != null ? labelTransform.GetComponent<TMP_Text>() : null;
+            }
+
+            BlockiverseActionMenu actionMenu = EnsureComponent<BlockiverseActionMenu>(panelRoot);
+            actionMenu.Configure(titleLabel, buttons, labels);
+            actionMenu.SetMenu("World Details", MenuActions.WorldDetails);
+
+            BlockiverseWorldDetailsPanel panel = EnsureComponent<BlockiverseWorldDetailsPanel>(panelRoot);
+            panel.Configure(metadataLabel, renameField);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(actionMenu);
+            EditorUtility.SetDirty(panel);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+            return (panel, actionMenu, presenter);
+        }
+
+        // Generic labeled slider row for settings panels (same construction as the comfort
+        // sliders, parameterized by name/label/range/position; defaults to 0–1).
+        static Slider EnsureSettingsSlider(Transform parent, string name, string label, float value, Vector2 anchoredPosition, float minValue = 0.0f, float maxValue = 1.0f)
+        {
+            GameObject rowObject = EnsureRectChild(parent, name);
+            RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(rowRect, anchoredPosition, new Vector2(484.0f, 88.0f));
+
+            EnsureLabel(
+                rowObject.transform,
+                "Label",
+                label,
+                26,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 0.0f),
+                new Vector2(300.0f, 40.0f),
+                TextDimColor);
+
+            GameObject sliderObject = EnsureRectChild(rowObject.transform, "Slider");
+            RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
+            ConfigureTopLeftRect(sliderRect, new Vector2(0.0f, -46.0f), new Vector2(484.0f, 36.0f));
+            Slider slider = EnsureComponent<Slider>(sliderObject);
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.minValue = minValue;
+            slider.maxValue = maxValue;
+            slider.wholeNumbers = false;
+
+            Sprite roundedSprite = GetRoundedSprite();
+
+            GameObject backgroundObject = EnsureRectChild(sliderObject.transform, "Background");
+            RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+            backgroundRect.anchorMin = new Vector2(0.0f, 0.30f);
+            backgroundRect.anchorMax = new Vector2(1.0f, 0.70f);
+            backgroundRect.offsetMin = Vector2.zero;
+            backgroundRect.offsetMax = Vector2.zero;
+            Image background = EnsureComponent<Image>(backgroundObject);
+            if (roundedSprite != null)
+            {
+                background.sprite = roundedSprite;
+                background.type = Image.Type.Sliced;
+            }
+            background.color = ControlNormalColor;
+
+            GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
+            RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
+            fillAreaRect.anchorMin = Vector2.zero;
+            fillAreaRect.anchorMax = Vector2.one;
+            fillAreaRect.offsetMin = new Vector2(10.0f, 0.0f);
+            fillAreaRect.offsetMax = new Vector2(-10.0f, 0.0f);
+
+            GameObject fillObject = EnsureRectChild(fillAreaObject.transform, "Fill");
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.anchorMin = new Vector2(0.0f, 0.30f);
+            fillRect.anchorMax = new Vector2(1.0f, 0.70f);
+            fillRect.offsetMin = Vector2.zero;
+            fillRect.offsetMax = Vector2.zero;
+            Image fill = EnsureComponent<Image>(fillObject);
+            if (roundedSprite != null)
+            {
+                fill.sprite = roundedSprite;
+                fill.type = Image.Type.Sliced;
+            }
+            fill.color = AccentColor;
+
+            GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
+            RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
+            handleAreaRect.anchorMin = Vector2.zero;
+            handleAreaRect.anchorMax = Vector2.one;
+            handleAreaRect.offsetMin = new Vector2(10.0f, 0.0f);
+            handleAreaRect.offsetMax = new Vector2(-10.0f, 0.0f);
+
+            GameObject handleObject = EnsureRectChild(handleAreaObject.transform, "Handle");
+            RectTransform handleRect = handleObject.GetComponent<RectTransform>();
+            handleRect.anchorMin = new Vector2(0.0f, 0.5f);
+            handleRect.anchorMax = new Vector2(0.0f, 0.5f);
+            handleRect.sizeDelta = new Vector2(36.0f, 36.0f);
+            Image handle = EnsureComponent<Image>(handleObject);
+            Sprite knobSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            if (knobSprite != null)
+                handle.sprite = knobSprite;
+            handle.color = TextPrimaryColor;
+
+            slider.fillRect = fillRect;
+            slider.handleRect = handleRect;
+            slider.targetGraphic = handle;
+            slider.colors = new ColorBlock
+            {
+                normalColor      = TextPrimaryColor,
+                highlightedColor = AccentHighlightColor,
+                pressedColor     = AccentColor,
+                selectedColor    = AccentColor,
+                disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
+                colorMultiplier  = 1.0f,
+                fadeDuration     = 0.08f
+            };
+            slider.value = value;
+            return slider;
         }
 
         // Builds the smelting-station panel: up to 3 input slots, 1 fuel slot, output, progress

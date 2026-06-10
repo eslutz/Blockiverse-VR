@@ -52,6 +52,14 @@ namespace Blockiverse.Gameplay
 
         public static ChunkMeshData Build(VoxelWorld world, BlockRegistry registry, ChunkCoordinate chunk, VoxelSkyLightMap skyLight = null)
         {
+            return Build(world, registry, chunk, out _, skyLight);
+        }
+
+        // Builds the chunk's render geometry in one walk, split into two meshes: solid faces
+        // (rendered and collidable) and fluid faces (rendered, ray-targetable, but excluded from
+        // physics contacts so players wade through water instead of walking on it).
+        public static ChunkMeshData Build(VoxelWorld world, BlockRegistry registry, ChunkCoordinate chunk, out ChunkMeshData fluidMesh, VoxelSkyLightMap skyLight = null)
+        {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
             if (registry == null)
@@ -64,6 +72,12 @@ namespace Blockiverse.Gameplay
             var uvs = new List<Vector2>();
             var colors = new List<Color>();
             int faceCount = 0;
+
+            var fluidVertices = new List<Vector3>();
+            var fluidTriangles = new List<int>();
+            var fluidUvs = new List<Vector2>();
+            var fluidColors = new List<Color>();
+            int fluidFaceCount = 0;
 
             int startX = chunk.X * world.ChunkSize;
             int startY = chunk.Y * world.ChunkSize;
@@ -84,30 +98,48 @@ namespace Blockiverse.Gameplay
                         if (!definition.IsRenderable)
                             continue;
 
+                        bool isFluid = definition.Category == BlockCategory.Fluid;
+
                         for (int face = 0; face < NeighborOffsets.Length; face++)
                         {
                             BlockPosition neighbor = position + NeighborOffsets[face];
 
-                            if (!ShouldRenderFace(world, registry, neighbor))
+                            if (!ShouldRenderFace(world, registry, definition, neighbor))
                                 continue;
 
                             float light = VoxelLightSampler.SampleAirLight(world, registry, neighbor, skyLight: skyLight);
-                            AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, light);
-                            faceCount++;
+
+                            if (isFluid)
+                            {
+                                AddFace(fluidVertices, fluidTriangles, fluidUvs, fluidColors, position, face, definition.Id, light);
+                                fluidFaceCount++;
+                            }
+                            else
+                            {
+                                AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, light);
+                                faceCount++;
+                            }
                         }
                     }
                 }
             }
 
+            fluidMesh = new ChunkMeshData(fluidVertices, fluidTriangles, fluidUvs, fluidColors, fluidFaceCount);
             return new ChunkMeshData(vertices, triangles, uvs, colors, faceCount);
         }
 
-        static bool ShouldRenderFace(VoxelWorld world, BlockRegistry registry, BlockPosition neighbor)
+        static bool ShouldRenderFace(VoxelWorld world, BlockRegistry registry, BlockDefinition current, BlockPosition neighbor)
         {
             if (!world.Bounds.Contains(neighbor))
                 return true;
 
             BlockDefinition neighborDefinition = registry.Get(world.GetBlock(neighbor));
+
+            // Adjacent cells of the same fluid merge into one volume — internal faces between
+            // identical fluid blocks would otherwise z-fight inside every lake.
+            if (current.Category == BlockCategory.Fluid && neighborDefinition.Id == current.Id)
+                return false;
+
             return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
         }
 

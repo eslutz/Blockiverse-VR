@@ -38,6 +38,10 @@ namespace Blockiverse.Persistence
     {
         public long WorldTimeTicks;
         public string WeatherState;
+        // Full weather-machine position: ticks accumulated in the current state plus the RNG
+        // position, so a loaded world resumes the exact weather timeline instead of restarting it.
+        public int WeatherTicksInState;
+        public uint WeatherRngState;
     }
 
     [Serializable]
@@ -50,6 +54,17 @@ namespace Blockiverse.Persistence
         public int SelectedHotbarSlotIndex;
         public SavedInventorySlot[] Slots;
         public SavedInventorySlot[] SurvivalInventorySnapshot;
+        // Player presence: rig position/heading and survival vitals. HasPlayerState guards the
+        // floats (a fresh save without it spawns at the world spawn with full vitals).
+        public bool HasPlayerState;
+        public float PositionX;
+        public float PositionY;
+        public float PositionZ;
+        public float YawDegrees;
+        public int Health;
+        public int Hunger;
+        public int Thirst;
+        public int Stamina;
     }
 
     [Serializable]
@@ -74,6 +89,67 @@ namespace Blockiverse.Persistence
     {
         public string CanonicalId;
         public int Count;
+    }
+
+    [Serializable]
+    public sealed class VxlwSimulationFile
+    {
+        public string Format;
+        public string SaveFormatVersion;
+        public VxlwSaplingProgress[] Saplings;
+        public VxlwWildRegrowthMarker[] WildRegrowth;
+        public VxlwBerrybushRegrowth[] BerrybushRegrowth;
+    }
+
+    [Serializable]
+    public sealed class VxlwSaplingProgress
+    {
+        public int X;
+        public int Y;
+        public int Z;
+        public int AccumulatedTicks;
+    }
+
+    [Serializable]
+    public sealed class VxlwWildRegrowthMarker
+    {
+        public string CanonicalId;
+        public int X;
+        public int Y;
+        public int Z;
+        public long RegrowAfterTick;
+        public int AttemptsLeft;
+    }
+
+    [Serializable]
+    public sealed class VxlwBerrybushRegrowth
+    {
+        public int X;
+        public int Y;
+        public int Z;
+        public int AccumulatedTicks;
+    }
+
+    [Serializable]
+    public sealed class VxlwStationFile
+    {
+        public string Format;
+        public string SaveFormatVersion;
+        public VxlwStation[] Stations;
+    }
+
+    [Serializable]
+    public sealed class VxlwStation
+    {
+        public int X;
+        public int Y;
+        public int Z;
+        public string StationType;             // CraftingStation name (ClayKiln/BellowsForge)
+        public SavedContainerSlot[] Inputs;    // slot-ordered; empty slots have empty CanonicalId
+        public SavedContainerSlot Fuel;
+        public SavedContainerSlot Output;
+        public string ActiveRecipeOutputId;    // canonical item id; empty when idle
+        public int ProgressTicks;
     }
 
     [Serializable]

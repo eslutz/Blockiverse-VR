@@ -15,6 +15,7 @@ namespace Blockiverse.UI
         Button[] entryButtons;
         TMP_Text[] entryLabels;
         Button loadButton;
+        Button detailsButton;
         Button cancelButton;
         TMP_Text selectionLabel;
 
@@ -28,11 +29,13 @@ namespace Blockiverse.UI
             TMP_Text[] entryLabels,
             Button loadButton,
             Button cancelButton,
-            TMP_Text selectionLabel)
+            TMP_Text selectionLabel,
+            Button detailsButton = null)
         {
             this.entryButtons = entryButtons ?? Array.Empty<Button>();
             this.entryLabels = entryLabels ?? Array.Empty<TMP_Text>();
             this.loadButton = loadButton;
+            this.detailsButton = detailsButton;
             this.cancelButton = cancelButton;
             this.selectionLabel = selectionLabel;
             WireControls();
@@ -54,6 +57,7 @@ namespace Blockiverse.UI
             }
 
             loadButton?.onClick.AddListener(() => ActionRequested?.Invoke(MenuActions.LoadWorldLoad));
+            detailsButton?.onClick.AddListener(() => ActionRequested?.Invoke(MenuActions.LoadWorldDetails));
             cancelButton?.onClick.AddListener(() => ActionRequested?.Invoke(MenuActions.LoadWorldCancel));
         }
 
@@ -92,6 +96,8 @@ namespace Blockiverse.UI
                 selectionLabel.text = hasSave ? model.SelectedSave.Value.Name : "No save selected";
             if (loadButton != null)
                 loadButton.interactable = hasSave;
+            if (detailsButton != null)
+                detailsButton.interactable = hasSave;
         }
     }
 }

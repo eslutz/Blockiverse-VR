@@ -45,6 +45,26 @@ namespace Blockiverse.Gameplay
             this.timeScale = timeScale;
         }
 
+        // Creative env control: jumps the time-of-day phase without touching elapsed ticks. The
+        // tick-0 offset shifts with it so RestoreElapsedTicks keeps reproducing this phase.
+        public void SetNormalizedTime(float value)
+        {
+            normalizedTime = Normalize(value);
+
+            long ticksPerDay = (long)(dayLengthSeconds * WorldConstants.TicksPerSecond);
+            if (ticksPerDay > 0)
+            {
+                float ticksFraction = (float)((totalElapsedTicks % ticksPerDay) / (double)ticksPerDay);
+                startNormalizedOffset = Normalize(normalizedTime - ticksFraction);
+            }
+        }
+
+        // Creative env control: speeds up or freezes the day cycle (0 pauses the clock).
+        public void SetTimeScale(float value)
+        {
+            timeScale = Mathf.Max(0.0f, value);
+        }
+
         void Awake()
         {
             // A fresh clock (no elapsed ticks) defines its serialized start time as the tick-0

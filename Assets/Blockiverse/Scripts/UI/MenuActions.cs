@@ -10,9 +10,13 @@ namespace Blockiverse.UI
         public const string TitleScreen = "title_menu";
         public const string NewWorldScreen = "new_world";
         public const string LoadWorldScreen = "load_world";
+        public const string WorldDetailsScreen = "world_details";
         public const string GameplayHudScreen = "gameplay_hud";
         public const string PauseScreen = "pause_menu";
         public const string SettingsScreen = "settings";
+        public const string AudioSettingsScreen = "settings_audio";
+        public const string ControlsScreen = "controls";
+        public const string CreativeToolsScreen = "creative_tools";
         public const string DeathScreen = "death_screen";
         public const string LanMultiplayerScreen = "lan_multiplayer";
         public const string StationMenuScreen = "station_menu";
@@ -33,9 +37,11 @@ namespace Blockiverse.UI
         public const string PauseResume = "pause.resume";
         public const string PauseSaveGame = "pause.save_game";
         public const string PauseToggleMode = "pause.toggle_survival_creative";
+        public const string PauseCreativeTools = "pause.open_creative_tools";
         public const string PauseSettings = "pause.open_settings";
         public const string PauseReturnToTitle = "pause.return_to_title_requested";
         public const string PauseQuit = "pause.quit_requested";
+        public const string CreativeToolsClose = "creative_tools.close";
 
         // ── Death actions (§6.21) ────────────────────────────────────────────
         public const string DeathRespawnBedroll = "death.respawn_bedroll";
@@ -51,7 +57,22 @@ namespace Blockiverse.UI
         public const string LoadWorldCancel = "load_world.cancel";
 
         // ── Settings actions ──────────────────────────────────────────────────
+        public const string SettingsOpenComfort = "settings.open_comfort";
+        public const string SettingsOpenAudio = "settings.open_audio";
+        public const string SettingsOpenControls = "settings.open_controls";
         public const string SettingsClose = "settings.close";
+        public const string AudioSettingsClose = "settings_audio.close";
+        public const string ControlsClose = "controls.close";
+
+        // ── World Details actions (§6.5) ─────────────────────────────────────
+        public const string WorldDetailsPlay = "world_details.play";
+        public const string WorldDetailsRename = "world_details.rename";
+        public const string WorldDetailsDuplicate = "world_details.duplicate";
+        public const string WorldDetailsDeleteRequested = "world_details.delete_requested";
+        public const string WorldDetailsBack = "world_details.back";
+
+        // ── Load World extra actions (§6.4 → §6.5) ───────────────────────────
+        public const string LoadWorldDetails = "load_world.open_details";
 
         // ── Confirmation actions (§6.22) ─────────────────────────────────────
         public const string ConfirmAccept = "confirm.accept";
@@ -78,6 +99,7 @@ namespace Blockiverse.UI
             new MenuAction(PauseResume, "Resume"),
             new MenuAction(PauseSaveGame, "Save Game"),
             new MenuAction(PauseToggleMode, "Switch Survival/Creative"),
+            new MenuAction(PauseCreativeTools, "Creative Tools"),
             new MenuAction(PauseSettings, "Settings"),
             new MenuAction(PauseReturnToTitle, "Return to Title"),
             new MenuAction(PauseQuit, "Quit Game"),
@@ -102,5 +124,25 @@ namespace Blockiverse.UI
                 new MenuAction(ConfirmCancel, cancelLabel),
             };
         }
+
+        // Settings hub (§6.19, adapted to the VR action-menu layout): comfort, audio, and the
+        // controls reference are their own screens/panels.
+        public static readonly IReadOnlyList<MenuAction> Settings = new[]
+        {
+            new MenuAction(SettingsOpenComfort, "Comfort"),
+            new MenuAction(SettingsOpenAudio, "Audio"),
+            new MenuAction(SettingsOpenControls, "Controls"),
+            new MenuAction(SettingsClose, "Close"),
+        };
+
+        // World Details management actions (§6.5).
+        public static readonly IReadOnlyList<MenuAction> WorldDetails = new[]
+        {
+            new MenuAction(WorldDetailsPlay, "Play"),
+            new MenuAction(WorldDetailsRename, "Rename"),
+            new MenuAction(WorldDetailsDuplicate, "Duplicate"),
+            new MenuAction(WorldDetailsDeleteRequested, "Delete"),
+            new MenuAction(WorldDetailsBack, "Back"),
+        };
     }
 }

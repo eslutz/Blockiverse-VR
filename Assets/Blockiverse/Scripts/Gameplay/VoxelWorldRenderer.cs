@@ -21,10 +21,12 @@ namespace Blockiverse.Gameplay
         public const int DefaultColliderRebuildBudget = 4;
 
         readonly Dictionary<ChunkCoordinate, GameObject> chunkObjects = new();
+        // Per-chunk fluid child: renders fluid faces and carries a contact-excluded collider so
+        // rays can target water (drink/fill/scoop) while players and props pass through it.
+        readonly Dictionary<ChunkCoordinate, GameObject> fluidObjects = new();
         readonly Dictionary<ChunkCoordinate, int> chunkTriangleCounts = new();
         readonly Queue<ChunkCoordinate> pendingColliderRebuilds = new();
         readonly HashSet<ChunkCoordinate> pendingColliderSet = new();
-        readonly Dictionary<ChunkCoordinate, Mesh> colliderMeshByChunk = new();
 
         VoxelWorld world;
         BlockRegistry registry;
@@ -134,38 +136,107 @@ namespace Blockiverse.Gameplay
         {
             using ProfilerMarker.AutoScope scope = RebuildChunkMarker.Auto();
 
-            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, skyLight);
+            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, out ChunkMeshData fluidData, skyLight);
             GameObject chunkObject = GetOrCreateChunkObject(chunk);
 
-            Mesh mesh = new();
-            mesh.name = $"Chunk {chunk}";
-            mesh.SetVertices(meshData.Vertices);
-            mesh.SetTriangles(meshData.Triangles, 0);
-            mesh.SetUVs(0, meshData.Uvs);
-            mesh.SetColors(meshData.Colors);
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-
+            // One pooled Mesh per chunk, cleared and refilled on every rebuild: no per-rebuild
+            // Mesh allocation/destroy churn. The throttled MeshCollider keeps serving its cooked
+            // snapshot of the old geometry until its rebake reassigns this same instance.
             MeshFilter filter = chunkObject.GetComponent<MeshFilter>();
-            Mesh previousMesh = filter.sharedMesh;
-            filter.sharedMesh = mesh;
+            Mesh mesh = filter.sharedMesh;
+            if (mesh == null)
+            {
+                mesh = new Mesh { name = $"Chunk {chunk}" };
+                filter.sharedMesh = mesh;
+            }
 
-            // The collider rebake is throttled, so the previous visual mesh may still be in use by
-            // the not-yet-updated collider; only destroy it once it is no longer referenced there.
-            colliderMeshByChunk.TryGetValue(chunk, out Mesh colliderMesh);
-            if (previousMesh != null && !ReferenceEquals(previousMesh, colliderMesh))
-                DestroyGeneratedObject(previousMesh);
-
+            FillMesh(mesh, meshData);
             EnqueueColliderRebuild(chunk);
+            UpdateFluidChunkMesh(chunk, chunkObject, fluidData);
 
             int previousTriangleCount = chunkTriangleCounts.TryGetValue(chunk, out int existingTriangleCount)
                 ? existingTriangleCount
                 : 0;
 
-            chunkTriangleCounts[chunk] = meshData.TriangleCount;
-            totalTriangleCount += meshData.TriangleCount - previousTriangleCount;
+            int triangleCount = meshData.TriangleCount + fluidData.TriangleCount;
+            chunkTriangleCounts[chunk] = triangleCount;
+            totalTriangleCount += triangleCount - previousTriangleCount;
 
-            return meshData.TriangleCount;
+            return triangleCount;
+        }
+
+        static void FillMesh(Mesh mesh, ChunkMeshData data)
+        {
+            mesh.Clear();
+            mesh.SetVertices(data.Vertices);
+            mesh.SetTriangles(data.Triangles, 0);
+            mesh.SetUVs(0, data.Uvs);
+            mesh.SetColors(data.Colors);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+        }
+
+        // Refills the chunk's pooled fluid mesh in place. Fluid meshes are small, so the collider
+        // bake is done synchronously instead of through the throttled solid-collider queue.
+        void UpdateFluidChunkMesh(ChunkCoordinate chunk, GameObject chunkObject, ChunkMeshData fluidData)
+        {
+            fluidObjects.TryGetValue(chunk, out GameObject fluidObject);
+
+            if (fluidData.FaceCount == 0)
+            {
+                // Most chunks hold no fluid; never create the child for them, and empty the
+                // pooled mesh when the last fluid block in the chunk goes away.
+                if (fluidObject == null)
+                    return;
+
+                fluidObject.GetComponent<MeshFilter>().sharedMesh?.Clear();
+                fluidObject.GetComponent<MeshCollider>().sharedMesh = null;
+                return;
+            }
+
+            if (fluidObject == null)
+                fluidObject = CreateFluidObject(chunk, chunkObject);
+
+            MeshFilter filter = fluidObject.GetComponent<MeshFilter>();
+            Mesh mesh = filter.sharedMesh;
+            if (mesh == null)
+            {
+                mesh = new Mesh { name = $"Chunk {chunk} Fluid" };
+                filter.sharedMesh = mesh;
+            }
+
+            FillMesh(mesh, fluidData);
+
+            MeshCollider collider = fluidObject.GetComponent<MeshCollider>();
+            collider.sharedMesh = null;
+            collider.sharedMesh = mesh;
+        }
+
+        GameObject CreateFluidObject(ChunkCoordinate chunk, GameObject chunkObject)
+        {
+            var fluidObject = new GameObject("Fluid");
+            fluidObject.transform.SetParent(chunkObject.transform, false);
+
+            if (interactionLayer >= 0)
+                fluidObject.layer = interactionLayer;
+
+            fluidObject.AddComponent<MeshFilter>();
+            MeshRenderer renderer = fluidObject.AddComponent<MeshRenderer>();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = true;
+
+            if (chunkMaterial != null)
+                renderer.sharedMaterial = chunkMaterial;
+
+            // Contact-excluded: raycast queries (block targeting, drink/fill) still hit the fluid
+            // surface, but the character controller and props never collide with it. The fluid
+            // child is deliberately not registered as a TeleportationArea — no teleporting onto
+            // water. Block targeting resolves through the parent's VoxelChunkTarget.
+            MeshCollider collider = fluidObject.AddComponent<MeshCollider>();
+            collider.excludeLayers = ~0;
+
+            fluidObjects.Add(chunk, fluidObject);
+            return fluidObject;
         }
 
         void EnqueueColliderRebuild(ChunkCoordinate chunk)
@@ -174,8 +245,8 @@ namespace Blockiverse.Gameplay
                 pendingColliderRebuilds.Enqueue(chunk);
         }
 
-        // Rebakes up to budget pending colliders to the current chunk mesh, destroying the mesh the
-        // collider previously used once it is released.
+        // Rebakes up to budget pending colliders against the chunk's pooled mesh (the reassign
+        // forces PhysX to recook from the refilled geometry).
         public void ProcessPendingColliderRebuilds(int budget)
         {
             int processed = 0;
@@ -189,14 +260,9 @@ namespace Blockiverse.Gameplay
 
                 Mesh currentMesh = chunkObject.GetComponent<MeshFilter>().sharedMesh;
                 MeshCollider collider = chunkObject.GetComponent<MeshCollider>();
-                colliderMeshByChunk.TryGetValue(chunk, out Mesh previousColliderMesh);
 
                 collider.sharedMesh = null;
                 collider.sharedMesh = currentMesh;
-                colliderMeshByChunk[chunk] = currentMesh;
-
-                if (previousColliderMesh != null && !ReferenceEquals(previousColliderMesh, currentMesh))
-                    DestroyGeneratedObject(previousColliderMesh);
 
                 processed++;
             }
@@ -288,24 +354,28 @@ namespace Blockiverse.Gameplay
         // teardown and when Configure swaps the renderer onto a different world.
         void DestroyGeneratedChunkContent()
         {
+            // Pooled fluid meshes first: the child objects themselves go down with their parents.
+            foreach (GameObject fluidObject in fluidObjects.Values)
+            {
+                if (fluidObject == null)
+                    continue;
+
+                DestroyGeneratedObject(fluidObject.GetComponent<MeshFilter>()?.sharedMesh);
+            }
+
             foreach (GameObject chunkObject in chunkObjects.Values)
             {
                 if (chunkObject == null)
                     continue;
 
-                Mesh mesh = chunkObject.GetComponent<MeshFilter>()?.sharedMesh;
-                DestroyGeneratedObject(mesh);
+                // One pooled mesh per chunk, shared by the filter and collider — destroy it once.
+                DestroyGeneratedObject(chunkObject.GetComponent<MeshFilter>()?.sharedMesh);
                 DestroyGeneratedObject(chunkObject);
             }
 
-            // Release any collider meshes still deferred behind the throttle (DestroyGeneratedObject
-            // is null-safe, so meshes already freed via the filter loop are skipped).
-            foreach (Mesh colliderMesh in colliderMeshByChunk.Values)
-                DestroyGeneratedObject(colliderMesh);
-
             chunkObjects.Clear();
+            fluidObjects.Clear();
             chunkTriangleCounts.Clear();
-            colliderMeshByChunk.Clear();
             pendingColliderRebuilds.Clear();
             pendingColliderSet.Clear();
             totalTriangleCount = 0;

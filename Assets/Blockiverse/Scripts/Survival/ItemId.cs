@@ -87,6 +87,12 @@ namespace Blockiverse.Survival
         public static readonly ItemId BerrySeed            = new("berry_seed");
         public static readonly ItemId CleanWaterFlask      = new("clean_water_flask");
 
+        // ── Fluid containers (§5.4, §9.3) ─────────────────────────────────────
+        public static readonly ItemId WaterFlask           = new("water_flask");
+        public static readonly ItemId EmptyBucket          = new("empty_bucket");
+        public static readonly ItemId FreshwaterBucket     = new("freshwater_bucket");
+        public static readonly ItemId BrineBucket          = new("brine_bucket");
+
         // ── Crafted intermediates (work parts, smelted bars, §9) ──────────────
         public static readonly ItemId StoutPole            = new("stout_pole");
         public static readonly ItemId FiberCord            = new("fiber_cord");

@@ -186,10 +186,30 @@ namespace Blockiverse.Survival
         public const int TillWaterHorizontalReach = 4;
         public const int TillWaterVerticalReach = 1;
 
+        // Scans the §11.1 reach box around the soil cell for a freshwater source block.
+        public static bool HasFreshwaterNearby(VoxelWorld world, BlockPosition position)
+        {
+            for (int dy = -TillWaterVerticalReach; dy <= TillWaterVerticalReach; dy++)
+            {
+                for (int dz = -TillWaterHorizontalReach; dz <= TillWaterHorizontalReach; dz++)
+                {
+                    for (int dx = -TillWaterHorizontalReach; dx <= TillWaterHorizontalReach; dx++)
+                    {
+                        var cell = new BlockPosition(position.X + dx, position.Y + dy, position.Z + dz);
+                        if (world.Bounds.Contains(cell) && world.GetBlock(cell) == BlockRegistry.Freshwater)
+                            return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         // Converts eligible soil to tended soil (§11.1). When no freshwater is nearby, the action
-        // consumes one clean_water_flask from the inventory; with neither, it returns RequiresWater.
-        // hasFreshwaterNearby is injected by callers that model a water supply; until fluid blocks
-        // exist it defaults to "water present" so creative/legacy tilling is unaffected.
+        // consumes one clean_water_flask from the inventory (the emptied flask returns, §731);
+        // with neither, it returns RequiresWater. hasFreshwaterNearby is injectable for tests;
+        // it defaults to "water present" — the authoritative gameplay path (ProcessHostTill)
+        // passes the real HasFreshwaterNearby scan.
         public FarmingResult Till(
             VoxelWorld world,
             BlockPosition position,
@@ -204,8 +224,14 @@ namespace Blockiverse.Survival
                 return FarmingResult.NotTillableBlock;
 
             bool waterNearby = hasFreshwaterNearby?.Invoke(world, position) ?? true;
-            if (!waterNearby && (inventory == null || !inventory.Remove(ItemId.CleanWaterFlask, 1)))
-                return FarmingResult.RequiresWater;
+            if (!waterNearby)
+            {
+                if (inventory == null || !inventory.Remove(ItemId.CleanWaterFlask, 1))
+                    return FarmingResult.RequiresWater;
+
+                // Flasks stack to 1, so the consume above freed a slot and the return cannot fail.
+                inventory.TryAddAll(new ItemStack(ItemId.WaterFlask, 1));
+            }
 
             world.SetBlock(position, BlockRegistry.TendedSoil);
             return FarmingResult.Success;
@@ -391,6 +417,29 @@ namespace Blockiverse.Survival
                     pendingGrowthAnchors.Add(pos);
                 }
             }
+        }
+
+        // ── Save/load (world persistence) ────────────────────────────────────
+
+        // Snapshot of pending berrybush regrowth (accumulated ticks toward the two-day delay).
+        public IReadOnlyList<(BlockPosition position, int accumulatedTicks)> ExportBerrybushRegrowth()
+        {
+            var result = new List<(BlockPosition, int)>(berrybushRegrowAccumulator.Count);
+            foreach (KeyValuePair<BlockPosition, int> entry in berrybushRegrowAccumulator)
+                result.Add((entry.Key, entry.Value));
+            return result;
+        }
+
+        // Replaces the pending berrybush regrowth set with saved progress. TickRegrowth drops any
+        // entry whose spot turns out to be occupied, so stale positions self-heal.
+        public void RestoreBerrybushRegrowth(IEnumerable<(BlockPosition position, int accumulatedTicks)> entries)
+        {
+            berrybushRegrowAccumulator.Clear();
+            if (entries == null)
+                return;
+
+            foreach ((BlockPosition position, int accumulatedTicks) in entries)
+                berrybushRegrowAccumulator[position] = Math.Max(0, accumulatedTicks);
         }
     }
 }

@@ -12,8 +12,9 @@ namespace Blockiverse.Tests.Survival.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
 
-            // 8 handcraft + 6 build-table + 6 kiln + 6 forge + 41 tools + 3 utility (§9).
-            Assert.That(recipeBook.All.Count, Is.EqualTo(70));
+            // 8 handcraft + 7 build-table + 7 kiln + 6 forge + 41 tools + 3 utility + 2 campfire
+            // fluid recipes (§9, §5.4).
+            Assert.That(recipeBook.All.Count, Is.EqualTo(74));
 
             // §9.1 basics are handcraft (no station).
             AssertRecipe(recipeBook, ItemId.WorkPlank, CraftingStation.None, new ItemStack(ItemId.WorkPlank, 6), new ItemStack(ItemId.BranchwoodLog, 1));
@@ -168,6 +169,100 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(recipeBook.GetByOutput(ItemId.FlintDelver).RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
             Assert.That(recipeBook.GetByOutput(ItemId.FlintDelver).TimeTicks, Is.EqualTo(0));
             Assert.That(recipeBook.GetByOutput(ItemId.BronzeBar).TimeTicks, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void FluidContainerRecipesFollowTheCanonicalChain()
+        {
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(ItemRegistry.CreateDefault());
+
+            // §632: buckets are crafted empty at the Build Table; filled ones come from the
+            // world fill action, never from a recipe.
+            AssertRecipe(recipeBook, ItemId.EmptyBucket, CraftingStation.BuildTable,
+                new ItemStack(ItemId.EmptyBucket, 1), new ItemStack(ItemId.RosycopperBar, 3));
+            Assert.That(recipeBook.TryGetByOutput(ItemId.FreshwaterBucket, out _), Is.False);
+            Assert.That(recipeBook.TryGetByOutput(ItemId.BrineBucket, out _), Is.False);
+
+            // §623: the empty glass flask is a timed kiln fire.
+            CraftingRecipe waterFlask = recipeBook.GetByOutput(ItemId.WaterFlask);
+            Assert.That(waterFlask.RequiredStation, Is.EqualTo(CraftingStation.ClayKiln));
+            Assert.That(waterFlask.TimeTicks, Is.EqualTo(8 * SmeltingModel.TicksPerSecond));
+
+            // §624/§731: filling the flask at the campfire returns the emptied bucket.
+            CraftingRecipe cleanFlask = recipeBook.GetByOutput(ItemId.CleanWaterFlask);
+            Assert.That(cleanFlask.RequiredStation, Is.EqualTo(CraftingStation.Campfire));
+            Assert.That(cleanFlask.TimeTicks, Is.EqualTo(0));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.WaterFlask, 1), new ItemStack(ItemId.FreshwaterBucket, 1) },
+                cleanFlask.Ingredients.ToArray());
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.EmptyBucket, 1) },
+                cleanFlask.Byproducts.ToArray());
+
+            // §574 (station/timing deviation documented in the book): brine boils to brightsalt
+            // at the campfire, returning the bucket.
+            CraftingRecipe brineBoil = recipeBook.GetByOutput(ItemId.Brightsalt);
+            Assert.That(brineBoil.RequiredStation, Is.EqualTo(CraftingStation.Campfire));
+            Assert.That(brineBoil.Output, Is.EqualTo(new ItemStack(ItemId.Brightsalt, 3)));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.EmptyBucket, 1) },
+                brineBoil.Byproducts.ToArray());
+        }
+
+        [Test]
+        public void CraftingGrantsByproductsAlongsideTheOutput()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
+            Inventory inventory = new(itemRegistry);
+            inventory.SetSlot(0, new ItemStack(ItemId.WaterFlask, 1));
+            inventory.SetSlot(1, new ItemStack(ItemId.FreshwaterBucket, 1));
+
+            CraftingResult result = CraftingService.TryCraft(
+                inventory, recipeBook.GetByOutput(ItemId.CleanWaterFlask), CraftingStation.Campfire);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(inventory.CountOf(ItemId.CleanWaterFlask), Is.EqualTo(1));
+            Assert.That(inventory.CountOf(ItemId.EmptyBucket), Is.EqualTo(1), "The emptied bucket must return (§731).");
+            Assert.That(inventory.CountOf(ItemId.WaterFlask), Is.Zero);
+            Assert.That(inventory.CountOf(ItemId.FreshwaterBucket), Is.Zero);
+        }
+
+        [Test]
+        public void CraftingRollsBackEverythingWhenAByproductCannotFit()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            // One slot: the ingredient frees it, the output takes it, the byproduct cannot fit.
+            Inventory inventory = new(itemRegistry, slotCount: 1, hotbarSlotCount: 1);
+            inventory.SetSlot(0, new ItemStack(ItemId.ReedFiber, 1));
+            CraftingRecipe recipe = new(
+                new ItemStack(ItemId.WorkPlank, 1),
+                CraftingStation.None,
+                timeTicks: 0,
+                new[] { new ItemStack(ItemId.ReedFiber, 1) },
+                new[] { new ItemStack(ItemId.EmptyBucket, 1) });
+
+            CraftingResult result = CraftingService.TryCraft(inventory, recipe, CraftingStation.None);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.FailureReason, Is.EqualTo(CraftingFailureReason.OutputBlocked));
+            Assert.That(result.FailedItemId, Is.EqualTo(ItemId.EmptyBucket));
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.ReedFiber, 1)), "A blocked byproduct must undo the whole craft.");
+            Assert.That(inventory.CountOf(ItemId.WorkPlank), Is.Zero);
+            Assert.That(inventory.CountOf(ItemId.EmptyBucket), Is.Zero);
+        }
+
+        [Test]
+        public void TimedRecipesCannotDeclareByproducts()
+        {
+            // The fueled station model grants only the primary output, so a timed recipe with a
+            // byproduct would silently drop it — the constructor forbids the combination.
+            Assert.Throws<System.ArgumentException>(() => new CraftingRecipe(
+                new ItemStack(ItemId.Brightsalt, 3),
+                CraftingStation.ClayKiln,
+                timeTicks: 10 * SmeltingModel.TicksPerSecond,
+                new[] { new ItemStack(ItemId.BrineBucket, 1) },
+                new[] { new ItemStack(ItemId.EmptyBucket, 1) }));
         }
 
         static void AssertRecipe(CraftingRecipeBook recipeBook, ItemId outputItemId, CraftingStation requiredStation, ItemStack output, params ItemStack[] ingredients)

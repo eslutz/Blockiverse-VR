@@ -52,6 +52,91 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void VoidBuilderPresetGeneratesOnlyTheCutstonePlatform()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 32, height: 64, depth: 32, chunkSize: 16, seed: 1001, groundHeight: 32);
+            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
+
+            int platformY = settings.GroundHeight - 1;
+            int startX = settings.SpawnPosition.X - VoidBuilderPreset.PlatformSize / 2;
+            int startZ = settings.SpawnPosition.Z - VoidBuilderPreset.PlatformSize / 2;
+
+            int cutstone = 0;
+            int strayBlocks = 0;
+            for (int y = 0; y < world.Bounds.Height; y++)
+            {
+                for (int x = 0; x < world.Bounds.Width; x++)
+                {
+                    for (int z = 0; z < world.Bounds.Depth; z++)
+                    {
+                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                        if (block == BlockRegistry.Air)
+                            continue;
+
+                        bool onPlatform = y == platformY &&
+                            x >= startX && x < startX + VoidBuilderPreset.PlatformSize &&
+                            z >= startZ && z < startZ + VoidBuilderPreset.PlatformSize;
+
+                        if (onPlatform && block == BlockRegistry.CutstoneBlock)
+                            cutstone++;
+                        else
+                            strayBlocks++;
+                    }
+                }
+            }
+
+            // §11.3: a 16×16×1 cutstone platform and nothing else; the default spawn column
+            // stands on it.
+            Assert.That(cutstone, Is.EqualTo(VoidBuilderPreset.PlatformSize * VoidBuilderPreset.PlatformSize));
+            Assert.That(strayBlocks, Is.Zero, "The void preset must generate nothing outside the platform.");
+            Assert.That(
+                world.GetBlock(new BlockPosition(settings.SpawnPosition.X, platformY, settings.SpawnPosition.Z)),
+                Is.EqualTo(BlockRegistry.CutstoneBlock));
+        }
+
+        [Test]
+        public void SurvivalTerrainKeepsFluidBelowTheWaterTable()
+        {
+            // Terrain heights straddle sea level, but a single seed's map can sit entirely above
+            // it — scan a few seeds and validate the first that generates water (same pattern as
+            // the container-loot seed scan).
+            bool foundFluid = false;
+
+            for (int seed = 1; seed <= 6 && !foundFluid; seed++)
+            {
+                VoxelWorld world = GenerateSurvivalWorld(seed);
+                int fluidBelowTable = 0;
+                int fluidAtOrAboveTable = 0;
+
+                for (int y = 0; y < world.Bounds.Height; y++)
+                {
+                    for (int x = 0; x < world.Bounds.Width; x++)
+                    {
+                        for (int z = 0; z < world.Bounds.Depth; z++)
+                        {
+                            BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                            if (block != BlockRegistry.Freshwater && block != BlockRegistry.Brine)
+                                continue;
+
+                            if (y < WorldConstants.SeaLevel)
+                                fluidBelowTable++;
+                            else
+                                fluidAtOrAboveTable++;
+                        }
+                    }
+                }
+
+                Assert.That(fluidAtOrAboveTable, Is.Zero,
+                    $"Seed {seed}: fluid above the §5.4 water table (the fill tops out at SeaLevel-1).");
+                foundFluid = fluidBelowTable > 0;
+            }
+
+            Assert.That(foundFluid, Is.True,
+                "Expected at least one scanned seed to flood columns below sea level (§5.4).");
+        }
+
+        [Test]
         public void SurvivalTerrainPresetFailsFastWhenWorldHeightCannotFitTerrainBand()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

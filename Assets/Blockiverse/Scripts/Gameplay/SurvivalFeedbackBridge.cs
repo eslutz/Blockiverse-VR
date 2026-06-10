@@ -14,12 +14,14 @@ namespace Blockiverse.Gameplay
     public sealed class SurvivalFeedbackBridge : MonoBehaviour
     {
         [SerializeField] MultiplayerSurvivalSync survivalSync;
+        [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseVfxCuePlayer vfxCuePlayer;
 
         BlockiverseNetworkSession session;
         NetworkManager subscribedNetworkManager;
         bool subscribedToSync;
+        bool subscribedToLoot;
 
         void OnEnable()
         {
@@ -40,6 +42,9 @@ namespace Blockiverse.Gameplay
             if (survivalSync == null)
                 survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
 
+            if (worldManager == null)
+                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+
             if (audioCuePlayer == null)
                 audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
 
@@ -58,6 +63,12 @@ namespace Blockiverse.Gameplay
                 subscribedToSync = true;
             }
 
+            if (worldManager != null && !subscribedToLoot)
+            {
+                worldManager.ContainerLooted += OnContainerLooted;
+                subscribedToLoot = true;
+            }
+
             NetworkManager networkManager = session != null ? session.NetworkManager : null;
             if (networkManager != null && subscribedNetworkManager != networkManager)
             {
@@ -72,6 +83,10 @@ namespace Blockiverse.Gameplay
             if (survivalSync != null && subscribedToSync)
                 survivalSync.CommandFeedback -= OnCommandFeedback;
             subscribedToSync = false;
+
+            if (worldManager != null && subscribedToLoot)
+                worldManager.ContainerLooted -= OnContainerLooted;
+            subscribedToLoot = false;
 
             if (subscribedNetworkManager != null)
             {
@@ -124,6 +139,14 @@ namespace Blockiverse.Gameplay
                         audioCuePlayer?.PlayCue(BlockiverseAudioCue.PickupItem);
                     break;
             }
+        }
+
+        // Structure-loot grant: a broken crate dumped its contents into the player (§3 loot loop).
+        void OnContainerLooted(BlockPosition position)
+        {
+            Vector3 worldCenter = new(position.X + 0.5f, position.Y + 0.5f, position.Z + 0.5f);
+            audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.ContainerOpen, worldCenter);
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.PickupItem);
         }
 
         void OnClientConnected(ulong clientId)

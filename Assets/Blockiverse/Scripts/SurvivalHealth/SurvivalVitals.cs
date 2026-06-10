@@ -78,6 +78,19 @@ namespace Blockiverse.Survival
         public void Drink(int amount) => Thirst = Add(Thirst, amount, Max);
         public void RecoverStamina(int amount) => Stamina = Add(Stamina, amount, Max);
 
+        // Restores saved vitals (world load). Values clamp into [0, Max]; the sub-point
+        // accumulators restart, which at worst shifts the next point by under a second.
+        public void RestoreFrom(int hunger, int thirst, int stamina)
+        {
+            Hunger = Math.Clamp(hunger, 0, Max);
+            Thirst = Math.Clamp(thirst, 0, Max);
+            Stamina = Math.Clamp(stamina, 0, Max);
+            hungerAccumulator = 0;
+            thirstAccumulator = 0;
+            staminaAccumulator = 0;
+            starvationAccumulator = 0;
+        }
+
         // Spends stamina for an exertion (sprint/jump). Returns false without spending when there
         // is not enough stamina.
         public bool TrySpendStamina(int amount)
