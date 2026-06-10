@@ -250,8 +250,7 @@ namespace Blockiverse.WorldGen
 
         // §5.4: after solid terrain, columns whose surface sits below sea level fill with a still
         // fluid — freshwater everywhere, brine in the dunes (salt basins/coastlines). The water
-        // top sits at SeaLevel-1 so shorelines keep a one-block step down (deviation from the
-        // §5.4 pseudocode's inclusive fill, for a readable shore edge in VR).
+        // top sits at SeaLevel-1 so shorelines keep a one-block step down from dry land.
         void PlaceFluids(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
         {
             WorldBounds bounds = world.Bounds;

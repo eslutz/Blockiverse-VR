@@ -223,17 +223,29 @@ namespace Blockiverse.Gameplay
             };
         }
 
-        // Restores the local player's presence and vitals from a save. No-op when null.
+        // Restores the local player's presence and vitals from a save. A save without player
+        // state is a fresh spawn: vitals reset to full so the previous session's hunger/damage
+        // never leaks into the loaded world (the caller positions the rig at the world spawn).
         public void RestorePlayerSaveState(SavedPlayerState state)
         {
             if (state == null)
+            {
+                ResetVitalsToFull();
                 return;
+            }
 
             CreativeWorldManager.PositionRig(
                 new Vector3(state.PositionX, state.PositionY, state.PositionZ),
                 state.YawDegrees);
             Vitals.RestoreHealth(state.Health);
             SurvivalVitals.RestoreFrom(state.Hunger, state.Thirst, state.Stamina);
+        }
+
+        // Full health/hunger/thirst/stamina without moving the rig.
+        public void ResetVitalsToFull()
+        {
+            Vitals.RestoreHealth(Vitals.MaxHealth);
+            SurvivalVitals.RestoreFrom(SurvivalVitals.Max, SurvivalVitals.Max, SurvivalVitals.Max);
         }
 
         // Drinks directly from a world fluid source (freshwater): restores thirst on a short

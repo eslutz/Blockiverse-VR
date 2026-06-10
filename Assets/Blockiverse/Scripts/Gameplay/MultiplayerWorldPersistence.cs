@@ -135,7 +135,9 @@ namespace Blockiverse.Gameplay
                 worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(result.Data.GameMode));
                 RestoreContainers(result.Data.Containers);
 
-                if (survivalSync != null && result.Data.Stations != null)
+                // Always restore (an empty list clears any prior session's station models), and
+                // a save without player state resets vitals to a fresh spawn inside the restore.
+                if (survivalSync != null)
                     survivalSync.RestoreStationStates(WorldSaveStateMapper.FromSavedStations(result.Data.Stations));
 
                 vitalsRuntime?.RestorePlayerSaveState(result.Data.PlayerState);

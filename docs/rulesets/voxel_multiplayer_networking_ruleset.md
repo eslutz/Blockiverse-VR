@@ -252,11 +252,11 @@ The host snapshot header must include:
 
 Canonical world presets:
 
-| Preset | Width | Height | Depth | Chunk Size | Seed | Ground Height | Purpose |
+| Preset | Width | Height | Depth | Chunk Size | Default Seed | Ground Height | Purpose |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `survival_terrain` | 128 | 64 | 128 | 16 | 6401 | 32 | Ruleset-defined survival world with terrain, caves, resources, vegetation, environment hooks, and structures. |
-| `flat_builder` | 32 | 16 | 32 | 16 | 1001 | 2 | Flat canonical creative world with full creative catalog. |
-| `void_builder` | 32 | 16 | 32 | 16 | 1001 | 0 | Empty builder world with safety floor/spawn platform and explicit bounds. |
+| `survival_terrain` | 128–256 | 256 | 128–256 | 16 | 6401 | 96 (sea level) | Ruleset-defined survival world with terrain, caves, fluids, resources, vegetation, environment hooks, and structures. Width/depth follow the world-size selector (small 128 / medium 192 / large 256). |
+| `flat_builder` | 128–256 | 64 | 128–256 | 16 | 1001 | 8 | Flat canonical creative world with the full creative catalog. |
+| `void_builder` | 128–256 | 64 | 128–256 | 16 | 1001 | 32 | Empty builder world with a 16×16 cutstone spawn platform (surface at ground height − 1) and explicit bounds. |
 
 ### Late-join snapshot
 

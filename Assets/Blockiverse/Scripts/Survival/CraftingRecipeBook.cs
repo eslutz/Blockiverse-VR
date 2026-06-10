@@ -62,9 +62,8 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.StoneRubble, 8)));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.FiredBrickBlock, 4), CraftingStation.BuildTable,
                 new ItemStack(ItemId.FiredBrick, 8)));
-            // Buckets are crafted empty (§632); filled buckets come from the fill action at a
-            // fluid source, not from a recipe (deviation from §630, which also lists a crafted
-            // freshwater_bucket — the fill action makes that row redundant).
+            // Buckets are only crafted empty (§9.6); filled buckets come from the fill action at
+            // a fluid source, never from a recipe.
             book.Register(new CraftingRecipe(new ItemStack(ItemId.EmptyBucket, 1), CraftingStation.BuildTable,
                 new ItemStack(ItemId.RosycopperBar, 3)));
 
@@ -84,9 +83,9 @@ namespace Blockiverse.Survival
             book.Register(new CraftingRecipe(new ItemStack(ItemId.WaterFlask, 1), CraftingStation.ClayKiln, Seconds(8),
                 new[] { new ItemStack(ItemId.GlassShard, 3), new ItemStack(ItemId.ResinKnot, 1) }));
 
-            // ── §5.4/§13 Campfire fluid recipes (instant; consumed buckets return empty, §731).
-            // Deviation from §574: brine boiling is an instant Campfire craft instead of a timed
-            // Clay Kiln run, because the fueled station model cannot return the empty bucket.
+            // ── §9.6 Campfire fluid recipes (instant; consumed buckets return empty, §731).
+            // Boiling runs here rather than on a timed station: timed stations grant only their
+            // primary output, and these crafts must hand the emptied bucket back.
             book.Register(new CraftingRecipe(new ItemStack(ItemId.CleanWaterFlask, 1), CraftingStation.Campfire, 0,
                 new[] { new ItemStack(ItemId.WaterFlask, 1), new ItemStack(ItemId.FreshwaterBucket, 1) },
                 new[] { new ItemStack(ItemId.EmptyBucket, 1) }));

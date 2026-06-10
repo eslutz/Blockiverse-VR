@@ -199,8 +199,7 @@ namespace Blockiverse.Tests.Survival.EditMode
                 new[] { new ItemStack(ItemId.EmptyBucket, 1) },
                 cleanFlask.Byproducts.ToArray());
 
-            // §574 (station/timing deviation documented in the book): brine boils to brightsalt
-            // at the campfire, returning the bucket.
+            // §9.6: brine boils to brightsalt at the campfire (instant), returning the bucket.
             CraftingRecipe brineBoil = recipeBook.GetByOutput(ItemId.Brightsalt);
             Assert.That(brineBoil.RequiredStation, Is.EqualTo(CraftingStation.Campfire));
             Assert.That(brineBoil.Output, Is.EqualTo(new ItemStack(ItemId.Brightsalt, 3)));

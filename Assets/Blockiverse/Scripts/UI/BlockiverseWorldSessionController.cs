@@ -682,21 +682,26 @@ namespace Blockiverse.UI
         }
 
         // Rebuilds timed-station contents (kiln/forge slots and in-flight crafts) from the save.
+        // Runs even when the save carries none: RestoreStationStates is what clears the previous
+        // world's station models, so skipping it would leak a prior session's kiln/forge contents
+        // into this world (and into its next autosave).
         void RestoreStations(VxlwStation[] saved)
         {
-            if (survivalSync == null || saved == null || saved.Length == 0)
+            if (survivalSync == null)
                 return;
 
             survivalSync.RestoreStationStates(WorldSaveStateMapper.FromSavedStations(saved));
         }
 
         // Places the rig at the saved position/heading and restores vitals; without saved player
-        // state the player starts at the world spawn with full vitals.
+        // state the player starts at the world spawn with full vitals (the reset keeps a previous
+        // session's hunger/damage from leaking into the loaded world).
         void RestorePlayer(SavedPlayerState state)
         {
             if (state == null || vitalsRuntime == null)
             {
                 CreativeWorldManager.PositionRigAtSpawn(ResolveSpawnPosition());
+                vitalsRuntime?.ResetVitalsToFull();
                 return;
             }
 
