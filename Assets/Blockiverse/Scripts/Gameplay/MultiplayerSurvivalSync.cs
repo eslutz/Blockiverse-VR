@@ -1430,6 +1430,16 @@ namespace Blockiverse.Gameplay
                 return invalidResult;
             }
 
+            // Proximity check: the requester must be near the station block, same as the
+            // crafting/repair paths (§8). Trusted when the requester's position is unresolvable.
+            if (TryResolveClientBlockPosition(clientId, out BlockPosition requesterPosition) &&
+                !StationProximity.ValidateClaim(world, requesterPosition, stationType))
+            {
+                var tooFarResult = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.NotAStation, requestId);
+                SendCommandFailure(clientId, tooFarResult, sendResponse);
+                return tooFarResult;
+            }
+
             SmeltingStationModel station = GetOrCreateStationModel(position, stationType);
             Inventory inventory = GetInventory(clientId);
             SurvivalCommandResult result;
@@ -2400,8 +2410,10 @@ namespace Blockiverse.Gameplay
         }
 
         // Resolves the authoritative world position of a client's player for proximity checks.
-        // Uses the spawned network player object (its root position is synced by the avatar rig);
-        // falls back to the local camera for host-local commands without a network session.
+        // Prefers the synced head anchor from the avatar rig: XR locomotion moves the headset
+        // independently of the NetworkObject root, so the root can lag at spawn while the player
+        // has walked to a station. Falls back to the root if no rig/anchor is present, and to the
+        // local camera for host-local commands without a network session.
         bool TryResolveClientBlockPosition(ulong clientId, out BlockPosition position)
         {
             NetworkManager networkManager = ResolveNetworkManagerOrNull();
@@ -2410,7 +2422,9 @@ namespace Blockiverse.Gameplay
                 networkManager.ConnectedClients.TryGetValue(clientId, out NetworkClient client) &&
                 client.PlayerObject != null)
             {
-                position = ToBlockPosition(client.PlayerObject.transform.position);
+                BlockiverseNetworkAvatarRig avatarRig = client.PlayerObject.GetComponent<BlockiverseNetworkAvatarRig>();
+                Transform headTransform = avatarRig?.HeadAnchor != null ? avatarRig.HeadAnchor : client.PlayerObject.transform;
+                position = ToBlockPosition(headTransform.position);
                 return true;
             }
 
