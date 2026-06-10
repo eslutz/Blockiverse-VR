@@ -1,5 +1,6 @@
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
+using Blockiverse.Voxel;
 using UnityEngine;
 
 namespace Blockiverse.UI
@@ -12,9 +13,23 @@ namespace Blockiverse.UI
         [SerializeField] SurvivalCratePanel cratePanel;
         [SerializeField] int selectedHotbarSlotIndex;
 
+        // Station proximity scan cadence: cheap cube scan around the player to unlock
+        // station-gated recipes (voxel_survival_ruleset §8) without per-frame world reads.
+        const float StationScanIntervalSeconds = 0.5f;
+
+        // Vitals display refresh cadence: SurvivalVitals has no change events, so the health
+        // panel is refreshed periodically while the vitals runtime is active.
+        const float VitalsRefreshIntervalSeconds = 0.5f;
+
         public Inventory Inventory { get; private set; }
         public CraftingRecipeBook RecipeBook { get; private set; }
         public PlayerVitals Vitals { get; private set; }
+
+        CreativeWorldManager worldManager;
+        SurvivalVitalsRuntime vitalsRuntime;
+        float nextStationScanTime;
+        float nextVitalsRefreshTime;
+        CraftingStationSet lastScannedStations;
 
         public void Configure(
             SurvivalInventoryPanel targetInventoryPanel,
@@ -50,10 +65,15 @@ namespace Blockiverse.UI
             var survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
             Inventory = survivalSync != null ? survivalSync.LocalInventory : new Inventory(itemRegistry);
             RecipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
-            Vitals = new PlayerVitals();
+
+            // Bind to the runtime-owned vitals (ticked by SurvivalVitalsRuntime) when present so the
+            // HUD shows live health/hunger/thirst/stamina. Falls back to a standalone instance for
+            // isolated validation/tests.
+            vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+            Vitals = vitalsRuntime != null ? vitalsRuntime.Vitals : new PlayerVitals();
 
             // Register this inventory as the container-loot destination so breaking a crate fills it.
-            var worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+            worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             worldManager?.SetActivePlayerInventory(Inventory);
 
             // Mirror the selected hotbar slot into the survival sync so VR break/place use the held item.
@@ -70,6 +90,8 @@ namespace Blockiverse.UI
             craftingPanel?.ConfigureSurvivalSync(survivalSync);
             craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
             healthPanel?.Bind(Vitals);
+            if (vitalsRuntime != null)
+                healthPanel?.BindSurvivalVitals(vitalsRuntime.SurvivalVitals);
             cratePanel?.Bind(survivalSync, itemRegistry);
 
             if (craftingPanel != null)
@@ -83,6 +105,50 @@ namespace Blockiverse.UI
                 cratePanel.CrateChanged -= RefreshPanels;
                 cratePanel.CrateChanged += RefreshPanels;
             }
+        }
+
+        void Update()
+        {
+            ScanNearbyStations();
+            RefreshVitalsDisplay();
+        }
+
+        // Keeps the hunger/thirst/stamina readout current (those vitals tick without events).
+        void RefreshVitalsDisplay()
+        {
+            if (vitalsRuntime == null || healthPanel == null || Time.time < nextVitalsRefreshTime)
+                return;
+
+            nextVitalsRefreshTime = Time.time + VitalsRefreshIntervalSeconds;
+            healthPanel.Refresh();
+        }
+
+        // Periodically scans the blocks around the player and feeds the stations in reach to the
+        // crafting panel, so station-gated recipes (kiln, forge, mend bench, …) become craftable
+        // when the player stands at the placed station.
+        void ScanNearbyStations()
+        {
+            if (craftingPanel == null || worldManager == null || worldManager.World == null)
+                return;
+
+            if (Time.time < nextStationScanTime)
+                return;
+
+            nextStationScanTime = Time.time + StationScanIntervalSeconds;
+
+            Transform origin = Camera.main != null ? Camera.main.transform : transform;
+            Vector3 position = origin.position;
+            var center = new BlockPosition(
+                Mathf.FloorToInt(position.x),
+                Mathf.FloorToInt(position.y),
+                Mathf.FloorToInt(position.z));
+
+            CraftingStationSet stations = StationProximity.ScanNearby(worldManager.World, center);
+            if (stations.Equals(lastScannedStations))
+                return;
+
+            lastScannedStations = stations;
+            craftingPanel.SetAvailableStations(stations);
         }
 
         void RefreshPanels()

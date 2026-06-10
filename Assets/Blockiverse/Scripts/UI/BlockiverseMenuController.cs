@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Gameplay;
+using Blockiverse.Survival;
+using Blockiverse.Voxel;
 using Blockiverse.VR;
 using UnityEngine;
 
@@ -19,6 +22,9 @@ namespace Blockiverse.UI
         BlockiverseActionMenu settingsMenu;
         BlockiverseNewWorldPanel newWorldPanel;
         BlockiverseLoadWorldPanel loadWorldPanel;
+        [SerializeField] BlockiverseStationPanel stationPanel;
+        MultiplayerSurvivalSync survivalSync;
+        SurvivalVitalsRuntime vitalsRuntime;
 
         readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
@@ -68,7 +74,13 @@ namespace Blockiverse.UI
             AddPresenter(MenuActions.LoadWorldScreen, loadWorld);
             AddPresenter(MenuActions.SettingsScreen, settings);
             if (station != null)
-                AddPresenter("station_menu", station);
+                AddPresenter(MenuActions.StationMenuScreen, station);
+        }
+
+        // Wires the smelting-station panel so a "use" on a kiln/forge block opens it (§8.4).
+        public void ConfigureStationPanel(BlockiverseStationPanel panel)
+        {
+            stationPanel = panel;
         }
 
         // Called by the bootstrapper after building the XR rig; also subscribed at runtime via Start.
@@ -80,6 +92,8 @@ namespace Blockiverse.UI
                 router.PushScreen(new ScreenRoute(MenuActions.PauseScreen, pauseGame: true));
             else if (active == MenuActions.PauseScreen && !router.HasModal)
                 router.PopScreen();
+            else if (active == MenuActions.StationMenuScreen && !router.HasModal)
+                HandleStationCloseRequested();
         }
 
         // Called by the world manager after a world is created or loaded.
@@ -121,6 +135,8 @@ namespace Blockiverse.UI
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
 
             WireMenus();
+            WireStationPanel();
+            WireVitalsRuntime();
 
             titleMenu?.SetMenu("Blockiverse", MenuActions.Title(false, false, CanQuit()));
             pauseMenu?.SetMenu("Paused", MenuActions.Pause);
@@ -136,6 +152,87 @@ namespace Blockiverse.UI
                 router.Changed -= ApplyRouterState;
             inputRig?.MenuPressed.RemoveListener(OnMenuPressed);
             UnwireMenus();
+            UnwireStationPanel();
+            UnwireVitalsRuntime();
+        }
+
+        // ── Player vitals: death and respawn (§6.21, §13) ───────────────────────────────────────
+
+        void WireVitalsRuntime()
+        {
+            if (vitalsRuntime == null)
+                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+
+            if (vitalsRuntime != null)
+                vitalsRuntime.LocalPlayerDied += HandleLocalPlayerDied;
+        }
+
+        void UnwireVitalsRuntime()
+        {
+            if (vitalsRuntime != null)
+                vitalsRuntime.LocalPlayerDied -= HandleLocalPlayerDied;
+        }
+
+        void HandleLocalPlayerDied()
+        {
+            if (router == null)
+                return;
+
+            // Dying with the station panel open closes it first so the death screen sits over the HUD.
+            if (router.ActiveScreen.ScreenId == MenuActions.StationMenuScreen && !router.HasModal)
+                HandleStationCloseRequested();
+
+            if (router.ActiveScreen.ScreenId == MenuActions.GameplayHudScreen)
+                ShowDeathScreen(vitalsRuntime != null && vitalsRuntime.HasBedrollSpawn);
+        }
+
+        // ── Smelting-station panel (§8.4) ───────────────────────────────────────────────────────
+
+        void WireStationPanel()
+        {
+            if (survivalSync == null)
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+
+            if (survivalSync != null)
+                survivalSync.StationOpenRequested += HandleStationOpenRequested;
+
+            if (stationPanel != null)
+            {
+                stationPanel.ConfigureSurvivalSync(survivalSync);
+                stationPanel.CloseRequested += HandleStationCloseRequested;
+            }
+        }
+
+        void UnwireStationPanel()
+        {
+            if (survivalSync != null)
+                survivalSync.StationOpenRequested -= HandleStationOpenRequested;
+
+            if (stationPanel != null)
+                stationPanel.CloseRequested -= HandleStationCloseRequested;
+        }
+
+        void HandleStationOpenRequested(BlockPosition position, CraftingStation stationType)
+        {
+            if (router == null || stationPanel == null || survivalSync == null)
+                return;
+
+            if (router.ActiveScreen.ScreenId != MenuActions.GameplayHudScreen)
+                return;
+
+            SmeltingStationModel model = survivalSync.GetOrCreateStationModel(position, stationType);
+            stationPanel.Open(model, position, stationType == CraftingStation.ClayKiln ? "Clay Kiln" : "Bellows Forge");
+            // Pulls the authoritative state onto remote-client mirrors; a no-op validation on the host.
+            survivalSync.TrySubmitStationOpen(position, out _);
+            router.PushScreen(new ScreenRoute(MenuActions.StationMenuScreen));
+        }
+
+        void HandleStationCloseRequested()
+        {
+            stationPanel?.Close();
+
+            if (router != null && router.ActiveScreen.ScreenId == MenuActions.StationMenuScreen)
+                router.PopScreen();
         }
 
         void HandleAction(string actionId)
@@ -192,10 +289,13 @@ namespace Blockiverse.UI
 
                 case MenuActions.DeathRespawnBedroll:
                 case MenuActions.DeathRespawnWorldSpawn:
+                    vitalsRuntime?.Respawn();
                     ActionRequested?.Invoke(actionId);
                     router.PopScreen();
                     break;
                 case MenuActions.DeathReturnToTitle:
+                    // Restore vitals so re-entering gameplay does not start dead.
+                    vitalsRuntime?.Respawn();
                     ActionRequested?.Invoke(actionId);
                     router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
                     break;

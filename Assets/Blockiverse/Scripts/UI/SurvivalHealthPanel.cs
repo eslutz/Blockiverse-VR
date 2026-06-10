@@ -13,6 +13,7 @@ namespace Blockiverse.UI
         [SerializeField] TMP_Text stateLabel;
 
         PlayerVitals vitals;
+        SurvivalVitals survivalVitals;
 
         public void Configure(TMP_Text targetHealthLabel, Slider targetHealthSlider, TMP_Text targetStateLabel)
         {
@@ -29,6 +30,14 @@ namespace Blockiverse.UI
 
             vitals = playerVitals ?? throw new ArgumentNullException(nameof(playerVitals));
             vitals.HealthChanged += OnHealthChanged;
+            Refresh();
+        }
+
+        // Optionally binds the hunger/thirst/stamina vitals so the state line shows them. These
+        // tick without events, so the HUD controller refreshes the panel on a cadence.
+        public void BindSurvivalVitals(SurvivalVitals playerSurvivalVitals)
+        {
+            survivalVitals = playerSurvivalVitals;
             Refresh();
         }
 
@@ -59,7 +68,12 @@ namespace Blockiverse.UI
             }
 
             if (stateLabel != null)
-                stateLabel.text = GetStateTMP_Text(vitals);
+            {
+                string state = GetStateTMP_Text(vitals);
+                if (survivalVitals != null)
+                    state = $"{state} · Hunger {survivalVitals.Hunger} · Thirst {survivalVitals.Thirst} · Stamina {survivalVitals.Stamina}";
+                stateLabel.text = state;
+            }
         }
 
         void OnDestroy()
