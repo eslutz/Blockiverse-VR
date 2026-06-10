@@ -6,6 +6,7 @@
     "Blockiverse.Gameplay",
     "Blockiverse.MetaAvatars",
     "Blockiverse.Networking",
+    "Blockiverse.Survival",
     "Blockiverse.UI",
     "Blockiverse.VR",
     "Oculus.AvatarSDK2",

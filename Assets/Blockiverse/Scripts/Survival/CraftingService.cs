@@ -8,7 +8,10 @@ namespace Blockiverse.Survival
         None,
         MissingStation,
         MissingIngredient,
-        OutputBlocked
+        OutputBlocked,
+        // Timed (kiln/forge) recipes run on the fueled SmeltingStationModel, never as an
+        // instant craft — rejecting here closes the fuel/time bypass for every caller.
+        TimedRecipeRequiresStation
     }
 
     public readonly struct CraftingResult
@@ -47,6 +50,11 @@ namespace Blockiverse.Survival
 
             if (recipe == null)
                 throw new ArgumentNullException(nameof(recipe));
+
+            // Timed recipes consume fuel and progress over ticks at their station model; crafting
+            // them instantly here would bypass both (§8.2/§9.3/§9.4).
+            if (recipe.TimeTicks > 0)
+                return CraftingResult.Failure(CraftingFailureReason.TimedRecipeRequiresStation, recipe.Output.ItemId);
 
             if (recipe.RequiredStation != CraftingStation.None && recipe.RequiredStation != availableStation)
                 return CraftingResult.Failure(CraftingFailureReason.MissingStation);

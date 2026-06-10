@@ -157,27 +157,19 @@ namespace Blockiverse.WorldGen
 
         static void PlaceRuin(VoxelWorld world, int baseX, int baseY, int baseZ, StructureDegradation degradation, int seed, StructureDefinition def = null, List<StructureContainerLoot> lootSink = null)
         {
-            // 5×5 footprint, 3-block-high walls
+            // 5×5 footprint, 3-block-high walls. Each wall block rolls its own degradation skip
+            // (hashed over its actual position + wall index) so weathering holes are not
+            // mirrored identically onto all four walls.
             const int wallH = 3;
 
             for (int dy = 0; dy < wallH; dy++)
             {
                 for (int side = 0; side < 5; side++)
                 {
-                    // Skip wall blocks for more degraded states
-                    uint skipHash = Hash(seed, baseX + side, baseY + dy, baseZ, salt: 4093);
-                    int skipChance = (int)degradation * 20;
-                    if (skipChance > 0 && skipHash % 100u < (uint)skipChance)
-                        continue;
-
-                    // North wall
-                    TrySetSolid(world, new BlockPosition(baseX + side, baseY + dy, baseZ));
-                    // South wall
-                    TrySetSolid(world, new BlockPosition(baseX + side, baseY + dy, baseZ + 4));
-                    // West wall (corners already placed)
-                    TrySetSolid(world, new BlockPosition(baseX,     baseY + dy, baseZ + side));
-                    // East wall
-                    TrySetSolid(world, new BlockPosition(baseX + 4, baseY + dy, baseZ + side));
+                    TryPlaceWallBlock(world, new BlockPosition(baseX + side, baseY + dy, baseZ), degradation, seed, wall: 0);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX + side, baseY + dy, baseZ + 4), degradation, seed, wall: 1);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX, baseY + dy, baseZ + side), degradation, seed, wall: 2);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX + 4, baseY + dy, baseZ + side), degradation, seed, wall: 3);
                 }
             }
 
@@ -218,6 +210,15 @@ namespace Blockiverse.WorldGen
                 if (world.Bounds.Contains(lightPos) && world.GetBlock(lightPos) == BlockRegistry.Air)
                     world.SetBlock(lightPos, BlockRegistry.Glowwick, trackChange: false);
             }
+        }
+
+        static void TryPlaceWallBlock(VoxelWorld world, BlockPosition pos, StructureDegradation degradation, int seed, int wall)
+        {
+            int skipChance = (int)degradation * 20;
+            if (skipChance > 0 && Hash(seed, pos.X, pos.Y, pos.Z, salt: 4093 + wall) % 100u < (uint)skipChance)
+                return;
+
+            TrySetSolid(world, pos);
         }
 
         static void TrySetSolid(VoxelWorld world, BlockPosition pos)
@@ -277,16 +278,7 @@ namespace Blockiverse.WorldGen
 
         static uint Hash(int seed, int x, int y, int z, int salt)
         {
-            unchecked
-            {
-                uint hash = 2166136261u;
-                hash ^= (uint)seed;  hash *= 16777619u;
-                hash ^= (uint)x;     hash *= 16777619u;
-                hash ^= (uint)y;     hash *= 16777619u;
-                hash ^= (uint)z;     hash *= 16777619u;
-                hash ^= (uint)salt;  hash *= 16777619u;
-                return hash;
-            }
+            return DeterministicHash.Hash(seed, x, y, z, salt);
         }
     }
 

@@ -29,6 +29,7 @@ namespace Blockiverse.Gameplay
         VoxelWorld world;
         BlockRegistry registry;
         ChunkRebuildQueue rebuildQueue;
+        VoxelSkyLightMap skyLight;
         Material chunkMaterial;
         int interactionLayer = -1;
         int totalTriangleCount;
@@ -36,6 +37,10 @@ namespace Blockiverse.Gameplay
 
         public VoxelWorld World => world;
         public VoxelRenderStats Stats => stats;
+
+        // The per-column sky map kept current by the rebuild queue; also consumable by
+        // gameplay systems that need cheap "is this cell under open sky" answers.
+        public VoxelSkyLightMap SkyLight => skyLight;
 
         // Colliders awaiting a (throttled) rebake. Visual meshes are always current.
         public int PendingColliderRebuildCount => pendingColliderRebuilds.Count;
@@ -49,12 +54,19 @@ namespace Blockiverse.Gameplay
             Material material,
             int layer)
         {
+            // Reconfiguring onto a new world (new/load from the menus) must not leave the old
+            // world's chunk meshes, queue subscription, or material behind.
+            rebuildQueue?.Detach();
+            DestroyGeneratedChunkContent();
+            DestroyGeneratedObject(chunkMaterial);
+
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             BlockVisualAtlas.ValidateRenderableBlockCoverage(registry);
             chunkMaterial = BlockVisualAtlas.CreateMaterial(material);
             interactionLayer = layer;
-            rebuildQueue = new ChunkRebuildQueue(world);
+            skyLight = new VoxelSkyLightMap(world, registry);
+            rebuildQueue = new ChunkRebuildQueue(world, skyLight);
             RebuildAll();
         }
 
@@ -122,7 +134,7 @@ namespace Blockiverse.Gameplay
         {
             using ProfilerMarker.AutoScope scope = RebuildChunkMarker.Auto();
 
-            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk);
+            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, skyLight);
             GameObject chunkObject = GetOrCreateChunkObject(chunk);
 
             Mesh mesh = new();
@@ -267,6 +279,15 @@ namespace Blockiverse.Gameplay
 
         void OnDestroy()
         {
+            rebuildQueue?.Detach();
+            DestroyGeneratedChunkContent();
+            DestroyGeneratedObject(chunkMaterial);
+        }
+
+        // Destroys every generated chunk object and mesh and resets the bookkeeping — used on
+        // teardown and when Configure swaps the renderer onto a different world.
+        void DestroyGeneratedChunkContent()
+        {
             foreach (GameObject chunkObject in chunkObjects.Values)
             {
                 if (chunkObject == null)
@@ -274,6 +295,7 @@ namespace Blockiverse.Gameplay
 
                 Mesh mesh = chunkObject.GetComponent<MeshFilter>()?.sharedMesh;
                 DestroyGeneratedObject(mesh);
+                DestroyGeneratedObject(chunkObject);
             }
 
             // Release any collider meshes still deferred behind the throttle (DestroyGeneratedObject
@@ -281,7 +303,6 @@ namespace Blockiverse.Gameplay
             foreach (Mesh colliderMesh in colliderMeshByChunk.Values)
                 DestroyGeneratedObject(colliderMesh);
 
-            DestroyGeneratedObject(chunkMaterial);
             chunkObjects.Clear();
             chunkTriangleCounts.Clear();
             colliderMeshByChunk.Clear();

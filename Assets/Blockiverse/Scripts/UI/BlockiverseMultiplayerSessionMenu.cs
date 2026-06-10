@@ -151,15 +151,34 @@ namespace Blockiverse.UI
 
         void Awake()
         {
+            DiscoverSession();
             RegisterControlCallbacks();
             ApplyDefaultAddressText();
             RefreshStatus();
         }
 
+        float nextSessionSearchTime;
+
+        // The rig-prefab panel cannot serialize a reference to the scene's network manager;
+        // discover the session at runtime instead (throttled — scene walks are not per-frame work).
+        void DiscoverSession()
+        {
+            if (session != null || !Application.isPlaying || Time.unscaledTime < nextSessionSearchTime)
+                return;
+
+            nextSessionSearchTime = Time.unscaledTime + 1.0f;
+            session = FindFirstObjectByType<BlockiverseNetworkSession>(FindObjectsInactive.Include);
+        }
+
         void Update()
         {
             if (session == null)
+            {
+                DiscoverSession();
+                if (session != null)
+                    RefreshStatus();
                 return;
+            }
 
             if (lastDisplayedState != session.CurrentState ||
                 lastDisplayedMode != session.CurrentMode ||

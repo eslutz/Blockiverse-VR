@@ -14,6 +14,14 @@ namespace Blockiverse.Gameplay
         FlatCreative
     }
 
+    // World-level rules mode (the manifest's "gameMode"): survival worlds accept edits only
+    // through the validated survival command channel; creative worlds allow direct mutations.
+    public enum WorldGameMode
+    {
+        Creative,
+        Survival,
+    }
+
     public readonly struct GeneratedCreativeWorld
     {
         public GeneratedCreativeWorld(BlockRegistry registry, WorldGenerationSettings settings, VoxelWorld world)
@@ -87,6 +95,20 @@ namespace Blockiverse.Gameplay
         public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
+
+        // The world's rules mode. The bare boot sandbox defaults to Creative; saves and the
+        // new-world flow set it from their manifest/config (see SetGameMode/ParseGameMode).
+        public WorldGameMode GameMode { get; private set; } = WorldGameMode.Creative;
+
+        public void SetGameMode(WorldGameMode mode) => GameMode = mode;
+
+        public static WorldGameMode ParseGameMode(string gameMode) =>
+            string.Equals(gameMode, "creative", StringComparison.OrdinalIgnoreCase)
+                ? WorldGameMode.Creative
+                : WorldGameMode.Survival;
+
+        // The canonical manifest string for the current mode.
+        public string GameModeString => GameMode == WorldGameMode.Creative ? "creative" : "survival";
 
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
         public WorldTimeClock WorldTimeClock => worldTimeClock;
@@ -351,7 +373,10 @@ namespace Blockiverse.Gameplay
             BlockId b = change.NewBlock;
             if (b == BlockRegistry.Sapling || b == BlockRegistry.Sapling_S1 || b == BlockRegistry.Sapling_S2)
                 vegetationService?.TrackSapling(change.Position);
-            if (FarmingService.IsCropBlock(b))
+            // Only a crop NEWLY appearing at a position re-anchors growth (planting/replanting).
+            // A crop→crop change is FarmingService's own stage advance; re-anchoring there would
+            // reset the interval anchor and silently skip the next growth roll after each advance.
+            if (FarmingService.IsCropBlock(b) && !FarmingService.IsCropBlock(change.PreviousBlock))
                 farmingService?.TrackCrop(change.Position);
 
             // Keep the leaf-decay candidate set current: newly placed Leafmoss must be checked,
@@ -372,10 +397,14 @@ namespace Blockiverse.Gameplay
 
             // A container block that is removed (broken, or replaced by a loaded save delta): deposit
             // its contents into the active player inventory (best effort) then drop the store entry so
-            // the store stays consistent with the world. Auto-loot is skipped while applying a save.
+            // the store stays consistent with the world. Auto-loot is skipped while applying a save,
+            // and only the world-owning peer (offline/host) may grant loot — on clients this handler
+            // also fires for replicated deltas, where granting locally would duplicate items that the
+            // host has already attributed to the breaking player (see ProcessHostHarvest).
             if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b) && containerStore != null)
             {
-                if (!suppressContainerAutoLoot && activePlayerInventory != null)
+                bool ownsWorld = authoritySync == null || authoritySync.CurrentBoundary.CanCommitMutations;
+                if (ownsWorld && !suppressContainerAutoLoot && activePlayerInventory != null)
                     TryLootContainerInto(change.Position, activePlayerInventory);
                 containerStore.Remove(change.Position);
             }
@@ -545,7 +574,8 @@ namespace Blockiverse.Gameplay
                 InitializeDefaultWorld();
         }
 
-        static void PositionRigAtSpawn(BlockPosition spawnPosition)
+        // Shared by world load and survival respawn (SurvivalVitalsRuntime).
+        internal static void PositionRigAtSpawn(BlockPosition spawnPosition)
         {
             GameObject rigObject = GameObject.Find(BlockiverseProject.XrRigRootName);
             if (rigObject == null)

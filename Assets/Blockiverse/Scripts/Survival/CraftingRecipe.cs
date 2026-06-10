@@ -14,6 +14,25 @@ namespace Blockiverse.Survival
         Campfire
     }
 
+    public static class CraftingStationNames
+    {
+        // Human-readable station name for UI ("ClayKiln" → "Clay Kiln"); matches the placed
+        // station blocks' display names in BlockRegistry.
+        public static string DisplayName(CraftingStation station)
+        {
+            string name = station.ToString();
+            var builder = new System.Text.StringBuilder(name.Length + 2);
+            for (int i = 0; i < name.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(name[i]))
+                    builder.Append(' ');
+                builder.Append(name[i]);
+            }
+
+            return builder.ToString();
+        }
+    }
+
     public sealed class CraftingRecipe
     {
         public CraftingRecipe(ItemStack output, CraftingStation requiredStation, params ItemStack[] ingredients)

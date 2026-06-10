@@ -16,6 +16,7 @@ namespace Blockiverse.Persistence
         public int ChunkSize;
         public string WorldPreset;
         public string GameMode;
+        public string Difficulty;
         public string CreatedAtUtc;
         public string ModifiedAtUtc;
         public string BlockRegistryHash;

@@ -13,10 +13,12 @@ namespace Blockiverse.VR
     public sealed class BlockiverseInteractionHaptics : MonoBehaviour
     {
         [SerializeField] CreativeInteractionController interactionController;
+        [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] BlockiverseControllerHaptics dominantHandHaptics;
         [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
 
         bool subscribed;
+        bool subscribedToSurvival;
 
         public event Action UiTickRequested;
         public CreativeInteractionController InteractionController => interactionController;
@@ -63,24 +65,56 @@ namespace Blockiverse.VR
 
             if (interactionController == null && Application.isPlaying)
                 interactionController = FindFirstObjectByType<CreativeInteractionController>();
+
+            if (survivalSync == null && Application.isPlaying)
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
         }
 
         void Subscribe()
         {
-            if (subscribed || interactionController == null)
-                return;
+            if (!subscribed && interactionController != null)
+            {
+                interactionController.BlockMutationApplied += OnBlockMutationApplied;
+                subscribed = true;
+            }
 
-            interactionController.BlockMutationApplied += OnBlockMutationApplied;
-            subscribed = true;
+            if (!subscribedToSurvival && survivalSync != null)
+            {
+                survivalSync.CommandFeedback += OnSurvivalCommandFeedback;
+                subscribedToSurvival = true;
+            }
         }
 
         void Unsubscribe()
         {
-            if (!subscribed || interactionController == null)
+            if (subscribed && interactionController != null)
+                interactionController.BlockMutationApplied -= OnBlockMutationApplied;
+            subscribed = false;
+
+            if (subscribedToSurvival && survivalSync != null)
+                survivalSync.CommandFeedback -= OnSurvivalCommandFeedback;
+            subscribedToSurvival = false;
+        }
+
+        // Survival break/place resolve through the host-authoritative command channel rather
+        // than the creative controller; mirror the same break/place buzz for them.
+        void OnSurvivalCommandFeedback(Blockiverse.Gameplay.SurvivalCommandResult result, BlockPosition position)
+        {
+            if (!result.Accepted)
                 return;
 
-            interactionController.BlockMutationApplied -= OnBlockMutationApplied;
-            subscribed = false;
+            switch (result.CommandKind)
+            {
+                case Blockiverse.Gameplay.SurvivalCommandKind.HarvestResource:
+                    SendPattern(BlockiverseHapticPattern.BlockBreak);
+                    break;
+                case Blockiverse.Gameplay.SurvivalCommandKind.PlaceBlock:
+                case Blockiverse.Gameplay.SurvivalCommandKind.StripLog:
+                case Blockiverse.Gameplay.SurvivalCommandKind.TillSoil:
+                case Blockiverse.Gameplay.SurvivalCommandKind.PlantSeed:
+                    SendPattern(BlockiverseHapticPattern.BlockPlace);
+                    break;
+            }
         }
 
         void OnBlockMutationApplied(BlockChange change)

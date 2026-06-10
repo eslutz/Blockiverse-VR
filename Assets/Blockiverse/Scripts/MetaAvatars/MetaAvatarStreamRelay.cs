@@ -15,6 +15,7 @@ namespace Blockiverse.MetaAvatars
         BlockiverseMetaAvatarPresenter localFirstPersonPresenter;
         BlockiverseNetworkAvatarRig ownerNetworkFallbackRig;
         double nextSendTime;
+        double nextPresenterSearchTime;
 
         void Awake()
         {
@@ -30,7 +31,14 @@ namespace Blockiverse.MetaAvatars
             if (!IsOwner)
                 return;
 
-            localFirstPersonPresenter ??= FindLocalFirstPersonPresenter();
+            // The local presenter may not exist (avatar disabled): throttle the scene walk
+            // instead of running FindObjectsByType every frame until one appears.
+            if (localFirstPersonPresenter == null && Time.unscaledTimeAsDouble >= nextPresenterSearchTime)
+            {
+                nextPresenterSearchTime = Time.unscaledTimeAsDouble + 1.0;
+                localFirstPersonPresenter = FindLocalFirstPersonPresenter();
+            }
+
             HideOwnerNetworkFallbackWhenLocalAvatarIsReady();
 
             if (localFirstPersonPresenter == null || NetworkManager == null)

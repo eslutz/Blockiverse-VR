@@ -51,6 +51,11 @@ namespace Blockiverse.Voxel
 
     public sealed class ChunkDeltaLog
     {
+        // Only the most recent deltas are retained: late-join sync ships the world's changed
+        // blocks (not this log), so the log exists for sequencing and diagnostics and must not
+        // grow unbounded over a long host session.
+        public const int MaxRetainedDeltas = 1024;
+
         readonly List<ChunkDelta> deltas = new();
         uint nextSequenceId = 1;
 
@@ -64,6 +69,10 @@ namespace Blockiverse.Voxel
                 sequenceId,
                 ChunkCoordinate.FromBlockPosition(change.Position, chunkSize),
                 change);
+
+            if (deltas.Count >= MaxRetainedDeltas)
+                deltas.RemoveAt(0);
+
             deltas.Add(delta);
             LastSequenceId = sequenceId;
             return delta;

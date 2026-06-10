@@ -29,11 +29,27 @@ namespace Blockiverse.UI
         readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
         UiScreenRouter router;
+        bool hasLatestSave;
+        bool hasAnySave;
 
         public UiScreenRouter Router => router;
 
-        // Fires when the controller needs the world manager to act (save, load, respawn, etc.).
+        // Fires when the controller needs the world session to act (save, load, respawn, etc.).
         public event Action<string> ActionRequested;
+
+        // Updates the title menu's save-dependent entries (Continue / Load World). Called by the
+        // world session coordinator whenever the set of saves changes.
+        public void SetSaveAvailability(bool latestSaveExists, bool anySaveExists)
+        {
+            hasLatestSave = latestSaveExists;
+            hasAnySave = anySaveExists;
+            RefreshTitleMenu();
+        }
+
+        void RefreshTitleMenu()
+        {
+            titleMenu?.SetMenu("Blockiverse", MenuActions.Title(hasLatestSave, hasAnySave, CanQuit()));
+        }
 
         public void Configure(
             BlockiverseInputRig rig,
@@ -63,7 +79,8 @@ namespace Blockiverse.UI
             BlockiverseWorldSpacePanelPresenter newWorld,
             BlockiverseWorldSpacePanelPresenter loadWorld,
             BlockiverseWorldSpacePanelPresenter settings,
-            BlockiverseWorldSpacePanelPresenter station = null)
+            BlockiverseWorldSpacePanelPresenter station = null,
+            BlockiverseWorldSpacePanelPresenter lanMultiplayer = null)
         {
             screenPresenters.Clear();
             AddPresenter(MenuActions.TitleScreen, title);
@@ -75,6 +92,8 @@ namespace Blockiverse.UI
             AddPresenter(MenuActions.SettingsScreen, settings);
             if (station != null)
                 AddPresenter(MenuActions.StationMenuScreen, station);
+            if (lanMultiplayer != null)
+                AddPresenter(MenuActions.LanMultiplayerScreen, lanMultiplayer);
         }
 
         // Wires the smelting-station panel so a "use" on a kiln/forge block opens it (§8.4).
@@ -90,10 +109,12 @@ namespace Blockiverse.UI
             string active = router.ActiveScreen.ScreenId;
             if (active == MenuActions.GameplayHudScreen)
                 router.PushScreen(new ScreenRoute(MenuActions.PauseScreen, pauseGame: true));
-            else if (active == MenuActions.PauseScreen && !router.HasModal)
-                router.PopScreen();
             else if (active == MenuActions.StationMenuScreen && !router.HasModal)
                 HandleStationCloseRequested();
+            else if (active != MenuActions.TitleScreen && !router.HasModal)
+                // Generic escape hatch: the menu button pops any other screen (pause included),
+                // so a screen without its own close action can never trap the player.
+                router.PopScreen();
         }
 
         // Called by the world manager after a world is created or loaded.
@@ -138,12 +159,25 @@ namespace Blockiverse.UI
             WireStationPanel();
             WireVitalsRuntime();
 
-            titleMenu?.SetMenu("Blockiverse", MenuActions.Title(false, false, CanQuit()));
+            RefreshTitleMenu();
             pauseMenu?.SetMenu("Paused", MenuActions.Pause);
             deathMenu?.SetMenu("You Died", MenuActions.Death(false));
             confirmMenu?.SetMenu("Confirm?", MenuActions.Confirm());
 
             ApplyRouterState();
+        }
+
+        // Close hook for the LAN multiplayer panel's button (wired by the bootstrapper).
+        public void CloseLanMultiplayerScreen()
+        {
+            HandleAction(MenuActions.LanMultiplayerClose);
+        }
+
+        // Status line on the title menu — used by the session coordinator to surface
+        // save/load failures without leaving the title screen.
+        public void SetTitleStatus(string message)
+        {
+            titleMenu?.SetStatus(message ?? string.Empty);
         }
 
         void OnDestroy()
@@ -221,18 +255,36 @@ namespace Blockiverse.UI
                 return;
 
             SmeltingStationModel model = survivalSync.GetOrCreateStationModel(position, stationType);
-            stationPanel.Open(model, position, stationType == CraftingStation.ClayKiln ? "Clay Kiln" : "Bellows Forge");
+            stationPanel.Open(model, position);
             // Pulls the authoritative state onto remote-client mirrors; a no-op validation on the host.
             survivalSync.TrySubmitStationOpen(position, out _);
             router.PushScreen(new ScreenRoute(MenuActions.StationMenuScreen));
+            PlayStationCue(BlockiverseAudioCue.ContainerOpen);
         }
 
         void HandleStationCloseRequested()
         {
+            bool wasOpen = stationPanel != null && stationPanel.IsOpen;
             stationPanel?.Close();
 
             if (router != null && router.ActiveScreen.ScreenId == MenuActions.StationMenuScreen)
                 router.PopScreen();
+
+            if (wasOpen)
+                PlayStationCue(BlockiverseAudioCue.ContainerClose);
+        }
+
+        BlockiverseAudioCuePlayer stationCuePlayer;
+
+        void PlayStationCue(BlockiverseAudioCue cue)
+        {
+            if (!Application.isPlaying)
+                return;
+
+            if (stationCuePlayer == null)
+                stationCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+
+            stationCuePlayer?.PlayCue(cue);
         }
 
         void HandleAction(string actionId)
@@ -242,20 +294,31 @@ namespace Blockiverse.UI
             switch (actionId)
             {
                 case MenuActions.TitleContinue:
+                    // The session coordinator loads the save and calls EnterGameplay() on
+                    // success — a failed load must leave the player on the title screen.
                     ActionRequested?.Invoke(actionId);
-                    router.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
                     break;
                 case MenuActions.TitleNewWorld:
                     newWorldPanel?.ResetForNewWorld();
                     router.PushScreen(new ScreenRoute(MenuActions.NewWorldScreen, pauseGame: true));
                     break;
                 case MenuActions.TitleLoadWorld:
+                    ActionRequested?.Invoke(actionId);
                     router.PushScreen(new ScreenRoute(MenuActions.LoadWorldScreen, pauseGame: true));
+                    break;
+                case MenuActions.TitleMultiplayer:
+                    router.PushScreen(new ScreenRoute(MenuActions.LanMultiplayerScreen, pauseGame: true));
+                    break;
+                case MenuActions.LanMultiplayerClose:
+                    if (router.ActiveScreen.ScreenId == MenuActions.LanMultiplayerScreen)
+                        router.PopScreen();
                     break;
                 case MenuActions.TitleSettings:
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
                     break;
                 case MenuActions.TitleQuit:
+                    // Give the session coordinator a chance to save before the process exits.
+                    ActionRequested?.Invoke(actionId);
                     Application.Quit();
                     break;
 
@@ -274,13 +337,10 @@ namespace Blockiverse.UI
                 case MenuActions.PauseSettings:
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
                     break;
-                case MenuActions.PauseControls:
-                    router.PushScreen(new ScreenRoute(MenuActions.ControlsScreen, pauseGame: true));
-                    break;
                 case MenuActions.PauseReturnToTitle:
                     ActionRequested?.Invoke(actionId);
                     router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
-                    titleMenu?.SetMenu("Blockiverse", MenuActions.Title(false, false, CanQuit()));
+                    RefreshTitleMenu();
                     break;
                 case MenuActions.PauseQuit:
                     ActionRequested?.Invoke(MenuActions.PauseSaveGame);
@@ -314,11 +374,10 @@ namespace Blockiverse.UI
                     break;
 
                 case MenuActions.NewWorldCreate:
+                    // Routed to gameplay by the session coordinator (EnterGameplay) only after
+                    // generation succeeds.
                     if (newWorldPanel?.Config?.IsValid(out _) == true)
-                    {
                         ActionRequested?.Invoke(actionId);
-                        router.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
-                    }
                     break;
                 case MenuActions.NewWorldCancel:
                     router.PopScreen();
@@ -326,10 +385,7 @@ namespace Blockiverse.UI
 
                 case MenuActions.LoadWorldLoad:
                     if (loadWorldPanel?.SelectedSave.HasValue == true)
-                    {
                         ActionRequested?.Invoke(actionId);
-                        router.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
-                    }
                     break;
                 case MenuActions.LoadWorldCancel:
                     router.PopScreen();

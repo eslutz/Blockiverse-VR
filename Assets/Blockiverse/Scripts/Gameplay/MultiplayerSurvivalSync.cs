@@ -161,16 +161,9 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class MultiplayerSurvivalSync : MonoBehaviour
     {
-        const string HarvestRequestMessage = "Blockiverse.Survival.HarvestRequest";
-        const string PlaceRequestMessage = "Blockiverse.Survival.PlaceRequest";
-        const string StripLogRequestMessage = "Blockiverse.Survival.StripLogRequest";
-        const string TillRequestMessage = "Blockiverse.Survival.TillRequest";
-        const string PlantRequestMessage = "Blockiverse.Survival.PlantRequest";
-        const string RepairRequestMessage = "Blockiverse.Survival.RepairRequest";
-        const string ConsumableRequestMessage = "Blockiverse.Survival.ConsumableRequest";
-        const string CraftRequestMessage = "Blockiverse.Survival.CraftRequest";
-        const string CrateTransferRequestMessage = "Blockiverse.Survival.CrateTransferRequest";
-        const string StationCommandRequestMessage = "Blockiverse.Survival.StationCommandRequest";
+        // Single client→host command channel: every request shares the wire header
+        // [uint requestId][int SurvivalCommandKind]; the host dispatcher switches on the kind.
+        const string CommandRequestMessage = "Blockiverse.Survival.CommandRequest";
         const string StationSnapshotMessage = "Blockiverse.Survival.StationSnapshot";
         const string CommandResultMessage = "Blockiverse.Survival.CommandResult";
         const string InventorySnapshotMessage = "Blockiverse.Survival.InventorySnapshot";
@@ -187,7 +180,7 @@ namespace Blockiverse.Gameplay
 
         readonly Dictionary<ulong, Inventory> inventoriesByClientId = new();
         readonly Dictionary<ulong, ProcessedRequestWindow> processedRequestsByClientId = new();
-        readonly Dictionary<uint, SurvivalCommandKind> pendingCommandRequests = new();
+        readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position)> pendingCommandRequests = new();
 
         // Smelting stations keyed by their block position. On the host these are the authoritative
         // models, ticked from Update; on remote clients they are display mirrors fed by snapshots.
@@ -204,10 +197,40 @@ namespace Blockiverse.Gameplay
         uint nextCommandRequestId = 1;
         bool messagesRegistered;
 
-        public Inventory LocalInventory => localInventory ??= CreatePlayerInventory();
+        public Inventory LocalInventory => GetInventory(ResolveLocalClientId());
         public Inventory SharedCrateInventory => sharedCrateInventory ??= CreateSharedCrateInventory();
         public SurvivalCommandResult LastCommandResult { get; private set; }
         public int PendingCommandRequestCount => pendingCommandRequests.Count;
+
+        // Raised whenever the local player's inventory contents may have changed (a host-side
+        // command mutated it, or a host snapshot was applied on a client) so display code can
+        // repaint without polling. SharedCrateChanged is the same signal for the shared crate.
+        public event Action LocalInventoryChanged;
+        public event Action SharedCrateChanged;
+
+        // Local-player survival command feedback for presentation (audio/VFX/haptics): the
+        // resolved result plus the command's block target (default for non-spatial commands).
+        // Raised immediately on the host/offline peer and on host confirmation for clients.
+        public event Action<SurvivalCommandResult, BlockPosition> CommandFeedback;
+
+        void RaiseCommandFeedback(SurvivalCommandResult result, BlockPosition position)
+        {
+            CommandFeedback?.Invoke(result, position);
+        }
+
+        // Finalizes a host/offline-processed local command: records it and raises presentation
+        // feedback (clients get theirs when the host's result message completes the pending entry).
+        SurvivalCommandResult CompleteLocalCommand(SurvivalCommandResult result, BlockPosition position = default)
+        {
+            LastCommandResult = result;
+            if (!result.IsDuplicate)
+                RaiseCommandFeedback(result, position);
+            return result;
+        }
+
+        // Scratch for RebindLocalInventoryMapping (the local client id changes across
+        // offline/host/client transitions, so stale aliases must be dropped).
+        readonly List<ulong> staleLocalInventoryIds = new();
 
         // The local player's selected hotbar slot — set by the survival inventory UI, read by the VR
         // interaction bridge so harvest/place use the held tool/block. Lives here (Gameplay) because the
@@ -230,13 +253,73 @@ namespace Blockiverse.Gameplay
         readonly SurvivalCreativeModeSwitch modeSwitch = new();
         public PlayerModeState CurrentMode => modeSwitch.CurrentMode;
 
-        // Flips between survival and creative interaction, snapshotting/restoring the survival inventory.
-        public void ToggleMode()
+        // Flips between survival and creative interaction, snapshotting/restoring the survival
+        // inventory. Host/offline only: a remote client's inventory is a host-owned mirror, so a
+        // local snapshot+clear would desync from the authoritative copy and be clobbered by the
+        // next snapshot. Returns false when the switch is unavailable.
+        public bool ToggleMode()
         {
+            if (IsActiveClientOnly())
+                return false;
+
             if (modeSwitch.CurrentMode == PlayerModeState.Survival)
                 modeSwitch.SwitchToCreative(LocalInventory);
             else
                 modeSwitch.SwitchToSurvival(LocalInventory);
+
+            LocalInventoryChanged?.Invoke();
+            return true;
+        }
+
+        // Sets the interaction mode outright (host/offline only); used when entering a loaded
+        // or freshly created world whose manifest dictates the mode.
+        public void SetMode(PlayerModeState mode)
+        {
+            if (mode == modeSwitch.CurrentMode)
+                return;
+
+            ToggleMode();
+        }
+
+        // The inventory persistence should write: the stashed survival slots while the player is
+        // in creative mode, else the live inventory.
+        public Inventory BuildPersistedInventory()
+        {
+            if (modeSwitch.CurrentMode == PlayerModeState.Survival || !modeSwitch.HasSurvivalSnapshot)
+                return LocalInventory;
+
+            Inventory inventory = CreatePlayerInventory();
+            System.Collections.Generic.IReadOnlyList<ItemStack> slots = modeSwitch.SurvivalSnapshotSlots;
+            int count = Math.Min(slots.Count, inventory.SlotCount);
+            for (int index = 0; index < count; index++)
+            {
+                if (!slots[index].IsEmpty)
+                    inventory.SetSlot(index, slots[index]);
+            }
+
+            return inventory;
+        }
+
+        // Replaces the local player's inventory contents in place from a loaded save
+        // (host/offline only — clients receive theirs via host snapshots).
+        public void RestoreLocalInventory(Inventory loaded, int selectedHotbarSlot)
+        {
+            if (loaded == null || IsActiveClientOnly())
+                return;
+
+            Inventory target = LocalInventory;
+            ClearInventorySlots(target);
+
+            int count = Math.Min(loaded.SlotCount, target.SlotCount);
+            for (int index = 0; index < count; index++)
+            {
+                ItemStack stack = loaded.GetSlot(index);
+                if (!stack.IsEmpty)
+                    target.SetSlot(index, stack);
+            }
+
+            SelectedHotbarSlotIndex = selectedHotbarSlot;
+            LocalInventoryChanged?.Invoke();
         }
 
         // The item in the selected hotbar slot (bare hand when empty/out of range).
@@ -307,6 +390,10 @@ namespace Blockiverse.Gameplay
             sharedCrateInventory = CreateSharedCrateInventory();
             SubscribeNetworkCallbacks();
             RefreshLocalInventoryReference();
+            // Configure replaces the inventory instances; consumers holding the old references
+            // (HUD panels, auto-loot target) must re-bind.
+            LocalInventoryChanged?.Invoke();
+            SharedCrateChanged?.Invoke();
         }
 
         void Awake()
@@ -329,8 +416,9 @@ namespace Blockiverse.Gameplay
         void Update()
         {
             // Authoritative smelting-station ticking (§8/§9.3): the host (or offline peer) advances
-            // station crafts in real time; remote clients only mirror snapshots.
-            if (IsActiveClientOnly())
+            // station crafts in real time; remote clients only mirror snapshots. The empty-model
+            // check comes first so the common no-station frame skips network-manager resolution.
+            if (stationModels.Count == 0 || IsActiveClientOnly())
                 return;
 
             stationTickRemainder += Time.deltaTime * SmeltingModel.TicksPerSecond;
@@ -351,11 +439,38 @@ namespace Blockiverse.Gameplay
         {
             if (!inventoriesByClientId.TryGetValue(clientId, out Inventory inventory))
             {
-                inventory = CreatePlayerInventory();
+                // The local player's entry IS the stable localInventory instance in every mode
+                // (offline, host, client): host-side command processing, the HUD binding, the
+                // auto-loot target, and the snapshot mirror all mutate one object, so the local
+                // player can never split-brain across two inventories.
+                inventory = clientId == ResolveLocalClientId()
+                    ? localInventory ??= CreatePlayerInventory()
+                    : CreatePlayerInventory();
                 inventoriesByClientId.Add(clientId, inventory);
             }
 
             return inventory;
+        }
+
+        // The local client id changes across offline (host id), hosting (host id), and client
+        // (assigned id) transitions; drop stale aliases of the local instance and bind the
+        // current id so GetInventory(localId) always resolves to localInventory.
+        void RebindLocalInventoryMapping()
+        {
+            if (localInventory == null)
+                return;
+
+            staleLocalInventoryIds.Clear();
+            foreach (KeyValuePair<ulong, Inventory> pair in inventoriesByClientId)
+            {
+                if (ReferenceEquals(pair.Value, localInventory))
+                    staleLocalInventoryIds.Add(pair.Key);
+            }
+
+            foreach (ulong staleId in staleLocalInventoryIds)
+                inventoriesByClientId.Remove(staleId);
+
+            inventoriesByClientId[ResolveLocalClientId()] = localInventory;
         }
 
         public SurvivalCommandResult TrySubmitHarvest(
@@ -377,14 +492,15 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendHarvestRequest(requestId, position, equippedItem, equippedSlotIndex);
+                SendHarvestRequest(requestId, position, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.HarvestResource, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostHarvest(ResolveLocalClientId(), requestId: 0, position, equippedItem, sendResponse: false, equippedSlotIndex);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostHarvest(ResolveLocalClientId(), requestId: 0, position, equippedItem, sendResponse: false, equippedSlotIndex),
+                position);
         }
 
         // Harvest convenience used by the VR interaction bridge: harvests with the currently selected
@@ -417,14 +533,15 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendPlaceRequest(requestId, position, equippedSlotIndex);
+                SendBlockCommandRequest(SurvivalCommandKind.PlaceBlock, requestId, position, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PlaceBlock, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostPlace(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostPlace(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false),
+                position);
         }
 
         // The survival "use" action with the held item: a Feller strips a targeted branchwood_log
@@ -440,7 +557,7 @@ namespace Blockiverse.Gameplay
             if (targetWorld != null &&
                 targetWorld.Bounds.Contains(targetBlock) &&
                 StationProximity.TryGetStationForBlock(targetWorld.GetBlock(targetBlock), out CraftingStation targetStation) &&
-                IsTimedStation(targetStation))
+                SmeltingStationModel.IsTimedStation(targetStation))
             {
                 requestSentToHost = false;
                 StationOpenRequested?.Invoke(targetBlock, targetStation);
@@ -489,14 +606,15 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendStripLogRequest(requestId, position, equippedSlotIndex);
+                SendBlockCommandRequest(SurvivalCommandKind.StripLog, requestId, position, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.StripLog, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostStripLog(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostStripLog(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false),
+                position);
         }
 
         // Tiller till: converts targeted tillable soil to tended_soil in place (§11.1), consuming
@@ -519,14 +637,15 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendTillRequest(requestId, position, equippedSlotIndex);
+                SendBlockCommandRequest(SurvivalCommandKind.TillSoil, requestId, position, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.TillSoil, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostTill(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostTill(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false),
+                position);
         }
 
         // Seed planting: plants the held seed's crop above targeted tended_soil (§11.2), consuming
@@ -549,14 +668,15 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendPlantRequest(requestId, soilPosition, equippedSlotIndex);
+                SendBlockCommandRequest(SurvivalCommandKind.PlantSeed, requestId, soilPosition, equippedSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PlantSeed, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostPlantSeed(ResolveLocalClientId(), requestId: 0, soilPosition, equippedSlotIndex, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostPlantSeed(ResolveLocalClientId(), requestId: 0, soilPosition, equippedSlotIndex, sendResponse: false),
+                soilPosition);
         }
 
         // Mend Bench tool repair (§10.7): restores 25% max durability of the tool in the given slot
@@ -572,14 +692,14 @@ namespace Blockiverse.Gameplay
             if (IsActiveClientOnly())
             {
                 uint requestId = AllocateCommandRequestId();
-                SendRepairRequest(requestId, toolSlotIndex);
+                SendSlotCommandRequest(SurvivalCommandKind.RepairTool, requestId, toolSlotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.RepairTool, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostRepair(ResolveLocalClientId(), requestId: 0, toolSlotIndex, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostRepair(ResolveLocalClientId(), requestId: 0, toolSlotIndex, sendResponse: false));
         }
 
         // Fires on the consuming peer when the host confirms a consumable was used (one stack of
@@ -599,16 +719,17 @@ namespace Blockiverse.Gameplay
             if (IsActiveClientOnly())
             {
                 uint requestId = AllocateCommandRequestId();
-                SendConsumableRequest(requestId, slotIndex);
+                SendSlotCommandRequest(SurvivalCommandKind.UseConsumable, requestId, slotIndex);
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.UseConsumable, requestId);
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostUseConsumable(ResolveLocalClientId(), requestId: 0, slotIndex, sendResponse: false);
-            if (LastCommandResult.Accepted)
-                ConsumableConsumed?.Invoke(LastCommandResult.Item);
-            return LastCommandResult;
+            SurvivalCommandResult consumableResult =
+                ProcessHostUseConsumable(ResolveLocalClientId(), requestId: 0, slotIndex, sendResponse: false);
+            if (consumableResult.Accepted)
+                ConsumableConsumed?.Invoke(consumableResult.Item);
+            return CompleteLocalCommand(consumableResult);
         }
 
         public SurvivalCommandResult TrySubmitCraft(
@@ -627,8 +748,8 @@ namespace Blockiverse.Gameplay
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostCraft(ResolveLocalClientId(), requestId: 0, outputItemId, availableStation, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostCraft(ResolveLocalClientId(), requestId: 0, outputItemId, availableStation, sendResponse: false));
         }
 
         // ── Smelting stations (Clay Kiln / Bellows Forge, §8/§9.3/§9.4) ─────────────────────────
@@ -637,13 +758,10 @@ namespace Blockiverse.Gameplay
         // station panel bound to the (host-authoritative or mirrored) model for that position.
         public event Action<BlockPosition, CraftingStation> StationOpenRequested;
 
-        public static bool IsTimedStation(CraftingStation station) =>
-            station == CraftingStation.ClayKiln || station == CraftingStation.BellowsForge;
-
         // The station model for a position: authoritative on the host, a display mirror on clients.
         public SmeltingStationModel GetOrCreateStationModel(BlockPosition position, CraftingStation stationType)
         {
-            if (!IsTimedStation(stationType))
+            if (!SmeltingStationModel.IsTimedStation(stationType))
                 throw new ArgumentException("Only timed stations (kiln/forge) have runtime models.", nameof(stationType));
 
             if (stationModels.TryGetValue(position, out SmeltingStationModel model) &&
@@ -654,7 +772,7 @@ namespace Blockiverse.Gameplay
 
             model = new SmeltingStationModel(
                 stationType,
-                stationType == CraftingStation.BellowsForge ? 3 : 1,
+                SmeltingStationModel.InputSlotCountFor(stationType),
                 ResolveRecipeBook(),
                 ResolveItemRegistry());
             stationModels[position] = model;
@@ -747,9 +865,10 @@ namespace Blockiverse.Gameplay
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostStationCommand(
-                ResolveLocalClientId(), requestId: 0, commandKind, position, itemId, count, sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostStationCommand(
+                    ResolveLocalClientId(), requestId: 0, commandKind, position, itemId, count, sendResponse: false),
+                position);
         }
 
         public SurvivalCommandResult TrySubmitCrateDeposit(
@@ -785,14 +904,14 @@ namespace Blockiverse.Gameplay
                 return LastCommandResult;
             }
 
-            LastCommandResult = ProcessHostCrateTransfer(
-                ResolveLocalClientId(),
-                requestId: 0,
-                commandKind,
-                itemId,
-                count,
-                sendResponse: false);
-            return LastCommandResult;
+            return CompleteLocalCommand(
+                ProcessHostCrateTransfer(
+                    ResolveLocalClientId(),
+                    requestId: 0,
+                    commandKind,
+                    itemId,
+                    count,
+                    sendResponse: false));
         }
 
         SurvivalCommandResult ProcessHostHarvest(
@@ -835,10 +954,34 @@ namespace Blockiverse.Gameplay
                 return result;
             }
 
-            BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
-                new BlockMutationRequest(clientId, position, BlockRegistry.Air, harvest.BlockId),
-                out _,
-                out _);
+            // A container's contents go to the player who broke it — host-authoritatively into
+            // that client's inventory — not to whichever peer's auto-loot handler fires first.
+            // Auto-loot is suppressed around the mutation so the world-change handler does not
+            // also grant leftovers to the host's own player. Best effort: contents that do not
+            // fit are destroyed with the block, matching the local break-to-loot behavior.
+            bool restoreAutoLoot = false;
+            if (worldManager != null &&
+                worldManager.ContainerStore != null &&
+                worldManager.ContainerStore.Contains(position))
+            {
+                worldManager.TryLootContainerInto(position, inventory);
+                restoreAutoLoot = !worldManager.SuppressContainerAutoLoot;
+                worldManager.SuppressContainerAutoLoot = true;
+            }
+
+            BlockMutationResult mutation;
+            try
+            {
+                mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
+                    new BlockMutationRequest(clientId, position, BlockRegistry.Air, harvest.BlockId),
+                    out _,
+                    out _);
+            }
+            finally
+            {
+                if (restoreAutoLoot)
+                    worldManager.SuppressContainerAutoLoot = false;
+            }
 
             if (!mutation.Accepted)
             {
@@ -1146,17 +1289,9 @@ namespace Blockiverse.Gameplay
             if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.RepairTool, sendResponse, out SurvivalCommandResult duplicate))
                 return duplicate;
 
-            // Host-side proximity check (§8): repair requires standing at a Mend Bench. Same trust
-            // rules as crafting — the claim is only downgraded when the requester's position
-            // resolves and the bench is provably out of reach.
-            CraftingStation station = CraftingStation.MendBench;
-            VoxelWorld world = ResolveWorldOrNull();
-            if (world != null &&
-                TryResolveClientBlockPosition(clientId, out BlockPosition requesterPosition) &&
-                !StationProximity.ValidateClaim(world, requesterPosition, CraftingStation.MendBench))
-            {
-                station = CraftingStation.None;
-            }
+            // Host-side proximity check (§8): repair requires standing at a Mend Bench; see
+            // ResolveValidatedStationClaim for the trust rules.
+            CraftingStation station = ResolveValidatedStationClaim(clientId, CraftingStation.MendBench);
 
             Inventory inventory = GetInventory(clientId);
             RepairResult repair = MendBenchRepair.TryRepair(ResolveItemRegistry(), inventory, toolSlotIndex, station);
@@ -1280,19 +1415,8 @@ namespace Blockiverse.Gameplay
 
             // Host-side proximity check (§8): a client cannot claim a crafting station it is not
             // standing near. Invalid claims downgrade to None so CraftingService rejects with
-            // MissingStation. When the requester's position cannot be resolved (offline/tests with
-            // no spawned player object), the claim is trusted — the local UI already gates recipes
-            // by an actual proximity scan, and remote clients always have a player object.
-            if (availableStation != CraftingStation.None)
-            {
-                VoxelWorld world = ResolveWorldOrNull();
-                if (world != null &&
-                    TryResolveClientBlockPosition(clientId, out BlockPosition requesterPosition) &&
-                    !StationProximity.ValidateClaim(world, requesterPosition, availableStation))
-                {
-                    availableStation = CraftingStation.None;
-                }
-            }
+            // MissingStation.
+            availableStation = ResolveValidatedStationClaim(clientId, availableStation);
 
             Inventory inventory = GetInventory(clientId);
             CraftingResult crafting = CraftingService.TryCraft(inventory, recipe, availableStation);
@@ -1397,6 +1521,9 @@ namespace Blockiverse.Gameplay
             result = SurvivalCommandResult.Accept(commandKind, requestId, stack);
             SendInventorySnapshot(clientId);
             BroadcastSharedCrateSnapshot();
+            // Broadcast skips the host's own client id; raise the local signal directly
+            // (and offline, where there is no session to broadcast through at all).
+            SharedCrateChanged?.Invoke();
             SendCommandResult(clientId, result, sendResponse);
             RefreshLocalInventoryReference();
             LastCommandResult = result;
@@ -1423,17 +1550,16 @@ namespace Blockiverse.Gameplay
             if (world == null ||
                 !world.Bounds.Contains(position) ||
                 !StationProximity.TryGetStationForBlock(world.GetBlock(position), out CraftingStation stationType) ||
-                !IsTimedStation(stationType))
+                !SmeltingStationModel.IsTimedStation(stationType))
             {
                 var invalidResult = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.NotAStation, requestId);
                 SendCommandFailure(clientId, invalidResult, sendResponse);
                 return invalidResult;
             }
 
-            // Proximity check: the requester must be near the station block, same as the
-            // crafting/repair paths (§8). Trusted when the requester's position is unresolvable.
-            if (TryResolveClientBlockPosition(clientId, out BlockPosition requesterPosition) &&
-                !StationProximity.ValidateClaim(world, requesterPosition, stationType))
+            // Proximity check: the requester must be near the station block, same trust rules as
+            // the crafting/repair paths (§8).
+            if (ResolveValidatedStationClaim(clientId, stationType) != stationType)
             {
                 var tooFarResult = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.NotAStation, requestId);
                 SendCommandFailure(clientId, tooFarResult, sendResponse);
@@ -1521,6 +1647,27 @@ namespace Blockiverse.Gameplay
             return itemId != ItemId.None && ResolveItemRegistry().TryGet(itemId, out _);
         }
 
+        // Host-side proximity trust policy (§8), shared by the craft/repair/station paths: a
+        // claimed station is downgraded to None when the requester's position resolves and no
+        // matching station block is within reach. When the position cannot be resolved
+        // (offline/tests with no spawned player object), the claim is trusted — the local UI
+        // already gates by an actual proximity scan, and remote clients always have a player object.
+        CraftingStation ResolveValidatedStationClaim(ulong clientId, CraftingStation claimed)
+        {
+            if (claimed == CraftingStation.None)
+                return claimed;
+
+            VoxelWorld world = ResolveWorldOrNull();
+            if (world != null &&
+                TryResolveClientBlockPosition(clientId, out BlockPosition requesterPosition) &&
+                !StationProximity.ValidateClaim(world, requesterPosition, claimed))
+            {
+                return CraftingStation.None;
+            }
+
+            return claimed;
+        }
+
         bool TryRejectDuplicate(
             ulong clientId,
             uint requestId,
@@ -1553,256 +1700,135 @@ namespace Blockiverse.Gameplay
             LastCommandResult = result;
         }
 
-        void HandleHarvestRequestMessage(ulong senderClientId, FastBufferReader reader)
+        // Single host-side dispatcher for every client→host command. The shared header
+        // [requestId][kind] is read here; each kind then reads its own payload and routes to
+        // the existing ProcessHost* logic. An unknown kind drops the message, the same posture
+        // an unregistered named message had under the old per-command channels.
+        void HandleCommandRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
             if (!CanProcessHostRequests())
                 return;
 
             reader.ReadValueSafe(out uint requestId);
-            BlockPosition position = ReadBlockPosition(ref reader);
-            ItemStack equippedItem = ReadItemStack(ref reader);
-            reader.ReadValueSafe(out int equippedSlotIndex);
-            ProcessHostHarvest(senderClientId, requestId, position, equippedItem, sendResponse: true, equippedSlotIndex);
+            reader.ReadValueSafe(out int kindValue);
+            var commandKind = (SurvivalCommandKind)kindValue;
+
+            switch (commandKind)
+            {
+                case SurvivalCommandKind.HarvestResource:
+                {
+                    // The wire carries only position + slot index: the host resolves the tool
+                    // from its own copy of the requester's inventory (ResolveAuthoritativeTool),
+                    // so a client-supplied stack would be ignored anyway.
+                    BlockPosition position = ReadBlockPosition(ref reader);
+                    reader.ReadValueSafe(out int equippedSlotIndex);
+                    ProcessHostHarvest(senderClientId, requestId, position, ItemStack.Empty, sendResponse: true, equippedSlotIndex);
+                    break;
+                }
+                case SurvivalCommandKind.PlaceBlock:
+                case SurvivalCommandKind.StripLog:
+                case SurvivalCommandKind.TillSoil:
+                case SurvivalCommandKind.PlantSeed:
+                {
+                    BlockPosition position = ReadBlockPosition(ref reader);
+                    reader.ReadValueSafe(out int equippedSlotIndex);
+
+                    if (commandKind == SurvivalCommandKind.PlaceBlock)
+                        ProcessHostPlace(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    else if (commandKind == SurvivalCommandKind.StripLog)
+                        ProcessHostStripLog(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    else if (commandKind == SurvivalCommandKind.TillSoil)
+                        ProcessHostTill(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    else
+                        ProcessHostPlantSeed(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    break;
+                }
+                case SurvivalCommandKind.RepairTool:
+                {
+                    reader.ReadValueSafe(out int toolSlotIndex);
+                    ProcessHostRepair(senderClientId, requestId, toolSlotIndex, sendResponse: true);
+                    break;
+                }
+                case SurvivalCommandKind.UseConsumable:
+                {
+                    reader.ReadValueSafe(out int slotIndex);
+                    ProcessHostUseConsumable(senderClientId, requestId, slotIndex, sendResponse: true);
+                    break;
+                }
+                case SurvivalCommandKind.CraftRecipe:
+                {
+                    reader.ReadValueSafe(out string outputItemId);
+                    reader.ReadValueSafe(out int availableStation);
+                    // An empty output id would throw in the ItemId constructor; route it through
+                    // as None so ProcessHostCraft rejects it with MissingRecipe instead.
+                    ItemId outputId = string.IsNullOrWhiteSpace(outputItemId)
+                        ? ItemId.None
+                        : new ItemId(outputItemId);
+                    ProcessHostCraft(
+                        senderClientId,
+                        requestId,
+                        outputId,
+                        (CraftingStation)availableStation,
+                        sendResponse: true);
+                    break;
+                }
+                case SurvivalCommandKind.SharedCrateDeposit:
+                case SurvivalCommandKind.SharedCrateWithdraw:
+                {
+                    ItemStack stack = ReadItemStack(ref reader);
+                    ProcessHostCrateTransfer(senderClientId, requestId, commandKind, stack.ItemId, stack.Count, sendResponse: true);
+                    break;
+                }
+                case SurvivalCommandKind.StationOpen:
+                case SurvivalCommandKind.StationDepositInput:
+                case SurvivalCommandKind.StationDepositFuel:
+                case SurvivalCommandKind.StationCollectOutput:
+                {
+                    BlockPosition position = ReadBlockPosition(ref reader);
+                    ItemStack stack = ReadItemStack(ref reader);
+                    ProcessHostStationCommand(senderClientId, requestId, commandKind, position, stack.ItemId, stack.Count, sendResponse: true);
+                    break;
+                }
+            }
         }
 
-        void SendPlaceRequest(uint requestId, BlockPosition position, int equippedSlotIndex)
+        delegate void CommandPayloadWriter(ref FastBufferWriter writer);
+
+        // Shared client→host command sender: registers the request as pending (with its block
+        // target for feedback), frames the message with the shared [requestId][kind] header, and
+        // lets the caller append the command-specific payload.
+        void SendCommandRequest(SurvivalCommandKind commandKind, uint requestId, CommandPayloadWriter writePayload, BlockPosition position = default)
         {
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.PlaceBlock;
+            pendingCommandRequests[requestId] = (commandKind, position);
             LastSentCommandRequestId = requestId;
             var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
 
             try
             {
                 writer.WriteValueSafe(requestId);
+                writer.WriteValueSafe((int)commandKind);
+                writePayload(ref writer);
+                networkManager.CustomMessagingManager.SendNamedMessage(CommandRequestMessage, NetworkManager.ServerClientId, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        // Place, strip-log, till, and plant all share the (position, slot index) payload.
+        void SendBlockCommandRequest(SurvivalCommandKind commandKind, uint requestId, BlockPosition position, int slotIndex) =>
+            SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) =>
+            {
                 WriteBlockPosition(ref writer, position);
-                writer.WriteValueSafe(equippedSlotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    PlaceRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void HandlePlaceRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            BlockPosition position = ReadBlockPosition(ref reader);
-            reader.ReadValueSafe(out int equippedSlotIndex);
-            ProcessHostPlace(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
-        }
-
-        void SendStripLogRequest(uint requestId, BlockPosition position, int equippedSlotIndex)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.StripLog;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
-            {
-                writer.WriteValueSafe(requestId);
-                WriteBlockPosition(ref writer, position);
-                writer.WriteValueSafe(equippedSlotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    StripLogRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void HandleStripLogRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            BlockPosition position = ReadBlockPosition(ref reader);
-            reader.ReadValueSafe(out int equippedSlotIndex);
-            ProcessHostStripLog(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
-        }
-
-        void SendTillRequest(uint requestId, BlockPosition position, int equippedSlotIndex)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.TillSoil;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
-            {
-                writer.WriteValueSafe(requestId);
-                WriteBlockPosition(ref writer, position);
-                writer.WriteValueSafe(equippedSlotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    TillRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void HandleTillRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            BlockPosition position = ReadBlockPosition(ref reader);
-            reader.ReadValueSafe(out int equippedSlotIndex);
-            ProcessHostTill(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
-        }
-
-        void SendPlantRequest(uint requestId, BlockPosition soilPosition, int equippedSlotIndex)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.PlantSeed;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
-            {
-                writer.WriteValueSafe(requestId);
-                WriteBlockPosition(ref writer, soilPosition);
-                writer.WriteValueSafe(equippedSlotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    PlantRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void HandlePlantRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            BlockPosition soilPosition = ReadBlockPosition(ref reader);
-            reader.ReadValueSafe(out int equippedSlotIndex);
-            ProcessHostPlantSeed(senderClientId, requestId, soilPosition, equippedSlotIndex, sendResponse: true);
-        }
-
-        void SendRepairRequest(uint requestId, int toolSlotIndex)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.RepairTool;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
-            {
-                writer.WriteValueSafe(requestId);
-                writer.WriteValueSafe(toolSlotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    RepairRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void HandleRepairRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            reader.ReadValueSafe(out int toolSlotIndex);
-            ProcessHostRepair(senderClientId, requestId, toolSlotIndex, sendResponse: true);
-        }
-
-        void SendConsumableRequest(uint requestId, int slotIndex)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.UseConsumable;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
-            {
-                writer.WriteValueSafe(requestId);
                 writer.WriteValueSafe(slotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    ConsumableRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
+            }, position);
 
-        void HandleConsumableRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            reader.ReadValueSafe(out int slotIndex);
-            ProcessHostUseConsumable(senderClientId, requestId, slotIndex, sendResponse: true);
-        }
-
-        void HandleCraftRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            reader.ReadValueSafe(out string outputItemId);
-            reader.ReadValueSafe(out int availableStation);
-            ProcessHostCraft(
-                senderClientId,
-                requestId,
-                new ItemId(outputItemId),
-                (CraftingStation)availableStation,
-                sendResponse: true);
-        }
-
-        void HandleCrateTransferRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            reader.ReadValueSafe(out int commandKind);
-            ItemStack stack = ReadItemStack(ref reader);
-            ProcessHostCrateTransfer(
-                senderClientId,
-                requestId,
-                (SurvivalCommandKind)commandKind,
-                stack.ItemId,
-                stack.Count,
-                sendResponse: true);
-        }
+        // Repair and consumable requests carry only a slot index.
+        void SendSlotCommandRequest(SurvivalCommandKind commandKind, uint requestId, int slotIndex) =>
+            SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) => writer.WriteValueSafe(slotIndex));
 
         void HandleCommandResultMessage(ulong senderClientId, FastBufferReader reader)
         {
@@ -1811,11 +1837,16 @@ namespace Blockiverse.Gameplay
 
             SurvivalCommandResult result = ReadCommandResult(ref reader);
             LastCommandResult = result;
-            TryCompletePendingCommandRequest(result.RequestId);
+            bool completedPending = TryCompletePendingCommandRequest(
+                result.RequestId,
+                out (SurvivalCommandKind kind, BlockPosition position) pending);
 
             // The consuming peer applies the consumable's vitals effect once the host confirms.
             if (result.Accepted && result.CommandKind == SurvivalCommandKind.UseConsumable)
                 ConsumableConsumed?.Invoke(result.Item);
+
+            if (completedPending && !result.IsDuplicate)
+                RaiseCommandFeedback(result, pending.position);
         }
 
         void HandleInventorySnapshotMessage(ulong senderClientId, FastBufferReader reader)
@@ -1825,6 +1856,7 @@ namespace Blockiverse.Gameplay
 
             ApplyInventorySnapshot(LocalInventory, ref reader);
             ReceivedInventorySnapshotCount++;
+            LocalInventoryChanged?.Invoke();
         }
 
         void HandleSharedCrateSnapshotMessage(ulong senderClientId, FastBufferReader reader)
@@ -1834,133 +1866,42 @@ namespace Blockiverse.Gameplay
 
             ApplyInventorySnapshot(SharedCrateInventory, ref reader);
             ReceivedSharedCrateSnapshotCount++;
+            SharedCrateChanged?.Invoke();
         }
 
-        void SendHarvestRequest(uint requestId, BlockPosition position, ItemStack equippedItem, int equippedSlotIndex = -1)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.HarvestResource;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
+        void SendHarvestRequest(uint requestId, BlockPosition position, int equippedSlotIndex = -1) =>
+            SendCommandRequest(SurvivalCommandKind.HarvestResource, requestId, (ref FastBufferWriter writer) =>
             {
-                writer.WriteValueSafe(requestId);
                 WriteBlockPosition(ref writer, position);
-                WriteItemStack(ref writer, equippedItem);
                 writer.WriteValueSafe(equippedSlotIndex);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    HarvestRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
+            }, position);
 
-        void SendCraftRequest(uint requestId, ItemId outputItemId, CraftingStation availableStation)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = SurvivalCommandKind.CraftRecipe;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
+        void SendCraftRequest(uint requestId, ItemId outputItemId, CraftingStation availableStation) =>
+            SendCommandRequest(SurvivalCommandKind.CraftRecipe, requestId, (ref FastBufferWriter writer) =>
             {
-                writer.WriteValueSafe(requestId);
                 writer.WriteValueSafe(outputItemId.Value);
                 writer.WriteValueSafe((int)availableStation);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    CraftRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
+            });
 
         void SendCrateTransferRequest(
             uint requestId,
             SurvivalCommandKind commandKind,
             ItemId itemId,
-            int count)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = commandKind;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
-            {
-                writer.WriteValueSafe(requestId);
-                writer.WriteValueSafe((int)commandKind);
-                WriteItemStack(ref writer, new ItemStack(itemId, count));
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    CrateTransferRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
+            int count) =>
+            SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) =>
+                WriteItemStack(ref writer, new ItemStack(itemId, count)));
 
         void SendStationCommandRequest(
             uint requestId,
             SurvivalCommandKind commandKind,
             BlockPosition position,
             ItemId itemId,
-            int count)
-        {
-            NetworkManager networkManager = ResolveNetworkManager();
-            RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = commandKind;
-            LastSentCommandRequestId = requestId;
-            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
-
-            try
+            int count) =>
+            SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) =>
             {
-                writer.WriteValueSafe(requestId);
-                writer.WriteValueSafe((int)commandKind);
                 WriteBlockPosition(ref writer, position);
                 WriteItemStack(ref writer, count > 0 ? new ItemStack(itemId, count) : ItemStack.Empty);
-                networkManager.CustomMessagingManager.SendNamedMessage(
-                    StationCommandRequestMessage,
-                    NetworkManager.ServerClientId,
-                    writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void HandleStationCommandRequestMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (!CanProcessHostRequests())
-                return;
-
-            reader.ReadValueSafe(out uint requestId);
-            reader.ReadValueSafe(out int commandKind);
-            BlockPosition position = ReadBlockPosition(ref reader);
-            ItemStack stack = ReadItemStack(ref reader);
-            ProcessHostStationCommand(
-                senderClientId,
-                requestId,
-                (SurvivalCommandKind)commandKind,
-                position,
-                stack.ItemId,
-                stack.Count,
-                sendResponse: true);
-        }
+            }, position);
 
         // Mirrors a station's authoritative state to one remote client.
         void SendStationSnapshot(ulong clientId, BlockPosition position)
@@ -1991,6 +1932,11 @@ namespace Blockiverse.Gameplay
                 WriteItemStack(ref writer, station.Fuel);
                 WriteItemStack(ref writer, station.Output);
                 writer.WriteValueSafe(station.IsActive);
+                // Intentionally the ItemId string, not a recipe index: every wire payload in this
+                // protocol identifies items by canonical ItemId (see WriteItemStack), and the
+                // reader resolves it via CraftingRecipeBook.TryGetByOutput (O(1)). A recipe index
+                // would be brittle across recipe-book reordering for no measurable size win at
+                // snapshot cadence.
                 writer.WriteValueSafe(station.IsActive ? station.ActiveRecipe.Output.ItemId.Value : string.Empty);
                 writer.WriteValueSafe(station.ProgressTicks);
                 networkManager.CustomMessagingManager.SendNamedMessage(StationSnapshotMessage, clientId, writer);
@@ -2034,7 +1980,7 @@ namespace Blockiverse.Gameplay
             reader.ReadValueSafe(out int progressTicks);
 
             var stationType = (CraftingStation)stationTypeValue;
-            if (!IsTimedStation(stationType))
+            if (!SmeltingStationModel.IsTimedStation(stationType))
                 return;
 
             SmeltingStationModel mirror = GetOrCreateStationModel(position, stationType);
@@ -2046,13 +1992,15 @@ namespace Blockiverse.Gameplay
         }
 
         // Resolves the recipe a host snapshot says is in progress; both peers build the same
-        // canonical recipe book, so output id + station identify the recipe.
+        // canonical recipe book, so output id + station identify the recipe. Outputs are unique in
+        // the book (Register throws on duplicates), so the indexed lookup plus a station/timed
+        // check is equivalent to scanning.
         CraftingRecipe FindStationRecipeByOutput(CraftingStation stationType, ItemId outputItemId)
         {
-            foreach (CraftingRecipe recipe in ResolveRecipeBook().All)
+            if (ResolveRecipeBook().TryGetByOutput(outputItemId, out CraftingRecipe recipe) &&
+                recipe.RequiredStation == stationType && recipe.TimeTicks > 0)
             {
-                if (recipe.RequiredStation == stationType && recipe.TimeTicks > 0 && recipe.Output.ItemId == outputItemId)
-                    return recipe;
+                return recipe;
             }
 
             return null;
@@ -2088,18 +2036,20 @@ namespace Blockiverse.Gameplay
 
         void SendInventorySnapshot(ulong clientId)
         {
+            // The local player's inventory mutates in place (one shared instance) — no wire
+            // round-trip; just signal local consumers (HUD) to repaint. Works offline too.
+            if (clientId == ResolveLocalClientId())
+            {
+                LocalInventoryChanged?.Invoke();
+                return;
+            }
+
             NetworkManager networkManager = ResolveNetworkManagerOrNull();
 
             if (networkManager == null ||
                 !networkManager.IsListening ||
                 !networkManager.IsServer)
             {
-                return;
-            }
-
-            if (clientId == networkManager.LocalClientId)
-            {
-                localInventory = GetInventory(clientId);
                 return;
             }
 
@@ -2168,11 +2118,16 @@ namespace Blockiverse.Gameplay
             return requestId;
         }
 
-        bool TryCompletePendingCommandRequest(uint requestId)
+        bool TryCompletePendingCommandRequest(
+            uint requestId,
+            out (SurvivalCommandKind kind, BlockPosition position) pending)
         {
-            if (requestId == 0 || !pendingCommandRequests.Remove(requestId))
+            pending = default;
+
+            if (requestId == 0 || !pendingCommandRequests.TryGetValue(requestId, out pending))
                 return false;
 
+            pendingCommandRequests.Remove(requestId);
             LastCompletedCommandRequestId = requestId;
             return true;
         }
@@ -2197,14 +2152,23 @@ namespace Blockiverse.Gameplay
 
             if (IsActiveClientOnly())
             {
+                // Clear the stable instances IN PLACE instead of swapping references: the HUD,
+                // auto-loot target, and snapshot mirror keep pointing at the same objects, which
+                // the host's first snapshots then repopulate.
                 ResetPendingCommands();
-                localInventory = CreatePlayerInventory();
-                sharedCrateInventory = CreateSharedCrateInventory();
+                ClearInventorySlots(LocalInventory);
+                ClearInventorySlots(SharedCrateInventory);
+                LocalInventoryChanged?.Invoke();
+                SharedCrateChanged?.Invoke();
             }
-            else
-            {
-                RefreshLocalInventoryReference();
-            }
+
+            RefreshLocalInventoryReference();
+        }
+
+        static void ClearInventorySlots(Inventory inventory)
+        {
+            for (int index = 0; index < inventory.SlotCount; index++)
+                inventory.ClearSlot(index);
         }
 
         void HandleClientConnected(ulong clientId)
@@ -2240,9 +2204,21 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.OnServerStarted += HandleServerStarted;
             subscribedNetworkManager.OnClientStarted += HandleClientStarted;
             subscribedNetworkManager.OnClientConnectedCallback += HandleClientConnected;
+            subscribedNetworkManager.OnClientDisconnectCallback += HandleClientDisconnected;
             subscribedNetworkManager.OnServerStopped += HandleServerStopped;
             subscribedNetworkManager.OnClientStopped += HandleClientStopped;
             RegisterMessageHandlers();
+        }
+
+        // Per-connection host state is released when a client leaves. Inventories are kept for
+        // the session (a future reconnect-identity feature can reclaim them); the duplicate
+        // window is purely connection-scoped.
+        void HandleClientDisconnected(ulong clientId)
+        {
+            if (!CanProcessHostRequests() || clientId == ResolveLocalClientId())
+                return;
+
+            processedRequestsByClientId.Remove(clientId);
         }
 
         void UnsubscribeNetworkCallbacks()
@@ -2255,6 +2231,7 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.OnServerStarted -= HandleServerStarted;
             subscribedNetworkManager.OnClientStarted -= HandleClientStarted;
             subscribedNetworkManager.OnClientConnectedCallback -= HandleClientConnected;
+            subscribedNetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
             subscribedNetworkManager.OnServerStopped -= HandleServerStopped;
             subscribedNetworkManager.OnClientStopped -= HandleClientStopped;
             subscribedNetworkManager = null;
@@ -2272,16 +2249,7 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(HarvestRequestMessage, HandleHarvestRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlaceRequestMessage, HandlePlaceRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(StripLogRequestMessage, HandleStripLogRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(TillRequestMessage, HandleTillRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlantRequestMessage, HandlePlantRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RepairRequestMessage, HandleRepairRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ConsumableRequestMessage, HandleConsumableRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CraftRequestMessage, HandleCraftRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CrateTransferRequestMessage, HandleCrateTransferRequestMessage);
-            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(StationCommandRequestMessage, HandleStationCommandRequestMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CommandRequestMessage, HandleCommandRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(StationSnapshotMessage, HandleStationSnapshotMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CommandResultMessage, HandleCommandResultMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(InventorySnapshotMessage, HandleInventorySnapshotMessage);
@@ -2299,16 +2267,7 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(HarvestRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlaceRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(StripLogRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(TillRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlantRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RepairRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ConsumableRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CraftRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CrateTransferRequestMessage);
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(StationCommandRequestMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CommandRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(StationSnapshotMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CommandResultMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(InventorySnapshotMessage);
@@ -2337,8 +2296,7 @@ namespace Blockiverse.Gameplay
 
         void RefreshLocalInventoryReference()
         {
-            if (CanProcessHostRequests())
-                localInventory = GetInventory(ResolveLocalClientId());
+            RebindLocalInventoryMapping();
         }
 
         bool CanProcessHostRequests()
@@ -2424,24 +2382,19 @@ namespace Blockiverse.Gameplay
             {
                 BlockiverseNetworkAvatarRig avatarRig = client.PlayerObject.GetComponent<BlockiverseNetworkAvatarRig>();
                 Transform headTransform = avatarRig?.HeadAnchor != null ? avatarRig.HeadAnchor : client.PlayerObject.transform;
-                position = ToBlockPosition(headTransform.position);
+                position = CreativeInteractionController.ToBlockPosition(headTransform.position);
                 return true;
             }
 
             if (clientId == ResolveLocalClientId() && Camera.main != null)
             {
-                position = ToBlockPosition(Camera.main.transform.position);
+                position = CreativeInteractionController.ToBlockPosition(Camera.main.transform.position);
                 return true;
             }
 
             position = default;
             return false;
         }
-
-        static BlockPosition ToBlockPosition(Vector3 worldPosition) => new(
-            Mathf.FloorToInt(worldPosition.x),
-            Mathf.FloorToInt(worldPosition.y),
-            Mathf.FloorToInt(worldPosition.z));
 
         CraftingRecipeBook ResolveRecipeBook()
         {
@@ -2591,7 +2544,9 @@ namespace Blockiverse.Gameplay
             reader.ReadValueSafe(out string itemId);
             reader.ReadValueSafe(out int count);
             reader.ReadValueSafe(out int durability);
-            if (count <= 0) return ItemStack.Empty;
+            // A malformed payload (positive count with an empty id) must not throw inside the
+            // message pump — the ItemId constructor rejects empty ids, so degrade to Empty.
+            if (count <= 0 || string.IsNullOrWhiteSpace(itemId)) return ItemStack.Empty;
             ItemStack stack = new ItemStack(new ItemId(itemId), count);
             return durability > 0 ? stack.WithDurability(durability) : stack;
         }

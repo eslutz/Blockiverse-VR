@@ -25,7 +25,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+                var service = new WorldSaveService();
                 service.Save(path, "editmode-test", world);
 
                 WorldLoadResult result = service.Load(path);
@@ -56,7 +56,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "layout-test", world);
+                new WorldSaveService().Save(path, "layout-test", world);
 
                 Assert.That(Directory.Exists(path), Is.True, "Expected .vxlworld directory.");
                 Assert.That(File.Exists(Path.Combine(path, "manifest.json")), Is.True);
@@ -85,7 +85,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "hash-test", world);
+                new WorldSaveService().Save(path, "hash-test", world);
 
                 string manifestJson = File.ReadAllText(Path.Combine(path, "manifest.json"));
                 VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(manifestJson);
@@ -109,7 +109,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ShouldAutoSaveReturnsTrueAfterIntervalAndFalseBeforeIt()
         {
-            var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+            var service = new WorldSaveService();
 
             Assert.That(service.ShouldAutoSave(0f), Is.False);
             Assert.That(service.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds - 1f), Is.False);
@@ -132,7 +132,7 @@ namespace Blockiverse.Tests.EditMode
                 BlockiverseLog.SetSinkForTesting(sink);
                 BlockiverseLog.DevelopmentInfoEnabled = true;
 
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "summary-test", world, inventory);
+                new WorldSaveService().Save(path, "summary-test", world, inventory);
 
                 BlockiverseLogEntry entry = sink.Entries.Single(log =>
                     log.Category == BlockiverseLogCategory.Persistence &&
@@ -190,14 +190,14 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LegacyFiredBrickBlocksMigrateToFiredBrickBlockOnLoad()
+        public void UnresolvedCanonicalIdDeltaIsSkippedOnApply()
         {
-            // Saves predating the fired_brick item/block split stored the placed building block
-            // under the canonical id "fired_brick"; on load it must resolve to fired_brick_block.
+            // No legacy aliases or integer fallbacks exist (the app is unreleased); a delta whose
+            // canonical id no longer resolves is skipped rather than remapped.
             var data = new WorldSaveData
             {
                 SchemaVersion = WorldSaveService.CurrentSchemaVersion,
-                WorldName = "legacy-brick",
+                WorldName = "unknown-block",
                 Width = 4,
                 Height = 4,
                 Depth = 4,
@@ -205,7 +205,8 @@ namespace Blockiverse.Tests.EditMode
                 Seed = 1,
                 ChangedBlocks = new[]
                 {
-                    new SavedBlockDelta { X = 2, Y = 1, Z = 2, CanonicalId = "fired_brick" }
+                    new SavedBlockDelta { X = 2, Y = 1, Z = 2, CanonicalId = "no_such_block" },
+                    new SavedBlockDelta { X = 1, Y = 1, Z = 1, CanonicalId = "graystone" }
                 },
                 PlayerInventory = new SavedPlayerInventory
                 {
@@ -219,7 +220,8 @@ namespace Blockiverse.Tests.EditMode
 
             WorldLoadResult.Loaded(data).ApplyTo(world);
 
-            Assert.That(world.GetBlock(new BlockPosition(2, 1, 2)), Is.EqualTo(BlockRegistry.FiredBrickBlock));
+            Assert.That(world.GetBlock(new BlockPosition(2, 1, 2)), Is.EqualTo(BlockRegistry.Air));
+            Assert.That(world.GetBlock(new BlockPosition(1, 1, 1)), Is.EqualTo(BlockRegistry.Graystone));
         }
 
         [Test]
@@ -235,7 +237,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+                var service = new WorldSaveService();
                 service.Save(path, "inventory-test", world, inventory, selectedHotbarSlotIndex: 5);
 
                 WorldLoadResult result = service.Load(path);
@@ -268,7 +270,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+                var service = new WorldSaveService();
                 service.Save(path, "world-only", world);
 
                 WorldLoadResult result = service.Load(path);
@@ -297,7 +299,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+                var service = new WorldSaveService();
                 service.Save(path, "first", firstWorld);
 
                 string createdAt = JsonUtility.FromJson<VxlwManifest>(
@@ -326,7 +328,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "no-tmp-test", world);
+                new WorldSaveService().Save(path, "no-tmp-test", world);
 
                 string[] tmpFiles = Directory.GetFiles(path, "*.tmp", SearchOption.AllDirectories);
                 Assert.That(tmpFiles, Is.Empty, "Expected no .tmp files inside the save directory after save.");
@@ -338,13 +340,15 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LegacyVersionOneFlatJsonMigratesOnLoad()
+        public void FlatJsonFilePathReturnsControlledFailure()
         {
+            // The legacy flat-JSON format (schema v1-v3) is unsupported: the app is unreleased,
+            // so loading a flat file fails fast instead of migrating.
             string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-legacy-{System.Guid.NewGuid():N}.json");
 
             try
             {
-                var versionOneData = new WorldSaveData
+                var flatData = new WorldSaveData
                 {
                     SchemaVersion = 1,
                     WorldName = "v1",
@@ -355,15 +359,12 @@ namespace Blockiverse.Tests.EditMode
                     Seed = 99,
                     ChangedBlocks = new SavedBlockDelta[0]
                 };
-                File.WriteAllText(flatPath, JsonUtility.ToJson(versionOneData, prettyPrint: true));
+                File.WriteAllText(flatPath, JsonUtility.ToJson(flatData, prettyPrint: true));
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
+                WorldLoadResult result = new WorldSaveService().Load(flatPath);
 
-                Assert.That(result.Success, Is.True, result.Error);
-                Assert.That(result.Data.SchemaVersion, Is.EqualTo(WorldSaveService.CurrentSchemaVersion));
-                Assert.That(result.Data.PlayerInventory, Is.Not.Null);
-                Assert.That(result.Data.PlayerInventory.Slots, Is.Empty);
-                Assert.That(result.CreateInventory(ItemRegistry.CreateDefault()).SlotCount, Is.EqualTo(Inventory.DefaultSlotCount));
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("unsupported"));
             }
             finally
             {
@@ -372,193 +373,179 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LegacyFlatJsonMigratesWithCustomRegistry()
+        public void UnsupportedManifestSchemaVersionReturnsControlledFailure()
         {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-legacy-{System.Guid.NewGuid():N}.json");
+            // No migrations exist (the app is unreleased): any schema other than the current one
+            // is rejected with a clear failure instead of being migrated.
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
 
             try
             {
-                var oldData = new WorldSaveData
-                {
-                    SchemaVersion = 0,
-                    WorldName = "old",
-                    Width = 4,
-                    Height = 4,
-                    Depth = 4,
-                    ChunkSize = 16,
-                    Seed = 99,
-                    ChangedBlocks = new SavedBlockDelta[0]
-                };
-                File.WriteAllText(flatPath, JsonUtility.ToJson(oldData, prettyPrint: true));
+                new WorldSaveService().Save(path, "old-schema", world);
 
-                var migrations = new WorldSaveMigrationRegistry();
-                migrations.Register(0, data =>
-                {
-                    data.SchemaVersion = WorldSaveService.CurrentSchemaVersion;
-                    data.WorldName = "migrated";
-                    return data;
-                });
+                string manifestPath = Path.Combine(path, "manifest.json");
+                VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(File.ReadAllText(manifestPath));
+                manifest.SchemaVersion = WorldSaveService.CurrentSchemaVersion - 1;
+                File.WriteAllText(manifestPath, JsonUtility.ToJson(manifest, prettyPrint: true));
 
-                WorldLoadResult result = new WorldSaveService(migrations).Load(flatPath);
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
-                Assert.That(result.Success, Is.True, result.Error);
-                Assert.That(result.Data.SchemaVersion, Is.EqualTo(WorldSaveService.CurrentSchemaVersion));
-                Assert.That(result.Data.WorldName, Is.EqualTo("migrated"));
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("unsupported"));
             }
             finally
             {
-                if (File.Exists(flatPath)) File.Delete(flatPath);
+                DeleteIfExists(path);
             }
         }
 
         [Test]
         public void InvalidInventorySlotReturnsControlledFailure()
         {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-bad-{System.Guid.NewGuid():N}.json");
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
 
             try
             {
-                var data = new WorldSaveData
+                new WorldSaveService().Save(path, "bad-inventory", world);
+
+                // A tool stack above its max stack size must fail inventory validation on load.
+                var playerSave = new VxlwPlayerSave
                 {
-                    SchemaVersion = WorldSaveService.CurrentSchemaVersion,
-                    WorldName = "bad-inventory",
-                    Width = 4,
-                    Height = 4,
-                    Depth = 4,
-                    ChunkSize = 16,
-                    Seed = 1,
-                    ChangedBlocks = new SavedBlockDelta[0],
-                    PlayerInventory = new SavedPlayerInventory
+                    SlotCount = 1,
+                    HotbarSlotCount = 1,
+                    SelectedHotbarSlotIndex = 0,
+                    Slots = new[]
                     {
-                        SlotCount = 1,
-                        HotbarSlotCount = 1,
-                        SelectedHotbarSlotIndex = 0,
-                        Slots = new[]
-                        {
-                            new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.ReedwoodDelver.Value, Count = 2 }
-                        }
+                        new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.ReedwoodDelver.Value, Count = 2 }
                     }
                 };
-                File.WriteAllText(flatPath, JsonUtility.ToJson(data, prettyPrint: true));
+                File.WriteAllText(
+                    Path.Combine(path, "players", "local_player.json"),
+                    JsonUtility.ToJson(playerSave, prettyPrint: true));
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Error, Does.Contain("inventory"));
             }
             finally
             {
-                if (File.Exists(flatPath)) File.Delete(flatPath);
+                DeleteIfExists(path);
             }
         }
 
         [Test]
         public void OversizedInventorySlotCountReturnsControlledFailure()
         {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-bad-{System.Guid.NewGuid():N}.json");
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
 
             try
             {
-                var data = new WorldSaveData
-                {
-                    SchemaVersion = WorldSaveService.CurrentSchemaVersion,
-                    WorldName = "oversized-inventory",
-                    Width = 4,
-                    Height = 4,
-                    Depth = 4,
-                    ChunkSize = 16,
-                    Seed = 1,
-                    ChangedBlocks = new SavedBlockDelta[0],
-                    PlayerInventory = new SavedPlayerInventory
-                    {
-                        SlotCount = 1_000_000,
-                        HotbarSlotCount = 1,
-                        SelectedHotbarSlotIndex = 0,
-                        Slots = new SavedInventorySlot[0]
-                    }
-                };
-                File.WriteAllText(flatPath, JsonUtility.ToJson(data, prettyPrint: true));
+                new WorldSaveService().Save(path, "oversized-inventory", world);
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
+                var playerSave = new VxlwPlayerSave
+                {
+                    SlotCount = 1_000_000,
+                    HotbarSlotCount = 1,
+                    SelectedHotbarSlotIndex = 0,
+                    Slots = new SavedInventorySlot[0]
+                };
+                File.WriteAllText(
+                    Path.Combine(path, "players", "local_player.json"),
+                    JsonUtility.ToJson(playerSave, prettyPrint: true));
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Error, Does.Contain("slot count"));
             }
             finally
             {
-                if (File.Exists(flatPath)) File.Delete(flatPath);
+                DeleteIfExists(path);
             }
         }
 
         [Test]
-        public void CorruptedSaveReturnsControlledFailure()
+        public void CorruptedManifestReturnsControlledFailure()
         {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-corrupt-{System.Guid.NewGuid():N}.json");
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
 
             try
             {
-                File.WriteAllText(flatPath, "{ definitely not valid json");
+                new WorldSaveService().Save(path, "corrupt-manifest", world);
+                File.WriteAllText(Path.Combine(path, "manifest.json"), "{ definitely not valid json");
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Error, Does.Contain("corrupt"));
             }
             finally
             {
-                if (File.Exists(flatPath)) File.Delete(flatPath);
+                DeleteIfExists(path);
             }
         }
 
         [Test]
         public void CorruptedSaveLogsSanitizedFailure()
         {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-corrupt-{System.Guid.NewGuid():N}.json");
+            string path = CreateTempSavePath();
             var sink = new CapturingLogSink();
+            VoxelWorld world = CreateDefaultWorld();
 
             try
             {
+                new WorldSaveService().Save(path, "corrupt-log", world);
+                File.WriteAllText(Path.Combine(path, "manifest.json"), "{ definitely not valid json");
+
                 BlockiverseLog.SetSinkForTesting(sink);
                 BlockiverseLog.DevelopmentInfoEnabled = true;
-                File.WriteAllText(flatPath, "{ definitely not valid json");
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
                 Assert.That(result.Success, Is.False);
                 BlockiverseLogEntry entry = sink.Entries.Single(log =>
                     log.Category == BlockiverseLogCategory.Persistence &&
                     log.Level == LogType.Warning &&
                     log.Message.Contains("Failed to load world save"));
-                Assert.That(entry.Message, Does.Contain(Path.GetFileName(flatPath)));
-                Assert.That(entry.Message, Does.Not.Contain(Path.GetDirectoryName(flatPath)));
+                Assert.That(entry.Message, Does.Contain(new DirectoryInfo(path).Name));
+                Assert.That(entry.Message, Does.Not.Contain(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar)));
                 Assert.That(entry.Message, Does.Contain("corrupt or incomplete"));
             }
             finally
             {
                 BlockiverseLog.ResetSinkForTesting();
-                if (File.Exists(flatPath)) File.Delete(flatPath);
+                DeleteIfExists(path);
             }
         }
 
         [Test]
-        public void PartiallyWrittenFlatJsonReturnsControlledFailure()
+        public void PartiallyWrittenManifestReturnsControlledFailure()
         {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-partial-{System.Guid.NewGuid():N}.json");
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
 
             try
             {
-                File.WriteAllText(
-                    flatPath,
-                    "{\"SchemaVersion\":2,\"WorldName\":\"partial\",\"Width\":4,\"Height\":4,\"Depth\":4,\"ChunkSize\":16,\"Seed\":1,\"ChangedBlocks\":[],\"PlayerInventory\":{\"SlotCount\":24,\"HotbarSlotCount\":6,\"SelectedHotbarSlotIndex\":0,\"Slots\":[]}");
+                new WorldSaveService().Save(path, "partial-manifest", world);
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
+                string manifestJson = File.ReadAllText(Path.Combine(path, "manifest.json"));
+                File.WriteAllText(
+                    Path.Combine(path, "manifest.json"),
+                    manifestJson.Substring(0, manifestJson.Length - 2));
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Error, Does.Contain("incomplete"));
             }
             finally
             {
-                if (File.Exists(flatPath)) File.Delete(flatPath);
+                DeleteIfExists(path);
             }
         }
 
@@ -572,7 +559,7 @@ namespace Blockiverse.Tests.EditMode
                 Directory.CreateDirectory(path);
                 // No manifest.json written — directory exists but is incomplete
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(path);
+                WorldLoadResult result = new WorldSaveService().Load(path);
 
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Error, Does.Contain("manifest"));
@@ -580,40 +567,6 @@ namespace Blockiverse.Tests.EditMode
             finally
             {
                 DeleteIfExists(path);
-            }
-        }
-
-        [Test]
-        public void OutOfBoundsSaveDeltaInLegacyFlatJsonReturnsControlledFailure()
-        {
-            string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-bad-{System.Guid.NewGuid():N}.json");
-
-            try
-            {
-                var data = new WorldSaveData
-                {
-                    SchemaVersion = WorldSaveService.CurrentSchemaVersion,
-                    WorldName = "bad-delta",
-                    Width = 4,
-                    Height = 4,
-                    Depth = 4,
-                    ChunkSize = 16,
-                    Seed = 1,
-                    ChangedBlocks = new[]
-                    {
-                        new SavedBlockDelta { X = 8, Y = 1, Z = 1, BlockId = BlockRegistry.LooseLoam.Value }
-                    }
-                };
-                File.WriteAllText(flatPath, JsonUtility.ToJson(data, prettyPrint: true));
-
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(flatPath);
-
-                Assert.That(result.Success, Is.False);
-                Assert.That(result.Error, Does.Contain("corrupt"));
-            }
-            finally
-            {
-                if (File.Exists(flatPath)) File.Delete(flatPath);
             }
         }
 
@@ -639,7 +592,7 @@ namespace Blockiverse.Tests.EditMode
 
             try
             {
-                var service = new WorldSaveService(new WorldSaveMigrationRegistry());
+                var service = new WorldSaveService();
                 service.Save(path, "container-test", world, containers: containers);
 
                 Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "containers.json")), Is.True,
@@ -670,14 +623,71 @@ namespace Blockiverse.Tests.EditMode
             VoxelWorld world = CreateDefaultWorld();
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, "no-containers", world);
+                new WorldSaveService().Save(path, "no-containers", world);
 
                 Assert.That(File.Exists(Path.Combine(path, "dimensions", "main", "containers.json")), Is.False,
                     "No containers file should be written when none are supplied (backward compatible).");
 
-                WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(path);
+                WorldLoadResult result = new WorldSaveService().Load(path);
                 Assert.That(result.Success, Is.True, result.Error);
                 Assert.That(result.Data.Containers, Is.Null);
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void OutOfBoundsRegionDeltaReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
+                new WorldSaveService().Save(path, "oob-delta", world);
+
+                // Doctor the region file so its chunk index lands the delta far outside the
+                // manifest bounds; the load must fail controlled instead of letting the delta
+                // throw later in WorldLoadResult.ApplyTo.
+                string regionsDir = Path.Combine(path, "dimensions", "main", "regions");
+                string regionPath = Directory.GetFiles(regionsDir, "r.*.vxlr")[0];
+                VxlwRegionFile region = JsonUtility.FromJson<VxlwRegionFile>(File.ReadAllText(regionPath));
+                region.Chunks[0].ChunkX = 1000;
+                File.WriteAllText(regionPath, JsonUtility.ToJson(region, prettyPrint: true));
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("outside world bounds"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void UnreadableRegionFileReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
+                new WorldSaveService().Save(path, "bad-region", world);
+
+                string regionsDir = Path.Combine(path, "dimensions", "main", "regions");
+                string regionPath = Directory.GetFiles(regionsDir, "r.*.vxlr")[0];
+                File.WriteAllText(regionPath, "{ definitely not a region file");
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("corrupt"));
             }
             finally
             {

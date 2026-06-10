@@ -71,11 +71,19 @@ namespace Blockiverse.WorldGen
 
         public static SurvivalResourceTuning CreateDefault()
         {
+            // Depth bands and rarity follow the tool-tier ladder (§7.1): tier-2 materials sit
+            // shallow and common, tier-5/6 deep and rare, so every smelting recipe (§9.3/§9.4)
+            // has an in-world source.
             return new SurvivalResourceTuning(
-                new ResourceVeinTuning(BlockRegistry.EmbercoalSeam,      salt: 701, minY: 35, maxY: 135, chancePermille: 270, radius: 2, verticalRadius: 2),
-                new ResourceVeinTuning(BlockRegistry.RosycopperBloom,    salt: 809, minY: 45, maxY: 150, chancePermille: 145, radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.EmbercoalSeam,      salt: 701,  minY: 35, maxY: 135, chancePermille: 270, radius: 2, verticalRadius: 2),
+                new ResourceVeinTuning(BlockRegistry.RosycopperBloom,    salt: 809,  minY: 45, maxY: 150, chancePermille: 145, radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.PaletinThread,      salt: 1213, minY: 30, maxY: 130, chancePermille: 120, radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.NiterstonePocket,   salt: 1409, minY: 40, maxY: 140, chancePermille: 95,  radius: 2, verticalRadius: 1),
                 new ResourceVeinTuning(BlockRegistry.RustcoreOre,        salt: 907,  minY: 15, maxY: 95,  chancePermille: 80,  radius: 2, verticalRadius: 1),
-                new ResourceVeinTuning(BlockRegistry.LumenQuartzCluster, salt: 1117, minY: 15, maxY: 120, chancePermille: 60,  radius: 2, verticalRadius: 1));
+                new ResourceVeinTuning(BlockRegistry.SunmetalFleck,      salt: 1303, minY: 20, maxY: 90,  chancePermille: 70,  radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.LumenQuartzCluster, salt: 1117, minY: 15, maxY: 120, chancePermille: 60,  radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.UmbraliteNode,      salt: 1511, minY: 8,  maxY: 60,  chancePermille: 50,  radius: 2, verticalRadius: 1),
+                new ResourceVeinTuning(BlockRegistry.StaropalGeode,      salt: 1613, minY: 5,  maxY: 40,  chancePermille: 35,  radius: 1, verticalRadius: 1));
         }
 
         public ResourceVeinTuning Get(BlockId resourceBlock)

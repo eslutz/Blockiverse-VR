@@ -32,7 +32,7 @@ namespace Blockiverse.WorldGen
             return CreateDefaultSurvivalTerrain(seed);
         }
 
-        public WorldGenerationSettings(int width, int height, int depth, int chunkSize, int seed, int groundHeight)
+        public WorldGenerationSettings(int width, int height, int depth, int chunkSize, int seed, int groundHeight, BlockPosition? spawnPosition = null)
         {
             if (groundHeight < 1 || groundHeight >= height)
                 throw new ArgumentOutOfRangeException(nameof(groundHeight), "Ground height must leave air above the surface.");
@@ -41,7 +41,12 @@ namespace Blockiverse.WorldGen
             ChunkSize = chunkSize;
             Seed = seed;
             GroundHeight = groundHeight;
-            SpawnPosition = new BlockPosition(width / 2, groundHeight + 1, depth / 2);
+            // The default spawn is the world center; callers may override it (e.g. the new-world
+            // flow's starting-biome search) as long as the position stays inside the bounds.
+            SpawnPosition = spawnPosition ?? new BlockPosition(width / 2, groundHeight + 1, depth / 2);
+
+            if (!Bounds.Contains(SpawnPosition))
+                throw new ArgumentOutOfRangeException(nameof(spawnPosition), "Spawn position must be inside the world bounds.");
         }
 
         public WorldBounds Bounds { get; }
@@ -107,41 +112,4 @@ namespace Blockiverse.WorldGen
         }
     }
 
-    public sealed class VoidBuilderPreset
-    {
-        const int PlatformHalfSize = 2;
-        const int PlatformY = 64;
-
-        readonly BlockRegistry registry;
-        readonly WorldGenerationSettings settings;
-
-        public VoidBuilderPreset(BlockRegistry registry, WorldGenerationSettings settings)
-        {
-            this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        }
-
-        public VoxelWorld Generate()
-        {
-            registry.Get(BlockRegistry.Air);
-            registry.Get(BlockRegistry.WhiteLimestone);
-
-            var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
-
-            int centerX = settings.Bounds.Width / 2;
-            int centerZ = settings.Bounds.Depth / 2;
-
-            for (int dx = -PlatformHalfSize; dx <= PlatformHalfSize; dx++)
-            {
-                for (int dz = -PlatformHalfSize; dz <= PlatformHalfSize; dz++)
-                {
-                    var pos = new BlockPosition(centerX + dx, PlatformY, centerZ + dz);
-                    if (world.Bounds.Contains(pos))
-                        world.SetBlock(pos, BlockRegistry.WhiteLimestone, trackChange: false);
-                }
-            }
-
-            return world;
-        }
-    }
 }

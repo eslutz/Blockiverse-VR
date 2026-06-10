@@ -29,6 +29,8 @@ namespace Blockiverse.Survival
         public static readonly ItemId RiverSilt            = new("river_silt");
         public static readonly ItemId PaleSand             = new("pale_sand");
         public static readonly ItemId ShingleGravel        = new("shingle_gravel");
+        public static readonly ItemId Snowpack             = new("snowpack");
+        public static readonly ItemId Frostglass           = new("frostglass");
         public static readonly ItemId Graystone            = new("graystone");
         public static readonly ItemId DarkSlate            = new("dark_slate");
         public static readonly ItemId WarmGranite          = new("warm_granite");
@@ -40,7 +42,6 @@ namespace Blockiverse.Survival
         public static readonly ItemId SmoothBranchwood     = new("smooth_branchwood");
         public static readonly ItemId Leafmoss             = new("leafmoss");
         public static readonly ItemId Thornbrush           = new("thornbrush");
-        public static readonly ItemId Reedgrass            = new("reedgrass");
         public static readonly ItemId WorkPlank            = new("work_plank");
         public static readonly ItemId CutstoneBlock        = new("cutstone_block");
         public static readonly ItemId FiredBrick           = new("fired_brick");
@@ -74,8 +75,6 @@ namespace Blockiverse.Survival
         public static readonly ItemId Brightsalt           = new("brightsalt");
         public static readonly ItemId Shellgrit            = new("shellgrit");
         public static readonly ItemId ResinKnot            = new("resin_knot");
-        public static readonly ItemId Berrybush            = new("berrybush");
-        public static readonly ItemId GrainStalk           = new("grain_stalk");
         public static readonly ItemId RawUmbralite         = new("raw_umbralite");
         public static readonly ItemId StaropalShard        = new("staropal_shard");
 

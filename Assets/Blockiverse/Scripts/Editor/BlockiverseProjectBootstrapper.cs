@@ -6,6 +6,7 @@ using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
+using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
@@ -84,6 +85,7 @@ namespace Blockiverse.Editor
         const string LoadWorldPanelName = "Load World Panel";
         const string SettingsPanelName = "Settings Panel";
         const string StationPanelName = "Station Panel";
+        const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
         const float GameMenuScale = 0.0013f;
         // All game menu panels share one world-space position; only one is visible at a time.
         static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.42f, 1.1f);
@@ -93,6 +95,7 @@ namespace Blockiverse.Editor
         static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
         static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
         static readonly Vector2 StationPanelSize = new(540.0f, 620.0f);
+        static readonly Vector2 LanMultiplayerPanelSize = new(620.0f, 520.0f);
 
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
@@ -912,10 +915,26 @@ namespace Blockiverse.Editor
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
             EnsureBootSceneCreativeWorld(scene);
+            EnsureBootSceneNetworkStack(scene);
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
+        }
+
+        // The Boot scene carries the full network/survival runtime stack (session, chunk
+        // authority, survival sync, vitals, persistence) so single-player survival works and the
+        // title menu's LAN entry can host/join without a scene switch.
+        static void EnsureBootSceneNetworkStack(Scene scene)
+        {
+            GameObject playerPrefab = EnsureNetworkPlayerPrefab();
+            GameObject networkManagerPrefab = EnsureNetworkManagerPrefab(playerPrefab);
+            GameObject managerObject = FindRootGameObject(scene, NetworkManagerRootName);
+
+            if (managerObject == null)
+                managerObject = (GameObject)PrefabUtility.InstantiatePrefab(networkManagerPrefab, scene);
+
+            ConfigureNetworkManagerObject(managerObject, playerPrefab);
         }
 
         static GameObject EnsureNetworkPlayerPrefab()
@@ -2114,6 +2133,15 @@ namespace Blockiverse.Editor
             interactionHaptics.Configure(controller, FindControllerHaptics(rig, BlockiverseControllerRole.Right));
             interactionHaptics.ConfigureFeedbackSettings(feedbackSettings);
 
+            // Survival command + multiplayer presence cues, and the weather/ambience driver —
+            // both discover their runtime dependencies (sync, world manager) on enable.
+            SurvivalFeedbackBridge survivalFeedback = EnsureComponent<SurvivalFeedbackBridge>(rig);
+            WeatherFeedbackController weatherFeedback = EnsureComponent<WeatherFeedbackController>(rig);
+
+            // Comfort + feedback settings persist across launches (PlayerPrefs).
+            BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
+            EditorUtility.SetDirty(settingsPersistence);
+
             inputRig?.ConfigureTeleportFeedback(audioCuePlayer);
             ConfigurePanelFeedbackReferences(rig, audioCuePlayer, interactionHaptics);
 
@@ -2122,6 +2150,8 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(vfxPool);
             EditorUtility.SetDirty(vfxCuePlayer);
             EditorUtility.SetDirty(interactionHaptics);
+            EditorUtility.SetDirty(survivalFeedback);
+            EditorUtility.SetDirty(weatherFeedback);
 
             if (inputRig != null)
                 EditorUtility.SetDirty(inputRig);
@@ -3527,14 +3557,27 @@ namespace Blockiverse.Editor
             var (loadWorldPanel, loadWorldPresenter) = EnsureLoadWorldMenuPanel(cameraOffset, head);
             var (settingsMenu, settingsPresenter) = EnsureSettingsMenuPanel(cameraOffset, head);
             var (stationPanel, stationPresenter) = EnsureStationMenuPanel(cameraOffset, head);
+            var (lanPresenter, lanCloseButton) = EnsureLanMultiplayerMenuPanel(cameraOffset, head);
 
             BlockiverseMenuController controller = EnsureComponent<BlockiverseMenuController>(rig);
             controller.Configure(inputRig, titleMenu, pauseMenu, deathMenu, confirmMenu,
                 newWorldPanel, loadWorldPanel, settingsMenu);
             controller.ConfigurePresenters(
                 titlePresenter, pausePresenter, deathPresenter, confirmPresenter,
-                newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter);
+                newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter,
+                lanPresenter);
             controller.ConfigureStationPanel(stationPanel);
+
+            if (lanCloseButton != null)
+            {
+                RemovePersistentListeners(lanCloseButton.onClick, controller, nameof(BlockiverseMenuController.CloseLanMultiplayerScreen));
+                UnityEventTools.AddPersistentListener(lanCloseButton.onClick, controller.CloseLanMultiplayerScreen);
+                EditorUtility.SetDirty(lanCloseButton);
+            }
+
+            // The session coordinator implements the menu's save/load/new-world/continue verbs.
+            BlockiverseWorldSessionController sessionController = EnsureComponent<BlockiverseWorldSessionController>(rig);
+            EditorUtility.SetDirty(sessionController);
 
             if (inputRig != null)
             {
@@ -3545,6 +3588,92 @@ namespace Blockiverse.Editor
 
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(rig);
+        }
+
+        // Builds the LAN multiplayer panel on the rig: host/join/stop controls plus a close
+        // button, presented through the same world-space presenter stack as the other menus.
+        static (BlockiverseWorldSpacePanelPresenter presenter, Button closeButton) EnsureLanMultiplayerMenuPanel(
+            Transform parent,
+            Transform head)
+        {
+            float width = LanMultiplayerPanelSize.x;
+            float height = LanMultiplayerPanelSize.y;
+
+            GameObject panelRoot = EnsureRectChild(parent, LanMultiplayerPanelName);
+            panelRoot.transform.localPosition = GameMenuLocalPosition;
+            panelRoot.transform.localRotation = Quaternion.identity;
+            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
+
+            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
+
+            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 25;
+            canvas.enabled = false;
+            ConfigureCanvasWorldCamera(canvas, head);
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(panelRoot);
+
+            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
+            RectTransform bgRect = bg.GetComponent<RectTransform>();
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+            Image bgImage = EnsureComponent<Image>(bg);
+            Sprite rounded = GetRoundedSprite();
+            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
+            bgImage.color = PanelBaseColor;
+
+            EnsureLabel(
+                bg.transform, "Title", "LAN Multiplayer", 30, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28.0f, -18.0f), new Vector2(width - 56.0f, 48.0f));
+
+            TMP_InputField addressInput = EnsureInputFieldControl(
+                bg.transform,
+                "Address Input",
+                "Host address",
+                BlockiverseNetworkConfig.DefaultAddress,
+                new Vector2(28.0f, -100.0f),
+                new Vector2(width - 56.0f, 58.0f));
+
+            Button hostButton = EnsureButtonControl(
+                bg.transform, "Host Button", "Host", new Vector2(28.0f, -180.0f), new Vector2(164.0f, 54.0f));
+            Button joinButton = EnsureButtonControl(
+                bg.transform, "Join Button", "Join", new Vector2(228.0f, -180.0f), new Vector2(164.0f, 54.0f));
+            Button stopButton = EnsureButtonControl(
+                bg.transform, "Stop Button", "Stop", new Vector2(428.0f, -180.0f), new Vector2(164.0f, 54.0f));
+
+            TextMeshProUGUI statusText = EnsureLabel(
+                bg.transform, "Status",
+                $"LAN session stopped. Join address defaults to {BlockiverseNetworkConfig.DefaultAddress}.",
+                22, TextAnchor.UpperLeft,
+                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
+                new Vector2(28.0f, -256.0f), new Vector2(width - 56.0f, 120.0f),
+                TextDimColor);
+
+            Button closeButton = EnsureButtonControl(
+                bg.transform, "Close Button", "Close", new Vector2(28.0f, -(height - 80.0f)), new Vector2(width - 56.0f, 54.0f));
+
+            BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(panelRoot);
+            menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
+
+            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
+            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
+
+            EditorUtility.SetDirty(menu);
+            EditorUtility.SetDirty(presenter);
+            EditorUtility.SetDirty(panelRoot);
+
+            return (presenter, closeButton);
         }
 
         // Builds a world-space panel canvas with a background, title label, N full-width action
@@ -4016,10 +4145,10 @@ namespace Blockiverse.Editor
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
                 new Vector2(28, -18), new Vector2(W - 56, 48));
 
-            // Input slots (3 max; unused ones stay empty when model has fewer)
-            var inputLabels = new TMP_Text[3];
+            // Input slots (forge maximum; unused ones stay empty when model has fewer)
+            var inputLabels = new TMP_Text[SmeltingStationModel.MaxInputSlots];
             string[] inputNames = { "Input Slot 1", "Input Slot 2", "Input Slot 3" };
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < inputLabels.Length; i++)
             {
                 EnsureLabel(bg.transform, $"Input Label {i + 1}", $"Input {i + 1}", 20, TextAnchor.MiddleLeft,
                     new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),

@@ -17,6 +17,10 @@ namespace Blockiverse.Gameplay
 
         float tickAccumulator;
         long totalElapsedTicks;
+        // The time-of-day at tick 0. Every peer shares this constant (or the Configure'd value),
+        // so a normalized time restored from absolute ticks lands on the same phase the live
+        // clock would have reached — late joiners and loaded saves agree with the host/pre-save.
+        float startNormalizedOffset = DefaultStartNormalizedTime;
 
         public event Action<int> Ticked;
 
@@ -30,14 +34,23 @@ namespace Blockiverse.Gameplay
             totalElapsedTicks = ticks;
             long ticksPerDay = (long)(dayLengthSeconds * WorldConstants.TicksPerSecond);
             if (ticksPerDay > 0)
-                normalizedTime = (float)((ticks % ticksPerDay) / (double)ticksPerDay);
+                normalizedTime = Normalize(startNormalizedOffset + (float)((ticks % ticksPerDay) / (double)ticksPerDay));
         }
 
         public void Configure(float dayLengthSeconds, float startNormalizedTime, float timeScale)
         {
             this.dayLengthSeconds = Mathf.Max(0.001f, dayLengthSeconds);
             normalizedTime = Normalize(startNormalizedTime);
+            startNormalizedOffset = normalizedTime;
             this.timeScale = timeScale;
+        }
+
+        void Awake()
+        {
+            // A fresh clock (no elapsed ticks) defines its serialized start time as the tick-0
+            // phase, keeping NormalizedTime and TotalElapsedTicks mutually consistent from boot.
+            if (totalElapsedTicks == 0)
+                startNormalizedOffset = Normalize(normalizedTime);
         }
 
         public void Tick(float deltaSeconds)

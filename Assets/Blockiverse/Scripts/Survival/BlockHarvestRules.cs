@@ -111,6 +111,12 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.WarmGranite,        HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.WhiteLimestone,     HarvestToolKind.Delver);
             rules.RegisterForBlock(BlockRegistry.BlackBasalt,        HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.Worldroot,          HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.Deepmantle,         HarvestToolKind.Delver);
+            rules.RegisterForBlock(BlockRegistry.Snowpack,           HarvestToolKind.Spade);
+            rules.RegisterForBlock(BlockRegistry.Frostglass,         HarvestToolKind.Spade);
+            // Tended soil digs back up as loam (drop alias in ItemRegistry).
+            rules.RegisterForBlock(BlockRegistry.TendedSoil,         HarvestToolKind.Spade);
 
             // ── Additional canonical vegetation ──────────────────────────────
             rules.RegisterForBlock(BlockRegistry.Thornbrush,         HarvestToolKind.Sickle);

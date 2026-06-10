@@ -1,5 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using Blockiverse.Core;
 using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -222,6 +225,8 @@ namespace Blockiverse.Gameplay
         void HandleClientStopped(bool wasHost)
         {
             hasHostGenerationSnapshotForSession = false;
+            // Drop any in-flight snapshot generation; its completion routine self-terminates.
+            pendingSnapshot = null;
             ResetClientChunkDeltaState();
             ResetPendingMutationRequests();
             UnregisterMessageHandlers();
@@ -241,9 +246,30 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            BlockMutationRequest request = ReadMutationRequest(senderClientId, ref reader, out uint requestId);
+            // Malformed payloads (negative block ids) are dropped — the same posture as an
+            // unregistered message; nothing legitimate sends them.
+            if (!TryReadMutationRequest(senderClientId, ref reader, out uint requestId, out BlockMutationRequest request))
+                return;
+
             ReceivedMutationRequestCount++;
             LastReceivedMutationRequestId = requestId;
+
+            // Survival worlds accept client edits only through the validated survival command
+            // channel (harvest/place/till/…): the raw creative channel would bypass inventory,
+            // tool-tier, and durability rules. The host's own edits remain authorized.
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            bool senderIsHost = networkManager != null && senderClientId == networkManager.LocalClientId;
+            if (!senderIsHost && worldManager != null && worldManager.GameMode == WorldGameMode.Survival)
+            {
+                BlockMutationResult gameModeRejection = BlockMutationResult.Reject(
+                    BlockMutationRejectionReason.GameModeForbidsDirectMutation,
+                    ChunkCoordinate.FromBlockPosition(request.Position, ResolveWorld().ChunkSize),
+                    "Survival worlds accept block edits only through validated survival commands.",
+                    requestId);
+                LastMutationResult = gameModeRejection;
+                SendMutationResult(senderClientId, requestId, request, gameModeRejection);
+                return;
+            }
             BlockMutationResult result = ResolveMutationAuthority().TryCommit(request, out _).WithRpcRequestId(requestId);
             LastMutationResult = result;
 
@@ -286,21 +312,159 @@ namespace Blockiverse.Gameplay
             if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
                 return;
 
-            ApplyWorldSnapshotHeader(ref reader, out int blockCount);
+            // Read the entire payload inside the handler (the reader is only valid here), then
+            // hand world generation to a background task: regenerating a full survival world
+            // synchronously would stall the VR main thread for seconds.
+            reader.ReadValueSafe(out int generationPreset);
+            reader.ReadValueSafe(out int width);
+            reader.ReadValueSafe(out int height);
+            reader.ReadValueSafe(out int depth);
+            reader.ReadValueSafe(out int chunkSize);
+            reader.ReadValueSafe(out int seed);
+            reader.ReadValueSafe(out int groundHeight);
+            reader.ReadValueSafe(out uint hostDeltaSequence);
+            reader.ReadValueSafe(out int blockCount);
 
-            // Batch the renderer rebuild: applying a late-join snapshot block-by-block would
-            // otherwise rebuild every dirty chunk mesh once per block (O(blocks × rebuild)).
+            var blocks = new List<(BlockPosition position, int blockId)>(Mathf.Max(0, blockCount));
             for (int index = 0; index < blockCount; index++)
             {
                 BlockPosition position = ReadBlockPosition(ref reader);
                 reader.ReadValueSafe(out int blockId);
+                blocks.Add((position, blockId));
+            }
+
+            var preset = (CreativeWorldGenerationPreset)generationPreset;
+            var settings = new WorldGenerationSettings(width, height, depth, chunkSize, seed, groundHeight);
+            StartSnapshotGeneration(preset, settings, hostDeltaSequence, blocks);
+        }
+
+        // The in-flight late-join snapshot. Only the newest one matters: a fresh snapshot
+        // replaces the pending entry and the completion routine drops superseded results.
+        sealed class PendingWorldSnapshot
+        {
+            public CreativeWorldGenerationPreset Preset;
+            public WorldGenerationSettings Settings;
+            public uint HostDeltaSequence;
+            public List<(BlockPosition position, int blockId)> Blocks;
+            public Task<GeneratedSnapshotWorld> GenerationTask;
+        }
+
+        sealed class GeneratedSnapshotWorld
+        {
+            public BlockRegistry Registry;
+            public VoxelWorld World;
+            public IReadOnlyList<StructureContainerLoot> ContainerLoot;
+        }
+
+        PendingWorldSnapshot pendingSnapshot;
+        Coroutine snapshotRoutine;
+
+        void StartSnapshotGeneration(
+            CreativeWorldGenerationPreset preset,
+            WorldGenerationSettings settings,
+            uint hostDeltaSequence,
+            List<(BlockPosition position, int blockId)> blocks)
+        {
+            pendingSnapshot = new PendingWorldSnapshot
+            {
+                Preset = preset,
+                Settings = settings,
+                HostDeltaSequence = hostDeltaSequence,
+                Blocks = blocks,
+                // World generation is pure C# over engine-free types, safe off the main thread.
+                GenerationTask = Task.Run(() => GenerateSnapshotWorld(preset, settings)),
+            };
+
+            if (snapshotRoutine == null)
+                snapshotRoutine = StartCoroutine(CompleteSnapshotWhenReady());
+        }
+
+        static GeneratedSnapshotWorld GenerateSnapshotWorld(
+            CreativeWorldGenerationPreset preset,
+            WorldGenerationSettings settings)
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+
+            if (preset == CreativeWorldGenerationPreset.FlatCreative)
+            {
+                return new GeneratedSnapshotWorld
+                {
+                    Registry = registry,
+                    World = new FlatCreativeWorldPreset(registry, settings).Generate(),
+                    ContainerLoot = null,
+                };
+            }
+
+            // Loot is deterministic from the seed, so the client regenerates the exact same
+            // container contents the host generated — no per-container network sync needed.
+            var survivalPreset = new SurvivalTerrainPreset(registry, settings);
+            VoxelWorld world = survivalPreset.Generate();
+            return new GeneratedSnapshotWorld
+            {
+                Registry = registry,
+                World = world,
+                ContainerLoot = survivalPreset.ContainerLoot,
+            };
+        }
+
+        IEnumerator CompleteSnapshotWhenReady()
+        {
+            while (true)
+            {
+                PendingWorldSnapshot current = pendingSnapshot;
+
+                if (current == null)
+                {
+                    snapshotRoutine = null;
+                    yield break;
+                }
+
+                if (current.GenerationTask.IsCompleted)
+                {
+                    pendingSnapshot = null;
+                    snapshotRoutine = null;
+                    FinalizeSnapshot(current);
+                    yield break;
+                }
+
+                yield return null;
+            }
+        }
+
+        void FinalizeSnapshot(PendingWorldSnapshot snapshot)
+        {
+            if (snapshot.GenerationTask.IsFaulted)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Bootstrap,
+                    "Failed to regenerate the host world snapshot on the client.",
+                    snapshot.GenerationTask.Exception?.GetBaseException(),
+                    this);
+                return;
+            }
+
+            GeneratedSnapshotWorld generated = snapshot.GenerationTask.Result;
+            worldManager.InitializeGeneratedWorld(
+                new GeneratedCreativeWorld(generated.Registry, snapshot.Settings, generated.World, snapshot.Preset, generated.ContainerLoot),
+                this);
+
+            // Batch the renderer rebuild: applying the snapshot block-by-block would otherwise
+            // rebuild every dirty chunk mesh once per block (O(blocks × rebuild)).
+            foreach ((BlockPosition position, int blockId) in snapshot.Blocks)
+            {
+                if (blockId < 0)
+                    continue;
+
                 ApplyAuthoritativeBlock(position, new BlockId(blockId), trackChange: false, rebuildRenderer: false);
                 AppliedSnapshotBlockCount++;
             }
 
-            if (blockCount > 0)
+            if (snapshot.Blocks.Count > 0)
                 worldManager.Renderer?.RebuildDirty();
 
+            LastAppliedChunkDeltaSequence = snapshot.HostDeltaSequence;
+            hasHostGenerationSnapshotForSession = true;
+            AppliedGenerationSnapshotCount++;
             ApplyBufferedChunkDeltas();
         }
 
@@ -880,41 +1044,6 @@ namespace Blockiverse.Gameplay
             writer.WriteValueSafe(changedBlockCount);
         }
 
-        void ApplyWorldSnapshotHeader(ref FastBufferReader reader, out int changedBlockCount)
-        {
-            reader.ReadValueSafe(out int generationPreset);
-            reader.ReadValueSafe(out int width);
-            reader.ReadValueSafe(out int height);
-            reader.ReadValueSafe(out int depth);
-            reader.ReadValueSafe(out int chunkSize);
-            reader.ReadValueSafe(out int seed);
-            reader.ReadValueSafe(out int groundHeight);
-            reader.ReadValueSafe(out uint hostDeltaSequence);
-            reader.ReadValueSafe(out changedBlockCount);
-
-            var preset = (CreativeWorldGenerationPreset)generationPreset;
-            var settings = new WorldGenerationSettings(width, height, depth, chunkSize, seed, groundHeight);
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-            VoxelWorld world;
-            IReadOnlyList<StructureContainerLoot> containerLoot = null;
-            if (preset == CreativeWorldGenerationPreset.FlatCreative)
-            {
-                world = new FlatCreativeWorldPreset(registry, settings).Generate();
-            }
-            else
-            {
-                // Loot is deterministic from the seed, so the client regenerates the exact same
-                // container contents the host generated — no per-container network sync needed.
-                var survivalPreset = new SurvivalTerrainPreset(registry, settings);
-                world = survivalPreset.Generate();
-                containerLoot = survivalPreset.ContainerLoot;
-            }
-            worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, preset, containerLoot), this);
-            LastAppliedChunkDeltaSequence = hostDeltaSequence;
-            hasHostGenerationSnapshotForSession = true;
-            AppliedGenerationSnapshotCount++;
-        }
-
         static ChunkDelta ReadMutationDelta(ref FastBufferReader reader, out ulong requestingClientId, out uint requestId)
         {
             reader.ReadValueSafe(out requestingClientId);
@@ -960,7 +1089,13 @@ namespace Blockiverse.Gameplay
             return new BlockChange(position, new BlockId(previousBlock), new BlockId(newBlock));
         }
 
-        static BlockMutationRequest ReadMutationRequest(ulong requestingClientId, ref FastBufferReader reader, out uint requestId)
+        // Returns false (and a default request) when the payload carries negative block ids —
+        // the BlockId constructor would throw inside the message pump otherwise.
+        static bool TryReadMutationRequest(
+            ulong requestingClientId,
+            ref FastBufferReader reader,
+            out uint requestId,
+            out BlockMutationRequest request)
         {
             reader.ReadValueSafe(out requestId);
             BlockPosition position = ReadBlockPosition(ref reader);
@@ -968,10 +1103,16 @@ namespace Blockiverse.Gameplay
             reader.ReadValueSafe(out bool hasExpectedCurrentBlock);
             reader.ReadValueSafe(out int expectedCurrentBlock);
 
-            if (hasExpectedCurrentBlock)
-                return new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock), new BlockId(expectedCurrentBlock));
+            if (newBlock < 0 || (hasExpectedCurrentBlock && expectedCurrentBlock < 0))
+            {
+                request = default;
+                return false;
+            }
 
-            return new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock));
+            request = hasExpectedCurrentBlock
+                ? new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock), new BlockId(expectedCurrentBlock))
+                : new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock));
+            return true;
         }
 
         readonly struct PendingChunkDeltaMessage

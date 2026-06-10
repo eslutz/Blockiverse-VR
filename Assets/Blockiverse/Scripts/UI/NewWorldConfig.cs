@@ -12,7 +12,7 @@ namespace Blockiverse.UI
         static readonly string[] GameModeOptions = { "survival", "creative" };
         static readonly string[] DifficultyOptions = { "easy", "normal", "hard" };
         static readonly string[] WorldSizeOptions = { "small", "medium", "large", "infinite" };
-        static readonly string[] WorldPresetOptions = { "survival_terrain", "flat_builder", "void_builder" };
+        static readonly string[] WorldPresetOptions = { "survival_terrain", "flat_builder" };
         static readonly string[] StartingBiomeOptions =
         {
             "balanced", "meadow", "pinewild", "wetland", "drybrush", "dunes", "tundra", "highlands",

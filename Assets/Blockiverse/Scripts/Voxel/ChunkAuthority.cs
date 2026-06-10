@@ -80,7 +80,10 @@ namespace Blockiverse.Voxel
         NoChange,
         RequestSentToHost,
         HostOnlyAuthorityOperation,
-        BlockEditingDisabled
+        BlockEditingDisabled,
+        // Survival worlds accept client edits only through the validated survival command
+        // channel; the raw creative mutation channel is host-only there.
+        GameModeForbidsDirectMutation
     }
 
     public readonly struct BlockMutationRequest : IEquatable<BlockMutationRequest>

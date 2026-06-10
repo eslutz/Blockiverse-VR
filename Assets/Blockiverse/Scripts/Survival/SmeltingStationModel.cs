@@ -10,6 +10,21 @@ namespace Blockiverse.Survival
     // emitting the output on completion and auto-continuing while inputs and fuel remain.
     public sealed class SmeltingStationModel
     {
+        // Largest input slot count across station types (the Bellows Forge's three slots).
+        public const int MaxInputSlots = 3;
+
+        // True for the stations whose crafts run over ticks and therefore have a runtime model.
+        public static bool IsTimedStation(CraftingStation station) =>
+            station == CraftingStation.ClayKiln || station == CraftingStation.BellowsForge;
+
+        // Canonical input slot count per timed station (§8.4: kiln 1, forge 3).
+        public static int InputSlotCountFor(CraftingStation station)
+        {
+            if (!IsTimedStation(station))
+                throw new ArgumentException("Only timed stations (kiln/forge) have input slots.", nameof(station));
+            return station == CraftingStation.BellowsForge ? MaxInputSlots : 1;
+        }
+
         readonly CraftingStation stationType;
         readonly CraftingRecipeBook recipeBook;
         readonly ItemRegistry itemRegistry;
@@ -21,7 +36,7 @@ namespace Blockiverse.Survival
             CraftingRecipeBook recipeBook = null,
             ItemRegistry itemRegistry = null)
         {
-            if (stationType != CraftingStation.ClayKiln && stationType != CraftingStation.BellowsForge)
+            if (!IsTimedStation(stationType))
                 throw new ArgumentException("SmeltingStationModel only models timed stations (kiln/forge).", nameof(stationType));
             if (inputSlotCount <= 0)
                 throw new ArgumentOutOfRangeException(nameof(inputSlotCount));
@@ -45,9 +60,23 @@ namespace Blockiverse.Survival
         public int RequiredTicks => ActiveRecipe?.TimeTicks ?? 0;
         public bool IsActive => ActiveRecipe != null;
 
+        // Bumped whenever slot contents or the active recipe change (not on plain progress
+        // ticking), so display code can skip rebuilding labels when nothing visible changed.
+        public int ContentVersion { get; private set; }
+
         public ItemStack GetInput(int slot) => inputs[slot];
-        public void SetInput(int slot, ItemStack stack) => inputs[slot] = stack;
-        public void SetFuel(ItemStack stack) => Fuel = stack;
+
+        public void SetInput(int slot, ItemStack stack)
+        {
+            inputs[slot] = stack;
+            ContentVersion++;
+        }
+
+        public void SetFuel(ItemStack stack)
+        {
+            Fuel = stack;
+            ContentVersion++;
+        }
 
         // Merges the stack into a matching input slot (respecting max stack size) or the first
         // empty slot. Returns false when no slot can receive it; the stack is untouched then.
@@ -62,6 +91,7 @@ namespace Blockiverse.Survival
                 if (!inputs[i].IsEmpty && inputs[i].ItemId == stack.ItemId && inputs[i].Count + stack.Count <= max)
                 {
                     inputs[i] = new ItemStack(stack.ItemId, inputs[i].Count + stack.Count);
+                    ContentVersion++;
                     return true;
                 }
             }
@@ -71,6 +101,7 @@ namespace Blockiverse.Survival
                 if (inputs[i].IsEmpty)
                 {
                     inputs[i] = stack;
+                    ContentVersion++;
                     return true;
                 }
             }
@@ -88,6 +119,7 @@ namespace Blockiverse.Survival
             if (Fuel.IsEmpty)
             {
                 Fuel = stack;
+                ContentVersion++;
                 return true;
             }
 
@@ -99,6 +131,7 @@ namespace Blockiverse.Survival
                 return false;
 
             Fuel = new ItemStack(stack.ItemId, Fuel.Count + stack.Count);
+            ContentVersion++;
             return true;
         }
 
@@ -107,6 +140,7 @@ namespace Blockiverse.Survival
         {
             ItemStack collected = Output;
             Output = ItemStack.Empty;
+            ContentVersion++;
             return collected;
         }
 
@@ -127,6 +161,7 @@ namespace Blockiverse.Survival
             Output = output;
             ActiveRecipe = activeRecipe;
             ProgressTicks = activeRecipe != null ? Math.Max(0, progressTicks) : 0;
+            ContentVersion++;
         }
 
         // Advances the station by the given ticks, beginning and chaining crafts as inputs/fuel allow.
@@ -170,6 +205,7 @@ namespace Blockiverse.Survival
                 Fuel = Decrement(Fuel, fuelUnits);
                 ActiveRecipe = recipe;
                 ProgressTicks = 0;
+                ContentVersion++;
                 return true;
             }
 
@@ -182,6 +218,7 @@ namespace Blockiverse.Survival
             Output = MergeOutput(Output, ActiveRecipe.Output);
             ActiveRecipe = null;
             ProgressTicks = 0;
+            ContentVersion++;
         }
 
         bool InputsSatisfy(CraftingRecipe recipe)

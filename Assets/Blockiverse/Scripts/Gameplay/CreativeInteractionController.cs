@@ -65,12 +65,15 @@ namespace Blockiverse.Gameplay
 
         public static BlockPosition ComputeHitBlockPosition(Vector3 hitPoint, Vector3 faceNormal)
         {
-            Vector3 pointInsideBlock = hitPoint - faceNormal.normalized * 0.001f;
-            return new BlockPosition(
-                Mathf.FloorToInt(pointInsideBlock.x),
-                Mathf.FloorToInt(pointInsideBlock.y),
-                Mathf.FloorToInt(pointInsideBlock.z));
+            return ToBlockPosition(hitPoint - faceNormal.normalized * 0.001f);
         }
+
+        // The voxel cell containing a Unity world-space point (BlockPosition lives in the
+        // engine-free Voxel assembly, so the Vector3 conversion belongs here in Gameplay).
+        public static BlockPosition ToBlockPosition(Vector3 worldPosition) => new(
+            Mathf.FloorToInt(worldPosition.x),
+            Mathf.FloorToInt(worldPosition.y),
+            Mathf.FloorToInt(worldPosition.z));
 
         public bool TryBreakBlock(BlockPosition position)
         {

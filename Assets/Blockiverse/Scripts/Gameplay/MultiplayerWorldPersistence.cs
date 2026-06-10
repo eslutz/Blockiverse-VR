@@ -96,7 +96,7 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            WorldLoadResult result = new WorldSaveService(new WorldSaveMigrationRegistry()).Load(path);
+            WorldLoadResult result = new WorldSaveService().Load(path);
 
             if (!result.Success)
             {
@@ -129,6 +129,7 @@ namespace Blockiverse.Gameplay
                 result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
                 worldManager.RestoreWeatherState(result.Data.WeatherState);
                 worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
+                worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(result.Data.GameMode));
                 RestoreContainers(result.Data.Containers);
             }
             finally
@@ -170,7 +171,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore));
+                new WorldSaveService().Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore));
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,

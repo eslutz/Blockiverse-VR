@@ -15,11 +15,22 @@ namespace Blockiverse.UI
         PlayerVitals vitals;
         SurvivalVitals survivalVitals;
 
+        // Last-displayed values; Refresh runs on a 0.5s HUD cadence plus health events, so the
+        // TMP string rebuild/assignment is skipped while the inputs are unchanged (the same
+        // gating pattern as BlockiverseStationPanel's lastContentVersion).
+        int lastHealth = int.MinValue;
+        int lastMaxHealth = int.MinValue;
+        int lastHunger = int.MinValue;
+        int lastThirst = int.MinValue;
+        int lastStamina = int.MinValue;
+        string lastBaseState;
+
         public void Configure(TMP_Text targetHealthLabel, Slider targetHealthSlider, TMP_Text targetStateLabel)
         {
             healthLabel = targetHealthLabel;
             healthSlider = targetHealthSlider;
             stateLabel = targetStateLabel;
+            InvalidateDisplayCache();
             Refresh();
         }
 
@@ -30,6 +41,7 @@ namespace Blockiverse.UI
 
             vitals = playerVitals ?? throw new ArgumentNullException(nameof(playerVitals));
             vitals.HealthChanged += OnHealthChanged;
+            InvalidateDisplayCache();
             Refresh();
         }
 
@@ -38,6 +50,7 @@ namespace Blockiverse.UI
         public void BindSurvivalVitals(SurvivalVitals playerSurvivalVitals)
         {
             survivalVitals = playerSurvivalVitals;
+            InvalidateDisplayCache();
             Refresh();
         }
 
@@ -54,26 +67,55 @@ namespace Blockiverse.UI
                 if (healthSlider != null)
                     healthSlider.value = 0f;
 
+                InvalidateDisplayCache();
                 return;
             }
 
-            if (healthLabel != null)
-                healthLabel.text = $"{vitals.CurrentHealth} / {vitals.MaxHealth}";
-
-            if (healthSlider != null)
+            if (vitals.CurrentHealth != lastHealth || vitals.MaxHealth != lastMaxHealth)
             {
-                healthSlider.minValue = 0f;
-                healthSlider.maxValue = vitals.MaxHealth;
-                healthSlider.value = vitals.CurrentHealth;
+                lastHealth = vitals.CurrentHealth;
+                lastMaxHealth = vitals.MaxHealth;
+
+                if (healthLabel != null)
+                    healthLabel.text = $"{vitals.CurrentHealth} / {vitals.MaxHealth}";
+
+                if (healthSlider != null)
+                {
+                    healthSlider.minValue = 0f;
+                    healthSlider.maxValue = vitals.MaxHealth;
+                    healthSlider.value = vitals.CurrentHealth;
+                }
             }
 
             if (stateLabel != null)
             {
-                string state = GetStateTMP_Text(vitals);
-                if (survivalVitals != null)
-                    state = $"{state} · Hunger {survivalVitals.Hunger} · Thirst {survivalVitals.Thirst} · Stamina {survivalVitals.Stamina}";
-                stateLabel.text = state;
+                string baseState = GetStateTMP_Text(vitals);
+                int hunger = survivalVitals != null ? survivalVitals.Hunger : int.MinValue;
+                int thirst = survivalVitals != null ? survivalVitals.Thirst : int.MinValue;
+                int stamina = survivalVitals != null ? survivalVitals.Stamina : int.MinValue;
+
+                if (baseState != lastBaseState || hunger != lastHunger || thirst != lastThirst || stamina != lastStamina)
+                {
+                    lastBaseState = baseState;
+                    lastHunger = hunger;
+                    lastThirst = thirst;
+                    lastStamina = stamina;
+
+                    stateLabel.text = survivalVitals != null
+                        ? $"{baseState} · Hunger {hunger} · Thirst {thirst} · Stamina {stamina}"
+                        : baseState;
+                }
             }
+        }
+
+        void InvalidateDisplayCache()
+        {
+            lastHealth = int.MinValue;
+            lastMaxHealth = int.MinValue;
+            lastHunger = int.MinValue;
+            lastThirst = int.MinValue;
+            lastStamina = int.MinValue;
+            lastBaseState = null;
         }
 
         void OnDestroy()
