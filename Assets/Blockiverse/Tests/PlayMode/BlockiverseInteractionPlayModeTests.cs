@@ -174,9 +174,12 @@ namespace Blockiverse.Tests.PlayMode
                 comfortMenu.Configure(comfortCanvas, comfortSettings);
                 inputRig.MenuPressed.AddListener(comfortMenu.ToggleVisible);
 
+                // Use the real quick-menu presenter (the component the bootstrapper wires to
+                // QuickMenuPressed) rather than a placeholder, starting hidden like the runtime menu.
                 var blockCanvas = blockMenuObject.AddComponent<Canvas>();
-                BlockiverseQuickMenuPlaceholder blockMenu = blockMenuObject.AddComponent<BlockiverseQuickMenuPlaceholder>();
-                blockMenu.Configure(blockCanvas);
+                var blockMenu = blockMenuObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                blockMenu.Configure(blockCanvas, rigObject.transform, 1.12f, -0.34f, -0.18f, 0.0f);
+                blockCanvas.enabled = false;
 
                 inputRig.QuickMenuPressed.AddListener(blockMenu.ToggleVisible);
 

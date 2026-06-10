@@ -72,7 +72,6 @@ namespace Blockiverse.WorldGen
         // One candidate per 32×32 chunk region; must be ≥ 48 blocks from any other.
         const int RegionSize      = 32;
         const int MinSpacing      = 48;
-        const int SpawnExclusion  = 40;
         // ~30% of regions hold a structure (matches the original pre-catalog density).
         const uint RegionSpawnChancePercent = 30;
         // Number of TerrainBiome enum values; biome indices are wrapped into this range.
@@ -188,7 +187,9 @@ namespace Blockiverse.WorldGen
                 var lootPos = new BlockPosition(baseX + 2, baseY, baseZ + 2);
                 if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
                 {
-                    world.SetBlock(lootPos, BlockRegistry.StorageCrate);
+                    // Worldgen placements are not player changes — keep them out of change tracking
+                    // (matching TrySetSolid) so they don't pollute save deltas.
+                    world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange: false);
 
                     // Roll this structure's loot table deterministically from the crate position so the
                     // host and any client that regenerates the world produce identical contents.
@@ -207,7 +208,7 @@ namespace Blockiverse.WorldGen
             {
                 var stationPos = new BlockPosition(baseX + 1, baseY, baseZ + 1);
                 if (world.Bounds.Contains(stationPos) && world.GetBlock(stationPos) == BlockRegistry.Air)
-                    world.SetBlock(stationPos, BlockRegistry.Campfire);
+                    world.SetBlock(stationPos, BlockRegistry.Campfire, trackChange: false);
             }
 
             // Place a glowwick inside intact or weathered structures
@@ -215,7 +216,7 @@ namespace Blockiverse.WorldGen
             {
                 var lightPos = new BlockPosition(baseX + 2, baseY + 1, baseZ + 2);
                 if (world.Bounds.Contains(lightPos) && world.GetBlock(lightPos) == BlockRegistry.Air)
-                    world.SetBlock(lightPos, BlockRegistry.Glowwick);
+                    world.SetBlock(lightPos, BlockRegistry.Glowwick, trackChange: false);
             }
         }
 
@@ -261,9 +262,6 @@ namespace Blockiverse.WorldGen
             int dz = z - settings.SpawnPosition.Z;
             return dx * dx + dz * dz < minDistance * minDistance;
         }
-
-        static bool IsTooCloseToSpawn(int x, int z, WorldGenerationSettings settings)
-            => IsTooCloseToSpawn(x, z, settings, SpawnExclusion);
 
         static bool IsTooCloseToAccepted(int x, int z, List<(int x, int z)> accepted)
         {

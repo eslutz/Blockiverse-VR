@@ -102,7 +102,6 @@ namespace Blockiverse.Gameplay
             if (selectedBlock == BlockRegistry.Air)
                 return false;
 
-            registry.Get(selectedBlock);
             return TryMutate(position, selectedBlock, pushUndo: true);
         }
 
