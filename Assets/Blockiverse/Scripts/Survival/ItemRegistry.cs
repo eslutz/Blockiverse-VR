@@ -18,10 +18,6 @@ namespace Blockiverse.Survival
         public const int ConsumableStackSize = 20;
         public const int FieldBandageStackSize = 20;
 
-        // Kept for backward compat with existing callers.
-        public const int ResourceStackSize = BlockStackSize;
-        public const int RecoveryWrapStackSize = FieldBandageStackSize;
-
         public IReadOnlyCollection<ItemDefinition> All => definitionsById.Values;
 
         public static ItemRegistry CreateDefault()
@@ -44,6 +40,12 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.WarmGranite, "Warm Granite", ItemKind.Resource, BlockStackSize, BlockRegistry.WarmGranite));
             registry.Register(new ItemDefinition(ItemId.WhiteLimestone, "White Limestone", ItemKind.Resource, BlockStackSize, BlockRegistry.WhiteLimestone));
             registry.Register(new ItemDefinition(ItemId.BlackBasalt, "Black Basalt", ItemKind.Resource, BlockStackSize, BlockRegistry.BlackBasalt));
+            registry.Register(new ItemDefinition(ItemId.Worldroot, "Worldroot", ItemKind.Resource, BlockStackSize, BlockRegistry.Worldroot));
+            registry.Register(new ItemDefinition(ItemId.Deepmantle, "Deepmantle", ItemKind.Resource, BlockStackSize, BlockRegistry.Deepmantle));
+            registry.Register(new ItemDefinition(ItemId.Snowpack, "Snowpack", ItemKind.Resource, BlockStackSize, BlockRegistry.Snowpack));
+            registry.Register(new ItemDefinition(ItemId.Frostglass, "Frostglass", ItemKind.Resource, BlockStackSize, BlockRegistry.Frostglass));
+            // Tended soil reverts to loam when dug up (§11.1) — alias instead of a new item.
+            registry.RegisterDropAlias(BlockRegistry.TendedSoil, ItemId.LooseLoam);
 
             // ── Block items (vegetation) ──────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.BranchwoodLog, "Branchwood Log", ItemKind.Resource, BlockStackSize, BlockRegistry.BranchwoodLog));

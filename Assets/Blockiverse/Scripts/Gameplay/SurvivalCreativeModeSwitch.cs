@@ -18,6 +18,10 @@ namespace Blockiverse.Gameplay
         public PlayerModeState CurrentMode => mode;
         public bool HasSurvivalSnapshot => survivalSnapshot != null;
 
+        // The stashed survival slots while in creative mode (null otherwise) — persistence
+        // saves these as the player's real inventory instead of the creative scratch slots.
+        public System.Collections.Generic.IReadOnlyList<ItemStack> SurvivalSnapshotSlots => survivalSnapshot;
+
         public bool SwitchToCreative(Inventory activeInventory)
         {
             if (activeInventory == null) throw new ArgumentNullException(nameof(activeInventory));
@@ -55,6 +59,14 @@ namespace Blockiverse.Gameplay
                 {
                     if (!survivalSnapshot[i].IsEmpty)
                         activeInventory.SetSlot(i, survivalSnapshot[i]);
+                }
+
+                // Snapshot slots beyond the current inventory size are merged best-effort
+                // instead of silently dropped (a smaller inventory keeps whatever fits).
+                for (int i = restoreCount; i < survivalSnapshotSlotCount; i++)
+                {
+                    if (!survivalSnapshot[i].IsEmpty)
+                        activeInventory.Add(survivalSnapshot[i]);
                 }
             }
 

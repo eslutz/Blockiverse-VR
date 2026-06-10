@@ -5,11 +5,10 @@ namespace Blockiverse.Gameplay
     public static class BlockiverseLightingRuntime
     {
         public const string SunObjectName = "Blockiverse Sun";
-        const string LegacySunObjectName = "Bootstrap Directional Light";
 
         public static BlockiverseLightingCycleController EnsureSceneLighting()
         {
-            GameObject sunObject = GameObject.Find(SunObjectName) ?? GameObject.Find(LegacySunObjectName);
+            GameObject sunObject = GameObject.Find(SunObjectName);
 
             if (sunObject == null)
                 sunObject = new GameObject(SunObjectName);

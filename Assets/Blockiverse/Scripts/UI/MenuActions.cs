@@ -10,11 +10,9 @@ namespace Blockiverse.UI
         public const string TitleScreen = "title_menu";
         public const string NewWorldScreen = "new_world";
         public const string LoadWorldScreen = "load_world";
-        public const string WorldDetailsScreen = "world_details";
         public const string GameplayHudScreen = "gameplay_hud";
         public const string PauseScreen = "pause_menu";
         public const string SettingsScreen = "settings";
-        public const string ControlsScreen = "controls";
         public const string DeathScreen = "death_screen";
         public const string LanMultiplayerScreen = "lan_multiplayer";
         public const string StationMenuScreen = "station_menu";
@@ -24,16 +22,18 @@ namespace Blockiverse.UI
         public const string TitleContinue = "title.continue_latest_save";
         public const string TitleNewWorld = "title.open_new_world";
         public const string TitleLoadWorld = "title.open_load_world";
+        public const string TitleMultiplayer = "title.open_lan_multiplayer";
         public const string TitleSettings = "title.open_settings";
-        public const string TitleCredits = "title.open_credits";
         public const string TitleQuit = "title.quit_requested";
+
+        // ── LAN multiplayer actions (§6) ─────────────────────────────────────
+        public const string LanMultiplayerClose = "lan_multiplayer.close";
 
         // ── Pause actions (§6.7) ─────────────────────────────────────────────
         public const string PauseResume = "pause.resume";
         public const string PauseSaveGame = "pause.save_game";
         public const string PauseToggleMode = "pause.toggle_survival_creative";
         public const string PauseSettings = "pause.open_settings";
-        public const string PauseControls = "pause.open_controls";
         public const string PauseReturnToTitle = "pause.return_to_title_requested";
         public const string PauseQuit = "pause.quit_requested";
 
@@ -66,8 +66,8 @@ namespace Blockiverse.UI
             actions.Add(new MenuAction(TitleNewWorld, "New World"));
             if (hasAnySave)
                 actions.Add(new MenuAction(TitleLoadWorld, "Load World"));
+            actions.Add(new MenuAction(TitleMultiplayer, "LAN Multiplayer"));
             actions.Add(new MenuAction(TitleSettings, "Settings"));
-            actions.Add(new MenuAction(TitleCredits, "Credits"));
             if (canQuit)
                 actions.Add(new MenuAction(TitleQuit, "Quit"));
             return actions;
@@ -79,7 +79,6 @@ namespace Blockiverse.UI
             new MenuAction(PauseSaveGame, "Save Game"),
             new MenuAction(PauseToggleMode, "Switch Survival/Creative"),
             new MenuAction(PauseSettings, "Settings"),
-            new MenuAction(PauseControls, "Controls"),
             new MenuAction(PauseReturnToTitle, "Return to Title"),
             new MenuAction(PauseQuit, "Quit Game"),
         };

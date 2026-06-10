@@ -545,7 +545,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             try
             {
-                new WorldSaveService(new WorldSaveMigrationRegistry()).Save(savePath, "mismatched-save", savedWorld);
+                new WorldSaveService().Save(savePath, "mismatched-save", savedWorld);
                 hostSession.Configure(testConfig);
 
                 Assert.That(hostSession.StartHost(), Is.False);

@@ -27,6 +27,8 @@ namespace Blockiverse.UI
 
         CreativeWorldManager worldManager;
         SurvivalVitalsRuntime vitalsRuntime;
+        MultiplayerSurvivalSync survivalSync;
+        ItemRegistry itemRegistry;
         float nextStationScanTime;
         float nextVitalsRefreshTime;
         CraftingStationSet lastScannedStations;
@@ -57,12 +59,12 @@ namespace Blockiverse.UI
             healthPanel ??= GetComponentInChildren<SurvivalHealthPanel>(includeInactive: true);
             cratePanel ??= GetComponentInChildren<SurvivalCratePanel>(includeInactive: true);
 
-            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            itemRegistry = ItemRegistry.CreateDefault();
 
             // Bind to the authoritative survival inventory when the runtime survival sync is present so
             // the HUD, harvesting, crafting, and container loot all share one inventory. Falls back to a
             // standalone inventory for isolated validation/tests.
-            var survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+            survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
             Inventory = survivalSync != null ? survivalSync.LocalInventory : new Inventory(itemRegistry);
             RecipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
 
@@ -105,6 +107,47 @@ namespace Blockiverse.UI
                 cratePanel.CrateChanged -= RefreshPanels;
                 cratePanel.CrateChanged += RefreshPanels;
             }
+
+            // Repaint (and re-bind, if the instance was replaced) when the authoritative local
+            // inventory or shared crate changes — host snapshots on clients, host-side command
+            // results, and mode switches all arrive through these signals.
+            if (survivalSync != null)
+            {
+                survivalSync.LocalInventoryChanged -= OnLocalInventoryChanged;
+                survivalSync.LocalInventoryChanged += OnLocalInventoryChanged;
+                survivalSync.SharedCrateChanged -= OnSharedCrateChanged;
+                survivalSync.SharedCrateChanged += OnSharedCrateChanged;
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (survivalSync != null)
+            {
+                survivalSync.LocalInventoryChanged -= OnLocalInventoryChanged;
+                survivalSync.SharedCrateChanged -= OnSharedCrateChanged;
+            }
+        }
+
+        void OnLocalInventoryChanged()
+        {
+            if (survivalSync != null && !ReferenceEquals(Inventory, survivalSync.LocalInventory))
+            {
+                // The sync replaced its inventory instance (explicit Configure): rebind every
+                // consumer that captured the old reference.
+                Inventory = survivalSync.LocalInventory;
+                worldManager?.SetActivePlayerInventory(Inventory);
+                inventoryPanel?.Bind(Inventory, itemRegistry, inventoryPanel.SelectedHotbarSlotIndex);
+                craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
+            }
+
+            inventoryPanel?.Refresh();
+            craftingPanel?.Refresh();
+        }
+
+        void OnSharedCrateChanged()
+        {
+            cratePanel?.Refresh();
         }
 
         void Update()
@@ -137,11 +180,7 @@ namespace Blockiverse.UI
             nextStationScanTime = Time.time + StationScanIntervalSeconds;
 
             Transform origin = Camera.main != null ? Camera.main.transform : transform;
-            Vector3 position = origin.position;
-            var center = new BlockPosition(
-                Mathf.FloorToInt(position.x),
-                Mathf.FloorToInt(position.y),
-                Mathf.FloorToInt(position.z));
+            BlockPosition center = CreativeInteractionController.ToBlockPosition(origin.position);
 
             CraftingStationSet stations = StationProximity.ScanNearby(worldManager.World, center);
             if (stations.Equals(lastScannedStations))

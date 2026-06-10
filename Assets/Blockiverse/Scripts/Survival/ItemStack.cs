@@ -39,6 +39,9 @@ namespace Blockiverse.Survival
 
         public ItemStack WithCount(int count)
         {
+            if (count < 0)
+                throw new ArgumentOutOfRangeException(nameof(count), "Item stack count cannot be negative.");
+
             if (count == 0)
                 return Empty;
 

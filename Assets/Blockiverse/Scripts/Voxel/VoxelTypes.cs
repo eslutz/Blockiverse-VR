@@ -134,7 +134,6 @@ namespace Blockiverse.Voxel
         readonly Dictionary<string, BlockDefinition> definitionsByName = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, BlockDefinition> definitionsByCanonicalId = new(StringComparer.OrdinalIgnoreCase);
 
-        // ── Preserved integer IDs (0-12) for legacy save migration ──────────
         public static readonly BlockId Air                 = new(0);
         public static readonly BlockId MeadowTurf          = new(1);
         public static readonly BlockId LooseLoam            = new(2);

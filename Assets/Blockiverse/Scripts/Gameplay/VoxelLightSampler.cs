@@ -23,7 +23,8 @@ namespace Blockiverse.Gameplay
             VoxelWorld world,
             BlockRegistry registry,
             BlockPosition airPosition,
-            int maxProbeDistance = DefaultProbeDistance)
+            int maxProbeDistance = DefaultProbeDistance,
+            VoxelSkyLightMap skyLight = null)
         {
             if (world == null || registry == null)
                 return SurfaceLight;
@@ -34,7 +35,7 @@ namespace Blockiverse.Gameplay
             if (!IsLightPassable(world, registry, airPosition))
                 return CaveMinimumLight;
 
-            if (HasSkyAccess(world, registry, airPosition))
+            if (HasSkyAccess(world, registry, airPosition, skyLight))
                 return SurfaceLight;
 
             int nearestOpening = maxProbeDistance + 1;
@@ -57,7 +58,7 @@ namespace Blockiverse.Gameplay
                     if (!IsLightPassable(world, registry, probe))
                         break;
 
-                    if (HasSkyAccess(world, registry, probe))
+                    if (HasSkyAccess(world, registry, probe, skyLight))
                     {
                         nearestOpening = Mathf.Min(nearestOpening, step);
                         break;
@@ -78,8 +79,13 @@ namespace Blockiverse.Gameplay
             return new Color(light, light, light, 1.0f);
         }
 
-        static bool HasSkyAccess(VoxelWorld world, BlockRegistry registry, BlockPosition airPosition)
+        static bool HasSkyAccess(VoxelWorld world, BlockRegistry registry, BlockPosition airPosition, VoxelSkyLightMap skyLight)
         {
+            // The sky-light map answers in O(1); the column walk remains as the fallback for
+            // callers without one (isolated tests).
+            if (skyLight != null)
+                return skyLight.HasSkyAccess(airPosition);
+
             for (int y = airPosition.Y + 1; y < world.Bounds.Height; y++)
             {
                 if (!IsLightPassable(world, registry, new BlockPosition(airPosition.X, y, airPosition.Z)))

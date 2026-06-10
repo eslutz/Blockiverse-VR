@@ -63,18 +63,6 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void PlaceMassiveTreeHasWiderTrunk()
-        {
-            vegetation.PlaceMassiveTree(world, BasePos);
-
-            // 2×2 trunk check
-            Assert.That(world.GetBlock(new BlockPosition(BasePos.X,     BasePos.Y, BasePos.Z)),     Is.EqualTo(BlockRegistry.BranchwoodLog));
-            Assert.That(world.GetBlock(new BlockPosition(BasePos.X + 1, BasePos.Y, BasePos.Z)),     Is.EqualTo(BlockRegistry.BranchwoodLog));
-            Assert.That(world.GetBlock(new BlockPosition(BasePos.X,     BasePos.Y, BasePos.Z + 1)), Is.EqualTo(BlockRegistry.BranchwoodLog));
-            Assert.That(world.GetBlock(new BlockPosition(BasePos.X + 1, BasePos.Y, BasePos.Z + 1)), Is.EqualTo(BlockRegistry.BranchwoodLog));
-        }
-
-        [Test]
         public void TickSaplingAdvancesThroughStagesAndPlacesTree()
         {
             world.SetBlock(BasePos, BlockRegistry.Sapling);

@@ -260,30 +260,6 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void VoidBuilderPresetGenerates5x5PlatformAtY64()
-        {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-            var settings = new WorldGenerationSettings(32, 128, 32, WorldConstants.ChunkSize, 1001, 2);
-            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
-
-            int cx = settings.Bounds.Width / 2;
-            int cz = settings.Bounds.Depth / 2;
-
-            for (int dx = -2; dx <= 2; dx++)
-            {
-                for (int dz = -2; dz <= 2; dz++)
-                {
-                    Assert.That(world.GetBlock(new BlockPosition(cx + dx, 64, cz + dz)),
-                        Is.EqualTo(BlockRegistry.WhiteLimestone),
-                        $"Expected WhiteLimestone at platform offset ({dx},{dz}).");
-                }
-            }
-
-            Assert.That(world.GetBlock(new BlockPosition(cx, 63, cz)), Is.EqualTo(BlockRegistry.Air));
-            Assert.That(world.GetBlock(new BlockPosition(cx, 65, cz)), Is.EqualTo(BlockRegistry.Air));
-        }
-
-        [Test]
         public void SurvivalTerrainGeneratesWildPlants()
         {
             VoxelWorld world = GenerateSurvivalWorld(seed: 6401);

@@ -50,7 +50,7 @@ namespace Blockiverse.Gameplay
             { new(0, 0, 0), new(0, 1, 0), new(1, 1, 0), new(1, 0, 0) }
         };
 
-        public static ChunkMeshData Build(VoxelWorld world, BlockRegistry registry, ChunkCoordinate chunk)
+        public static ChunkMeshData Build(VoxelWorld world, BlockRegistry registry, ChunkCoordinate chunk, VoxelSkyLightMap skyLight = null)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -91,7 +91,7 @@ namespace Blockiverse.Gameplay
                             if (!ShouldRenderFace(world, registry, neighbor))
                                 continue;
 
-                            float light = VoxelLightSampler.SampleAirLight(world, registry, neighbor);
+                            float light = VoxelLightSampler.SampleAirLight(world, registry, neighbor, skyLight: skyLight);
                             AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, light);
                             faceCount++;
                         }
@@ -152,15 +152,24 @@ namespace Blockiverse.Gameplay
         const int LightingProbeInvalidationPadding = VoxelLightSampler.DefaultProbeDistance + 1;
 
         readonly VoxelWorld world;
+        readonly VoxelSkyLightMap skyLight;
         readonly HashSet<ChunkCoordinate> dirtyChunks = new();
 
-        public ChunkRebuildQueue(VoxelWorld world)
+        public ChunkRebuildQueue(VoxelWorld world, VoxelSkyLightMap skyLight = null)
         {
             this.world = world ?? throw new ArgumentNullException(nameof(world));
+            this.skyLight = skyLight;
             world.BlockChanged += OnBlockChanged;
         }
 
         public int Count => dirtyChunks.Count;
+
+        // Unsubscribes from the world; call when the renderer is reconfigured onto a new world
+        // so the stale queue does not keep marking chunks for it.
+        public void Detach()
+        {
+            world.BlockChanged -= OnBlockChanged;
+        }
 
         public void MarkDirty(ChunkCoordinate chunk)
         {
@@ -178,7 +187,30 @@ namespace Blockiverse.Gameplay
         {
             ChunkCoordinate changedChunk = world.GetChunkCoordinate(change.Position);
             MarkDirty(changedChunk);
-            MarkLightingAffectedChunks(change.Position);
+
+            if (skyLight == null)
+            {
+                // No sky map (isolated construction): conservatively invalidate the whole lit
+                // column below the edit, as before.
+                MarkLightingAffectedChunks(change.Position.X, change.Position.Z, 0, change.Position.Y);
+            }
+            else if (skyLight.ApplyChange(change, out int previousTop, out int newTop))
+            {
+                // The column's sky profile moved (a surface block was added/removed): every cell
+                // between the ground and the higher of the two tops may change classification.
+                int maxY = Math.Max(change.Position.Y, Math.Max(previousTop, newTop));
+                MarkLightingAffectedChunks(change.Position.X, change.Position.Z, 0, maxY);
+            }
+            else
+            {
+                // Sky profile unchanged (typical mining/building underground or beneath cover):
+                // light can only differ within probe range of the edit, not all the way down.
+                MarkLightingAffectedChunks(
+                    change.Position.X,
+                    change.Position.Z,
+                    Math.Max(0, change.Position.Y - LightingProbeInvalidationPadding),
+                    Math.Min(world.Bounds.Height - 1, change.Position.Y + LightingProbeInvalidationPadding));
+            }
 
             BlockPosition local = ChunkCoordinate.LocalPositionFromBlockPosition(change.Position, world.ChunkSize);
             MarkNeighborIfNeeded(local.X == 0, change.Position + new BlockPosition(-1, 0, 0));
@@ -189,24 +221,22 @@ namespace Blockiverse.Gameplay
             MarkNeighborIfNeeded(local.Z == world.ChunkSize - 1, change.Position + new BlockPosition(0, 0, 1));
         }
 
-        void MarkLightingAffectedChunks(BlockPosition position)
+        void MarkLightingAffectedChunks(int x, int z, int minY, int maxY)
         {
-            int minX = Math.Max(0, position.X - LightingProbeInvalidationPadding);
-            int maxX = Math.Min(world.Bounds.Width - 1, position.X + LightingProbeInvalidationPadding);
-            int minY = 0;
-            int maxY = position.Y;
-            int minZ = Math.Max(0, position.Z - LightingProbeInvalidationPadding);
-            int maxZ = Math.Min(world.Bounds.Depth - 1, position.Z + LightingProbeInvalidationPadding);
+            int minX = Math.Max(0, x - LightingProbeInvalidationPadding);
+            int maxX = Math.Min(world.Bounds.Width - 1, x + LightingProbeInvalidationPadding);
+            int minZ = Math.Max(0, z - LightingProbeInvalidationPadding);
+            int maxZ = Math.Min(world.Bounds.Depth - 1, z + LightingProbeInvalidationPadding);
 
             ChunkCoordinate minChunk = ChunkCoordinate.FromBlockPosition(new BlockPosition(minX, minY, minZ), world.ChunkSize);
             ChunkCoordinate maxChunk = ChunkCoordinate.FromBlockPosition(new BlockPosition(maxX, maxY, maxZ), world.ChunkSize);
 
-            for (int y = minChunk.Y; y <= maxChunk.Y; y++)
+            for (int chunkY = minChunk.Y; chunkY <= maxChunk.Y; chunkY++)
             {
-                for (int z = minChunk.Z; z <= maxChunk.Z; z++)
+                for (int chunkZ = minChunk.Z; chunkZ <= maxChunk.Z; chunkZ++)
                 {
-                    for (int x = minChunk.X; x <= maxChunk.X; x++)
-                        MarkDirty(new ChunkCoordinate(x, y, z));
+                    for (int chunkX = minChunk.X; chunkX <= maxChunk.X; chunkX++)
+                        MarkDirty(new ChunkCoordinate(chunkX, chunkY, chunkZ));
                 }
             }
         }

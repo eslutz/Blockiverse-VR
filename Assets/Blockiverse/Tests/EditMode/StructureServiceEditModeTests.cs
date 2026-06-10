@@ -232,10 +232,10 @@ namespace Blockiverse.Tests.EditMode
         {
             // The per-region spawn gate (~30%) must keep most regions empty even when every biome
             // has many valid catalog entries. Without the gate, nearly every region would build one.
-            var settings = MakeSettings(seed: 314);
+            var settings = MakeSettings(seed: 300);
             var world = FlatWorld(settings);
 
-            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 314,
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 300,
                 biomeAt: (x, z) => 0); // Meadow allows several catalog entries
 
             const int regionSize = 32;

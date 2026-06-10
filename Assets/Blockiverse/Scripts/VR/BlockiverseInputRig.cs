@@ -64,6 +64,27 @@ namespace Blockiverse.VR
 
         Action<LocomotionProvider> teleportEndedHandler;
 
+        // Cached gameplay/hand actions — resolved once per InputActionAsset so the hot Update
+        // poll avoids five string-keyed FindActionMap/FindAction lookups every frame.
+        InputActionAsset cachedActionAsset;
+        InputAction cachedMenuAction;
+        InputAction cachedQuickMenuAction;
+        InputAction cachedBreakAction;
+        InputAction cachedPlaceAction;
+        InputAction cachedUndoAction;
+        InputAction cachedBlockEditingToggleAction;
+
+        // Last comfort values pushed to the XRI providers. Provider fields — and especially the
+        // jump reader, whose InputActionReference is a ScriptableObject instance — must only be
+        // rebuilt when a setting actually changes, never per frame.
+        bool comfortApplied;
+        BlockiverseLocomotionMode lastLocomotionMode;
+        bool lastSmoothTurn;
+        float lastMoveSpeed;
+        float lastSnapTurnDegrees;
+
+        static LayerMask? cachedTerrainLayerMask;
+
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
         public UnityEvent QuickMenuPressed => quickMenuPressed;
@@ -265,58 +286,51 @@ namespace Blockiverse.VR
         void Update()
         {
             ApplyComfortSettingsToProviders();
+            RefreshCachedActions();
             UpdateMenu();
             UpdateQuickMenu();
             UpdateCreativeBindings();
         }
 
+        void RefreshCachedActions()
+        {
+            if (cachedActionAsset == inputActions)
+                return;
+
+            cachedActionAsset = inputActions;
+            TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, out cachedMenuAction);
+            TryFindAction(BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Activate, out cachedQuickMenuAction);
+            TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Select, out cachedBreakAction);
+            TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Activate, out cachedPlaceAction);
+            TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, out cachedUndoAction);
+            TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, out cachedBlockEditingToggleAction);
+        }
+
         void UpdateMenu()
         {
-            if (!TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, out InputAction menuAction) ||
-                !menuAction.WasPressedThisFrame())
-            {
-                return;
-            }
-
-            menuPressed?.Invoke();
+            if (cachedMenuAction != null && cachedMenuAction.WasPressedThisFrame())
+                menuPressed?.Invoke();
         }
 
         void UpdateQuickMenu()
         {
-            if (!TryFindAction(BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Activate, out InputAction quickMenuAction) ||
-                !quickMenuAction.WasPressedThisFrame())
-            {
-                return;
-            }
-
-            quickMenuPressed?.Invoke();
+            if (cachedQuickMenuAction != null && cachedQuickMenuAction.WasPressedThisFrame())
+                quickMenuPressed?.Invoke();
         }
 
         void UpdateCreativeBindings()
         {
-            if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Select, out InputAction breakAction) &&
-                breakAction.WasPressedThisFrame())
-            {
+            if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
                 breakPressed?.Invoke();
-            }
 
-            if (TryFindAction(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Activate, out InputAction placeAction) &&
-                placeAction.WasPressedThisFrame())
-            {
+            if (cachedPlaceAction != null && cachedPlaceAction.WasPressedThisFrame())
                 placePressed?.Invoke();
-            }
 
-            if (TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo, out InputAction undoAction) &&
-                undoAction.WasPressedThisFrame())
-            {
+            if (cachedUndoAction != null && cachedUndoAction.WasPressedThisFrame())
                 undoPressed?.Invoke();
-            }
 
-            if (TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, out InputAction blockEditingToggleAction) &&
-                blockEditingToggleAction.WasPressedThisFrame())
-            {
+            if (cachedBlockEditingToggleAction != null && cachedBlockEditingToggleAction.WasPressedThisFrame())
                 blockEditingTogglePressed?.Invoke();
-            }
         }
 
         bool TryFindAction(string mapName, string actionName, out InputAction action)
@@ -560,6 +574,8 @@ namespace Blockiverse.VR
 
             ConfigureXriProviderInputs();
             SubscribeTeleportFeedback();
+            // Providers may be fresh instances; force a settings re-push past the change gate.
+            comfortApplied = false;
             ApplyComfortSettingsToProviders();
         }
 
@@ -674,8 +690,12 @@ namespace Blockiverse.VR
 
         static LayerMask GetVoxelTerrainLayerMask()
         {
+            if (cachedTerrainLayerMask.HasValue)
+                return cachedTerrainLayerMask.Value;
+
             int terrainLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-            return terrainLayer >= 0 ? (LayerMask)(1 << terrainLayer) : Physics.DefaultRaycastLayers;
+            cachedTerrainLayerMask = terrainLayer >= 0 ? (LayerMask)(1 << terrainLayer) : Physics.DefaultRaycastLayers;
+            return cachedTerrainLayerMask.Value;
         }
 
         public static void ConfigureCharacterController(CharacterController controller)
@@ -696,22 +716,45 @@ namespace Blockiverse.VR
 
         void ApplyComfortSettingsToProviders()
         {
+            BlockiverseLocomotionMode mode = comfortSettings != null
+                ? comfortSettings.LocomotionMode
+                : BlockiverseLocomotionMode.Glide;
             bool smoothTurn = comfortSettings != null && comfortSettings.SmoothTurnEnabled;
+            float moveSpeed = comfortSettings != null
+                ? comfortSettings.ContinuousMoveSpeed
+                : DefaultContinuousMoveSpeed;
+            float snapTurnDegrees = comfortSettings != null
+                ? comfortSettings.SnapTurnDegrees
+                : DefaultSnapTurnDegrees;
+
+            // Update runs hot; only push to the providers when a comfort value actually changed
+            // (ConfigureXriLocomotionProviders resets comfortApplied so reconfigures re-push).
+            if (comfortApplied &&
+                mode == lastLocomotionMode &&
+                smoothTurn == lastSmoothTurn &&
+                Mathf.Approximately(moveSpeed, lastMoveSpeed) &&
+                Mathf.Approximately(snapTurnDegrees, lastSnapTurnDegrees))
+            {
+                return;
+            }
+
+            comfortApplied = true;
+            lastLocomotionMode = mode;
+            lastSmoothTurn = smoothTurn;
+            lastMoveSpeed = moveSpeed;
+            lastSnapTurnDegrees = snapTurnDegrees;
+
+            bool isGlide = mode == BlockiverseLocomotionMode.Glide;
 
             if (continuousMoveProvider != null)
             {
-                continuousMoveProvider.moveSpeed = comfortSettings != null
-                    ? comfortSettings.ContinuousMoveSpeed
-                    : DefaultContinuousMoveSpeed;
-                continuousMoveProvider.enabled = comfortSettings == null ||
-                    comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide;
+                continuousMoveProvider.moveSpeed = moveSpeed;
+                continuousMoveProvider.enabled = isGlide;
             }
 
             if (snapTurnProvider != null)
             {
-                snapTurnProvider.turnAmount = comfortSettings != null
-                    ? comfortSettings.SnapTurnDegrees
-                    : DefaultSnapTurnDegrees;
+                snapTurnProvider.turnAmount = snapTurnDegrees;
                 snapTurnProvider.enabled = !smoothTurn;
             }
 
@@ -728,21 +771,11 @@ namespace Blockiverse.VR
             }
 
             // In Teleport mode teleport rays are active; in Glide mode they must stay inactive.
-            // The teleport ray mediators read LocomotionMode directly, so no rig-level toggle
-            // is needed here — the provider enable state below is sufficient.
+            // The teleport ray mediators read LocomotionMode directly, so no rig-level toggle is
+            // needed here. Jump is only meaningful in Glide mode (Teleport mode teleports instead);
+            // the jump reader itself is wired once in ConfigureXriProviderInputs, never per frame.
             if (jumpProvider != null)
-            {
-                bool isGlide = comfortSettings == null ||
-                    comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide;
-                // Jump is only meaningful in Glide mode (Teleport mode uses teleport, not jump).
                 jumpProvider.enabled = isGlide;
-
-                jumpProvider.jumpInput = CreateButtonActionReader(
-                    "Jump",
-                    TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction)
-                        ? jumpAction
-                        : null);
-            }
         }
 
         void SubscribeTeleportFeedback()

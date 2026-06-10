@@ -31,6 +31,7 @@ namespace Blockiverse.UI
         BlockPosition stationPosition;
         float displayProgressTicks;
         int lastModelProgressTicks;
+        int lastContentVersion = -1;
 
         public event Action CloseRequested;
 
@@ -76,7 +77,7 @@ namespace Blockiverse.UI
             displayProgressTicks = model?.ProgressTicks ?? 0;
             lastModelProgressTicks = model?.ProgressTicks ?? 0;
             if (titleLabel != null && model != null)
-                titleLabel.text = displayTitle ?? model.StationType.ToString();
+                titleLabel.text = displayTitle ?? CraftingStationNames.DisplayName(model.StationType);
             if (model != null)
                 SetStatus(model.IsActive ? "Active" : "Idle");
             RefreshDisplay();
@@ -112,7 +113,12 @@ namespace Blockiverse.UI
                 displayProgressTicks = 0.0f;
             }
 
-            RefreshDisplay();
+            // Slot/fuel/output labels only change when the model's contents change (TMP label
+            // rebuilds and the string formatting are too costly per frame in VR); the progress
+            // bar extrapolates every frame.
+            if (station.ContentVersion != lastContentVersion)
+                RefreshLabels();
+            RefreshProgress();
         }
 
         void WireTransferButtons()
@@ -195,6 +201,14 @@ namespace Blockiverse.UI
             if (station == null)
                 return;
 
+            RefreshLabels();
+            RefreshProgress();
+        }
+
+        void RefreshLabels()
+        {
+            lastContentVersion = station.ContentVersion;
+
             for (int i = 0; i < inputSlotLabels.Length; i++)
             {
                 if (inputSlotLabels[i] == null) continue;
@@ -220,10 +234,13 @@ namespace Blockiverse.UI
                 statusLabel.text = "Active";
 
             if (progressSlider != null)
-            {
                 progressSlider.maxValue = Mathf.Max(1, station.RequiredTicks);
+        }
+
+        void RefreshProgress()
+        {
+            if (progressSlider != null)
                 progressSlider.value = station.IsActive ? displayProgressTicks : 0.0f;
-            }
         }
     }
 }

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Blockiverse.Core;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
+using Blockiverse.WorldGen;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -18,33 +18,18 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class SurvivalVitalsRuntime : MonoBehaviour
     {
-        // Balance constants — canon fixes the 0..100 vital ranges and the consumable items
-        // (clean_water_flask "restores thirst or stamina", field_bandage heals); the amounts
-        // and hazard rates are tunable.
-        public const int CleanWaterThirstRestore = 40;
-        public const int CleanWaterStaminaRestore = 20;
-        public const int ThornbrushDamage = 1;
-        public const float ThornbrushIntervalSeconds = 0.5f;
-        public const int CampfireDamage = 2;
-        public const float CampfireIntervalSeconds = 0.5f;
+        // Consumable effect amounts live with the effect table in ConsumableEffects; hazard
+        // damage amounts and rates live with the hazard table in BlockHazards.
         const float HazardScanIntervalSeconds = 0.25f;
+        const float ClockSearchIntervalSeconds = 1.0f;
 
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] CreativeWorldManager worldManager;
 
         WorldTimeClock worldTimeClock;
+        float nextClockSearchTime;
         float nextHazardScanTime;
         readonly Dictionary<string, float> nextHazardApplyTimes = new();
-
-        static readonly HazardVolumeDefinition ThornbrushHazard = new(
-            "thornbrush",
-            new HazardDamage(ThornbrushDamage, HazardDamageKind.Environmental, "thornbrush"),
-            ThornbrushIntervalSeconds);
-
-        static readonly HazardVolumeDefinition CampfireHazard = new(
-            "campfire",
-            new HazardDamage(CampfireDamage, HazardDamageKind.Heat, "campfire"),
-            CampfireIntervalSeconds);
 
         public PlayerVitals Vitals { get; } = new PlayerVitals();
         public SurvivalVitals SurvivalVitals { get; } = new SurvivalVitals();
@@ -84,10 +69,21 @@ namespace Blockiverse.Gameplay
 
         void Update()
         {
-            // The clock may not exist until a world is loaded; bind lazily.
+            // The clock may not exist until a world is loaded; bind lazily. The world manager
+            // exposes it directly; the scene-wide search is a throttled fallback for setups
+            // without a manager (it walks all loaded objects, too costly to run per frame).
             if (worldTimeClock == null)
             {
-                worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
+                if (worldManager != null && worldManager.WorldTimeClock != null)
+                {
+                    worldTimeClock = worldManager.WorldTimeClock;
+                }
+                else if (Time.time >= nextClockSearchTime)
+                {
+                    nextClockSearchTime = Time.time + ClockSearchIntervalSeconds;
+                    worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
+                }
+
                 if (worldTimeClock != null)
                     worldTimeClock.Ticked += OnWorldTick;
             }
@@ -150,25 +146,28 @@ namespace Blockiverse.Gameplay
             if (world == null || head == null)
                 return;
 
-            Vector3 position = head.position;
-            var headCell = new BlockPosition(
-                Mathf.FloorToInt(position.x),
-                Mathf.FloorToInt(position.y),
-                Mathf.FloorToInt(position.z));
+            BlockPosition headCell = CreativeInteractionController.ToBlockPosition(head.position);
             var feetCell = new BlockPosition(headCell.X, headCell.Y - 1, headCell.Z);
             var groundCell = new BlockPosition(headCell.X, headCell.Y - 2, headCell.Z);
 
-            // Thornbrush damages entities walking through it (body cells); campfire burns when
-            // stood in or directly on (feet/ground cells).
-            if (IsBlockAt(world, feetCell, BlockRegistry.Thornbrush) || IsBlockAt(world, headCell, BlockRegistry.Thornbrush))
-                TryApplyHazard(ThornbrushHazard);
-
-            if (IsBlockAt(world, feetCell, BlockRegistry.Campfire) || IsBlockAt(world, groundCell, BlockRegistry.Campfire))
-                TryApplyHazard(CampfireHazard);
+            CheckHazardCell(world, headCell, HazardContactCells.Head);
+            CheckHazardCell(world, feetCell, HazardContactCells.Feet);
+            CheckHazardCell(world, groundCell, HazardContactCells.GroundBelow);
         }
 
-        static bool IsBlockAt(VoxelWorld world, BlockPosition position, BlockId block) =>
-            world.Bounds.Contains(position) && world.GetBlock(position) == block;
+        // Applies the cell's hazard when the block is hazardous and triggers on this contact
+        // cell; TryApplyHazard's per-hazard throttle dedupes multi-cell contact in one scan.
+        void CheckHazardCell(VoxelWorld world, BlockPosition cell, HazardContactCells contact)
+        {
+            if (!world.Bounds.Contains(cell))
+                return;
+
+            if (BlockHazards.TryGetHazard(world.GetBlock(cell), out BlockHazard hazard) &&
+                (hazard.ContactCells & contact) != 0)
+            {
+                TryApplyHazard(hazard.Hazard);
+            }
+        }
 
         void TryApplyHazard(HazardVolumeDefinition hazard)
         {
@@ -181,18 +180,8 @@ namespace Blockiverse.Gameplay
 
         void OnConsumableConsumed(ItemStack consumed)
         {
-            if (consumed.IsEmpty)
-                return;
-
-            if (consumed.ItemId == ItemId.FieldBandage)
-            {
-                RecoveryWrap.ApplyTo(Vitals);
-            }
-            else if (consumed.ItemId == ItemId.CleanWaterFlask)
-            {
-                SurvivalVitals.Drink(CleanWaterThirstRestore);
-                SurvivalVitals.RecoverStamina(CleanWaterStaminaRestore);
-            }
+            if (!consumed.IsEmpty)
+                ConsumableEffects.TryApply(consumed.ItemId, Vitals, SurvivalVitals);
         }
 
         void OnVitalsDied(HealthChangeResult result)
@@ -206,10 +195,7 @@ namespace Blockiverse.Gameplay
             BlockPosition spawn = ResolveSpawnPosition();
             Vitals.RespawnAt(spawn);
             SurvivalVitals.ResetToFull();
-
-            GameObject rig = GameObject.Find(BlockiverseProject.XrRigRootName);
-            if (rig != null)
-                rig.transform.position = new Vector3(spawn.X + 0.5f, spawn.Y, spawn.Z + 0.5f);
+            CreativeWorldManager.PositionRigAtSpawn(spawn);
         }
 
         BlockPosition ResolveSpawnPosition()
@@ -225,14 +211,8 @@ namespace Blockiverse.Gameplay
 
             int x = world.Bounds.Width / 2;
             int z = world.Bounds.Depth / 2;
-            for (int y = world.Bounds.Height - 1; y >= 0; y--)
-            {
-                var probe = new BlockPosition(x, y, z);
-                if (world.GetBlock(probe) != BlockRegistry.Air)
-                    return new BlockPosition(x, y + 1, z);
-            }
-
-            return new BlockPosition(x, 1, z);
+            int surfaceY = StructureService.FindSurfaceY(world, x, z);
+            return new BlockPosition(x, surfaceY >= 0 ? surfaceY + 1 : 1, z);
         }
     }
 }

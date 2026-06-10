@@ -87,19 +87,6 @@ namespace Blockiverse.WorldGen
             PlaceCanopySquare(world, new BlockPosition(basePos.X, basePos.Y + 9, basePos.Z), radius: 1);
         }
 
-        public void PlaceMassiveTree(VoxelWorld world, BlockPosition basePos)
-        {
-            if (!TrunkClear(world, basePos, trunkHeight: 6)) return;
-            // 2×2 trunk
-            for (int dy = 0; dy < 6; dy++)
-            for (int dx = 0; dx <= 1; dx++)
-            for (int dz = 0; dz <= 1; dz++)
-                TrySetBlock(world, new BlockPosition(basePos.X + dx, basePos.Y + dy, basePos.Z + dz), BlockRegistry.BranchwoodLog);
-
-            var canopyBase = new BlockPosition(basePos.X, basePos.Y + 6, basePos.Z);
-            PlaceCanopyRound(world, canopyBase, radius: 4, layers: 3);
-        }
-
         // ── Biome-aware tree dispatch ────────────────────────────────────────
 
         void PlaceBiomeTree(VoxelWorld world, BlockPosition pos, TerrainBiome biome)
@@ -201,15 +188,20 @@ namespace Blockiverse.WorldGen
                 else if (current == BlockRegistry.Sapling_S2)
                 {
                     world.SetBlock(pos, BlockRegistry.Air);
-                    if (!TrunkClear(world, pos, trunkHeight: 4))
+                    int biomeIndex = biomeResolver != null ? biomeResolver(pos.X, pos.Z) : 0;
+                    PlaceBiomeTree(world, pos, (TerrainBiome)biomeIndex);
+
+                    // Each biome tree checks its own trunk clearance (4–8 blocks) and silently
+                    // no-ops when blocked; in that case the trunk base is still Air — restore the
+                    // mature sapling and retry next interval instead of destroying it.
+                    if (world.GetBlock(pos) == BlockRegistry.Air)
                     {
                         world.SetBlock(pos, BlockRegistry.Sapling_S2);
                         saplingTicks[pos] = remainder;
                         return;
                     }
+
                     saplingTicks.Remove(pos);
-                    int biomeIndex = biomeResolver != null ? biomeResolver(pos.X, pos.Z) : 0;
-                    PlaceBiomeTree(world, pos, (TerrainBiome)biomeIndex);
                     return;
                 }
                 else

@@ -75,10 +75,12 @@ namespace Blockiverse.WorldGen
 
         internal static double ValueNoise2D(int x, int z, int scale, int seed, int salt)
         {
-            int cellX = x / scale;
-            int cellZ = z / scale;
-            double fractionX = (x - cellX * scale) / (double)scale;
-            double fractionZ = (z - cellZ * scale) / (double)scale;
+            // Floor division (not truncation) so negative coordinates land in the correct cell;
+            // identical to the previous math for the non-negative coordinates of bounded worlds.
+            int cellX = (int)Math.Floor(x / (double)scale);
+            int cellZ = (int)Math.Floor(z / (double)scale);
+            double fractionX = (x - cellX * (double)scale) / scale;
+            double fractionZ = (z - cellZ * (double)scale) / scale;
             double smoothX = SmoothStep(fractionX);
             double smoothZ = SmoothStep(fractionZ);
 
@@ -90,38 +92,9 @@ namespace Blockiverse.WorldGen
             return Lerp(Lerp(a, b, smoothX), Lerp(c, d, smoothX), smoothZ);
         }
 
-        internal static uint Hash(int seed, int x, int y, int z, int salt)
-        {
-            unchecked
-            {
-                uint hash = 2166136261u;
-                hash = Mix(hash, (uint)seed);
-                hash = Mix(hash, (uint)x);
-                hash = Mix(hash, (uint)y);
-                hash = Mix(hash, (uint)z);
-                hash = Mix(hash, (uint)salt);
-                hash ^= hash >> 16;
-                hash *= 2246822519u;
-                hash ^= hash >> 13;
-                hash *= 3266489917u;
-                hash ^= hash >> 16;
-                return hash;
-            }
-        }
-
-        static uint Mix(uint hash, uint value)
-        {
-            unchecked
-            {
-                hash ^= value + 0x9e3779b9u + (hash << 6) + (hash >> 2);
-                hash *= 16777619u;
-                return hash;
-            }
-        }
-
         static double HashUnit(int seed, int x, int y, int z, int salt)
         {
-            return (Hash(seed, x, y, z, salt) & 0x00ffffffu) / 16777215d;
+            return (DeterministicHash.Hash(seed, x, y, z, salt) & 0x00ffffffu) / 16777215d;
         }
 
         static double SmoothStep(double value) => value * value * (3d - 2d * value);

@@ -4,11 +4,13 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
+    "Blockiverse.Persistence",
     "Blockiverse.Survival",
     "Blockiverse.Survival.Health",
     "Blockiverse.Networking",
     "Blockiverse.Voxel",
     "Blockiverse.VR",
+    "Blockiverse.WorldGen",
     "UnityEngine.UI",
     "Unity.TextMeshPro",
     "Unity.Netcode.Runtime"

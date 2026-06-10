@@ -10,12 +10,14 @@ namespace Blockiverse.Tests.Survival.EditMode
         static readonly BlockPosition SoilPos = new(2, 2, 2);
         static readonly BlockPosition CropPos = new(2, 3, 2);
 
-        // Deterministic growth rolls: AlwaysGrow always passes the chance check; NeverGrow never does.
-        static readonly Func<double> AlwaysGrow = () => 0.0;
-        static readonly Func<double> NeverGrow = () => 1.0;
+        // Guaranteed-outcome growth conditions: AlwaysGrow pushes the stage chance above 1 via the
+        // biome modifier so every deterministic roll passes; NeverGrow zeroes the chance.
+        static readonly CropGrowthConditions AlwaysGrow = new(lightLevel: 15, soilMoist: true, biomeModifier: 10_000f);
+        static readonly CropGrowthConditions NeverGrow = new(lightLevel: 15, soilMoist: true, biomeModifier: 0f);
 
         VoxelWorld world;
         FarmingService farming;
+        long currentTick;
 
         [SetUp]
         public void SetUp()
@@ -23,9 +25,22 @@ namespace Blockiverse.Tests.Survival.EditMode
             world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
             world.SetBlock(SoilPos, BlockRegistry.LooseLoam, trackChange: false);
             farming = new FarmingService();
+            farming.ConfigureDeterministicGrowth(worldSeed: 1234);
+            currentTick = 0;
         }
 
-        void Grow(int ticks) => farming.TickGrowth(world, ticks, conditions: null, random: AlwaysGrow);
+        // Advances the world clock by the given ticks and processes deterministic growth. The
+        // first call anchors freshly planted crops at interval 0, so growth begins at the first
+        // interval boundary — mirroring the runtime, which ticks crops from the moment they exist.
+        void Grow(int ticks) => Grow(ticks, AlwaysGrow);
+
+        void Grow(int ticks, CropGrowthConditions conditions)
+        {
+            if (currentTick == 0)
+                farming.TickGrowth(world, 0L, _ => conditions);
+            currentTick += ticks;
+            farming.TickGrowth(world, currentTick, _ => conditions);
+        }
 
         // ── Tilling ──────────────────────────────────────────────────────────
 
@@ -200,22 +215,40 @@ namespace Blockiverse.Tests.Survival.EditMode
         [Test]
         public void FavorableConditionsGrowWhereUnfavorableConditionsDoNot()
         {
-            // Grain base chance 0.35; unfavorable is 0.25× = 0.0875. A roll of 0.2 passes the
-            // favorable check but not the unfavorable one.
-            Func<double> roll = () => 0.2;
+            // Grain base chance 0.35; unfavorable is 0.25× = 0.0875. Find a seed whose
+            // interval-1 roll for the crop cell lands between the two, so the same roll passes
+            // the favorable check but fails the unfavorable one.
+            int seed = -1;
+            for (int candidate = 0; candidate < 1024; candidate++)
+            {
+                double roll = DeterministicHash.UnitRoll(
+                    candidate, CropPos.X, CropPos.Y, CropPos.Z, BlockRegistry.GrainStalk.Value, 1L);
+                if (roll >= 0.0875 && roll < 0.35)
+                {
+                    seed = candidate;
+                    break;
+                }
+            }
+            Assert.That(seed, Is.GreaterThanOrEqualTo(0), "Expected a seed with a discriminating first-interval roll.");
 
-            farming.Till(world, SoilPos);
-            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
-            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks,
-                conditions: _ => CropGrowthConditions.Favorable, random: roll);
-            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk_S1), "Favorable conditions should grow at base chance.");
+            Assert.That(GrowOneInterval(seed, CropGrowthConditions.Favorable),
+                Is.EqualTo(BlockRegistry.GrainStalk_S1), "Favorable conditions should grow at base chance.");
+            Assert.That(GrowOneInterval(seed, new CropGrowthConditions(lightLevel: 0, soilMoist: false)),
+                Is.EqualTo(BlockRegistry.GrainStalk), "Unfavorable conditions cut growth chance to 25% of base.");
+        }
 
-            // Reset to a fresh crop and apply unfavorable conditions (dark, dry).
-            world.SetBlock(CropPos, BlockRegistry.Air, trackChange: false);
-            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
-            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks,
-                conditions: _ => new CropGrowthConditions(lightLevel: 0, soilMoist: false), random: roll);
-            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk), "Unfavorable conditions cut growth chance to 25% of base.");
+        BlockId GrowOneInterval(int seed, CropGrowthConditions conditions)
+        {
+            var growthWorld = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
+            growthWorld.SetBlock(SoilPos, BlockRegistry.LooseLoam, trackChange: false);
+            var service = new FarmingService();
+            service.ConfigureDeterministicGrowth(seed);
+            service.Till(growthWorld, SoilPos);
+            service.PlantCrop(growthWorld, SoilPos, BlockRegistry.GrainStalk);
+
+            service.TickGrowth(growthWorld, 0L, _ => conditions); // anchor at interval 0
+            service.TickGrowth(growthWorld, FarmingService.GrowthIntervalTicks, _ => conditions);
+            return growthWorld.GetBlock(CropPos);
         }
 
         [Test]
@@ -224,7 +257,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             farming.Till(world, SoilPos);
             farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
 
-            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks * 10, conditions: null, random: NeverGrow);
+            Grow(FarmingService.GrowthIntervalTicks * 10, NeverGrow);
             Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk));
         }
 
@@ -308,16 +341,16 @@ namespace Blockiverse.Tests.Survival.EditMode
         [Test]
         public void DeterministicGrowthRequiresConfiguration()
         {
-            farming.Till(world, SoilPos);
-            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
+            var unconfigured = new FarmingService();
+            unconfigured.Till(world, SoilPos);
+            unconfigured.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
 
-            Assert.Throws<InvalidOperationException>(() => farming.TickGrowth(world, 0L));
+            Assert.Throws<InvalidOperationException>(() => unconfigured.TickGrowth(world, 0L));
         }
 
         [Test]
         public void DeterministicGrowthDoesNotAdvanceWithinTheAnchorInterval()
         {
-            farming.ConfigureDeterministicGrowth(worldSeed: 1234);
             farming.Till(world, SoilPos);
             farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
 
@@ -388,38 +421,40 @@ namespace Blockiverse.Tests.Survival.EditMode
             return growthWorld.GetBlock(CropPos);
         }
 
-        // ── Tick accumulator bookkeeping ─────────────────────────────────────
+        // ── Crop tracking bookkeeping ────────────────────────────────────────
 
         [Test]
-        public void ScanAndTrackCropsPreservesExistingTickAccumulators()
+        public void ScanAndTrackCropsPreservesGrowthAnchorsForTrackedCrops()
         {
             farming.Till(world, SoilPos);
             farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
-            Grow(FarmingService.GrowthIntervalTicks - 100);
+            Grow(FarmingService.GrowthIntervalTicks - 100); // anchored at interval 0
 
             farming.ScanAndTrackCrops(world);
-            Grow(100);
+            Grow(100); // crosses the first interval boundary
 
             Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk_S1),
-                "ScanAndTrackCrops must not reset accumulated growth ticks for already-tracked crops.");
+                "ScanAndTrackCrops must not re-anchor already-tracked crops.");
         }
 
         [Test]
-        public void TrackCropResetsAccumulatorWhenCropIsReplacedAtSamePosition()
+        public void TrackCropReanchorsAReplacedCropAtTheSamePosition()
         {
             farming.Till(world, SoilPos);
             farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
-            Grow(FarmingService.GrowthIntervalTicks - 100);
+            Grow(FarmingService.GrowthIntervalTicks - 100); // anchored at interval 0
 
             world.SetBlock(CropPos, BlockRegistry.Air, trackChange: false);
             farming.TrackCrop(CropPos);
             world.SetBlock(CropPos, BlockRegistry.GrainStalk, trackChange: false);
 
+            // The boundary at interval 1 is crossed here, but the re-planted crop is re-anchored
+            // at that interval, so it must not inherit the old crop's progress.
             Grow(100);
             Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk),
-                "TrackCrop must reset ticks to 0 so a re-planted crop starts fresh.");
+                "TrackCrop must re-anchor so a re-planted crop starts fresh.");
 
-            Grow(FarmingService.GrowthIntervalTicks - 100);
+            Grow(FarmingService.GrowthIntervalTicks);
             Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk_S1));
         }
     }

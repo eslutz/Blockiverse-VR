@@ -29,7 +29,7 @@ namespace Blockiverse.Tests.Survival.EditMode
         {
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             var inventory = new Inventory(itemRegistry, slotCount: 1, hotbarSlotCount: 1);
-            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, ItemRegistry.ResourceStackSize));
+            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, ItemRegistry.BlockStackSize));
             VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
             var service = CreateService(itemRegistry);
 

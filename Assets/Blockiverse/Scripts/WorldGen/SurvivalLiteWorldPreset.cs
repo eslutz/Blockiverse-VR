@@ -52,6 +52,7 @@ namespace Blockiverse.WorldGen
             StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt, containerLoot);
             PlaceSparseVegetation(world, surfaceHeights, biomeMap);
             PlaceWildPlants(world, surfaceHeights, biomeMap);
+            PlaceSurfaceResourceNodes(world, surfaceHeights, biomeMap);
             ApplySpawnSafety(world);
 
             return world;
@@ -168,11 +169,31 @@ namespace Blockiverse.WorldGen
 
         BlockId SelectTerrainBlock(int y, int surfaceY, int subsoilDepth, TerrainBiome biome, int x, int z)
         {
+            // Canonical depth bands: Deepmantle bedrock, a Worldroot mantle above it, then the
+            // stone column with low-frequency strata patches.
             if (y <= WorldConstants.BedrockTopY)
-                return BlockRegistry.Graystone;
+                return BlockRegistry.Deepmantle;
+
+            if (y <= WorldConstants.BedrockTopY + 9)
+                return BlockRegistry.Worldroot;
 
             if (y >= surfaceY - subsoilDepth)
                 return SelectSubsoilBlock(biome);
+
+            return SelectStoneBlock(y, x, z);
+        }
+
+        // Strata patches over the Graystone base, in 8³ cells so veins of slate/limestone/
+        // granite/basalt read as coherent pockets rather than noise.
+        BlockId SelectStoneBlock(int y, int x, int z)
+        {
+            uint roll = Hash(settings.Seed, x >> 3, y >> 3, z >> 3, salt: 2657) % 1000u;
+
+            if (roll < 90)
+                return y < 64 ? BlockRegistry.DarkSlate : BlockRegistry.WhiteLimestone;
+
+            if (roll >= 910)
+                return y < 48 ? BlockRegistry.BlackBasalt : BlockRegistry.WarmGranite;
 
             return BlockRegistry.Graystone;
         }
@@ -182,22 +203,48 @@ namespace Blockiverse.WorldGen
             return biome switch
             {
                 TerrainBiome.Highlands => BlockRegistry.Graystone,
+                TerrainBiome.Dunes     => BlockRegistry.PaleSand,
+                TerrainBiome.Wetland   => BlockRegistry.Claybed,
+                TerrainBiome.Drybrush  => BlockRegistry.Rootsoil,
+                TerrainBiome.Pinewild  => BlockRegistry.Rootsoil,
+                TerrainBiome.Tundra    => BlockRegistry.Rootsoil,
                 _ => BlockRegistry.LooseLoam,
             };
         }
 
-        static BlockId SelectSurfaceBlock(TerrainBiome biome, int x, int z)
+        BlockId SelectSurfaceBlock(TerrainBiome biome, int x, int z)
         {
-            return biome switch
+            switch (biome)
             {
-                TerrainBiome.Highlands => BlockRegistry.Graystone,
-                TerrainBiome.Drybrush  => BlockRegistry.MeadowTurf,
-                TerrainBiome.Dunes     => BlockRegistry.MeadowTurf,
-                TerrainBiome.Tundra    => BlockRegistry.MeadowTurf,
-                TerrainBiome.Pinewild  => BlockRegistry.LooseLoam,
-                TerrainBiome.Wetland   => BlockRegistry.LooseLoam,
-                _                      => BlockRegistry.MeadowTurf,
-            };
+                case TerrainBiome.Highlands:
+                {
+                    // Scree patches over bare rock.
+                    uint roll = Hash(settings.Seed, x, 0, z, salt: 2741) % 100u;
+                    return roll < 15 ? BlockRegistry.ShingleGravel : BlockRegistry.Graystone;
+                }
+                case TerrainBiome.Tundra:
+                {
+                    // Mostly snow-covered turf with packed-snow drifts and rare frostglass sheets.
+                    uint roll = Hash(settings.Seed, x, 0, z, salt: 2837) % 100u;
+                    if (roll < 35) return BlockRegistry.Snowpack;
+                    if (roll < 41) return BlockRegistry.Frostglass;
+                    return BlockRegistry.SnowcapTurf;
+                }
+                case TerrainBiome.Drybrush:
+                    return BlockRegistry.DryTurf;
+                case TerrainBiome.Dunes:
+                    return BlockRegistry.PaleSand;
+                case TerrainBiome.Pinewild:
+                    return BlockRegistry.Rootsoil;
+                case TerrainBiome.Wetland:
+                {
+                    // Silt flats threaded through the wet ground.
+                    uint roll = Hash(settings.Seed, x, 0, z, salt: 2903) % 100u;
+                    return roll < 40 ? BlockRegistry.RiverSilt : BlockRegistry.Claybed;
+                }
+                default:
+                    return BlockRegistry.MeadowTurf;
+            }
         }
 
         void CarveCaves(VoxelWorld world, int[] surfaceHeights)
@@ -233,9 +280,13 @@ namespace Blockiverse.WorldGen
 
                         CarveEllipsoid(world, surfaceHeights, centerX, centerY, centerZ, radiusX, radiusY, radiusZ);
 
-                        int endX = Clamp(centerX - 6 + Range(hash, 40, 13), 1, bounds.Width - 2);
-                        int endY = Clamp(centerY - 2 + Range(hash, 48, 5), 3, bounds.Height - 4);
-                        int endZ = Clamp(centerZ - 6 + Range(hash, 56, 13), 1, bounds.Depth - 2);
+                        // Tunnel endpoints come from a second hash: shifts of 40/48/56 on a uint
+                        // alias to 8/16/24 (C# masks shift counts to 5 bits), which correlated the
+                        // endpoints with the cave center/radius bits above.
+                        uint tunnelHash = Hash(settings.Seed, gridX, gridY, gridZ, salt: 509);
+                        int endX = Clamp(centerX - 6 + Range(tunnelHash, 0, 13), 1, bounds.Width - 2);
+                        int endY = Clamp(centerY - 2 + Range(tunnelHash, 8, 5), 3, bounds.Height - 4);
+                        int endZ = Clamp(centerZ - 6 + Range(tunnelHash, 16, 13), 1, bounds.Depth - 2);
                         CarveTunnel(world, surfaceHeights, centerX, centerY, centerZ, endX, endY, endZ);
                     }
                 }
@@ -526,6 +577,68 @@ namespace Blockiverse.WorldGen
             }
         }
 
+        // Per-biome surface node scatter (block, density in permille, salt). These are the
+        // renewable-ish gathering nodes (§3) that feed early recipes: pebbles/flint for tools and
+        // campfires, brightsalt/shellgrit/resin for glass, preservation, and bandages.
+        static readonly (TerrainBiome biome, BlockId block, int permille, int salt)[] SurfaceNodeTable =
+        {
+            (TerrainBiome.Meadow,    BlockRegistry.SurfacePebbles,  24, 3001),
+            (TerrainBiome.Meadow,    BlockRegistry.FlintyShingle,   12, 3109),
+            (TerrainBiome.Meadow,    BlockRegistry.ResinKnot,       10, 3407),
+            (TerrainBiome.Pinewild,  BlockRegistry.SurfacePebbles,  16, 3001),
+            (TerrainBiome.Pinewild,  BlockRegistry.ResinKnot,       28, 3407),
+            (TerrainBiome.Wetland,   BlockRegistry.SurfacePebbles,  14, 3001),
+            (TerrainBiome.Wetland,   BlockRegistry.ShellgritBed,    36, 3301),
+            (TerrainBiome.Drybrush,  BlockRegistry.SurfacePebbles,  22, 3001),
+            (TerrainBiome.Drybrush,  BlockRegistry.FlintyShingle,   18, 3109),
+            (TerrainBiome.Drybrush,  BlockRegistry.BrightsaltCrust, 12, 3203),
+            (TerrainBiome.Dunes,     BlockRegistry.BrightsaltCrust, 30, 3203),
+            (TerrainBiome.Dunes,     BlockRegistry.FlintyShingle,   10, 3109),
+            (TerrainBiome.Tundra,    BlockRegistry.SurfacePebbles,  16, 3001),
+            (TerrainBiome.Tundra,    BlockRegistry.FlintyShingle,   10, 3109),
+            (TerrainBiome.Highlands, BlockRegistry.SurfacePebbles,  26, 3001),
+            (TerrainBiome.Highlands, BlockRegistry.FlintyShingle,   20, 3109),
+        };
+
+        // Scatters single-block resource nodes on clear surface columns, after vegetation and
+        // wild plants so it never overwrites them (first occupant of the cell wins).
+        void PlaceSurfaceResourceNodes(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
+        {
+            WorldBounds bounds = world.Bounds;
+
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                for (int z = 0; z < bounds.Depth; z++)
+                {
+                    if (IsInsideSpawnProtectedColumn(x, z))
+                        continue;
+
+                    TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
+                    int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
+                    var nodePos = new BlockPosition(x, surfaceY + 1, z);
+                    if (!world.Bounds.Contains(nodePos))
+                        continue;
+
+                    if (world.GetBlock(nodePos) != BlockRegistry.Air)
+                        continue;
+                    if (world.GetBlock(new BlockPosition(x, surfaceY, z)) == BlockRegistry.Air)
+                        continue;
+
+                    foreach ((TerrainBiome nodeBiome, BlockId block, int permille, int salt) in SurfaceNodeTable)
+                    {
+                        if (nodeBiome != biome)
+                            continue;
+
+                        if (Hash(settings.Seed, x, 0, z, salt) % 1000u >= (uint)permille)
+                            continue;
+
+                        world.SetBlock(nodePos, block, trackChange: false);
+                        break;
+                    }
+                }
+            }
+        }
+
         void ApplySpawnSafety(VoxelWorld world)
         {
             BlockPosition spawn = settings.SpawnPosition;
@@ -580,31 +693,7 @@ namespace Blockiverse.WorldGen
 
         static uint Hash(int seed, int x, int y, int z, int salt)
         {
-            unchecked
-            {
-                uint hash = 2166136261u;
-                hash = Mix(hash, (uint)seed);
-                hash = Mix(hash, (uint)x);
-                hash = Mix(hash, (uint)y);
-                hash = Mix(hash, (uint)z);
-                hash = Mix(hash, (uint)salt);
-                hash ^= hash >> 16;
-                hash *= 2246822519u;
-                hash ^= hash >> 13;
-                hash *= 3266489917u;
-                hash ^= hash >> 16;
-                return hash;
-            }
-        }
-
-        static uint Mix(uint hash, uint value)
-        {
-            unchecked
-            {
-                hash ^= value + 0x9e3779b9u + (hash << 6) + (hash >> 2);
-                hash *= 16777619u;
-                return hash;
-            }
+            return DeterministicHash.Hash(seed, x, y, z, salt);
         }
 
         static int Range(uint hash, int shift, int count)

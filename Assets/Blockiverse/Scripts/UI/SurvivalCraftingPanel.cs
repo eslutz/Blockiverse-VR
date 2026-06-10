@@ -238,7 +238,14 @@ namespace Blockiverse.UI
 
             // Registration order (basics → stations → smelting → tools → utility) keeps early-game
             // recipes at the top of the limited recipe slots, which alphabetical order would bury.
-            recipes.AddRange(recipeBook.All);
+            // Timed (kiln/forge) recipes are excluded: they run on the fueled station model via the
+            // station panel, and CraftingService rejects them as instant crafts anyway.
+            foreach (CraftingRecipe recipe in recipeBook.All)
+            {
+                if (recipe.TimeTicks <= 0)
+                    recipes.Add(recipe);
+            }
+
             return recipes;
         }
 
@@ -264,7 +271,7 @@ namespace Blockiverse.UI
         {
             string text = $"{FormatStack(recipe.Output)} - {FormatIngredients(recipe)}";
             if (!availableStations.Contains(recipe.RequiredStation))
-                text += $" [needs {recipe.RequiredStation}]";
+                text += $" [needs {CraftingStationNames.DisplayName(recipe.RequiredStation)}]";
             return text;
         }
 
@@ -294,7 +301,15 @@ namespace Blockiverse.UI
             DiscoverFeedback();
             audioCuePlayer?.PlayCue(cue);
             interactionHaptics?.PlayUiTick();
+
+            // Visual punctuation at the panel itself: sparks on success, a dull puff on failure.
+            if (cue == BlockiverseAudioCue.CraftSuccess)
+                vfxCuePlayer?.PlayCue(BlockiverseVfxCue.CraftSuccessSpark, transform.position);
+            else if (cue == BlockiverseAudioCue.CraftFail)
+                vfxCuePlayer?.PlayCue(BlockiverseVfxCue.CraftFailPuff, transform.position);
         }
+
+        BlockiverseVfxCuePlayer vfxCuePlayer;
 
         void DiscoverFeedback()
         {
@@ -306,6 +321,9 @@ namespace Blockiverse.UI
 
             if (interactionHaptics == null)
                 interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+
+            if (vfxCuePlayer == null)
+                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
         }
 
         void EnsureBound()

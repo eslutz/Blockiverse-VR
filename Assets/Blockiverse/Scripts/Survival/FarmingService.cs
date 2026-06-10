@@ -116,14 +116,11 @@ namespace Blockiverse.Survival
 
         public static bool IsBerrybushStage(BlockId blockId) => BerrybushStages.Contains(blockId);
 
-        // Test-only fallback for the legacy delta-tick overload. The runtime must use the
-        // deterministic absolute-tick overload below: environmental mutations are never broadcast,
-        // so host and clients must roll identical growth from synced state alone.
-        readonly Random defaultRandom = new();
-        readonly Dictionary<BlockPosition, int> tickAccumulator = new();
+        // Crops currently tracked for growth, and pending berrybush regrow delays (delta ticks).
+        readonly HashSet<BlockPosition> trackedCrops = new();
         readonly Dictionary<BlockPosition, int> berrybushRegrowAccumulator = new();
 
-        // Scratch list reused across tick calls so iterating a mutating dictionary's keys does not
+        // Scratch list reused across tick calls so iterating a mutating collection does not
         // allocate a fresh list every world tick.
         readonly List<BlockPosition> tickKeyScratch = new();
 
@@ -134,6 +131,12 @@ namespace Blockiverse.Survival
         int deterministicSeed;
         bool deterministicRollsConfigured;
         readonly Dictionary<BlockPosition, long> lastProcessedInterval = new();
+
+        // Crops cross growth boundaries only once per interval (1200 ticks), so the deterministic
+        // sweep is skipped until the interval index advances. Newly tracked crops are queued here
+        // so they get their interval anchor on the next tick without rescanning every crop.
+        long lastSweptGrowthInterval = -1;
+        readonly HashSet<BlockPosition> pendingGrowthAnchors = new();
 
         // Enables seed-keyed deterministic growth rolls (used with the absolute-tick TickGrowth).
         public void ConfigureDeterministicGrowth(int worldSeed)
@@ -146,24 +149,25 @@ namespace Blockiverse.Survival
         {
             // Prune entries for positions no longer holding crop blocks.
             var toRemove = new List<BlockPosition>();
-            foreach (BlockPosition pos in tickAccumulator.Keys)
+            foreach (BlockPosition pos in trackedCrops)
                 if (!CropBlocks.Contains(world.GetBlock(pos)))
                     toRemove.Add(pos);
             foreach (BlockPosition pos in toRemove)
             {
-                tickAccumulator.Remove(pos);
+                trackedCrops.Remove(pos);
                 lastProcessedInterval.Remove(pos);
+                pendingGrowthAnchors.Remove(pos);
             }
 
-            // Add newly found crops without resetting ticks for already-tracked ones.
+            // Add newly found crops without re-anchoring already-tracked ones.
             WorldBounds bounds = world.Bounds;
             for (int y = 0; y < bounds.Height; y++)
             for (int z = 0; z < bounds.Depth; z++)
             for (int x = 0; x < bounds.Width; x++)
             {
                 var pos = new BlockPosition(x, y, z);
-                if (CropBlocks.Contains(world.GetBlock(pos)) && !tickAccumulator.ContainsKey(pos))
-                    tickAccumulator[pos] = 0;
+                if (CropBlocks.Contains(world.GetBlock(pos)) && trackedCrops.Add(pos))
+                    pendingGrowthAnchors.Add(pos);
             }
         }
 
@@ -171,10 +175,11 @@ namespace Blockiverse.Survival
 
         public void TrackCrop(BlockPosition position)
         {
-            tickAccumulator[position] = 0;
+            trackedCrops.Add(position);
             // Restart the deterministic interval anchor too: a freshly planted crop begins growing
             // from the next interval boundary after it is first ticked.
             lastProcessedInterval.Remove(position);
+            pendingGrowthAnchors.Add(position);
         }
 
         // Horizontal/vertical reach of the tended-soil freshwater check (§11.1).
@@ -223,8 +228,9 @@ namespace Blockiverse.Survival
                 return FarmingResult.BlockAboveNotAir;
 
             world.SetBlock(cropPosition, cropKind);
-            tickAccumulator[cropPosition] = 0;
+            trackedCrops.Add(cropPosition);
             lastProcessedInterval.Remove(cropPosition);
+            pendingGrowthAnchors.Add(cropPosition);
             return FarmingResult.Success;
         }
 
@@ -245,59 +251,10 @@ namespace Blockiverse.Survival
         public static bool IsTillableBlock(BlockId block) =>
             block == BlockRegistry.LooseLoam || block == BlockRegistry.Rootsoil || block == BlockRegistry.RiverSilt;
 
-        // Advances tracked crops. Each elapsed growth interval rolls one probabilistic stage
-        // advance: favorable light+moisture uses the crop's base chance (× biome modifier); otherwise
-        // 25% of it (§11.2). Conditions default to favorable until a light/moisture source is wired;
-        // the random source is injectable for deterministic tests.
-        public void TickGrowth(
-            VoxelWorld world,
-            int ticks,
-            Func<BlockPosition, CropGrowthConditions> conditions = null,
-            Func<double> random = null)
-        {
-            if (ticks <= 0)
-                return;
-
-            conditions ??= _ => CropGrowthConditions.Favorable;
-            random ??= defaultRandom.NextDouble;
-
-            foreach (BlockPosition pos in SnapshotKeys(tickAccumulator))
-            {
-                BlockId current = world.GetBlock(pos);
-                if (!NextGrowthStage.ContainsKey(current))
-                {
-                    // No longer a growable crop (harvested, replaced, or already mature).
-                    tickAccumulator.Remove(pos);
-                    lastProcessedInterval.Remove(pos);
-                    continue;
-                }
-
-                long accumulated = (long)tickAccumulator[pos] + ticks;
-                while (accumulated >= GrowthIntervalTicks && NextGrowthStage.TryGetValue(current, out BlockId next))
-                {
-                    accumulated -= GrowthIntervalTicks;
-
-                    CropGrowthProfile profile = ProfilesByStage[current];
-                    CropGrowthConditions cond = conditions(pos);
-                    double chance = cond.LightLevel >= profile.MinLight && cond.SoilMoist
-                        ? profile.BaseGrowthChance * cond.BiomeModifier
-                        : profile.BaseGrowthChance * UnfavorableGrowthMultiplier;
-
-                    if (random() < chance)
-                    {
-                        current = next;
-                        world.SetBlock(pos, current);
-                    }
-                }
-
-                if (NextGrowthStage.ContainsKey(current))
-                    tickAccumulator[pos] = (int)Math.Min(accumulated, int.MaxValue);
-                else
-                    tickAccumulator.Remove(pos); // matured — stop tracking
-            }
-        }
-
         // Deterministic growth driven by the absolute world tick (§11.2, multiplayer ruleset).
+        // Each elapsed growth interval rolls one probabilistic stage advance: favorable
+        // light+moisture uses the crop's base chance (× biome modifier); otherwise 25% of it.
+        // Conditions default to favorable until a light/moisture source is wired.
         // Each crop processes the growth-interval boundaries it has crossed since it was last
         // ticked; every roll is Hash(worldSeed, position, stage, intervalIndex), so the host and
         // all clients — including late joiners whose stages arrive via the chunk snapshot — advance
@@ -310,19 +267,38 @@ namespace Blockiverse.Survival
             if (!deterministicRollsConfigured)
                 throw new InvalidOperationException(
                     "Deterministic growth requires ConfigureDeterministicGrowth(worldSeed) first.");
-            if (worldTick < 0 || tickAccumulator.Count == 0)
+            if (worldTick < 0 || trackedCrops.Count == 0)
                 return;
 
             conditions ??= _ => CropGrowthConditions.Favorable;
             long currentInterval = worldTick / GrowthIntervalTicks;
 
-            foreach (BlockPosition pos in SnapshotKeys(tickAccumulator))
+            // Anchor crops tracked since the last tick: growth begins at the next boundary after
+            // the crop is first ticked, so the anchor must be set now, not at the next interval.
+            if (pendingGrowthAnchors.Count > 0)
+            {
+                foreach (BlockPosition pos in pendingGrowthAnchors)
+                {
+                    if (trackedCrops.Contains(pos))
+                        lastProcessedInterval[pos] = currentInterval;
+                }
+
+                pendingGrowthAnchors.Clear();
+            }
+
+            // Rolls only happen at interval boundaries, so the per-crop sweep is pure overhead
+            // until the interval index advances.
+            if (currentInterval == lastSweptGrowthInterval)
+                return;
+            lastSweptGrowthInterval = currentInterval;
+
+            foreach (BlockPosition pos in SnapshotKeys(trackedCrops))
             {
                 BlockId current = world.GetBlock(pos);
                 if (!NextGrowthStage.ContainsKey(current))
                 {
                     // No longer a growable crop (harvested, replaced, or already mature).
-                    tickAccumulator.Remove(pos);
+                    trackedCrops.Remove(pos);
                     lastProcessedInterval.Remove(pos);
                     continue;
                 }
@@ -356,37 +332,26 @@ namespace Blockiverse.Survival
                     lastProcessedInterval[pos] = currentInterval;
                 else
                 {
-                    tickAccumulator.Remove(pos); // matured — stop tracking
+                    trackedCrops.Remove(pos); // matured — stop tracking
                     lastProcessedInterval.Remove(pos);
                 }
             }
         }
 
-        // Copies a dictionary's keys into the shared scratch list so the loop body can mutate the
-        // dictionary. Tick methods are never nested, so one scratch list is safe to share.
-        List<BlockPosition> SnapshotKeys(Dictionary<BlockPosition, int> source)
+        // Copies the positions into the shared scratch list so the loop body can mutate the
+        // source collection. Tick methods are never nested, so one scratch list is safe to share.
+        List<BlockPosition> SnapshotKeys(IEnumerable<BlockPosition> source)
         {
             tickKeyScratch.Clear();
-            tickKeyScratch.AddRange(source.Keys);
+            tickKeyScratch.AddRange(source);
             return tickKeyScratch;
         }
 
-        // FNV-1a over (seed, position, stage, interval) mapped to [0, 1) — the same hashing pattern
-        // StructureService uses for deterministic generation.
+        // Deterministic roll over (seed, position, stage, interval) mapped to [0, 1) — the shared
+        // world-generation hash, so every peer computes identical growth from the same seed.
         double DeterministicRoll(BlockPosition pos, BlockId stage, long interval)
         {
-            unchecked
-            {
-                uint hash = 2166136261u;
-                hash ^= (uint)deterministicSeed;     hash *= 16777619u;
-                hash ^= (uint)pos.X;                 hash *= 16777619u;
-                hash ^= (uint)pos.Y;                 hash *= 16777619u;
-                hash ^= (uint)pos.Z;                 hash *= 16777619u;
-                hash ^= (uint)stage.Value;           hash *= 16777619u;
-                hash ^= (uint)interval;              hash *= 16777619u;
-                hash ^= (uint)(interval >> 32);      hash *= 16777619u;
-                return hash / 4294967296.0;
-            }
+            return DeterministicHash.UnitRoll(deterministicSeed, pos.X, pos.Y, pos.Z, stage.Value, interval);
         }
 
         // Call after a block is harvested; queues a berrybush to regrow two game days later (§3).
@@ -407,7 +372,7 @@ namespace Blockiverse.Survival
             if (ticks <= 0 || berrybushRegrowAccumulator.Count == 0)
                 return;
 
-            foreach (BlockPosition pos in SnapshotKeys(berrybushRegrowAccumulator))
+            foreach (BlockPosition pos in SnapshotKeys(berrybushRegrowAccumulator.Keys))
             {
                 long accumulated = (long)berrybushRegrowAccumulator[pos] + ticks;
                 if (accumulated < BerrybushRegrowTicks)
@@ -421,8 +386,9 @@ namespace Blockiverse.Survival
                 if (world.Bounds.Contains(pos) && world.GetBlock(pos) == BlockRegistry.Air)
                 {
                     world.SetBlock(pos, BlockRegistry.Berrybush);
-                    tickAccumulator[pos] = 0;
+                    trackedCrops.Add(pos);
                     lastProcessedInterval.Remove(pos);
+                    pendingGrowthAnchors.Add(pos);
                 }
             }
         }
