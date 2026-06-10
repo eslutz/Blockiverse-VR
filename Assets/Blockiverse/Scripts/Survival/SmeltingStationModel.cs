@@ -49,6 +49,86 @@ namespace Blockiverse.Survival
         public void SetInput(int slot, ItemStack stack) => inputs[slot] = stack;
         public void SetFuel(ItemStack stack) => Fuel = stack;
 
+        // Merges the stack into a matching input slot (respecting max stack size) or the first
+        // empty slot. Returns false when no slot can receive it; the stack is untouched then.
+        public bool TryDepositInput(ItemStack stack)
+        {
+            if (stack.IsEmpty)
+                return false;
+
+            int max = itemRegistry.Get(stack.ItemId).MaxStackSize;
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                if (!inputs[i].IsEmpty && inputs[i].ItemId == stack.ItemId && inputs[i].Count + stack.Count <= max)
+                {
+                    inputs[i] = new ItemStack(stack.ItemId, inputs[i].Count + stack.Count);
+                    return true;
+                }
+            }
+
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                if (inputs[i].IsEmpty)
+                {
+                    inputs[i] = stack;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Merges the stack into the fuel slot. Only accepts canonical fuels (§8.2) and a fuel slot
+        // that is empty or already holds the same fuel with room in the stack.
+        public bool TryDepositFuel(ItemStack stack)
+        {
+            if (stack.IsEmpty || !SmeltingModel.IsFuel(stack.ItemId))
+                return false;
+
+            if (Fuel.IsEmpty)
+            {
+                Fuel = stack;
+                return true;
+            }
+
+            if (Fuel.ItemId != stack.ItemId)
+                return false;
+
+            int max = itemRegistry.Get(stack.ItemId).MaxStackSize;
+            if (Fuel.Count + stack.Count > max)
+                return false;
+
+            Fuel = new ItemStack(stack.ItemId, Fuel.Count + stack.Count);
+            return true;
+        }
+
+        // Removes and returns the accumulated output (empty when there is none).
+        public ItemStack CollectOutput()
+        {
+            ItemStack collected = Output;
+            Output = ItemStack.Empty;
+            return collected;
+        }
+
+        // Applies a host-authoritative snapshot to this client-side display mirror. Mirrors are
+        // never ticked locally (the host owns station ticking); progress between snapshots is
+        // extrapolated by the displaying panel only.
+        public void ApplyHostSnapshot(
+            ItemStack[] snapshotInputs,
+            ItemStack fuel,
+            ItemStack output,
+            CraftingRecipe activeRecipe,
+            int progressTicks)
+        {
+            for (int i = 0; i < inputs.Length; i++)
+                inputs[i] = snapshotInputs != null && i < snapshotInputs.Length ? snapshotInputs[i] : ItemStack.Empty;
+
+            Fuel = fuel;
+            Output = output;
+            ActiveRecipe = activeRecipe;
+            ProgressTicks = activeRecipe != null ? Math.Max(0, progressTicks) : 0;
+        }
+
         // Advances the station by the given ticks, beginning and chaining crafts as inputs/fuel allow.
         public void Tick(int ticks)
         {

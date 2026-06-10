@@ -12,6 +12,7 @@ namespace Blockiverse.UI
     public sealed class SurvivalCraftingPanel : MonoBehaviour
     {
         [SerializeField] Button[] recipeButtons;
+        [SerializeField] Button repairButton;
         [SerializeField] TMP_Text[] recipeLabels;
         [SerializeField] TMP_Text statusLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -21,7 +22,7 @@ namespace Blockiverse.UI
         CraftingRecipeBook recipeBook;
         Inventory inventory;
         ItemRegistry itemRegistry;
-        CraftingStation availableStation;
+        CraftingStationSet availableStations;
 
         public event Action CraftingChanged;
 
@@ -52,6 +53,12 @@ namespace Blockiverse.UI
             Refresh();
         }
 
+        public void ConfigureRepairButton(Button targetRepairButton)
+        {
+            repairButton = targetRepairButton;
+            WireRepairButton();
+        }
+
         public void Bind(
             CraftingRecipeBook targetRecipeBook,
             Inventory targetInventory,
@@ -61,10 +68,23 @@ namespace Blockiverse.UI
             recipeBook = targetRecipeBook ?? throw new ArgumentNullException(nameof(targetRecipeBook));
             inventory = targetInventory ?? throw new ArgumentNullException(nameof(targetInventory));
             itemRegistry = registry ?? ItemRegistry.CreateDefault();
-            availableStation = station;
+            availableStations = CraftingStationSet.Of(station);
             SetStatus("Ready");
             Refresh();
         }
+
+        // Updates the set of stations currently in reach (fed by the HUD's proximity scan) so
+        // station-gated recipes become craftable when the player stands at the station (§8).
+        public void SetAvailableStations(CraftingStationSet stations)
+        {
+            availableStations = stations;
+            Refresh();
+        }
+
+        // The station actually claimed for a craft: the recipe's own requirement when it is in
+        // reach, otherwise None (which CraftingService rejects with MissingStation).
+        CraftingStation EffectiveStationFor(CraftingRecipe recipe) =>
+            availableStations.Contains(recipe.RequiredStation) ? recipe.RequiredStation : CraftingStation.None;
 
         public CraftingResult TryCraftAtIndex(int index)
         {
@@ -101,7 +121,7 @@ namespace Blockiverse.UI
             if (survivalSync != null)
                 return TryCraftAuthoritative(recipe);
 
-            CraftingResult result = CraftingService.TryCraft(inventory, recipe, availableStation);
+            CraftingResult result = CraftingService.TryCraft(inventory, recipe, EffectiveStationFor(recipe));
             SetStatus(result.Succeeded
                 ? $"Crafted {FormatStack(recipe.Output)}"
                 : $"Cannot craft {itemRegistry.Get(recipe.Output.ItemId).Name}: {result.FailureReason}");
@@ -119,7 +139,7 @@ namespace Blockiverse.UI
         // pending until the host responds (the inventory mirror updates from the snapshot).
         CraftingResult TryCraftAuthoritative(CraftingRecipe recipe)
         {
-            SurvivalCommandResult command = survivalSync.TrySubmitCraft(recipe.Output.ItemId, availableStation, out bool sentToHost);
+            SurvivalCommandResult command = survivalSync.TrySubmitCraft(recipe.Output.ItemId, EffectiveStationFor(recipe), out bool sentToHost);
             bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
 
             SetStatus(command.Accepted
@@ -136,6 +156,48 @@ namespace Blockiverse.UI
             return acceptedOrPending
                 ? CraftingResult.Success()
                 : CraftingResult.Failure(command.CraftingFailureReason, recipe.Output.ItemId);
+        }
+
+        // Mend Bench repair of the held tool (§10.7): one matching head material restores 25% max
+        // durability. Routed through the host-authoritative sync when present (the host re-validates
+        // bench proximity); falls back to local MendBenchRepair for isolated use (tests, no
+        // networking). toolSlotIndex -1 repairs the selected hotbar slot.
+        public bool TryRepairHeldTool(int toolSlotIndex = -1)
+        {
+            EnsureBound();
+
+            if (survivalSync != null)
+            {
+                SurvivalCommandResult command = survivalSync.TrySubmitRepair(out bool sentToHost, toolSlotIndex);
+                bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
+
+                SetStatus(command.Accepted
+                    ? "Tool repaired"
+                    : sentToHost
+                        ? "Repairing…"
+                        : $"Cannot repair: {command.FailureReason}");
+                Refresh();
+                PlayFeedback(acceptedOrPending ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+
+                if (command.Accepted)
+                    CraftingChanged?.Invoke();
+
+                return acceptedOrPending;
+            }
+
+            CraftingStation station = availableStations.Contains(CraftingStation.MendBench)
+                ? CraftingStation.MendBench
+                : CraftingStation.None;
+            RepairResult result = MendBenchRepair.TryRepair(itemRegistry, inventory, Math.Max(0, toolSlotIndex), station);
+
+            SetStatus(result.Succeeded ? "Tool repaired" : $"Cannot repair: {result.FailureReason}");
+            Refresh();
+            PlayFeedback(result.Succeeded ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+
+            if (result.Succeeded)
+                CraftingChanged?.Invoke();
+
+            return result.Succeeded;
         }
 
         public void Refresh()
@@ -156,6 +218,16 @@ namespace Blockiverse.UI
         void Awake()
         {
             WireRecipeButtons();
+            WireRepairButton();
+        }
+
+        void WireRepairButton()
+        {
+            if (repairButton == null)
+                return;
+
+            repairButton.onClick.RemoveAllListeners();
+            repairButton.onClick.AddListener(() => TryRepairHeldTool());
         }
 
         List<CraftingRecipe> GetSortedRecipes()
@@ -190,7 +262,10 @@ namespace Blockiverse.UI
 
         string FormatRecipe(CraftingRecipe recipe)
         {
-            return $"{FormatStack(recipe.Output)} - {FormatIngredients(recipe)}";
+            string text = $"{FormatStack(recipe.Output)} - {FormatIngredients(recipe)}";
+            if (!availableStations.Contains(recipe.RequiredStation))
+                text += $" [needs {recipe.RequiredStation}]";
+            return text;
         }
 
         string FormatIngredients(CraftingRecipe recipe)

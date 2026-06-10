@@ -203,6 +203,11 @@ namespace Blockiverse.Survival
             return rule.Drop;
         }
 
+        // Durability cost the authoritative host path applies for a completed harvest (§6.3) — kept
+        // public so MultiplayerSurvivalSync charges the same formula cost as the local TryHarvest.
+        public int GetHarvestDurabilityCost(BlockHarvestResult result, ItemStack equippedItem) =>
+            ComputeDurabilityCost(result, equippedItem);
+
         int ComputeDurabilityCost(BlockHarvestResult result, ItemStack equippedItem)
         {
             BlockCategory category = BlockCategory.Terrain;
