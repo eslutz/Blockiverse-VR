@@ -6,6 +6,7 @@
     "Blockiverse.Networking",
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
+    "Blockiverse.Survival.Health",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
     "Unity.Netcode.Runtime",

@@ -141,6 +141,42 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void TickLeafDecayRemovesOrphanedLeafAfterLogRemovalIsMarked()
+        {
+            var logPos  = new BlockPosition(8, 8, 8);
+            var leafPos = new BlockPosition(8, 9, 8);
+            world.SetBlock(logPos,  BlockRegistry.BranchwoodLog);
+            world.SetBlock(leafPos, BlockRegistry.Leafmoss);
+
+            // First sweep: the leaf is supported and drops out of the candidate set.
+            vegetation.TickLeafDecay(world, 120);
+            Assert.That(world.GetBlock(leafPos), Is.EqualTo(BlockRegistry.Leafmoss));
+
+            // Removing the log re-marks the surrounding leaves (the runtime wires this through
+            // CreativeWorldManager.OnBlockChanged); the next sweep removes the orphan.
+            world.SetBlock(logPos, BlockRegistry.Air);
+            vegetation.MarkLeafDecayCandidates(world, logPos);
+            vegetation.TickLeafDecay(world, 120);
+
+            Assert.That(world.GetBlock(leafPos), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
+        public void TickLeafDecayChecksNewlyPlacedLeafmossViaCandidateMark()
+        {
+            // Seed the candidate set with an empty world (first sweep), then place an orphan leaf.
+            vegetation.TickLeafDecay(world, 120);
+
+            var leafPos = new BlockPosition(8, 16, 8);
+            world.SetBlock(leafPos, BlockRegistry.Leafmoss);
+            vegetation.MarkLeafDecayCandidate(leafPos);
+
+            vegetation.TickLeafDecay(world, 120);
+
+            Assert.That(world.GetBlock(leafPos), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
         public void ScanAndTrackSaplingsPreservesExistingTickAccumulators()
         {
             world.SetBlock(BasePos, BlockRegistry.Sapling);

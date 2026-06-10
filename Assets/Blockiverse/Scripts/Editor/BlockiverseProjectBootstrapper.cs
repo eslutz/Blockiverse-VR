@@ -92,7 +92,7 @@ namespace Blockiverse.Editor
         static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
         static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
         static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
-        static readonly Vector2 StationPanelSize = new(540.0f, 540.0f);
+        static readonly Vector2 StationPanelSize = new(540.0f, 620.0f);
 
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
@@ -1027,6 +1027,7 @@ namespace Blockiverse.Editor
             EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
             EnsureComponent<MultiplayerChunkAuthoritySync>(managerObject);
             EnsureComponent<MultiplayerSurvivalSync>(managerObject);
+            EnsureComponent<SurvivalVitalsRuntime>(managerObject);
             EnsureComponent<MultiplayerWorldPersistence>(managerObject);
 
             EditorUtility.SetDirty(transport);
@@ -2630,7 +2631,7 @@ namespace Blockiverse.Editor
 
         static SurvivalCraftingPanel EnsureSurvivalCraftingSection(Transform parent)
         {
-            GameObject sectionObject = EnsureHudSection(parent, "Crafting", new Vector2(480.0f, -82.0f), new Vector2(216.0f, 300.0f));
+            GameObject sectionObject = EnsureHudSection(parent, "Crafting", new Vector2(480.0f, -82.0f), new Vector2(216.0f, 340.0f));
 
             EnsureLabel(
                 sectionObject.transform,
@@ -2676,8 +2677,23 @@ namespace Blockiverse.Editor
                 recipeButtons[index] = EnsureTextButton(recipeLabels[index]);
             }
 
+            // Mend Bench repair of the held tool (§10.7) — gated at runtime by station proximity.
+            TMP_Text repairLabel = EnsureLabel(
+                sectionObject.transform,
+                "Repair",
+                "Repair Held Tool",
+                16,
+                TextAnchor.MiddleCenter,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(16.0f, -82.0f - recipeLabels.Length * 40.0f),
+                new Vector2(180.0f, 36.0f));
+            Button repairButton = EnsureTextButton(repairLabel);
+
             SurvivalCraftingPanel panel = EnsureComponent<SurvivalCraftingPanel>(sectionObject);
             panel.Configure(recipeButtons, recipeLabels, statusLabel);
+            panel.ConfigureRepairButton(repairButton);
             EditorUtility.SetDirty(panel);
             return panel;
         }
@@ -3510,7 +3526,7 @@ namespace Blockiverse.Editor
             var (newWorldPanel, newWorldPresenter) = EnsureNewWorldMenuPanel(cameraOffset, head);
             var (loadWorldPanel, loadWorldPresenter) = EnsureLoadWorldMenuPanel(cameraOffset, head);
             var (settingsMenu, settingsPresenter) = EnsureSettingsMenuPanel(cameraOffset, head);
-            BlockiverseWorldSpacePanelPresenter stationPresenter = EnsureStationMenuPanel(cameraOffset, head);
+            var (stationPanel, stationPresenter) = EnsureStationMenuPanel(cameraOffset, head);
 
             BlockiverseMenuController controller = EnsureComponent<BlockiverseMenuController>(rig);
             controller.Configure(inputRig, titleMenu, pauseMenu, deathMenu, confirmMenu,
@@ -3518,6 +3534,7 @@ namespace Blockiverse.Editor
             controller.ConfigurePresenters(
                 titlePresenter, pausePresenter, deathPresenter, confirmPresenter,
                 newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter);
+            controller.ConfigureStationPanel(stationPanel);
 
             if (inputRig != null)
             {
@@ -3945,11 +3962,13 @@ namespace Blockiverse.Editor
         }
 
         // Builds the smelting-station panel: up to 3 input slots, 1 fuel slot, output, progress
-        // slider, and a Close button. Used for both Clay Kiln (1 input) and Bellows Forge (3).
-        static BlockiverseWorldSpacePanelPresenter EnsureStationMenuPanel(Transform parent, Transform head)
+        // slider, deposit/collect transfer buttons, and a Close button. Used for both Clay Kiln
+        // (1 input) and Bellows Forge (3).
+        static (BlockiverseStationPanel panel, BlockiverseWorldSpacePanelPresenter presenter) EnsureStationMenuPanel(
+            Transform parent, Transform head)
         {
             const float W = 540.0f;
-            const float H = 540.0f;
+            const float H = 620.0f;
 
             GameObject panelRoot = EnsureRectChild(parent, StationPanelName);
             panelRoot.transform.localPosition = GameMenuLocalPosition;
@@ -4034,13 +4053,22 @@ namespace Blockiverse.Editor
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
                 new Vector2(28, -394), new Vector2(W - 56, 36), TextDimColor);
 
+            // Transfer buttons: deposit the held hotbar item as input/fuel, collect the output.
+            Button depositInputButton = EnsureButtonControl(bg.transform, "Deposit Input Button", "Add Input",
+                new Vector2(28, -440), new Vector2(150, 52));
+            Button depositFuelButton = EnsureButtonControl(bg.transform, "Deposit Fuel Button", "Add Fuel",
+                new Vector2(188, -440), new Vector2(150, 52));
+            Button collectOutputButton = EnsureButtonControl(bg.transform, "Collect Output Button", "Collect",
+                new Vector2(348, -440), new Vector2(150, 52));
+
             // Close button
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
-                new Vector2(28, -452), new Vector2(160, 52));
+                new Vector2(28, -504), new Vector2(160, 52));
 
             BlockiverseStationPanel stationPanel = EnsureComponent<BlockiverseStationPanel>(panelRoot);
             stationPanel.Configure(titleLabel, inputLabels, fuelLabel, outputLabel, statusLabel,
                 progressSlider, closeButton);
+            stationPanel.ConfigureTransferControls(depositInputButton, depositFuelButton, collectOutputButton);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
@@ -4050,7 +4078,7 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(presenter);
             EditorUtility.SetDirty(panelRoot);
 
-            return presenter;
+            return (stationPanel, presenter);
         }
     }
 }

@@ -303,6 +303,91 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(farming.HasPendingRegrowth(CropPos), Is.False);
         }
 
+        // ── Deterministic interval-indexed growth (multiplayer lockstep) ─────
+
+        [Test]
+        public void DeterministicGrowthRequiresConfiguration()
+        {
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
+
+            Assert.Throws<InvalidOperationException>(() => farming.TickGrowth(world, 0L));
+        }
+
+        [Test]
+        public void DeterministicGrowthDoesNotAdvanceWithinTheAnchorInterval()
+        {
+            farming.ConfigureDeterministicGrowth(worldSeed: 1234);
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.GrainStalk);
+
+            farming.TickGrowth(world, 0L); // anchors the crop at interval 0
+            farming.TickGrowth(world, FarmingService.GrowthIntervalTicks - 1L);
+
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.GrainStalk),
+                "No interval boundary has been crossed since the crop was anchored.");
+        }
+
+        [Test]
+        public void DeterministicGrowthIsIndependentOfTickBatching()
+        {
+            const int seed = 98765;
+            const int intervals = 64;
+
+            // Host: ticks growth at every interval boundary. Late joiner: receives the same crop
+            // via the chunk snapshot and processes all elapsed intervals in one batch. Both must
+            // land on the same stage because every roll is a pure function of
+            // (seed, position, stage, interval index).
+            BlockId stepped = RunDeterministicGrowth(seed, intervals, stepPerInterval: true);
+            BlockId batched = RunDeterministicGrowth(seed, intervals, stepPerInterval: false);
+
+            Assert.That(batched, Is.EqualTo(stepped),
+                "Batched catch-up growth must match per-interval host growth exactly.");
+            Assert.That(stepped, Is.Not.EqualTo(BlockRegistry.GrainStalk),
+                "64 favorable intervals at 35% base chance must advance the crop.");
+        }
+
+        [Test]
+        public void DeterministicGrowthDivergesAcrossDifferentSeeds()
+        {
+            // Sanity check that the roll actually keys off the world seed: scanning many seeds,
+            // the first-interval outcome must differ between some pair of seeds.
+            bool sawGrowth = false, sawNoGrowth = false;
+            for (int seed = 0; seed < 64 && !(sawGrowth && sawNoGrowth); seed++)
+            {
+                BlockId result = RunDeterministicGrowth(seed, intervals: 1, stepPerInterval: true);
+                if (result == BlockRegistry.GrainStalk) sawNoGrowth = true;
+                else sawGrowth = true;
+            }
+
+            Assert.That(sawGrowth && sawNoGrowth, Is.True,
+                "First-interval growth outcomes must vary by world seed.");
+        }
+
+        BlockId RunDeterministicGrowth(int seed, int intervals, bool stepPerInterval)
+        {
+            var growthWorld = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
+            growthWorld.SetBlock(SoilPos, BlockRegistry.LooseLoam, trackChange: false);
+            var service = new FarmingService();
+            service.ConfigureDeterministicGrowth(seed);
+            service.Till(growthWorld, SoilPos);
+            service.PlantCrop(growthWorld, SoilPos, BlockRegistry.GrainStalk);
+
+            service.TickGrowth(growthWorld, 0L); // anchor at interval 0
+
+            if (stepPerInterval)
+            {
+                for (int i = 1; i <= intervals; i++)
+                    service.TickGrowth(growthWorld, (long)i * FarmingService.GrowthIntervalTicks);
+            }
+            else
+            {
+                service.TickGrowth(growthWorld, (long)intervals * FarmingService.GrowthIntervalTicks);
+            }
+
+            return growthWorld.GetBlock(CropPos);
+        }
+
         // ── Tick accumulator bookkeeping ─────────────────────────────────────
 
         [Test]

@@ -64,6 +64,9 @@ namespace Blockiverse.Gameplay
         VegetationService vegetationService;
         FarmingService farmingService;
         WorldTimeClock worldTimeClock;
+        // The world instance whose BlockChanged event we are currently subscribed to. Tracked
+        // separately from `World` so re-configuration unsubscribes from the right instance.
+        VoxelWorld subscribedWorld;
         string pendingWeatherState;
         // Environment sync values received before the services existed (message-ordering safety net).
         WeatherSyncState? pendingWeatherSync;
@@ -277,12 +280,26 @@ namespace Blockiverse.Gameplay
             if (worldTimeClock != null)
                 worldTimeClock.Ticked -= OnWorldTick;
 
-            if (vegetationService != null && World != null)
-                World.BlockChanged -= OnBlockChanged;
+            // Unsubscribe from the world we actually subscribed to — `World` may already point at a
+            // replacement (e.g. a multiplayer regeneration), and unsubscribing from the new instance
+            // would leak the old world's handler.
+            if (subscribedWorld != null)
+            {
+                subscribedWorld.BlockChanged -= OnBlockChanged;
+                subscribedWorld = null;
+            }
 
             // Build container contents (structure loot crates) from generation loot. Done before the
             // WorldTimeClock check so containers exist even in scenes/tests without a clock.
             BuildContainerStore();
+
+            // Subscribe block-change tracking before the clock gate: container auto-loot and
+            // sapling/crop tracking must work even in scenes without a WorldTimeClock.
+            if (World != null)
+            {
+                World.BlockChanged += OnBlockChanged;
+                subscribedWorld = World;
+            }
 
             worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
@@ -292,6 +309,10 @@ namespace Blockiverse.Gameplay
             weatherService    = new WeatherService(seed);
             vegetationService = new VegetationService();
             farmingService    = new FarmingService();
+
+            // Crop growth rolls must be a pure function of synced state (world seed + world clock):
+            // environmental mutations are never broadcast, so host and clients simulate in lockstep.
+            farmingService.ConfigureDeterministicGrowth(settings != null ? settings.Seed : World.Seed);
 
             // Wire biome-aware sapling growth for survival terrain worlds. The resolver is a pure
             // function of (seed, worldHeight), so host and late-joining clients (which receive the
@@ -304,7 +325,6 @@ namespace Blockiverse.Gameplay
 
             vegetationService.ScanAndTrackSaplings(World);
             farmingService.ScanAndTrackCrops(World);
-            World.BlockChanged += OnBlockChanged;
             worldTimeClock.Ticked += OnWorldTick;
 
             // Apply any environment state received before the services existed (message ordering).
@@ -333,6 +353,13 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TrackSapling(change.Position);
             if (FarmingService.IsCropBlock(b))
                 farmingService?.TrackCrop(change.Position);
+
+            // Keep the leaf-decay candidate set current: newly placed Leafmoss must be checked,
+            // and removing a log may orphan the leaves around it.
+            if (b == BlockRegistry.Leafmoss)
+                vegetationService?.MarkLeafDecayCandidate(change.Position);
+            if (change.PreviousBlock == BlockRegistry.BranchwoodLog && b != BlockRegistry.BranchwoodLog)
+                vegetationService?.MarkLeafDecayCandidates(World, change.Position);
 
             // Harvesting a berrybush (cleared to air) queues it to regrow after two game days (§3).
             // Berrybush is owned by FarmingService (it replants a fresh stage-0 bush and tracks its
@@ -441,7 +468,7 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TickLeafDecay(World, ticks);
                 vegetationService?.TickSapling(World, ticks);
                 vegetationService?.TickWildRegrowth(World, CurrentWorldTick);
-                farmingService?.TickGrowth(World, ticks);
+                farmingService?.TickGrowth(World, CurrentWorldTick);
                 farmingService?.TickRegrowth(World, ticks);
             }
         }
@@ -450,8 +477,11 @@ namespace Blockiverse.Gameplay
         {
             if (worldTimeClock != null)
                 worldTimeClock.Ticked -= OnWorldTick;
-            if (vegetationService != null && World != null)
-                World.BlockChanged -= OnBlockChanged;
+            if (subscribedWorld != null)
+            {
+                subscribedWorld.BlockChanged -= OnBlockChanged;
+                subscribedWorld = null;
+            }
         }
 
         void ConfigureInteractionController(WorldGenerationSettings settings)

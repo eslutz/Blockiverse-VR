@@ -17,6 +17,7 @@ namespace Blockiverse.UI
         public const string ControlsScreen = "controls";
         public const string DeathScreen = "death_screen";
         public const string LanMultiplayerScreen = "lan_multiplayer";
+        public const string StationMenuScreen = "station_menu";
         public const string ConfirmModal = "confirm_dialog";
 
         // ── Title actions (§6.2) ─────────────────────────────────────────────
