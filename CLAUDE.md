@@ -65,3 +65,21 @@ Boot scene carries the XR rig (with all world-space menus and both controllers' 
 ### Save format
 
 `<name>.vxlworld/` directory (schema v4): `manifest.json` (pretty-printed, registry hashes), `dimensions/main/` (dimension, environment, containers, `regions/r.<rx>.<rz>.vxlr`), `players/local_player.json`. Regions store **only changed blocks** (delta vs. terrain regenerated from seed) as 16-block sections with string palettes. All writes are atomic (`.tmp` → move/replace; regions dir swap keeps a `.bak` recovery window). Legacy v1–v3 saves fail fast — no migrations pre-release. Single-player saves live under `Application.persistentDataPath/Saves`; the multiplayer host world is `multiplayer-world.vxlworld`.
+
+## Documentation currency
+
+Two companion projects must stay current alongside this repo:
+
+- **Wiki** (`../Blockiverse-VR.wiki`) — the primary source for all user-facing documentation (gameplay mechanics, controls, crafting/survival rules, save format, multiplayer setup, store descriptions, release notes, known issues). The wiki is what players and store reviewers read; it must reflect the shipped state of the game, not aspirational plans.
+- **Website** (`../Blockiverse-VR.website`) — the public-facing project site; keep store metadata, feature lists, screenshots, and versioning consistent with what is actually in the game.
+
+**When to update:** any change that affects a user-observable behaviour, a publicly documented feature, or a store-submitted artefact warrants a corresponding wiki and/or website update in the same PR or immediately following commit. This includes (but is not limited to):
+
+- New or changed gameplay mechanics, survival rules, crafting recipes, or block/item behaviour
+- Save-format version bumps or migration behaviour changes
+- Multiplayer session flow changes (hosting, joining, disconnect handling)
+- VR comfort, control binding, or locomotion changes
+- New store-ready features, screenshots, or release notes
+- Changes to the privacy policy or data-use declarations
+
+Changes that are purely internal (refactors, test additions, CI fixes, performance work with no observable behaviour change) do not require wiki or website updates, but use judgement — if a performance fix removes a known limitation that appears in the known-issues page, update it.
