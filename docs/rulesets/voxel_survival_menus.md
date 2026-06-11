@@ -404,36 +404,39 @@ function createWorld(config) {
 
 ### 6.5 World Details Menu
 
-**Purpose:** Show full save metadata and management actions.
+**Purpose:** Show save metadata and management actions for the save selected on the Load World
+menu (opened with its Details button).
 
 **Mockup:**
 
 ```txt
 +------------------------------------------------------------+
-| World Details: Meadow Home                                 |
+| World Details                                              |
 +------------------------------------------------------------+
 | Mode: Survival              Difficulty: Normal             |
-| Day: 18                     Player Location: 122, 78, -44  |
-| Seed: 918273645             Created: 2026-06-02            |
-| Last Played: 2026-06-06     File Size: 48 MB               |
-| Progress: Bronze            Spawn Biome: Meadow            |
+| Day: 18                     Seed: 918273645                |
+| Created: 2026-06-02         Last Played: 2026-06-06        |
 |                                                            |
-| Notes:                                                     |
-| [ Small meadow base near a river...                    ]   |
+| Name                                                       |
+| [ Meadow Home                                          ]   |
 |                                                            |
-| [ Play ] [ Rename ] [ Duplicate ] [ Delete ] [ Back ]      |
+| [ Play ] [ Rename ] [ Duplicate ]                          |
+| [ Delete ] [ Back ]                                        |
 +------------------------------------------------------------+
 ```
+
+The name field uses the system keyboard; Rename applies its text. Renaming and duplicating
+uniquify clashing names (" (2)", " (3)", …); deleting opens the shared confirmation dialog.
 
 **Actions:**
 
 | Element | Action ID | Logic |
 |---|---|---|
-| Play | `world_details.play` | Loads selected save |
-| Rename | `world_details.rename` | Opens inline rename state |
-| Notes | `world_details.update_notes` | Updates optional save notes |
-| Duplicate | `world_details.duplicate` | Copies save folder and creates new save ID |
-| Delete | `world_details.delete_requested` | Opens confirmation dialog |
+| Details (on Load World) | `load_world.open_details` | Opens this screen for the selected save |
+| Play | `world_details.play` | Loads the shown save |
+| Rename | `world_details.rename` | Renames the save to the name field's text |
+| Duplicate | `world_details.duplicate` | Copies the save folder under a unique name |
+| Delete | `world_details.delete_requested` | Opens the confirmation dialog, then deletes |
 | Back | `world_details.back` | Returns to Load World Menu |
 
 ---
@@ -1053,65 +1056,67 @@ Voice communication uses Meta Quest party chat. Blockiverse VR does not capture 
 
 **Purpose:** Configure game, video, audio, controls, and accessibility options.
 
+In VR the Settings menu is a hub of focused panels rather than a tabbed desktop dialog: each
+entry opens its own world-space screen, and every control applies immediately (settings persist
+via the player-prefs snapshot — there is no pending Apply/Reset flow).
+
 **Mockup:**
 
 ```txt
-+----------------------------------------------------------------+
-| Settings                                             [X Back]  |
-+-------------------+--------------------------------------------+
-| > Game            | Autosave Interval       < 5 min >          |
-|   Video           | Field of View           < 80 >             |
-|   Audio           | Camera Bob              [x] Enabled        |
-|   Controls        | Tooltips                [x] Enabled        |
-|   Accessibility   | Measurement Units       < Game Units >     |
-|                   |                                            |
-|                   | [ Apply ] [ Reset Tab ] [ Reset All ]      |
-+-------------------+--------------------------------------------+
++------------------------------+
+| Settings                     |
++------------------------------+
+| [ Comfort  ]                 |
+| [ Audio    ]                 |
+| [ Controls ]                 |
+| [ Close    ]                 |
++------------------------------+
 ```
 
-**Tabs and settings:**
+**Sections:**
 
-| Tab | Settings |
+| Section | Settings |
 |---|---|
-| Game | Autosave interval, difficulty display, tooltip verbosity, language, units |
-| Video | Resolution, display mode, brightness, FOV, render distance, VSync |
-| Audio | Master volume, music, ambience, UI volume, subtitles |
-| Controls | Keybindings, mouse sensitivity, controller sensitivity, invert look |
-| Accessibility | Text size, UI scale, colorblind-safe indicators, hold-to-mine toggle, reduced motion |
+| Comfort | Locomotion mode (glide/teleport), move speed, smooth/snap turn, snap-turn degrees, standing eye height, vignette toggle/strength |
+| Audio | Master, effects, UI, and weather volume; haptic strength; mute all; haptics toggle; reduced flash; reduced particles |
+| Controls | Read-only controller mapping reference (shared with the first-launch popup) |
 
 **Actions:**
 
 | Element | Action ID | Logic |
 |---|---|---|
-| Tab selector | `settings.select_tab` | Changes active settings tab |
-| Setting row | `settings.change_value` | Updates pending setting value |
-| Apply | `settings.apply` | Writes pending changes to runtime settings and config file |
-| Reset Tab | `settings.reset_tab_requested` | Opens confirmation, then resets active tab |
-| Reset All | `settings.reset_all_requested` | Opens confirmation, then resets all settings |
-| Back | `settings.back` | Prompts to apply/discard if pending changes exist |
+| Comfort | `settings.open_comfort` | Shows the comfort settings panel |
+| Audio | `settings.open_audio` | Pushes the audio & feedback screen |
+| Controls | `settings.open_controls` | Pushes the controls reference screen |
+| Close | `settings.close` | Returns to the previous screen |
+| Audio close | `settings_audio.close` | Returns from the audio screen |
+| Controls close | `controls.close` | Returns from the controls screen |
 
 ---
 
 ### 6.20 Controls Menu
 
-**Purpose:** View and remap input bindings.
+**Purpose:** View the canonical controller mapping. Bindings are fixed to the Quest controller
+layout (no remapping); the same mapping text backs the first-launch controller popup so the two
+can never drift apart.
 
 **Mockup:**
 
 ```txt
 +------------------------------------------------------------+
-| Controls                                         [X Back]  |
-+--------------------------+---------------------------------+
-| Move Forward             | W                               |
-| Move Backward            | S                               |
-| Jump                     | Space                           |
-| Interact                 | E                               |
-| Inventory                | I                               |
-| Hotbar Slot 1            | 1                               |
-| Mine / Primary Use       | Left Mouse                      |
-| Place / Alternate Use    | Right Mouse                     |
-+--------------------------+---------------------------------+
-| [ Rebind ] [ Clear ] [ Restore Defaults ] [ Back ]         |
+| Controls                                                   |
++------------------------------------------------------------+
+| Left stick: move                                           |
+| Right stick: snap turn                                     |
+| Right stick hold up: teleport aim, release to land         |
+| Right trigger: press UI or break blocks                    |
+| Right grip: place or use                                   |
+| Left grip: blocks menu                                     |
+| Right A: jump                                              |
+| Right B: toggle block editing                              |
+| Menu: pause                                                |
+|                                                            |
+| [ Close ]                                                  |
 +------------------------------------------------------------+
 ```
 
@@ -1119,19 +1124,7 @@ Voice communication uses Meta Quest party chat. Blockiverse VR does not capture 
 
 | Element | Action ID | Logic |
 |---|---|---|
-| Binding row | `controls.select_binding` | Selects action to remap |
-| Rebind | `controls.start_rebind` | Waits for next valid input event |
-| Clear | `controls.clear_binding` | Removes optional binding |
-| Restore Defaults | `controls.restore_defaults_requested` | Confirmation, then reset bindings |
-| Back | `controls.back` | Saves valid changes or prompts if conflicts exist |
-
-**Conflict handling:**
-
-```ts
-if newBinding already assigned to another action:
-    showConflictDialog(oldAction, newAction)
-    options = ["Replace", "Cancel"]
-```
+| Close | `controls.close` | Returns to the Settings menu |
 
 ---
 

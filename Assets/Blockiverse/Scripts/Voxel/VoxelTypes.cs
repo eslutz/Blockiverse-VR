@@ -53,7 +53,8 @@ namespace Blockiverse.Voxel
         Organic,
         Crafted,
         Resource,
-        Station
+        Station,
+        Fluid
     }
 
     public enum BlockHardnessClass
@@ -233,6 +234,15 @@ namespace Blockiverse.Voxel
         public static readonly BlockId PantryJar            = new(72);
         public static readonly BlockId DeepLocker           = new(73);
 
+        // ── Fluids (§5.4): permanent sources plus the flowing cells the flow simulation
+        // spreads from them (FluidFlowService). Flow cells render with the source's tile.
+        public static readonly BlockId Freshwater           = new(74);
+        public static readonly BlockId Brine                = new(75);
+        public static readonly BlockId Emberflow            = new(76);
+        public static readonly BlockId FreshwaterFlow       = new(77);
+        public static readonly BlockId BrineFlow            = new(78);
+        public static readonly BlockId EmberflowFlow        = new(79);
+
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
 
         public static BlockRegistry CreateDefault()
@@ -334,6 +344,15 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Sapling,    "sapling",    "Sapling",    BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Sapling_S1, "sapling_s1", "Sapling S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(Sapling_S2, "sapling_s2", "Sapling S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+
+            // ── Fluids (§5.4): non-solid, light-passable, not harvestable. Sources are
+            // permanent; flow cells are spread/retracted by the flow simulation. Emberflow glows.
+            registry.Register(new BlockDefinition(Freshwater,     "freshwater",      "Freshwater",      BlockCategory.Fluid, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(Brine,          "brine",           "Brine",           BlockCategory.Fluid, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(Emberflow,      "emberflow",       "Emberflow",       BlockCategory.Fluid, isSolid: false, isRenderable: true, emissiveLight: 10));
+            registry.Register(new BlockDefinition(FreshwaterFlow, "freshwater_flow", "Flowing Freshwater", BlockCategory.Fluid, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(BrineFlow,      "brine_flow",      "Flowing Brine",   BlockCategory.Fluid, isSolid: false, isRenderable: true));
+            registry.Register(new BlockDefinition(EmberflowFlow,  "emberflow_flow",  "Flowing Emberflow", BlockCategory.Fluid, isSolid: false, isRenderable: true, emissiveLight: 9));
 
             return registry;
         }

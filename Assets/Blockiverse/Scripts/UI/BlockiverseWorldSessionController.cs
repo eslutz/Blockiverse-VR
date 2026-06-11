@@ -29,6 +29,7 @@ namespace Blockiverse.UI
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
+        [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
 
         string currentSavePath;
         string currentWorldName;
@@ -37,6 +38,7 @@ namespace Blockiverse.UI
         // Save list rows keyed back to their on-disk paths so Load resolves the exact slot even
         // when two saves share a display name (rebuilt by RefreshSaveList).
         readonly Dictionary<string, string> savePathsBySummaryKey = new();
+        float lastSaveTime;
 
         public string CurrentSavePath => currentSavePath;
         public bool HasActiveSession => !string.IsNullOrEmpty(currentSavePath);
@@ -86,6 +88,22 @@ namespace Blockiverse.UI
 
             if (chunkAuthoritySync == null)
                 chunkAuthoritySync = FindFirstObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
+
+            if (vitalsRuntime == null)
+                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+        }
+
+        // Autosave: while a session is active, save on the WorldSaveService cadence (§6.7).
+        // Multiplayer-hosted worlds are autosaved by MultiplayerWorldPersistence instead.
+        void Update()
+        {
+            if (!HasActiveSession)
+                return;
+
+            if (Time.unscaledTime - lastSaveTime < WorldSaveService.AutoSaveIntervalSeconds)
+                return;
+
+            SaveCurrentWorld();
         }
 
         void Wire()
@@ -116,6 +134,19 @@ namespace Blockiverse.UI
                 case MenuActions.LoadWorldLoad:
                     LoadSelectedSave();
                     break;
+                case MenuActions.WorldDetailsPlay:
+                    PlayDetailsSave();
+                    break;
+                case MenuActions.WorldDetailsRename:
+                    RenameDetailsSave();
+                    break;
+                case MenuActions.WorldDetailsDuplicate:
+                    DuplicateDetailsSave();
+                    break;
+                case MenuActions.WorldDetailsDeleteRequested:
+                    // The menu controller already ran the delete confirmation modal.
+                    DeleteDetailsSave();
+                    break;
                 case MenuActions.NewWorldCreate:
                     CreateNewWorld();
                     break;
@@ -140,6 +171,10 @@ namespace Blockiverse.UI
             if (worldManager == null || worldManager.World == null || !HasActiveSession)
                 return false;
 
+            // Stamp before the attempt so a persistent failure logs once per autosave interval,
+            // not once per frame.
+            lastSaveTime = Time.unscaledTime;
+
             try
             {
                 Inventory inventory = survivalSync != null
@@ -158,7 +193,8 @@ namespace Blockiverse.UI
                     worldTimeTicks: worldManager.WorldTimeClock != null ? worldManager.WorldTimeClock.TotalElapsedTicks : 0L,
                     containers: BuildSavedContainers(worldManager.ContainerStore),
                     difficulty: currentDifficulty,
-                    worldPreset: currentWorldPreset);
+                    worldPreset: currentWorldPreset,
+                    extras: BuildSaveExtras());
 
                 RefreshSaveList();
                 return true;
@@ -171,6 +207,20 @@ namespace Blockiverse.UI
                     context: this);
                 return false;
             }
+        }
+
+        // World-sim state beyond blocks/inventory: weather machine, vegetation/farming queues
+        // (world manager), timed-station contents (survival sync), and player presence/vitals.
+        WorldSaveExtras BuildSaveExtras()
+        {
+            var extras = new WorldSaveExtras();
+            worldManager.FillSaveExtras(extras);
+
+            if (survivalSync != null)
+                extras.Stations = WorldSaveStateMapper.ToSavedStations(survivalSync.ExportStationStates());
+
+            extras.PlayerState = vitalsRuntime != null ? vitalsRuntime.BuildPlayerSaveState() : null;
+            return extras;
         }
 
         static IReadOnlyList<SavedContainer> BuildSavedContainers(ContainerInventoryStore store)
@@ -242,15 +292,28 @@ namespace Blockiverse.UI
             }
         }
 
+        // Builder presets are mid-height worlds (§11.2/§11.3): the flat surface sits low for
+        // stacking room; the void platform sits centered for build space above and below it.
+        const int BuilderWorldHeight = 64;
+        const int FlatBuilderGroundHeight = 8;
+        const int VoidBuilderGroundHeight = 32;
+
         GeneratedCreativeWorld GenerateWorld(string worldPreset, int seed, int width, int depth, string startingBiome)
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
             if (string.Equals(worldPreset, "flat_builder", StringComparison.OrdinalIgnoreCase))
             {
-                var flatSettings = new WorldGenerationSettings(width, 64, depth, WorldConstants.ChunkSize, seed, groundHeight: 8);
+                var flatSettings = new WorldGenerationSettings(width, BuilderWorldHeight, depth, WorldConstants.ChunkSize, seed, FlatBuilderGroundHeight);
                 VoxelWorld flatWorld = new FlatBuilderPreset(registry, flatSettings).Generate();
                 return new GeneratedCreativeWorld(registry, flatSettings, flatWorld, CreativeWorldGenerationPreset.FlatCreative);
+            }
+
+            if (string.Equals(worldPreset, "void_builder", StringComparison.OrdinalIgnoreCase))
+            {
+                var voidSettings = new WorldGenerationSettings(width, BuilderWorldHeight, depth, WorldConstants.ChunkSize, seed, VoidBuilderGroundHeight);
+                VoxelWorld voidWorld = new VoidBuilderPreset(registry, voidSettings).Generate();
+                return new GeneratedCreativeWorld(registry, voidSettings, voidWorld, CreativeWorldGenerationPreset.VoidBuilder);
             }
 
             BlockPosition? spawn = FindSpawnForBiome(seed, width, SurvivalWorldHeight, depth, WorldConstants.SeaLevel, startingBiome);
@@ -273,14 +336,14 @@ namespace Blockiverse.UI
             }
         }
 
-        // Searches outward from the world center for a column of the requested starting biome
-        // ("balanced" keeps the default center spawn). Pure seed math via SurvivalBiomeResolver,
-        // so the search agrees with what the generator will build.
+        // Searches outward from the world center for a dry-land column of the requested starting
+        // biome ("balanced" accepts any biome). Columns below sea level flood with fluid (§5.4),
+        // so the spawn prefers terrain at or above it rather than terraforming an island into a
+        // lake. Pure seed math via SurvivalBiomeResolver, so the search agrees with what the
+        // generator will build.
         static BlockPosition? FindSpawnForBiome(int seed, int width, int height, int depth, int groundHeight, string startingBiome)
         {
-            int target = BiomeIndexFor(startingBiome);
-            if (target < 0)
-                return null;
+            int target = BiomeIndexFor(startingBiome); // -1 = any biome (balanced)
 
             var resolver = new SurvivalBiomeResolver(seed, height);
             int centerX = width / 2;
@@ -288,7 +351,11 @@ namespace Blockiverse.UI
             const int edgeMargin = 8;
             const int step = 4;
 
-            if (resolver.BiomeIndexAt(centerX, centerZ) == target)
+            bool Matches(int x, int z) =>
+                (target < 0 || resolver.BiomeIndexAt(x, z) == target) &&
+                resolver.SurfaceHeight(x, z) >= groundHeight;
+
+            if (Matches(centerX, centerZ))
                 return null; // center already matches — keep the default spawn
 
             int maxRadius = Math.Max(width, depth);
@@ -307,13 +374,13 @@ namespace Blockiverse.UI
                         if (x < edgeMargin || x >= width - edgeMargin || z < edgeMargin || z >= depth - edgeMargin)
                             continue;
 
-                        if (resolver.BiomeIndexAt(x, z) == target)
+                        if (Matches(x, z))
                             return new BlockPosition(x, groundHeight + 1, z);
                     }
                 }
             }
 
-            return null; // biome absent in this seed — fall back to the center spawn
+            return null; // no dry match in this seed — fall back to the center spawn
         }
 
         // TerrainBiome is internal to WorldGen; the resolver exposes biome indexes, whose order
@@ -369,13 +436,10 @@ namespace Blockiverse.UI
                 return;
             }
 
-            foreach (WorldSaveService.WorldSaveInfo info in WorldSaveService.EnumerateSaves(SavesRoot))
+            if (TryResolveSavePathByName(selected.Value.Name, out string path))
             {
-                if (string.Equals(info.Manifest.WorldName, selected.Value.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    LoadSave(info.Path);
-                    return;
-                }
+                LoadSave(path);
+                return;
             }
 
             menuController?.SetTitleStatus("Save not found.");
@@ -385,6 +449,143 @@ namespace Blockiverse.UI
         // summary on both sides so lookups see exactly what RefreshSaveList stored.
         static string SummaryKey(WorldSaveSummary summary) =>
             $"{summary.Name}\n{summary.Seed}\n{summary.CreatedUtc.Ticks}";
+
+        bool TryResolveSavePathByName(string worldName, out string path)
+        {
+            foreach (WorldSaveService.WorldSaveInfo info in WorldSaveService.EnumerateSaves(SavesRoot))
+            {
+                if (string.Equals(info.Manifest.WorldName, worldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    path = info.Path;
+                    return true;
+                }
+            }
+
+            path = null;
+            return false;
+        }
+
+        // ── World Details management (§6.5): play/rename/duplicate/delete ─────
+
+        void PlayDetailsSave()
+        {
+            WorldSaveSummary? save = menuController?.PendingDetailsSave;
+            if (!save.HasValue)
+                return;
+
+            if (TryResolveSavePathByName(save.Value.Name, out string path))
+                LoadSave(path);
+            else
+                menuController?.ShowError("Save not found.");
+        }
+
+        void RenameDetailsSave()
+        {
+            WorldSaveSummary? save = menuController?.PendingDetailsSave;
+            string newName = menuController?.PendingDetailsRenameText?.Trim();
+            if (!save.HasValue || string.IsNullOrEmpty(newName))
+            {
+                menuController?.ShowError("Enter a world name first.");
+                return;
+            }
+
+            if (string.Equals(newName, save.Value.Name, StringComparison.Ordinal))
+                return; // unchanged
+
+            if (!TryResolveSavePathByName(save.Value.Name, out string path))
+            {
+                menuController?.ShowError("Save not found.");
+                return;
+            }
+
+            (string destinationPath, string uniqueName) = AllocateSavePath(newName);
+            if (!WorldSaveService.TryRenameSave(path, destinationPath, uniqueName))
+            {
+                menuController?.ShowError("Failed to rename the world.");
+                return;
+            }
+
+            // The renamed save may be the active session — keep saving to the new location.
+            if (string.Equals(currentSavePath, path, StringComparison.Ordinal))
+            {
+                currentSavePath = destinationPath;
+                currentWorldName = uniqueName;
+            }
+
+            RefreshSaveList();
+            RefreshDetailsPanel(uniqueName);
+        }
+
+        void DuplicateDetailsSave()
+        {
+            WorldSaveSummary? save = menuController?.PendingDetailsSave;
+            if (!save.HasValue)
+                return;
+
+            if (!TryResolveSavePathByName(save.Value.Name, out string path))
+            {
+                menuController?.ShowError("Save not found.");
+                return;
+            }
+
+            (string destinationPath, string uniqueName) = AllocateSavePath(save.Value.Name + " Copy");
+            if (!WorldSaveService.TryDuplicateSave(path, destinationPath, uniqueName))
+            {
+                menuController?.ShowError("Failed to duplicate the world.");
+                return;
+            }
+
+            RefreshSaveList();
+        }
+
+        void DeleteDetailsSave()
+        {
+            WorldSaveSummary? save = menuController?.PendingDetailsSave;
+            if (!save.HasValue)
+                return;
+
+            if (!TryResolveSavePathByName(save.Value.Name, out string path))
+            {
+                menuController?.ShowError("Save not found.");
+                return;
+            }
+
+            if (!WorldSaveService.TryDeleteSave(path))
+            {
+                menuController?.ShowError("Failed to delete the world.");
+                return;
+            }
+
+            // Deleting the active session's save ends its autosave target.
+            if (string.Equals(currentSavePath, path, StringComparison.Ordinal))
+            {
+                currentSavePath = null;
+                currentWorldName = null;
+            }
+
+            RefreshSaveList();
+            menuController?.CloseWorldDetails();
+        }
+
+        // Re-points the details screen at the (renamed) save's fresh summary.
+        void RefreshDetailsPanel(string worldName)
+        {
+            foreach (WorldSaveService.WorldSaveInfo info in WorldSaveService.EnumerateSaves(SavesRoot))
+            {
+                if (!string.Equals(info.Manifest.WorldName, worldName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                menuController?.ShowWorldDetails(new WorldSaveSummary(
+                    info.Manifest.WorldName,
+                    info.Manifest.Seed.ToString(),
+                    info.Manifest.GameMode,
+                    info.Manifest.Difficulty,
+                    dayCount: (int)(info.WorldTimeTicks / WorldConstants.TicksPerDay) + 1,
+                    lastPlayedUtc: ParseUtc(info.Manifest.ModifiedAtUtc),
+                    createdUtc: ParseUtc(info.Manifest.CreatedAtUtc)));
+                return;
+            }
+        }
 
         public bool LoadSave(string path)
         {
@@ -408,15 +609,17 @@ namespace Blockiverse.UI
                 worldManager.InitializeGeneratedWorld(generated, chunkAuthoritySync);
 
                 // Saved state is authoritative over the regenerated baseline: block deltas,
-                // weather, world time, game mode, container contents, then the inventory.
+                // weather + simulation queues, world time, game mode, container contents,
+                // station contents, then the inventory.
                 worldManager.SuppressContainerAutoLoot = true;
                 try
                 {
                     result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
-                    worldManager.RestoreWeatherState(data.WeatherState);
+                    worldManager.RestoreSimulationState(data);
                     worldManager.RestoreWorldTimeTicks(data.WorldTimeTicks);
                     worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(data.GameMode));
                     RestoreContainers(data.Containers);
+                    RestoreStations(data.Stations);
                 }
                 finally
                 {
@@ -426,12 +629,13 @@ namespace Blockiverse.UI
                 worldManager.Renderer?.RebuildAll();
                 RestoreInventory(result, data);
                 ApplyPlayerMode();
-                CreativeWorldManager.PositionRigAtSpawn(ResolveSpawnPosition());
+                RestorePlayer(data.PlayerState);
 
                 currentSavePath = path;
                 currentWorldName = data.WorldName;
                 currentDifficulty = data.Difficulty ?? string.Empty;
                 currentWorldPreset = data.WorldPreset;
+                lastSaveTime = Time.unscaledTime;
                 menuController?.EnterGameplay();
                 return true;
             }
@@ -454,9 +658,18 @@ namespace Blockiverse.UI
             {
                 var flatSettings = new WorldGenerationSettings(
                     data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed,
-                    groundHeight: Math.Min(8, data.Height - 2));
+                    groundHeight: Math.Min(FlatBuilderGroundHeight, data.Height - 2));
                 VoxelWorld flatWorld = new FlatBuilderPreset(registry, flatSettings).Generate();
                 return new GeneratedCreativeWorld(registry, flatSettings, flatWorld, CreativeWorldGenerationPreset.FlatCreative);
+            }
+
+            if (string.Equals(data.WorldPreset, "void_builder", StringComparison.OrdinalIgnoreCase))
+            {
+                var voidSettings = new WorldGenerationSettings(
+                    data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed,
+                    groundHeight: Math.Min(VoidBuilderGroundHeight, data.Height - 2));
+                VoxelWorld voidWorld = new VoidBuilderPreset(registry, voidSettings).Generate();
+                return new GeneratedCreativeWorld(registry, voidSettings, voidWorld, CreativeWorldGenerationPreset.VoidBuilder);
             }
 
             var settings = new WorldGenerationSettings(
@@ -492,6 +705,33 @@ namespace Blockiverse.UI
             Inventory loaded = result.CreateInventory();
             int selectedHotbarSlot = data.PlayerInventory != null ? data.PlayerInventory.SelectedHotbarSlotIndex : 0;
             survivalSync.RestoreLocalInventory(loaded, selectedHotbarSlot);
+        }
+
+        // Rebuilds timed-station contents (kiln/forge slots and in-flight crafts) from the save.
+        // Runs even when the save carries none: RestoreStationStates is what clears the previous
+        // world's station models, so skipping it would leak a prior session's kiln/forge contents
+        // into this world (and into its next autosave).
+        void RestoreStations(VxlwStation[] saved)
+        {
+            if (survivalSync == null)
+                return;
+
+            survivalSync.RestoreStationStates(WorldSaveStateMapper.FromSavedStations(saved));
+        }
+
+        // Places the rig at the saved position/heading and restores vitals; without saved player
+        // state the player starts at the world spawn with full vitals (the reset keeps a previous
+        // session's hunger/damage from leaking into the loaded world).
+        void RestorePlayer(SavedPlayerState state)
+        {
+            if (state == null || vitalsRuntime == null)
+            {
+                CreativeWorldManager.PositionRigAtSpawn(ResolveSpawnPosition());
+                vitalsRuntime?.ResetVitalsToFull();
+                return;
+            }
+
+            vitalsRuntime.RestorePlayerSaveState(state);
         }
 
         // Aligns the player's interaction mode with the world's rules mode (creative worlds

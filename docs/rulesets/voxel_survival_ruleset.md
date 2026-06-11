@@ -306,17 +306,21 @@ Stone selection:
 After solid terrain:
 
 ```ts
-if height < SEA_LEVEL:
-    fill from height + 1 to SEA_LEVEL with freshwater
+if height + 1 < SEA_LEVEL:
+    fill from height + 1 to SEA_LEVEL - 1 with freshwater
 ```
+
+The water table tops out one block below sea level so shorelines keep a one-block step down
+from dry land — a readable shore edge in VR instead of water sitting flush with the beach.
 
 Use `brine` instead of `freshwater` in dune coastlines, salt flats, and enclosed dry basins.
 
-Emberflow placement:
+Emberflow placement (rolled once per carved cave pocket during §5.5 carving, matching the
+§5.5 flood table):
 
 ```ts
-if y < 18 and caveAirNearby and random() < 0.035:
-    place emberflow source pocket
+if pocketCenterY < 18 and pocketRoll(seed, pocket) < 0.10:
+    fill carved cells below y = 18 with emberflow sources
 ```
 
 Fluid behavior:
@@ -325,7 +329,12 @@ Fluid behavior:
 |---|---:|---:|---|
 | Freshwater | 8 blocks | Every 5 ticks | Turns emberflow source contact into `black_basalt` |
 | Brine | 6 blocks | Every 6 ticks | Can be boiled into `brightsalt` |
-| Emberflow | 4 blocks | Every 12 ticks | Deals heat damage; ignites wood-adjacent blocks |
+| Emberflow | 4 blocks | Every 12 ticks | Deals heat damage; burns adjacent wood/foliage away |
+
+Flow distance counts the source cell: a freshwater source plus its flowing cells spans at
+most 8 blocks horizontally. Pouring over an edge resets the budget — a fall restarts the
+full horizontal distance from the landing cell. Sources are permanent blocks; flowing cells
+are simulated (spread and retract with the source) and are never collectable.
 
 ### 5.5 Cave Generation
 
@@ -494,7 +503,7 @@ Examples:
 
 | Tool | Action | Logic |
 |---|---|---|
-| Tiller | Create Tended Soil | Use on `loose_loam`, `rootsoil`, or `river_silt`; requires water within 4 blocks or consumes 1 `freshwater_flask` |
+| Tiller | Create Tended Soil | Use on `loose_loam`, `rootsoil`, or `river_silt`; requires freshwater within 4 blocks or consumes 1 `clean_water_flask` (the emptied `water_flask` returns) |
 | Sickle | Efficient harvesting | Plant drops roll twice and keep the better result |
 | Mallet | Salvage crafted blocks | Crafted blocks drop themselves instead of rubble |
 | Feller | Strip log | Optional alternate action turns `branchwood_log` into `smooth_branchwood` |
@@ -571,8 +580,11 @@ Kiln consumes fuel normally. Forge consumes fuel at `2×` speed.
 | `clearpane_glass ×1` | Clay Kiln | `glass_shard ×4`, `shellgrit ×1` | 10 sec | Transparent block |
 | `rosycopper_bar ×1` | Clay Kiln | `raw_rosycopper ×2` | 12 sec | Copper tools |
 | `paletin_bar ×1` | Clay Kiln | `raw_paletin ×2` | 12 sec | Bronze ingredient |
-| `brightsalt ×3` | Clay Kiln | `brine_bucket ×1` | 10 sec | Food preservation |
 | `lumen_dust ×2` | Clay Kiln | `lumen_crystal ×1` | 6 sec | Lamps and advanced recipes |
+| `water_flask ×1` | Clay Kiln | `glass_shard ×3`, `resin_blob ×1` | 8 sec | Empty drink flask (fill at a Campfire) |
+
+Brine boiling is an instant Campfire craft (see §9.6), not a timed kiln run: timed stations grant
+only their primary output, and boiling must hand the emptied bucket back.
 
 ### 9.4 Forge Recipes
 
@@ -620,16 +632,19 @@ deepsteel_bar
 | Output | Station | Ingredients | Use |
 |---|---|---|---|
 | `lumen_lamp ×2` | Build Table | `lumen_crystal ×1`, `glass_shard ×2`, `sunmetal_bar ×1` | Strong permanent light |
-| `water_flask ×1` | Clay Kiln | `glass_shard ×3`, `resin_blob ×1` | Holds one drink of water |
-| `clean_water_flask ×1` | Campfire | `water_flask ×1`, `freshwater_bucket ×1` | Restores thirst or stamina |
+| `clean_water_flask ×1` | Campfire | `water_flask ×1`, `freshwater_bucket ×1` | Restores thirst and stamina; returns `empty_bucket` |
+| `brightsalt ×3` | Campfire | `brine_bucket ×1` | Boiled brine; returns `empty_bucket` |
 | `trail_ration ×2` | Prep Board | `grain_bundle ×2`, `berry_cluster ×2`, `brightsalt ×1` | Long-lasting food |
 | `berry_mash ×1` | Prep Board | `berry_cluster ×3` | Quick food |
 | `field_bandage ×2` | Prep Board | `reed_fiber ×4`, `resin_blob ×1` | Slow healing item |
 | `spark_flare ×3` | Build Table | `spark_niter ×1`, `reed_fiber ×1`, `embercoal ×1` | Temporary bright light |
 | `small_blast_charge ×1` | Bellows Forge | `spark_niter ×4`, `fiber_cord ×2`, `clay_lump ×2` | Breaks weak stone in radius 2 |
-| `freshwater_bucket ×1` | Build Table | `rosycopper_bar ×3` | Carries fluid source |
-| `brine_bucket ×1` | Fill action | `empty_bucket ×1` on brine | Carries brine |
 | `empty_bucket ×1` | Build Table | `rosycopper_bar ×3` | Fluid container |
+| `freshwater_bucket ×1` | Fill action | `empty_bucket ×1` on freshwater | Carries freshwater |
+| `brine_bucket ×1` | Fill action | `empty_bucket ×1` on brine | Carries brine |
+
+Buckets are only crafted empty; filled buckets come from the fill action on a fluid source.
+Pouring a filled bucket places its source block and hands the empty bucket back.
 
 ---
 
@@ -781,7 +796,7 @@ Conversion requirements:
 hasWaterNearby = any freshwater block within 4 horizontal blocks and 1 vertical block
 ```
 
-If no water is nearby, the action requires `clean_water_flask ×1`.
+If no water is nearby, the action consumes `clean_water_flask ×1` (the emptied `water_flask` returns).
 
 ### 11.2 Crop Growth
 
@@ -840,8 +855,10 @@ Campfire actions:
 |---|---|---:|
 | `berry_cluster ×3` | `berry_mash ×1` | 6 sec |
 | `grain_bundle ×2` | `flatbread ×1` | 10 sec |
-| `freshwater_bucket ×1` | `clean_water_flask ×3` | 12 sec |
 | `raw_morsel ×1` | `cooked_morsel ×1` | 8 sec |
+
+Clean water comes from the §9.6 Campfire craft (`water_flask` + `freshwater_bucket`, one flask
+per craft with the bucket returned) — there is no batch purification recipe.
 
 ---
 

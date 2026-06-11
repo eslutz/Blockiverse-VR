@@ -58,6 +58,7 @@ namespace Blockiverse.VR
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
         [SerializeField] UnityEvent breakPressed = new();
+        [SerializeField] UnityEvent breakReleased = new();
         [SerializeField] UnityEvent placePressed = new();
         [SerializeField] UnityEvent undoPressed = new();
         [SerializeField] UnityEvent blockEditingTogglePressed = new();
@@ -89,6 +90,9 @@ namespace Blockiverse.VR
         public UnityEvent MenuPressed => menuPressed;
         public UnityEvent QuickMenuPressed => quickMenuPressed;
         public UnityEvent BreakPressed => breakPressed;
+        public UnityEvent BreakReleased => breakReleased;
+        // Live held-state of the break input (hold-to-mine polls this as a release safety net).
+        public bool IsBreakHeld => cachedBreakAction != null && cachedBreakAction.IsPressed();
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent UndoPressed => undoPressed;
         public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
@@ -322,6 +326,9 @@ namespace Blockiverse.VR
         {
             if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
                 breakPressed?.Invoke();
+
+            if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
+                breakReleased?.Invoke();
 
             if (cachedPlaceAction != null && cachedPlaceAction.WasPressedThisFrame())
                 placePressed?.Invoke();

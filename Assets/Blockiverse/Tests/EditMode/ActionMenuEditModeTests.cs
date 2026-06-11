@@ -35,7 +35,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(title.text, Is.EqualTo("Paused"));
             Assert.That(labels[0].text, Is.EqualTo("Resume"));
             Assert.That(labels[2].text, Is.EqualTo("Switch Survival/Creative"));
-            Assert.That(labels[4].text, Is.EqualTo("Return to Title"));
+            Assert.That(labels[3].text, Is.EqualTo("Creative Tools"));
+            Assert.That(labels[5].text, Is.EqualTo("Return to Title"));
 
             string invoked = null;
             menu.ActionInvoked += id => invoked = id;
@@ -46,7 +47,7 @@ namespace Blockiverse.Tests.EditMode
             buttons[2].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseToggleMode));
 
-            buttons[4].onClick.Invoke();
+            buttons[5].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseReturnToTitle));
         }
 

@@ -606,7 +606,9 @@ above y = 96:
 
 ```ts
 voidBuilder = {
-  platformCenter: [0, 96, 0],
+  // Centered on the spawn column; the platform's walking surface sits at groundHeight - 1,
+  // the same surface/spawn relationship as flat_builder (the default spawn stands on it).
+  platformCenter: [spawn.x, groundHeight - 1, spawn.z],
   platformSize: [16, 1, 16],
   platformBlock: "cutstone_block",
   generateTerrain: false,

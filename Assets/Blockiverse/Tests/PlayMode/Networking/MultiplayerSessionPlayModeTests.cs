@@ -1607,6 +1607,9 @@ namespace Blockiverse.Tests.Networking.PlayMode
             var soilPosition = new BlockPosition(2, 4, 2);
             var cropPosition = new BlockPosition(2, 5, 2);
             hostWorldManager.World.SetBlock(soilPosition, BlockRegistry.LooseLoam);
+            // §11.1: tilling requires freshwater within reach (or a clean water flask). Place a
+            // source beside the soil on the host (the till is validated against the host world).
+            hostWorldManager.World.SetBlock(new BlockPosition(3, 4, 2), BlockRegistry.Freshwater);
 
             MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
             MultiplayerChunkAuthoritySync clientChunkSync = ConfigureChunkSync(clientSession, clientWorldManager);

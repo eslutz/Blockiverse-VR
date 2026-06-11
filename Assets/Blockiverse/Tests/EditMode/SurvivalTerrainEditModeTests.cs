@@ -52,6 +52,139 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void VoidBuilderPresetGeneratesOnlyTheCutstonePlatform()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 32, height: 64, depth: 32, chunkSize: 16, seed: 1001, groundHeight: 32);
+            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
+
+            int platformY = settings.GroundHeight - 1;
+            int startX = settings.SpawnPosition.X - VoidBuilderPreset.PlatformSize / 2;
+            int startZ = settings.SpawnPosition.Z - VoidBuilderPreset.PlatformSize / 2;
+
+            int cutstone = 0;
+            int strayBlocks = 0;
+            for (int y = 0; y < world.Bounds.Height; y++)
+            {
+                for (int x = 0; x < world.Bounds.Width; x++)
+                {
+                    for (int z = 0; z < world.Bounds.Depth; z++)
+                    {
+                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                        if (block == BlockRegistry.Air)
+                            continue;
+
+                        bool onPlatform = y == platformY &&
+                            x >= startX && x < startX + VoidBuilderPreset.PlatformSize &&
+                            z >= startZ && z < startZ + VoidBuilderPreset.PlatformSize;
+
+                        if (onPlatform && block == BlockRegistry.CutstoneBlock)
+                            cutstone++;
+                        else
+                            strayBlocks++;
+                    }
+                }
+            }
+
+            // §11.3: a 16×16×1 cutstone platform and nothing else; the default spawn column
+            // stands on it.
+            Assert.That(cutstone, Is.EqualTo(VoidBuilderPreset.PlatformSize * VoidBuilderPreset.PlatformSize));
+            Assert.That(strayBlocks, Is.Zero, "The void preset must generate nothing outside the platform.");
+            Assert.That(
+                world.GetBlock(new BlockPosition(settings.SpawnPosition.X, platformY, settings.SpawnPosition.Z)),
+                Is.EqualTo(BlockRegistry.CutstoneBlock));
+        }
+
+        [Test]
+        public void SurvivalTerrainKeepsFluidBelowTheWaterTable()
+        {
+            // Terrain heights straddle sea level, but a single seed's map can sit entirely above
+            // it — scan a few seeds and validate the first that generates water (same pattern as
+            // the container-loot seed scan).
+            bool foundFluid = false;
+
+            for (int seed = 1; seed <= 6 && !foundFluid; seed++)
+            {
+                VoxelWorld world = GenerateSurvivalWorld(seed);
+                int fluidBelowTable = 0;
+                int fluidAtOrAboveTable = 0;
+
+                for (int y = 0; y < world.Bounds.Height; y++)
+                {
+                    for (int x = 0; x < world.Bounds.Width; x++)
+                    {
+                        for (int z = 0; z < world.Bounds.Depth; z++)
+                        {
+                            BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                            if (block != BlockRegistry.Freshwater && block != BlockRegistry.Brine)
+                                continue;
+
+                            if (y < WorldConstants.SeaLevel)
+                                fluidBelowTable++;
+                            else
+                                fluidAtOrAboveTable++;
+                        }
+                    }
+                }
+
+                Assert.That(fluidAtOrAboveTable, Is.Zero,
+                    $"Seed {seed}: fluid above the §5.4 water table (the fill tops out at SeaLevel-1).");
+                foundFluid = fluidBelowTable > 0;
+            }
+
+            Assert.That(foundFluid, Is.True,
+                "Expected at least one scanned seed to flood columns below sea level (§5.4).");
+        }
+
+        [Test]
+        public void SurvivalTerrainPlacesEmberflowPoolsOnlyInDeepCaves()
+        {
+            // Deep cave pockets roll a 10% emberflow flood (§5.4/§5.5), so a single seed may
+            // legitimately have none — scan seeds for the first that places a pool, while
+            // validating the depth ceiling on every world along the way.
+            bool foundEmberflow = false;
+
+            for (int seed = 1; seed <= 8 && !foundEmberflow; seed++)
+            {
+                VoxelWorld world = GenerateSurvivalWorld(seed);
+                int sourcesBelowCeiling = 0;
+                int sourcesAtOrAboveCeiling = 0;
+                int flowCells = 0;
+
+                for (int y = 0; y < world.Bounds.Height; y++)
+                {
+                    for (int x = 0; x < world.Bounds.Width; x++)
+                    {
+                        for (int z = 0; z < world.Bounds.Depth; z++)
+                        {
+                            BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                            if (block == BlockRegistry.Emberflow)
+                            {
+                                if (y < 18)
+                                    sourcesBelowCeiling++;
+                                else
+                                    sourcesAtOrAboveCeiling++;
+                            }
+                            else if (block == BlockRegistry.EmberflowFlow)
+                            {
+                                flowCells++;
+                            }
+                        }
+                    }
+                }
+
+                Assert.That(sourcesAtOrAboveCeiling, Is.Zero,
+                    $"Seed {seed}: emberflow above the §5.4 deep-cave ceiling (y<18).");
+                Assert.That(flowCells, Is.Zero,
+                    $"Seed {seed}: worldgen places only emberflow sources; flow cells come from the simulation.");
+                foundEmberflow = sourcesBelowCeiling > 0;
+            }
+
+            Assert.That(foundEmberflow, Is.True,
+                "Expected at least one scanned seed to flood a deep cave pocket with emberflow (§5.4).");
+        }
+
+        [Test]
         public void SurvivalTerrainPresetFailsFastWhenWorldHeightCannotFitTerrainBand()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
@@ -329,11 +462,12 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void SurvivalTerrainExposesDeterministicContainerLoot()
         {
-            // Loot is biome-weighted toward the no-loot pathmark_stones, so any single seed may place
-            // zero loot crates. Search a handful of seeds for one that does, then assert the contents
-            // are deterministic and correctly anchored on StorageCrate blocks.
+            // Loot is biome-weighted toward the no-loot pathmark_stones, and §5.4 lakes/seas now
+            // skip structures on flooded columns, so any single seed may place zero loot crates.
+            // Search a range of seeds for one that does, then assert the contents are deterministic
+            // and correctly anchored on StorageCrate blocks.
             int seedWithLoot = -1;
-            for (int seed = 1; seed <= 30 && seedWithLoot < 0; seed++)
+            for (int seed = 1; seed <= 80 && seedWithLoot < 0; seed++)
             {
                 var probe = new SurvivalTerrainPreset(BlockRegistry.CreateDefault(),
                     WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed));

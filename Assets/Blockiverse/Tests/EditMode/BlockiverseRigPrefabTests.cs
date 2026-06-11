@@ -461,6 +461,21 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(audioCuePlayer.HasClipForCue(cue), Is.True, $"{cue} should have an assigned generated clip.");
 
             Assert.That(audioCuePlayer.FootstepClipCount, Is.EqualTo(2));
+
+            // The music bed: a controller on the rig with a generated track per context.
+            BlockiverseMusicController musicController = prefab.GetComponent<BlockiverseMusicController>();
+            Assert.That(musicController, Is.Not.Null);
+            foreach (BlockiverseMusicContext context in new[]
+            {
+                BlockiverseMusicContext.Menu,
+                BlockiverseMusicContext.Day,
+                BlockiverseMusicContext.Night,
+                BlockiverseMusicContext.Cave,
+            })
+            {
+                Assert.That(musicController.ResolveTrackClip(context), Is.Not.Null,
+                    $"{context} should have an assigned generated music track.");
+            }
         }
 
         [Test]
@@ -483,15 +498,15 @@ namespace Blockiverse.Tests.EditMode
             string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                 .Select(label => label.text));
 
+            // Canonical controller mapping (shared with the Settings → Controls screen).
             Assert.That(popupText, Does.Contain("Right trigger: press UI or break blocks"));
-            Assert.That(popupText, Does.Contain("Right grip: place blocks"));
+            Assert.That(popupText, Does.Contain("Right grip: place or use"));
             Assert.That(popupText, Does.Contain("Left grip: blocks menu"));
-            Assert.That(popupText, Does.Contain("Menu: comfort settings"));
-            Assert.That(popupText, Does.Contain("Right thumbstick: snap turn"));
+            Assert.That(popupText, Does.Contain("Menu: pause"));
+            Assert.That(popupText, Does.Contain("Right stick: snap turn"));
             Assert.That(popupText, Does.Contain("Right A: jump"));
-            Assert.That(popupText, Does.Contain("Left X: unassigned"));
-            Assert.That(popupText, Does.Contain("Left Y: unassigned"));
-            Assert.That(popupText, Does.Contain("Right B: unassigned"));
+            Assert.That(popupText, Does.Contain("Right B: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Left stick: move"));
             Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
             Assert.That(popupText, Does.Not.Contain("Left X: jump"));
             Assert.That(popupText, Does.Not.Contain("Left Y: undo"));

@@ -38,6 +38,17 @@ namespace Blockiverse.Survival
         public const float ThornbrushIntervalSeconds = 0.5f;
         public const int CampfireDamage = 2;
         public const float CampfireIntervalSeconds = 0.5f;
+        public const int EmberflowDamage = 3;
+        public const float EmberflowIntervalSeconds = 0.5f;
+
+        // Emberflow source and flowing cells share one hazard id, so wading between them never
+        // double-applies inside a single throttle window.
+        static readonly BlockHazard EmberflowHazard = new(
+            new HazardVolumeDefinition(
+                "emberflow",
+                new HazardDamage(EmberflowDamage, HazardDamageKind.Heat, "emberflow"),
+                EmberflowIntervalSeconds),
+            HazardContactCells.Feet | HazardContactCells.Head | HazardContactCells.GroundBelow);
 
         static readonly Dictionary<BlockId, BlockHazard> HazardForBlock = new()
         {
@@ -59,6 +70,8 @@ namespace Blockiverse.Survival
                         CampfireIntervalSeconds),
                     HazardContactCells.Feet | HazardContactCells.GroundBelow)
             },
+            { BlockRegistry.Emberflow, EmberflowHazard },
+            { BlockRegistry.EmberflowFlow, EmberflowHazard },
         };
 
         public static bool TryGetHazard(BlockId block, out BlockHazard hazard) =>

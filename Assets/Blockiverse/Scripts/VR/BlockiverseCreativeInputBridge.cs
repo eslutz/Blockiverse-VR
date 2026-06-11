@@ -23,6 +23,7 @@ namespace Blockiverse.VR
         [SerializeField] MultiplayerSurvivalSync survivalSync;
 
         UnityAction breakAction;
+        UnityAction breakReleasedAction;
         UnityAction placeAction;
         UnityAction undoAction;
         UnityAction blockEditingToggleAction;
@@ -30,6 +31,19 @@ namespace Blockiverse.VR
         bool lineRendererDefaultEnabled;
         bool capturedLineVisualDefault;
         bool lineVisualDefaultEnabled;
+
+        // Hold-to-mine (§7.3): survival break is a timed hold on a fixed target. ToolHit cues +
+        // chip VFX play on a cadence while held; releasing or losing the target cancels; the
+        // harvest submits when the block's work time elapses. Creative break stays instant.
+        const float MineHitCueIntervalSeconds = 0.4f;
+
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        BlockiverseVfxCuePlayer vfxCuePlayer;
+        bool mining;
+        BlockPosition miningTarget;
+        float miningElapsedSeconds;
+        float miningRequiredSeconds;
+        float nextMineCueTime;
 
         public XRRayInteractor InteractionRay => interactionRay;
 
@@ -73,6 +87,57 @@ namespace Blockiverse.VR
                 interactionController.UpdatePreview(target, normal);
             else
                 interactionController.HidePreview();
+
+            TickMining(target);
+        }
+
+        // Advances an active hold-to-mine: cancels when the aim leaves the started block or the
+        // trigger is no longer held, plays the strike cadence, and submits the harvest when the
+        // block's work time elapses.
+        void TickMining(BlockPosition currentTarget)
+        {
+            if (!mining)
+                return;
+
+            bool stillHeld = inputRig == null || inputRig.IsBreakHeld;
+            bool stillAimed = interactionController.CurrentTarget.HasValue && currentTarget == miningTarget;
+
+            if (!stillHeld || !stillAimed || !SurvivalInteractionActive)
+            {
+                CancelMining();
+                return;
+            }
+
+            miningElapsedSeconds += Time.deltaTime;
+
+            if (Time.time >= nextMineCueTime)
+            {
+                nextMineCueTime = Time.time + MineHitCueIntervalSeconds;
+                PlayMineStrikeFeedback();
+            }
+
+            if (miningElapsedSeconds >= miningRequiredSeconds)
+            {
+                mining = false;
+                survivalSync.TrySubmitHarvest(miningTarget, out _);
+            }
+        }
+
+        void CancelMining()
+        {
+            mining = false;
+        }
+
+        void PlayMineStrikeFeedback()
+        {
+            if (audioCuePlayer == null)
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+            if (vfxCuePlayer == null)
+                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+
+            var worldCenter = new Vector3(miningTarget.X + 0.5f, miningTarget.Y + 0.5f, miningTarget.Z + 0.5f);
+            audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.ToolHitSoft, worldCenter);
+            vfxCuePlayer?.PlayCue(BlockiverseVfxCue.BlockChipBurst, worldCenter);
         }
 
         void Bind()
@@ -84,10 +149,12 @@ namespace Blockiverse.VR
 
             EnsureActions();
             inputRig.BreakPressed.RemoveListener(breakAction);
+            inputRig.BreakReleased.RemoveListener(breakReleasedAction);
             inputRig.PlacePressed.RemoveListener(placeAction);
             inputRig.UndoPressed.RemoveListener(undoAction);
             inputRig.BlockEditingTogglePressed.RemoveListener(blockEditingToggleAction);
             inputRig.BreakPressed.AddListener(breakAction);
+            inputRig.BreakReleased.AddListener(breakReleasedAction);
             inputRig.PlacePressed.AddListener(placeAction);
             inputRig.UndoPressed.AddListener(undoAction);
             inputRig.BlockEditingTogglePressed.AddListener(blockEditingToggleAction);
@@ -100,14 +167,17 @@ namespace Blockiverse.VR
 
             EnsureActions();
             inputRig.BreakPressed.RemoveListener(breakAction);
+            inputRig.BreakReleased.RemoveListener(breakReleasedAction);
             inputRig.PlacePressed.RemoveListener(placeAction);
             inputRig.UndoPressed.RemoveListener(undoAction);
             inputRig.BlockEditingTogglePressed.RemoveListener(blockEditingToggleAction);
+            CancelMining();
         }
 
         void EnsureActions()
         {
             breakAction ??= TryBreakTarget;
+            breakReleasedAction ??= OnBreakReleased;
             placeAction ??= TryPlaceTarget;
             undoAction ??= TryUndo;
             blockEditingToggleAction ??= ToggleBlockEditing;
@@ -182,12 +252,34 @@ namespace Blockiverse.VR
             if (!TryGetTarget(out BlockPosition target, out _))
                 return;
 
-            // Survival mode: server-authoritative harvest (resource drops, tool tier/durability,
-            // container loot). Creative mode: direct delete.
+            // Survival mode: hold-to-mine — the press starts a timed hold whose harvest submits
+            // when the block's work time elapses (server-authoritative on submit). Blocks the
+            // preview already rejects (wrong tool, full inventory, no rule) submit immediately so
+            // the host's rejection feedback (e.g. ToolWrong) plays. Creative mode: instant delete.
             if (SurvivalInteractionActive)
+            {
+                if (survivalSync.TryEvaluateHarvestWorkSeconds(target, out float requiredSeconds) &&
+                    requiredSeconds > 0f)
+                {
+                    mining = true;
+                    miningTarget = target;
+                    miningElapsedSeconds = 0f;
+                    miningRequiredSeconds = requiredSeconds;
+                    nextMineCueTime = Time.time;
+                    return;
+                }
+
                 survivalSync.TrySubmitHarvest(target, out _);
+            }
             else
+            {
                 interactionController.TryBreakBlock(target);
+            }
+        }
+
+        void OnBreakReleased()
+        {
+            CancelMining();
         }
 
         void TryPlaceTarget()

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Blockiverse.Core;
+using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -11,7 +12,8 @@ namespace Blockiverse.Gameplay
     public enum CreativeWorldGenerationPreset
     {
         SurvivalLite,
-        FlatCreative
+        FlatCreative,
+        VoidBuilder
     }
 
     // World-level rules mode (the manifest's "gameMode"): survival worlds accept edits only
@@ -71,11 +73,11 @@ namespace Blockiverse.Gameplay
         WeatherService weatherService;
         VegetationService vegetationService;
         FarmingService farmingService;
+        FluidFlowService fluidFlowService;
         WorldTimeClock worldTimeClock;
         // The world instance whose BlockChanged event we are currently subscribed to. Tracked
         // separately from `World` so re-configuration unsubscribes from the right instance.
         VoxelWorld subscribedWorld;
-        string pendingWeatherState;
         // Environment sync values received before the services existed (message-ordering safety net).
         WeatherSyncState? pendingWeatherSync;
         long? pendingWorldTimeTicks;
@@ -129,6 +131,19 @@ namespace Blockiverse.Gameplay
             return true;
         }
 
+        // Whether a head/world position sits underground (no sky access above its cell), the O(1)
+        // sky-map answer the ambience and music presentation layers share so they agree on when
+        // the player is in a cave. False when there is no sky map or the cell is out of bounds.
+        public bool IsHeadUnderground(Vector3 headWorldPosition)
+        {
+            VoxelSkyLightMap skyLight = Renderer != null ? Renderer.SkyLight : null;
+            if (skyLight == null || World == null)
+                return false;
+
+            BlockPosition cell = CreativeInteractionController.ToBlockPosition(headWorldPosition);
+            return World.Bounds.Contains(cell) && !skyLight.HasSkyAccess(cell);
+        }
+
         // Full weather snapshot: state + tick accumulator + RNG position. The RNG position is
         // what keeps a late-joining client in deterministic lockstep with the host's weather.
         public readonly struct WeatherSyncState
@@ -165,6 +180,17 @@ namespace Blockiverse.Gameplay
             weatherService.RestoreState(sync.State, sync.Ticks, sync.RngState);
         }
 
+        // Creative env control: forces a weather state immediately (offline/host worlds — clients
+        // mirror the host's weather via the environment sync, never set it locally). The RNG
+        // position is preserved so the machine's future transitions stay on its timeline.
+        public void SetWeather(WeatherState state)
+        {
+            if (weatherService == null)
+                return;
+
+            weatherService.RestoreState(state, ticks: 0, GetWeatherSyncState().RngState);
+        }
+
         // Restores the world-time clock from a host snapshot, buffering if the clock is not ready.
         public void RestoreWorldTimeTicks(long totalElapsedTicks)
         {
@@ -174,25 +200,130 @@ namespace Blockiverse.Gameplay
                 return;
             }
             worldTimeClock.RestoreElapsedTicks(totalElapsedTicks);
+
+            // When the clock is restored AFTER the fluid sim was configured (save load applies
+            // the world first, then restores time), resume the sim from the restored tick — the
+            // loaded world is already the post-tick state, so the next Tick must not replay every
+            // elapsed tick. (When the restore arrives first it is buffered into
+            // pendingWorldTimeTicks and the sim is Configured at the restored tick directly.)
+            fluidFlowService?.SyncToWorldTick(totalElapsedTicks);
         }
 
-        // Legacy string-based restore: saves persist only the state name, so ticks/RNG restart
-        // deterministically from (0, seed). RestoreWeatherSyncState is the full-fidelity path.
-        public void RestoreWeatherState(string weatherStateString)
-        {
-            if (string.IsNullOrEmpty(weatherStateString))
-                return;
+        // ── World-simulation persistence ─────────────────────────────────────
 
-            if (weatherService == null)
+        // Fills the world-owned portion of the save extras: the full weather-machine position
+        // plus the vegetation/farming simulation queues. Player state and stations belong to
+        // other components and are appended by the caller.
+        public void FillSaveExtras(WorldSaveExtras extras)
+        {
+            if (extras == null)
+                throw new ArgumentNullException(nameof(extras));
+
+            WeatherSyncState weather = GetWeatherSyncState();
+            extras.WeatherTicksInState = weather.Ticks;
+            extras.WeatherRngState = weather.RngState;
+
+            if (vegetationService != null)
             {
-                pendingWeatherState = weatherStateString;
-                return;
+                IReadOnlyList<(BlockPosition position, int accumulatedTicks)> saplings =
+                    vegetationService.ExportSaplingProgress();
+                var saplingsOut = new VxlwSaplingProgress[saplings.Count];
+                for (int i = 0; i < saplings.Count; i++)
+                {
+                    (BlockPosition position, int accumulatedTicks) = saplings[i];
+                    saplingsOut[i] = new VxlwSaplingProgress
+                    {
+                        X = position.X, Y = position.Y, Z = position.Z,
+                        AccumulatedTicks = accumulatedTicks
+                    };
+                }
+                extras.Saplings = saplingsOut;
+
+                IReadOnlyList<VegetationService.WildRegrowthMarker> wild = vegetationService.ExportWildRegrowth();
+                var wildOut = new List<VxlwWildRegrowthMarker>(wild.Count);
+                foreach (VegetationService.WildRegrowthMarker marker in wild)
+                {
+                    if (Registry == null || !Registry.TryGet(marker.BlockId, out BlockDefinition def))
+                        continue;
+
+                    wildOut.Add(new VxlwWildRegrowthMarker
+                    {
+                        CanonicalId = def.CanonicalId,
+                        X = marker.Position.X, Y = marker.Position.Y, Z = marker.Position.Z,
+                        RegrowAfterTick = marker.RegrowAfterTick,
+                        AttemptsLeft = marker.AttemptsLeft
+                    });
+                }
+                extras.WildRegrowth = wildOut.ToArray();
             }
 
-            if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed))
+            if (farmingService != null)
             {
-                uint seed = Settings != null ? (uint)Settings.Seed : 1u;
-                weatherService.RestoreState(parsed, 0, seed);
+                IReadOnlyList<(BlockPosition position, int accumulatedTicks)> regrowth =
+                    farmingService.ExportBerrybushRegrowth();
+                var regrowthOut = new VxlwBerrybushRegrowth[regrowth.Count];
+                for (int i = 0; i < regrowth.Count; i++)
+                {
+                    (BlockPosition position, int accumulatedTicks) = regrowth[i];
+                    regrowthOut[i] = new VxlwBerrybushRegrowth
+                    {
+                        X = position.X, Y = position.Y, Z = position.Z,
+                        AccumulatedTicks = accumulatedTicks
+                    };
+                }
+                extras.BerrybushRegrowth = regrowthOut;
+            }
+        }
+
+        // Restores the world-owned simulation state from a loaded save: weather machine position
+        // (state + ticks + RNG) and the vegetation/farming queues. Call after the world has been
+        // initialized and saved block deltas applied — the queues validate against world blocks.
+        public void RestoreSimulationState(WorldSaveData data)
+        {
+            if (data == null)
+                throw new ArgumentNullException(nameof(data));
+
+            WeatherState weatherState = WeatherState.Clear;
+            if (!string.IsNullOrEmpty(data.WeatherState))
+                Enum.TryParse(data.WeatherState, ignoreCase: true, out weatherState);
+            RestoreWeatherSyncState(new WeatherSyncState(weatherState, data.WeatherTicksInState, data.WeatherRngState));
+
+            if (vegetationService != null)
+            {
+                if (data.Saplings != null)
+                {
+                    var saplings = new List<(BlockPosition, int)>(data.Saplings.Length);
+                    foreach (VxlwSaplingProgress entry in data.Saplings)
+                        saplings.Add((new BlockPosition(entry.X, entry.Y, entry.Z), entry.AccumulatedTicks));
+                    vegetationService.RestoreSaplingProgress(saplings);
+                }
+
+                if (data.WildRegrowth != null)
+                {
+                    var markers = new List<VegetationService.WildRegrowthMarker>(data.WildRegrowth.Length);
+                    foreach (VxlwWildRegrowthMarker entry in data.WildRegrowth)
+                    {
+                        // Markers whose canonical block no longer resolves are dropped (unreleased:
+                        // no legacy fallbacks).
+                        if (Registry == null || !Registry.TryGetByCanonicalId(entry.CanonicalId, out BlockDefinition def))
+                            continue;
+
+                        markers.Add(new VegetationService.WildRegrowthMarker(
+                            def.Id,
+                            new BlockPosition(entry.X, entry.Y, entry.Z),
+                            entry.RegrowAfterTick,
+                            entry.AttemptsLeft));
+                    }
+                    vegetationService.RestoreWildRegrowth(markers);
+                }
+            }
+
+            if (farmingService != null && data.BerrybushRegrowth != null)
+            {
+                var regrowth = new List<(BlockPosition, int)>(data.BerrybushRegrowth.Length);
+                foreach (VxlwBerrybushRegrowth entry in data.BerrybushRegrowth)
+                    regrowth.Add((new BlockPosition(entry.X, entry.Y, entry.Z), entry.AccumulatedTicks));
+                farmingService.RestoreBerrybushRegrowth(regrowth);
             }
         }
 
@@ -304,6 +435,11 @@ namespace Blockiverse.Gameplay
             if (worldTimeClock != null)
                 worldTimeClock.Ticked -= OnWorldTick;
 
+            // The flow sim is bound to the world it was configured on; drop it now so a stale
+            // instance never reacts to the replacement world's edits (it is recreated at the end
+            // of this method once the clock is known).
+            fluidFlowService = null;
+
             // Unsubscribe from the world we actually subscribed to — `World` may already point at a
             // replacement (e.g. a multiplayer regeneration), and unsubscribing from the new instance
             // would leak the old world's handler.
@@ -357,22 +493,28 @@ namespace Blockiverse.Gameplay
                 weatherService.RestoreState(pendingWeatherSync.Value.State, pendingWeatherSync.Value.Ticks, pendingWeatherSync.Value.RngState);
                 pendingWeatherSync = null;
             }
-            else if (!string.IsNullOrEmpty(pendingWeatherState))
-            {
-                RestoreWeatherState(pendingWeatherState);
-                pendingWeatherState = null;
-            }
 
             if (pendingWorldTimeTicks.HasValue)
             {
                 worldTimeClock.RestoreElapsedTicks(pendingWorldTimeTicks.Value);
                 pendingWorldTimeTicks = null;
             }
+
+            // Configured after any pending clock restore so the flow phase aligns with the
+            // synced absolute tick — late joiners then step fluids at the same world ticks
+            // as the host.
+            fluidFlowService = new FluidFlowService();
+            fluidFlowService.Configure(World, settings != null ? settings.Seed : World.Seed, CurrentWorldTick);
         }
 
         void OnBlockChanged(BlockChange change)
         {
             BlockId b = change.NewBlock;
+
+            // Fluid simulation reacts to every edit: placed/removed fluids and new openings
+            // activate the affected cells (a no-op for changes far from any fluid).
+            fluidFlowService?.OnBlockChanged(World, change);
+
             if (b == BlockRegistry.Sapling || b == BlockRegistry.Sapling_S1 || b == BlockRegistry.Sapling_S2)
                 vegetationService?.TrackSapling(change.Position);
             // Only a crop NEWLY appearing at a position re-anchors growth (planting/replanting).
@@ -470,13 +612,21 @@ namespace Blockiverse.Gameplay
         // Moves all contents from the container at a position into the target inventory. Returns true
         // when the container was fully emptied. Safe to call on a position with no container. Used by
         // the break-to-loot path; a future container-open UI can reuse it or read ContainerStore.
+        // Fires when a broken container's contents were granted to the active player (feedback
+        // layers play the open/pickup cues from it).
+        public event Action<BlockPosition> ContainerLooted;
+
         public bool TryLootContainerInto(BlockPosition position, Inventory target)
         {
             if (containerStore == null || target == null)
                 return false;
             if (!containerStore.Contains(position))
                 return false;
-            return containerStore.TransferAllInto(position, target);
+
+            bool looted = containerStore.TransferAllInto(position, target);
+            if (looted)
+                ContainerLooted?.Invoke(position);
+            return looted;
         }
 
         // Replaces the live container store with saved contents on load (saved state is authoritative
@@ -501,6 +651,11 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TickWildRegrowth(World, CurrentWorldTick);
                 farmingService?.TickGrowth(World, CurrentWorldTick);
                 farmingService?.TickRegrowth(World, ticks);
+                fluidFlowService?.Tick(World, CurrentWorldTick);
+
+                // World-sim mutations only mark chunks dirty; repaint them here so growth and
+                // flow are visible without waiting for a player edit to trigger a rebuild.
+                Renderer?.RebuildDirty();
             }
         }
 
@@ -585,6 +740,16 @@ namespace Blockiverse.Gameplay
                 return;
 
             rigObject.transform.position = new Vector3(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
+        }
+
+        // Places the rig at a saved player position/heading (world load with saved player state).
+        public static void PositionRig(Vector3 position, float yawDegrees)
+        {
+            GameObject rigObject = GameObject.Find(BlockiverseProject.XrRigRootName);
+            if (rigObject == null)
+                return;
+
+            rigObject.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yawDegrees, 0f));
         }
 
         PlacementPreview CreatePlacementPreview()

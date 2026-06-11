@@ -14,6 +14,8 @@ namespace Blockiverse.UI
         [SerializeField] Button[] recipeButtons;
         [SerializeField] Button repairButton;
         [SerializeField] TMP_Text[] recipeLabels;
+        [SerializeField] Image[] recipeIcons;
+        [SerializeField] BlockiverseItemIconLibrary iconLibrary;
         [SerializeField] TMP_Text statusLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
@@ -50,10 +52,17 @@ namespace Blockiverse.UI
             Configure(null, targetRecipeLabels, targetStatusLabel);
         }
 
-        public void Configure(Button[] targetRecipeButtons, TMP_Text[] targetRecipeLabels, TMP_Text targetStatusLabel)
+        public void Configure(
+            Button[] targetRecipeButtons,
+            TMP_Text[] targetRecipeLabels,
+            TMP_Text targetStatusLabel,
+            Image[] targetRecipeIcons = null,
+            BlockiverseItemIconLibrary targetIconLibrary = null)
         {
             recipeLabels = targetRecipeLabels ?? Array.Empty<TMP_Text>();
             recipeButtons = targetRecipeButtons ?? Array.Empty<Button>();
+            recipeIcons = targetRecipeIcons ?? Array.Empty<Image>();
+            iconLibrary = targetIconLibrary;
             statusLabel = targetStatusLabel;
             WireRecipeButtons();
             Refresh();
@@ -218,7 +227,22 @@ namespace Blockiverse.UI
                     continue;
 
                 recipeLabels[i].text = i < recipes.Count ? FormatRecipe(recipes[i]) : string.Empty;
+                SetRecipeIcon(i, i < recipes.Count ? recipes[i] : null);
             }
+        }
+
+        // Output-item icon next to the recipe row (blank when no icon exists for the output).
+        void SetRecipeIcon(int index, CraftingRecipe recipe)
+        {
+            if (recipeIcons == null || index >= recipeIcons.Length || recipeIcons[index] == null)
+                return;
+
+            Sprite icon = null;
+            if (recipe != null && iconLibrary != null)
+                iconLibrary.TryGetIcon(recipe.Output.ItemId, out icon);
+
+            recipeIcons[index].sprite = icon;
+            recipeIcons[index].enabled = icon != null;
         }
 
         void Awake()

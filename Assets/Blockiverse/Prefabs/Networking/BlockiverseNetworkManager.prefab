@@ -15,6 +15,9 @@ GameObject:
   - component: {fileID: 6213910669066858669}
   - component: {fileID: 2253992077840423001}
   - component: {fileID: 8842103972451178240}
+  - component: {fileID: 6539620558512076537}
+  - component: {fileID: 4340109983338920945}
+  - component: {fileID: 2462214665471144563}
   m_Layer: 0
   m_Name: BlockiverseNetworkManager
   m_TagString: Untagged
@@ -169,5 +172,50 @@ MonoBehaviour:
   session: {fileID: 0}
   worldManager: {fileID: 0}
   chunkAuthoritySync: {fileID: 2253992077840423001}
+  survivalSync: {fileID: 0}
+  vitalsRuntime: {fileID: 0}
   saveFileName: multiplayer-world.vxlworld
   worldName: Multiplayer World
+--- !u!114 &6539620558512076537
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 561d98b12ce2c41e6aba0dd25490ca6e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.MultiplayerSurvivalSync
+  session: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}
+  worldManager: {fileID: 0}
+--- !u!114 &4340109983338920945
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d2e4a91c6b34f8aa0d5e1f2b3c4d5e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.SurvivalVitalsRuntime
+  survivalSync: {fileID: 0}
+  worldManager: {fileID: 0}
+--- !u!114 &2462214665471144563
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c2e94f1a8d643b59e6f0a3d1b8c2754, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.EnvironmentDynamicsController
+  worldManager: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}

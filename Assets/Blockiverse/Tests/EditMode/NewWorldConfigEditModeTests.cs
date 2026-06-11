@@ -40,6 +40,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(config.WorldSize, Is.EqualTo("medium"));
             config.CycleWorldPreset();
             Assert.That(config.WorldPreset, Is.EqualTo("flat_builder"));
+            config.CycleWorldPreset();
+            Assert.That(config.WorldPreset, Is.EqualTo("void_builder"));
+            config.CycleWorldPreset();
+            Assert.That(config.WorldPreset, Is.EqualTo("survival_terrain"), "World preset should wrap after void_builder.");
             config.CycleStartingBiome();
             Assert.That(config.StartingBiome, Is.EqualTo("meadow"));
         }

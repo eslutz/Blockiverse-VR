@@ -14,6 +14,8 @@ namespace Blockiverse.UI
 
         [SerializeField] Button[] slotButtons;
         [SerializeField] TMP_Text[] slotLabels;
+        [SerializeField] Image[] slotIcons;
+        [SerializeField] BlockiverseItemIconLibrary iconLibrary;
         [SerializeField] TMP_Text selectedHotbarLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
@@ -34,10 +36,17 @@ namespace Blockiverse.UI
             Configure(null, targetSlotLabels, targetSelectedHotbarLabel);
         }
 
-        public void Configure(Button[] targetSlotButtons, TMP_Text[] targetSlotLabels, TMP_Text targetSelectedHotbarLabel)
+        public void Configure(
+            Button[] targetSlotButtons,
+            TMP_Text[] targetSlotLabels,
+            TMP_Text targetSelectedHotbarLabel,
+            Image[] targetSlotIcons = null,
+            BlockiverseItemIconLibrary targetIconLibrary = null)
         {
             slotLabels = targetSlotLabels ?? Array.Empty<TMP_Text>();
             slotButtons = targetSlotButtons ?? Array.Empty<Button>();
+            slotIcons = targetSlotIcons ?? Array.Empty<Image>();
+            iconLibrary = targetIconLibrary;
             selectedHotbarLabel = targetSelectedHotbarLabel;
             WireSlotButtons();
             Refresh();
@@ -77,7 +86,18 @@ namespace Blockiverse.UI
                     if (slotLabels[i] == null)
                         continue;
 
-                    slotLabels[i].text = FormatSlot(i);
+                    // Icon + count when the item has an icon; the text-only fallback keeps slots
+                    // readable for icons that don't exist (and for icon-less configurations).
+                    if (TryGetSlotIcon(i, out Sprite icon, out ItemStack stack))
+                    {
+                        SetSlotIcon(i, icon);
+                        slotLabels[i].text = $"x{stack.Count}";
+                    }
+                    else
+                    {
+                        SetSlotIcon(i, null);
+                        slotLabels[i].text = FormatSlot(i);
+                    }
                 }
             }
 
@@ -103,6 +123,30 @@ namespace Blockiverse.UI
                 return string.Empty;
 
             return FormatStack(inventory.GetSlot(slotIndex), itemRegistry);
+        }
+
+        bool TryGetSlotIcon(int slotIndex, out Sprite icon, out ItemStack stack)
+        {
+            icon = null;
+            stack = ItemStack.Empty;
+
+            if (iconLibrary == null || slotIcons == null || slotIndex >= slotIcons.Length || slotIcons[slotIndex] == null)
+                return false;
+
+            if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount)
+                return false;
+
+            stack = inventory.GetSlot(slotIndex);
+            return !stack.IsEmpty && iconLibrary.TryGetIcon(stack.ItemId, out icon);
+        }
+
+        void SetSlotIcon(int slotIndex, Sprite icon)
+        {
+            if (slotIcons == null || slotIndex >= slotIcons.Length || slotIcons[slotIndex] == null)
+                return;
+
+            slotIcons[slotIndex].sprite = icon;
+            slotIcons[slotIndex].enabled = icon != null;
         }
 
         static string FormatStack(ItemStack stack, ItemRegistry registry)

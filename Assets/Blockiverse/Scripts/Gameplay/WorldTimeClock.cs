@@ -11,6 +11,14 @@ namespace Blockiverse.Gameplay
         public const float DefaultDayLengthSeconds = 1200.0f;
         public const float DefaultStartNormalizedTime = 0.22f;
 
+        // The daylight window over NormalizedTime, shared by the presentation layers (ambience,
+        // music) so they all agree on when night starts.
+        public const float DayStartNormalizedTime = 0.05f;
+        public const float NightStartNormalizedTime = 0.55f;
+
+        public static bool IsDay(float normalizedTime) =>
+            normalizedTime >= DayStartNormalizedTime && normalizedTime < NightStartNormalizedTime;
+
         [SerializeField] float dayLengthSeconds = DefaultDayLengthSeconds;
         [SerializeField] float normalizedTime = DefaultStartNormalizedTime;
         [SerializeField] float timeScale = 1.0f;
@@ -43,6 +51,26 @@ namespace Blockiverse.Gameplay
             normalizedTime = Normalize(startNormalizedTime);
             startNormalizedOffset = normalizedTime;
             this.timeScale = timeScale;
+        }
+
+        // Creative env control: jumps the time-of-day phase without touching elapsed ticks. The
+        // tick-0 offset shifts with it so RestoreElapsedTicks keeps reproducing this phase.
+        public void SetNormalizedTime(float value)
+        {
+            normalizedTime = Normalize(value);
+
+            long ticksPerDay = (long)(dayLengthSeconds * WorldConstants.TicksPerSecond);
+            if (ticksPerDay > 0)
+            {
+                float ticksFraction = (float)((totalElapsedTicks % ticksPerDay) / (double)ticksPerDay);
+                startNormalizedOffset = Normalize(normalizedTime - ticksFraction);
+            }
+        }
+
+        // Creative env control: speeds up or freezes the day cycle (0 pauses the clock).
+        public void SetTimeScale(float value)
+        {
+            timeScale = Mathf.Max(0.0f, value);
         }
 
         void Awake()

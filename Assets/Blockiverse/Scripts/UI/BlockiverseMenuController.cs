@@ -22,6 +22,9 @@ namespace Blockiverse.UI
         BlockiverseActionMenu settingsMenu;
         BlockiverseNewWorldPanel newWorldPanel;
         BlockiverseLoadWorldPanel loadWorldPanel;
+        BlockiverseWorldDetailsPanel worldDetailsPanel;
+        BlockiverseActionMenu worldDetailsMenu;
+        BlockiverseComfortMenu comfortMenu;
         [SerializeField] BlockiverseStationPanel stationPanel;
         MultiplayerSurvivalSync survivalSync;
         SurvivalVitalsRuntime vitalsRuntime;
@@ -59,7 +62,9 @@ namespace Blockiverse.UI
             BlockiverseActionMenu confirm,
             BlockiverseNewWorldPanel newWorld,
             BlockiverseLoadWorldPanel loadWorld,
-            BlockiverseActionMenu settings = null)
+            BlockiverseActionMenu settings = null,
+            BlockiverseWorldDetailsPanel worldDetails = null,
+            BlockiverseActionMenu worldDetailsActions = null)
         {
             inputRig = rig;
             titleMenu = title;
@@ -69,6 +74,8 @@ namespace Blockiverse.UI
             settingsMenu = settings;
             newWorldPanel = newWorld;
             loadWorldPanel = loadWorld;
+            worldDetailsPanel = worldDetails;
+            worldDetailsMenu = worldDetailsActions;
         }
 
         public void ConfigurePresenters(
@@ -80,7 +87,11 @@ namespace Blockiverse.UI
             BlockiverseWorldSpacePanelPresenter loadWorld,
             BlockiverseWorldSpacePanelPresenter settings,
             BlockiverseWorldSpacePanelPresenter station = null,
-            BlockiverseWorldSpacePanelPresenter lanMultiplayer = null)
+            BlockiverseWorldSpacePanelPresenter lanMultiplayer = null,
+            BlockiverseWorldSpacePanelPresenter audioSettings = null,
+            BlockiverseWorldSpacePanelPresenter controls = null,
+            BlockiverseWorldSpacePanelPresenter worldDetails = null,
+            BlockiverseWorldSpacePanelPresenter creativeTools = null)
         {
             screenPresenters.Clear();
             AddPresenter(MenuActions.TitleScreen, title);
@@ -94,6 +105,14 @@ namespace Blockiverse.UI
                 AddPresenter(MenuActions.StationMenuScreen, station);
             if (lanMultiplayer != null)
                 AddPresenter(MenuActions.LanMultiplayerScreen, lanMultiplayer);
+            if (audioSettings != null)
+                AddPresenter(MenuActions.AudioSettingsScreen, audioSettings);
+            if (controls != null)
+                AddPresenter(MenuActions.ControlsScreen, controls);
+            if (worldDetails != null)
+                AddPresenter(MenuActions.WorldDetailsScreen, worldDetails);
+            if (creativeTools != null)
+                AddPresenter(MenuActions.CreativeToolsScreen, creativeTools);
         }
 
         // Wires the smelting-station panel so a "use" on a kiln/forge block opens it (§8.4).
@@ -149,6 +168,28 @@ namespace Blockiverse.UI
         // Exposes the selected save so the world manager can read it on LoadWorldLoad.
         public WorldSaveSummary? PendingLoadSave => loadWorldPanel?.SelectedSave;
 
+        // The save shown on the World Details screen (§6.5) and its pending rename text.
+        public WorldSaveSummary? PendingDetailsSave => worldDetailsPanel?.CurrentSave;
+        public string PendingDetailsRenameText => worldDetailsPanel?.PendingRenameText ?? string.Empty;
+
+        // Re-shows the details screen content for an updated save (after rename/duplicate).
+        public void ShowWorldDetails(WorldSaveSummary save) => worldDetailsPanel?.ShowSave(save);
+
+        // Pops the World Details screen (after a delete removed the shown save).
+        public void CloseWorldDetails()
+        {
+            if (router != null && router.ActiveScreen.ScreenId == MenuActions.WorldDetailsScreen && !router.HasModal)
+                router.PopScreen();
+        }
+
+        // Generic error dialog (§6.22 adapted): a single-OK modal over the current screen.
+        public void ShowError(string message)
+        {
+            confirmMenu?.SetMenu(message, new[] { new MenuAction(MenuActions.ConfirmAccept, "OK") });
+            confirmCallback = null;
+            router?.PushModal(MenuActions.ConfirmModal);
+        }
+
         void Start()
         {
             router = new UiScreenRouter(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
@@ -165,6 +206,10 @@ namespace Blockiverse.UI
             pauseMenu?.SetMenu("Paused", MenuActions.Pause);
             deathMenu?.SetMenu("You Died", MenuActions.Death(false));
             confirmMenu?.SetMenu("Confirm?", MenuActions.Confirm());
+            settingsMenu?.SetMenu("Settings", MenuActions.Settings);
+
+            if (comfortMenu == null)
+                comfortMenu = FindFirstObjectByType<BlockiverseComfortMenu>(FindObjectsInactive.Include);
 
             ApplyRouterState();
         }
@@ -336,6 +381,15 @@ namespace Blockiverse.UI
                     ActionRequested?.Invoke(actionId);
                     router.PopScreen();
                     break;
+                case MenuActions.PauseCreativeTools:
+                    // Pushed without pausing: corner selection aims the live interaction ray at
+                    // world blocks while the panel is open (same posture as the station screen).
+                    router.PushScreen(new ScreenRoute(MenuActions.CreativeToolsScreen));
+                    break;
+                case MenuActions.CreativeToolsClose:
+                    if (router.ActiveScreen.ScreenId == MenuActions.CreativeToolsScreen)
+                        router.PopScreen();
+                    break;
                 case MenuActions.PauseSettings:
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
                     break;
@@ -392,8 +446,52 @@ namespace Blockiverse.UI
                 case MenuActions.LoadWorldCancel:
                     router.PopScreen();
                     break;
+                case MenuActions.LoadWorldDetails:
+                    if (loadWorldPanel?.SelectedSave.HasValue == true && worldDetailsPanel != null)
+                    {
+                        worldDetailsPanel.ShowSave(loadWorldPanel.SelectedSave.Value);
+                        router.PushScreen(new ScreenRoute(MenuActions.WorldDetailsScreen, pauseGame: true));
+                    }
+                    break;
 
+                // ── World Details (§6.5): file operations live in the session controller ──
+                case MenuActions.WorldDetailsPlay:
+                case MenuActions.WorldDetailsRename:
+                case MenuActions.WorldDetailsDuplicate:
+                    if (worldDetailsPanel?.CurrentSave.HasValue == true)
+                        ActionRequested?.Invoke(actionId);
+                    break;
+                case MenuActions.WorldDetailsDeleteRequested:
+                    if (worldDetailsPanel?.CurrentSave.HasValue == true)
+                    {
+                        string worldName = worldDetailsPanel.CurrentSave.Value.Name;
+                        RequestConfirm(
+                            $"Delete \"{worldName}\"? This cannot be undone.",
+                            "Delete",
+                            "Cancel",
+                            accepted =>
+                            {
+                                if (accepted)
+                                    ActionRequested?.Invoke(actionId);
+                            });
+                    }
+                    break;
+                case MenuActions.WorldDetailsBack:
+                    router.PopScreen();
+                    break;
+
+                case MenuActions.SettingsOpenComfort:
+                    comfortMenu?.Show();
+                    break;
+                case MenuActions.SettingsOpenAudio:
+                    router.PushScreen(new ScreenRoute(MenuActions.AudioSettingsScreen, pauseGame: true));
+                    break;
+                case MenuActions.SettingsOpenControls:
+                    router.PushScreen(new ScreenRoute(MenuActions.ControlsScreen, pauseGame: true));
+                    break;
                 case MenuActions.SettingsClose:
+                case MenuActions.AudioSettingsClose:
+                case MenuActions.ControlsClose:
                     router.PopScreen();
                     break;
             }
@@ -433,6 +531,7 @@ namespace Blockiverse.UI
             if (deathMenu != null) deathMenu.ActionInvoked += HandleAction;
             if (confirmMenu != null) confirmMenu.ActionInvoked += HandleAction;
             if (settingsMenu != null) settingsMenu.ActionInvoked += HandleAction;
+            if (worldDetailsMenu != null) worldDetailsMenu.ActionInvoked += HandleAction;
             if (newWorldPanel != null) newWorldPanel.ActionRequested += HandleAction;
             if (loadWorldPanel != null) loadWorldPanel.ActionRequested += HandleAction;
         }
@@ -444,9 +543,16 @@ namespace Blockiverse.UI
             if (deathMenu != null) deathMenu.ActionInvoked -= HandleAction;
             if (confirmMenu != null) confirmMenu.ActionInvoked -= HandleAction;
             if (settingsMenu != null) settingsMenu.ActionInvoked -= HandleAction;
+            if (worldDetailsMenu != null) worldDetailsMenu.ActionInvoked -= HandleAction;
             if (newWorldPanel != null) newWorldPanel.ActionRequested -= HandleAction;
             if (loadWorldPanel != null) loadWorldPanel.ActionRequested -= HandleAction;
         }
+
+        // Close hooks for panels whose Close buttons are wired as persistent listeners by the
+        // bootstrapper (same pattern as CloseLanMultiplayerScreen).
+        public void CloseAudioSettingsScreen() => HandleAction(MenuActions.AudioSettingsClose);
+        public void CloseControlsScreen() => HandleAction(MenuActions.ControlsClose);
+        public void CloseCreativeToolsScreen() => HandleAction(MenuActions.CreativeToolsClose);
 
         static bool CanQuit() =>
 #if UNITY_EDITOR

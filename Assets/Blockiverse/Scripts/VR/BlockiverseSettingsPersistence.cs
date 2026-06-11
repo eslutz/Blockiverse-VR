@@ -87,6 +87,7 @@ namespace Blockiverse.VR
                 feedbackSettings.EffectsVolume = PlayerPrefs.GetFloat(KeyPrefix + "EffectsVolume", feedbackSettings.EffectsVolume);
                 feedbackSettings.UiVolume = PlayerPrefs.GetFloat(KeyPrefix + "UiVolume", feedbackSettings.UiVolume);
                 feedbackSettings.WeatherVolume = PlayerPrefs.GetFloat(KeyPrefix + "WeatherVolume", feedbackSettings.WeatherVolume);
+                feedbackSettings.MusicVolume = PlayerPrefs.GetFloat(KeyPrefix + "MusicVolume", feedbackSettings.MusicVolume);
                 feedbackSettings.MuteAll = PlayerPrefs.GetInt(KeyPrefix + "MuteAll", feedbackSettings.MuteAll ? 1 : 0) != 0;
                 feedbackSettings.HapticsEnabled = PlayerPrefs.GetInt(KeyPrefix + "HapticsEnabled", feedbackSettings.HapticsEnabled ? 1 : 0) != 0;
                 feedbackSettings.HapticIntensity = PlayerPrefs.GetFloat(KeyPrefix + "HapticIntensity", feedbackSettings.HapticIntensity);
@@ -123,6 +124,7 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetFloat(KeyPrefix + "EffectsVolume", feedbackSettings.EffectsVolume);
                 PlayerPrefs.SetFloat(KeyPrefix + "UiVolume", feedbackSettings.UiVolume);
                 PlayerPrefs.SetFloat(KeyPrefix + "WeatherVolume", feedbackSettings.WeatherVolume);
+                PlayerPrefs.SetFloat(KeyPrefix + "MusicVolume", feedbackSettings.MusicVolume);
                 PlayerPrefs.SetInt(KeyPrefix + "MuteAll", feedbackSettings.MuteAll ? 1 : 0);
                 PlayerPrefs.SetInt(KeyPrefix + "HapticsEnabled", feedbackSettings.HapticsEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "HapticIntensity", feedbackSettings.HapticIntensity);
@@ -155,6 +157,7 @@ namespace Blockiverse.VR
                     hash = hash * 31 + feedbackSettings.EffectsVolume.GetHashCode();
                     hash = hash * 31 + feedbackSettings.UiVolume.GetHashCode();
                     hash = hash * 31 + feedbackSettings.WeatherVolume.GetHashCode();
+                    hash = hash * 31 + feedbackSettings.MusicVolume.GetHashCode();
                     hash = hash * 31 + (feedbackSettings.MuteAll ? 1 : 0);
                     hash = hash * 31 + (feedbackSettings.HapticsEnabled ? 1 : 0);
                     hash = hash * 31 + feedbackSettings.HapticIntensity.GetHashCode();

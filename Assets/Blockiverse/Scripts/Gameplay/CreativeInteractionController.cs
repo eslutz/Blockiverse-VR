@@ -8,6 +8,8 @@ namespace Blockiverse.Gameplay
     public sealed class CreativeInteractionController : MonoBehaviour
     {
         readonly List<SetBlockCommand> undoStack = new();
+        // Undone edits eligible for redo (§12.1); cleared whenever a fresh edit lands.
+        readonly List<SetBlockCommand> redoStack = new();
 
         VoxelWorld world;
         BlockRegistry registry;
@@ -167,6 +169,12 @@ namespace Blockiverse.Gameplay
                 return requestSentToHost;
 
             undoStack.RemoveAt(undoStack.Count - 1);
+
+            // The undone edit becomes redoable until a fresh edit invalidates the branch.
+            if (redoStack.Count >= GameModeConstants.CreativeUndoHistoryLimit)
+                redoStack.RemoveAt(0);
+            redoStack.Add(command);
+
             RebuildChangedChunks();
 
             if (undoCommand.HasAppliedChange)
@@ -175,14 +183,73 @@ namespace Blockiverse.Gameplay
             return true;
         }
 
+        // Re-applies the most recently undone edit (§12.1 redo).
+        public bool RedoLast()
+        {
+            EnsureConfigured();
+
+            if (!blockEditingEnabled)
+            {
+                BlockPosition position = redoStack.Count > 0 ? redoStack[redoStack.Count - 1].Position : default;
+                return RejectBlockEditingDisabled(position);
+            }
+
+            if (redoStack.Count == 0)
+                return false;
+
+            SetBlockCommand command = redoStack[redoStack.Count - 1];
+
+            ChunkAuthorityBoundary boundary = ResolveEffectiveBoundary();
+            if (!boundary.CanCommitMutations)
+            {
+                LastMutationResult = BlockMutationResult.Reject(
+                    BlockMutationRejectionReason.ClientCannotCommitAuthoritativeState,
+                    ChunkCoordinate.FromBlockPosition(command.Position, world.ChunkSize),
+                    "Clients must request host validation instead of redoing authoritative chunk mutations locally.");
+                return false;
+            }
+
+            BlockChange appliedChange = command.AppliedChange;
+            var redoRequest = new BlockMutationRequest(
+                boundary.LocalClientId,
+                appliedChange.Position,
+                appliedChange.NewBlock,
+                expectedCurrentBlock: appliedChange.PreviousBlock);
+
+            BlockMutationResult result = SubmitMutation(redoRequest, out SetBlockCommand redoCommand, out bool requestSentToHost);
+            LastMutationResult = result;
+
+            if (!result.Accepted)
+                return requestSentToHost;
+
+            redoStack.RemoveAt(redoStack.Count - 1);
+
+            if (undoStack.Count >= GameModeConstants.CreativeUndoHistoryLimit)
+                undoStack.RemoveAt(0);
+            undoStack.Add(command);
+
+            RebuildChangedChunks();
+
+            if (redoCommand.HasAppliedChange)
+                BlockMutationApplied?.Invoke(redoCommand.AppliedChange);
+
+            return true;
+        }
+
+        // The block the interaction ray currently points at (null when nothing is targeted).
+        // Consumed by the creative tools panel for corner selection / pick-block.
+        public BlockPosition? CurrentTarget { get; private set; }
+
         public void UpdatePreview(BlockPosition targetPosition, Vector3 faceNormal)
         {
+            CurrentTarget = targetPosition;
+
             if (placementPreview == null)
                 return;
 
             if (!blockEditingEnabled)
             {
-                HidePreview();
+                placementPreview?.Hide();
                 return;
             }
 
@@ -192,6 +259,7 @@ namespace Blockiverse.Gameplay
 
         public void HidePreview()
         {
+            CurrentTarget = null;
             placementPreview?.Hide();
         }
 
@@ -237,6 +305,8 @@ namespace Blockiverse.Gameplay
                 if (undoStack.Count >= GameModeConstants.CreativeUndoHistoryLimit)
                     undoStack.RemoveAt(0);
                 undoStack.Add(command);
+                // A fresh edit invalidates the redo branch (standard undo/redo semantics).
+                redoStack.Clear();
             }
 
             RebuildChangedChunks();

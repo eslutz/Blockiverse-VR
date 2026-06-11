@@ -56,6 +56,32 @@ namespace Blockiverse.Persistence
     }
 
     [Serializable]
+    public sealed class SavedPlayerState
+    {
+        public float PositionX;
+        public float PositionY;
+        public float PositionZ;
+        public float YawDegrees;
+        public int Health;
+        public int Hunger;
+        public int Thirst;
+        public int Stamina;
+    }
+
+    // Optional world-sim state saved alongside the core world: full weather-machine position,
+    // player presence/vitals, vegetation/farming simulation queues, and timed-station contents.
+    public sealed class WorldSaveExtras
+    {
+        public int WeatherTicksInState;
+        public uint WeatherRngState = 1u;
+        public SavedPlayerState PlayerState;            // null = no player presence saved
+        public VxlwSaplingProgress[] Saplings;
+        public VxlwWildRegrowthMarker[] WildRegrowth;
+        public VxlwBerrybushRegrowth[] BerrybushRegrowth;
+        public VxlwStation[] Stations;
+    }
+
+    [Serializable]
     public sealed class WorldSaveData
     {
         public int SchemaVersion;
@@ -73,6 +99,13 @@ namespace Blockiverse.Persistence
         public string WorldPreset;
         public string Difficulty;
         public SavedContainer[] Containers;
+        public int WeatherTicksInState;
+        public uint WeatherRngState;
+        public SavedPlayerState PlayerState;            // null when the save carries none
+        public VxlwSaplingProgress[] Saplings;
+        public VxlwWildRegrowthMarker[] WildRegrowth;
+        public VxlwBerrybushRegrowth[] BerrybushRegrowth;
+        public VxlwStation[] Stations;
     }
 
     public sealed class WorldLoadResult
@@ -178,12 +211,12 @@ namespace Blockiverse.Persistence
 
         // ── Save ─────────────────────────────────────────────────────────────
 
-        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = "survival_terrain")
+        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = "survival_terrain", WorldSaveExtras extras = null)
         {
-            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState, gameMode: gameMode, worldTimeTicks: worldTimeTicks, containers: containers, difficulty: difficulty, worldPreset: worldPreset);
+            Save(path, worldName, world, new Inventory(itemRegistry), selectedHotbarSlotIndex: 0, weatherState: weatherState, gameMode: gameMode, worldTimeTicks: worldTimeTicks, containers: containers, difficulty: difficulty, worldPreset: worldPreset, extras: extras);
         }
 
-        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = "survival_terrain")
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = "survival_terrain", WorldSaveExtras extras = null)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -237,7 +270,9 @@ namespace Blockiverse.Persistence
             var environment = new VxlwEnvironment
             {
                 WorldTimeTicks = worldTimeTicks,
-                WeatherState = !string.IsNullOrEmpty(weatherState) ? weatherState : "CLEAR"
+                WeatherState = !string.IsNullOrEmpty(weatherState) ? weatherState : "CLEAR",
+                WeatherTicksInState = extras?.WeatherTicksInState ?? 0,
+                WeatherRngState = extras?.WeatherRngState ?? 1u
             };
 
             var registryManifest = new VxlwRegistryManifest
@@ -248,6 +283,7 @@ namespace Blockiverse.Persistence
                 ItemCount = itemRegistry.All.Count
             };
 
+            SavedPlayerState playerState = extras?.PlayerState;
             var playerSave = new VxlwPlayerSave
             {
                 PlayerId = "local_player",
@@ -258,7 +294,16 @@ namespace Blockiverse.Persistence
                 Slots = BuildInventorySlots(inventory, selectedHotbarSlotIndex),
                 SurvivalInventorySnapshot = survivalSnapshot != null
                     ? BuildInventorySlots(survivalSnapshot, 0)
-                    : null
+                    : null,
+                HasPlayerState = playerState != null,
+                PositionX = playerState?.PositionX ?? 0f,
+                PositionY = playerState?.PositionY ?? 0f,
+                PositionZ = playerState?.PositionZ ?? 0f,
+                YawDegrees = playerState?.YawDegrees ?? 0f,
+                Health = playerState?.Health ?? 0,
+                Hunger = playerState?.Hunger ?? 0,
+                Thirst = playerState?.Thirst ?? 0,
+                Stamina = playerState?.Stamina ?? 0
             };
 
             // Write all files atomically using .tmp → rename. Only the manifest is
@@ -270,6 +315,8 @@ namespace Blockiverse.Persistence
             WriteJsonAtomic(Path.Combine(dimDir, "dimension.json"), dimension);
             WriteJsonAtomic(Path.Combine(dimDir, "environment.json"), environment);
             WriteContainerFile(dimDir, containers);
+            WriteSimulationFile(dimDir, extras);
+            WriteStationFile(dimDir, extras?.Stations);
 
             WriteRegionFiles(path, world, blockRegistry);
 
@@ -354,11 +401,13 @@ namespace Blockiverse.Persistence
             if (regionError != null)
                 return FailedLoad(path, $"World save is corrupt: {regionError}");
 
-            SavedPlayerInventory playerInventory = LoadPlayerInventory(path) ?? CreateEmptyInventoryData();
+            SavedPlayerInventory playerInventory = LoadPlayerInventory(path, out SavedPlayerState playerState) ?? CreateEmptyInventoryData();
             EnsurePlayerInventoryDefaults(ref playerInventory);
 
-            (string savedWeatherState, long savedWorldTimeTicks) = LoadEnvironmentState(path);
+            VxlwEnvironment environment = LoadEnvironmentState(path);
             SavedContainer[] containers = LoadContainerFile(path);
+            VxlwSimulationFile simulation = LoadSimulationFile(path);
+            VxlwStation[] stations = LoadStationFile(path);
 
             var data = new WorldSaveData
             {
@@ -371,12 +420,19 @@ namespace Blockiverse.Persistence
                 Seed = manifest.Seed,
                 ChangedBlocks = changedBlocks.ToArray(),
                 PlayerInventory = playerInventory,
-                WeatherState = savedWeatherState,
-                WorldTimeTicks = savedWorldTimeTicks,
+                WeatherState = environment?.WeatherState,
+                WorldTimeTicks = environment?.WorldTimeTicks ?? 0L,
+                WeatherTicksInState = environment?.WeatherTicksInState ?? 0,
+                WeatherRngState = environment?.WeatherRngState ?? 1u,
                 GameMode = !string.IsNullOrEmpty(manifest.GameMode) ? manifest.GameMode : "survival",
                 WorldPreset = !string.IsNullOrEmpty(manifest.WorldPreset) ? manifest.WorldPreset : "survival_terrain",
                 Difficulty = manifest.Difficulty ?? string.Empty,
-                Containers = containers
+                Containers = containers,
+                PlayerState = playerState,
+                Saplings = simulation?.Saplings,
+                WildRegrowth = simulation?.WildRegrowth,
+                BerrybushRegrowth = simulation?.BerrybushRegrowth,
+                Stations = stations
             };
 
             if (!IsValidInventory(data.PlayerInventory, out string inventoryError))
@@ -585,8 +641,10 @@ namespace Blockiverse.Persistence
             return deltas;
         }
 
-        SavedPlayerInventory LoadPlayerInventory(string savePath)
+        SavedPlayerInventory LoadPlayerInventory(string savePath, out SavedPlayerState playerState)
         {
+            playerState = null;
+
             string playerPath = Path.Combine(savePath, "players", "local_player.json");
             if (!File.Exists(playerPath))
                 return null;
@@ -599,6 +657,21 @@ namespace Blockiverse.Persistence
             if (playerSave == null)
                 return null;
 
+            if (playerSave.HasPlayerState)
+            {
+                playerState = new SavedPlayerState
+                {
+                    PositionX = playerSave.PositionX,
+                    PositionY = playerSave.PositionY,
+                    PositionZ = playerSave.PositionZ,
+                    YawDegrees = playerSave.YawDegrees,
+                    Health = playerSave.Health,
+                    Hunger = playerSave.Hunger,
+                    Thirst = playerSave.Thirst,
+                    Stamina = playerSave.Stamina
+                };
+            }
+
             return new SavedPlayerInventory
             {
                 SlotCount = playerSave.SlotCount,
@@ -609,18 +682,88 @@ namespace Blockiverse.Persistence
             };
         }
 
-        static (string weatherState, long worldTimeTicks) LoadEnvironmentState(string savePath)
+        static VxlwEnvironment LoadEnvironmentState(string savePath)
         {
             string envPath = Path.Combine(savePath, "dimensions", "main", "environment.json");
             if (!File.Exists(envPath))
-                return (null, 0L);
+                return null;
 
             string json = File.ReadAllText(envPath);
             if (string.IsNullOrWhiteSpace(json))
-                return (null, 0L);
+                return null;
 
-            VxlwEnvironment env = JsonUtility.FromJson<VxlwEnvironment>(json);
-            return (env?.WeatherState, env?.WorldTimeTicks ?? 0L);
+            return JsonUtility.FromJson<VxlwEnvironment>(json);
+        }
+
+        // Writes the vegetation/farming simulation queues, or deletes the file when there is
+        // nothing pending — a stale file from a previous save must not resurrect dead queues.
+        static void WriteSimulationFile(string dimDir, WorldSaveExtras extras)
+        {
+            string path = Path.Combine(dimDir, "simulation.json");
+            bool hasContent =
+                (extras?.Saplings?.Length ?? 0) > 0 ||
+                (extras?.WildRegrowth?.Length ?? 0) > 0 ||
+                (extras?.BerrybushRegrowth?.Length ?? 0) > 0;
+
+            if (!hasContent)
+            {
+                File.Delete(path);
+                return;
+            }
+
+            WriteJsonAtomic(path, new VxlwSimulationFile
+            {
+                Format = "blockiverse-simulation",
+                SaveFormatVersion = SaveFormatVersion,
+                Saplings = extras.Saplings ?? Array.Empty<VxlwSaplingProgress>(),
+                WildRegrowth = extras.WildRegrowth ?? Array.Empty<VxlwWildRegrowthMarker>(),
+                BerrybushRegrowth = extras.BerrybushRegrowth ?? Array.Empty<VxlwBerrybushRegrowth>()
+            });
+        }
+
+        static VxlwSimulationFile LoadSimulationFile(string savePath)
+        {
+            string path = Path.Combine(savePath, "dimensions", "main", "simulation.json");
+            if (!File.Exists(path))
+                return null;
+
+            string json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            return JsonUtility.FromJson<VxlwSimulationFile>(json);
+        }
+
+        // Writes the timed-station runtime contents, or deletes the file when no stations exist.
+        static void WriteStationFile(string dimDir, VxlwStation[] stations)
+        {
+            string path = Path.Combine(dimDir, "stations.json");
+            if (stations == null || stations.Length == 0)
+            {
+                File.Delete(path);
+                return;
+            }
+
+            WriteJsonAtomic(path, new VxlwStationFile
+            {
+                Format = "blockiverse-stations",
+                SaveFormatVersion = SaveFormatVersion,
+                Stations = stations
+            });
+        }
+
+        static VxlwStation[] LoadStationFile(string savePath)
+        {
+            string path = Path.Combine(savePath, "dimensions", "main", "stations.json");
+            if (!File.Exists(path))
+                return null;
+
+            string json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+                return null;
+
+            VxlwStationFile file = JsonUtility.FromJson<VxlwStationFile>(json);
+            return file?.Stations != null && file.Stations.Length > 0 ? file.Stations : null;
         }
 
         void WriteContainerFile(string dimDir, IReadOnlyList<SavedContainer> containers)
@@ -680,6 +823,103 @@ namespace Blockiverse.Persistence
             return result;
         }
 
+        // ── Save management (World Details §6.5: rename/duplicate/delete) ─────
+
+        // Moves the save directory and rewrites the manifest's world name. Fails (false) when the
+        // destination exists or the source is not a loadable save directory.
+        public static bool TryRenameSave(string path, string destinationPath, string newWorldName)
+        {
+            if (string.IsNullOrWhiteSpace(newWorldName) ||
+                !Directory.Exists(path) ||
+                Directory.Exists(destinationPath) || File.Exists(destinationPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                Directory.Move(path, destinationPath);
+                return TryRewriteManifestWorldName(destinationPath, newWorldName);
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to rename save file={SanitizeSavePath(path)} exception={exception.GetType().Name}");
+                return false;
+            }
+        }
+
+        // Copies the save directory recursively and rewrites the copy's world name.
+        public static bool TryDuplicateSave(string sourcePath, string destinationPath, string newWorldName)
+        {
+            if (string.IsNullOrWhiteSpace(newWorldName) ||
+                !Directory.Exists(sourcePath) ||
+                Directory.Exists(destinationPath) || File.Exists(destinationPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                CopyDirectoryRecursive(sourcePath, destinationPath);
+                return TryRewriteManifestWorldName(destinationPath, newWorldName);
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to duplicate save file={SanitizeSavePath(sourcePath)} exception={exception.GetType().Name}");
+                return false;
+            }
+        }
+
+        public static bool TryDeleteSave(string path)
+        {
+            if (!Directory.Exists(path))
+                return false;
+
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to delete save file={SanitizeSavePath(path)} exception={exception.GetType().Name}");
+                return false;
+            }
+        }
+
+        static bool TryRewriteManifestWorldName(string savePath, string newWorldName)
+        {
+            string manifestPath = Path.Combine(savePath, "manifest.json");
+            if (!File.Exists(manifestPath))
+                return false;
+
+            VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(File.ReadAllText(manifestPath));
+            if (manifest == null)
+                return false;
+
+            manifest.WorldName = newWorldName;
+            manifest.ModifiedAtUtc = DateTime.UtcNow.ToString("o");
+            WriteJsonAtomic(manifestPath, manifest);
+            return true;
+        }
+
+        static void CopyDirectoryRecursive(string source, string destination)
+        {
+            Directory.CreateDirectory(destination);
+
+            foreach (string file in Directory.GetFiles(source))
+                File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+
+            foreach (string directory in Directory.GetDirectories(source))
+                CopyDirectoryRecursive(directory, Path.Combine(destination, Path.GetFileName(directory)));
+        }
+
         // ── Save enumeration (menu listings) ──────────────────────────────────
 
         // Lightweight save-slot summary: manifest fields plus the saved world time, read without
@@ -729,8 +969,8 @@ namespace Blockiverse.Persistence
                     return null;
                 }
 
-                (_, long worldTimeTicks) = LoadEnvironmentState(path);
-                return new WorldSaveInfo { Path = path, Manifest = manifest, WorldTimeTicks = worldTimeTicks };
+                VxlwEnvironment environment = LoadEnvironmentState(path);
+                return new WorldSaveInfo { Path = path, Manifest = manifest, WorldTimeTicks = environment?.WorldTimeTicks ?? 0L };
             }
             catch (Exception exception) when (exception is IOException || exception is ArgumentException || exception is UnauthorizedAccessException)
             {
