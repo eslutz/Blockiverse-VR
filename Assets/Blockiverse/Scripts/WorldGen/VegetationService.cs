@@ -373,15 +373,9 @@ namespace Blockiverse.WorldGen
 
         void SeedLeafDecayCandidates(VoxelWorld world)
         {
-            WorldBounds bounds = world.Bounds;
-            for (int y = 0; y < bounds.Height; y++)
-            for (int z = 0; z < bounds.Depth; z++)
-            for (int x = 0; x < bounds.Width; x++)
-            {
-                var pos = new BlockPosition(x, y, z);
-                if (world.GetBlock(pos) == BlockRegistry.Leafmoss)
-                    leafDecayCandidates.Add(pos);
-            }
+            // Single flat-array pass; per-position GetBlock over a full-size world (4M+ blocks)
+            // pays a bounds check and index computation per block and stalls the first decay tick.
+            world.CollectBlockPositions(BlockRegistry.Leafmoss, leafDecayCandidates);
         }
 
         // Searches a cube of half-extent maxDist, not a sphere. Corner-diagonal leaves

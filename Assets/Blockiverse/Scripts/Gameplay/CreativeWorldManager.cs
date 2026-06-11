@@ -176,6 +176,8 @@ namespace Blockiverse.Gameplay
             worldTimeClock.RestoreElapsedTicks(totalElapsedTicks);
         }
 
+        // Legacy string-based restore: saves persist only the state name, so ticks/RNG restart
+        // deterministically from (0, seed). RestoreWeatherSyncState is the full-fidelity path.
         public void RestoreWeatherState(string weatherStateString)
         {
             if (string.IsNullOrEmpty(weatherStateString))
@@ -190,7 +192,7 @@ namespace Blockiverse.Gameplay
             if (Enum.TryParse(weatherStateString, ignoreCase: true, out WeatherState parsed))
             {
                 uint seed = Settings != null ? (uint)Settings.Seed : 1u;
-                weatherService = new WeatherService(seed, parsed);
+                weatherService.RestoreState(parsed, 0, seed);
             }
         }
 
@@ -574,8 +576,9 @@ namespace Blockiverse.Gameplay
                 InitializeDefaultWorld();
         }
 
-        // Shared by world load and survival respawn (SurvivalVitalsRuntime).
-        internal static void PositionRigAtSpawn(BlockPosition spawnPosition)
+        // Shared by world load (BlockiverseWorldSessionController, separate assembly) and survival
+        // respawn (SurvivalVitalsRuntime) — public because no InternalsVisibleTo covers the UI assembly.
+        public static void PositionRigAtSpawn(BlockPosition spawnPosition)
         {
             GameObject rigObject = GameObject.Find(BlockiverseProject.XrRigRootName);
             if (rigObject == null)

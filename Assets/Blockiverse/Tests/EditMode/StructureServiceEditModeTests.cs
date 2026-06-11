@@ -80,39 +80,31 @@ namespace Blockiverse.Tests.EditMode
         public void StructureDegradationStatesAreDerivedFromSeed()
         {
             var settings = MakeSettings(seed: 101);
-            var degradations = new HashSet<StructureDegradation>();
+            var wallCounts = new HashSet<int>();
+            int seedsWithStructures = 0;
 
-            // Run multiple seeds to collect different degradation states.
-            for (int s = 1; s <= 50; s++)
+            // Degradation drives the per-wall-block skip chance, so the Graystone total is the
+            // observable proxy for the seed-derived degradation state of each placed structure.
+            for (int s = 1; s <= 8; s++)
             {
                 var w = FlatWorld(settings);
                 StructureService.PlaceStructures(w, BlockRegistry.CreateDefault(), settings, s);
 
-                // Count how many Graystone blocks (structure blocks) were placed.
-                // The fact that different seeds place different amounts implies degradation varies.
                 int count = 0;
-                for (int x = 0; x < settings.Bounds.Width; x += 4)
-                for (int z = 0; z < settings.Bounds.Depth; z += 4)
+                for (int x = 0; x < settings.Bounds.Width; x++)
+                for (int z = 0; z < settings.Bounds.Depth; z++)
                 for (int y = WorldConstants.SeaLevel; y < WorldConstants.SeaLevel + 8; y++)
                     if (w.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.Graystone)
                         count++;
 
                 if (count == 0) continue;
-                // Different block counts imply different degradation (more degraded = fewer blocks)
-                // We just verify that placement occurred and is non-trivially varied.
+                seedsWithStructures++;
+                wallCounts.Add(count);
             }
 
-            // Verify at least one seed placed structures (basic smoke check)
-            var worldCheck = FlatWorld(settings);
-            StructureService.PlaceStructures(worldCheck, BlockRegistry.CreateDefault(), settings, 42);
-            int total = 0;
-            for (int x = 0; x < settings.Bounds.Width; x++)
-            for (int z = 0; z < settings.Bounds.Depth; z++)
-            for (int y = WorldConstants.SeaLevel; y < WorldConstants.SeaLevel + 8; y++)
-                if (worldCheck.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.Graystone)
-                    total++;
-
-            Assert.That(total, Is.GreaterThan(0), "Expected at least one structure to be placed.");
+            Assert.That(seedsWithStructures, Is.GreaterThan(0), "Expected at least one seed to place structures.");
+            Assert.That(wallCounts.Count, Is.GreaterThanOrEqualTo(2),
+                "Wall-block totals must vary across seeds; identical totals would mean degradation is not seed-derived.");
         }
 
         [Test]
@@ -129,11 +121,13 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void PlaceStructuresWithBiomeResolverPlacesStorageCrateForLootStructures()
         {
-            var settings = MakeSettings(seed: 99);
+            // Seed 455 deterministically places loot-bearing structures (forager_lean_to) in an
+            // all-Meadow world; the canonical DeterministicHash keeps this stable across platforms.
+            var settings = MakeSettings(seed: 455);
             var world = FlatWorld(settings);
 
             // Force everything to Meadow (0), which allows forager_lean_to and others with loot.
-            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 99,
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 455,
                 biomeAt: (x, z) => 0);
 
             // Count StorageCrate blocks placed by structures.
@@ -144,9 +138,7 @@ namespace Blockiverse.Tests.EditMode
                 if (world.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.StorageCrate)
                     crates++;
 
-            // At least one loot-bearing structure should have been placed.
-            Assert.That(crates, Is.GreaterThanOrEqualTo(0), "StorageCrate count should be non-negative.");
-            // Note: this is a smoke test — actual count depends on hash; 0 is valid for sparse worlds.
+            Assert.That(crates, Is.GreaterThan(0), "Expected loot structures to place at least one StorageCrate.");
         }
 
         [Test]
@@ -191,14 +183,16 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void PlaceStructuresEmitsContainerLootForLootCrates()
         {
-            var settings = MakeSettings(seed: 2024);
+            // Seed 455 deterministically places loot-bearing structures in an all-Meadow world.
+            var settings = MakeSettings(seed: 455);
             var world = FlatWorld(settings);
             var loot = new List<StructureContainerLoot>();
 
-            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 2024,
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 455,
                 biomeAt: (x, z) => 0, lootSink: loot);
 
             // Every emitted loot record must sit exactly on a StorageCrate block and carry items.
+            Assert.That(loot, Is.Not.Empty, "Expected loot records for the placed crates.");
             foreach (StructureContainerLoot record in loot)
             {
                 Assert.That(world.GetBlock(record.Position), Is.EqualTo(BlockRegistry.StorageCrate),
@@ -210,15 +204,17 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ContainerLootIsDeterministicForSameSeed()
         {
-            var settings = MakeSettings(seed: 555);
+            // Seed 13 deterministically places one loot crate, so the comparison is non-vacuous.
+            var settings = MakeSettings(seed: 13);
             var a = new List<StructureContainerLoot>();
             var b = new List<StructureContainerLoot>();
 
             var worldA = FlatWorld(settings);
             var worldB = FlatWorld(settings);
-            StructureService.PlaceStructures(worldA, BlockRegistry.CreateDefault(), settings, 555, (x, z) => 0, a);
-            StructureService.PlaceStructures(worldB, BlockRegistry.CreateDefault(), settings, 555, (x, z) => 0, b);
+            StructureService.PlaceStructures(worldA, BlockRegistry.CreateDefault(), settings, 13, (x, z) => 0, a);
+            StructureService.PlaceStructures(worldB, BlockRegistry.CreateDefault(), settings, 13, (x, z) => 0, b);
 
+            Assert.That(a, Is.Not.Empty, "Expected at least one loot crate for seed 13.");
             Assert.That(a.Count, Is.EqualTo(b.Count));
             for (int i = 0; i < a.Count; i++)
             {

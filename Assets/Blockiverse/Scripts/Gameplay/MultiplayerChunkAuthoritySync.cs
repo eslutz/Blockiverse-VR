@@ -33,6 +33,8 @@ namespace Blockiverse.Gameplay
 
         readonly Dictionary<uint, BlockMutationRequest> pendingMutationRequests = new();
         readonly List<PendingChunkDeltaMessage> bufferedChunkDeltas = new();
+        // Reused by SendToRemoteClients so each broadcast avoids a per-delta list allocation.
+        readonly List<ulong> remoteClientIdsScratch = new();
         readonly ChunkDeltaLog chunkDeltaLog = new();
         NetworkManager subscribedNetworkManager;
         BlockMutationAuthority mutationAuthority;
@@ -102,10 +104,22 @@ namespace Blockiverse.Gameplay
             ResolveReferences();
             SubscribeNetworkCallbacks();
             RefreshAuthorityBoundary();
+
+            // Resume polling a snapshot that was still in flight when the component was disabled.
+            if (pendingSnapshot != null && snapshotRoutine == null)
+                snapshotRoutine = StartCoroutine(CompleteSnapshotWhenReady());
         }
 
         void OnDisable()
         {
+            // Stop the snapshot poll explicitly and clear the handle: a stale non-null handle
+            // would block StartSnapshotGeneration's null-check forever after a re-enable.
+            if (snapshotRoutine != null)
+            {
+                StopCoroutine(snapshotRoutine);
+                snapshotRoutine = null;
+            }
+
             UnsubscribeNetworkCallbacks();
         }
 
@@ -225,8 +239,11 @@ namespace Blockiverse.Gameplay
         void HandleClientStopped(bool wasHost)
         {
             hasHostGenerationSnapshotForSession = false;
-            // Drop any in-flight snapshot generation; its completion routine self-terminates.
+            // Drop any in-flight snapshot generation; its completion routine self-terminates
+            // via the null pendingSnapshot, so no StopCoroutine is needed here.
+            ObserveAbandonedSnapshotTask(pendingSnapshot);
             pendingSnapshot = null;
+            snapshotRoutine = null;
             ResetClientChunkDeltaState();
             ResetPendingMutationRequests();
             UnregisterMessageHandlers();
@@ -365,6 +382,10 @@ namespace Blockiverse.Gameplay
             uint hostDeltaSequence,
             List<(BlockPosition position, int blockId)> blocks)
         {
+            // A newer snapshot supersedes any in-flight generation; observe the abandoned
+            // task so a faulted run cannot surface later as an UnobservedTaskException.
+            ObserveAbandonedSnapshotTask(pendingSnapshot);
+
             pendingSnapshot = new PendingWorldSnapshot
             {
                 Preset = preset,
@@ -377,6 +398,19 @@ namespace Blockiverse.Gameplay
 
             if (snapshotRoutine == null)
                 snapshotRoutine = StartCoroutine(CompleteSnapshotWhenReady());
+        }
+
+        static void ObserveAbandonedSnapshotTask(PendingWorldSnapshot snapshot)
+        {
+            if (snapshot == null || snapshot.GenerationTask == null)
+                return;
+
+            // The continuation runs on a thread pool thread; the Unity debug sink is thread-safe.
+            _ = snapshot.GenerationTask.ContinueWith(
+                task => BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Bootstrap,
+                    $"Abandoned world snapshot generation faulted: {task.Exception?.GetBaseException()}"),
+                TaskContinuationOptions.OnlyOnFaulted);
         }
 
         static GeneratedSnapshotWorld GenerateSnapshotWorld(
@@ -816,16 +850,16 @@ namespace Blockiverse.Gameplay
         void SendToRemoteClients(string messageName, FastBufferWriter writer)
         {
             NetworkManager networkManager = ResolveNetworkManager();
-            var clientIds = new List<ulong>();
+            remoteClientIdsScratch.Clear();
 
             foreach (ulong clientId in networkManager.ConnectedClientsIds)
             {
                 if (clientId != networkManager.LocalClientId)
-                    clientIds.Add(clientId);
+                    remoteClientIdsScratch.Add(clientId);
             }
 
-            if (clientIds.Count > 0)
-                networkManager.CustomMessagingManager.SendNamedMessage(messageName, clientIds, writer);
+            if (remoteClientIdsScratch.Count > 0)
+                networkManager.CustomMessagingManager.SendNamedMessage(messageName, remoteClientIdsScratch, writer);
         }
 
         void RefreshAuthorityBoundary()

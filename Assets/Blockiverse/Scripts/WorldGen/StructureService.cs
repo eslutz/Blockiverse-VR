@@ -304,6 +304,11 @@ namespace Blockiverse.WorldGen
 
         public StructureLootTable(string id, int minRolls, int maxRolls, StructureLootEntry[] entries)
         {
+            // Fail fast: Pick/Roll index into Entries unconditionally, so an empty table would
+            // otherwise surface as an IndexOutOfRangeException at loot time instead of here.
+            if (entries == null || entries.Length == 0)
+                throw new ArgumentException("Structure loot table requires at least one entry.", nameof(entries));
+
             Id = id; MinRolls = minRolls; MaxRolls = maxRolls; Entries = entries;
         }
 

@@ -63,6 +63,10 @@ namespace Blockiverse.VR
             {
                 comfortSettings.LocomotionMode = (BlockiverseLocomotionMode)PlayerPrefs.GetInt(
                     KeyPrefix + "LocomotionMode", (int)comfortSettings.LocomotionMode);
+                // A stale or corrupt pref can hold an int outside the enum; fall back to Glide
+                // rather than letting an undefined value degrade the rig to Teleport behavior.
+                if (!System.Enum.IsDefined(typeof(BlockiverseLocomotionMode), comfortSettings.LocomotionMode))
+                    comfortSettings.LocomotionMode = BlockiverseLocomotionMode.Glide;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
                     KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 comfortSettings.SmoothTurnEnabled = PlayerPrefs.GetInt(

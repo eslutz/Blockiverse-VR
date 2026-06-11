@@ -16,7 +16,7 @@ namespace Blockiverse.UI
     public sealed class BlockiverseStationPanel : MonoBehaviour
     {
         TMP_Text titleLabel;
-        TMP_Text[] inputSlotLabels;
+        TMP_Text[] inputSlotLabels = Array.Empty<TMP_Text>();
         TMP_Text fuelLabel;
         TMP_Text outputLabel;
         TMP_Text statusLabel;
@@ -54,7 +54,7 @@ namespace Blockiverse.UI
             this.statusLabel = statusLabel;
             this.progressSlider = progressSlider;
             this.closeButton = closeButton;
-            closeButton?.onClick.AddListener(() => CloseRequested?.Invoke());
+            Wire(closeButton, () => CloseRequested?.Invoke());
         }
 
         public void ConfigureTransferControls(

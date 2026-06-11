@@ -274,13 +274,17 @@ namespace Blockiverse.WorldGen
                         if (!CanCarveAt(centerX, centerY, centerZ, surfaceHeights))
                             continue;
 
-                        int radiusX = 3 + Range(hash, 24, 4);
-                        int radiusY = 2 + Range(hash, 28, 2);
-                        int radiusZ = 3 + Range(hash, 32, 4);
+                        // Cave radii come from a dedicated hash: a shift of 32 on a uint aliases to 0
+                        // (C# masks shift counts to 5 bits), which correlated radiusZ with the
+                        // cave center bits above.
+                        uint radiusHash = Hash(settings.Seed, gridX, gridY, gridZ, salt: 504);
+                        int radiusX = 3 + Range(radiusHash, 0, 4);
+                        int radiusY = 2 + Range(radiusHash, 8, 2);
+                        int radiusZ = 3 + Range(radiusHash, 16, 4);
 
                         CarveEllipsoid(world, surfaceHeights, centerX, centerY, centerZ, radiusX, radiusY, radiusZ);
 
-                        // Tunnel endpoints come from a second hash: shifts of 40/48/56 on a uint
+                        // Tunnel endpoints come from a dedicated hash: shifts of 40/48/56 on a uint
                         // alias to 8/16/24 (C# masks shift counts to 5 bits), which correlated the
                         // endpoints with the cave center/radius bits above.
                         uint tunnelHash = Hash(settings.Seed, gridX, gridY, gridZ, salt: 509);

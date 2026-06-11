@@ -1,3 +1,4 @@
+using System;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -32,6 +33,10 @@ namespace Blockiverse.UI
         float nextStationScanTime;
         float nextVitalsRefreshTime;
         CraftingStationSet lastScannedStations;
+        // The exact SelectionChanged subscription, stored so a later bind (which may discover a
+        // different sync instance) detaches the previous handler instead of leaking it.
+        SurvivalInventoryPanel selectionChangedSource;
+        Action<int> selectionChangedHandler;
 
         public void Configure(
             SurvivalInventoryPanel targetInventoryPanel,
@@ -79,11 +84,13 @@ namespace Blockiverse.UI
             worldManager?.SetActivePlayerInventory(Inventory);
 
             // Mirror the selected hotbar slot into the survival sync so VR break/place use the held item.
+            UnsubscribeSelectionChanged();
             if (survivalSync != null && inventoryPanel != null)
             {
                 survivalSync.SelectedHotbarSlotIndex = selectedHotbarSlotIndex;
-                inventoryPanel.SelectionChanged -= survivalSync.SetSelectedHotbarSlot;
-                inventoryPanel.SelectionChanged += survivalSync.SetSelectedHotbarSlot;
+                selectionChangedSource = inventoryPanel;
+                selectionChangedHandler = survivalSync.SetSelectedHotbarSlot;
+                selectionChangedSource.SelectionChanged += selectionChangedHandler;
             }
 
             inventoryPanel?.Bind(Inventory, itemRegistry, selectedHotbarSlotIndex);
@@ -122,11 +129,24 @@ namespace Blockiverse.UI
 
         void OnDestroy()
         {
+            UnsubscribeSelectionChanged();
+
             if (survivalSync != null)
             {
                 survivalSync.LocalInventoryChanged -= OnLocalInventoryChanged;
                 survivalSync.SharedCrateChanged -= OnSharedCrateChanged;
             }
+        }
+
+        // Removes the stored SelectionChanged subscription. `-= survivalSync.SetSelectedHotbarSlot`
+        // against a freshly discovered sync would not remove a previous sync's handler.
+        void UnsubscribeSelectionChanged()
+        {
+            if (selectionChangedSource != null && selectionChangedHandler != null)
+                selectionChangedSource.SelectionChanged -= selectionChangedHandler;
+
+            selectionChangedSource = null;
+            selectionChangedHandler = null;
         }
 
         void OnLocalInventoryChanged()

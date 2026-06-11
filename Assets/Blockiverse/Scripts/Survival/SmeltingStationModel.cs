@@ -221,11 +221,14 @@ namespace Blockiverse.Survival
             ContentVersion++;
         }
 
+        // Indexed iteration over AggregatedIngredients keeps these allocation-free; TryBeginCraft
+        // runs InputsSatisfy against every recipe each tick while idle.
         bool InputsSatisfy(CraftingRecipe recipe)
         {
-            foreach (ItemStack ingredient in AggregateIngredients(recipe))
+            IReadOnlyList<ItemStack> ingredients = recipe.AggregatedIngredients;
+            for (int i = 0; i < ingredients.Count; i++)
             {
-                if (CountInInputs(ingredient.ItemId) < ingredient.Count)
+                if (CountInInputs(ingredients[i].ItemId) < ingredients[i].Count)
                     return false;
             }
 
@@ -234,8 +237,10 @@ namespace Blockiverse.Survival
 
         void ConsumeInputs(CraftingRecipe recipe)
         {
-            foreach (ItemStack ingredient in AggregateIngredients(recipe))
+            IReadOnlyList<ItemStack> ingredients = recipe.AggregatedIngredients;
+            for (int n = 0; n < ingredients.Count; n++)
             {
+                ItemStack ingredient = ingredients[n];
                 int toRemove = ingredient.Count;
                 for (int i = 0; i < inputs.Length && toRemove > 0; i++)
                 {
@@ -280,16 +285,6 @@ namespace Blockiverse.Survival
         {
             int remaining = stack.Count - amount;
             return remaining > 0 ? new ItemStack(stack.ItemId, remaining) : ItemStack.Empty;
-        }
-
-        static IEnumerable<ItemStack> AggregateIngredients(CraftingRecipe recipe)
-        {
-            var totals = new Dictionary<ItemId, int>();
-            foreach (ItemStack ingredient in recipe.Ingredients)
-                totals[ingredient.ItemId] = (totals.TryGetValue(ingredient.ItemId, out int count) ? count : 0) + ingredient.Count;
-
-            foreach (KeyValuePair<ItemId, int> pair in totals)
-                yield return new ItemStack(pair.Key, pair.Value);
         }
     }
 }

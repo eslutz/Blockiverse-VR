@@ -44,12 +44,18 @@ namespace Blockiverse.Tests.EditMode
                 0,
                 settings.Bounds.Depth / (2 * settings.ChunkSize));
 
+            // Build results alias ChunkMeshBuilder's pooled per-thread lists, so the first
+            // build's counts must be snapshotted before the second build reuses those lists.
             ChunkMeshData first = ChunkMeshBuilder.Build(world, registry, chunk);
+            int firstVertexCount = first.Vertices.Count;
+            int firstTrianglesCount = first.Triangles.Count;
+            int firstTriangleCount = first.TriangleCount;
+
             ChunkMeshData second = ChunkMeshBuilder.Build(world, registry, chunk);
 
-            Assert.That(second.Vertices.Count, Is.EqualTo(first.Vertices.Count));
-            Assert.That(second.Triangles.Count, Is.EqualTo(first.Triangles.Count));
-            Assert.That(second.TriangleCount, Is.EqualTo(first.TriangleCount));
+            Assert.That(second.Vertices.Count, Is.EqualTo(firstVertexCount));
+            Assert.That(second.Triangles.Count, Is.EqualTo(firstTrianglesCount));
+            Assert.That(second.TriangleCount, Is.EqualTo(firstTriangleCount));
         }
 
         [Test]

@@ -62,11 +62,42 @@ namespace Blockiverse.Survival
             RequiredStation = requiredStation;
             TimeTicks = timeTicks;
             Ingredients = Array.AsReadOnly(ingredientCopy);
+            AggregatedIngredients = Aggregate(ingredientCopy) ?? Ingredients;
         }
 
         public ItemStack Output { get; }
         public CraftingStation RequiredStation { get; }
         public int TimeTicks { get; }
         public IReadOnlyList<ItemStack> Ingredients { get; }
+
+        // Ingredients merged into one stack per item id (first-seen order), built once here so
+        // per-tick recipe checks (e.g. smelting stations) can iterate without allocating.
+        public IReadOnlyList<ItemStack> AggregatedIngredients { get; }
+
+        // Returns the merged ingredient list, or null when there are no duplicate item ids and
+        // the original list can be reused as-is.
+        static IReadOnlyList<ItemStack> Aggregate(ItemStack[] ingredients)
+        {
+            var aggregate = new List<ItemStack>(ingredients.Length);
+            foreach (ItemStack ingredient in ingredients)
+            {
+                int existing = -1;
+                for (int i = 0; i < aggregate.Count; i++)
+                {
+                    if (aggregate[i].ItemId == ingredient.ItemId)
+                    {
+                        existing = i;
+                        break;
+                    }
+                }
+
+                if (existing >= 0)
+                    aggregate[existing] = new ItemStack(ingredient.ItemId, aggregate[existing].Count + ingredient.Count);
+                else
+                    aggregate.Add(ingredient);
+            }
+
+            return aggregate.Count == ingredients.Length ? null : aggregate.AsReadOnly();
+        }
     }
 }

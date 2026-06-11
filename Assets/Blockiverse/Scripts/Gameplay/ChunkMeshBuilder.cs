@@ -6,6 +6,9 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
+    // Views over ChunkMeshBuilder's pooled per-thread lists; the contents are valid only until
+    // the next Build call on the same thread. Consumers must copy the data out (e.g. into a Mesh)
+    // before triggering another rebuild.
     public sealed class ChunkMeshData
     {
         public ChunkMeshData(List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, List<Color> colors, int faceCount)
@@ -29,6 +32,15 @@ namespace Blockiverse.Gameplay
     public static class ChunkMeshBuilder
     {
         static readonly ProfilerMarker BuildMarker = new("Blockiverse.ChunkMeshBuilder.Build");
+
+        // Build output lists are pooled per thread so chunk rebuilds do not allocate every call
+        // (GC hitches on Quest). [ThreadStatic] keeps the pool safe should Build ever run off the
+        // main thread; the returned ChunkMeshData aliases these lists, so each result must be
+        // consumed before the next Build call on the same thread clears and reuses them.
+        [ThreadStatic] static List<Vector3> pooledVertices;
+        [ThreadStatic] static List<int> pooledTriangles;
+        [ThreadStatic] static List<Vector2> pooledUvs;
+        [ThreadStatic] static List<Color> pooledColors;
 
         static readonly BlockPosition[] NeighborOffsets =
         {
@@ -59,10 +71,14 @@ namespace Blockiverse.Gameplay
 
             using ProfilerMarker.AutoScope buildScope = BuildMarker.Auto();
 
-            var vertices = new List<Vector3>();
-            var triangles = new List<int>();
-            var uvs = new List<Vector2>();
-            var colors = new List<Color>();
+            List<Vector3> vertices = pooledVertices ??= new();
+            List<int> triangles = pooledTriangles ??= new();
+            List<Vector2> uvs = pooledUvs ??= new();
+            List<Color> colors = pooledColors ??= new();
+            vertices.Clear();
+            triangles.Clear();
+            uvs.Clear();
+            colors.Clear();
             int faceCount = 0;
 
             int startX = chunk.X * world.ChunkSize;

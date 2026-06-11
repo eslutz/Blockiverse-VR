@@ -7,6 +7,7 @@
     "Oculus.AvatarSDK2",
     "Oculus.Platform",
     "Oculus.VR",
+    "Unity.Collections",
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],

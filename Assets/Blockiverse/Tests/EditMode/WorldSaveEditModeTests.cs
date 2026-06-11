@@ -48,6 +48,28 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SaveThenLoadPreservesDifficultyAndWorldPreset()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "settings-test", world, difficulty: "hard", worldPreset: "flat_builder");
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.Difficulty, Is.EqualTo("hard"));
+                Assert.That(result.Data.WorldPreset, Is.EqualTo("flat_builder"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void SaveProducesCanonicalDirectoryLayout()
         {
             string path = CreateTempSavePath();
@@ -140,7 +162,7 @@ namespace Blockiverse.Tests.EditMode
                     log.Message.Contains("Saved world"));
                 Assert.That(entry.Message, Does.Contain("world=summary-test"));
                 Assert.That(entry.Message, Does.Contain($"schema={WorldSaveService.CurrentSchemaVersion}"));
-                Assert.That(entry.Message, Does.Contain("dimensions=32x16x32"));
+                Assert.That(entry.Message, Does.Contain($"dimensions={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth}"));
                 Assert.That(entry.Message, Does.Contain("changedBlocks=1"));
                 Assert.That(entry.Message, Does.Contain("inventorySlots=44"));
                 Assert.That(entry.Message, Does.Contain("occupiedInventorySlots=1"));
@@ -255,6 +277,41 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(loadedInventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 12)));
                 Assert.That(loadedInventory.GetSlot(5), Is.EqualTo(new ItemStack(ItemId.ReedwoodDelver, 1)));
                 Assert.That(loadedInventory.GetSlot(8), Is.EqualTo(new ItemStack(ItemId.FieldBandage, 2)));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SurvivalInventorySnapshotRoundTripsThroughSave()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry);
+            var snapshot = new Inventory(itemRegistry);
+            snapshot.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 12));
+            snapshot.SetSlot(3, new ItemStack(ItemId.FieldBandage, 2));
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "snapshot-roundtrip", world, inventory, survivalSnapshot: snapshot);
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.PlayerInventory.SurvivalInventorySnapshot, Is.Not.Null);
+                Assert.That(result.Data.PlayerInventory.SurvivalInventorySnapshot, Has.Length.EqualTo(2));
+
+                SavedInventorySlot logs = result.Data.PlayerInventory.SurvivalInventorySnapshot.First(s => s.SlotIndex == 0);
+                Assert.That(logs.CanonicalId, Is.EqualTo(ItemId.BranchwoodLog.Value));
+                Assert.That(logs.Count, Is.EqualTo(12));
+
+                SavedInventorySlot bandages = result.Data.PlayerInventory.SurvivalInventorySnapshot.First(s => s.SlotIndex == 3);
+                Assert.That(bandages.CanonicalId, Is.EqualTo(ItemId.FieldBandage.Value));
+                Assert.That(bandages.Count, Is.EqualTo(2));
             }
             finally
             {
@@ -461,6 +518,161 @@ namespace Blockiverse.Tests.EditMode
 
                 Assert.That(result.Success, Is.False);
                 Assert.That(result.Error, Does.Contain("slot count"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        // The "missing survival snapshot slot" (null element) branch is not reachable through
+        // Load: JsonUtility never deserializes null array elements, so only the remaining
+        // snapshot rejection reasons are covered here.
+        [Test]
+        public void SurvivalSnapshotSlotIndexOutOfBoundsReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                new WorldSaveService().Save(path, "snapshot-oob", world);
+                WritePlayerSaveWithSurvivalSnapshot(path, new[]
+                {
+                    new SavedInventorySlot { SlotIndex = Inventory.DefaultSlotCount, CanonicalId = ItemId.BranchwoodLog.Value, Count = 1 }
+                });
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("survival snapshot slot index is outside inventory bounds"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SurvivalSnapshotDuplicateSlotIndexReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                new WorldSaveService().Save(path, "snapshot-duplicate", world);
+                WritePlayerSaveWithSurvivalSnapshot(path, new[]
+                {
+                    new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.BranchwoodLog.Value, Count = 1 },
+                    new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.FieldBandage.Value, Count = 1 }
+                });
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("survival snapshot has duplicate slot indexes"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SurvivalSnapshotNonPositiveCountReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                new WorldSaveService().Save(path, "snapshot-zero-count", world);
+                WritePlayerSaveWithSurvivalSnapshot(path, new[]
+                {
+                    new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.BranchwoodLog.Value, Count = 0 }
+                });
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("survival snapshot stack count is invalid"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SurvivalSnapshotMissingItemIdReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                new WorldSaveService().Save(path, "snapshot-missing-id", world);
+                WritePlayerSaveWithSurvivalSnapshot(path, new[]
+                {
+                    new SavedInventorySlot { SlotIndex = 0, CanonicalId = string.Empty, Count = 1 }
+                });
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("survival snapshot slot is missing canonical item id"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SurvivalSnapshotUnregisteredItemReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                new WorldSaveService().Save(path, "snapshot-unregistered", world);
+                WritePlayerSaveWithSurvivalSnapshot(path, new[]
+                {
+                    new SavedInventorySlot { SlotIndex = 0, CanonicalId = "no_such_item", Count = 1 }
+                });
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("survival snapshot item id is not registered"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SurvivalSnapshotOverstackedToolReturnsControlledFailure()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                new WorldSaveService().Save(path, "snapshot-overstack", world);
+                // A tool stack above its max stack size must fail snapshot validation on load.
+                WritePlayerSaveWithSurvivalSnapshot(path, new[]
+                {
+                    new SavedInventorySlot { SlotIndex = 0, CanonicalId = ItemId.ReedwoodDelver.Value, Count = 2 }
+                });
+
+                WorldLoadResult result = new WorldSaveService().Load(path);
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.Error, Does.Contain("survival snapshot stack count exceeds item max stack size"));
             }
             finally
             {
@@ -704,6 +916,23 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             return new FlatCreativeWorldPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
+        }
+
+        // Overwrites the saved player file with a valid base inventory plus the supplied
+        // survival snapshot slots, so each test isolates one snapshot rejection reason.
+        static void WritePlayerSaveWithSurvivalSnapshot(string path, SavedInventorySlot[] snapshotSlots)
+        {
+            var playerSave = new VxlwPlayerSave
+            {
+                SlotCount = Inventory.DefaultSlotCount,
+                HotbarSlotCount = Inventory.DefaultHotbarSlotCount,
+                SelectedHotbarSlotIndex = 0,
+                Slots = new SavedInventorySlot[0],
+                SurvivalInventorySnapshot = snapshotSlots
+            };
+            File.WriteAllText(
+                Path.Combine(path, "players", "local_player.json"),
+                JsonUtility.ToJson(playerSave, prettyPrint: true));
         }
 
         static void DeleteIfExists(string path)

@@ -24,6 +24,12 @@ namespace Blockiverse.UI
         ItemRegistry itemRegistry;
         CraftingStationSet availableStations;
 
+        // GetSortedRecipes cache: CraftingRecipeBook is append-only (Register), so the bound book
+        // instance plus its recipe count identifies the content that produced the list.
+        readonly List<CraftingRecipe> sortedRecipesCache = new();
+        CraftingRecipeBook sortedRecipesSource;
+        int sortedRecipesSourceCount = -1;
+
         public event Action CraftingChanged;
 
         // Routes crafting through the host-authoritative survival sync when present, so a remote client
@@ -232,9 +238,16 @@ namespace Blockiverse.UI
 
         List<CraftingRecipe> GetSortedRecipes()
         {
-            var recipes = new List<CraftingRecipe>();
+            int recipeCount = recipeBook != null ? recipeBook.All.Count : 0;
+            if (ReferenceEquals(sortedRecipesSource, recipeBook) && sortedRecipesSourceCount == recipeCount)
+                return sortedRecipesCache;
+
+            sortedRecipesCache.Clear();
+            sortedRecipesSource = recipeBook;
+            sortedRecipesSourceCount = recipeCount;
+
             if (recipeBook == null)
-                return recipes;
+                return sortedRecipesCache;
 
             // Registration order (basics → stations → smelting → tools → utility) keeps early-game
             // recipes at the top of the limited recipe slots, which alphabetical order would bury.
@@ -243,10 +256,10 @@ namespace Blockiverse.UI
             foreach (CraftingRecipe recipe in recipeBook.All)
             {
                 if (recipe.TimeTicks <= 0)
-                    recipes.Add(recipe);
+                    sortedRecipesCache.Add(recipe);
             }
 
-            return recipes;
+            return sortedRecipesCache;
         }
 
         void WireRecipeButtons()
