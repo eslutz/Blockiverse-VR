@@ -6,7 +6,8 @@ namespace Blockiverse.Gameplay
     {
         Effects,
         Ui,
-        Weather
+        Weather,
+        Music
     }
 
     [DisallowMultipleComponent]
@@ -16,6 +17,8 @@ namespace Blockiverse.Gameplay
         [SerializeField, Range(0f, 1f)] float effectsVolume = 1.0f;
         [SerializeField, Range(0f, 1f)] float uiVolume = 1.0f;
         [SerializeField, Range(0f, 1f)] float weatherVolume = 1.0f;
+        // Music defaults to a bed level under the world audio (§4 bus table: Music 50%).
+        [SerializeField, Range(0f, 1f)] float musicVolume = 0.5f;
         [SerializeField] bool muteAll;
         [SerializeField] bool hapticsEnabled = true;
         [SerializeField, Range(0f, 1f)] float hapticIntensity = 1.0f;
@@ -44,6 +47,12 @@ namespace Blockiverse.Gameplay
         {
             get => weatherVolume;
             set => weatherVolume = Mathf.Clamp01(value);
+        }
+
+        public float MusicVolume
+        {
+            get => musicVolume;
+            set => musicVolume = Mathf.Clamp01(value);
         }
 
         public bool MuteAll
@@ -85,6 +94,7 @@ namespace Blockiverse.Gameplay
             {
                 BlockiverseAudioCategory.Ui => uiVolume,
                 BlockiverseAudioCategory.Weather => weatherVolume,
+                BlockiverseAudioCategory.Music => musicVolume,
                 _ => effectsVolume
             };
 
@@ -104,6 +114,7 @@ namespace Blockiverse.Gameplay
             EffectsVolume = effectsVolume;
             UiVolume = uiVolume;
             WeatherVolume = weatherVolume;
+            MusicVolume = musicVolume;
             HapticIntensity = hapticIntensity;
         }
     }

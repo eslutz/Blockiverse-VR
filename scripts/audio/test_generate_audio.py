@@ -19,8 +19,11 @@ def load_generator():
 
 
 class GeneratedAudioTests(unittest.TestCase):
-    def setUp(self):
-        self.generator = load_generator()
+    @classmethod
+    def setUpClass(cls):
+        # One shared render: the module synthesizes every clip (including the
+        # multi-second music beds) at import time.
+        cls.generator = load_generator()
 
     def test_generator_uses_reusable_name(self):
         self.assertTrue(GENERATOR_PATH.exists())
@@ -67,6 +70,10 @@ class GeneratedAudioTests(unittest.TestCase):
                 "night_ambience_loop",
                 "multiplayer_join",
                 "multiplayer_leave",
+                "music_menu",
+                "music_day",
+                "music_night",
+                "music_cave",
             },
         )
 
@@ -102,6 +109,10 @@ class GeneratedAudioTests(unittest.TestCase):
             "night_ambience_loop": (0.90, 1.50),
             "multiplayer_join": (0.14, 0.28),
             "multiplayer_leave": (0.14, 0.30),
+            "music_menu": (30.0, 40.0),
+            "music_day": (28.0, 40.0),
+            "music_night": (30.0, 40.0),
+            "music_cave": (30.0, 40.0),
         }
 
         for name, (minimum, maximum) in expected_duration_ranges.items():

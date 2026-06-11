@@ -110,7 +110,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void RendererDestroysReplacedChunkMeshesAfterDirtyRebuild()
+        public void RendererReusesThePooledChunkMeshAcrossDirtyRebuilds()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
@@ -119,7 +119,6 @@ namespace Blockiverse.Tests.EditMode
             var worldObject = new GameObject("Chunk Renderer");
             Texture2D atlasTexture = null;
             Material blockMaterial = null;
-            Mesh firstMesh = null;
 
             try
             {
@@ -128,23 +127,23 @@ namespace Blockiverse.Tests.EditMode
                 renderer.Configure(world, registry, blockMaterial, -1);
 
                 MeshFilter filter = worldObject.GetComponentInChildren<MeshFilter>();
-                firstMesh = filter.sharedMesh;
+                Mesh firstMesh = filter.sharedMesh;
                 Assert.That(firstMesh, Is.Not.Null);
+                Assert.That(firstMesh.vertexCount, Is.GreaterThan(0));
 
                 world.SetBlock(editedPosition, BlockRegistry.Air);
                 renderer.RebuildDirty();
 
-                Assert.That(filter.sharedMesh, Is.Not.SameAs(firstMesh));
-                Assert.That(firstMesh == null, Is.True, "Expected the replaced chunk mesh to be destroyed.");
+                // One pooled Mesh per chunk: rebuilds refill the same instance (no allocation
+                // churn), and the refilled geometry reflects the edit (block removed → no faces).
+                Assert.That(filter.sharedMesh, Is.SameAs(firstMesh));
+                Assert.That(firstMesh.vertexCount, Is.EqualTo(0), "Expected the pooled mesh to be refilled with the post-edit geometry.");
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(worldObject);
                 UnityEngine.Object.DestroyImmediate(blockMaterial);
                 UnityEngine.Object.DestroyImmediate(atlasTexture);
-
-                if (firstMesh != null)
-                    UnityEngine.Object.DestroyImmediate(firstMesh);
             }
         }
 
@@ -171,20 +170,23 @@ namespace Blockiverse.Tests.EditMode
                 MeshFilter filter = worldObject.GetComponentInChildren<MeshFilter>();
                 MeshCollider collider = worldObject.GetComponentInChildren<MeshCollider>();
 
-                // With a zero budget, an edit updates the visual mesh immediately but defers the
-                // collider rebake.
+                // Add a second block so the chunk stays non-empty (its pooled mesh keeps vertices,
+                // so the collider holds a real mesh throughout). With a zero budget the edit
+                // refills the visual mesh immediately but defers the collider rebake.
                 renderer.ColliderRebuildBudget = 0;
-                world.SetBlock(editedPosition, BlockRegistry.Air);
+                world.SetBlock(new BlockPosition(2, 0, 2), BlockRegistry.MeadowTurf);
                 renderer.RebuildDirty();
 
+                // The throttle is observable through the pending count (meshes are pooled, so the
+                // filter and collider share the same instance regardless of bake timing).
                 Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0), "Collider rebakes should be throttled by the budget.");
-                Assert.That(collider.sharedMesh, Is.Not.SameAs(filter.sharedMesh), "Collider should still use the pre-edit mesh until the rebake runs.");
 
-                // Draining the backlog brings the collider up to the current visual mesh.
+                // Draining the backlog recooks the collider from the refilled non-empty mesh.
                 renderer.ProcessPendingColliderRebuilds(int.MaxValue);
 
                 Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
                 Assert.That(collider.sharedMesh, Is.SameAs(filter.sharedMesh));
+                Assert.That(collider.sharedMesh.vertexCount, Is.GreaterThan(0));
             }
             finally
             {
@@ -250,13 +252,35 @@ namespace Blockiverse.Tests.EditMode
                 .Where(block => block.IsRenderable)
                 .ToArray();
 
-            Rect[] tileRects = renderableBlocks
+            Assert.That(
+                renderableBlocks.All(block =>
+                {
+                    Rect rect = BlockVisualAtlas.GetTileRect(block.Id);
+                    return rect.width > 0.0f && rect.height > 0.0f;
+                }),
+                Is.True,
+                "Every renderable block must map to a positive-area atlas tile.");
+
+            // Flow cells intentionally render with their family's source tile (flowing water
+            // reads as water), so they are the only permitted tile sharers. Every other
+            // renderable block must own a distinct tile.
+            BlockDefinition[] nonFlowBlocks = renderableBlocks
+                .Where(block => !FluidBlocks.IsFlow(block.Id))
+                .ToArray();
+            Rect[] nonFlowRects = nonFlowBlocks
                 .Select(block => BlockVisualAtlas.GetTileRect(block.Id))
                 .ToArray();
+            Assert.That(nonFlowRects.Distinct().Count(), Is.EqualTo(nonFlowBlocks.Length),
+                "Non-flow renderable blocks must each have a distinct atlas tile.");
 
-            Assert.That(tileRects, Has.Length.EqualTo(renderableBlocks.Length));
-            Assert.That(tileRects.Distinct().Count(), Is.EqualTo(renderableBlocks.Length));
-            Assert.That(tileRects.All(rect => rect.width > 0.0f && rect.height > 0.0f), Is.True);
+            foreach (BlockDefinition block in renderableBlocks.Where(b => FluidBlocks.IsFlow(b.Id)))
+            {
+                Assert.That(FluidBlocks.TryGetFamily(block.Id, out FluidFamily family), Is.True);
+                Assert.That(
+                    BlockVisualAtlas.GetTileRect(block.Id),
+                    Is.EqualTo(BlockVisualAtlas.GetTileRect(FluidBlocks.SourceOf(family))),
+                    $"{block.Name} should share its family source's atlas tile.");
+            }
         }
 
         [Test]

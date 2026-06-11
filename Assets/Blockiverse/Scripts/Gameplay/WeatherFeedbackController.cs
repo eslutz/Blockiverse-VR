@@ -15,8 +15,6 @@ namespace Blockiverse.Gameplay
         const float PrecipitationVfxIntervalSeconds = 0.6f;
         const float FogVfxIntervalSeconds = 2.5f;
         const int CampfireSearchRadius = 8;
-        const float DayStartNormalized = 0.05f;
-        const float NightStartNormalized = 0.55f;
 
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -129,16 +127,17 @@ namespace Blockiverse.Gameplay
 
         BlockiverseAudioCue ResolveAmbienceCue()
         {
-            // Underground (no sky above the head cell) → cave ambience; the sky map answers in O(1).
-            VoxelSkyLightMap skyLight = worldManager.Renderer != null ? worldManager.Renderer.SkyLight : null;
-            if (skyLight != null && TryGetHeadCell(out BlockPosition headCell) && !skyLight.HasSkyAccess(headCell))
+            // Underground (no sky above the head cell) → cave ambience; the shared O(1) sky-map
+            // query the music controller also uses.
+            if (TryGetHeadWorldPosition(out Vector3 headPosition) && worldManager.IsHeadUnderground(headPosition))
                 return BlockiverseAudioCue.CaveAmbienceLoop;
 
             float normalizedTime = worldManager.WorldTimeClock != null
                 ? worldManager.WorldTimeClock.NormalizedTime
                 : 0.25f;
-            bool isDay = normalizedTime >= DayStartNormalized && normalizedTime < NightStartNormalized;
-            return isDay ? BlockiverseAudioCue.DayAmbienceLoop : BlockiverseAudioCue.NightAmbienceLoop;
+            return WorldTimeClock.IsDay(normalizedTime)
+                ? BlockiverseAudioCue.DayAmbienceLoop
+                : BlockiverseAudioCue.NightAmbienceLoop;
         }
 
         // ── Campfire loop ─────────────────────────────────────────────────────

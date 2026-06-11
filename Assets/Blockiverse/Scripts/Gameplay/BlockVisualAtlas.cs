@@ -92,6 +92,13 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.ToolRack.Value,            70 },
             { BlockRegistry.PantryJar.Value,           71 },
             { BlockRegistry.DeepLocker.Value,          72 },
+            { BlockRegistry.Freshwater.Value,          73 },
+            { BlockRegistry.Brine.Value,               74 },
+            { BlockRegistry.Emberflow.Value,           75 },
+            // Flowing cells render with their family's source tile.
+            { BlockRegistry.FreshwaterFlow.Value,      73 },
+            { BlockRegistry.BrineFlow.Value,           74 },
+            { BlockRegistry.EmberflowFlow.Value,       75 },
         };
 
         public static Rect GetTileRect(BlockId blockId)

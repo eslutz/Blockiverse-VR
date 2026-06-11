@@ -467,6 +467,7 @@ Mask radius recommendations:
 | Wetland Stilt Cache | `wetland_stilt_cache` | `wetland` | Shore/shallow water | Uncommon | `7×7×7` | `branchwood_log`, `work_plank`, `river_silt` | Food + Paletin chance |
 | Drybrush Niter Pit | `drybrush_niter_pit` | `drybrush`, `dunes` | Surface | Uncommon | `8×5×8` | `shingle_gravel`, `warm_granite`, `niterstone_pocket` | Spark niter |
 | Frost Shelter | `frost_shelter` | `tundra`, `highlands` | Surface | Uncommon | `7×5×6` | `dark_slate`, `snow_block`, `branchwood_log` | Embercoal + food |
+| Bridge Segment | `bridge_segment` | `meadow`, `wetland`, `pinewild` | Surface | Uncommon | `9×2×3` | `work_plank`, `smooth_branchwood` | None |
 
 ### 12.3 Surface major structures and landmarks
 
@@ -482,6 +483,7 @@ Mask radius recommendations:
 
 | Structure | ID | Biomes / Hosts | Placement | Rarity | Footprint | Loot Tier |
 |---|---|---|---|---:|---:|---:|
+| Cave Shrine | `cave_shrine` | Any biome; first cave pocket beneath its column (surface fallback) | Cave feature | Rare | `3×3×3` | 1 |
 | Stoneburrow Cellar | `stoneburrow_cellar` | Any surface biome, stone below | Underground room | Rare | `11×7×11` | 1–2 |
 | Lumen Hollow | `lumen_hollow` | Cave walls with `lumen_quartz_cluster` nearby | Cave feature | Uncommon below `y=80` | `12×9×12` | 2–3 |
 | Ember Vent Outpost | `ember_vent_outpost` | `black_basalt`, emberflow nearby | Cave feature | Rare below `y=35` | `13×9×13` | 3–4 |

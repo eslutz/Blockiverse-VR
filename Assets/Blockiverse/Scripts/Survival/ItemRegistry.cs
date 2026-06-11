@@ -17,6 +17,7 @@ namespace Blockiverse.Survival
         public const int ToolStackSize = 1;
         public const int ConsumableStackSize = 20;
         public const int FieldBandageStackSize = 20;
+        public const int FluidContainerStackSize = 1; // Buckets and fluid containers stack to 1 (§14 stack table).
 
         public IReadOnlyCollection<ItemDefinition> All => definitionsById.Values;
 
@@ -138,13 +139,20 @@ namespace Blockiverse.Survival
             RegisterToolTier(registry, "starforged", "Starforged", tier: 7, baseDurability: 1800);
 
             // ── Farming: canonical crop drops, seeds, and stage aliases (§3, §11.2) ─
-            registry.Register(new ItemDefinition(ItemId.GrainBundle, "Grain Bundle",  ItemKind.Resource, FoodStackSize));
-            registry.Register(new ItemDefinition(ItemId.BerryCluster, "Berry Cluster", ItemKind.Resource, FoodStackSize));
+            // Crop foods are consumables (§13): eating them is the hunger-restore loop.
+            registry.Register(new ItemDefinition(ItemId.GrainBundle, "Grain Bundle",  ItemKind.Consumable, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.BerryCluster, "Berry Cluster", ItemKind.Consumable, FoodStackSize));
             registry.Register(new ItemDefinition(ItemId.MeadowSeed,   "Meadow Seed",   ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.DrygrassSeed, "Drygrass Seed", ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.ReedCutting,  "Reed Cutting",  ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.BerrySeed,    "Berry Seed",    ItemKind.Resource, BlockStackSize));
-            registry.Register(new ItemDefinition(ItemId.CleanWaterFlask, "Clean Water Flask", ItemKind.Consumable, ConsumableStackSize));
+            registry.Register(new ItemDefinition(ItemId.CleanWaterFlask, "Clean Water Flask", ItemKind.Consumable, FluidContainerStackSize));
+
+            // ── Fluid containers (§5.4, §9.3): flasks and buckets, stack 1 ────
+            registry.Register(new ItemDefinition(ItemId.WaterFlask,       "Water Flask",       ItemKind.Resource, FluidContainerStackSize));
+            registry.Register(new ItemDefinition(ItemId.EmptyBucket,      "Empty Bucket",      ItemKind.Resource, FluidContainerStackSize));
+            registry.Register(new ItemDefinition(ItemId.FreshwaterBucket, "Freshwater Bucket", ItemKind.Resource, FluidContainerStackSize));
+            registry.Register(new ItemDefinition(ItemId.BrineBucket,      "Brine Bucket",      ItemKind.Resource, FluidContainerStackSize));
 
             // Every grain/berry/reed stage (base + grown) drops the canonical crop resource.
             registry.RegisterDropAlias(BlockRegistry.GrainStalk,    ItemId.GrainBundle);

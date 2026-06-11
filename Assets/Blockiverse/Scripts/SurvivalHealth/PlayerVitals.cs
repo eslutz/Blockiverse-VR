@@ -95,6 +95,23 @@ namespace Blockiverse.Survival
             RespawnAt(new BlockPosition(0, 0, 0));
         }
 
+        // Restores saved health (world load). Clamped to [1, MaxHealth]: a save written while
+        // alive can never restore into a dead state, and HealthChanged fires so HUDs repaint.
+        public void RestoreHealth(int health)
+        {
+            int previousHealth = CurrentHealth;
+            CurrentHealth = Math.Clamp(health, 1, MaxHealth);
+
+            PublishHealthChange(new HealthChangeResult(
+                HealthChangeKind.Respawn,
+                Math.Abs(CurrentHealth - previousHealth),
+                CurrentHealth - previousHealth,
+                previousHealth,
+                CurrentHealth,
+                MaxHealth,
+                wasDead: false));
+        }
+
         static void ValidateNonNegativeAmount(int amount, string parameterName)
         {
             if (amount < 0)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
+using Blockiverse.WorldGen;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -25,7 +26,9 @@ namespace Blockiverse.Gameplay
         StationDepositInput,
         StationDepositFuel,
         StationCollectOutput,
-        UseConsumable
+        UseConsumable,
+        FillBucket,
+        PourBucket
     }
 
     public enum SurvivalCommandFailureReason
@@ -47,12 +50,15 @@ namespace Blockiverse.Gameplay
         StripRejected,
         NotTillable,
         TillRejected,
+        TillRequiresWater,
         NotPlantable,
         PlantRejected,
         RepairRejected,
         NotAStation,
         StationRejected,
-        NotConsumable
+        NotConsumable,
+        NotBucketUse,
+        BucketRejected
     }
 
     public readonly struct SurvivalCommandResult
@@ -168,6 +174,8 @@ namespace Blockiverse.Gameplay
         const string CommandResultMessage = "Blockiverse.Survival.CommandResult";
         const string InventorySnapshotMessage = "Blockiverse.Survival.InventorySnapshot";
         const string SharedCrateSnapshotMessage = "Blockiverse.Survival.SharedCrateSnapshot";
+        const string PlayerHelloMessage = "Blockiverse.Survival.PlayerHello";
+        const string PlayerGuidPrefKey = "Blockiverse.PlayerGuid";
         const int CommandRequestMessageBytes = 128;
         const int CommandResultMessageBytes = 128;
         const int StationSnapshotMessageBytes = 512;
@@ -179,6 +187,11 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeWorldManager worldManager;
 
         readonly Dictionary<ulong, Inventory> inventoriesByClientId = new();
+        // Reconnect identity: each player carries a persistent GUID (PlayerPrefs). The host maps
+        // connections to GUIDs and stashes a departing player's inventory under it, so the same
+        // player reconnecting mid-session gets their items back under their new client id.
+        readonly Dictionary<ulong, string> playerGuidsByClientId = new();
+        readonly Dictionary<string, Inventory> stashedInventoriesByGuid = new();
         readonly Dictionary<ulong, ProcessedRequestWindow> processedRequestsByClientId = new();
         readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position)> pendingCommandRequests = new();
 
@@ -349,6 +362,8 @@ namespace Blockiverse.Gameplay
         public int AcceptedRepairCount { get; private set; }
         public int ReceivedConsumableRequestCount { get; private set; }
         public int AcceptedConsumableCount { get; private set; }
+        public int ReceivedBucketRequestCount { get; private set; }
+        public int AcceptedBucketCount { get; private set; }
         public int ReceivedStationCommandRequestCount { get; private set; }
         public int AcceptedStationCommandCount { get; private set; }
         public int ReceivedStationSnapshotCount { get; private set; }
@@ -566,6 +581,21 @@ namespace Blockiverse.Gameplay
             }
 
             ItemStack held = EquippedItem;
+
+            // Drinking from targeted freshwater (§6.2; source or flowing): any use that isn't a
+            // bucket fill drinks by hand. Vitals are local-player state (SurvivalVitalsRuntime
+            // subscribes), so no host round-trip is involved and the world is untouched.
+            if (targetWorld != null &&
+                targetWorld.Bounds.Contains(targetBlock) &&
+                FluidBlocks.IsFreshwater(targetWorld.GetBlock(targetBlock)) &&
+                held.ItemId != ItemId.EmptyBucket)
+            {
+                requestSentToHost = false;
+                WorldDrinkRequested?.Invoke();
+                LastCommandResult = SurvivalCommandResult.Accept(SurvivalCommandKind.None, requestId: 0);
+                return LastCommandResult;
+            }
+
             if (!held.IsEmpty && itemRegistry.TryGet(held.ItemId, out ItemDefinition def))
             {
                 if (def.ToolClass == HarvestToolKind.Feller)
@@ -576,6 +606,14 @@ namespace Blockiverse.Gameplay
 
                 if (FarmingService.IsSeedItem(held.ItemId))
                     return TrySubmitPlantSeed(targetBlock, out requestSentToHost, SelectedHotbarSlotIndex);
+
+                // Buckets (§5.4/§631): an empty bucket scoops the targeted fluid source; a filled
+                // one pours its source into the adjacent cell (same cell placement would use).
+                if (held.ItemId == ItemId.EmptyBucket)
+                    return TrySubmitFillBucket(targetBlock, out requestSentToHost, SelectedHotbarSlotIndex);
+
+                if (held.ItemId == ItemId.FreshwaterBucket || held.ItemId == ItemId.BrineBucket)
+                    return TrySubmitPourBucket(placement, out requestSentToHost, SelectedHotbarSlotIndex);
 
                 // Using a held consumable (field bandage, water flask, …) consumes it instead of
                 // placing; the vitals effect is applied by SurvivalVitalsRuntime on confirmation.
@@ -679,6 +717,68 @@ namespace Blockiverse.Gameplay
                 soilPosition);
         }
 
+        // Bucket fill: scoops the targeted fluid source into the held empty bucket (§631), removing
+        // the source block. Server-authoritative like harvest/place.
+        public SurvivalCommandResult TrySubmitFillBucket(
+            BlockPosition position,
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
+        {
+            requestSentToHost = false;
+
+            if (IsActiveClientOnly())
+            {
+                if (chunkAuthoritySync != null && !chunkAuthoritySync.HasHostGenerationSnapshotForSession)
+                {
+                    LastCommandResult = SurvivalCommandResult.Reject(
+                        SurvivalCommandKind.FillBucket,
+                        SurvivalCommandFailureReason.AwaitingHostWorldSnapshot);
+                    return LastCommandResult;
+                }
+
+                uint requestId = AllocateCommandRequestId();
+                SendBlockCommandRequest(SurvivalCommandKind.FillBucket, requestId, position, equippedSlotIndex);
+                requestSentToHost = true;
+                LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.FillBucket, requestId);
+                return LastCommandResult;
+            }
+
+            return CompleteLocalCommand(
+                ProcessHostFillBucket(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false),
+                position);
+        }
+
+        // Bucket pour: empties the held filled bucket's fluid source into the targeted air cell,
+        // returning the bucket empty. Server-authoritative like harvest/place.
+        public SurvivalCommandResult TrySubmitPourBucket(
+            BlockPosition position,
+            out bool requestSentToHost,
+            int equippedSlotIndex = -1)
+        {
+            requestSentToHost = false;
+
+            if (IsActiveClientOnly())
+            {
+                if (chunkAuthoritySync != null && !chunkAuthoritySync.HasHostGenerationSnapshotForSession)
+                {
+                    LastCommandResult = SurvivalCommandResult.Reject(
+                        SurvivalCommandKind.PourBucket,
+                        SurvivalCommandFailureReason.AwaitingHostWorldSnapshot);
+                    return LastCommandResult;
+                }
+
+                uint requestId = AllocateCommandRequestId();
+                SendBlockCommandRequest(SurvivalCommandKind.PourBucket, requestId, position, equippedSlotIndex);
+                requestSentToHost = true;
+                LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PourBucket, requestId);
+                return LastCommandResult;
+            }
+
+            return CompleteLocalCommand(
+                ProcessHostPourBucket(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false),
+                position);
+        }
+
         // Mend Bench tool repair (§10.7): restores 25% max durability of the tool in the given slot
         // (default: the selected hotbar slot) for one matching head material. Server-authoritative;
         // the host validates Mend Bench proximity and mutates the host-owned inventory.
@@ -702,9 +802,34 @@ namespace Blockiverse.Gameplay
                 ProcessHostRepair(ResolveLocalClientId(), requestId: 0, toolSlotIndex, sendResponse: false));
         }
 
+        // Evaluates how long mining the targeted block takes with the equipped tool (hold-to-mine
+        // cadence, §7.3). Local-only preview against the local inventory and replicated world —
+        // the host still revalidates the harvest on submit. False when the block cannot be
+        // harvested at all (air, no rule, wrong tool, full inventory).
+        public bool TryEvaluateHarvestWorkSeconds(BlockPosition position, out float seconds)
+        {
+            seconds = 0f;
+
+            VoxelWorld world = ResolveWorldOrNull();
+            if (world == null)
+                return false;
+
+            BlockHarvestResult preview = ResolveHarvestService()
+                .TryPreviewHarvest(world, LocalInventory, position, EquippedItem);
+            if (!preview.Succeeded)
+                return false;
+
+            seconds = preview.WorkRequired / (float)WorldConstants.TicksPerSecond;
+            return true;
+        }
+
         // Fires on the consuming peer when the host confirms a consumable was used (one stack of
         // the consumed item). SurvivalVitalsRuntime applies the matching vitals effect (§13).
         public event Action<ItemStack> ConsumableConsumed;
+
+        // Fires when the local player uses a targeted freshwater source by hand (§6.2).
+        // SurvivalVitalsRuntime applies the thirst restore on its own drink cooldown.
+        public event Action WorldDrinkRequested;
 
         // Consumes one consumable from the given slot (default: the selected hotbar slot). The
         // inventory decrement is server-authoritative; the vitals effect is applied client-side by
@@ -777,6 +902,86 @@ namespace Blockiverse.Gameplay
                 ResolveItemRegistry());
             stationModels[position] = model;
             return model;
+        }
+
+        // Per-station persistent state for world saves: slot contents plus the in-flight craft
+        // (fuel was consumed when the craft began, so recipe+progress restore resumes it exactly).
+        public readonly struct StationPersistentState
+        {
+            public readonly BlockPosition Position;
+            public readonly CraftingStation StationType;
+            public readonly ItemStack[] Inputs;
+            public readonly ItemStack Fuel;
+            public readonly ItemStack Output;
+            public readonly ItemId ActiveRecipeOutput; // None when idle
+            public readonly int ProgressTicks;
+
+            public StationPersistentState(
+                BlockPosition position,
+                CraftingStation stationType,
+                ItemStack[] inputs,
+                ItemStack fuel,
+                ItemStack output,
+                ItemId activeRecipeOutput,
+                int progressTicks)
+            {
+                Position = position;
+                StationType = stationType;
+                Inputs = inputs;
+                Fuel = fuel;
+                Output = output;
+                ActiveRecipeOutput = activeRecipeOutput;
+                ProgressTicks = progressTicks;
+            }
+        }
+
+        // Snapshot of every timed station's runtime state for world persistence (host/offline).
+        public IReadOnlyList<StationPersistentState> ExportStationStates()
+        {
+            var result = new List<StationPersistentState>(stationModels.Count);
+
+            foreach (KeyValuePair<BlockPosition, SmeltingStationModel> pair in stationModels)
+            {
+                SmeltingStationModel model = pair.Value;
+                var inputs = new ItemStack[model.InputSlotCount];
+                for (int i = 0; i < inputs.Length; i++)
+                    inputs[i] = model.GetInput(i);
+
+                result.Add(new StationPersistentState(
+                    pair.Key,
+                    model.StationType,
+                    inputs,
+                    model.Fuel,
+                    model.Output,
+                    model.ActiveRecipe?.Output.ItemId ?? ItemId.None,
+                    model.ProgressTicks));
+            }
+
+            return result;
+        }
+
+        // Rebuilds the station models from saved state (world load, host/offline). Entries whose
+        // recipe no longer resolves restore idle with their slots intact; TickStations prunes any
+        // whose block no longer matches the station type.
+        public void RestoreStationStates(IEnumerable<StationPersistentState> states)
+        {
+            stationModels.Clear();
+            if (states == null)
+                return;
+
+            CraftingRecipeBook recipeBook = ResolveRecipeBook();
+            foreach (StationPersistentState state in states)
+            {
+                if (!SmeltingStationModel.IsTimedStation(state.StationType))
+                    continue;
+
+                CraftingRecipe activeRecipe = null;
+                if (!state.ActiveRecipeOutput.IsNone)
+                    recipeBook.TryGetByOutput(state.ActiveRecipeOutput, out activeRecipe);
+
+                SmeltingStationModel model = GetOrCreateStationModel(state.Position, state.StationType);
+                model.ApplyHostSnapshot(state.Inputs, state.Fuel, state.Output, activeRecipe, state.ProgressTicks);
+            }
         }
 
         // Advances all host-owned station models, pruning stations whose block was removed and
@@ -1183,6 +1388,20 @@ namespace Blockiverse.Gameplay
                 return result;
             }
 
+            // §11.1: tilling needs freshwater within reach; without it, one clean water flask is
+            // spent instead (§497/§784). Availability is checked before the mutation and the flask
+            // removed after it, so a rejected mutation never costs the flask.
+            bool waterNearby = FarmingService.HasFreshwaterNearby(world, position);
+            if (!waterNearby && inventory.CountOf(ItemId.CleanWaterFlask) < 1)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.TillSoil,
+                    SurvivalCommandFailureReason.TillRequiresWater,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
             BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
                 new BlockMutationRequest(clientId, position, BlockRegistry.TendedSoil, world.GetBlock(position)),
                 out _,
@@ -1196,6 +1415,13 @@ namespace Blockiverse.Gameplay
                     requestId);
                 SendCommandFailure(clientId, result, sendResponse);
                 return result;
+            }
+
+            if (!waterNearby)
+            {
+                inventory.Remove(ItemId.CleanWaterFlask, 1);
+                // Flasks stack to 1, so the consume freed a slot for the returned empty (§731).
+                inventory.TryAddAll(new ItemStack(ItemId.WaterFlask, 1));
             }
 
             // Tilling costs Tiller durability (the soil converts in place, no drop).
@@ -1350,11 +1576,151 @@ namespace Blockiverse.Gameplay
 
             inventory.SetSlot(slotIndex, stack.Count > 1 ? stack.WithCount(stack.Count - 1) : ItemStack.Empty);
 
+            // Drinking a filled flask returns the empty flask (§731 container-return). Flasks
+            // stack to 1, so the consume above always freed a slot and this add cannot fail.
+            if (stack.ItemId == ItemId.CleanWaterFlask)
+                inventory.TryAddAll(new ItemStack(ItemId.WaterFlask, 1));
+
             AcceptedConsumableCount++;
             SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
                 SurvivalCommandKind.UseConsumable,
                 requestId,
                 new ItemStack(stack.ItemId, 1));
+            SendInventorySnapshot(clientId);
+            SendCommandResult(clientId, accepted, sendResponse);
+            RefreshLocalInventoryReference();
+            LastCommandResult = accepted;
+            return accepted;
+        }
+
+        SurvivalCommandResult ProcessHostFillBucket(
+            ulong clientId,
+            uint requestId,
+            BlockPosition position,
+            int equippedSlotIndex,
+            bool sendResponse)
+        {
+            ReceivedBucketRequestCount++;
+
+            if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.FillBucket, sendResponse, out SurvivalCommandResult duplicate))
+                return duplicate;
+
+            Inventory inventory = GetInventory(clientId);
+
+            // The held bucket is read from the host-owned slot, never trusted from the client: an
+            // empty bucket is required, and the target must be a fluid source block (§631).
+            ItemStack held = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount
+                ? inventory.GetSlot(equippedSlotIndex)
+                : ItemStack.Empty;
+
+            VoxelWorld world = ResolveWorld();
+            BlockId target = world.Bounds.Contains(position) ? world.GetBlock(position) : BlockRegistry.Air;
+            ItemId filledBucket = target == BlockRegistry.Freshwater ? ItemId.FreshwaterBucket
+                : target == BlockRegistry.Brine ? ItemId.BrineBucket
+                : ItemId.None;
+
+            if (held.IsEmpty || held.ItemId != ItemId.EmptyBucket || filledBucket.IsNone)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.FillBucket,
+                    SurvivalCommandFailureReason.NotBucketUse,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            // Filling scoops the source: the block becomes air, the bucket carries it (fluid is
+            // conserved between fill and pour).
+            BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
+                new BlockMutationRequest(clientId, position, BlockRegistry.Air, target),
+                out _,
+                out _);
+
+            if (!mutation.Accepted)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.FillBucket,
+                    SurvivalCommandFailureReason.BucketRejected,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            // Buckets stack to 1, so the held stack is exactly the one bucket being filled.
+            inventory.SetSlot(equippedSlotIndex, new ItemStack(filledBucket, 1));
+
+            AcceptedBucketCount++;
+            SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
+                SurvivalCommandKind.FillBucket,
+                requestId,
+                new ItemStack(filledBucket, 1));
+            SendInventorySnapshot(clientId);
+            SendCommandResult(clientId, accepted, sendResponse);
+            RefreshLocalInventoryReference();
+            LastCommandResult = accepted;
+            return accepted;
+        }
+
+        SurvivalCommandResult ProcessHostPourBucket(
+            ulong clientId,
+            uint requestId,
+            BlockPosition position,
+            int equippedSlotIndex,
+            bool sendResponse)
+        {
+            ReceivedBucketRequestCount++;
+
+            if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.PourBucket, sendResponse, out SurvivalCommandResult duplicate))
+                return duplicate;
+
+            Inventory inventory = GetInventory(clientId);
+
+            // The poured fluid is derived from the host-owned inventory slot, never trusted from
+            // the client. Pouring requires a filled bucket and an air cell at the target.
+            ItemStack held = equippedSlotIndex >= 0 && equippedSlotIndex < inventory.SlotCount
+                ? inventory.GetSlot(equippedSlotIndex)
+                : ItemStack.Empty;
+
+            BlockId fluid = held.ItemId == ItemId.FreshwaterBucket ? BlockRegistry.Freshwater
+                : held.ItemId == ItemId.BrineBucket ? BlockRegistry.Brine
+                : BlockRegistry.Air;
+
+            VoxelWorld world = ResolveWorld();
+            if (fluid == BlockRegistry.Air ||
+                !world.Bounds.Contains(position) ||
+                world.GetBlock(position) != BlockRegistry.Air)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.PourBucket,
+                    SurvivalCommandFailureReason.NotBucketUse,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
+                new BlockMutationRequest(clientId, position, fluid, BlockRegistry.Air),
+                out _,
+                out _);
+
+            if (!mutation.Accepted)
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.PourBucket,
+                    SurvivalCommandFailureReason.BucketRejected,
+                    requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
+
+            // The emptied bucket returns in place (§731); buckets stack to 1 so the swap fits.
+            inventory.SetSlot(equippedSlotIndex, new ItemStack(ItemId.EmptyBucket, 1));
+
+            AcceptedBucketCount++;
+            SurvivalCommandResult accepted = SurvivalCommandResult.Accept(
+                SurvivalCommandKind.PourBucket,
+                requestId,
+                new ItemStack(held.ItemId, 1));
             SendInventorySnapshot(clientId);
             SendCommandResult(clientId, accepted, sendResponse);
             RefreshLocalInventoryReference();
@@ -1729,6 +2095,8 @@ namespace Blockiverse.Gameplay
                 case SurvivalCommandKind.StripLog:
                 case SurvivalCommandKind.TillSoil:
                 case SurvivalCommandKind.PlantSeed:
+                case SurvivalCommandKind.FillBucket:
+                case SurvivalCommandKind.PourBucket:
                 {
                     BlockPosition position = ReadBlockPosition(ref reader);
                     reader.ReadValueSafe(out int equippedSlotIndex);
@@ -1739,8 +2107,12 @@ namespace Blockiverse.Gameplay
                         ProcessHostStripLog(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
                     else if (commandKind == SurvivalCommandKind.TillSoil)
                         ProcessHostTill(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
-                    else
+                    else if (commandKind == SurvivalCommandKind.PlantSeed)
                         ProcessHostPlantSeed(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    else if (commandKind == SurvivalCommandKind.FillBucket)
+                        ProcessHostFillBucket(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    else
+                        ProcessHostPourBucket(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
                     break;
                 }
                 case SurvivalCommandKind.RepairTool:
@@ -2173,6 +2545,14 @@ namespace Blockiverse.Gameplay
 
         void HandleClientConnected(ulong clientId)
         {
+            // On the connecting client itself: introduce the persistent player GUID so the host
+            // can hand back a stashed inventory from an earlier disconnect this session.
+            if (IsActiveClientOnly() && clientId == ResolveLocalClientId())
+            {
+                SendPlayerHello();
+                return;
+            }
+
             if (!CanProcessHostRequests())
                 return;
 
@@ -2219,6 +2599,68 @@ namespace Blockiverse.Gameplay
                 return;
 
             processedRequestsByClientId.Remove(clientId);
+
+            // Reconnect identity: stash the departing player's inventory under their persistent
+            // GUID so the same player rejoining this session reclaims it (new client id).
+            if (playerGuidsByClientId.Remove(clientId, out string guid) &&
+                inventoriesByClientId.Remove(clientId, out Inventory inventory))
+            {
+                stashedInventoriesByGuid[guid] = inventory;
+            }
+        }
+
+        // The local player's persistent identity, created once and reused across sessions.
+        static string ResolveLocalPlayerGuid()
+        {
+            string guid = PlayerPrefs.GetString(PlayerGuidPrefKey, string.Empty);
+            if (string.IsNullOrEmpty(guid))
+            {
+                guid = Guid.NewGuid().ToString("N");
+                PlayerPrefs.SetString(PlayerGuidPrefKey, guid);
+            }
+
+            return guid;
+        }
+
+        // Client → host introduction carrying the persistent player GUID.
+        void SendPlayerHello()
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || networkManager.CustomMessagingManager == null)
+                return;
+
+            RegisterMessageHandlers();
+            var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
+
+            try
+            {
+                writer.WriteValueSafe(ResolveLocalPlayerGuid());
+                networkManager.CustomMessagingManager.SendNamedMessage(PlayerHelloMessage, NetworkManager.ServerClientId, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        // Host: binds the sender to its persistent GUID and hands back any inventory stashed
+        // for that GUID by an earlier disconnect, then pushes the authoritative snapshot.
+        void HandlePlayerHelloMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!CanProcessHostRequests())
+                return;
+
+            reader.ReadValueSafe(out string guid);
+            if (string.IsNullOrWhiteSpace(guid))
+                return;
+
+            playerGuidsByClientId[senderClientId] = guid;
+
+            if (stashedInventoriesByGuid.Remove(guid, out Inventory stashed))
+            {
+                inventoriesByClientId[senderClientId] = stashed;
+                SendInventorySnapshot(senderClientId);
+            }
         }
 
         void UnsubscribeNetworkCallbacks()
@@ -2254,6 +2696,7 @@ namespace Blockiverse.Gameplay
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(CommandResultMessage, HandleCommandResultMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(InventorySnapshotMessage, HandleInventorySnapshotMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(SharedCrateSnapshotMessage, HandleSharedCrateSnapshotMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlayerHelloMessage, HandlePlayerHelloMessage);
             messagesRegistered = true;
         }
 
@@ -2272,6 +2715,7 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(CommandResultMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(InventorySnapshotMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(SharedCrateSnapshotMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlayerHelloMessage);
             messagesRegistered = false;
         }
 

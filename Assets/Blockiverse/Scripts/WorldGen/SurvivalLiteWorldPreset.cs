@@ -14,6 +14,8 @@ namespace Blockiverse.WorldGen
         const int SpawnClearanceRadius = 3;
         const int SpawnHeadroom = 3;
         const int SpawnProtectedRadius = 4;
+        // §5.5: emberflow pools only occur in deep caves, below this height.
+        const int EmberflowMaxY = 18;
 
         readonly BlockRegistry registry;
         readonly WorldGenerationSettings settings;
@@ -46,7 +48,8 @@ namespace Blockiverse.WorldGen
             int[] surfaceHeights = BuildSurfaceHeights(biomeMap);
 
             FillTerrain(world, surfaceHeights, biomeMap);
-            CarveCaves(world, surfaceHeights);
+            PlaceFluids(world, surfaceHeights, biomeMap);
+            CarveCaves(world, surfaceHeights, biomeMap);
             PlaceResourceVeins(world, surfaceHeights);
             containerLoot.Clear();
             StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt, containerLoot);
@@ -247,7 +250,36 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        void CarveCaves(VoxelWorld world, int[] surfaceHeights)
+        // §5.4: after solid terrain, columns whose surface sits below sea level fill with a still
+        // fluid — freshwater everywhere, brine in the dunes (salt basins/coastlines). The water
+        // top sits at SeaLevel-1 so shorelines keep a one-block step down from dry land.
+        void PlaceFluids(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
+        {
+            WorldBounds bounds = world.Bounds;
+
+            for (int x = 0; x < bounds.Width; x++)
+            {
+                for (int z = 0; z < bounds.Depth; z++)
+                {
+                    int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
+                    if (surfaceY + 1 >= WorldConstants.SeaLevel)
+                        continue;
+
+                    // The spawn clearing stays dry, matching the cave/structure protection.
+                    if (IsInsideSpawnProtectedColumn(x, z))
+                        continue;
+
+                    BlockId fluid = biomeMap[SurfaceIndex(x, z)] == TerrainBiome.Dunes
+                        ? BlockRegistry.Brine
+                        : BlockRegistry.Freshwater;
+
+                    for (int y = surfaceY + 1; y < WorldConstants.SeaLevel; y++)
+                        world.SetBlock(new BlockPosition(x, y, z), fluid, trackChange: false);
+                }
+            }
+        }
+
+        void CarveCaves(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
         {
             WorldBounds bounds = world.Bounds;
             const int horizontalCellSize = 16;
@@ -278,7 +310,24 @@ namespace Blockiverse.WorldGen
                         int radiusY = 2 + Range(hash, 28, 2);
                         int radiusZ = 3 + Range(hash, 32, 4);
 
-                        CarveEllipsoid(world, surfaceHeights, centerX, centerY, centerZ, radiusX, radiusY, radiusZ);
+                        // §5.5: deep caves (below y=18) roll a 10% chance to pool with emberflow;
+                        // otherwise caves below sea level have a 35% chance to flood with water.
+                        // The water follows the surface biome above the cave (brine under the
+                        // dunes), like §5.4 lakes.
+                        BlockId carveFill = BlockRegistry.Air;
+                        uint floodRoll = Hash(settings.Seed, gridX, gridY, gridZ, salt: 521);
+                        if (centerY < EmberflowMaxY && floodRoll % 100u < 10u)
+                        {
+                            carveFill = BlockRegistry.Emberflow;
+                        }
+                        else if (centerY < WorldConstants.SeaLevel && floodRoll % 100u < 35u)
+                        {
+                            carveFill = biomeMap[SurfaceIndex(centerX, centerZ)] == TerrainBiome.Dunes
+                                ? BlockRegistry.Brine
+                                : BlockRegistry.Freshwater;
+                        }
+
+                        CarveEllipsoid(world, surfaceHeights, centerX, centerY, centerZ, radiusX, radiusY, radiusZ, carveFill);
 
                         // Tunnel endpoints come from a second hash: shifts of 40/48/56 on a uint
                         // alias to 8/16/24 (C# masks shift counts to 5 bits), which correlated the
@@ -287,13 +336,13 @@ namespace Blockiverse.WorldGen
                         int endX = Clamp(centerX - 6 + Range(tunnelHash, 0, 13), 1, bounds.Width - 2);
                         int endY = Clamp(centerY - 2 + Range(tunnelHash, 8, 5), 3, bounds.Height - 4);
                         int endZ = Clamp(centerZ - 6 + Range(tunnelHash, 16, 13), 1, bounds.Depth - 2);
-                        CarveTunnel(world, surfaceHeights, centerX, centerY, centerZ, endX, endY, endZ);
+                        CarveTunnel(world, surfaceHeights, centerX, centerY, centerZ, endX, endY, endZ, carveFill);
                     }
                 }
             }
         }
 
-        void CarveTunnel(VoxelWorld world, int[] surfaceHeights, int startX, int startY, int startZ, int endX, int endY, int endZ)
+        void CarveTunnel(VoxelWorld world, int[] surfaceHeights, int startX, int startY, int startZ, int endX, int endY, int endZ, BlockId carveFill)
         {
             int steps = Max(Abs(endX - startX), Abs(endY - startY), Abs(endZ - startZ));
             if (steps == 0)
@@ -304,11 +353,11 @@ namespace Blockiverse.WorldGen
                 int x = startX + (endX - startX) * step / steps;
                 int y = startY + (endY - startY) * step / steps;
                 int z = startZ + (endZ - startZ) * step / steps;
-                CarveEllipsoid(world, surfaceHeights, x, y, z, radiusX: 2, radiusY: 1, radiusZ: 2);
+                CarveEllipsoid(world, surfaceHeights, x, y, z, radiusX: 2, radiusY: 1, radiusZ: 2, carveFill);
             }
         }
 
-        void CarveEllipsoid(VoxelWorld world, int[] surfaceHeights, int centerX, int centerY, int centerZ, int radiusX, int radiusY, int radiusZ)
+        void CarveEllipsoid(VoxelWorld world, int[] surfaceHeights, int centerX, int centerY, int centerZ, int radiusX, int radiusY, int radiusZ, BlockId carveFill)
         {
             for (int dx = -radiusX; dx <= radiusX; dx++)
             {
@@ -324,7 +373,7 @@ namespace Blockiverse.WorldGen
                         if (normalized > 1d)
                             continue;
 
-                        TryCarveCaveBlock(world, surfaceHeights, centerX + dx, centerY + dy, centerZ + dz);
+                        TryCarveCaveBlock(world, surfaceHeights, centerX + dx, centerY + dy, centerZ + dz, carveFill);
                     }
                 }
             }
@@ -338,7 +387,7 @@ namespace Blockiverse.WorldGen
             return y <= surfaceHeights[SurfaceIndex(x, z)] - 5 && y >= 4 && !IsInsideSpawnProtectedColumn(x, z);
         }
 
-        void TryCarveCaveBlock(VoxelWorld world, int[] surfaceHeights, int x, int y, int z)
+        void TryCarveCaveBlock(VoxelWorld world, int[] surfaceHeights, int x, int y, int z, BlockId carveFill)
         {
             var position = new BlockPosition(x, y, z);
             if (!world.Bounds.Contains(position))
@@ -350,8 +399,22 @@ namespace Blockiverse.WorldGen
             if (IsInsideSpawnProtectedColumn(x, z))
                 return;
 
-            if (world.GetBlock(position) != BlockRegistry.Air)
-                world.SetBlock(position, BlockRegistry.Air, trackChange: false);
+            BlockId existing = world.GetBlock(position);
+
+            // Never carve through fluid: cutting a lake or flooded-cave boundary at generation
+            // time would dump the neighboring pocket's fluid through the hole.
+            if (FluidBlocks.IsFluid(existing))
+                return;
+
+            // Flooded caves fill below their fluid's ceiling and stay open air above it: water
+            // pools cap at the §5.4 water table, emberflow pools at the §5.5 deep-cave band.
+            int fluidCeiling = carveFill == BlockRegistry.Emberflow ? EmberflowMaxY : WorldConstants.SeaLevel;
+            BlockId fill = carveFill != BlockRegistry.Air && y < fluidCeiling
+                ? carveFill
+                : BlockRegistry.Air;
+
+            if (existing != fill)
+                world.SetBlock(position, fill, trackChange: false);
         }
 
         void PlaceResourceVeins(VoxelWorld world, int[] surfaceHeights)
@@ -488,6 +551,12 @@ namespace Blockiverse.WorldGen
 
                     int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
                     var basePos  = new BlockPosition(x, surfaceY + 1, z);
+
+                    // Skip flooded columns (§5.4): trees don't grow under lakes, and planting one
+                    // would overwrite the water volume.
+                    if (!world.Bounds.Contains(basePos) || world.GetBlock(basePos) != BlockRegistry.Air)
+                        continue;
+
                     PlaceBiomeTree(vegetation, world, basePos, biome);
                 }
             }

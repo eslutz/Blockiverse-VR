@@ -82,6 +82,17 @@ namespace Blockiverse.Survival
                 return CraftingResult.Failure(CraftingFailureReason.OutputBlocked, recipe.Output.ItemId);
             }
 
+            // Byproducts (e.g. the empty bucket back from a consumed filled one, §731) are part
+            // of the same all-or-nothing transaction: if one cannot fit, the craft never happened.
+            foreach (ItemStack byproduct in recipe.Byproducts)
+            {
+                if (!inventory.TryAddAll(byproduct))
+                {
+                    RestoreSnapshot(inventory, snapshot);
+                    return CraftingResult.Failure(CraftingFailureReason.OutputBlocked, byproduct.ItemId);
+                }
+            }
+
             return CraftingResult.Success();
         }
 

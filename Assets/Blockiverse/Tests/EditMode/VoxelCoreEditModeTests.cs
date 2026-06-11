@@ -14,12 +14,27 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(registry.All.Count, Is.EqualTo(74));
+            Assert.That(registry.All.Count, Is.EqualTo(80));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
             Assert.That(registry.Get(BlockRegistry.BranchwoodLog).Category, Is.EqualTo(BlockCategory.Organic));
             Assert.That(registry.Get(BlockRegistry.BuildTable).Category, Is.EqualTo(BlockCategory.Station));
             Assert.That(registry.Get(BlockRegistry.EmbercoalSeam).Category, Is.EqualTo(BlockCategory.Resource));
+            // Fluids (§5.4): renderable non-solid sources/flow cells the player can pass through.
+            Assert.That(registry.Get(BlockRegistry.Freshwater).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.Brine).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.Emberflow).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.FreshwaterFlow).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.BrineFlow).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.EmberflowFlow).Category, Is.EqualTo(BlockCategory.Fluid));
+            Assert.That(registry.Get(BlockRegistry.Freshwater).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Brine).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Emberflow).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.EmberflowFlow).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Freshwater).IsRenderable, Is.True);
+            // Emberflow glows at the §8 canonical light level; its flow cells glow slightly dimmer.
+            Assert.That(registry.Get(BlockRegistry.Emberflow).EmissiveLight, Is.EqualTo(10));
+            Assert.That(registry.Get(BlockRegistry.EmberflowFlow).EmissiveLight, Is.EqualTo(9));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Graystone"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Dark Slate"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Glowwick"));

@@ -292,6 +292,45 @@ namespace Blockiverse.WorldGen
         // Exposes current regrowth queue count for tests and save/load.
         public int WildRegrowthQueueCount => wildRegrowthQueue.Count;
 
+        // ── Save/load (world persistence) ────────────────────────────────────
+
+        // Snapshot of per-sapling growth progress (accumulated ticks toward the next stage).
+        public IReadOnlyList<(BlockPosition position, int accumulatedTicks)> ExportSaplingProgress()
+        {
+            var result = new List<(BlockPosition, int)>(saplingTicks.Count);
+            foreach (KeyValuePair<BlockPosition, int> entry in saplingTicks)
+                result.Add((entry.Key, entry.Value));
+            return result;
+        }
+
+        // Replaces the sapling tracker with saved progress. Entries are validated against the
+        // world on the next tick (TickSapling prunes positions that no longer hold saplings).
+        public void RestoreSaplingProgress(IEnumerable<(BlockPosition position, int accumulatedTicks)> entries)
+        {
+            saplingTicks.Clear();
+            if (entries == null)
+                return;
+
+            foreach ((BlockPosition position, int accumulatedTicks) in entries)
+                saplingTicks[position] = Math.Max(0, accumulatedTicks);
+        }
+
+        // Snapshot of the pending wild-regrowth markers (absolute-tick deadlines).
+        public IReadOnlyList<WildRegrowthMarker> ExportWildRegrowth()
+        {
+            return wildRegrowthQueue.ToArray();
+        }
+
+        // Replaces the wild-regrowth queue with saved markers.
+        public void RestoreWildRegrowth(IEnumerable<WildRegrowthMarker> markers)
+        {
+            wildRegrowthQueue.Clear();
+            if (markers == null)
+                return;
+
+            wildRegrowthQueue.AddRange(markers);
+        }
+
         static int WildRegrowthDelayTicks(BlockId blockId)
         {
             if (blockId == BlockRegistry.Berrybush)   return 48000;
