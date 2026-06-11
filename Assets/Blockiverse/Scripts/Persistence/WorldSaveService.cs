@@ -485,6 +485,10 @@ namespace Blockiverse.Persistence
             // previous save with more/different edits are never resurrected on load.
             string regionsDirTmp = regionsDir + ".tmp";
             string regionsDirBak = regionsDir + ".bak";
+            // A crashed save can orphan a populated .tmp directory; CreateDirectory alone
+            // would reuse it and swap its stale region files into the live directory.
+            if (Directory.Exists(regionsDirTmp))
+                Directory.Delete(regionsDirTmp, recursive: true);
             Directory.CreateDirectory(regionsDirTmp);
 
             foreach (var (rKey, chunkMap) in regionMap)
