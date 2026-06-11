@@ -1030,6 +1030,37 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
+        [Test]
+        public void SaveDiscardsOrphanedRegionsTmpDirectoryFromCrashedPriorSave()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.Graystone);
+
+            try
+            {
+                // A save that crashed mid-write leaves a populated regions.tmp behind; its
+                // region files must not be swapped into the live regions directory.
+                string regionsDirTmp = Path.Combine(path, "dimensions", "main", "regions.tmp");
+                Directory.CreateDirectory(regionsDirTmp);
+                File.WriteAllText(Path.Combine(regionsDirTmp, "r.99.99.vxlr"), "{}");
+
+                new WorldSaveService().Save(path, "orphan-tmp-test", world);
+
+                string regionsDir = Path.Combine(path, "dimensions", "main", "regions");
+                Assert.That(File.Exists(Path.Combine(regionsDir, "r.99.99.vxlr")), Is.False,
+                    "Stale region file from an orphaned regions.tmp must not survive the swap.");
+                Assert.That(Directory.GetFiles(regionsDir, "r.*.*.vxlr"), Is.Not.Empty,
+                    "Expected the current save's own region file.");
+                Assert.That(Directory.Exists(regionsDirTmp), Is.False,
+                    "regions.tmp must not linger after a successful save.");
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
         static string CreateTempSavePath()
         {
             return Path.Combine(Path.GetTempPath(), $"blockiverse-save-{System.Guid.NewGuid():N}.vxlworld");
