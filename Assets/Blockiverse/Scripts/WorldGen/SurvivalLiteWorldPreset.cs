@@ -14,6 +14,8 @@ namespace Blockiverse.WorldGen
         const int SpawnClearanceRadius = 3;
         const int SpawnHeadroom = 3;
         const int SpawnProtectedRadius = 4;
+        // §5.5: emberflow pools only occur in deep caves, below this height.
+        const int EmberflowMaxY = 18;
 
         readonly BlockRegistry registry;
         readonly WorldGenerationSettings settings;
@@ -308,18 +310,21 @@ namespace Blockiverse.WorldGen
                         int radiusY = 2 + Range(hash, 28, 2);
                         int radiusZ = 3 + Range(hash, 32, 4);
 
-                        // §5.5: caves below sea level have a 35% chance to flood. The fluid follows
-                        // the surface biome above the cave (brine under the dunes), like §5.4 lakes.
+                        // §5.5: deep caves (below y=18) roll a 10% chance to pool with emberflow;
+                        // otherwise caves below sea level have a 35% chance to flood with water.
+                        // The water follows the surface biome above the cave (brine under the
+                        // dunes), like §5.4 lakes.
                         BlockId carveFill = BlockRegistry.Air;
-                        if (centerY < WorldConstants.SeaLevel)
+                        uint floodRoll = Hash(settings.Seed, gridX, gridY, gridZ, salt: 521);
+                        if (centerY < EmberflowMaxY && floodRoll % 100u < 10u)
                         {
-                            uint floodRoll = Hash(settings.Seed, gridX, gridY, gridZ, salt: 521);
-                            if (floodRoll % 100u < 35u)
-                            {
-                                carveFill = biomeMap[SurfaceIndex(centerX, centerZ)] == TerrainBiome.Dunes
-                                    ? BlockRegistry.Brine
-                                    : BlockRegistry.Freshwater;
-                            }
+                            carveFill = BlockRegistry.Emberflow;
+                        }
+                        else if (centerY < WorldConstants.SeaLevel && floodRoll % 100u < 35u)
+                        {
+                            carveFill = biomeMap[SurfaceIndex(centerX, centerZ)] == TerrainBiome.Dunes
+                                ? BlockRegistry.Brine
+                                : BlockRegistry.Freshwater;
                         }
 
                         CarveEllipsoid(world, surfaceHeights, centerX, centerY, centerZ, radiusX, radiusY, radiusZ, carveFill);
@@ -396,14 +401,15 @@ namespace Blockiverse.WorldGen
 
             BlockId existing = world.GetBlock(position);
 
-            // Never carve through fluid: sources are static (no flow sim yet), so cutting a lake
-            // or flooded-cave boundary would leave water hanging over air.
-            if (existing == BlockRegistry.Freshwater || existing == BlockRegistry.Brine)
+            // Never carve through fluid: cutting a lake or flooded-cave boundary at generation
+            // time would dump the neighboring pocket's fluid through the hole.
+            if (FluidBlocks.IsFluid(existing))
                 return;
 
-            // Flooded caves fill below sea level and stay open air above it, matching the
-            // §5.4 water table.
-            BlockId fill = carveFill != BlockRegistry.Air && y < WorldConstants.SeaLevel
+            // Flooded caves fill below their fluid's ceiling and stay open air above it: water
+            // pools cap at the §5.4 water table, emberflow pools at the §5.5 deep-cave band.
+            int fluidCeiling = carveFill == BlockRegistry.Emberflow ? EmberflowMaxY : WorldConstants.SeaLevel;
+            BlockId fill = carveFill != BlockRegistry.Air && y < fluidCeiling
                 ? carveFill
                 : BlockRegistry.Air;
 

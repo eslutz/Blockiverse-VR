@@ -461,6 +461,21 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(audioCuePlayer.HasClipForCue(cue), Is.True, $"{cue} should have an assigned generated clip.");
 
             Assert.That(audioCuePlayer.FootstepClipCount, Is.EqualTo(2));
+
+            // The music bed: a controller on the rig with a generated track per context.
+            BlockiverseMusicController musicController = prefab.GetComponent<BlockiverseMusicController>();
+            Assert.That(musicController, Is.Not.Null);
+            foreach (BlockiverseMusicContext context in new[]
+            {
+                BlockiverseMusicContext.Menu,
+                BlockiverseMusicContext.Day,
+                BlockiverseMusicContext.Night,
+                BlockiverseMusicContext.Cave,
+            })
+            {
+                Assert.That(musicController.ResolveTrackClip(context), Is.Not.Null,
+                    $"{context} should have an assigned generated music track.");
+            }
         }
 
         [Test]

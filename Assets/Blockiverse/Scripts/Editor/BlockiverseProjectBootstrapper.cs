@@ -751,18 +751,25 @@ namespace Blockiverse.Editor
         // Atlas tile indexes assigned to the fluid blocks in BlockVisualAtlas.TileIndexByBlockId.
         const int FreshwaterAtlasTileIndex = 73;
         const int BrineAtlasTileIndex = 74;
+        const int EmberflowAtlasTileIndex = 75;
 
-        // Paints the freshwater/brine tiles into the authored block atlas. Strictly additive and
-        // deterministic: a tile is only painted while it is still blank (fully transparent or one
-        // uniform placeholder color), so authored pixels are never touched and reruns are no-ops.
+        // Paints the freshwater/brine/emberflow tiles into the authored block atlas. Strictly
+        // additive and deterministic: a tile is only painted while it is still blank (fully
+        // transparent or one uniform placeholder color), so authored pixels are never touched
+        // and reruns are no-ops.
         // The stale Python art generator (ATLAS_ROWS=7) must NOT be used for this — it would
         // regenerate the whole atlas at the old size.
         static void EnsureFluidAtlasTiles()
         {
             // Source tiles back the atlas tiles (every block needs a committed source PNG); write
-            // them from the same pixel functions so source and atlas stay consistent.
+            // them from the same pixel functions so source and atlas stay consistent. Flow cells
+            // render with their family's source tile, so their source PNGs reuse the family pixels.
             EnsureFluidSourceTile("freshwater", FreshwaterTilePixel);
             EnsureFluidSourceTile("brine", BrineTilePixel);
+            EnsureFluidSourceTile("emberflow", EmberflowTilePixel);
+            EnsureFluidSourceTile("freshwater_flow", FreshwaterTilePixel);
+            EnsureFluidSourceTile("brine_flow", BrineTilePixel);
+            EnsureFluidSourceTile("emberflow_flow", EmberflowTilePixel);
 
             string path = BlockVisualAtlas.AuthoredAtlasPath;
             if (!File.Exists(path))
@@ -783,6 +790,7 @@ namespace Blockiverse.Editor
 
                 bool painted = TryPaintAtlasTile(texture, FreshwaterAtlasTileIndex, FreshwaterTilePixel);
                 painted |= TryPaintAtlasTile(texture, BrineAtlasTileIndex, BrineTilePixel);
+                painted |= TryPaintAtlasTile(texture, EmberflowAtlasTileIndex, EmberflowTilePixel);
 
                 if (!painted)
                     return;
@@ -898,6 +906,24 @@ namespace Blockiverse.Editor
                 return new Color32(30, 84, 86, 255);
 
             return new Color32(44, 108, 106, 255);
+        }
+
+        // Emberflow: molten red-orange body bands with bright ember streaks and dark crust flecks.
+        static Color32 EmberflowTilePixel(int x, int y)
+        {
+            if ((x * 5 + y * 11) % 29 == 0)
+                return new Color32(255, 232, 150, 255);
+
+            if ((x * 13 + y * 3) % 31 == 0)
+                return new Color32(96, 28, 16, 255);
+
+            int band = (y + ((x + y * 3) % 4 == 0 ? 1 : 0)) % 4;
+            if (band == 0)
+                return new Color32(244, 138, 38, 255);
+            if (band == 2)
+                return new Color32(168, 52, 16, 255);
+
+            return new Color32(212, 88, 24, 255);
         }
 
         static void EnsureBlockTextureMaterial()
@@ -2322,6 +2348,16 @@ namespace Blockiverse.Editor
             // both discover their runtime dependencies (sync, world manager) on enable.
             SurvivalFeedbackBridge survivalFeedback = EnsureComponent<SurvivalFeedbackBridge>(rig);
             WeatherFeedbackController weatherFeedback = EnsureComponent<WeatherFeedbackController>(rig);
+
+            // The sparse music bed: generated tracks per context (menu/day/night/cave).
+            BlockiverseMusicController musicController = EnsureComponent<BlockiverseMusicController>(rig);
+            musicController.ConfigureClips(
+                LoadAudioClip("music_menu"),
+                LoadAudioClip("music_day"),
+                LoadAudioClip("music_night"),
+                LoadAudioClip("music_cave"));
+            musicController.ConfigureFeedbackSettings(feedbackSettings);
+            EditorUtility.SetDirty(musicController);
 
             // Glide footsteps + landing thump from the rig's character controller.
             BlockiverseLocomotionFeedback locomotionFeedback = EnsureComponent<BlockiverseLocomotionFeedback>(rig);
@@ -4362,7 +4398,7 @@ namespace Blockiverse.Editor
             EnsureAudioSettingsMenuPanel(Transform parent, Transform head)
         {
             const float W = 540.0f;
-            const float H = 860.0f;
+            const float H = 956.0f;
 
             GameObject panelRoot = EnsureRectChild(parent, AudioSettingsPanelName);
             panelRoot.transform.localPosition = GameMenuLocalPosition;
@@ -4404,20 +4440,21 @@ namespace Blockiverse.Editor
             Slider effects = EnsureSettingsSlider(bg.transform, "Effects Volume Slider", "Effects Volume", 1.0f, new Vector2(28, -192));
             Slider ui = EnsureSettingsSlider(bg.transform, "UI Volume Slider", "UI Volume", 1.0f, new Vector2(28, -288));
             Slider weather = EnsureSettingsSlider(bg.transform, "Weather Volume Slider", "Weather Volume", 1.0f, new Vector2(28, -384));
-            Slider hapticStrength = EnsureSettingsSlider(bg.transform, "Haptic Strength Slider", "Haptic Strength", 1.0f, new Vector2(28, -480));
+            Slider music = EnsureSettingsSlider(bg.transform, "Music Volume Slider", "Music Volume", 0.5f, new Vector2(28, -480));
+            Slider hapticStrength = EnsureSettingsSlider(bg.transform, "Haptic Strength Slider", "Haptic Strength", 1.0f, new Vector2(28, -576));
 
-            Toggle mute = EnsureToggleControl(bg.transform, "Mute All Toggle", "Mute All", false, new Vector2(28, -576));
-            Toggle haptics = EnsureToggleControl(bg.transform, "Haptics Toggle", "Haptics", true, new Vector2(28, -632));
-            Toggle reducedFlash = EnsureToggleControl(bg.transform, "Reduced Flash Toggle", "Reduced Flash", false, new Vector2(28, -688));
-            Toggle reducedParticles = EnsureToggleControl(bg.transform, "Reduced Particles Toggle", "Reduced Particles", false, new Vector2(28, -744));
+            Toggle mute = EnsureToggleControl(bg.transform, "Mute All Toggle", "Mute All", false, new Vector2(28, -672));
+            Toggle haptics = EnsureToggleControl(bg.transform, "Haptics Toggle", "Haptics", true, new Vector2(28, -728));
+            Toggle reducedFlash = EnsureToggleControl(bg.transform, "Reduced Flash Toggle", "Reduced Flash", false, new Vector2(28, -784));
+            Toggle reducedParticles = EnsureToggleControl(bg.transform, "Reduced Particles Toggle", "Reduced Particles", false, new Vector2(28, -840));
 
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
-                new Vector2(28, -806), new Vector2(160, 48));
+                new Vector2(28, -902), new Vector2(160, 48));
 
             BlockiverseAudioSettingsPanel panel = EnsureComponent<BlockiverseAudioSettingsPanel>(panelRoot);
             panel.Configure(
                 parent.GetComponentInParent<BlockiverseFeedbackSettings>(),
-                master, effects, ui, weather, hapticStrength,
+                master, effects, ui, weather, music, hapticStrength,
                 mute, haptics, reducedFlash, reducedParticles);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);

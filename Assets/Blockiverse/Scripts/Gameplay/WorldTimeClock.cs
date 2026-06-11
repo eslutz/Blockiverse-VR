@@ -11,6 +11,14 @@ namespace Blockiverse.Gameplay
         public const float DefaultDayLengthSeconds = 1200.0f;
         public const float DefaultStartNormalizedTime = 0.22f;
 
+        // The daylight window over NormalizedTime, shared by the presentation layers (ambience,
+        // music) so they all agree on when night starts.
+        public const float DayStartNormalizedTime = 0.05f;
+        public const float NightStartNormalizedTime = 0.55f;
+
+        public static bool IsDay(float normalizedTime) =>
+            normalizedTime >= DayStartNormalizedTime && normalizedTime < NightStartNormalizedTime;
+
         [SerializeField] float dayLengthSeconds = DefaultDayLengthSeconds;
         [SerializeField] float normalizedTime = DefaultStartNormalizedTime;
         [SerializeField] float timeScale = 1.0f;

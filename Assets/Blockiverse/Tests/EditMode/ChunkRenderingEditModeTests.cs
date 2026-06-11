@@ -252,13 +252,35 @@ namespace Blockiverse.Tests.EditMode
                 .Where(block => block.IsRenderable)
                 .ToArray();
 
-            Rect[] tileRects = renderableBlocks
+            Assert.That(
+                renderableBlocks.All(block =>
+                {
+                    Rect rect = BlockVisualAtlas.GetTileRect(block.Id);
+                    return rect.width > 0.0f && rect.height > 0.0f;
+                }),
+                Is.True,
+                "Every renderable block must map to a positive-area atlas tile.");
+
+            // Flow cells intentionally render with their family's source tile (flowing water
+            // reads as water), so they are the only permitted tile sharers. Every other
+            // renderable block must own a distinct tile.
+            BlockDefinition[] nonFlowBlocks = renderableBlocks
+                .Where(block => !FluidBlocks.IsFlow(block.Id))
+                .ToArray();
+            Rect[] nonFlowRects = nonFlowBlocks
                 .Select(block => BlockVisualAtlas.GetTileRect(block.Id))
                 .ToArray();
+            Assert.That(nonFlowRects.Distinct().Count(), Is.EqualTo(nonFlowBlocks.Length),
+                "Non-flow renderable blocks must each have a distinct atlas tile.");
 
-            Assert.That(tileRects, Has.Length.EqualTo(renderableBlocks.Length));
-            Assert.That(tileRects.Distinct().Count(), Is.EqualTo(renderableBlocks.Length));
-            Assert.That(tileRects.All(rect => rect.width > 0.0f && rect.height > 0.0f), Is.True);
+            foreach (BlockDefinition block in renderableBlocks.Where(b => FluidBlocks.IsFlow(b.Id)))
+            {
+                Assert.That(FluidBlocks.TryGetFamily(block.Id, out FluidFamily family), Is.True);
+                Assert.That(
+                    BlockVisualAtlas.GetTileRect(block.Id),
+                    Is.EqualTo(BlockVisualAtlas.GetTileRect(FluidBlocks.SourceOf(family))),
+                    $"{block.Name} should share its family source's atlas tile.");
+            }
         }
 
         [Test]

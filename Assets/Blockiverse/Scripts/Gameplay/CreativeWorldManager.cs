@@ -73,6 +73,7 @@ namespace Blockiverse.Gameplay
         WeatherService weatherService;
         VegetationService vegetationService;
         FarmingService farmingService;
+        FluidFlowService fluidFlowService;
         WorldTimeClock worldTimeClock;
         // The world instance whose BlockChanged event we are currently subscribed to. Tracked
         // separately from `World` so re-configuration unsubscribes from the right instance.
@@ -414,6 +415,11 @@ namespace Blockiverse.Gameplay
             if (worldTimeClock != null)
                 worldTimeClock.Ticked -= OnWorldTick;
 
+            // The flow sim is bound to the world it was configured on; drop it now so a stale
+            // instance never reacts to the replacement world's edits (it is recreated at the end
+            // of this method once the clock is known).
+            fluidFlowService = null;
+
             // Unsubscribe from the world we actually subscribed to — `World` may already point at a
             // replacement (e.g. a multiplayer regeneration), and unsubscribing from the new instance
             // would leak the old world's handler.
@@ -473,11 +479,22 @@ namespace Blockiverse.Gameplay
                 worldTimeClock.RestoreElapsedTicks(pendingWorldTimeTicks.Value);
                 pendingWorldTimeTicks = null;
             }
+
+            // Configured after any pending clock restore so the flow phase aligns with the
+            // synced absolute tick — late joiners then step fluids at the same world ticks
+            // as the host.
+            fluidFlowService = new FluidFlowService();
+            fluidFlowService.Configure(World, settings != null ? settings.Seed : World.Seed, CurrentWorldTick);
         }
 
         void OnBlockChanged(BlockChange change)
         {
             BlockId b = change.NewBlock;
+
+            // Fluid simulation reacts to every edit: placed/removed fluids and new openings
+            // activate the affected cells (a no-op for changes far from any fluid).
+            fluidFlowService?.OnBlockChanged(World, change);
+
             if (b == BlockRegistry.Sapling || b == BlockRegistry.Sapling_S1 || b == BlockRegistry.Sapling_S2)
                 vegetationService?.TrackSapling(change.Position);
             // Only a crop NEWLY appearing at a position re-anchors growth (planting/replanting).
@@ -614,6 +631,11 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TickWildRegrowth(World, CurrentWorldTick);
                 farmingService?.TickGrowth(World, CurrentWorldTick);
                 farmingService?.TickRegrowth(World, ticks);
+                fluidFlowService?.Tick(World, CurrentWorldTick);
+
+                // World-sim mutations only mark chunks dirty; repaint them here so growth and
+                // flow are visible without waiting for a player edit to trigger a rebuild.
+                Renderer?.RebuildDirty();
             }
         }
 

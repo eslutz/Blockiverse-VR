@@ -434,6 +434,130 @@ def ambience(seed, duration, base_frequency, shimmer_frequency, noise_cutoff):
     return finalize(samples)
 
 
+# ── Music ────────────────────────────────────────────────────────────────────
+# Original synthesized music beds (one per playback context: menu, day, night,
+# cave). Notes are rendered additively into a track buffer: warm pad chords
+# underneath, a seeded pentatonic melody on top, and a tonic chord ringing out
+# into the tail. Everything is composed from scratch — no sampled, third-party,
+# or imitative material.
+
+PAD_HARMONICS = ((1.0, 0.62), (2.0, 0.22), (3.0, 0.09))
+PLUCK_HARMONICS = ((1.0, 0.66), (2.0, 0.24), (4.0, 0.07))
+BELL_HARMONICS = ((1.0, 0.60), (2.76, 0.17), (5.40, 0.06))
+
+
+def note_frequency(midi_note):
+    return 440.0 * (2.0 ** ((midi_note - 69) / 12.0))
+
+
+def add_note(buffer, start_seconds, frequency, duration, amplitude, harmonics,
+             attack_fraction, release_power):
+    start = int(start_seconds * SAMPLE_RATE)
+    total = max(1, seconds_to_samples(duration))
+    two_pi = 2.0 * math.pi
+    for i in range(total):
+        index = start + i
+        if index >= len(buffer):
+            break
+        progress = i / total
+        if progress < attack_fraction:
+            env = smoothstep(progress / attack_fraction)
+        else:
+            decay = (progress - attack_fraction) / max(1e-6, 1.0 - attack_fraction)
+            env = (1.0 - decay) ** release_power
+        t = i / SAMPLE_RATE
+        value = 0.0
+        for ratio, weight in harmonics:
+            value += weight * math.sin(two_pi * frequency * ratio * t)
+        buffer[index] += value * env * amplitude
+
+
+def music_track(seed, chords, melody_notes, *, bars, bar_seconds, pad_amplitude,
+                melody_amplitude, melody_density, melody_harmonics,
+                melody_release=2.6):
+    """Renders a once-through track: pad chords per bar, a sparse seeded melody,
+    and the first chord restated over the closing tail."""
+    rng = random.Random(seed)
+    tail_seconds = bar_seconds
+    duration = bars * bar_seconds + tail_seconds
+    buffer = [0.0] * seconds_to_samples(duration)
+
+    for bar in range(bars):
+        chord = chords[bar % len(chords)]
+        start = bar * bar_seconds
+        for voice_index, midi in enumerate(chord):
+            add_note(buffer, start + 0.05 * voice_index, note_frequency(midi),
+                     bar_seconds * 1.12, pad_amplitude, PAD_HARMONICS,
+                     attack_fraction=0.28, release_power=1.3)
+
+        beat_seconds = bar_seconds / 4.0
+        for beat in range(4):
+            if rng.random() > melody_density:
+                continue
+            midi = rng.choice(melody_notes)
+            length = beat_seconds * rng.choice((1.0, 1.5, 2.0))
+            add_note(buffer, start + beat * beat_seconds, note_frequency(midi),
+                     length, melody_amplitude * rng.uniform(0.7, 1.0),
+                     melody_harmonics, attack_fraction=0.05,
+                     release_power=melody_release)
+
+    resolution = chords[0]
+    for voice_index, midi in enumerate(resolution):
+        add_note(buffer, bars * bar_seconds + 0.05 * voice_index,
+                 note_frequency(midi), tail_seconds * 0.9, pad_amplitude,
+                 PAD_HARMONICS, attack_fraction=0.3, release_power=1.6)
+
+    return finalize(buffer)
+
+
+# Chord voicings (MIDI notes). The shared Am/F/C/G family keeps the tracks in
+# one tonal world while each context picks its own color and pacing.
+CHORD_A_MINOR = (45, 57, 60, 64)
+CHORD_F_MAJOR = (41, 53, 57, 60)
+CHORD_C_MAJOR = (48, 55, 60, 64)
+CHORD_G_MAJOR = (43, 55, 59, 62)
+CHORD_E_MINOR = (40, 52, 55, 59)
+CHORD_CAVE_OPEN = (33, 45, 52)
+CHORD_CAVE_SHIFT = (33, 45, 50)
+
+PENTATONIC_MID = (57, 60, 62, 64, 67, 69, 72)
+PENTATONIC_HIGH = (64, 67, 69, 72, 74, 76, 79)
+PENTATONIC_LOW = (52, 55, 57, 60, 62, 64)
+CAVE_BELL_NOTES = (57, 60, 64, 67, 72)
+
+
+def music_menu():
+    return music_track(
+        2101, (CHORD_A_MINOR, CHORD_F_MAJOR, CHORD_C_MAJOR, CHORD_G_MAJOR),
+        PENTATONIC_MID, bars=8, bar_seconds=4.0, pad_amplitude=0.20,
+        melody_amplitude=0.16, melody_density=0.45,
+        melody_harmonics=PLUCK_HARMONICS)
+
+
+def music_day():
+    return music_track(
+        2102, (CHORD_C_MAJOR, CHORD_A_MINOR, CHORD_F_MAJOR, CHORD_G_MAJOR),
+        PENTATONIC_HIGH, bars=8, bar_seconds=3.6, pad_amplitude=0.18,
+        melody_amplitude=0.17, melody_density=0.55,
+        melody_harmonics=PLUCK_HARMONICS)
+
+
+def music_night():
+    return music_track(
+        2103, (CHORD_A_MINOR, CHORD_E_MINOR, CHORD_F_MAJOR, CHORD_A_MINOR),
+        PENTATONIC_LOW, bars=7, bar_seconds=4.4, pad_amplitude=0.20,
+        melody_amplitude=0.12, melody_density=0.30,
+        melody_harmonics=PAD_HARMONICS, melody_release=1.8)
+
+
+def music_cave():
+    return music_track(
+        2104, (CHORD_CAVE_OPEN, CHORD_CAVE_SHIFT),
+        CAVE_BELL_NOTES, bars=6, bar_seconds=5.0, pad_amplitude=0.22,
+        melody_amplitude=0.11, melody_density=0.18,
+        melody_harmonics=BELL_HARMONICS, melody_release=3.4)
+
+
 CLIPS = {
     "block_break": block_break(),
     "block_place": block_place(),
@@ -465,6 +589,10 @@ CLIPS = {
     "night_ambience_loop": ambience(1403, 1.2, 72.0, 247.0, 150.0),
     "multiplayer_join": ui_sequence([392.0, 523.25, 659.25], duration=0.2),
     "multiplayer_leave": ui_sequence([659.25, 493.88, 329.63], duration=0.22),
+    "music_menu": music_menu(),
+    "music_day": music_day(),
+    "music_night": music_night(),
+    "music_cave": music_cave(),
 }
 
 
@@ -490,8 +618,12 @@ def stable_guid(relative_path):
     return hashlib.md5(relative_path.encode("utf-8")).hexdigest()
 
 
-def write_audio_meta(relative_path):
+def write_audio_meta(relative_path, streaming=False):
+    # Music tracks stream from disk instead of preloading: a 30s+ PCM bed held in
+    # memory would cost megabytes on Quest for a clip that plays once at a time.
     guid = stable_guid(relative_path)
+    load_type = 2 if streaming else 0
+    preload = 0 if streaming else 1
     meta = (
         "fileFormatVersion: 2\n"
         f"guid: {guid}\n"
@@ -500,17 +632,17 @@ def write_audio_meta(relative_path):
         "  serializedVersion: 6\n"
         "  defaultSettings:\n"
         "    serializedVersion: 2\n"
-        "    loadType: 0\n"
+        f"    loadType: {load_type}\n"
         "    sampleRateSetting: 0\n"
         "    sampleRateOverride: 44100\n"
         "    compressionFormat: 1\n"
         "    quality: 1\n"
         "    conversionMode: 0\n"
-        "    preloadAudioData: 1\n"
+        f"    preloadAudioData: {preload}\n"
         "  platformSettingOverrides: {}\n"
         "  forceToMono: 1\n"
         "  normalize: 1\n"
-        "  preloadAudioData: 1\n"
+        f"  preloadAudioData: {preload}\n"
         "  loadInBackground: 0\n"
         "  ambisonic: 0\n"
         "  3D: 0\n"
@@ -527,7 +659,7 @@ def main():
     for name, samples in CLIPS.items():
         relative_path = f"{AUDIO_DIR}/{name}.wav"
         write_wav(os.path.join(ROOT, relative_path), samples)
-        write_audio_meta(relative_path)
+        write_audio_meta(relative_path, streaming=name.startswith("music_"))
         print(f"wrote {relative_path} ({len(samples)} samples)")
 
 

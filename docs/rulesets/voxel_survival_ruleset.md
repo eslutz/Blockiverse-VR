@@ -315,11 +315,12 @@ from dry land — a readable shore edge in VR instead of water sitting flush wit
 
 Use `brine` instead of `freshwater` in dune coastlines, salt flats, and enclosed dry basins.
 
-Emberflow placement:
+Emberflow placement (rolled once per carved cave pocket during §5.5 carving, matching the
+§5.5 flood table):
 
 ```ts
-if y < 18 and caveAirNearby and random() < 0.035:
-    place emberflow source pocket
+if pocketCenterY < 18 and pocketRoll(seed, pocket) < 0.10:
+    fill carved cells below y = 18 with emberflow sources
 ```
 
 Fluid behavior:
@@ -328,7 +329,12 @@ Fluid behavior:
 |---|---:|---:|---|
 | Freshwater | 8 blocks | Every 5 ticks | Turns emberflow source contact into `black_basalt` |
 | Brine | 6 blocks | Every 6 ticks | Can be boiled into `brightsalt` |
-| Emberflow | 4 blocks | Every 12 ticks | Deals heat damage; ignites wood-adjacent blocks |
+| Emberflow | 4 blocks | Every 12 ticks | Deals heat damage; burns adjacent wood/foliage away |
+
+Flow distance counts the source cell: a freshwater source plus its flowing cells spans at
+most 8 blocks horizontally. Pouring over an edge resets the budget — a fall restarts the
+full horizontal distance from the landing cell. Sources are permanent blocks; flowing cells
+are simulated (spread and retract with the source) and are never collectable.
 
 ### 5.5 Cave Generation
 

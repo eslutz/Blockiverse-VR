@@ -582,12 +582,12 @@ namespace Blockiverse.Gameplay
 
             ItemStack held = EquippedItem;
 
-            // Drinking from a targeted freshwater source (§6.2): any use that isn't a bucket fill
-            // drinks by hand. Vitals are local-player state (SurvivalVitalsRuntime subscribes), so
-            // no host round-trip is involved and the world is untouched.
+            // Drinking from targeted freshwater (§6.2; source or flowing): any use that isn't a
+            // bucket fill drinks by hand. Vitals are local-player state (SurvivalVitalsRuntime
+            // subscribes), so no host round-trip is involved and the world is untouched.
             if (targetWorld != null &&
                 targetWorld.Bounds.Contains(targetBlock) &&
-                targetWorld.GetBlock(targetBlock) == BlockRegistry.Freshwater &&
+                FluidBlocks.IsFreshwater(targetWorld.GetBlock(targetBlock)) &&
                 held.ItemId != ItemId.EmptyBucket)
             {
                 requestSentToHost = false;

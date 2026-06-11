@@ -156,9 +156,10 @@ namespace Blockiverse.Gameplay
                 new(BlockRegistry.PrepBoard,        CreativeCatalogCategory.Stations),
                 new(BlockRegistry.MendBench,        CreativeCatalogCategory.Stations),
 
-                // Fluids (creative placement of still sources)
+                // Fluids (creative placement of sources; flowing cells come from the simulation)
                 new(BlockRegistry.Freshwater,       CreativeCatalogCategory.Fluids),
                 new(BlockRegistry.Brine,            CreativeCatalogCategory.Fluids),
+                new(BlockRegistry.Emberflow,        CreativeCatalogCategory.Fluids),
             };
 
             foreach (CreativeCatalogEntry entry in list)

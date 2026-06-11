@@ -141,9 +141,8 @@ namespace Blockiverse.WorldGen
                     if (surfaceY < 0) continue;
 
                     // Fluids are placed before structures, so the found "surface" over a lake is
-                    // the water top — ruins don't float on water (§5.4).
-                    BlockId surfaceBlock = world.GetBlock(new BlockPosition(worldX, surfaceY, worldZ));
-                    if (surfaceBlock == BlockRegistry.Freshwater || surfaceBlock == BlockRegistry.Brine) continue;
+                    // the fluid top — ruins don't float on water or emberflow (§5.4).
+                    if (FluidBlocks.IsFluid(world.GetBlock(new BlockPosition(worldX, surfaceY, worldZ)))) continue;
 
                     accepted.Add((worldX, worldZ));
                     var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(regionHash % 4u)));

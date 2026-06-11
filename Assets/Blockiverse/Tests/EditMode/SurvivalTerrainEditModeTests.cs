@@ -137,6 +137,54 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SurvivalTerrainPlacesEmberflowPoolsOnlyInDeepCaves()
+        {
+            // Deep cave pockets roll a 10% emberflow flood (§5.4/§5.5), so a single seed may
+            // legitimately have none — scan seeds for the first that places a pool, while
+            // validating the depth ceiling on every world along the way.
+            bool foundEmberflow = false;
+
+            for (int seed = 1; seed <= 8 && !foundEmberflow; seed++)
+            {
+                VoxelWorld world = GenerateSurvivalWorld(seed);
+                int sourcesBelowCeiling = 0;
+                int sourcesAtOrAboveCeiling = 0;
+                int flowCells = 0;
+
+                for (int y = 0; y < world.Bounds.Height; y++)
+                {
+                    for (int x = 0; x < world.Bounds.Width; x++)
+                    {
+                        for (int z = 0; z < world.Bounds.Depth; z++)
+                        {
+                            BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                            if (block == BlockRegistry.Emberflow)
+                            {
+                                if (y < 18)
+                                    sourcesBelowCeiling++;
+                                else
+                                    sourcesAtOrAboveCeiling++;
+                            }
+                            else if (block == BlockRegistry.EmberflowFlow)
+                            {
+                                flowCells++;
+                            }
+                        }
+                    }
+                }
+
+                Assert.That(sourcesAtOrAboveCeiling, Is.Zero,
+                    $"Seed {seed}: emberflow above the §5.4 deep-cave ceiling (y<18).");
+                Assert.That(flowCells, Is.Zero,
+                    $"Seed {seed}: worldgen places only emberflow sources; flow cells come from the simulation.");
+                foundEmberflow = sourcesBelowCeiling > 0;
+            }
+
+            Assert.That(foundEmberflow, Is.True,
+                "Expected at least one scanned seed to flood a deep cave pocket with emberflow (§5.4).");
+        }
+
+        [Test]
         public void SurvivalTerrainPresetFailsFastWhenWorldHeightCannotFitTerrainBand()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

@@ -149,11 +149,10 @@ namespace Blockiverse.Gameplay
         }
 
         // Pure stacking rule: snow settles on any solid surface but never on snowpack (one layer
-        // max) and never on fluids.
+        // max) and never on fluids (still or flowing).
         public static bool CanHoldSnowLayer(BlockId surface) =>
             surface != BlockRegistry.Snowpack &&
-            surface != BlockRegistry.Freshwater &&
-            surface != BlockRegistry.Brine;
+            !FluidBlocks.IsFluid(surface);
 
         void TryStrikeRandomColumn(VoxelWorld world)
         {

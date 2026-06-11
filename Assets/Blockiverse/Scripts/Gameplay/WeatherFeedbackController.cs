@@ -15,8 +15,6 @@ namespace Blockiverse.Gameplay
         const float PrecipitationVfxIntervalSeconds = 0.6f;
         const float FogVfxIntervalSeconds = 2.5f;
         const int CampfireSearchRadius = 8;
-        const float DayStartNormalized = 0.05f;
-        const float NightStartNormalized = 0.55f;
 
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -137,8 +135,9 @@ namespace Blockiverse.Gameplay
             float normalizedTime = worldManager.WorldTimeClock != null
                 ? worldManager.WorldTimeClock.NormalizedTime
                 : 0.25f;
-            bool isDay = normalizedTime >= DayStartNormalized && normalizedTime < NightStartNormalized;
-            return isDay ? BlockiverseAudioCue.DayAmbienceLoop : BlockiverseAudioCue.NightAmbienceLoop;
+            return WorldTimeClock.IsDay(normalizedTime)
+                ? BlockiverseAudioCue.DayAmbienceLoop
+                : BlockiverseAudioCue.NightAmbienceLoop;
         }
 
         // ── Campfire loop ─────────────────────────────────────────────────────

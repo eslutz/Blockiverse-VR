@@ -15,6 +15,7 @@ namespace Blockiverse.UI
         [SerializeField] Slider effectsVolumeSlider;
         [SerializeField] Slider uiVolumeSlider;
         [SerializeField] Slider weatherVolumeSlider;
+        [SerializeField] Slider musicVolumeSlider;
         [SerializeField] Slider hapticIntensitySlider;
         [SerializeField] Toggle muteAllToggle;
         [SerializeField] Toggle hapticsToggle;
@@ -29,6 +30,7 @@ namespace Blockiverse.UI
             Slider effectsVolume,
             Slider uiVolume,
             Slider weatherVolume,
+            Slider musicVolume,
             Slider hapticIntensity,
             Toggle muteAll,
             Toggle haptics,
@@ -41,6 +43,7 @@ namespace Blockiverse.UI
             effectsVolumeSlider = effectsVolume;
             uiVolumeSlider = uiVolume;
             weatherVolumeSlider = weatherVolume;
+            musicVolumeSlider = musicVolume;
             hapticIntensitySlider = hapticIntensity;
             muteAllToggle = muteAll;
             hapticsToggle = haptics;
@@ -77,6 +80,7 @@ namespace Blockiverse.UI
             effectsVolumeSlider?.SetValueWithoutNotify(feedbackSettings.EffectsVolume);
             uiVolumeSlider?.SetValueWithoutNotify(feedbackSettings.UiVolume);
             weatherVolumeSlider?.SetValueWithoutNotify(feedbackSettings.WeatherVolume);
+            musicVolumeSlider?.SetValueWithoutNotify(feedbackSettings.MusicVolume);
             hapticIntensitySlider?.SetValueWithoutNotify(feedbackSettings.HapticIntensity);
             muteAllToggle?.SetIsOnWithoutNotify(feedbackSettings.MuteAll);
             hapticsToggle?.SetIsOnWithoutNotify(feedbackSettings.HapticsEnabled);
@@ -93,6 +97,7 @@ namespace Blockiverse.UI
             effectsVolumeSlider?.onValueChanged.AddListener(OnEffectsVolumeChanged);
             uiVolumeSlider?.onValueChanged.AddListener(OnUiVolumeChanged);
             weatherVolumeSlider?.onValueChanged.AddListener(OnWeatherVolumeChanged);
+            musicVolumeSlider?.onValueChanged.AddListener(OnMusicVolumeChanged);
             hapticIntensitySlider?.onValueChanged.AddListener(OnHapticIntensityChanged);
             muteAllToggle?.onValueChanged.AddListener(OnMuteAllChanged);
             hapticsToggle?.onValueChanged.AddListener(OnHapticsChanged);
@@ -110,6 +115,7 @@ namespace Blockiverse.UI
             effectsVolumeSlider?.onValueChanged.RemoveListener(OnEffectsVolumeChanged);
             uiVolumeSlider?.onValueChanged.RemoveListener(OnUiVolumeChanged);
             weatherVolumeSlider?.onValueChanged.RemoveListener(OnWeatherVolumeChanged);
+            musicVolumeSlider?.onValueChanged.RemoveListener(OnMusicVolumeChanged);
             hapticIntensitySlider?.onValueChanged.RemoveListener(OnHapticIntensityChanged);
             muteAllToggle?.onValueChanged.RemoveListener(OnMuteAllChanged);
             hapticsToggle?.onValueChanged.RemoveListener(OnHapticsChanged);
@@ -122,6 +128,7 @@ namespace Blockiverse.UI
         void OnEffectsVolumeChanged(float value) { if (feedbackSettings != null) feedbackSettings.EffectsVolume = value; }
         void OnUiVolumeChanged(float value) { if (feedbackSettings != null) feedbackSettings.UiVolume = value; }
         void OnWeatherVolumeChanged(float value) { if (feedbackSettings != null) feedbackSettings.WeatherVolume = value; }
+        void OnMusicVolumeChanged(float value) { if (feedbackSettings != null) feedbackSettings.MusicVolume = value; }
         void OnHapticIntensityChanged(float value) { if (feedbackSettings != null) feedbackSettings.HapticIntensity = value; }
         void OnMuteAllChanged(bool value) { if (feedbackSettings != null) feedbackSettings.MuteAll = value; }
         void OnHapticsChanged(bool value) { if (feedbackSettings != null) feedbackSettings.HapticsEnabled = value; }

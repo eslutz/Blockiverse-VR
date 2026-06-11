@@ -135,10 +135,15 @@ namespace Blockiverse.Gameplay
 
             BlockDefinition neighborDefinition = registry.Get(world.GetBlock(neighbor));
 
-            // Adjacent cells of the same fluid merge into one volume — internal faces between
-            // identical fluid blocks would otherwise z-fight inside every lake.
-            if (current.Category == BlockCategory.Fluid && neighborDefinition.Id == current.Id)
+            // Adjacent cells of the same fluid family (source or flowing) merge into one volume —
+            // internal faces between them would otherwise z-fight inside every lake and stream.
+            if (current.Category == BlockCategory.Fluid &&
+                FluidBlocks.TryGetFamily(current.Id, out FluidFamily currentFamily) &&
+                FluidBlocks.TryGetFamily(neighborDefinition.Id, out FluidFamily neighborFamily) &&
+                currentFamily == neighborFamily)
+            {
                 return false;
+            }
 
             return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
         }

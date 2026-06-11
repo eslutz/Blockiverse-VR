@@ -186,7 +186,7 @@ namespace Blockiverse.Survival
         public const int TillWaterHorizontalReach = 4;
         public const int TillWaterVerticalReach = 1;
 
-        // Scans the §11.1 reach box around the soil cell for a freshwater source block.
+        // Scans the §11.1 reach box around the soil cell for freshwater (source or flowing).
         public static bool HasFreshwaterNearby(VoxelWorld world, BlockPosition position)
         {
             for (int dy = -TillWaterVerticalReach; dy <= TillWaterVerticalReach; dy++)
@@ -196,7 +196,7 @@ namespace Blockiverse.Survival
                     for (int dx = -TillWaterHorizontalReach; dx <= TillWaterHorizontalReach; dx++)
                     {
                         var cell = new BlockPosition(position.X + dx, position.Y + dy, position.Z + dz);
-                        if (world.Bounds.Contains(cell) && world.GetBlock(cell) == BlockRegistry.Freshwater)
+                        if (world.Bounds.Contains(cell) && FluidBlocks.IsFreshwater(world.GetBlock(cell)))
                             return true;
                     }
                 }
