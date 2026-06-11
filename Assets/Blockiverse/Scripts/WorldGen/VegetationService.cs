@@ -26,6 +26,9 @@ namespace Blockiverse.WorldGen
         readonly List<(BlockPosition pos, int accumulated)> saplingAdvanceScratch = new();
         readonly List<(BlockPosition pos, int value)> saplingUpdateScratch = new();
 
+        // Scratch list for ScanAndTrackSaplings' flat-array sweep (world init / late join).
+        readonly List<BlockPosition> saplingScanScratch = new();
+
         Func<int, int, int> biomeResolver; // (x, z) → TerrainBiome as int; null = default Meadow
 
         public void Configure(Func<int, int, int> biomeAt)
@@ -119,17 +122,19 @@ namespace Blockiverse.WorldGen
                 saplingTicks.Remove(pos);
 
             // Add newly found saplings without resetting ticks for already-tracked ones.
-            WorldBounds bounds = world.Bounds;
-            for (int y = 0; y < bounds.Height; y++)
-            for (int z = 0; z < bounds.Depth; z++)
-            for (int x = 0; x < bounds.Width; x++)
+            // Flat-array sweeps (see VoxelWorld.CollectBlockPositions) — a per-position GetBlock
+            // scan over a full-size world (4M+ blocks) stalls the main thread on world init,
+            // including the late-join client finalize path.
+            saplingScanScratch.Clear();
+            world.CollectBlockPositions(BlockRegistry.Sapling, saplingScanScratch);
+            world.CollectBlockPositions(BlockRegistry.Sapling_S1, saplingScanScratch);
+            world.CollectBlockPositions(BlockRegistry.Sapling_S2, saplingScanScratch);
+            foreach (BlockPosition pos in saplingScanScratch)
             {
-                var pos = new BlockPosition(x, y, z);
-                BlockId block = world.GetBlock(pos);
-                if ((block == BlockRegistry.Sapling || block == BlockRegistry.Sapling_S1 || block == BlockRegistry.Sapling_S2)
-                    && !saplingTicks.ContainsKey(pos))
+                if (!saplingTicks.ContainsKey(pos))
                     saplingTicks[pos] = 0;
             }
+            saplingScanScratch.Clear();
         }
 
         public void TrackSapling(BlockPosition position)

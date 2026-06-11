@@ -49,6 +49,12 @@ namespace Blockiverse.Survival
             if (ingredients.Length == 0)
                 throw new ArgumentException("Crafting recipes must require at least one ingredient.", nameof(ingredients));
 
+            // The sign of TimeTicks is load-bearing: CraftingService treats <= 0 as an instant
+            // craft while smelting stations only accept > 0, so a negative value would silently
+            // turn a timed recipe into a fuel-free instant craft. Fail fast at the data layer.
+            if (timeTicks < 0)
+                throw new ArgumentOutOfRangeException(nameof(timeTicks), "TimeTicks must be non-negative.");
+
             var ingredientCopy = new ItemStack[ingredients.Length];
             for (int i = 0; i < ingredients.Length; i++)
             {

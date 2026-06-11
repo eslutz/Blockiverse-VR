@@ -159,6 +159,10 @@ namespace Blockiverse.UI
                 worldManager?.SetActivePlayerInventory(Inventory);
                 inventoryPanel?.Bind(Inventory, itemRegistry, inventoryPanel.SelectedHotbarSlotIndex);
                 craftingPanel?.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
+                // Bind resets the panel's station set to None, and ScanNearbyStations skips its
+                // push while the scan result still equals lastScannedStations — re-apply the
+                // cached set so station-gated recipes stay unlocked across the rebind.
+                craftingPanel?.SetAvailableStations(lastScannedStations);
             }
 
             inventoryPanel?.Refresh();

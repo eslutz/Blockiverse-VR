@@ -1,5 +1,6 @@
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
+using Blockiverse.WorldGen;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -20,6 +21,62 @@ namespace Blockiverse.Tests.EditMode
                 clock.Tick(2.5f);
 
                 Assert.That(clock.NormalizedTime, Is.EqualTo(0.15f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void WorldTimeClockRestoreElapsedTicksMatchesContinuousTickAcrossDayWraps()
+        {
+            const float dayLengthSeconds = 10.0f;
+            const float startNormalizedTime = 0.9f;
+            const long ticks = 730; // ticksPerDay = 200, so this spans three full day wraps.
+
+            var restoredHost = new GameObject("Restored World Time Clock");
+            var tickedHost = new GameObject("Ticked World Time Clock");
+
+            try
+            {
+                WorldTimeClock restored = restoredHost.AddComponent<WorldTimeClock>();
+                restored.Configure(dayLengthSeconds, startNormalizedTime, timeScale: 1.0f);
+                restored.RestoreElapsedTicks(ticks);
+
+                long ticksPerDay = (long)(dayLengthSeconds * WorldConstants.TicksPerSecond);
+                float expected = (startNormalizedTime + (ticks % ticksPerDay) / (float)ticksPerDay) % 1.0f;
+
+                Assert.That(restored.NormalizedTime, Is.EqualTo(expected).Within(0.001f));
+                Assert.That(restored.TotalElapsedTicks, Is.EqualTo(ticks));
+
+                WorldTimeClock ticked = tickedHost.AddComponent<WorldTimeClock>();
+                ticked.Configure(dayLengthSeconds, startNormalizedTime, timeScale: 1.0f);
+                ticked.Tick(ticks / (float)WorldConstants.TicksPerSecond);
+
+                Assert.That(restored.NormalizedTime, Is.EqualTo(ticked.NormalizedTime).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(restoredHost);
+                Object.DestroyImmediate(tickedHost);
+            }
+        }
+
+        [Test]
+        public void WorldTimeClockRestoreElapsedTicksZeroReturnsStartPhase()
+        {
+            var host = new GameObject("World Time Clock");
+
+            try
+            {
+                WorldTimeClock clock = host.AddComponent<WorldTimeClock>();
+                clock.Configure(dayLengthSeconds: 10.0f, startNormalizedTime: 0.9f, timeScale: 1.0f);
+
+                clock.RestoreElapsedTicks(0);
+
+                Assert.That(clock.NormalizedTime, Is.EqualTo(0.9f).Within(0.001f));
+                Assert.That(clock.TotalElapsedTicks, Is.EqualTo(0));
             }
             finally
             {

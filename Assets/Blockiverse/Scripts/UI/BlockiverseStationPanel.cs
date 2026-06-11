@@ -27,6 +27,7 @@ namespace Blockiverse.UI
         Button collectOutputButton;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
 
+        ItemRegistry itemRegistry;
         SmeltingStationModel station;
         BlockPosition stationPosition;
         float displayProgressTicks;
@@ -69,6 +70,8 @@ namespace Blockiverse.UI
         }
 
         public void ConfigureSurvivalSync(MultiplayerSurvivalSync sync) => survivalSync = sync;
+
+        public void ConfigureItemRegistry(ItemRegistry registry) => itemRegistry = registry;
 
         public void Open(SmeltingStationModel model, BlockPosition position, string displayTitle = null)
         {
@@ -175,7 +178,7 @@ namespace Blockiverse.UI
 
             SurvivalCommandResult result = survivalSync.TrySubmitStationCollect(stationPosition, out bool sentToHost);
             SetStatus(result.Accepted
-                ? $"Collected {result.Item.ItemId.ToString().ToLower()} ×{result.Item.Count}"
+                ? $"Collected {FormatStack(result.Item)}"
                 : sentToHost
                     ? "Sending…"
                     : $"Cannot collect: {result.FailureReason}");
@@ -196,6 +199,15 @@ namespace Blockiverse.UI
                 statusLabel.text = status;
         }
 
+        // Player-facing labels use registry display names ("Iron Ingot"), never raw canonical
+        // ids ("iron_ingot"), matching SurvivalCraftingPanel.FormatStack. Falls back to the
+        // default registry when no shared instance was injected via ConfigureItemRegistry.
+        string FormatStack(ItemStack stack)
+        {
+            itemRegistry ??= ItemRegistry.CreateDefault();
+            return $"{itemRegistry.Get(stack.ItemId).Name} ×{stack.Count}";
+        }
+
         void RefreshDisplay()
         {
             if (station == null)
@@ -213,21 +225,21 @@ namespace Blockiverse.UI
             {
                 if (inputSlotLabels[i] == null) continue;
                 ItemStack input = i < station.InputSlotCount ? station.GetInput(i) : ItemStack.Empty;
-                inputSlotLabels[i].text = input.IsEmpty ? "—" : $"{input.ItemId.ToString().ToLower()} ×{input.Count}";
+                inputSlotLabels[i].text = input.IsEmpty ? "—" : FormatStack(input);
             }
 
             if (fuelLabel != null)
             {
                 fuelLabel.text = station.Fuel.IsEmpty
                     ? "No fuel"
-                    : $"{station.Fuel.ItemId.ToString().ToLower()} ×{station.Fuel.Count}";
+                    : FormatStack(station.Fuel);
             }
 
             if (outputLabel != null)
             {
                 outputLabel.text = station.Output.IsEmpty
                     ? "—"
-                    : $"{station.Output.ItemId.ToString().ToLower()} ×{station.Output.Count}";
+                    : FormatStack(station.Output);
             }
 
             if (statusLabel != null && station.IsActive)

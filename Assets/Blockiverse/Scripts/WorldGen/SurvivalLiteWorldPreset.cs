@@ -481,13 +481,16 @@ namespace Blockiverse.WorldGen
                         continue;
 
                     TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
-                    int treeDensityThreshold = BiomeTreeDensityThreshold(biome);
+                    int treeDensityPercent = BiomeTreeDensityPercent(biome);
 
-                    if (treeDensityThreshold == 0)
+                    if (treeDensityPercent == 0)
                         continue;
 
+                    // Tree density is in percent (0–100) gated against hash % 100u — unlike the
+                    // permille (0–1000) densities used by WildPlantForBiome and SurfaceNodeTable.
+                    // Changing the modulus or unit here changes generation for existing seeds.
                     uint hash = Hash(settings.Seed, x, 0, z, salt: 1301);
-                    if (hash % 100u >= (uint)treeDensityThreshold)
+                    if (hash % 100u >= (uint)treeDensityPercent)
                         continue;
 
                     int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
@@ -511,7 +514,9 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        static int BiomeTreeDensityThreshold(TerrainBiome biome)
+        // Per-biome tree density in percent (0–100), compared against hash % 100u in
+        // PlaceSparseVegetation. NOT permille: the rest of this file uses 0–1000 densities.
+        static int BiomeTreeDensityPercent(TerrainBiome biome)
         {
             return biome switch
             {
@@ -584,6 +589,11 @@ namespace Blockiverse.WorldGen
         // Per-biome surface node scatter (block, density in permille, salt). These are the
         // renewable-ish gathering nodes (§3) that feed early recipes: pebbles/flint for tools and
         // campfires, brightsalt/shellgrit/resin for glass, preservation, and bandages.
+        // ORDER MATTERS: PlaceSurfaceResourceNodes evaluates entries in declaration order with
+        // first-match-wins (it breaks after the first same-biome entry whose roll passes), so
+        // later same-biome rows have a slightly reduced effective rate. Reordering rows changes
+        // generated terrain for existing seeds — saves store only deltas against seed-regenerated
+        // terrain, so a reorder would silently corrupt existing worlds.
         static readonly (TerrainBiome biome, BlockId block, int permille, int salt)[] SurfaceNodeTable =
         {
             (TerrainBiome.Meadow,    BlockRegistry.SurfacePebbles,  24, 3001),
