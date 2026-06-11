@@ -29,10 +29,23 @@ namespace Blockiverse.WorldGen
             new(0, 0, -1),
         };
 
+        // The six orthogonal neighbors, for the all-direction reaction scans (ignite/quench and
+        // neighbor re-activation). Sharing one array avoids a per-call enumerator allocation.
+        static readonly BlockPosition[] SixNeighbors =
+        {
+            new(0, 1, 0),
+            new(0, -1, 0),
+            new(1, 0, 0),
+            new(-1, 0, 0),
+            new(0, 0, 1),
+            new(0, 0, -1),
+        };
+
         // Horizontal flow budget per flowing cell; sources implicitly carry the family maximum.
         readonly Dictionary<BlockPosition, int> flowLevels = new();
-        // Cells that may act on their family's next step (spread, retract, ignite, quench).
-        readonly HashSet<BlockPosition> active = new();
+        // Cells that may act on their family's next step (spread, retract, ignite, quench),
+        // partitioned by family so a step only walks its own family's cells.
+        readonly HashSet<BlockPosition>[] active;
         readonly List<BlockPosition> processScratch = new();
 
         int worldSeed;
@@ -41,7 +54,32 @@ namespace Blockiverse.WorldGen
         // clocks restore to the host's position) still step at the same world ticks.
         long lastWorldTick;
 
-        public int ActiveCellCount => active.Count;
+        public FluidFlowService()
+        {
+            active = new HashSet<BlockPosition>[FluidBlocks.FamilyCount];
+            for (int i = 0; i < active.Length; i++)
+                active[i] = new HashSet<BlockPosition>();
+        }
+
+        public int ActiveCellCount
+        {
+            get
+            {
+                int total = 0;
+                foreach (HashSet<BlockPosition> set in active)
+                    total += set.Count;
+                return total;
+            }
+        }
+
+        // Resumes the simulation from an externally restored absolute tick (save load, late-join
+        // clock restore) WITHOUT replaying the elapsed ticks: the restored world is already the
+        // post-tick state, so the next Tick advances only from here. Without this, a clock that
+        // jumps forward after Configure would make the next Tick walk every elapsed tick.
+        public void SyncToWorldTick(long worldTick)
+        {
+            lastWorldTick = worldTick;
+        }
 
         // Full rebuild from the world: recompute flowing-cell levels by a multi-source BFS from
         // every source, then activate each fluid cell that can still act and every orphaned
@@ -55,8 +93,10 @@ namespace Blockiverse.WorldGen
             worldSeed = seed;
             lastWorldTick = worldTick;
             flowLevels.Clear();
-            active.Clear();
+            foreach (HashSet<BlockPosition> set in active)
+                set.Clear();
 
+            var sources = new List<BlockPosition>();
             var flowCells = new List<BlockPosition>();
             var frontier = new Queue<BlockPosition>();
 
@@ -71,9 +111,14 @@ namespace Blockiverse.WorldGen
                         BlockId block = world.GetBlock(position);
 
                         if (FluidBlocks.IsSource(block))
+                        {
+                            sources.Add(position);
                             frontier.Enqueue(position);
+                        }
                         else if (FluidBlocks.IsFlow(block))
+                        {
                             flowCells.Add(position);
+                        }
                     }
                 }
             }
@@ -109,25 +154,21 @@ namespace Blockiverse.WorldGen
 
             foreach (BlockPosition cell in flowCells)
             {
+                FluidBlocks.TryGetFamily(world.GetBlock(cell), out FluidFamily family);
+
                 // Orphans (no path from any source) retract on their first step.
                 if (!flowLevels.ContainsKey(cell))
-                    active.Add(cell);
+                    active[(int)family].Add(cell);
                 else
-                    ActivateIfActionable(world, cell);
+                    ActivateIfActionable(world, family, cell);
             }
 
-            // Re-walk sources to activate the ones with somewhere to spread.
-            for (int y = 0; y < bounds.Height; y++)
+            // Activate the sources that still have something to do, reusing the source list from
+            // the scan above instead of re-walking the whole world.
+            foreach (BlockPosition source in sources)
             {
-                for (int z = 0; z < bounds.Depth; z++)
-                {
-                    for (int x = 0; x < bounds.Width; x++)
-                    {
-                        var position = new BlockPosition(x, y, z);
-                        if (FluidBlocks.IsSource(world.GetBlock(position)))
-                            ActivateIfActionable(world, position);
-                    }
-                }
+                FluidBlocks.TryGetFamily(world.GetBlock(source), out FluidFamily family);
+                ActivateIfActionable(world, family, source);
             }
         }
 
@@ -151,24 +192,59 @@ namespace Blockiverse.WorldGen
             return true;
         }
 
-        void ActivateIfActionable(VoxelWorld world, BlockPosition cell)
+        // Activates a fluid cell during Configure if processing it would do anything: fall or
+        // spread into open air, emberflow re-rolling ignition on a flammable in contact, or
+        // freshwater quenching an emberflow source in contact. This must mirror the conditions
+        // ProcessCell uses to KEEP a cell active, or a rebuilt sim (load/late-join) would leave a
+        // walled-in emberflow/freshwater cell dormant that the continuous host keeps acting on.
+        void ActivateIfActionable(VoxelWorld world, FluidFamily family, BlockPosition cell)
+        {
+            if (IsActionable(world, family, cell))
+                active[(int)family].Add(cell);
+        }
+
+        bool IsActionable(VoxelWorld world, FluidFamily family, BlockPosition cell)
+        {
+            if (HasAirNeighbor(world, cell))
+                return true;
+
+            if (family == FluidFamily.Emberflow)
+                return HasNeighborMatching(world, cell, IsFlammable);
+
+            if (family == FluidFamily.Freshwater)
+                return HasNeighborMatching(world, cell, IsEmberflowSource);
+
+            return false;
+        }
+
+        // Air directly below (a fall) or horizontally (a spread). Air strictly above never
+        // enables action, matching ProcessCell's fall/spread directions.
+        bool HasAirNeighbor(VoxelWorld world, BlockPosition cell)
         {
             BlockPosition below = cell + Down;
             if (world.Bounds.Contains(below) && world.GetBlock(below) == BlockRegistry.Air)
-            {
-                active.Add(cell);
-                return;
-            }
+                return true;
 
             foreach (BlockPosition offset in HorizontalOffsets)
             {
                 BlockPosition next = cell + offset;
                 if (world.Bounds.Contains(next) && world.GetBlock(next) == BlockRegistry.Air)
-                {
-                    active.Add(cell);
-                    return;
-                }
+                    return true;
             }
+
+            return false;
+        }
+
+        bool HasNeighborMatching(VoxelWorld world, BlockPosition cell, Func<BlockId, bool> predicate)
+        {
+            foreach (BlockPosition offset in SixNeighbors)
+            {
+                BlockPosition next = cell + offset;
+                if (world.Bounds.Contains(next) && predicate(world.GetBlock(next)))
+                    return true;
+            }
+
+            return false;
         }
 
         // Keeps the simulation state in step with world edits (player edits, replicated deltas,
@@ -178,15 +254,15 @@ namespace Blockiverse.WorldGen
         {
             BlockPosition cell = change.Position;
 
-            if (FluidBlocks.IsFluid(change.NewBlock))
+            if (FluidBlocks.TryGetFamily(change.NewBlock, out FluidFamily family))
             {
-                active.Add(cell);
+                active[(int)family].Add(cell);
             }
             else
             {
                 // The cell stopped being fluid (mined source, quenched, burned, overwritten).
                 flowLevels.Remove(cell);
-                active.Remove(cell);
+                RemoveActiveAllFamilies(cell);
             }
 
             // Neighbors may now spread into an opening, fall into it, or retract without it.
@@ -195,16 +271,23 @@ namespace Blockiverse.WorldGen
 
         void ActivateFluidNeighbors(VoxelWorld world, BlockPosition cell)
         {
-            Activate(world, cell + Up);
-            Activate(world, cell + Down);
-            foreach (BlockPosition offset in HorizontalOffsets)
+            foreach (BlockPosition offset in SixNeighbors)
                 Activate(world, cell + offset);
         }
 
         void Activate(VoxelWorld world, BlockPosition cell)
         {
-            if (world.Bounds.Contains(cell) && FluidBlocks.IsFluid(world.GetBlock(cell)))
-                active.Add(cell);
+            if (world.Bounds.Contains(cell) &&
+                FluidBlocks.TryGetFamily(world.GetBlock(cell), out FluidFamily family))
+            {
+                active[(int)family].Add(cell);
+            }
+        }
+
+        void RemoveActiveAllFamilies(BlockPosition cell)
+        {
+            foreach (HashSet<BlockPosition> set in active)
+                set.Remove(cell);
         }
 
         // Advances the simulation to the synced clock's absolute world tick (same contract as
@@ -233,20 +316,14 @@ namespace Blockiverse.WorldGen
 
         void StepFamily(VoxelWorld world, FluidFamily family, long tick)
         {
-            if (active.Count == 0)
+            HashSet<BlockPosition> familyActive = active[(int)family];
+            if (familyActive.Count == 0)
                 return;
 
-            // Snapshot and sort for deterministic processing order across peers.
+            // Snapshot this family's active cells and sort for deterministic processing order
+            // across peers.
             processScratch.Clear();
-            foreach (BlockPosition cell in active)
-            {
-                if (FluidBlocks.TryGetFamily(world.GetBlock(cell), out FluidFamily cellFamily) &&
-                    cellFamily == family)
-                {
-                    processScratch.Add(cell);
-                }
-            }
-
+            processScratch.AddRange(familyActive);
             processScratch.Sort(ComparePositions);
 
             foreach (BlockPosition cell in processScratch)
@@ -264,10 +341,11 @@ namespace Blockiverse.WorldGen
 
         void ProcessCell(VoxelWorld world, FluidFamily family, BlockPosition cell, long tick)
         {
+            HashSet<BlockPosition> familyActive = active[(int)family];
             BlockId block = world.GetBlock(cell);
             if (!FluidBlocks.TryGetFamily(block, out FluidFamily cellFamily) || cellFamily != family)
             {
-                active.Remove(cell);
+                familyActive.Remove(cell);
                 return;
             }
 
@@ -282,7 +360,7 @@ namespace Blockiverse.WorldGen
             {
                 world.SetBlock(cell, BlockRegistry.Air);
                 flowLevels.Remove(cell);
-                active.Remove(cell);
+                familyActive.Remove(cell);
                 ActivateFluidNeighbors(world, cell);
                 return;
             }
@@ -302,7 +380,7 @@ namespace Blockiverse.WorldGen
             {
                 world.SetBlock(belowCell, FluidBlocks.FlowOf(family));
                 flowLevels[belowCell] = FluidBlocks.FlowDistance(family);
-                active.Add(belowCell);
+                active[(int)family].Add(belowCell);
                 return;
             }
 
@@ -314,7 +392,7 @@ namespace Blockiverse.WorldGen
                 belowFamily == family)
             {
                 if (!acted)
-                    active.Remove(cell);
+                    familyActive.Remove(cell);
                 return;
             }
 
@@ -328,13 +406,13 @@ namespace Blockiverse.WorldGen
 
                     world.SetBlock(next, FluidBlocks.FlowOf(family));
                     flowLevels[next] = level - 1;
-                    active.Add(next);
+                    active[(int)family].Add(next);
                     acted = true;
                 }
             }
 
             if (!acted)
-                active.Remove(cell);
+                familyActive.Remove(cell);
         }
 
         bool HasSupport(VoxelWorld world, FluidFamily family, BlockPosition cell, int level)
@@ -377,7 +455,7 @@ namespace Blockiverse.WorldGen
         {
             bool quenched = false;
 
-            foreach (BlockPosition offset in AllOffsets())
+            foreach (BlockPosition offset in SixNeighbors)
             {
                 BlockPosition next = cell + offset;
                 if (!world.Bounds.Contains(next) || world.GetBlock(next) != BlockRegistry.Emberflow)
@@ -385,7 +463,7 @@ namespace Blockiverse.WorldGen
 
                 world.SetBlock(next, BlockRegistry.BlackBasalt);
                 flowLevels.Remove(next);
-                active.Remove(next);
+                RemoveActiveAllFamilies(next);
                 ActivateFluidNeighbors(world, next);
                 quenched = true;
             }
@@ -400,7 +478,7 @@ namespace Blockiverse.WorldGen
         {
             bool anyFlammable = false;
 
-            foreach (BlockPosition offset in AllOffsets())
+            foreach (BlockPosition offset in SixNeighbors)
             {
                 BlockPosition next = cell + offset;
                 if (!world.Bounds.Contains(next) || !IsFlammable(world.GetBlock(next)))
@@ -417,19 +495,13 @@ namespace Blockiverse.WorldGen
             return anyFlammable;
         }
 
+        static bool IsEmberflowSource(BlockId block) => block == BlockRegistry.Emberflow;
+
         static bool IsFlammable(BlockId block) =>
             block == BlockRegistry.BranchwoodLog ||
             block == BlockRegistry.SmoothBranchwood ||
             block == BlockRegistry.WorkPlank ||
             block == BlockRegistry.Leafmoss ||
             block == BlockRegistry.Thornbrush;
-
-        static IEnumerable<BlockPosition> AllOffsets()
-        {
-            yield return Up;
-            yield return Down;
-            foreach (BlockPosition offset in HorizontalOffsets)
-                yield return offset;
-        }
     }
 }

@@ -1,4 +1,3 @@
-using Blockiverse.Voxel;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -232,20 +231,12 @@ namespace Blockiverse.Gameplay
                 ? worldManager.WorldTimeClock.NormalizedTime
                 : 0.25f;
 
-        // Underground = no sky above the head cell, same O(1) sky-map answer the ambience
-        // driver uses.
+        // Underground = no sky above the head cell, the shared sky-map answer the ambience driver
+        // also uses (CreativeWorldManager.IsHeadUnderground).
         bool IsHeadUnderground()
         {
-            VoxelSkyLightMap skyLight = worldManager.Renderer != null ? worldManager.Renderer.SkyLight : null;
-            if (skyLight == null)
-                return false;
-
             Camera head = Camera.main;
-            if (head == null || worldManager.World == null)
-                return false;
-
-            BlockPosition cell = CreativeInteractionController.ToBlockPosition(head.transform.position);
-            return worldManager.World.Bounds.Contains(cell) && !skyLight.HasSkyAccess(cell);
+            return head != null && worldManager.IsHeadUnderground(head.transform.position);
         }
 
         void EnsureMusicSource()

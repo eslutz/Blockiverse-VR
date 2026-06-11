@@ -215,6 +215,12 @@ namespace Blockiverse.Gameplay
 
         public IReadOnlyCollection<ChunkCoordinate> DrainDirtyChunks()
         {
+            // The per-world-tick RebuildDirty pump drains this every tick even when nothing is
+            // dirty; return the shared empty array in that case so a static world allocates no
+            // garbage per tick.
+            if (dirtyChunks.Count == 0)
+                return Array.Empty<ChunkCoordinate>();
+
             var drained = new List<ChunkCoordinate>(dirtyChunks);
             dirtyChunks.Clear();
             return drained;

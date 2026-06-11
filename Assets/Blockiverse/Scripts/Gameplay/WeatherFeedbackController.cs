@@ -127,9 +127,9 @@ namespace Blockiverse.Gameplay
 
         BlockiverseAudioCue ResolveAmbienceCue()
         {
-            // Underground (no sky above the head cell) → cave ambience; the sky map answers in O(1).
-            VoxelSkyLightMap skyLight = worldManager.Renderer != null ? worldManager.Renderer.SkyLight : null;
-            if (skyLight != null && TryGetHeadCell(out BlockPosition headCell) && !skyLight.HasSkyAccess(headCell))
+            // Underground (no sky above the head cell) → cave ambience; the shared O(1) sky-map
+            // query the music controller also uses.
+            if (TryGetHeadWorldPosition(out Vector3 headPosition) && worldManager.IsHeadUnderground(headPosition))
                 return BlockiverseAudioCue.CaveAmbienceLoop;
 
             float normalizedTime = worldManager.WorldTimeClock != null

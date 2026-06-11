@@ -131,6 +131,19 @@ namespace Blockiverse.Gameplay
             return true;
         }
 
+        // Whether a head/world position sits underground (no sky access above its cell), the O(1)
+        // sky-map answer the ambience and music presentation layers share so they agree on when
+        // the player is in a cave. False when there is no sky map or the cell is out of bounds.
+        public bool IsHeadUnderground(Vector3 headWorldPosition)
+        {
+            VoxelSkyLightMap skyLight = Renderer != null ? Renderer.SkyLight : null;
+            if (skyLight == null || World == null)
+                return false;
+
+            BlockPosition cell = CreativeInteractionController.ToBlockPosition(headWorldPosition);
+            return World.Bounds.Contains(cell) && !skyLight.HasSkyAccess(cell);
+        }
+
         // Full weather snapshot: state + tick accumulator + RNG position. The RNG position is
         // what keeps a late-joining client in deterministic lockstep with the host's weather.
         public readonly struct WeatherSyncState
@@ -187,6 +200,13 @@ namespace Blockiverse.Gameplay
                 return;
             }
             worldTimeClock.RestoreElapsedTicks(totalElapsedTicks);
+
+            // When the clock is restored AFTER the fluid sim was configured (save load applies
+            // the world first, then restores time), resume the sim from the restored tick — the
+            // loaded world is already the post-tick state, so the next Tick must not replay every
+            // elapsed tick. (When the restore arrives first it is buffered into
+            // pendingWorldTimeTicks and the sim is Configured at the restored tick directly.)
+            fluidFlowService?.SyncToWorldTick(totalElapsedTicks);
         }
 
         // ── World-simulation persistence ─────────────────────────────────────

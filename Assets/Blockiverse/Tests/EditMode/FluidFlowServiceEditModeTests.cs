@@ -206,7 +206,50 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(lateJoiner.ActiveCellCount, Is.EqualTo(serviceA.ActiveCellCount));
         }
 
+        [Test]
+        public void ConfigureReactivatesWalledInReactingCellsMatchingTheContinuousSim()
+        {
+            // Regression: a Configure-rebuilt sim (save load / late-join) must re-activate cells
+            // whose only action is a reaction (emberflow igniting a flammable, freshwater
+            // quenching an emberflow source) even when they have NO air neighbor — otherwise the
+            // rebuilt peer leaves them dormant and diverges from the continuously-run host.
+
+            // Peer A (continuous): build the walled-in emberflow + flammable by editing through
+            // the wired service, so OnBlockChanged activates the emberflow cell.
+            VoxelWorld worldA = CreateFlooredWorld();
+            FluidFlowService serviceA = CreateWiredService(worldA, seed: 3);
+            BuildWalledEmberflowAdjacentToFlammable(worldA, trackChange: true);
+
+            // Peer B (rebuilt): build the identical final state silently, then Configure fresh.
+            VoxelWorld worldB = CreateFlooredWorld();
+            BuildWalledEmberflowAdjacentToFlammable(worldB, trackChange: false);
+            var serviceB = new FluidFlowService();
+            serviceB.Configure(worldB, seed: 3, worldTick: 0);
+
+            serviceA.Tick(worldA, 12 * 200);
+            serviceB.Tick(worldB, 12 * 200);
+
+            // The scenario must actually fire on the continuous peer (the flammable burns),
+            // otherwise the test would pass trivially without exercising the activation gap.
+            Assert.That(worldA.GetBlock(new BlockPosition(17, 1, 16)), Is.Not.EqualTo(BlockRegistry.BranchwoodLog),
+                "Continuous peer should have ignited the walled-in flammable.");
+            AssertWorldsMatch(worldA, worldB);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
+
+        // An emberflow source at (16,1,16) whose only non-solid neighbor is a flammable log at
+        // (17,1,16); every other orthogonal neighbor is stone, so it has no air neighbor and is
+        // actionable ONLY through ignition.
+        static void BuildWalledEmberflowAdjacentToFlammable(VoxelWorld world, bool trackChange)
+        {
+            world.SetBlock(new BlockPosition(15, 1, 16), BlockRegistry.Graystone, trackChange);
+            world.SetBlock(new BlockPosition(16, 1, 15), BlockRegistry.Graystone, trackChange);
+            world.SetBlock(new BlockPosition(16, 1, 17), BlockRegistry.Graystone, trackChange);
+            world.SetBlock(new BlockPosition(16, 2, 16), BlockRegistry.Graystone, trackChange);
+            world.SetBlock(new BlockPosition(17, 1, 16), BlockRegistry.BranchwoodLog, trackChange);
+            world.SetBlock(new BlockPosition(16, 1, 16), BlockRegistry.Emberflow, trackChange);
+        }
 
         // 32×8×32 world with a solid graystone floor at y=0.
         static VoxelWorld CreateFlooredWorld()
