@@ -29,6 +29,10 @@ namespace Blockiverse.UI
         BlockiverseConnectionState lastDisplayedState;
         NetworkSessionMode lastDisplayedMode;
         string lastDisplayedDisconnectReason = string.Empty;
+        bool lastAppliedCanStart;
+        bool lastAppliedCanStop;
+        Canvas[] sessionEndedCanvases;
+        BaseRaycaster[] sessionEndedRaycasters;
 
         public BlockiverseNetworkSession Session => session;
         public TMP_Text StatusText => statusText;
@@ -183,8 +187,17 @@ namespace Blockiverse.UI
             if (lastDisplayedState != session.CurrentState ||
                 lastDisplayedMode != session.CurrentMode ||
                 lastDisplayedDisconnectReason != session.LastDisconnectReason)
+            {
                 RefreshStatus();
-            else
+                return;
+            }
+
+            // NetworkManager listening/shutdown flags can flip without a CurrentState transition
+            // (e.g. ShutdownInProgress clearing after a host disconnect), so the control gating is
+            // still polled — but only re-applied when the derived values change, to avoid dirtying
+            // Button state every frame.
+            ComputeControlState(out bool canStart, out bool canStop);
+            if (canStart != lastAppliedCanStart || canStop != lastAppliedCanStop)
                 RefreshControls();
         }
 
@@ -270,13 +283,20 @@ namespace Blockiverse.UI
                 statusText.text = message;
         }
 
-        void RefreshControls()
+        void ComputeControlState(out bool canStart, out bool canStop)
         {
-            bool canStart = session != null &&
+            canStart = session != null &&
                 !session.NetworkManager.IsListening &&
                 !session.NetworkManager.ShutdownInProgress;
-            bool canStop = session != null &&
+            canStop = session != null &&
                 (session.NetworkManager.IsListening || session.NetworkManager.ShutdownInProgress);
+        }
+
+        void RefreshControls()
+        {
+            ComputeControlState(out bool canStart, out bool canStop);
+            lastAppliedCanStart = canStart;
+            lastAppliedCanStop = canStop;
 
             if (hostButton != null)
                 hostButton.interactable = canStart;
@@ -296,12 +316,16 @@ namespace Blockiverse.UI
             if (!IsShowingSessionEndedMessage)
                 return;
 
-            foreach (Canvas canvas in GetComponentsInParent<Canvas>(true))
+            // The panel's parent hierarchy is stable at runtime, so the allocating parent
+            // lookups run once and the results are reused on later state transitions.
+            sessionEndedCanvases ??= GetComponentsInParent<Canvas>(true);
+            foreach (Canvas canvas in sessionEndedCanvases)
                 canvas.enabled = true;
 
             // BaseRaycaster covers both the legacy GraphicRaycaster and XRI's
             // TrackedDeviceGraphicRaycaster used by the world-space VR menus.
-            foreach (BaseRaycaster raycaster in GetComponentsInParent<BaseRaycaster>(true))
+            sessionEndedRaycasters ??= GetComponentsInParent<BaseRaycaster>(true);
+            foreach (BaseRaycaster raycaster in sessionEndedRaycasters)
                 raycaster.enabled = true;
         }
 

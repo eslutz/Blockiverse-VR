@@ -130,9 +130,11 @@ namespace Blockiverse.UI
                 router.PushScreen(new ScreenRoute(MenuActions.PauseScreen, pauseGame: true));
             else if (active == MenuActions.StationMenuScreen && !router.HasModal)
                 HandleStationCloseRequested();
-            else if (active != MenuActions.TitleScreen && !router.HasModal)
+            else if (active != MenuActions.TitleScreen && active != MenuActions.DeathScreen && !router.HasModal)
                 // Generic escape hatch: the menu button pops any other screen (pause included),
-                // so a screen without its own close action can never trap the player.
+                // so a screen without its own close action can never trap the player. The death
+                // screen is excluded — dismissing it here would skip Respawn() and leave the
+                // player walking around dead; its own actions handle respawn before popping.
                 router.PopScreen();
         }
 

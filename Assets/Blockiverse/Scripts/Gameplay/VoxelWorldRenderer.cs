@@ -136,6 +136,8 @@ namespace Blockiverse.Gameplay
         {
             using ProfilerMarker.AutoScope scope = RebuildChunkMarker.Auto();
 
+            // meshData aliases ChunkMeshBuilder's pooled lists, which the next Build call clears;
+            // the Set* calls below copy everything into the Mesh before that can happen.
             ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, out ChunkMeshData fluidData, skyLight);
             GameObject chunkObject = GetOrCreateChunkObject(chunk);
 
@@ -293,8 +295,10 @@ namespace Blockiverse.Gameplay
 
             chunkObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = chunkObject.AddComponent<MeshRenderer>();
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            renderer.receiveShadows = true;
+            // Voxel lighting is baked into vertex colors; Unity shadow passes would only add an
+            // extra render pass per light on Quest (per Meta VRC guidance) for no visual gain.
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
 
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;

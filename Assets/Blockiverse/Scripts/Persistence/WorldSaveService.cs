@@ -306,8 +306,9 @@ namespace Blockiverse.Persistence
                 Stamina = playerState?.Stamina ?? 0
             };
 
-            // Write all files atomically using .tmp → rename
-            WriteJsonAtomic(Path.Combine(path, "manifest.json"), manifest);
+            // Write all files atomically using .tmp → rename. Only the manifest is
+            // pretty-printed (developer-inspectable); machine-read files stay compact.
+            WriteJsonAtomic(Path.Combine(path, "manifest.json"), manifest, prettyPrint: true);
 
             string dimDir = Path.Combine(path, "dimensions", "main");
             Directory.CreateDirectory(dimDir);
@@ -570,8 +571,6 @@ namespace Blockiverse.Persistence
 
             if (!Directory.Exists(regionsDir))
                 return deltas;
-
-            BlockRegistry blockRegistry = BlockRegistry.CreateDefault();
 
             foreach (string regionPath in Directory.GetFiles(regionsDir, "r.*.*.vxlr"))
             {
@@ -1184,9 +1183,9 @@ namespace Blockiverse.Persistence
             return selectedHotbarSlotIndex >= 0 && selectedHotbarSlotIndex < hotbarSlotCount;
         }
 
-        static void WriteJsonAtomic(string path, object data)
+        static void WriteJsonAtomic(string path, object data, bool prettyPrint = false)
         {
-            string json = JsonUtility.ToJson(data, prettyPrint: true);
+            string json = JsonUtility.ToJson(data, prettyPrint);
             string tempPath = path + ".tmp";
             File.WriteAllText(tempPath, json);
             ReplaceWithTempFile(tempPath, path);
@@ -1210,7 +1209,16 @@ namespace Blockiverse.Persistence
             {
                 if (File.Exists(backupPath)) File.Delete(backupPath);
                 File.Move(path, backupPath);
-                File.Move(tempPath, path);
+                try
+                {
+                    File.Move(tempPath, path);
+                }
+                catch
+                {
+                    // A failed swap must not strand the live file at .bak — put the original back.
+                    File.Move(backupPath, path);
+                    throw;
+                }
                 File.Delete(backupPath);
             }
         }

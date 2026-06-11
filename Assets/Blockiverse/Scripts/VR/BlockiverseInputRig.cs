@@ -505,18 +505,6 @@ namespace Blockiverse.VR
 
             heightReset.Configure(origin, comfortSettings);
 
-            if (gravityProvider == null)
-                gravityProvider = GetComponent<GravityProvider>();
-
-            if (gravityProvider == null)
-                gravityProvider = gameObject.AddComponent<GravityProvider>();
-
-            if (jumpProvider == null)
-                jumpProvider = GetComponent<JumpProvider>();
-
-            if (jumpProvider == null)
-                jumpProvider = gameObject.AddComponent<JumpProvider>();
-
             ConfigureXriLocomotionProviders();
         }
 

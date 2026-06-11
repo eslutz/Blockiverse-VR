@@ -8,6 +8,7 @@ This file defines standing workflow instructions for AI agents and automation wo
 - Read and follow the canonical rulesets under [docs/rulesets/](docs/rulesets/). These documents define the current game design, implementation vocabulary, save schema, menus, environment, structures, vegetation, multiplayer behavior, audio/VFX behavior, and known-good checkpoint policy.
 - The rulesets define the game. Existing temporary validation worlds, reduced starter registries, and old temporary block/item names are migration inputs only.
 - Use [docs/rulesets/voxel_implementation_alignment_matrix.md](docs/rulesets/voxel_implementation_alignment_matrix.md) only as a migration/refactor aid. It is not a second gameplay vocabulary.
+- Use [CLAUDE.md](CLAUDE.md) for repository orientation: common developer commands and the high-level code architecture map. It supplements this file and does not override workflow policy here.
 - Use GitHub issues and pull requests for active workflow state only: current bugs, blockers, review work, multi-PR initiatives, and durable follow-ups.
 - Use the GitHub Project `Blockiverse VR Roadmap` as a lightweight active-work board. It is not a canonical roadmap, product spec, or required issue hierarchy.
 - Do not duplicate detailed product, architecture, testing, art, release, or platform requirements in this file. Keep those details in the execution plan, rulesets, pull requests, or focused issues.

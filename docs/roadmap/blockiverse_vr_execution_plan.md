@@ -2001,6 +2001,8 @@ This is the canonical home for later expansion feature definitions. When a futur
 | Seasons | Future feature | Promote after Phase 5 weather/day-night systems are stable and seasonal variation is needed for survival or world feel. |
 | Full survival expansion | Future feature | Promote after the Store / Early Access candidate is stable and deeper survival is the next product goal. |
 | Cloud private worlds | Future feature | Promote after LAN multiplayer, save/load, entitlement, privacy, and cost guardrails are proven enough for internet-hosted worlds. |
+| Hand tracking and hand motion control | Future feature (V2 target) | Promote after the first Store / Early Access candidate ships and controller-based interaction is stable enough to add a second input mode. |
+| Mixed reality room play | Future feature (V3 target) | Promote after the V2 hand-tracking release is stable; MR room play builds on the hand-interaction layer and Meta scene/passthrough capabilities. |
 
 ## Future feature — Seasons
 
@@ -2275,6 +2277,165 @@ Invite/member model works.
 Cloud save/spin-down/spin-up works.
 Authorized Quest users can resume persisted world over internet.
 Privacy/cost/quota diagnostics are documented.
+```
+
+## Future feature — Hand tracking and hand motion control (V2 target)
+
+### Deliverable
+
+Meta Quest hand tracking becomes a supported input mode alongside controllers: players can navigate menus, select hotbar items, and place/break blocks using tracked hands and natural hand motions, with automatic switching between controllers and hands.
+
+### Scope
+
+```text
+Meta Quest hand tracking as an optional input mode (controllers remain fully supported)
+Automatic runtime switching between controller and hand input when controllers are set down/picked up
+Pinch/poke/grab interactions through the XRI hand-interaction layer (Unity XR Hands)
+Hand-ray UI interaction across every existing menu, panel, and the system keyboard field
+Hand-driven block place/break using the existing placement preview and mutation authority path
+Hand-pose hotbar/item selection and a palm or wrist gesture to open the quick menu
+Survival interactions mapped to hand motions: harvest, place, till, plant, station deposit/collect
+Audio/VFX feedback substitution where controller haptics do not exist
+Hand-tracking-loss handling: graceful fallback, re-acquire messaging, no unintended block edits
+Comfort settings and an explicit settings toggle to disable hand input
+Meta Avatars hand pose streaming so remote players see tracked hands
+Store metadata and VRC items for hand-tracking support
+```
+
+### Out of scope
+
+```text
+Hand-tracking-only requirement (controllers stay primary and required)
+Custom ML gesture recognition beyond the platform pinch/poke/grab set
+Finger-level voxel sculpting or per-finger physics
+Two-handed gesture combos for locomotion (teleport/move stay on standard interactions)
+Desktop or PC VR input modes
+```
+
+### Implementation outline
+
+```text
+FEATURE: Hand input foundation
+  SPIKE: Validate Unity XR Hands + XRI hand interaction against the current OpenXR/Meta stack
+  STORY: Add hand-tracking subsystem setup and controller/hand mode switching to the input rig
+  STORY: Wire hand-ray UI interaction into the existing world-space menu stack
+
+FEATURE: Hand gameplay interactions
+  STORY: Map block place/break to pinch interactions through the existing mutation authority path
+  STORY: Map survival verbs (harvest, till, plant, station ops) to hand interactions
+  STORY: Add quick-menu and hotbar selection gestures
+
+FEATURE: Feedback and presence
+  STORY: Substitute audio/VFX cues where haptics are unavailable
+  STORY: Stream hand poses through the Meta Avatars layer
+  STORY: Add comfort/settings toggles and tracking-loss handling
+```
+
+### Tests
+
+```text
+Unit: input mode switching is deterministic and never duplicates bound actions.
+Unit: hand-driven mutations flow through BlockMutationAuthority like controller mutations.
+Integration: every menu action id is reachable with hand-ray interaction.
+PlayMode: place/break with simulated hand input matches controller behavior.
+PlayMode: tracking loss cancels in-progress interactions without committing edits.
+```
+
+### Validation
+
+```text
+All menus, the hotbar, and block place/break are usable with hands only.
+Switching between controllers and hands mid-session works without restart.
+Remote players see tracked hand poses on avatars.
+Hand interaction passes Quest comfort and readability checks.
+```
+
+### Definition of done
+
+```text
+Hand tracking is an optional input mode on Quest 3/3S.
+Every controller-reachable interaction has a hand equivalent or documented exception.
+Controller play is unchanged.
+Store/VRC hand-tracking requirements pass.
+```
+
+## Future feature — Mixed reality room play (V3 target)
+
+### Deliverable
+
+A passthrough mixed-reality mode anchors a voxel play volume in the player's real room: the room is visible through passthrough, the voxel world sits on real surfaces, and the player walks around their physical space placing and breaking blocks that persist exactly where they left them.
+
+### Scope
+
+```text
+Passthrough rendering mode with an explicit in-game toggle (VR worlds remain the default)
+Meta scene/room understanding: floor, walls, ceiling, and furniture surfaces as placement context
+Room-scaled bounded voxel volume preset sized from the scanned room
+Spatial anchoring so the voxel volume stays registered to the real room across sessions
+Block place/break against real-room surfaces through the existing mutation authority path
+MR world saves: world data plus spatial-anchor references, with re-anchoring on load
+Lighting/readability adaptation of voxel rendering against the passthrough background
+Safety behavior around real obstacles (no guardian-required free locomotion in MR mode)
+Creative-first MR builder experience; survival systems evaluated separately for MR fit
+Performance budgets revalidated for passthrough + voxel rendering on Quest 3/3S
+Store metadata, privacy notes for scene data, and VRC items for mixed reality
+```
+
+### Out of scope
+
+```text
+Co-located multiplayer (shared-room sessions are a later expansion on top of MR play)
+Occlusion-perfect blending of voxels behind real furniture
+Dynamic re-scanning or scene-mesh deformation during play
+Outdoor or multi-room continuous play spaces
+Porting the full survival loop to MR in the first MR release
+```
+
+### Implementation outline
+
+```text
+FEATURE: Passthrough and scene foundation
+  SPIKE: Validate Meta passthrough + scene/room APIs against the current OpenXR/URP stack
+  STORY: Add passthrough mode toggle and MR camera/rendering configuration
+  STORY: Ingest room scene data into a bounded room-scale world preset
+
+FEATURE: Anchored voxel volume
+  STORY: Anchor the voxel volume with spatial anchors and re-anchor on load
+  STORY: Extend the save schema with anchor references for MR worlds
+  STORY: Map block placement onto detected floor/table surfaces
+
+FEATURE: MR experience
+  STORY: Adapt voxel lighting/contrast for passthrough readability
+  STORY: Add MR-specific comfort/safety behavior and onboarding
+  STORY: Revalidate performance budgets for passthrough + voxel rendering
+```
+
+### Tests
+
+```text
+Unit: room-preset bounds derive deterministically from scene dimensions.
+Unit: MR saves serialize and validate anchor references.
+Integration: anchored worlds reload with block positions registered to the same room pose.
+Integration: mutation authority rules hold unchanged in MR mode.
+PlayMode: passthrough toggle transitions cleanly without world or input state loss.
+```
+
+### Validation
+
+```text
+A scanned room produces a sensibly sized play volume on the real floor.
+Blocks placed on real surfaces persist across save/load in the same room.
+Voxel content stays readable over passthrough in bright and dim rooms.
+Frame timing meets Quest MR budgets with a fully built room volume.
+```
+
+### Definition of done
+
+```text
+Passthrough MR mode ships as an explicit opt-in.
+Room-anchored voxel worlds save and reload in place.
+VR-world play is unchanged.
+MR privacy, comfort, and VRC requirements pass.
 ```
 
 ---

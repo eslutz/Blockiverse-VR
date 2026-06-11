@@ -731,8 +731,8 @@ namespace Blockiverse.Gameplay
                 InitializeDefaultWorld();
         }
 
-        // Shared by world load (UI session controller) and survival respawn (SurvivalVitalsRuntime).
-        // Public: the session controller lives in the UI assembly.
+        // Shared by world load (BlockiverseWorldSessionController, separate assembly) and survival
+        // respawn (SurvivalVitalsRuntime) — public because no InternalsVisibleTo covers the UI assembly.
         public static void PositionRigAtSpawn(BlockPosition spawnPosition)
         {
             GameObject rigObject = GameObject.Find(BlockiverseProject.XrRigRootName);

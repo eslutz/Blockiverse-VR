@@ -16,6 +16,7 @@ namespace Blockiverse.Gameplay
     {
         const string DefaultSaveFileName = "multiplayer-world.vxlworld";
         const string DefaultWorldName = "Multiplayer World";
+        const string DefaultWorldPreset = "survival_terrain";
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
@@ -28,6 +29,11 @@ namespace Blockiverse.Gameplay
         string configuredSavePath;
         bool subscribed;
         float lastAutoSaveTime;
+
+        // Mirrors the single-player defaults in BlockiverseWorldSessionController so fresh
+        // multiplayer worlds save the same difficulty/preset metadata.
+        string worldDifficulty = string.Empty;
+        string worldPreset = DefaultWorldPreset;
 
         public bool LastHostLoadAttempted { get; private set; }
         public bool LastHostLoadSucceeded { get; private set; }
@@ -45,7 +51,23 @@ namespace Blockiverse.Gameplay
             Unsubscribe();
             session = targetSession;
             worldManager = targetWorldManager;
-            configuredSavePath = targetSavePath;
+
+            if (string.IsNullOrWhiteSpace(targetSavePath))
+            {
+                configuredSavePath = null;
+            }
+            else if (TryResolveTrustedSavePath(targetSavePath, out string trustedSavePath))
+            {
+                configuredSavePath = trustedSavePath;
+            }
+            else
+            {
+                // Keep the previous/default path so a bad configuration cannot redirect saves.
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Rejected untrusted multiplayer save path file={SanitizeSavePath(targetSavePath)} reason=path-outside-trusted-roots",
+                    context: this);
+            }
 
             if (!string.IsNullOrWhiteSpace(targetWorldName))
                 worldName = targetWorldName;
@@ -79,7 +101,12 @@ namespace Blockiverse.Gameplay
             string path = ResolveSavePath();
 
             if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                // No save on disk means a fresh world; reset metadata to the defaults.
+                worldDifficulty = string.Empty;
+                worldPreset = DefaultWorldPreset;
                 return true;
+            }
 
             LastHostLoadAttempted = true;
 
@@ -146,6 +173,8 @@ namespace Blockiverse.Gameplay
             {
                 worldManager.SuppressContainerAutoLoot = false;
             }
+            worldDifficulty = result.Data.Difficulty ?? string.Empty;
+            worldPreset = string.IsNullOrWhiteSpace(result.Data.WorldPreset) ? DefaultWorldPreset : result.Data.WorldPreset;
             worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
@@ -181,7 +210,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService().Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), extras: BuildSaveExtras());
+                new WorldSaveService().Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), difficulty: worldDifficulty, worldPreset: worldPreset, extras: BuildSaveExtras());
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,
@@ -234,7 +263,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService().Save(ResolveSavePath(), ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), extras: BuildSaveExtras());
+                new WorldSaveService().Save(ResolveSavePath(), ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), difficulty: worldDifficulty, worldPreset: worldPreset, extras: BuildSaveExtras());
             }
             catch (Exception exception)
             {
@@ -291,7 +320,20 @@ namespace Blockiverse.Gameplay
                 SavedContainerSlot[] slots = container.Slots ?? Array.Empty<SavedContainerSlot>();
                 var items = new List<(string, int)>(slots.Length);
                 foreach (SavedContainerSlot slot in slots)
+                {
+                    // Corrupted saves can carry blank ids or non-positive counts; restoring them
+                    // would throw inside ItemId or corrupt the container inventory.
+                    if (string.IsNullOrWhiteSpace(slot.CanonicalId) || slot.Count <= 0)
+                    {
+                        BlockiverseLog.Warning(
+                            BlockiverseLogCategory.Persistence,
+                            $"Skipped invalid saved container slot world={ResolveWorldName()} container=({container.X},{container.Y},{container.Z}) id={(string.IsNullOrWhiteSpace(slot.CanonicalId) ? "(empty)" : slot.CanonicalId)} count={slot.Count}",
+                            this);
+                        continue;
+                    }
+
                     items.Add((slot.CanonicalId, slot.Count));
+                }
                 restored.Add((new BlockPosition(container.X, container.Y, container.Z), items));
             }
 
@@ -414,6 +456,46 @@ namespace Blockiverse.Gameplay
             session.HostStartPreparing -= RestoreSavedWorldBeforeHostStart;
             session.HostShutdownPreparing -= SaveWorldBeforeHostShutdown;
             subscribed = false;
+        }
+
+        // Trust model: configured save paths must be absolute and resolve (after normalization,
+        // which collapses ".." segments) under the app's persistent data folder or the OS temp
+        // folder (used by trusted local tooling and tests). Everything else — relative paths and
+        // paths escaping both roots — is rejected.
+        static bool TryResolveTrustedSavePath(string candidate, out string fullPath)
+        {
+            fullPath = null;
+
+            try
+            {
+                if (!Path.IsPathRooted(candidate))
+                    return false;
+
+                string resolved = Path.GetFullPath(candidate);
+
+                if (!IsUnderRoot(resolved, Application.persistentDataPath) &&
+                    !IsUnderRoot(resolved, Path.GetTempPath()))
+                {
+                    return false;
+                }
+
+                fullPath = resolved;
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        static bool IsUnderRoot(string fullPath, string root)
+        {
+            if (string.IsNullOrWhiteSpace(root))
+                return false;
+
+            string normalizedRoot = Path.GetFullPath(root)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return fullPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
         }
 
         string ResolveSavePath()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace Blockiverse.Voxel
@@ -56,7 +57,7 @@ namespace Blockiverse.Voxel
         // grow unbounded over a long host session.
         public const int MaxRetainedDeltas = 1024;
 
-        readonly List<ChunkDelta> deltas = new();
+        readonly DeltaRingBuffer deltas = new(MaxRetainedDeltas);
         uint nextSequenceId = 1;
 
         public IReadOnlyList<ChunkDelta> Deltas => deltas;
@@ -70,9 +71,6 @@ namespace Blockiverse.Voxel
                 ChunkCoordinate.FromBlockPosition(change.Position, chunkSize),
                 change);
 
-            if (deltas.Count >= MaxRetainedDeltas)
-                deltas.RemoveAt(0);
-
             deltas.Add(delta);
             LastSequenceId = sequenceId;
             return delta;
@@ -80,9 +78,11 @@ namespace Blockiverse.Voxel
 
         public void Clear()
         {
+            // Sequence IDs are deliberately not reset: they must stay monotonic for the host
+            // session lifetime so receivers dedup and order deltas correctly across a
+            // clear-and-refill, and so snapshot baselines (LastSequenceId) keep matching the
+            // next broadcast delta.
             deltas.Clear();
-            nextSequenceId = 1;
-            LastSequenceId = 0;
         }
 
         public static void Replay(VoxelWorld world, IEnumerable<ChunkDelta> sourceDeltas, bool trackChange = false)
@@ -104,6 +104,63 @@ namespace Blockiverse.Voxel
                 nextSequenceId = 1;
 
             return sequenceId;
+        }
+
+        // Fixed-capacity ring buffer so evicting the oldest delta at the retention cap is
+        // O(1); a List-backed log would pay an O(n) RemoveAt(0) on every block edit once
+        // the cap is reached.
+        sealed class DeltaRingBuffer : IReadOnlyList<ChunkDelta>
+        {
+            readonly ChunkDelta[] buffer;
+            int start;
+
+            public DeltaRingBuffer(int capacity)
+            {
+                buffer = new ChunkDelta[capacity];
+            }
+
+            public int Count { get; private set; }
+
+            public ChunkDelta this[int index]
+            {
+                get
+                {
+                    if (index < 0 || index >= Count)
+                        throw new ArgumentOutOfRangeException(nameof(index));
+
+                    return buffer[(start + index) % buffer.Length];
+                }
+            }
+
+            public void Add(ChunkDelta delta)
+            {
+                if (Count < buffer.Length)
+                {
+                    buffer[(start + Count) % buffer.Length] = delta;
+                    Count++;
+                    return;
+                }
+
+                buffer[start] = delta;
+                start = (start + 1) % buffer.Length;
+            }
+
+            public void Clear()
+            {
+                start = 0;
+                Count = 0;
+            }
+
+            public IEnumerator<ChunkDelta> GetEnumerator()
+            {
+                for (int index = 0; index < Count; index++)
+                    yield return buffer[(start + index) % buffer.Length];
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
         }
     }
 }

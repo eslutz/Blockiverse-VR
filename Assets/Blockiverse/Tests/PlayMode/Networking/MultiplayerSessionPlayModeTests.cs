@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
@@ -29,8 +30,11 @@ namespace Blockiverse.Tests.Networking.PlayMode
 {
     public sealed class MultiplayerSessionPlayModeTests
     {
-        static ushort nextPort = 7810;
-        static readonly List<string> TempSavePaths = new();
+        // Advanced only via Interlocked so parallel test execution never hands out the same port.
+        static int nextPort = 7809;
+
+        // Per-instance so concurrently executing fixtures cannot clear each other's pending deletes.
+        readonly List<string> tempSavePaths = new();
 
         [UnityTest]
         public IEnumerator MultiplayerTestSceneSessionMenuHostsAndJoinsLocalClient()
@@ -575,7 +579,11 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Save Failure World");
-            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, "invalid\0save");
+            // Configure rejects untrusted paths up front, so an invalid path can no longer reach
+            // the save itself. Use a trusted temp path and block it with a plain file below so the
+            // shutdown save fails inside WorldSaveService instead.
+            string savePath = CreateTempSavePath();
+            MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
             ushort port = NextPort();
             var testConfig = new BlockiverseNetworkConfig(
                 BlockiverseNetworkConfig.DefaultAddress,
@@ -596,9 +604,12 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
                 "Client did not connect to host.");
 
+            // A regular file at the save path makes the save's Directory.CreateDirectory throw.
+            File.WriteAllText(savePath, "occupies the multiplayer save path");
+
             LogAssert.Expect(
                 LogType.Error,
-                new Regex(@"\[Blockiverse\]\[Persistence\] Failed to save multiplayer host world before shutdown.*exception=(ArgumentException|NotSupportedException)"));
+                new Regex(@"\[Blockiverse\]\[Persistence\] Failed to save multiplayer host world before shutdown.*exception=IOException"));
 
             hostMenu.StopButton.onClick.Invoke();
             yield return null;
@@ -1804,33 +1815,75 @@ namespace Blockiverse.Tests.Networking.PlayMode
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            NetworkManager[] managers = UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None);
-
-            foreach (NetworkManager manager in managers)
+            try
             {
-                if (manager != null && (manager.IsListening || manager.ShutdownInProgress))
-                    manager.Shutdown();
+                foreach (NetworkManager manager in UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None))
+                    ShutdownManagerSafely(manager);
+
+                yield return WaitFor(
+                    () => UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None)
+                        .All(manager => manager == null || !manager.IsListening),
+                    "Network managers did not stop during test cleanup.",
+                    timeoutSeconds: 3.0f);
             }
-
-            yield return WaitFor(
-                () => UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None)
-                    .All(manager => manager == null || !manager.IsListening),
-                "Network managers did not stop during test cleanup.",
-                timeoutSeconds: 3.0f);
-
-            foreach (NetworkManager manager in UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None))
+            finally
             {
-                if (manager != null)
-                    UnityEngine.Object.DestroyImmediate(manager.gameObject);
+                // Destruction and temp-save cleanup must run even when a shutdown throws or the
+                // wait above times out, otherwise a NetworkManager that was shut down but never
+                // destroyed (or vice versa) leaks into the next test.
+                foreach (NetworkManager manager in UnityEngine.Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None))
+                {
+                    ShutdownManagerSafely(manager);
+                    DestroyManagerSafely(manager);
+                }
+
+                foreach (string tempSavePath in tempSavePaths)
+                {
+                    try
+                    {
+                        DeleteIfExists(tempSavePath);
+                    }
+                    catch (Exception exception)
+                    {
+                        Debug.LogWarning($"Failed to delete temp save path '{tempSavePath}' during test cleanup: {exception.GetType().Name}");
+                    }
+                }
+
+                tempSavePaths.Clear();
             }
-
-            foreach (string tempSavePath in TempSavePaths)
-                DeleteIfExists(tempSavePath);
-
-            TempSavePaths.Clear();
         }
 
-        static IEnumerator LoadMultiplayerTestScene()
+        static void ShutdownManagerSafely(NetworkManager manager)
+        {
+            if (manager == null || (!manager.IsListening && !manager.ShutdownInProgress))
+                return;
+
+            try
+            {
+                manager.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"Failed to shut down NetworkManager '{manager.name}' during test cleanup: {exception.GetType().Name}");
+            }
+        }
+
+        static void DestroyManagerSafely(NetworkManager manager)
+        {
+            if (manager == null)
+                return;
+
+            try
+            {
+                UnityEngine.Object.DestroyImmediate(manager.gameObject);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"Failed to destroy NetworkManager '{manager.name}' during test cleanup: {exception.GetType().Name}");
+            }
+        }
+
+        IEnumerator LoadMultiplayerTestScene()
         {
             string sceneName = Path.GetFileNameWithoutExtension(BlockiverseProject.MultiplayerTestScenePath);
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
@@ -1989,13 +2042,13 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
         static ushort NextPort()
         {
-            return nextPort++;
+            return (ushort)Interlocked.Increment(ref nextPort);
         }
 
-        static string CreateTempSavePath()
+        string CreateTempSavePath()
         {
             string path = Path.Combine(Path.GetTempPath(), $"blockiverse-multiplayer-{Guid.NewGuid():N}.vxlworld");
-            TempSavePaths.Add(path);
+            tempSavePaths.Add(path);
             return path;
         }
 

@@ -75,6 +75,27 @@ namespace Blockiverse.Voxel
             return ChunkCoordinate.FromBlockPosition(position, ChunkSize);
         }
 
+        // Linear scan over the backing array — decodes a BlockPosition only for matches. Full-world
+        // sweeps (e.g. leaf-decay seeding) must use this instead of per-position GetBlock, which pays
+        // a bounds check and index computation on every block.
+        public void CollectBlockPositions(BlockId block, ICollection<BlockPosition> results)
+        {
+            if (results == null)
+                throw new ArgumentNullException(nameof(results));
+
+            int width = Bounds.Width;
+            int layer = width * Bounds.Depth;
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                if (blocks[i] != block)
+                    continue;
+
+                int y = i / layer;
+                int remainder = i - y * layer;
+                results.Add(new BlockPosition(remainder % width, y, remainder / width));
+            }
+        }
+
         public IReadOnlyCollection<BlockChange> GetChangedBlocks()
         {
             return changedBlocks.Values;

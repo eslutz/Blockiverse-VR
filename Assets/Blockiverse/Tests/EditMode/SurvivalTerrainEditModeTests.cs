@@ -406,6 +406,60 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SurvivalTerrainPlacesSurfaceResourceNodesAboveSolidGroundOutsideSpawn()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed: 6401);
+            VoxelWorld world = new SurvivalTerrainPreset(registry, settings).Generate();
+
+            // The full SurfaceNodeTable block set (gathering nodes scattered at surfaceY + 1).
+            var nodeBlocks = new HashSet<BlockId>
+            {
+                BlockRegistry.SurfacePebbles,
+                BlockRegistry.FlintyShingle,
+                BlockRegistry.ResinKnot,
+                BlockRegistry.ShellgritBed,
+                BlockRegistry.BrightsaltCrust,
+            };
+
+            // Mirrors SurvivalTerrainPreset.SpawnProtectedRadius: generated scatter must never
+            // land within this horizontal distance of the spawn column.
+            const int spawnProtectedRadius = 4;
+            BlockPosition spawn = settings.SpawnPosition;
+            int pebbleCount = 0;
+
+            for (int x = 0; x < world.Bounds.Width; x++)
+            {
+                for (int z = 0; z < world.Bounds.Depth; z++)
+                {
+                    for (int y = 1; y < world.Bounds.Height; y++)
+                    {
+                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
+                        if (!nodeBlocks.Contains(block))
+                            continue;
+
+                        if (block == BlockRegistry.SurfacePebbles)
+                            pebbleCount++;
+
+                        BlockId support = world.GetBlock(new BlockPosition(x, y - 1, z));
+                        Assert.That(support, Is.Not.EqualTo(BlockRegistry.Air),
+                            $"Expected the surface node {block} at ({x}, {y}, {z}) to sit directly above a surface block.");
+                        Assert.That(registry.Get(support).IsSolid, Is.True,
+                            $"Expected the surface node {block} at ({x}, {y}, {z}) to sit on a solid surface block, not {support}.");
+
+                        int dx = x - spawn.X;
+                        int dz = z - spawn.Z;
+                        Assert.That(dx * dx + dz * dz, Is.GreaterThan(spawnProtectedRadius * spawnProtectedRadius),
+                            $"Surface node {block} at ({x}, {y}, {z}) violates the spawn-protected radius.");
+                    }
+                }
+            }
+
+            Assert.That(pebbleCount, Is.GreaterThan(0),
+                "The survival preset should scatter SurfacePebbles nodes one block above the surface.");
+        }
+
+        [Test]
         public void SurvivalTerrainExposesDeterministicContainerLoot()
         {
             // Loot is biome-weighted toward the no-loot pathmark_stones, and §5.4 lakes/seas now

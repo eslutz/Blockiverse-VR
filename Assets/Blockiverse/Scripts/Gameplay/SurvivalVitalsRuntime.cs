@@ -31,6 +31,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeWorldManager worldManager;
 
         WorldTimeClock worldTimeClock;
+        Transform cachedHeadTransform;
         float nextClockSearchTime;
         float nextHazardScanTime;
         float nextWorldDrinkTime;
@@ -57,6 +58,7 @@ namespace Blockiverse.Gameplay
         void OnEnable()
         {
             Vitals.Died += OnVitalsDied;
+            cachedHeadTransform = Camera.main != null ? Camera.main.transform : null;
             ResolveReferences();
             WireSurvivalSync();
         }
@@ -64,6 +66,7 @@ namespace Blockiverse.Gameplay
         void OnDisable()
         {
             Vitals.Died -= OnVitalsDied;
+            cachedHeadTransform = null;
             UnwireSurvivalSync();
             if (worldTimeClock != null)
             {
@@ -151,12 +154,15 @@ namespace Blockiverse.Gameplay
 
             nextHazardScanTime = Time.time + HazardScanIntervalSeconds;
 
+            // XR cameras can spawn after enable; refresh the cache lazily until one exists.
+            if (cachedHeadTransform == null)
+                cachedHeadTransform = Camera.main != null ? Camera.main.transform : null;
+
             VoxelWorld world = worldManager != null ? worldManager.World : null;
-            Transform head = Camera.main != null ? Camera.main.transform : null;
-            if (world == null || head == null)
+            if (world == null || cachedHeadTransform == null)
                 return;
 
-            BlockPosition headCell = CreativeInteractionController.ToBlockPosition(head.position);
+            BlockPosition headCell = CreativeInteractionController.ToBlockPosition(cachedHeadTransform.position);
             var feetCell = new BlockPosition(headCell.X, headCell.Y - 1, headCell.Z);
             var groundCell = new BlockPosition(headCell.X, headCell.Y - 2, headCell.Z);
 

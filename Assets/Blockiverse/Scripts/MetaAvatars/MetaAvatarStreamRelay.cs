@@ -65,6 +65,8 @@ namespace Blockiverse.MetaAvatars
         [ServerRpc]
         void SubmitAvatarStreamServerRpc(MetaAvatarStreamMessage message)
         {
+            // Re-stamp the sender id server-side: a modified client could spoof any identity.
+            message.SenderClientId = OwnerClientId;
             ReceiveAvatarStreamClientRpc(message);
         }
 

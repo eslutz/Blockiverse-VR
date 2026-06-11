@@ -551,8 +551,6 @@ namespace Blockiverse.Editor
             else
                 EnsureControllerMapSchema(rightHandMap, "<XRController>{RightHand}");
 
-            RemoveAction(rightHandMap, BlockiverseInputActionNames.Jump);
-
             if (gameplayMap == null)
             {
                 AddGameplayMap(asset);

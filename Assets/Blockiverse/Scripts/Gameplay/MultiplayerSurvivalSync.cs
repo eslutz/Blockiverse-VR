@@ -176,6 +176,11 @@ namespace Blockiverse.Gameplay
         const string SharedCrateSnapshotMessage = "Blockiverse.Survival.SharedCrateSnapshot";
         const string PlayerHelloMessage = "Blockiverse.Survival.PlayerHello";
         const string PlayerGuidPrefKey = "Blockiverse.PlayerGuid";
+        // Sized for the worst-case command payload, a station deposit at ~66 bytes: the 8-byte
+        // [requestId][kind] header + 12-byte block position + an ItemStack whose id string is
+        // wire-encoded at 4 + 2 bytes/char (longest canonical id today is 17 chars). 128 keeps
+        // ~2x headroom; FastBufferWriter throws at send time on overflow, so grow this alongside
+        // any larger future command payload.
         const int CommandRequestMessageBytes = 128;
         const int CommandResultMessageBytes = 128;
         const int StationSnapshotMessageBytes = 512;
@@ -200,6 +205,11 @@ namespace Blockiverse.Gameplay
         readonly Dictionary<BlockPosition, SmeltingStationModel> stationModels = new();
         readonly List<BlockPosition> staleStationPositions = new();
         float stationTickRemainder;
+
+        // Scratch input-slot buffer for HandleStationSnapshotMessage, grown to the largest
+        // snapshot slot count seen so per-snapshot receipt does not allocate; entries past the
+        // current snapshot's count are cleared before use.
+        ItemStack[] stationSnapshotInputs = Array.Empty<ItemStack>();
 
         NetworkManager subscribedNetworkManager;
         ItemRegistry itemRegistry;
@@ -385,6 +395,7 @@ namespace Blockiverse.Gameplay
             ItemRegistry targetItemRegistry = null,
             CraftingRecipeBook targetRecipeBook = null)
         {
+            inLifecycleResolve = true;
             UnsubscribeNetworkCallbacks();
             session = targetSession;
             chunkAuthoritySync = targetChunkAuthoritySync;
@@ -405,6 +416,7 @@ namespace Blockiverse.Gameplay
             sharedCrateInventory = CreateSharedCrateInventory();
             SubscribeNetworkCallbacks();
             RefreshLocalInventoryReference();
+            inLifecycleResolve = false;
             // Configure replaces the inventory instances; consumers holding the old references
             // (HUD panels, auto-loot target) must re-bind.
             LocalInventoryChanged?.Invoke();
@@ -413,14 +425,18 @@ namespace Blockiverse.Gameplay
 
         void Awake()
         {
+            inLifecycleResolve = true;
             ResolveReferences();
+            inLifecycleResolve = false;
         }
 
         void OnEnable()
         {
+            inLifecycleResolve = true;
             ResolveReferences();
             SubscribeNetworkCallbacks();
             RefreshLocalInventoryReference();
+            inLifecycleResolve = false;
         }
 
         void OnDisable()
@@ -2001,7 +2017,12 @@ namespace Blockiverse.Gameplay
 
             AcceptedStationCommandCount++;
             SendInventorySnapshot(clientId);
-            BroadcastStationSnapshot(position);
+            // StationOpen is read-only: only the requester's mirror needs refreshing. Mutating
+            // commands (deposit/collect) change state every viewing client must see, so broadcast.
+            if (commandKind == SurvivalCommandKind.StationOpen)
+                SendStationSnapshot(clientId, position);
+            else
+                BroadcastStationSnapshot(position);
             SendCommandResult(clientId, result, sendResponse);
             RefreshLocalInventoryReference();
             LastCommandResult = result;
@@ -2342,9 +2363,15 @@ namespace Blockiverse.Gameplay
             BlockPosition position = ReadBlockPosition(ref reader);
             reader.ReadValueSafe(out int stationTypeValue);
             reader.ReadValueSafe(out int inputSlotCount);
-            var inputs = new ItemStack[Mathf.Max(0, inputSlotCount)];
-            for (int slot = 0; slot < inputs.Length; slot++)
-                inputs[slot] = ReadItemStack(ref reader);
+            int inputCount = Mathf.Max(0, inputSlotCount);
+            if (stationSnapshotInputs.Length < inputCount)
+                stationSnapshotInputs = new ItemStack[inputCount];
+            for (int slot = 0; slot < inputCount; slot++)
+                stationSnapshotInputs[slot] = ReadItemStack(ref reader);
+            // Stale scratch entries past this snapshot's count must read as empty:
+            // ApplyHostSnapshot consumes the array up to the mirror's own slot count.
+            for (int slot = inputCount; slot < stationSnapshotInputs.Length; slot++)
+                stationSnapshotInputs[slot] = ItemStack.Empty;
             ItemStack fuel = ReadItemStack(ref reader);
             ItemStack output = ReadItemStack(ref reader);
             reader.ReadValueSafe(out bool isActive);
@@ -2356,10 +2383,13 @@ namespace Blockiverse.Gameplay
                 return;
 
             SmeltingStationModel mirror = GetOrCreateStationModel(position, stationType);
-            CraftingRecipe activeRecipe = isActive
+            // A malformed snapshot (active with an empty recipe id) must not throw inside the
+            // message pump — the ItemId constructor rejects empty ids — so degrade to no active
+            // recipe, matching the CraftRecipe request guard.
+            CraftingRecipe activeRecipe = isActive && !string.IsNullOrWhiteSpace(activeOutputItemId)
                 ? FindStationRecipeByOutput(stationType, new ItemId(activeOutputItemId))
                 : null;
-            mirror.ApplyHostSnapshot(inputs, fuel, output, activeRecipe, progressTicks);
+            mirror.ApplyHostSnapshot(stationSnapshotInputs, fuel, output, activeRecipe, progressTicks);
             ReceivedStationSnapshotCount++;
         }
 
@@ -2561,14 +2591,29 @@ namespace Blockiverse.Gameplay
             SendSharedCrateSnapshot(clientId);
         }
 
+        // Mirrors Configure's per-session clear set so a stopped session cannot leak state into
+        // a later one started without a fresh Configure: stale station models would tick against
+        // the new world, and the old session's inventories/duplicate windows are dead. The stable
+        // localInventory instance survives and is re-bound to the current local client id.
+        void ClearSessionState()
+        {
+            inventoriesByClientId.Clear();
+            processedRequestsByClientId.Clear();
+            stationModels.Clear();
+            stationTickRemainder = 0.0f;
+            ResetPendingCommands();
+            RefreshLocalInventoryReference();
+        }
+
         void HandleServerStopped(bool wasHost)
         {
+            ClearSessionState();
             UnregisterMessageHandlers();
         }
 
         void HandleClientStopped(bool wasHost)
         {
-            ResetPendingCommands();
+            ClearSessionState();
             UnregisterMessageHandlers();
         }
 
@@ -2590,9 +2635,9 @@ namespace Blockiverse.Gameplay
             RegisterMessageHandlers();
         }
 
-        // Per-connection host state is released when a client leaves. Inventories are kept for
-        // the session (a future reconnect-identity feature can reclaim them); the duplicate
-        // window is purely connection-scoped.
+        // Per-connection host state is released when a client leaves: the duplicate window is
+        // purely connection-scoped, and the departing player's inventory is stashed under their
+        // persistent GUID so a reconnect mid-session reclaims it (see HandlePlayerHelloMessage).
         void HandleClientDisconnected(ulong clientId)
         {
             if (!CanProcessHostRequests() || clientId == ResolveLocalClientId())
@@ -2719,6 +2764,21 @@ namespace Blockiverse.Gameplay
             messagesRegistered = false;
         }
 
+        // True while Awake/OnEnable/Configure run their expected wiring pass; the scene-scan
+        // fallback below is silent there but surfaced anywhere else (e.g. mid-command).
+        bool inLifecycleResolve;
+
+        // Scene-scan fallback for a missing worldManager reference. Expected during the
+        // Awake/OnEnable/Configure wiring window; firing outside it during play means a command
+        // ran before wiring completed, so surface the silent degradation instead of hiding it.
+        CreativeWorldManager FindWorldManagerFallback()
+        {
+            if (Application.isPlaying && !inLifecycleResolve)
+                Debug.LogWarning("MultiplayerSurvivalSync fell back to a CreativeWorldManager scene scan outside Awake/OnEnable/Configure; wire it via Configure or the inspector.");
+
+            return FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+        }
+
         void ResolveReferences()
         {
             if (session == null)
@@ -2728,7 +2788,7 @@ namespace Blockiverse.Gameplay
                 chunkAuthoritySync = GetComponent<MultiplayerChunkAuthoritySync>();
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindWorldManagerFallback();
 
             itemRegistry ??= ItemRegistry.CreateDefault();
             recipeBook ??= CraftingRecipeBook.CreateDefault(itemRegistry);
@@ -2806,7 +2866,7 @@ namespace Blockiverse.Gameplay
         VoxelWorld ResolveWorldOrNull()
         {
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindWorldManagerFallback();
 
             return worldManager != null ? worldManager.World : null;
         }

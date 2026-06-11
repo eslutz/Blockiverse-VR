@@ -54,6 +54,12 @@ namespace Blockiverse.Survival
             if (ingredients.Length == 0)
                 throw new ArgumentException("Crafting recipes must require at least one ingredient.", nameof(ingredients));
 
+            // The sign of TimeTicks is load-bearing: CraftingService treats <= 0 as an instant
+            // craft while smelting stations only accept > 0, so a negative value would silently
+            // turn a timed recipe into a fuel-free instant craft. Fail fast at the data layer.
+            if (timeTicks < 0)
+                throw new ArgumentOutOfRangeException(nameof(timeTicks), "TimeTicks must be non-negative.");
+
             var ingredientCopy = new ItemStack[ingredients.Length];
             for (int i = 0; i < ingredients.Length; i++)
             {
@@ -91,14 +97,46 @@ namespace Blockiverse.Survival
             RequiredStation = requiredStation;
             TimeTicks = timeTicks;
             Ingredients = Array.AsReadOnly(ingredientCopy);
+            AggregatedIngredients = Aggregate(ingredientCopy) ?? Ingredients;
         }
 
         public ItemStack Output { get; }
         public CraftingStation RequiredStation { get; }
         public int TimeTicks { get; }
         public IReadOnlyList<ItemStack> Ingredients { get; }
+
+        // Ingredients merged into one stack per item id (first-seen order), built once here so
+        // per-tick recipe checks (e.g. smelting stations) can iterate without allocating.
+        public IReadOnlyList<ItemStack> AggregatedIngredients { get; }
+
         // Extra stacks granted alongside the output (e.g. the empty bucket returned when a
         // recipe consumes a filled one, §731). Empty for almost every recipe.
         public IReadOnlyList<ItemStack> Byproducts { get; }
+
+        // Returns the merged ingredient list, or null when there are no duplicate item ids and
+        // the original list can be reused as-is.
+        static IReadOnlyList<ItemStack> Aggregate(ItemStack[] ingredients)
+        {
+            var aggregate = new List<ItemStack>(ingredients.Length);
+            foreach (ItemStack ingredient in ingredients)
+            {
+                int existing = -1;
+                for (int i = 0; i < aggregate.Count; i++)
+                {
+                    if (aggregate[i].ItemId == ingredient.ItemId)
+                    {
+                        existing = i;
+                        break;
+                    }
+                }
+
+                if (existing >= 0)
+                    aggregate[existing] = new ItemStack(ingredient.ItemId, aggregate[existing].Count + ingredient.Count);
+                else
+                    aggregate.Add(ingredient);
+            }
+
+            return aggregate.Count == ingredients.Length ? null : aggregate.AsReadOnly();
+        }
     }
 }

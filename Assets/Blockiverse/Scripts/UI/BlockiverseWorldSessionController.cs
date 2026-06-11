@@ -21,6 +21,9 @@ namespace Blockiverse.UI
     public sealed class BlockiverseWorldSessionController : MonoBehaviour
     {
         const string SaveDirectoryExtension = ".vxlworld";
+        // Survival worlds always generate at the canonical full height; derived from
+        // WorldConstants.WorldMaxY because WorldConstants has no height constant of its own.
+        const int SurvivalWorldHeight = WorldConstants.WorldMaxY + 1;
 
         [SerializeField] BlockiverseMenuController menuController;
         [SerializeField] CreativeWorldManager worldManager;
@@ -32,12 +35,18 @@ namespace Blockiverse.UI
         string currentWorldName;
         string currentDifficulty = string.Empty;
         string currentWorldPreset = "survival_terrain";
+        // Save list rows keyed back to their on-disk paths so Load resolves the exact slot even
+        // when two saves share a display name (rebuilt by RefreshSaveList).
+        readonly Dictionary<string, string> savePathsBySummaryKey = new();
         float lastSaveTime;
 
         public string CurrentSavePath => currentSavePath;
         public bool HasActiveSession => !string.IsNullOrEmpty(currentSavePath);
 
-        static string SavesRoot => Path.Combine(Application.persistentDataPath, "Saves");
+        static string savesRoot;
+
+        // Application.persistentDataPath is fixed for the life of the process — compute once.
+        static string SavesRoot => savesRoot ??= Path.Combine(Application.persistentDataPath, "Saves");
 
         public void Configure(
             BlockiverseMenuController controller,
@@ -143,6 +152,9 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.PauseSaveGame:
                 case MenuActions.PauseReturnToTitle:
+                // Order dependency: BlockiverseMenuController respawns the vitals runtime *before*
+                // raising DeathReturnToTitle, so this save sees post-respawn player state rather
+                // than a dead player.
                 case MenuActions.DeathReturnToTitle:
                 case MenuActions.TitleQuit:
                     SaveCurrentWorld();
@@ -304,8 +316,8 @@ namespace Blockiverse.UI
                 return new GeneratedCreativeWorld(registry, voidSettings, voidWorld, CreativeWorldGenerationPreset.VoidBuilder);
             }
 
-            BlockPosition? spawn = FindSpawnForBiome(seed, width, 256, depth, WorldConstants.SeaLevel, startingBiome);
-            var settings = new WorldGenerationSettings(width, 256, depth, WorldConstants.ChunkSize, seed, WorldConstants.SeaLevel, spawn);
+            BlockPosition? spawn = FindSpawnForBiome(seed, width, SurvivalWorldHeight, depth, WorldConstants.SeaLevel, startingBiome);
+            var settings = new WorldGenerationSettings(width, SurvivalWorldHeight, depth, WorldConstants.ChunkSize, seed, WorldConstants.SeaLevel, spawn);
             var preset = new SurvivalTerrainPreset(registry, settings);
             VoxelWorld world = preset.Generate();
             return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite, preset.ContainerLoot);
@@ -415,6 +427,15 @@ namespace Blockiverse.UI
             if (!selected.HasValue)
                 return;
 
+            // Prefer the path cached by RefreshSaveList — it pins the exact slot even when two
+            // saves share a display name. The name scan below covers a stale or missing mapping.
+            if (savePathsBySummaryKey.TryGetValue(SummaryKey(selected.Value), out string mappedPath) &&
+                Directory.Exists(mappedPath))
+            {
+                LoadSave(mappedPath);
+                return;
+            }
+
             if (TryResolveSavePathByName(selected.Value.Name, out string path))
             {
                 LoadSave(path);
@@ -423,6 +444,11 @@ namespace Blockiverse.UI
 
             menuController?.SetTitleStatus("Save not found.");
         }
+
+        // Seed + created timestamp disambiguate slots whose display names collide; built from the
+        // summary on both sides so lookups see exactly what RefreshSaveList stored.
+        static string SummaryKey(WorldSaveSummary summary) =>
+            $"{summary.Name}\n{summary.Seed}\n{summary.CreatedUtc.Ticks}";
 
         bool TryResolveSavePathByName(string worldName, out string path)
         {
@@ -740,20 +766,25 @@ namespace Blockiverse.UI
 
             IReadOnlyList<WorldSaveService.WorldSaveInfo> saves = WorldSaveService.EnumerateSaves(SavesRoot);
             var summaries = new List<WorldSaveSummary>(saves.Count);
+            savePathsBySummaryKey.Clear();
 
             foreach (WorldSaveService.WorldSaveInfo info in saves)
             {
-                summaries.Add(new WorldSaveSummary(
+                var summary = new WorldSaveSummary(
                     info.Manifest.WorldName,
                     info.Manifest.Seed.ToString(),
                     info.Manifest.GameMode,
                     info.Manifest.Difficulty,
                     dayCount: (int)(info.WorldTimeTicks / WorldConstants.TicksPerDay) + 1,
                     lastPlayedUtc: ParseUtc(info.Manifest.ModifiedAtUtc),
-                    createdUtc: ParseUtc(info.Manifest.CreatedAtUtc)));
+                    createdUtc: ParseUtc(info.Manifest.CreatedAtUtc));
+                summaries.Add(summary);
+                savePathsBySummaryKey[SummaryKey(summary)] = info.Path;
             }
 
             menuController?.SetSaveList(summaries);
+            // Continue and Load World share one gate: Continue opens the most recent save, so
+            // "latest exists" and "any exists" are the same predicate today.
             menuController?.SetSaveAvailability(summaries.Count > 0, summaries.Count > 0);
         }
 
@@ -775,24 +806,45 @@ namespace Blockiverse.UI
             Directory.CreateDirectory(SavesRoot);
             string baseName = SanitizeFileName(worldName);
 
-            for (int suffix = 1; ; suffix++)
+            // Bounded so a broken filesystem (or thousands of stale slots) fails loudly instead
+            // of spinning forever; CreateNewWorld surfaces the failure on the title screen.
+            const int maxSuffix = 9999;
+            for (int suffix = 1; suffix <= maxSuffix; suffix++)
             {
                 string candidateName = suffix == 1 ? baseName : $"{baseName} ({suffix})";
                 string candidate = Path.Combine(SavesRoot, candidateName + SaveDirectoryExtension);
                 if (!Directory.Exists(candidate) && !File.Exists(candidate))
                     return (candidate, candidateName);
             }
+
+            throw new InvalidOperationException(
+                $"Unable to allocate a save slot for \"{baseName}\" after {maxSuffix} attempts.");
         }
 
+        // Path.GetInvalidFileNameChars() returns an empty array on Android, so '/' and '\' would
+        // pass through and let a world name escape the Saves root. Sanitize with a platform-
+        // independent allowlist instead: anything outside [a-zA-Z0-9 _\-.()] becomes '_'
+        // (matching the old replacement so already-valid names keep their save directories).
         static string SanitizeFileName(string name)
         {
-            char[] invalid = Path.GetInvalidFileNameChars();
             var builder = new System.Text.StringBuilder(name.Length);
             foreach (char character in name)
-                builder.Append(Array.IndexOf(invalid, character) >= 0 ? '_' : character);
+                builder.Append(IsSafeFileNameChar(character) ? character : '_');
 
             string sanitized = builder.ToString().Trim();
-            return string.IsNullOrEmpty(sanitized) ? "world" : sanitized;
+            if (string.IsNullOrEmpty(sanitized) || sanitized == "." || sanitized == "..")
+                return "world";
+
+            return sanitized;
+        }
+
+        static bool IsSafeFileNameChar(char character)
+        {
+            return (character >= 'a' && character <= 'z') ||
+                   (character >= 'A' && character <= 'Z') ||
+                   (character >= '0' && character <= '9') ||
+                   character == ' ' || character == '_' || character == '-' ||
+                   character == '.' || character == '(' || character == ')';
         }
     }
 }

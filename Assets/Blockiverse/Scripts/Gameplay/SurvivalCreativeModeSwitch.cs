@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Survival;
+using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
@@ -65,8 +66,13 @@ namespace Blockiverse.Gameplay
                 // instead of silently dropped (a smaller inventory keeps whatever fits).
                 for (int i = restoreCount; i < survivalSnapshotSlotCount; i++)
                 {
-                    if (!survivalSnapshot[i].IsEmpty)
-                        activeInventory.Add(survivalSnapshot[i]);
+                    if (survivalSnapshot[i].IsEmpty)
+                        continue;
+
+                    ItemStack remainder = activeInventory.Add(survivalSnapshot[i]);
+                    if (!remainder.IsEmpty)
+                        Debug.LogWarning(
+                            $"Survival snapshot restore lost {remainder.Count}x {remainder.ItemId}: inventory is full.");
                 }
             }
 
