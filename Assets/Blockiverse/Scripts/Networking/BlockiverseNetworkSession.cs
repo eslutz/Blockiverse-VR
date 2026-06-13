@@ -466,7 +466,6 @@ namespace Blockiverse.Networking
                 parts[1] != ApprovalPayloadProtocolVersion.ToString() ||
                 parts[2] != ApprovalPayloadRulesetVersion ||
                 parts[3] != config.Port.ToString() ||
-                parts[4] != config.MaxPlayers.ToString() ||
                 parts[5] != ApprovalPayloadSessionMode ||
                 parts[6] != ApprovalPayloadVoiceMode)
                 return false;

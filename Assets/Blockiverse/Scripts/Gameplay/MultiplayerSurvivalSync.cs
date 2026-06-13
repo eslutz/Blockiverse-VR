@@ -1505,6 +1505,23 @@ namespace Blockiverse.Gameplay
             List<ItemStack> containerDrops = hasContainerAtPosition
                 ? CaptureContainerContents(position)
                 : null;
+            ItemStack[] drops = ResolveHarvestService().RollHarvestDrops(harvest);
+            var pendingDrops = new List<ItemStack>();
+            if (containerDrops != null)
+                pendingDrops.AddRange(containerDrops);
+            pendingDrops.AddRange(drops);
+
+            if (sendResponse && !InventoryCanReceiveAll(inventory, pendingDrops))
+            {
+                var result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.HarvestResource,
+                    SurvivalCommandFailureReason.InventoryFull,
+                    requestId,
+                    harvest.Drop,
+                    BlockHarvestFailureReason.InventoryFull);
+                SendCommandFailure(clientId, result, sendResponse);
+                return result;
+            }
 
             // A container's contents go to the player who broke it, but only after the block
             // mutation succeeds. Auto-loot is suppressed around the mutation so the world-change
@@ -1561,9 +1578,9 @@ namespace Blockiverse.Gameplay
 
             // Apply the rule's drop table so tool-action bonuses (Sickle double-roll, Carver full
             // yield) take effect on the authoritative path, not only in the local TryHarvest helper.
-            // If the requester cannot hold a stack, the host keeps the block break and spawns a
-            // protected ground item instead of rejecting the harvest.
-            ItemStack[] drops = ResolveHarvestService().RollHarvestDrops(harvest);
+            // Local/offline harvests can spawn protected ground items for overflow. Remote clients
+            // do not yet receive or pick up ground-item snapshots, so the preflight above rejects
+            // their overflow before the block mutation.
             foreach (ItemStack stack in drops)
             {
                 if (stack.IsEmpty)
@@ -1613,6 +1630,28 @@ namespace Blockiverse.Gameplay
             }
 
             return stacks;
+        }
+
+        static bool InventoryCanReceiveAll(Inventory inventory, IEnumerable<ItemStack> stacks)
+        {
+            if (inventory == null || stacks == null)
+                return true;
+
+            var requiredByItem = new Dictionary<ItemId, int>();
+            foreach (ItemStack stack in stacks)
+            {
+                if (stack.IsEmpty)
+                    continue;
+
+                requiredByItem.TryGetValue(stack.ItemId, out int required);
+                requiredByItem[stack.ItemId] = required + stack.Count;
+            }
+
+            foreach (KeyValuePair<ItemId, int> requirement in requiredByItem)
+                if (inventory.GetAvailableCapacity(requirement.Key) < requirement.Value)
+                    return false;
+
+            return true;
         }
 
         void GrantStackToInventoryOrGround(Inventory inventory, ItemStack stack, BlockPosition position, ulong clientId)

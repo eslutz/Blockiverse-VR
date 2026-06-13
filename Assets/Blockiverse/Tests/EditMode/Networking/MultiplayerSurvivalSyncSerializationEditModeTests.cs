@@ -497,6 +497,62 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void RemoteHarvestRejectsOverflowBeforeSpawningUnsyncedGroundDrop()
+        {
+            var worldObject = new GameObject("Remote Overflow Harvest World");
+            var syncObject = new GameObject("Remote Overflow Harvest Survival Sync");
+            var target = new BlockPosition(2, 1, 2);
+            const ulong RemoteClientId = 42;
+
+            try
+            {
+                CreativeWorldManager worldManager = worldObject.AddComponent<CreativeWorldManager>();
+                BlockRegistry registry = BlockRegistry.CreateDefault();
+                var settings = new WorldGenerationSettings(
+                    width: 6,
+                    height: 4,
+                    depth: 6,
+                    chunkSize: 2,
+                    seed: 47,
+                    groundHeight: 1);
+                var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
+                world.SetBlock(target, BlockRegistry.BranchwoodLog, trackChange: false);
+                worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.FlatCreative));
+                worldManager.SetGameMode(WorldGameMode.Survival);
+
+                MultiplayerChunkAuthoritySync chunkSync = syncObject.AddComponent<MultiplayerChunkAuthoritySync>();
+                chunkSync.Configure(null, worldManager);
+                MultiplayerSurvivalSync sync = syncObject.AddComponent<MultiplayerSurvivalSync>();
+                sync.Configure(null, chunkSync, worldManager);
+
+                Inventory remoteInventory = sync.GetInventory(RemoteClientId);
+                for (int slot = 0; slot < remoteInventory.SlotCount; slot++)
+                    remoteInventory.SetSlot(slot, new ItemStack(ItemId.LooseLoam, ItemRegistry.BlockStackSize));
+
+                SurvivalCommandResult result = InvokeRemoteHostHarvest(
+                    sync,
+                    RemoteClientId,
+                    requestId: 1,
+                    target);
+
+                Assert.That(result.Accepted, Is.False);
+                Assert.That(result.FailureReason, Is.EqualTo(SurvivalCommandFailureReason.InventoryFull));
+                Assert.That(result.HarvestFailureReason, Is.EqualTo(BlockHarvestFailureReason.InventoryFull));
+                Assert.That(world.GetBlock(target), Is.EqualTo(BlockRegistry.BranchwoodLog));
+                Assert.That(sync.GroundItems.Count, Is.Zero);
+                Assert.That(remoteInventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(syncObject);
+                Object.DestroyImmediate(worldObject);
+                GameObject sunObject = GameObject.Find(BlockiverseLightingRuntime.SunObjectName);
+                if (sunObject != null)
+                    Object.DestroyImmediate(sunObject);
+            }
+        }
+
+        [Test]
         public void StationPersistentStateExportRestoreRoundTripsAndClears()
         {
             var syncObject = new GameObject("Station Persistence Survival Sync");
@@ -645,6 +701,22 @@ namespace Blockiverse.Tests.Networking.EditMode
 
             Assert.That(field, Is.Not.Null, "Inventory snapshot delivery contract field is missing.");
             Assert.That(field.GetValue(null), Is.EqualTo(NetworkDelivery.ReliableFragmentedSequenced));
+        }
+
+        static SurvivalCommandResult InvokeRemoteHostHarvest(
+            MultiplayerSurvivalSync sync,
+            ulong clientId,
+            uint requestId,
+            BlockPosition position)
+        {
+            MethodInfo method = typeof(MultiplayerSurvivalSync).GetMethod(
+                "ProcessHostHarvest",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(method, Is.Not.Null);
+            return (SurvivalCommandResult)method.Invoke(
+                sync,
+                new object[] { clientId, requestId, position, ItemStack.Empty, true, -1 });
         }
     }
 }

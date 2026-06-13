@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using Blockiverse.Networking;
 using NUnit.Framework;
@@ -9,13 +10,16 @@ namespace Blockiverse.Tests.Networking.EditMode
 {
     public sealed class BlockiverseNetworkSessionApprovalEditModeTests
     {
-        GameObject sessionObject;
+        readonly List<GameObject> sessionObjects = new();
 
         [TearDown]
         public void TearDown()
         {
-            if (sessionObject != null)
-                Object.DestroyImmediate(sessionObject);
+            foreach (GameObject sessionObject in sessionObjects)
+                if (sessionObject != null)
+                    Object.DestroyImmediate(sessionObject);
+
+            sessionObjects.Clear();
         }
 
         [Test]
@@ -54,6 +58,27 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void ApprovalDoesNotRequireClientToMirrorHostCapacity()
+        {
+            BlockiverseNetworkSession session = CreateSession();
+            session.Configure(BlockiverseNetworkConfig.Default
+                .WithPort(7788)
+                .WithJoinCode("quest-room")
+                .WithMaxPlayers(2));
+            byte[] defaultCapacityPayload = session.CreateApprovalPayload();
+
+            session.Configure(BlockiverseNetworkConfig.Default
+                .WithPort(7788)
+                .WithJoinCode("quest-room")
+                .WithMaxPlayers(4));
+
+            Assert.That(
+                session.ValidateConnectionRequest(defaultCapacityPayload, 2, out string reason),
+                Is.True);
+            Assert.That(reason, Is.Empty);
+        }
+
+        [Test]
         public void EncryptedTransportRequestFailsClosedWithoutPemMaterial()
         {
             BlockiverseNetworkSession session = CreateSession();
@@ -75,7 +100,8 @@ namespace Blockiverse.Tests.Networking.EditMode
 
         BlockiverseNetworkSession CreateSession()
         {
-            sessionObject = new GameObject("Network Session");
+            GameObject sessionObject = new("Network Session");
+            sessionObjects.Add(sessionObject);
             var networkManager = sessionObject.AddComponent<NetworkManager>();
             networkManager.NetworkConfig = new NetworkConfig();
             sessionObject.AddComponent<UnityTransport>();

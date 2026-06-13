@@ -61,8 +61,8 @@ namespace Blockiverse.Survival
         public const float PickupRadiusBlocks = 2.5f;
         public const int RecentDropProtectionSeconds = 3;
         public const int DespawnSeconds = 10 * 60;
-        public const int RecentDropProtectionTicks = RecentDropProtectionSeconds * WorldConstants.TicksPerSecond;
-        public const int DespawnTicks = DespawnSeconds * WorldConstants.TicksPerSecond;
+        public const int RecentDropProtectionTicks = RecentDropProtectionSeconds * SimulationTime.TicksPerSecond;
+        public const int DespawnTicks = DespawnSeconds * SimulationTime.TicksPerSecond;
 
         readonly List<GroundItem> items = new();
         readonly ItemRegistry itemRegistry;
