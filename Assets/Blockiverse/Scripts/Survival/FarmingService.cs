@@ -104,8 +104,8 @@ namespace Blockiverse.Survival
             { ItemId.ReedCutting,  BlockRegistry.Reedgrass },
         };
 
-        // Berrybush regrows two game days after harvest (§3); 1 game day = 24000 ticks.
-        public const int TicksPerGameDay = 24000;
+        // Berrybush regrows two game days after harvest (§3).
+        public const int TicksPerGameDay = SimulationTime.TicksPerDay;
         public const int BerrybushRegrowTicks = 2 * TicksPerGameDay;
 
         static readonly HashSet<BlockId> BerrybushStages = new()
@@ -115,6 +115,7 @@ namespace Blockiverse.Survival
         };
 
         public static bool IsBerrybushStage(BlockId blockId) => BerrybushStages.Contains(blockId);
+        public static bool IsMatureBerrybushStage(BlockId blockId) => blockId == BlockRegistry.Berrybush_S5;
 
         // Crops currently tracked for growth, and pending berrybush regrow delays (delta ticks).
         readonly HashSet<BlockPosition> trackedCrops = new();
@@ -123,6 +124,7 @@ namespace Blockiverse.Survival
         // Scratch list reused across tick calls so iterating a mutating collection does not
         // allocate a fresh list every world tick.
         readonly List<BlockPosition> tickKeyScratch = new();
+        readonly List<BlockPosition> cropScanScratch = new();
 
         // Deterministic growth state: the world seed all rolls derive from, and the last absolute
         // growth interval processed per crop. Together with the synced WorldTimeClock this makes
@@ -160,15 +162,14 @@ namespace Blockiverse.Survival
             }
 
             // Add newly found crops without re-anchoring already-tracked ones.
-            WorldBounds bounds = world.Bounds;
-            for (int y = 0; y < bounds.Height; y++)
-            for (int z = 0; z < bounds.Depth; z++)
-            for (int x = 0; x < bounds.Width; x++)
+            cropScanScratch.Clear();
+            world.CollectBlockPositions(CropBlocks, cropScanScratch);
+            foreach (BlockPosition pos in cropScanScratch)
             {
-                var pos = new BlockPosition(x, y, z);
-                if (CropBlocks.Contains(world.GetBlock(pos)) && trackedCrops.Add(pos))
+                if (trackedCrops.Add(pos))
                     pendingGrowthAnchors.Add(pos);
             }
+            cropScanScratch.Clear();
         }
 
         public static bool IsCropBlock(BlockId blockId) => CropBlocks.Contains(blockId);
@@ -384,7 +385,7 @@ namespace Blockiverse.Survival
         // Non-berrybush blocks are ignored.
         public void OnBlockHarvested(BlockId harvestedBlock, BlockPosition position)
         {
-            if (IsBerrybushStage(harvestedBlock))
+            if (IsMatureBerrybushStage(harvestedBlock))
                 berrybushRegrowAccumulator[position] = 0;
         }
 

@@ -1,3 +1,4 @@
+using Blockiverse.Core;
 using Blockiverse.UI;
 using NUnit.Framework;
 
@@ -14,9 +15,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(config.GameMode, Is.EqualTo("survival"));
             Assert.That(config.Difficulty, Is.EqualTo("normal"));
             Assert.That(config.WorldSize, Is.EqualTo("small"));
-            Assert.That(config.WorldPreset, Is.EqualTo("survival_terrain"));
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain));
             Assert.That(config.StartingBiome, Is.EqualTo("balanced"));
-            Assert.That(config.ExperimentalRulesEnabled, Is.False);
             Assert.That(config.Seed, Is.EqualTo(918273645UL));
         }
 
@@ -38,12 +38,13 @@ namespace Blockiverse.Tests.EditMode
 
             config.CycleWorldSize();
             Assert.That(config.WorldSize, Is.EqualTo("medium"));
+            Assert.That(BlockiverseLocalization.DisplayNameForCanonicalId("infinite"), Is.EqualTo("Infinite Preview (256x256)"));
             config.CycleWorldPreset();
-            Assert.That(config.WorldPreset, Is.EqualTo("flat_builder"));
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
             config.CycleWorldPreset();
-            Assert.That(config.WorldPreset, Is.EqualTo("void_builder"));
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.VoidBuilder));
             config.CycleWorldPreset();
-            Assert.That(config.WorldPreset, Is.EqualTo("survival_terrain"), "World preset should wrap after void_builder.");
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain), "World preset should wrap after void_builder.");
             config.CycleStartingBiome();
             Assert.That(config.StartingBiome, Is.EqualTo("meadow"));
         }
@@ -52,6 +53,8 @@ namespace Blockiverse.Tests.EditMode
         public void NumericSeedPassesThroughWhileTextSeedHashesDeterministically()
         {
             Assert.That(NewWorldConfig.HashSeed("12345"), Is.EqualTo(12345UL));
+            Assert.That(NewWorldConfig.HashSeed("12,345"), Is.Not.EqualTo(12345UL),
+                "Seed parsing must stay invariant and ungrouped; formatted text seeds should hash.");
 
             ulong first = NewWorldConfig.HashSeed("meadow-home");
             ulong second = NewWorldConfig.HashSeed("meadow-home");
@@ -84,14 +87,24 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ToggleExperimentalRulesFlips()
+        public void ValidationRejectsSurvivalBuilderPresetCombinations()
         {
             var config = new NewWorldConfig();
-            Assert.That(config.ExperimentalRulesEnabled, Is.False);
-            config.ToggleExperimentalRules();
-            Assert.That(config.ExperimentalRulesEnabled, Is.True);
-            config.ToggleExperimentalRules();
-            Assert.That(config.ExperimentalRulesEnabled, Is.False);
+            config.CycleWorldPreset();
+
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
+            Assert.That(config.GameMode, Is.EqualTo("survival"));
+            Assert.That(config.IsValid(out string error), Is.False);
+            Assert.That(error, Does.Contain("Survival Terrain"));
+
+            config.CycleWorldPreset();
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.VoidBuilder));
+            Assert.That(config.IsValid(out _), Is.False);
+
+            config.CycleGameMode();
+            Assert.That(config.GameMode, Is.EqualTo("creative"));
+            Assert.That(config.IsValid(out _), Is.True);
         }
+
     }
 }

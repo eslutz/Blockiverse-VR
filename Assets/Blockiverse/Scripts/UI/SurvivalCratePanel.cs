@@ -14,7 +14,7 @@ namespace Blockiverse.UI
     // mirrored to every client — the crate is never mutated locally on a client.
     public sealed class SurvivalCratePanel : MonoBehaviour
     {
-        static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.CreateDefault();
+        static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.Default;
 
         [SerializeField] Button[] slotButtons;
         [SerializeField] TMP_Text[] slotLabels;
@@ -49,7 +49,9 @@ namespace Blockiverse.UI
         {
             survivalSync = sync;
             itemRegistry = registry ?? DefaultItemRegistry;
-            SetStatus(sync != null ? "Shared crate" : "Crate offline");
+            SetStatus(sync != null
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateShared)
+                : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateOffline));
             Refresh();
         }
 
@@ -58,20 +60,23 @@ namespace Blockiverse.UI
         {
             if (survivalSync == null)
             {
-                SetStatus("Crate offline");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateOffline));
                 return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateDeposit, SurvivalCommandFailureReason.InvalidTransfer);
             }
 
             ItemStack held = survivalSync.EquippedItem;
             if (held.IsEmpty)
             {
-                SetStatus("Nothing held to deposit");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateNothingHeld));
                 PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateDeposit, SurvivalCommandFailureReason.InvalidTransfer);
             }
 
             SurvivalCommandResult result = survivalSync.TrySubmitCrateDeposit(held.ItemId, held.Count, out bool sentToHost);
-            ReportTransfer(result, sentToHost, $"Deposited {FormatStack(held)}");
+            ReportTransfer(
+                result,
+                sentToHost,
+                BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CrateDeposited, FormatStack(held)));
             return result;
         }
 
@@ -80,7 +85,7 @@ namespace Blockiverse.UI
         {
             if (survivalSync == null)
             {
-                SetStatus("Crate offline");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateOffline));
                 return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateWithdraw, SurvivalCommandFailureReason.InvalidTransfer);
             }
 
@@ -91,13 +96,16 @@ namespace Blockiverse.UI
             ItemStack stack = crate.GetSlot(slotIndex);
             if (stack.IsEmpty)
             {
-                SetStatus("Empty slot");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateEmptySlot));
                 PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateWithdraw, SurvivalCommandFailureReason.SharedCrateEmpty);
             }
 
             SurvivalCommandResult result = survivalSync.TrySubmitCrateWithdraw(stack.ItemId, stack.Count, out bool sentToHost);
-            ReportTransfer(result, sentToHost, $"Withdrew {FormatStack(stack)}");
+            ReportTransfer(
+                result,
+                sentToHost,
+                BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CrateWithdrew, FormatStack(stack)));
             return result;
         }
 
@@ -114,14 +122,18 @@ namespace Blockiverse.UI
 
                 slotLabels[i].text = crate != null && i < crate.SlotCount
                     ? FormatStack(crate.GetSlot(i))
-                    : "Empty";
+                    : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonEmpty);
             }
         }
 
         void ReportTransfer(SurvivalCommandResult result, bool sentToHost, string successText)
         {
             bool ok = result.Accepted || result.PendingHostValidation || sentToHost;
-            SetStatus(result.Accepted ? successText : sentToHost ? "Transferring…" : "Transfer rejected");
+            SetStatus(result.Accepted
+                ? successText
+                : sentToHost
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateTransferring)
+                    : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateTransferRejected));
             Refresh();
             PlayFeedback(ok ? BlockiverseAudioCue.UiSelect : BlockiverseAudioCue.UiCancel);
             if (result.Accepted)
@@ -159,10 +171,10 @@ namespace Blockiverse.UI
         string FormatStack(ItemStack stack)
         {
             if (stack.IsEmpty)
-                return "Empty";
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonEmpty);
 
             ItemDefinition definition = (itemRegistry ?? DefaultItemRegistry).Get(stack.ItemId);
-            return $"{definition.Name} x{stack.Count}";
+            return BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CommonStack, definition.Name, stack.Count);
         }
 
         void SetStatus(string status)
@@ -173,21 +185,7 @@ namespace Blockiverse.UI
 
         void PlayFeedback(BlockiverseAudioCue cue)
         {
-            DiscoverFeedback();
-            audioCuePlayer?.PlayCue(cue);
-            interactionHaptics?.PlayUiTick();
-        }
-
-        void DiscoverFeedback()
-        {
-            if (!Application.isPlaying)
-                return;
-
-            if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-
-            if (interactionHaptics == null)
-                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
         }
     }
 }

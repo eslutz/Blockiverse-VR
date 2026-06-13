@@ -29,6 +29,19 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PlaceStandardTreeTracksRuntimeChangesOnlyWhenRequested()
+        {
+            vegetation.PlaceStandardTree(world, BasePos);
+            Assert.That(world.GetChangedBlocks(), Is.Empty);
+
+            var runtimeWorld = new VoxelWorld(new WorldBounds(32, 32, 32), chunkSize: 16, seed: 1);
+            vegetation.PlaceStandardTree(runtimeWorld, BasePos, trackChange: true);
+
+            Assert.That(runtimeWorld.GetChangedBlocks(), Is.Not.Empty);
+            Assert.That(HasChangedBlock(runtimeWorld, BasePos, BlockRegistry.BranchwoodLog), Is.True);
+        }
+
+        [Test]
         public void PlaceConicalTreeProducesNarrowTopWideBottom()
         {
             vegetation.PlaceConicalTree(world, BasePos);
@@ -79,6 +92,20 @@ namespace Blockiverse.Tests.EditMode
             // Stage 2 → full tree (sapling removed, logs placed)
             vegetation.TickSapling(world, 1200);
             Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.BranchwoodLog));
+        }
+
+        [Test]
+        public void TickSaplingTracksGrownTreeBlocksForPersistence()
+        {
+            world.SetBlock(BasePos, BlockRegistry.Sapling);
+            vegetation.TrackSapling(BasePos);
+            world.ClearChangedBlocks();
+
+            vegetation.TickSapling(world, 3600);
+
+            Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.BranchwoodLog));
+            Assert.That(HasChangedBlock(world, BasePos, BlockRegistry.BranchwoodLog), Is.True);
+            Assert.That(HasChangedBlock(world, new BlockPosition(BasePos.X, BasePos.Y + 4, BasePos.Z), BlockRegistry.Leafmoss), Is.True);
         }
 
         [Test]
@@ -159,6 +186,21 @@ namespace Blockiverse.Tests.EditMode
             var leafPos = new BlockPosition(8, 9, 8);
             world.SetBlock(logPos,  BlockRegistry.BranchwoodLog);
             world.SetBlock(leafPos, BlockRegistry.Leafmoss);
+
+            vegetation.TickLeafDecay(world, 120);
+
+            Assert.That(world.GetBlock(leafPos), Is.EqualTo(BlockRegistry.Leafmoss));
+        }
+
+        [Test]
+        public void TickLeafDecayPreservesLeafmossNearStrippedLog()
+        {
+            var logPos  = new BlockPosition(8, 8, 8);
+            var leafPos = new BlockPosition(8, 9, 8);
+            world.SetBlock(logPos,  BlockRegistry.SmoothBranchwood);
+            world.SetBlock(leafPos, BlockRegistry.Leafmoss);
+
+            Assert.That(VegetationService.IsLeafSupportBlock(BlockRegistry.SmoothBranchwood), Is.True);
 
             vegetation.TickLeafDecay(world, 120);
 
@@ -291,6 +333,17 @@ namespace Blockiverse.Tests.EditMode
             for (int x = 0; x < world.Bounds.Width; x++)
                 if (world.GetBlock(new BlockPosition(x, y, z)) == blockId) count++;
             return count;
+        }
+
+        static bool HasChangedBlock(VoxelWorld targetWorld, BlockPosition position, BlockId newBlock)
+        {
+            foreach (BlockChange change in targetWorld.GetChangedBlocks())
+            {
+                if (change.Position == position && change.NewBlock == newBlock)
+                    return true;
+            }
+
+            return false;
         }
 
         static int FindTrunkTop(VoxelWorld w, BlockPosition basePos)

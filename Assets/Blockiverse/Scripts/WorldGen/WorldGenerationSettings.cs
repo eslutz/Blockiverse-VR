@@ -5,6 +5,8 @@ namespace Blockiverse.WorldGen
 {
     public sealed class WorldGenerationSettings
     {
+        // Intentionally public for deterministic flat-world validation fixtures. Runtime
+        // new-world flow chooses the ruleset presets explicitly instead of this tiny fixture.
         public static WorldGenerationSettings CreateDefaultCreative()
         {
             return new WorldGenerationSettings(
@@ -92,23 +94,6 @@ namespace Blockiverse.WorldGen
             }
 
             return world;
-        }
-    }
-
-    public sealed class FlatCreativeWorldPreset
-    {
-        readonly BlockRegistry registry;
-        readonly WorldGenerationSettings settings;
-
-        public FlatCreativeWorldPreset(BlockRegistry registry, WorldGenerationSettings settings)
-        {
-            this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        }
-
-        public VoxelWorld Generate()
-        {
-            return new FlatBuilderPreset(registry, settings).Generate();
         }
     }
 

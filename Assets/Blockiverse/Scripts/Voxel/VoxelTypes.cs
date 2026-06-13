@@ -119,6 +119,7 @@ namespace Blockiverse.Voxel
 
         public BlockId Id { get; }
         public string CanonicalId { get; }
+        public string DisplayKey => $"block.{CanonicalId}.name";
         public string Name { get; }
         public BlockCategory Category { get; }
         public bool IsSolid { get; }
@@ -132,7 +133,6 @@ namespace Blockiverse.Voxel
     public sealed class BlockRegistry
     {
         readonly Dictionary<BlockId, BlockDefinition> definitionsById = new();
-        readonly Dictionary<string, BlockDefinition> definitionsByName = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, BlockDefinition> definitionsByCanonicalId = new(StringComparer.OrdinalIgnoreCase);
 
         public static readonly BlockId Air                 = new(0);
@@ -242,8 +242,10 @@ namespace Blockiverse.Voxel
         public static readonly BlockId FreshwaterFlow       = new(77);
         public static readonly BlockId BrineFlow            = new(78);
         public static readonly BlockId EmberflowFlow        = new(79);
+        public static readonly BlockId Bedroll              = new(80);
 
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
+        public static BlockRegistry Default { get; } = CreateDefault();
 
         public static BlockRegistry CreateDefault()
         {
@@ -268,9 +270,10 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(ToolRack,            "tool_rack",          "Tool Rack",            BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(PantryJar,           "pantry_jar",         "Pantry Jar",           BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(DeepLocker,          "deep_locker",        "Deep Locker",          BlockCategory.Crafted,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 5));
+            registry.Register(new BlockDefinition(Bedroll,             "bedroll",            "Bedroll",              BlockCategory.Crafted,  isSolid: false, isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
 
             // ── Additional canonical terrain (atlas tiles generated) ─────────
-            registry.Register(new BlockDefinition(Worldroot,    "worldroot",     "Worldroot",     BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: 3));
+            registry.Register(new BlockDefinition(Worldroot,    "worldroot",     "Worldroot",     BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: int.MaxValue, hardness: float.PositiveInfinity));
             registry.Register(new BlockDefinition(Deepmantle,   "deepmantle",    "Deepmantle",    BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.VeryHard, harvestTierMin: 5));
             registry.Register(new BlockDefinition(DarkSlate,    "dark_slate",    "Dark Slate",    BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Medium,   harvestTierMin: 1));
             registry.Register(new BlockDefinition(WarmGranite,  "warm_granite",  "Warm Granite",  BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Medium,   harvestTierMin: 2));
@@ -365,14 +368,10 @@ namespace Blockiverse.Voxel
             if (definitionsById.ContainsKey(definition.Id))
                 throw new InvalidOperationException($"Block ID is already registered: {definition.Id}");
 
-            if (definitionsByName.ContainsKey(definition.Name))
-                throw new InvalidOperationException($"Block name is already registered: {definition.Name}");
-
             if (definitionsByCanonicalId.ContainsKey(definition.CanonicalId))
                 throw new InvalidOperationException($"Block canonical ID is already registered: {definition.CanonicalId}");
 
             definitionsById.Add(definition.Id, definition);
-            definitionsByName.Add(definition.Name, definition);
             definitionsByCanonicalId.Add(definition.CanonicalId, definition);
         }
 

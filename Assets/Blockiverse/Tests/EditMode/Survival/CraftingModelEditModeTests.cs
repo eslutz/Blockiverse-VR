@@ -12,9 +12,9 @@ namespace Blockiverse.Tests.Survival.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
 
-            // 8 handcraft + 7 build-table + 7 kiln + 6 forge + 41 tools + 3 utility + 2 campfire
-            // fluid recipes (§9, §5.4).
-            Assert.That(recipeBook.All.Count, Is.EqualTo(74));
+            // 8 handcraft + 13 build-table + 7 kiln + 6 forge + 48 tools + 3 utility +
+            // 2 campfire fluid recipes + 4 food recipes (§9, §5.4, §12.2).
+            Assert.That(recipeBook.All.Count, Is.EqualTo(91));
 
             // §9.1 basics are handcraft (no station).
             AssertRecipe(recipeBook, ItemId.WorkPlank, CraftingStation.None, new ItemStack(ItemId.WorkPlank, 6), new ItemStack(ItemId.BranchwoodLog, 1));
@@ -24,13 +24,42 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             // §9.2 build-table.
             AssertRecipe(recipeBook, ItemId.StorageCrate, CraftingStation.BuildTable, new ItemStack(ItemId.StorageCrate, 1), new ItemStack(ItemId.WorkPlank, 12), new ItemStack(ItemId.StoutPole, 2));
+            AssertRecipe(recipeBook, ItemId.ReedBasket, CraftingStation.BuildTable, new ItemStack(ItemId.ReedBasket, 1),
+                new ItemStack(ItemId.ReedFiber, 10), new ItemStack(ItemId.FiberCord, 2));
+            AssertRecipe(recipeBook, ItemId.ToolRack, CraftingStation.BuildTable, new ItemStack(ItemId.ToolRack, 1),
+                new ItemStack(ItemId.WorkPlank, 8), new ItemStack(ItemId.StoutPole, 4), new ItemStack(ItemId.FiberCord, 2));
+            AssertRecipe(recipeBook, ItemId.PantryJar, CraftingStation.BuildTable, new ItemStack(ItemId.PantryJar, 1),
+                new ItemStack(ItemId.ClayLump, 6), new ItemStack(ItemId.GlassShard, 2), new ItemStack(ItemId.ResinKnot, 1));
+            AssertRecipe(recipeBook, ItemId.DeepLocker, CraftingStation.BuildTable, new ItemStack(ItemId.DeepLocker, 1),
+                new ItemStack(ItemId.CutstoneBlock, 4), new ItemStack(ItemId.IronrootBar, 2), new ItemStack(ItemId.FiberCord, 2));
+            AssertRecipe(recipeBook, ItemId.Bedroll, CraftingStation.BuildTable, new ItemStack(ItemId.Bedroll, 1),
+                new ItemStack(ItemId.Leafmoss, 6), new ItemStack(ItemId.ReedFiber, 8), new ItemStack(ItemId.FiberCord, 4));
             AssertRecipe(recipeBook, ItemId.FiredBrickBlock, CraftingStation.BuildTable, new ItemStack(ItemId.FiredBrickBlock, 4), new ItemStack(ItemId.FiredBrick, 8));
+            AssertRecipe(recipeBook, ItemId.EmbercoalBlock, CraftingStation.BuildTable, new ItemStack(ItemId.EmbercoalBlock, 1), new ItemStack(ItemId.Embercoal, 9));
 
             // §9.6 utility.
             AssertRecipe(recipeBook, ItemId.LumenLamp, CraftingStation.BuildTable, new ItemStack(ItemId.LumenLamp, 2),
                 new ItemStack(ItemId.LumenCrystal, 1), new ItemStack(ItemId.GlassShard, 2), new ItemStack(ItemId.SunmetalBar, 1));
             AssertRecipe(recipeBook, ItemId.FieldBandage, CraftingStation.PrepBoard, new ItemStack(ItemId.FieldBandage, 2),
                 new ItemStack(ItemId.ReedFiber, 4), new ItemStack(ItemId.ResinKnot, 1));
+            AssertRecipe(recipeBook, ItemId.TrailRation, CraftingStation.PrepBoard, new ItemStack(ItemId.TrailRation, 2),
+                new ItemStack(ItemId.GrainBundle, 2), new ItemStack(ItemId.BerryCluster, 2), new ItemStack(ItemId.Brightsalt, 1));
+            AssertRecipe(recipeBook, ItemId.BerryMash, CraftingStation.PrepBoard, new ItemStack(ItemId.BerryMash, 1),
+                new ItemStack(ItemId.BerryCluster, 3));
+            AssertRecipe(recipeBook, ItemId.Flatbread, CraftingStation.Campfire, new ItemStack(ItemId.Flatbread, 1),
+                new ItemStack(ItemId.GrainBundle, 2));
+            AssertRecipe(recipeBook, ItemId.CookedMorsel, CraftingStation.Campfire, new ItemStack(ItemId.CookedMorsel, 1),
+                new ItemStack(ItemId.RawMorsel, 1));
+        }
+
+        [Test]
+        public void SharedDefaultRecipeBookIsStableAndCanonical()
+        {
+            CraftingRecipeBook shared = CraftingRecipeBook.Default;
+
+            Assert.That(CraftingRecipeBook.Default, Is.SameAs(shared));
+            Assert.That(shared.All.Count, Is.EqualTo(CraftingRecipeBook.CreateDefault(ItemRegistry.Default).All.Count));
+            AssertRecipe(shared, ItemId.EmbercoalBlock, CraftingStation.BuildTable, new ItemStack(ItemId.EmbercoalBlock, 1), new ItemStack(ItemId.Embercoal, 9));
         }
 
         [Test]
@@ -64,6 +93,48 @@ namespace Blockiverse.Tests.Survival.EditMode
             CollectionAssert.AreEquivalent(
                 new[] { new ItemStack(ItemId.WorkPlank, 3), new ItemStack(ItemId.StoutPole, 2) },
                 reedwoodDelver.Ingredients.ToArray());
+
+            CraftingRecipe reedwoodSickle = recipeBook.GetByOutput(ItemId.ReedwoodSickle);
+            Assert.That(reedwoodSickle.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.WorkPlank, 2), new ItemStack(ItemId.StoutPole, 1), new ItemStack(ItemId.FiberCord, 1) },
+                reedwoodSickle.Ingredients.ToArray());
+
+            CraftingRecipe reedwoodMallet = recipeBook.GetByOutput(ItemId.ReedwoodMallet);
+            Assert.That(reedwoodMallet.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.WorkPlank, 4), new ItemStack(ItemId.StoutPole, 2) },
+                reedwoodMallet.Ingredients.ToArray());
+
+            CraftingRecipe reedwoodCarver = recipeBook.GetByOutput(ItemId.ReedwoodCarver);
+            Assert.That(reedwoodCarver.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.WorkPlank, 1), new ItemStack(ItemId.StoutPole, 1), new ItemStack(ItemId.FiberCord, 1) },
+                reedwoodCarver.Ingredients.ToArray());
+
+            CraftingRecipe reedwoodTiller = recipeBook.GetByOutput(ItemId.ReedwoodTiller);
+            Assert.That(reedwoodTiller.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.WorkPlank, 2), new ItemStack(ItemId.StoutPole, 2) },
+                reedwoodTiller.Ingredients.ToArray());
+
+            CraftingRecipe flintSickle = recipeBook.GetByOutput(ItemId.FlintSickle);
+            Assert.That(flintSickle.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.FlintyShingle, 2), new ItemStack(ItemId.StoutPole, 1), new ItemStack(ItemId.FiberCord, 1) },
+                flintSickle.Ingredients.ToArray());
+
+            CraftingRecipe flintMallet = recipeBook.GetByOutput(ItemId.FlintMallet);
+            Assert.That(flintMallet.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.FlintyShingle, 4), new ItemStack(ItemId.StoutPole, 2) },
+                flintMallet.Ingredients.ToArray());
+
+            CraftingRecipe flintTiller = recipeBook.GetByOutput(ItemId.FlintTiller);
+            Assert.That(flintTiller.RequiredStation, Is.EqualTo(CraftingStation.BuildTable));
+            CollectionAssert.AreEquivalent(
+                new[] { new ItemStack(ItemId.FlintyShingle, 2), new ItemStack(ItemId.StoutPole, 2), new ItemStack(ItemId.FiberCord, 1) },
+                flintTiller.Ingredients.ToArray());
 
             // Metal tools at the Bellows Forge, from bars.
             CraftingRecipe rosycopperDelver = recipeBook.GetByOutput(new ItemId("rosycopper_delver"));

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Blockiverse.Survival;
 using NUnit.Framework;
 
@@ -77,6 +78,18 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
+        public void TryDepositInputRejectsStacksAboveItemMax()
+        {
+            SmeltingStationModel kiln = CreateKiln(out ItemRegistry registry);
+            int max = registry.Get(ItemId.ClayLump).MaxStackSize;
+
+            Assert.That(kiln.TryDepositInput(new ItemStack(ItemId.ClayLump, max + 1)), Is.False);
+
+            Assert.That(kiln.GetInput(0).IsEmpty, Is.True);
+            Assert.That(kiln.ContentVersion, Is.EqualTo(0));
+        }
+
+        [Test]
         public void TryDepositInputRejectsWhenNoSlotCanReceive()
         {
             SmeltingStationModel kiln = CreateKiln(out _);
@@ -108,6 +121,61 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(kiln.CollectOutput(), Is.EqualTo(new ItemStack(ItemId.FiredBrick, 1)));
             Assert.That(kiln.Output.IsEmpty, Is.True);
             Assert.That(kiln.CollectOutput().IsEmpty, Is.True);
+        }
+
+        [Test]
+        public void WithdrawInputReturnsRequestedStackAndLeavesRemainder()
+        {
+            SmeltingStationModel kiln = CreateKiln(out _);
+            kiln.SetInput(0, new ItemStack(ItemId.ClayLump, 5));
+
+            bool withdrew = kiln.TryWithdrawInput(ItemId.ClayLump, 2, out ItemStack stack);
+
+            Assert.That(withdrew, Is.True);
+            Assert.That(stack, Is.EqualTo(new ItemStack(ItemId.ClayLump, 2)));
+            Assert.That(kiln.GetInput(0), Is.EqualTo(new ItemStack(ItemId.ClayLump, 3)));
+        }
+
+        [Test]
+        public void WithdrawFuelReturnsRequestedStackAndLeavesRemainder()
+        {
+            SmeltingStationModel kiln = CreateKiln(out _);
+            kiln.SetFuel(new ItemStack(ItemId.Embercoal, 3));
+
+            bool withdrew = kiln.TryWithdrawFuel(ItemId.Embercoal, 1, out ItemStack stack);
+
+            Assert.That(withdrew, Is.True);
+            Assert.That(stack, Is.EqualTo(new ItemStack(ItemId.Embercoal, 1)));
+            Assert.That(kiln.Fuel, Is.EqualTo(new ItemStack(ItemId.Embercoal, 2)));
+        }
+
+        [Test]
+        public void DrainContentsReturnsSlotsAndClearsStation()
+        {
+            SmeltingStationModel kiln = CreateKiln(out ItemRegistry registry);
+            CraftingRecipe recipe = CraftingRecipeBook.CreateDefault(registry).GetByOutput(ItemId.FiredBrick);
+            kiln.ApplyHostSnapshot(
+                new[] { new ItemStack(ItemId.ClayLump, 2) },
+                new ItemStack(ItemId.Embercoal, 1),
+                new ItemStack(ItemId.FiredBrick, 1),
+                recipe,
+                progressTicks: 3);
+
+            IReadOnlyList<ItemStack> drained = kiln.DrainContents();
+
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    new ItemStack(ItemId.ClayLump, 2),
+                    new ItemStack(ItemId.Embercoal, 1),
+                    new ItemStack(ItemId.FiredBrick, 1)
+                },
+                drained);
+            Assert.That(kiln.GetInput(0).IsEmpty, Is.True);
+            Assert.That(kiln.Fuel.IsEmpty, Is.True);
+            Assert.That(kiln.Output.IsEmpty, Is.True);
+            Assert.That(kiln.IsActive, Is.False);
+            Assert.That(kiln.ProgressTicks, Is.EqualTo(0));
         }
 
         [Test]

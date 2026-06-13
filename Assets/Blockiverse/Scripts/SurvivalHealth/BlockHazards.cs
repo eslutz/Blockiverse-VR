@@ -5,7 +5,8 @@ using Blockiverse.Voxel;
 namespace Blockiverse.Survival
 {
     // Which of the player's contact cells trigger a hazard block: thornbrush hurts the body
-    // (feet/head) when walked through; campfire burns when stood in or directly on.
+    // (feet/head), campfire burns when stood in or directly on, and emberflow burns any
+    // occupied/contact cell.
     [Flags]
     public enum HazardContactCells
     {

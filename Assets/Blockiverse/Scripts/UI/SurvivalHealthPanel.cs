@@ -102,7 +102,12 @@ namespace Blockiverse.UI
                     lastStamina = stamina;
 
                     stateLabel.text = survivalVitals != null
-                        ? $"{baseState} · Hunger {hunger} · Thirst {thirst} · Stamina {stamina}"
+                        ? BlockiverseLocalization.Format(
+                            BlockiverseLocalization.Keys.HealthVitals,
+                            baseState,
+                            hunger,
+                            thirst,
+                            stamina)
                         : baseState;
                 }
             }
@@ -132,9 +137,11 @@ namespace Blockiverse.UI
         static string GetStateTMP_Text(PlayerVitals playerVitals)
         {
             if (playerVitals.IsDead)
-                return "Down";
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthDown);
 
-            return playerVitals.CurrentHealth <= playerVitals.MaxHealth / 4 ? "Critical" : "Stable";
+            return playerVitals.CurrentHealth <= playerVitals.MaxHealth / 4
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthCritical)
+                : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthStable);
         }
     }
 }

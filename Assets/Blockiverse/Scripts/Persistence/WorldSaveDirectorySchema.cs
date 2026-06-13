@@ -21,6 +21,10 @@ namespace Blockiverse.Persistence
         public string ModifiedAtUtc;
         public string BlockRegistryHash;
         public string ItemRegistryHash;
+        public bool HasSpawnPosition;
+        public int SpawnX;
+        public int SpawnY;
+        public int SpawnZ;
     }
 
     [Serializable]
@@ -89,6 +93,7 @@ namespace Blockiverse.Persistence
     {
         public string CanonicalId;
         public int Count;
+        public int Durability;
     }
 
     [Serializable]

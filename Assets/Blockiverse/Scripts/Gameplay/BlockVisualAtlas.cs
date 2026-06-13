@@ -11,11 +11,15 @@ namespace Blockiverse.Gameplay
         public const int Columns = 8;
         public const int Rows = 10;
         public const int TilePixels = 16;
+        public const int TilePaddingPixels = 4;
+        public const int TileStridePixels = TilePixels + TilePaddingPixels * 2;
+        public const int AtlasWidthPixels = Columns * TileStridePixels;
+        public const int AtlasHeightPixels = Rows * TileStridePixels;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
         public const string VoxelLitShaderName = "Blockiverse/Voxel Lit";
 
-        const float UvInset = 0.001f;
+        const float UvInsetPixels = 0.5f;
 
         static readonly Dictionary<int, int> TileIndexByBlockId = new()
         {
@@ -95,6 +99,7 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Freshwater.Value,          73 },
             { BlockRegistry.Brine.Value,               74 },
             { BlockRegistry.Emberflow.Value,           75 },
+            { BlockRegistry.Bedroll.Value,             76 },
             // Flowing cells render with their family's source tile.
             { BlockRegistry.FreshwaterFlow.Value,      73 },
             { BlockRegistry.BrineFlow.Value,           74 },
@@ -106,14 +111,16 @@ namespace Blockiverse.Gameplay
             int tileIndex = GetTileIndex(blockId);
             int column = tileIndex % Columns;
             int row = tileIndex / Columns;
-            float width = 1.0f / Columns;
-            float height = 1.0f / Rows;
+            float minX = column * TileStridePixels + TilePaddingPixels + UvInsetPixels;
+            float maxX = column * TileStridePixels + TilePaddingPixels + TilePixels - UvInsetPixels;
+            float minY = row * TileStridePixels + TilePaddingPixels + UvInsetPixels;
+            float maxY = row * TileStridePixels + TilePaddingPixels + TilePixels - UvInsetPixels;
 
             return new Rect(
-                column * width + UvInset,
-                1.0f - (row + 1) * height + UvInset,
-                width - UvInset * 2.0f,
-                height - UvInset * 2.0f);
+                minX / AtlasWidthPixels,
+                1.0f - maxY / AtlasHeightPixels,
+                (maxX - minX) / AtlasWidthPixels,
+                (maxY - minY) / AtlasHeightPixels);
         }
 
         public static Material CreateMaterial(Material sourceMaterial)
@@ -131,7 +138,7 @@ namespace Blockiverse.Gameplay
             if (!IsAuthoredAtlasTexture(texture))
             {
                 string message =
-                    $"Block material texture '{texture.name}' is not the expected authored atlas. Assign {AuthoredAtlasPath} ({Columns * TilePixels}x{Rows * TilePixels}).";
+                    $"Block material texture '{texture.name}' is not the expected authored atlas. Assign {AuthoredAtlasPath} ({AtlasWidthPixels}x{AtlasHeightPixels}).";
                 BlockiverseLog.Warning(BlockiverseLogCategory.Assets, message);
                 throw new InvalidOperationException(message);
             }
@@ -203,8 +210,8 @@ namespace Blockiverse.Gameplay
         {
             return texture is Texture2D texture2D &&
                    texture2D.name == AuthoredAtlasName &&
-                   texture2D.width == Columns * TilePixels &&
-                   texture2D.height == Rows * TilePixels;
+                   texture2D.width == AtlasWidthPixels &&
+                   texture2D.height == AtlasHeightPixels;
         }
 
         static Material CreateBaseMaterial(Material sourceMaterial)

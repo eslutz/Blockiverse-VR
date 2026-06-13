@@ -24,7 +24,10 @@ namespace Blockiverse.Tests.EditMode
             {
                 BlockiverseHapticPattern.BlockBreak,
                 BlockiverseHapticPattern.BlockPlace,
-                BlockiverseHapticPattern.UiTick
+                BlockiverseHapticPattern.UiTick,
+                BlockiverseHapticPattern.PlayerDamage,
+                BlockiverseHapticPattern.LowHealth,
+                BlockiverseHapticPattern.PlayerDeath
             };
 
             foreach (BlockiverseHapticPattern pattern in patterns)

@@ -25,21 +25,64 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class BlockiverseVfxPool : MonoBehaviour
     {
+        static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
+        static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+
         [SerializeField, Range(1, 32)] int poolSize = 16;
         [SerializeField] Material particleMaterial;
+        [SerializeField] Sprite blockDustParticle;
+        [SerializeField] Sprite blockPuffParticle;
+        [SerializeField] Sprite resourceSparkParticle;
+        [SerializeField] Sprite craftSparkParticle;
+        [SerializeField] Sprite rainSplashParticle;
+        [SerializeField] Sprite snowflakeParticle;
+        [SerializeField] Sprite fogWispParticle;
+        [SerializeField] Sprite emberParticle;
 
         readonly List<ParticleSystem> systems = new();
+        readonly ParticleSystem.Burst[] burstScratch = new ParticleSystem.Burst[1];
+        readonly MaterialPropertyBlock propertyBlock = new();
         int nextIndex;
 
         public int PrewarmedCount => systems.Count;
         public int PlayCount { get; private set; }
         public float LastIntensity { get; private set; }
+        public Material ParticleMaterial => particleMaterial;
 
         public void ConfigureForTests(int poolSize)
         {
             this.poolSize = Mathf.Clamp(poolSize, 1, 32);
             Prewarm();
         }
+
+        public void ConfigureParticleMaterial(Material material)
+        {
+            particleMaterial = material;
+            foreach (ParticleSystem system in systems)
+                ApplyParticleMaterial(system);
+        }
+
+        public void ConfigureParticleSprites(
+            Sprite blockDust,
+            Sprite blockPuff,
+            Sprite resourceSpark,
+            Sprite craftSpark,
+            Sprite rainSplash,
+            Sprite snowflake,
+            Sprite fogWisp,
+            Sprite ember)
+        {
+            blockDustParticle = blockDust;
+            blockPuffParticle = blockPuff;
+            resourceSparkParticle = resourceSpark;
+            craftSparkParticle = craftSpark;
+            rainSplashParticle = rainSplash;
+            snowflakeParticle = snowflake;
+            fogWispParticle = fogWisp;
+            emberParticle = ember;
+        }
+
+        public bool HasSpriteForCue(BlockiverseVfxCue cue) => SpriteForCue(cue) != null;
 
         public void Prewarm()
         {
@@ -71,16 +114,16 @@ namespace Blockiverse.Gameplay
             var particleObject = new GameObject($"VFX Particle {index + 1:00}");
             particleObject.transform.SetParent(transform, worldPositionStays: false);
             var system = particleObject.AddComponent<ParticleSystem>();
-            var renderer = particleObject.GetComponent<ParticleSystemRenderer>();
-            renderer.sharedMaterial = particleMaterial != null
-                ? particleMaterial
-                : new Material(Shader.Find("Sprites/Default"));
+            ApplyParticleMaterial(system);
             particleObject.SetActive(true);
             return system;
         }
 
-        static void ConfigureParticleSystem(ParticleSystem system, BlockiverseVfxCue cue, Color tint, float intensity)
+        void ConfigureParticleSystem(ParticleSystem system, BlockiverseVfxCue cue, Color tint, float intensity)
         {
+            ApplyParticleMaterial(system);
+            ApplyParticleSprite(system, SpriteForCue(cue));
+
             ParticleSystem.MainModule main = system.main;
             main.loop = false;
             main.playOnAwake = false;
@@ -93,10 +136,8 @@ namespace Blockiverse.Gameplay
             ParticleSystem.EmissionModule emission = system.emission;
             emission.enabled = true;
             emission.rateOverTime = 0f;
-            emission.SetBursts(new[]
-            {
-                new ParticleSystem.Burst(0f, (short)main.maxParticles)
-            });
+            burstScratch[0] = new ParticleSystem.Burst(0f, (short)main.maxParticles);
+            emission.SetBursts(burstScratch);
         }
 
         static int DefaultParticleCount(BlockiverseVfxCue cue)
@@ -113,6 +154,49 @@ namespace Blockiverse.Gameplay
                 BlockiverseVfxCue.TorchSpark => 3,
                 BlockiverseVfxCue.CampfireEmber => 8,
                 _ => 4
+            };
+        }
+
+        void ApplyParticleMaterial(ParticleSystem system)
+        {
+            if (system == null)
+                return;
+
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            if (particleMaterial != null)
+                renderer.sharedMaterial = particleMaterial;
+            else if (renderer.sharedMaterial == null)
+                renderer.sharedMaterial = new Material(Shader.Find("Sprites/Default"));
+        }
+
+        void ApplyParticleSprite(ParticleSystem system, Sprite sprite)
+        {
+            if (system == null || sprite == null || sprite.texture == null)
+                return;
+
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            propertyBlock.Clear();
+            renderer.GetPropertyBlock(propertyBlock);
+            propertyBlock.SetTexture(BaseMapId, sprite.texture);
+            propertyBlock.SetTexture(MainTexId, sprite.texture);
+            renderer.SetPropertyBlock(propertyBlock);
+        }
+
+        Sprite SpriteForCue(BlockiverseVfxCue cue)
+        {
+            return cue switch
+            {
+                BlockiverseVfxCue.BlockBreakDust or BlockiverseVfxCue.BlockChipBurst => blockDustParticle,
+                BlockiverseVfxCue.BlockPlacePuff or BlockiverseVfxCue.CraftFailPuff or
+                    BlockiverseVfxCue.TeleportArrivalPuff => blockPuffParticle,
+                BlockiverseVfxCue.ResourceSpark => resourceSparkParticle,
+                BlockiverseVfxCue.CraftSuccessSpark or BlockiverseVfxCue.InventoryPanelPulse or
+                    BlockiverseVfxCue.SelectionPulse => craftSparkParticle,
+                BlockiverseVfxCue.RainSplash => rainSplashParticle,
+                BlockiverseVfxCue.SnowflakeDrift => snowflakeParticle,
+                BlockiverseVfxCue.FogWisp or BlockiverseVfxCue.LightningFlash => fogWispParticle,
+                BlockiverseVfxCue.TorchSpark or BlockiverseVfxCue.CampfireEmber => emberParticle,
+                _ => null
             };
         }
     }

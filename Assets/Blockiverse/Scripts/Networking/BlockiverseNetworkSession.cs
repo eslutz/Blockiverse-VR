@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -12,6 +14,13 @@ namespace Blockiverse.Networking
     [RequireComponent(typeof(UnityTransport))]
     public sealed class BlockiverseNetworkSession : MonoBehaviour
     {
+        public const int ApprovalPayloadProtocolVersion = 1;
+        public const int ForcedHostShutdownPreparationFailureThreshold = 2;
+        const string ApprovalPayloadRulesetVersion = "voxel-networking-1";
+        const string ApprovalPayloadSessionMode = "lan_host_authoritative";
+        const string ApprovalPayloadVoiceMode = "meta_quest_party_chat_external";
+        const char ApprovalPayloadSeparator = '|';
+
         [SerializeField]
         BlockiverseNetworkConfig config = BlockiverseNetworkConfig.Default;
 
@@ -21,17 +30,37 @@ namespace Blockiverse.Networking
         [SerializeField]
         UnityTransport unityTransport;
 
+        [SerializeField]
+        bool useEncryptedTransport;
+
+        [SerializeField]
+        string transportServerCommonName = "blockiverse-lan";
+
+        [SerializeField, TextArea(4, 12)]
+        string serverCertificatePem;
+
+        [SerializeField, TextArea(4, 12)]
+        string serverPrivateKeyPem;
+
+        [SerializeField, TextArea(4, 12)]
+        string clientCaCertificatePem;
+
         bool subscribed;
         bool stopRequestedByLocalSession;
+        int consecutiveHostShutdownPreparationFailures;
 
         public BlockiverseConnectionState CurrentState { get; private set; } = BlockiverseConnectionState.Stopped;
         public NetworkSessionMode CurrentMode { get; private set; } = NetworkSessionMode.Offline;
         public string LastDisconnectReason { get; private set; } = string.Empty;
         public bool HasConnectedAsClient { get; private set; }
         public bool LastStopRequestSucceeded { get; private set; } = true;
+        public bool LastStopForcedAfterPreparationFailure { get; private set; }
+        public int ConsecutiveHostShutdownPreparationFailures => consecutiveHostShutdownPreparationFailures;
         public NetworkManager NetworkManager => ResolveNetworkManager();
         public UnityTransport UnityTransport => ResolveUnityTransport();
         public BlockiverseNetworkConfig Config => config;
+        public bool IsTransportEncryptionRequested => useEncryptedTransport;
+        public bool IsTransportEncryptionConfigured => HasTransportEncryptionSecrets();
 
         public event BlockiverseNetworkSessionPreparationHandler HostStartPreparing;
         public event BlockiverseNetworkSessionPreparationHandler HostShutdownPreparing;
@@ -60,15 +89,42 @@ namespace Blockiverse.Networking
 
         public void Configure(BlockiverseNetworkConfig newConfig)
         {
-            if (ResolveNetworkManager().IsListening)
+            ResolveDependencies();
+            if (networkManager.IsListening)
                 throw new InvalidOperationException("Cannot change multiplayer config while a session is active.");
 
             config = newConfig;
+            ApplyConnectionApprovalSettings();
+        }
+
+        public void ConfigureTransportSecurity(
+            bool enabled,
+            string serverCertificate,
+            string serverPrivateKey,
+            string serverCommonName,
+            string clientCaCertificate = null)
+        {
+            ResolveDependencies();
+            if (networkManager.IsListening)
+                throw new InvalidOperationException("Cannot change multiplayer transport security while a session is active.");
+
+            useEncryptedTransport = enabled;
+            serverCertificatePem = serverCertificate;
+            serverPrivateKeyPem = serverPrivateKey;
+            transportServerCommonName = string.IsNullOrWhiteSpace(serverCommonName)
+                ? "blockiverse-lan"
+                : serverCommonName.Trim();
+            clientCaCertificatePem = string.IsNullOrWhiteSpace(clientCaCertificate)
+                ? serverCertificate
+                : clientCaCertificate;
         }
 
         public bool StartHost()
         {
             if (!PrepareToStart(NetworkSessionMode.Host))
+                return false;
+
+            if (!ApplyTransportSecurity(NetworkSessionMode.Host))
                 return false;
 
             if (!RunPreparation(HostStartPreparing, "Unable to prepare LAN host session."))
@@ -90,6 +146,9 @@ namespace Blockiverse.Networking
         public bool StartClient(string address)
         {
             if (!PrepareToStart(NetworkSessionMode.Client))
+                return false;
+
+            if (!ApplyTransportSecurity(NetworkSessionMode.Client))
                 return false;
 
             string targetAddress = string.IsNullOrWhiteSpace(address) ? config.Address : address;
@@ -114,6 +173,8 @@ namespace Blockiverse.Networking
                 CurrentState = BlockiverseConnectionState.Stopped;
                 HasConnectedAsClient = false;
                 stopRequestedByLocalSession = false;
+                consecutiveHostShutdownPreparationFailures = 0;
+                LastStopForcedAfterPreparationFailure = false;
                 return;
             }
 
@@ -121,10 +182,22 @@ namespace Blockiverse.Networking
                 networkManager.IsListening &&
                 !RunPreparation(HostShutdownPreparing, "Unable to prepare LAN host shutdown."))
             {
-                LastStopRequestSucceeded = false;
-                CurrentState = BlockiverseConnectionState.Hosting;
-                stopRequestedByLocalSession = false;
-                return;
+                consecutiveHostShutdownPreparationFailures++;
+                if (consecutiveHostShutdownPreparationFailures < ForcedHostShutdownPreparationFailureThreshold)
+                {
+                    LastStopRequestSucceeded = false;
+                    LastStopForcedAfterPreparationFailure = false;
+                    CurrentState = BlockiverseConnectionState.Hosting;
+                    stopRequestedByLocalSession = false;
+                    return;
+                }
+
+                LastStopForcedAfterPreparationFailure = true;
+            }
+            else
+            {
+                consecutiveHostShutdownPreparationFailures = 0;
+                LastStopForcedAfterPreparationFailure = false;
             }
 
             CurrentState = BlockiverseConnectionState.Disconnecting;
@@ -144,7 +217,32 @@ namespace Blockiverse.Networking
             CurrentMode = mode;
             HasConnectedAsClient = false;
             LastStopRequestSucceeded = true;
+            LastStopForcedAfterPreparationFailure = false;
+            consecutiveHostShutdownPreparationFailures = 0;
             stopRequestedByLocalSession = false;
+            return true;
+        }
+
+        public byte[] CreateApprovalPayload()
+        {
+            return BuildApprovalPayload(config);
+        }
+
+        public bool ValidateConnectionRequest(byte[] payload, int connectedPlayerCount, out string failureReason)
+        {
+            if (connectedPlayerCount >= config.MaxPlayers)
+            {
+                failureReason = "SessionFull";
+                return false;
+            }
+
+            if (!ValidateApprovalPayload(payload, config))
+            {
+                failureReason = "InvalidJoinPayload";
+                return false;
+            }
+
+            failureReason = string.Empty;
             return true;
         }
 
@@ -181,6 +279,58 @@ namespace Blockiverse.Networking
         {
             unityTransport.SetConnectionData(address, config.Port, listenAddress);
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
+            ApplyConnectionApprovalSettings();
+        }
+
+        bool ApplyTransportSecurity(NetworkSessionMode mode)
+        {
+            if (!useEncryptedTransport)
+            {
+                unityTransport.UseEncryption = false;
+                return true;
+            }
+
+            if (!HasTransportEncryptionSecrets())
+            {
+                MarkFailed("Encrypted LAN transport requires server certificate, private key, and client CA certificate.");
+                return false;
+            }
+
+            unityTransport.UseEncryption = true;
+            if (mode == NetworkSessionMode.Host)
+                unityTransport.SetServerSecrets(serverCertificatePem, serverPrivateKeyPem);
+            else
+                unityTransport.SetClientSecrets(transportServerCommonName, clientCaCertificatePem);
+
+            return true;
+        }
+
+        bool HasTransportEncryptionSecrets() =>
+            !string.IsNullOrWhiteSpace(serverCertificatePem) &&
+            !string.IsNullOrWhiteSpace(serverPrivateKeyPem) &&
+            !string.IsNullOrWhiteSpace(transportServerCommonName) &&
+            !string.IsNullOrWhiteSpace(clientCaCertificatePem);
+
+        void ApplyConnectionApprovalSettings()
+        {
+            if (networkManager?.NetworkConfig == null)
+                return;
+
+            networkManager.NetworkConfig.ConnectionApproval = true;
+            networkManager.NetworkConfig.ConnectionData = BuildApprovalPayload(config);
+            networkManager.ConnectionApprovalCallback = HandleConnectionApproval;
+        }
+
+        void HandleConnectionApproval(
+            NetworkManager.ConnectionApprovalRequest request,
+            NetworkManager.ConnectionApprovalResponse response)
+        {
+            int connectedPlayerCount = networkManager != null ? networkManager.ConnectedClientsIds.Count : 0;
+            bool approved = ValidateConnectionRequest(request.Payload, connectedPlayerCount, out string failureReason);
+            response.Approved = approved;
+            response.CreatePlayerObject = approved;
+            response.Reason = approved ? string.Empty : failureReason;
+            response.Pending = false;
         }
 
         void MarkFailed(string reason)
@@ -277,6 +427,81 @@ namespace Blockiverse.Networking
             ResolveUnityTransport();
             networkManager.NetworkConfig ??= new NetworkConfig();
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
+            ApplyConnectionApprovalSettings();
+        }
+
+        static byte[] BuildApprovalPayload(BlockiverseNetworkConfig config)
+        {
+            string body = string.Join(
+                ApprovalPayloadSeparator.ToString(),
+                "blockiverse_lan",
+                ApprovalPayloadProtocolVersion.ToString(),
+                ApprovalPayloadRulesetVersion,
+                config.Port.ToString(),
+                config.MaxPlayers.ToString(),
+                ApprovalPayloadSessionMode,
+                ApprovalPayloadVoiceMode);
+            string signature = Convert.ToBase64String(ComputePayloadSignature(body, config.JoinCode));
+            return Encoding.UTF8.GetBytes(body + ApprovalPayloadSeparator + signature);
+        }
+
+        static bool ValidateApprovalPayload(byte[] payload, BlockiverseNetworkConfig config)
+        {
+            if (payload == null || payload.Length == 0 || payload.Length > 512)
+                return false;
+
+            string text;
+            try
+            {
+                text = Encoding.UTF8.GetString(payload);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+
+            string[] parts = text.Split(ApprovalPayloadSeparator);
+            if (parts.Length != 8 ||
+                parts[0] != "blockiverse_lan" ||
+                parts[1] != ApprovalPayloadProtocolVersion.ToString() ||
+                parts[2] != ApprovalPayloadRulesetVersion ||
+                parts[3] != config.Port.ToString() ||
+                parts[4] != config.MaxPlayers.ToString() ||
+                parts[5] != ApprovalPayloadSessionMode ||
+                parts[6] != ApprovalPayloadVoiceMode)
+                return false;
+
+            string body = string.Join(ApprovalPayloadSeparator.ToString(), parts, 0, 7);
+            byte[] expected = ComputePayloadSignature(body, config.JoinCode);
+            byte[] actual;
+            try
+            {
+                actual = Convert.FromBase64String(parts[7]);
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+
+            return FixedTimeEquals(expected, actual);
+        }
+
+        static byte[] ComputePayloadSignature(string body, string joinCode)
+        {
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(joinCode));
+            return hmac.ComputeHash(Encoding.UTF8.GetBytes(body));
+        }
+
+        static bool FixedTimeEquals(byte[] left, byte[] right)
+        {
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+
+            int diff = 0;
+            for (int i = 0; i < left.Length; i++)
+                diff |= left[i] ^ right[i];
+
+            return diff == 0;
         }
 
         NetworkManager ResolveNetworkManager()

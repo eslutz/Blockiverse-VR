@@ -1,3 +1,4 @@
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -24,6 +25,35 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void RuntimeAdvanceStopsWhileGameIsPaused()
+        {
+            var host = new GameObject("World Time Clock");
+
+            try
+            {
+                WorldTimeClock clock = host.AddComponent<WorldTimeClock>();
+                clock.Configure(dayLengthSeconds: 10.0f, startNormalizedTime: 0.25f, timeScale: 1.0f);
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+                clock.AdvanceRuntime(1.0f);
+
+                Assert.That(clock.NormalizedTime, Is.EqualTo(0.25f).Within(0.001f));
+                Assert.That(clock.TotalElapsedTicks, Is.EqualTo(0));
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+                clock.AdvanceRuntime(1.0f);
+
+                Assert.That(clock.NormalizedTime, Is.EqualTo(0.35f).Within(0.001f));
+                Assert.That(clock.TotalElapsedTicks, Is.EqualTo(WorldConstants.TicksPerSecond));
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
                 Object.DestroyImmediate(host);
             }
         }
@@ -98,6 +128,30 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void LightingCycleAppliesNonShadowCastingSun()
+        {
+            var host = new GameObject("Lighting Cycle");
+
+            try
+            {
+                WorldTimeClock clock = host.AddComponent<WorldTimeClock>();
+                clock.Configure(dayLengthSeconds: 10.0f, startNormalizedTime: 0.25f, timeScale: 1.0f);
+                Light light = host.AddComponent<Light>();
+                BlockiverseLightingCycleController controller = host.AddComponent<BlockiverseLightingCycleController>();
+
+                controller.Configure(clock, light);
+
+                Assert.That(light.type, Is.EqualTo(LightType.Directional));
+                Assert.That(light.shadows, Is.EqualTo(LightShadows.None));
+                Assert.That(light.shadowStrength, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void VoxelLightSamplerDarkensTunnelWithDistanceFromOpening()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
@@ -123,7 +177,28 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void TorchbudLightManagerPlacesPointLightAtFlameEnd()
+        public void VoxelLightSamplerBrightensTunnelNearEmissiveBlocks()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 12);
+            for (int y = 0; y < world.Bounds.Height; y++)
+            for (int z = 0; z < world.Bounds.Depth; z++)
+            for (int x = 0; x < world.Bounds.Width; x++)
+                world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Graystone, trackChange: false);
+
+            var air = new BlockPosition(4, 4, 4);
+            world.SetBlock(air, BlockRegistry.Air, trackChange: false);
+            float unlit = VoxelLightSampler.SampleAirLight(world, registry, air);
+
+            world.SetBlock(new BlockPosition(4, 4, 5), BlockRegistry.LumenLamp, trackChange: false);
+            float lit = VoxelLightSampler.SampleAirLight(world, registry, air);
+
+            Assert.That(lit, Is.GreaterThan(unlit));
+            Assert.That(lit, Is.GreaterThanOrEqualTo(registry.Get(BlockRegistry.LumenLamp).EmissiveLight / 15.0f));
+        }
+
+        [Test]
+        public void TorchbudLightManagerIdentifiesEmissiveBlocksAndEffectPosition()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             Vector3 position = TorchbudLightManager.GetLightPosition(new BlockPosition(2, 4, 6));

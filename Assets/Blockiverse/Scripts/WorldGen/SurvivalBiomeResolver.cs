@@ -12,9 +12,19 @@ namespace Blockiverse.WorldGen
     // exact same biomes the host generated.
     //
     // BiomeIndexAt returns the TerrainBiome value as an int (0–6) so callers in other
-    // assemblies can consume it without the internal TerrainBiome enum.
+    // assemblies can consume it without the internal TerrainBiome enum. Public helper
+    // methods below are the only supported way to map canonical biome IDs to these indexes.
     public sealed class SurvivalBiomeResolver
     {
+        public const int AnyBiomeIndex = -1;
+        public const int MeadowBiomeIndex = (int)TerrainBiome.Meadow;
+        public const int PinewildBiomeIndex = (int)TerrainBiome.Pinewild;
+        public const int WetlandBiomeIndex = (int)TerrainBiome.Wetland;
+        public const int DrybrushBiomeIndex = (int)TerrainBiome.Drybrush;
+        public const int DunesBiomeIndex = (int)TerrainBiome.Dunes;
+        public const int TundraBiomeIndex = (int)TerrainBiome.Tundra;
+        public const int HighlandsBiomeIndex = (int)TerrainBiome.Highlands;
+
         readonly int seed;
         readonly int worldHeight;
 
@@ -41,6 +51,44 @@ namespace Blockiverse.WorldGen
 
         // TerrainBiome value (0–6) at the given column.
         public int BiomeIndexAt(int x, int z) => (int)BiomeAt(x, z);
+
+        public static int BiomeIndexForCanonicalId(string biomeId)
+        {
+            return TryGetBiomeIndex(biomeId, out int index) ? index : AnyBiomeIndex;
+        }
+
+        public static bool TryGetBiomeIndex(string biomeId, out int index)
+        {
+            switch (biomeId)
+            {
+                case "meadow":
+                    index = MeadowBiomeIndex;
+                    return true;
+                case "pinewild":
+                    index = PinewildBiomeIndex;
+                    return true;
+                case "wetland":
+                    index = WetlandBiomeIndex;
+                    return true;
+                case "drybrush":
+                    index = DrybrushBiomeIndex;
+                    return true;
+                case "dunes":
+                    index = DunesBiomeIndex;
+                    return true;
+                case "tundra":
+                    index = TundraBiomeIndex;
+                    return true;
+                case "highlands":
+                    index = HighlandsBiomeIndex;
+                    return true;
+                default:
+                    index = AnyBiomeIndex;
+                    return false;
+            }
+        }
+
+        public static bool IsTundraBiomeIndex(int biomeIndex) => biomeIndex == TundraBiomeIndex;
 
         internal TerrainBiome BiomeAt(int x, int z) => Classify(x, z, SurfaceHeight(x, z));
 

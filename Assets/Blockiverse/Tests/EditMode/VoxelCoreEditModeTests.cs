@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -14,7 +16,7 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(registry.All.Count, Is.EqualTo(80));
+            Assert.That(registry.All.Count, Is.EqualTo(81));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
             Assert.That(registry.Get(BlockRegistry.BranchwoodLog).Category, Is.EqualTo(BlockCategory.Organic));
@@ -35,11 +37,56 @@ namespace Blockiverse.Tests.EditMode
             // Emberflow glows at the §8 canonical light level; its flow cells glow slightly dimmer.
             Assert.That(registry.Get(BlockRegistry.Emberflow).EmissiveLight, Is.EqualTo(10));
             Assert.That(registry.Get(BlockRegistry.EmberflowFlow).EmissiveLight, Is.EqualTo(9));
+            Assert.That(registry.Get(BlockRegistry.Bedroll).IsSolid, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Graystone).DisplayKey, Is.EqualTo("block.graystone.name"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Graystone"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Dark Slate"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Glowwick"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Smooth Branchwood"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Deep Locker"));
+            Assert.That(registry.All.Select(b => b.Name), Has.Member("Bedroll"));
+        }
+
+        [Test]
+        public void SharedDefaultRegistryIsStableAndMatchesFactoryContents()
+        {
+            BlockRegistry shared = BlockRegistry.Default;
+            BlockRegistry factory = BlockRegistry.CreateDefault();
+
+            Assert.That(BlockRegistry.Default, Is.SameAs(shared));
+            Assert.That(shared.All.Count, Is.EqualTo(factory.All.Count));
+            Assert.That(shared.Get(BlockRegistry.SmoothBranchwood).CanonicalId, Is.EqualTo("smooth_branchwood"));
+            Assert.That(shared.Get(BlockRegistry.Bedroll).IsSolid, Is.False);
+        }
+
+        [Test]
+        public void DeterministicHashGoldenValuesGuardWorldRollCompatibility()
+        {
+            Assert.That(DeterministicHash.Hash(0, 0, 0, 0, 0), Is.EqualTo(0xca889355u));
+            Assert.That(DeterministicHash.Hash(1, 2, 3, 4, 5), Is.EqualTo(0x9db240e2u));
+            Assert.That(DeterministicHash.Hash(-12345, 67, -89, 10, 42), Is.EqualTo(0x1fc14182u));
+            Assert.That(DeterministicHash.Hash(2202, 15, 4, 9, BlockRegistry.Emberflow.Value), Is.EqualTo(0x8ce79b82u));
+
+            Assert.That(DeterministicHash.UnitRoll(0, 0, 0, 0, 0, 0L), Is.EqualTo(0.5902278602588922d).Within(1e-16));
+            Assert.That(DeterministicHash.UnitRoll(42, 2, 4, 6, BlockRegistry.Thornbrush.Value, 1L), Is.EqualTo(0.5138001018203795d).Within(1e-16));
+            Assert.That(DeterministicHash.UnitRoll(-12345, 67, -89, 10, 42, 9876543210L), Is.EqualTo(0.7407544837333262d).Within(1e-16));
+            Assert.That(DeterministicHash.UnitRoll(2202, 15, 4, 9, BlockRegistry.Emberflow.Value, 1099511627793L), Is.EqualTo(0.23445059009827673d).Within(1e-16));
+        }
+
+        [Test]
+        public void BlockInteractionReachUsesNearestBlockBounds()
+        {
+            Vector3 origin = new(0.5f, 1.6f, 0.5f);
+
+            Assert.That(
+                CreativeInteractionController.IsBlockWithinInteractionReach(origin, new BlockPosition(6, 1, 0)),
+                Is.True,
+                "A block whose nearest face is within the 6 m gameplay reach should be accepted.");
+
+            Assert.That(
+                CreativeInteractionController.IsBlockWithinInteractionReach(origin, new BlockPosition(8, 1, 0)),
+                Is.False,
+                "Distant block commands must be rejected before the host mutates world or inventory state.");
         }
 
         [Test]
@@ -50,6 +97,19 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.Throws<InvalidOperationException>(() =>
                 registry.Register(new BlockDefinition(new BlockId(7), "test_second", "Second", BlockCategory.Terrain, isSolid: true, isRenderable: true)));
+        }
+
+        [Test]
+        public void RegistryKeysBlocksByCanonicalIdNotDisplayName()
+        {
+            var registry = new BlockRegistry();
+            registry.Register(new BlockDefinition(new BlockId(7), "test_first", "Shared Display", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+            registry.Register(new BlockDefinition(new BlockId(8), "test_second", "Shared Display", BlockCategory.Terrain, isSolid: true, isRenderable: true));
+
+            Assert.That(registry.TryGetByCanonicalId("test_first", out BlockDefinition first), Is.True);
+            Assert.That(first.Id, Is.EqualTo(new BlockId(7)));
+            Assert.That(first.DisplayKey, Is.EqualTo("block.test_first.name"));
+            Assert.That(registry.TryGetByCanonicalId("Shared Display", out _), Is.False);
         }
 
         [Test]
@@ -81,6 +141,29 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void CollectBlockPositionsFindsMultipleTargetBlocks()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 42);
+            var grain = new BlockPosition(1, 1, 1);
+            var berry = new BlockPosition(2, 2, 1);
+            var ignored = new BlockPosition(3, 1, 1);
+            var targets = new HashSet<BlockId>
+            {
+                BlockRegistry.GrainStalk,
+                BlockRegistry.Berrybush,
+            };
+            var results = new HashSet<BlockPosition>();
+
+            world.SetBlock(grain, BlockRegistry.GrainStalk);
+            world.SetBlock(berry, BlockRegistry.Berrybush);
+            world.SetBlock(ignored, BlockRegistry.Reedgrass);
+
+            world.CollectBlockPositions(targets, results);
+
+            Assert.That(results, Is.EquivalentTo(new[] { grain, berry }));
+        }
+
+        [Test]
         public void UntrackedBlockMutationDoesNotRecordPersistenceChangeButQueuesRenderChange()
         {
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 42);
@@ -95,6 +178,42 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(world.GetChangedBlocks(), Is.Empty);
             Assert.That(eventCount, Is.EqualTo(1));
             Assert.That(rebuildQueue.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void TrackedBlockMutationKeepsOriginalBaselineAndDropsWhenReverted()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 42);
+            var position = new BlockPosition(1, 1, 1);
+
+            world.SetBlock(position, BlockRegistry.Graystone);
+            world.SetBlock(position, BlockRegistry.WorkPlank);
+
+            BlockChange delta = world.GetChangedBlocks().Single();
+            Assert.That(delta.PreviousBlock, Is.EqualTo(BlockRegistry.Air));
+            Assert.That(delta.NewBlock, Is.EqualTo(BlockRegistry.WorkPlank));
+
+            world.SetBlock(position, BlockRegistry.Air);
+
+            Assert.That(world.GetChangedBlocks(), Is.Empty);
+        }
+
+        [Test]
+        public void SetBlockReconcilesTrackedChangesAgainstExistingBaseline()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 42);
+            var position = new BlockPosition(1, 1, 1);
+
+            world.SetBlock(position, BlockRegistry.Graystone, trackChange: true);
+            world.SetBlock(position, BlockRegistry.WorkPlank, trackChange: true);
+
+            BlockChange delta = world.GetChangedBlocks().Single();
+            Assert.That(delta.PreviousBlock, Is.EqualTo(BlockRegistry.Air));
+            Assert.That(delta.NewBlock, Is.EqualTo(BlockRegistry.WorkPlank));
+
+            world.SetBlock(position, BlockRegistry.Air, trackChange: true);
+
+            Assert.That(world.GetChangedBlocks(), Is.Empty);
         }
 
         [Test]
@@ -253,7 +372,7 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var settings = new WorldGenerationSettings(width: 16, height: 8, depth: 16, chunkSize: 16, seed: 123, groundHeight: 2);
-            var preset = new FlatCreativeWorldPreset(registry, settings);
+            var preset = new FlatBuilderPreset(registry, settings);
 
             VoxelWorld world = preset.Generate();
 

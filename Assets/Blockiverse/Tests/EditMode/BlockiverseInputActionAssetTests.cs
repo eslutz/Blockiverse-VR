@@ -9,6 +9,8 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class BlockiverseInputActionAssetTests
     {
+        const string StickDeadzoneProcessor = "stickDeadzone(min=0.2,max=0.95)";
+
         [Test]
         public void InputActionAssetContainsM1ActionMaps()
         {
@@ -31,14 +33,14 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{RightHand}/secondaryButton");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo);
-            AssertNoBindingPath(asset, "<XRController>{LeftHand}/primaryButton", "Left X is intentionally unassigned.");
-            AssertNoBindingPath(asset, "<XRController>{LeftHand}/secondaryButton", "Left Y is intentionally unassigned.");
         }
 
         [Test]
-        public void JumpUsesRightAAndHasNoLegacyControllerBindings()
+        public void JumpUsesGameplayMapAndHasNoLegacyControllerBindings()
         {
             InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
                 BlockiverseProject.InputActionsAssetPath);
@@ -49,7 +51,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(rightHandJump, Is.Null, "RightHand/Jump is stale; JumpProvider reads Blockiverse Gameplay/Jump.");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
                 BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
-            AssertNoBindingPath(asset, "<XRController>{LeftHand}/primaryButton", "Jump must no longer be on Left X.");
+            AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
+                BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
         }
 
         static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)
@@ -62,11 +65,13 @@ namespace Blockiverse.Tests.EditMode
             AssertAction(asset, mapName, BlockiverseInputActionNames.TrackingState, $"{controllerPath}/trackingState");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Select, $"{controllerPath}/triggerPressed");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Activate, $"{controllerPath}/gripPressed");
+            AssertAction(asset, mapName, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
+            AssertAction(asset, mapName, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
             AssertAction(asset, mapName, BlockiverseInputActionNames.UiPress, $"{controllerPath}/triggerPressed");
             AssertAction(asset, mapName, BlockiverseInputActionNames.UiScroll, $"{controllerPath}/thumbstick");
             AssertAction(asset, mapName, BlockiverseInputActionNames.HapticDevice, $"{controllerPath}/*");
-            AssertAction(asset, mapName, BlockiverseInputActionNames.Move, $"{controllerPath}/thumbstick");
-            AssertAction(asset, mapName, BlockiverseInputActionNames.Turn, $"{controllerPath}/thumbstick");
+            AssertActionWithProcessor(asset, mapName, BlockiverseInputActionNames.Move, $"{controllerPath}/thumbstick", StickDeadzoneProcessor);
+            AssertActionWithProcessor(asset, mapName, BlockiverseInputActionNames.Turn, $"{controllerPath}/thumbstick", StickDeadzoneProcessor);
             // Teleport Mode and Teleport Select are now thumbstick-up composites (push forward to
             // aim, release to teleport), not trigger or A button.
             AssertActionContainsPath(asset, mapName, BlockiverseInputActionNames.TeleportMode, "thumbstick");
@@ -83,6 +88,22 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(action.bindings, Has.Some.Matches<InputBinding>(
                 binding => binding.effectivePath == expectedPath),
                 $"{mapName}/{actionName} binding not found: {expectedPath}");
+        }
+
+        static void AssertActionWithProcessor(
+            InputActionAsset asset,
+            string mapName,
+            string actionName,
+            string expectedPath,
+            string expectedProcessor)
+        {
+            InputAction action = asset.FindActionMap(mapName).FindAction(actionName);
+
+            Assert.That(action, Is.Not.Null, $"{mapName}/{actionName}");
+            Assert.That(action.bindings, Has.Some.Matches<InputBinding>(
+                binding => binding.effectivePath == expectedPath &&
+                    binding.processors == expectedProcessor),
+                $"{mapName}/{actionName} deadzoned binding not found: {expectedPath} processor={expectedProcessor}");
         }
 
         static void AssertActionContainsPath(InputActionAsset asset, string mapName, string actionName, string pathSubstring)

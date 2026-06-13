@@ -17,14 +17,25 @@ namespace Blockiverse.Survival
         public const int ThirstTicksPerPoint = 180;
         // Stamina recovers one point every second of rest.
         public const int StaminaRegenTicksPerPoint = 20;
-        // While starving or dehydrated, deal damage on this cadence.
-        public const int StarvationDamageIntervalTicks = 1200;
-        public const int StarvationDamagePerInterval = 1;
+        // While starving or dehydrated, deal damage on this cadence. Normal difficulty applies
+        // 4 HP/minute per empty vital, enough to make an ignored vital failure urgent.
+        public const int StarvationDamageIntervalTicks = 600;
+        public const int StarvationDamagePerInterval = 2;
+        // Cold weather pressure is tick-driven, not frame-driven, so clients remain aligned with
+        // the host's synced weather/time state.
+        public const int EnvironmentExposureDamageIntervalTicks = 600;
+        public const int EnvironmentExposureDamagePerInterval = 1;
+        public const float ColdExposureTemperatureThresholdC = 2.0f;
+        public const float NightColdPressureThresholdC = 5.0f;
+        public const float FallSafeDistanceMeters = 3.0f;
+        public const int FallDamagePerMeter = 6;
+        public const int FallMaxDamage = 60;
 
         int hungerAccumulator;
         int thirstAccumulator;
         int staminaAccumulator;
         int starvationAccumulator;
+        int environmentExposureAccumulator;
 
         public SurvivalVitals(int max = DefaultMax)
         {
@@ -45,16 +56,21 @@ namespace Blockiverse.Survival
         public bool IsStarving => Hunger <= 0;
         public bool IsDehydrated => Thirst <= 0;
 
+        public int Tick(int ticks) => Tick(ticks, SurvivalDifficultyProfile.Normal);
+
         // Advances vitals by the given number of ticks. Returns the health damage to apply this
         // step from starvation/dehydration (0 when both are above zero).
-        public int Tick(int ticks)
+        public int Tick(int ticks, SurvivalDifficultyProfile difficulty)
         {
             if (ticks <= 0)
                 return 0;
 
-            Hunger = DepleteWithAccumulator(Hunger, ref hungerAccumulator, ticks, HungerTicksPerPoint);
-            Thirst = DepleteWithAccumulator(Thirst, ref thirstAccumulator, ticks, ThirstTicksPerPoint);
-            Stamina = RegenWithAccumulator(Stamina, ref staminaAccumulator, ticks, StaminaRegenTicksPerPoint, Max);
+            if (!difficulty.IsValid)
+                difficulty = SurvivalDifficultyProfile.Normal;
+
+            Hunger = DepleteWithAccumulator(Hunger, ref hungerAccumulator, ticks, difficulty.HungerTicksPerPoint);
+            Thirst = DepleteWithAccumulator(Thirst, ref thirstAccumulator, ticks, difficulty.ThirstTicksPerPoint);
+            Stamina = RegenWithAccumulator(Stamina, ref staminaAccumulator, ticks, difficulty.StaminaRegenTicksPerPoint, Max);
 
             if (!IsStarving && !IsDehydrated)
             {
@@ -66,12 +82,72 @@ namespace Blockiverse.Survival
             int sources = (IsStarving ? 1 : 0) + (IsDehydrated ? 1 : 0);
             starvationAccumulator += ticks;
             int damage = 0;
-            while (starvationAccumulator >= StarvationDamageIntervalTicks)
+            while (starvationAccumulator >= difficulty.StarvationDamageIntervalTicks)
             {
-                starvationAccumulator -= StarvationDamageIntervalTicks;
-                damage += StarvationDamagePerInterval * sources;
+                starvationAccumulator -= difficulty.StarvationDamageIntervalTicks;
+                damage += difficulty.StarvationDamagePerInterval * sources;
             }
             return damage;
+        }
+
+        public int TickEnvironmentExposure(int ticks, SurvivalEnvironmentExposure exposure) =>
+            TickEnvironmentExposure(ticks, exposure, SurvivalDifficultyProfile.Normal);
+
+        public int TickEnvironmentExposure(int ticks, SurvivalEnvironmentExposure exposure, SurvivalDifficultyProfile difficulty)
+        {
+            if (ticks <= 0)
+                return 0;
+
+            if (!difficulty.IsValid)
+                difficulty = SurvivalDifficultyProfile.Normal;
+
+            int pressureSources = ComputeEnvironmentPressureSources(exposure);
+            if (pressureSources <= 0)
+            {
+                environmentExposureAccumulator = 0;
+                return 0;
+            }
+
+            environmentExposureAccumulator += ticks;
+            int damage = 0;
+            while (environmentExposureAccumulator >= difficulty.EnvironmentExposureDamageIntervalTicks)
+            {
+                environmentExposureAccumulator -= difficulty.EnvironmentExposureDamageIntervalTicks;
+                damage += difficulty.EnvironmentExposureDamagePerInterval * pressureSources;
+            }
+            return damage;
+        }
+
+        public void ResetEnvironmentExposure() => environmentExposureAccumulator = 0;
+
+        public static int ComputeEnvironmentPressureSources(SurvivalEnvironmentExposure exposure)
+        {
+            if (!exposure.SkyExposed)
+                return 0;
+
+            bool coldEnough = exposure.TemperatureC <= ColdExposureTemperatureThresholdC;
+            bool nightCold = exposure.IsNight && exposure.TemperatureC <= NightColdPressureThresholdC;
+            if (!coldEnough && !nightCold)
+                return 0;
+
+            int sources = 1;
+            if (exposure.PrecipitationIntensity >= 0.6f)
+                sources++;
+            if (exposure.StormIntensity >= 0.6f)
+                sources++;
+            return sources;
+        }
+
+        public static int ComputeFallDamage(float fallMeters, SurvivalDifficultyProfile difficulty)
+        {
+            if (fallMeters <= FallSafeDistanceMeters)
+                return 0;
+
+            if (!difficulty.IsValid)
+                difficulty = SurvivalDifficultyProfile.Normal;
+
+            int baseDamage = (int)Math.Ceiling((fallMeters - FallSafeDistanceMeters) * FallDamagePerMeter);
+            return Math.Min(FallMaxDamage, difficulty.ScaleFallDamage(baseDamage));
         }
 
         public void Eat(int amount) => Hunger = Add(Hunger, amount, Max);
@@ -89,6 +165,7 @@ namespace Blockiverse.Survival
             thirstAccumulator = 0;
             staminaAccumulator = 0;
             starvationAccumulator = 0;
+            environmentExposureAccumulator = 0;
         }
 
         // Spends stamina for an exertion (sprint/jump). Returns false without spending when there
@@ -109,7 +186,7 @@ namespace Blockiverse.Survival
             Hunger = Max;
             Thirst = Max;
             Stamina = Max;
-            hungerAccumulator = thirstAccumulator = staminaAccumulator = starvationAccumulator = 0;
+            hungerAccumulator = thirstAccumulator = staminaAccumulator = starvationAccumulator = environmentExposureAccumulator = 0;
         }
 
         // Restores persisted values (clamped) without resetting accumulators to defaults.
@@ -159,5 +236,37 @@ namespace Blockiverse.Survival
         }
 
         static int Clamp(int value, int max) => Math.Max(0, Math.Min(max, value));
+    }
+
+    public readonly struct SurvivalEnvironmentExposure
+    {
+        public SurvivalEnvironmentExposure(
+            float temperatureC,
+            bool skyExposed,
+            bool isNight,
+            float precipitationIntensity = 0.0f,
+            float stormIntensity = 0.0f)
+        {
+            TemperatureC = temperatureC;
+            SkyExposed = skyExposed;
+            IsNight = isNight;
+            PrecipitationIntensity = Clamp01(precipitationIntensity);
+            StormIntensity = Clamp01(stormIntensity);
+        }
+
+        public float TemperatureC { get; }
+        public bool SkyExposed { get; }
+        public bool IsNight { get; }
+        public float PrecipitationIntensity { get; }
+        public float StormIntensity { get; }
+
+        static float Clamp01(float value)
+        {
+            if (float.IsNaN(value) || value <= 0.0f)
+                return 0.0f;
+            if (value >= 1.0f)
+                return 1.0f;
+            return value;
+        }
     }
 }

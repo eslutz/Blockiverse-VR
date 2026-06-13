@@ -23,6 +23,7 @@ namespace Blockiverse.MetaAvatars
         [SerializeField] string fallbackReason = "Meta Horizon avatar has not loaded yet.";
 
         byte[] streamBuffer = Array.Empty<byte>();
+        byte[] recordedStreamData = Array.Empty<byte>();
         MetaAvatarPresentationMode mode = MetaAvatarPresentationMode.RemoteThirdPerson;
         bool attemptedLocalLoad;
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -100,8 +101,12 @@ namespace Blockiverse.MetaAvatars
             if (byteCount == 0)
                 return false;
 
-            streamData = new byte[byteCount];
-            Array.Copy(streamBuffer, streamData, byteCount);
+            int streamLength = checked((int)byteCount);
+            if (recordedStreamData.Length != streamLength)
+                recordedStreamData = new byte[streamLength];
+
+            Array.Copy(streamBuffer, recordedStreamData, streamLength);
+            streamData = recordedStreamData;
             return true;
         }
 

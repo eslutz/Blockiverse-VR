@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Blockiverse.Gameplay;
+using Blockiverse.Voxel;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
@@ -105,6 +106,22 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(BlockiverseAudioCuePlayer.GetCategory(BlockiverseAudioCue.UiConfirm), Is.EqualTo(BlockiverseAudioCategory.Ui));
             Assert.That(BlockiverseAudioCuePlayer.GetCategory(BlockiverseAudioCue.RainLightLoop), Is.EqualTo(BlockiverseAudioCategory.Weather));
             Assert.That(BlockiverseAudioCuePlayer.GetCategory(BlockiverseAudioCue.BlockBreak), Is.EqualTo(BlockiverseAudioCategory.Effects));
+        }
+
+        [Test]
+        public void BlockFeedbackCuesUseStoneCueForHardBlocksAndSoftCueForOrganicBlocks()
+        {
+            BlockRegistry registry = BlockRegistry.Default;
+
+            Assert.That(
+                BlockiverseBlockFeedbackCues.ToolHitForBlock(registry, BlockRegistry.Graystone),
+                Is.EqualTo(BlockiverseAudioCue.ToolHitStone));
+            Assert.That(
+                BlockiverseBlockFeedbackCues.ToolHitForBlock(registry, BlockRegistry.EmbercoalSeam),
+                Is.EqualTo(BlockiverseAudioCue.ToolHitStone));
+            Assert.That(
+                BlockiverseBlockFeedbackCues.ToolHitForBlock(registry, BlockRegistry.BranchwoodLog),
+                Is.EqualTo(BlockiverseAudioCue.ToolHitSoft));
         }
 
         [Test]

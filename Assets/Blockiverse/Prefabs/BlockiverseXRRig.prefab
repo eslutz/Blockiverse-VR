@@ -29843,7 +29843,7 @@ MonoBehaviour:
   m_AllowHoverHapticsWhileSelecting: 1
   m_LineType: 0
   m_BlendVisualLinePoints: 1
-  m_MaxRaycastDistance: 30
+  m_MaxRaycastDistance: 6
   m_RayOriginTransform: {fileID: 3260024600113923118}
   m_ReferenceFrame: {fileID: 0}
   m_Velocity: 16
@@ -42389,20 +42389,7 @@ MonoBehaviour:
   audioCuePlayer: {fileID: 8273465101139274317}
   menuPressed:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 3940017637420611929}
-        m_TargetAssemblyTypeName: Blockiverse.VR.BlockiverseWorldSpacePanelPresenter,
-          Blockiverse.VR
-        m_MethodName: ToggleVisible
-        m_Mode: 0
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: 
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
   quickMenuPressed:
     m_PersistentCalls:
       m_Calls:

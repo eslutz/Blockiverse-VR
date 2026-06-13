@@ -10,14 +10,14 @@ namespace Blockiverse.UI
     // NewWorldCancel so BlockiverseMenuController can route the result.
     public sealed class BlockiverseNewWorldPanel : MonoBehaviour
     {
-        TMP_InputField nameInput;
-        TMP_InputField seedInput;
-        Button[] cycleBackButtons;
-        Button[] cycleNextButtons;
-        TMP_Text[] cycleValueLabels;
-        Button createButton;
-        Button cancelButton;
-        TMP_Text errorLabel;
+        [SerializeField] TMP_InputField nameInput;
+        [SerializeField] TMP_InputField seedInput;
+        [SerializeField] Button[] cycleBackButtons;
+        [SerializeField] Button[] cycleNextButtons;
+        [SerializeField] TMP_Text[] cycleValueLabels;
+        [SerializeField] Button createButton;
+        [SerializeField] Button cancelButton;
+        [SerializeField] TMP_Text errorLabel;
 
         static readonly Action<NewWorldConfig>[] ForwardActions =
         {
@@ -39,12 +39,23 @@ namespace Blockiverse.UI
 
         static readonly Func<NewWorldConfig, string>[] ValueGetters =
         {
-            c => c.GameMode,
-            c => c.Difficulty,
-            c => c.WorldSize,
-            c => c.WorldPreset,
-            c => c.StartingBiome,
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.GameMode),
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.Difficulty),
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.WorldSize),
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.WorldPreset),
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.StartingBiome),
         };
+
+        static readonly string[] CycleRowNames =
+        {
+            "Game Mode",
+            "Difficulty",
+            "World Size",
+            "World Preset",
+            "Starting Biome",
+        };
+
+        bool controlsWired;
 
         public NewWorldConfig Config { get; private set; }
         public event Action<string> ActionRequested;
@@ -67,11 +78,49 @@ namespace Blockiverse.UI
             this.createButton = createButton;
             this.cancelButton = cancelButton;
             this.errorLabel = errorLabel;
+            controlsWired = false;
+            WireControls();
+        }
+
+        public void ResolveRuntimeReferences()
+        {
+            Transform root = transform.Find("Panel") ?? transform;
+            bool changed = false;
+
+            changed |= AssignIfMissing(ref nameInput, FindChildComponent<TMP_InputField>(root, "Name Input"));
+            changed |= AssignIfMissing(ref seedInput, FindChildComponent<TMP_InputField>(root, "Seed Input"));
+
+            if (NeedsRefresh(cycleBackButtons, CycleRowNames.Length))
+            {
+                cycleBackButtons = FindCycleButtons(root, "Back");
+                changed |= cycleBackButtons.Length > 0;
+            }
+
+            if (NeedsRefresh(cycleNextButtons, CycleRowNames.Length))
+            {
+                cycleNextButtons = FindCycleButtons(root, "Next");
+                changed |= cycleNextButtons.Length > 0;
+            }
+
+            if (NeedsRefresh(cycleValueLabels, CycleRowNames.Length))
+            {
+                cycleValueLabels = FindCycleLabels(root);
+                changed |= cycleValueLabels.Length > 0;
+            }
+
+            changed |= AssignIfMissing(ref createButton, FindChildComponent<Button>(root, "Create Button"));
+            changed |= AssignIfMissing(ref cancelButton, FindChildComponent<Button>(root, "Cancel Button"));
+            changed |= AssignIfMissing(ref errorLabel, FindChildComponent<TMP_Text>(root, "Error"));
+
+            if (changed)
+                controlsWired = false;
+
             WireControls();
         }
 
         public void ResetForNewWorld()
         {
+            ResolveRuntimeReferences();
             Config = new NewWorldConfig();
             Config.SetName(NewWorldConfig.DefaultName);
             Config.RandomizeSeed(null);
@@ -81,8 +130,16 @@ namespace Blockiverse.UI
             RefreshAllCycleLabels();
         }
 
+        void Awake()
+        {
+            ResolveRuntimeReferences();
+        }
+
         void WireControls()
         {
+            if (controlsWired)
+                return;
+
             nameInput?.onValueChanged.AddListener(v => Config?.SetName(v));
             seedInput?.onValueChanged.AddListener(v => Config?.SetSeed(v));
 
@@ -100,6 +157,7 @@ namespace Blockiverse.UI
 
             createButton?.onClick.AddListener(OnCreate);
             cancelButton?.onClick.AddListener(() => ActionRequested?.Invoke(MenuActions.NewWorldCancel));
+            controlsWired = true;
         }
 
         void OnCycle(int idx, bool forward)
@@ -132,6 +190,48 @@ namespace Blockiverse.UI
         {
             for (int i = 0; i < ValueGetters.Length; i++)
                 RefreshCycleLabel(i);
+        }
+
+        static Button[] FindCycleButtons(Transform root, string buttonName)
+        {
+            var buttons = new Button[CycleRowNames.Length];
+            for (int i = 0; i < CycleRowNames.Length; i++)
+                buttons[i] = FindChildComponent<Button>(root, $"Row {CycleRowNames[i]}/{buttonName}");
+            return buttons;
+        }
+
+        static TMP_Text[] FindCycleLabels(Transform root)
+        {
+            var labels = new TMP_Text[CycleRowNames.Length];
+            for (int i = 0; i < CycleRowNames.Length; i++)
+                labels[i] = FindChildComponent<TMP_Text>(root, $"Row {CycleRowNames[i]}/Value");
+            return labels;
+        }
+
+        static T FindChildComponent<T>(Transform root, string path) where T : Component
+        {
+            Transform child = root != null ? root.Find(path) : null;
+            return child != null ? child.GetComponent<T>() : null;
+        }
+
+        static bool AssignIfMissing<T>(ref T target, T value) where T : Component
+        {
+            if (target != null || value == null)
+                return false;
+
+            target = value;
+            return true;
+        }
+
+        static bool NeedsRefresh<T>(T[] values, int expectedLength) where T : class
+        {
+            if (values == null || values.Length != expectedLength || values.Length == 0)
+                return true;
+
+            for (int i = 0; i < values.Length; i++)
+                if (values[i] == null)
+                    return true;
+            return false;
         }
     }
 }

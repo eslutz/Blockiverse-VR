@@ -3,6 +3,7 @@ using System.Linq;
 using System.Xml;
 using Blockiverse.Core;
 using NUnit.Framework;
+using Unity.Netcode.Editor.Configuration;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -15,12 +16,26 @@ namespace Blockiverse.Tests.EditMode
         const string BootScenePath = "Assets/Blockiverse/Scenes/Boot.unity";
         const string XrRigPrefabPath = "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab";
         const string AndroidUrpAssetPath = "Assets/Blockiverse/Settings/BlockiverseAndroidURPAsset.asset";
+        const string VoxelShaderPath = "Assets/Blockiverse/Shaders/BlockiverseVoxelLit.shader";
+        const string PerformanceStatsOverlayPath = "Assets/Blockiverse/Scripts/Gameplay/PerformanceStatsOverlay.cs";
+        const string BlockiverseInputRigPath = "Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs";
+        const string BlockiverseControllerHapticsPath = "Assets/Blockiverse/Scripts/VR/BlockiverseControllerHaptics.cs";
         const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         const string LegacyAndroidResourcePath = "Assets/Plugins/Android/res";
         const string OculusRuntimeSettingsPath = "Assets/Resources/OculusRuntimeSettings.asset";
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
+        const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
+        const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
+        const string XrRigBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs";
+        static readonly string[] EngineFreeAsmdefPaths =
+        {
+            "Assets/Blockiverse/Scripts/Voxel/Blockiverse.Voxel.asmdef",
+            "Assets/Blockiverse/Scripts/Survival/Blockiverse.Survival.asmdef",
+            "Assets/Blockiverse/Scripts/SurvivalHealth/Blockiverse.Survival.Health.asmdef",
+            "Assets/Blockiverse/Scripts/WorldGen/Blockiverse.WorldGen.asmdef",
+        };
 
         [Test]
         public void UnityVersionIsPinnedToUnity6()
@@ -43,10 +58,26 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void NetcodeDefaultNetworkPrefabGenerationIsDisabled()
+        {
+            Assert.That(NetcodeForGameObjectsProjectSettings.instance.GenerateDefaultNetworkPrefabs, Is.False);
+        }
+
+        [Test]
         public void RepositoryUsesVisibleMetaFilesAndTextSerialization()
         {
             Assert.That(VersionControlSettings.mode, Is.EqualTo("Visible Meta Files"));
             Assert.That(EditorSettings.serializationMode, Is.EqualTo(SerializationMode.ForceText));
+        }
+
+        [Test]
+        public void EngineFreeSimulationAssembliesRejectUnityEngineReferences()
+        {
+            foreach (string asmdefPath in EngineFreeAsmdefPaths)
+            {
+                string asmdef = File.ReadAllText(asmdefPath);
+                Assert.That(asmdef, Does.Contain("\"noEngineReferences\": true"), asmdefPath);
+            }
         }
 
         [Test]
@@ -58,11 +89,123 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void AndroidUrpAssetDisablesRealtimeShadowsForQuest()
+        {
+            string asset = File.ReadAllText(AndroidUrpAssetPath);
+
+            StringAssert.Contains("m_MainLightShadowsSupported: 0", asset);
+            StringAssert.Contains("m_ShadowDistance: 0", asset);
+            StringAssert.Contains("m_AdditionalLightsRenderingMode: 0", asset);
+            StringAssert.Contains("m_AdditionalLightsPerObjectLimit: 0", asset);
+        }
+
+        [Test]
+        public void VoxelShaderDoesNotCompileRealtimeShadowPasses()
+        {
+            string shader = File.ReadAllText(VoxelShaderPath);
+
+            Assert.That(shader, Does.Not.Contain("_MAIN_LIGHT_SHADOWS"));
+            Assert.That(shader, Does.Not.Contain("_ADDITIONAL_LIGHTS"));
+            Assert.That(shader, Does.Not.Contain("ShadowCaster"));
+        }
+
+        [Test]
         public void BootSceneIsFirstEnabledBuildScene()
         {
             Assert.That(EditorBuildSettings.scenes, Has.Length.GreaterThanOrEqualTo(1));
             Assert.That(EditorBuildSettings.scenes[0].path, Is.EqualTo(BootScenePath));
             Assert.That(EditorBuildSettings.scenes[0].enabled, Is.True);
+            Assert.That(
+                EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path),
+                Is.EqualTo(new[] { BootScenePath }),
+                "Player builds must enable only the generated Boot scene; test scenes stay editor-only.");
+        }
+
+        [Test]
+        public void GeneratedMenuLabelsAutoSizeForLocalizedText()
+        {
+            string menuBootstrapper = File.ReadAllText(MenuBootstrapperPath);
+
+            StringAssert.Contains("text.enableAutoSizing = true", menuBootstrapper);
+            StringAssert.Contains("text.fontSizeMin =", menuBootstrapper);
+            StringAssert.Contains("TextOverflowModes.Ellipsis", menuBootstrapper);
+            Assert.That(menuBootstrapper, Does.Not.Contain("TextOverflowModes.Truncate"));
+        }
+
+        [Test]
+        public void GeneratedControllerMappingMentionsBothTeleportSticks()
+        {
+            string gameMenuBootstrapper = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.GameMenus.cs");
+
+            StringAssert.Contains("Either stick hold up: teleport aim, release to land", gameMenuBootstrapper);
+            Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right stick hold up: teleport aim"));
+        }
+
+        [Test]
+        public void GeneratedXrRigRegistersPlayerRigAnchor()
+        {
+            string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);
+
+            StringAssert.Contains("rig.AddComponent<BlockiversePlayerRigAnchor>()", xrRigBootstrapper);
+            StringAssert.Contains("EnsureComponent<BlockiversePlayerRigAnchor>(rig)", xrRigBootstrapper);
+        }
+
+        [Test]
+        public void GeneratedWorldWiresPerformanceStatsOverlay()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+
+            StringAssert.Contains("EnsureComponent<PerformanceStatsOverlay>(worldObject)", sceneBootstrapper);
+            StringAssert.Contains("performanceOverlay.Configure(renderer)", sceneBootstrapper);
+        }
+
+        [Test]
+        public void GeneratedXrRigVignetteIncludesFallsAndJumps()
+        {
+            string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);
+
+            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())", xrRigBootstrapper);
+            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())", xrRigBootstrapper);
+        }
+
+        [Test]
+        public void XrRigTurnProvidersAreSuppressedWhileTurnHandHoversUi()
+        {
+            string inputRig = File.ReadAllText(BlockiverseInputRigPath);
+
+            StringAssert.Contains("leftInteractionRay", inputRig);
+            StringAssert.Contains("rightInteractionRay", inputRig);
+            StringAssert.Contains("UpdateTurnProviderEnabledState()", inputRig);
+            StringAssert.Contains("IsActiveTurnRayOverUi()", inputRig);
+            StringAssert.Contains("interactionRay.IsOverUIGameObject()", inputRig);
+            StringAssert.Contains("!smoothTurn && !suppressTurnForUi", inputRig);
+            StringAssert.Contains("smoothTurn && !suppressTurnForUi", inputRig);
+        }
+
+        [Test]
+        public void LocomotionFeedbackUsesTeleportAndSnapTurnHapticsWithoutPerCallDeviceListAllocation()
+        {
+            string inputRig = File.ReadAllText(BlockiverseInputRigPath);
+            string haptics = File.ReadAllText(BlockiverseControllerHapticsPath);
+
+            StringAssert.Contains("teleportationProvider.locomotionEnded += teleportEndedHandler", inputRig);
+            StringAssert.Contains("snapTurnProvider.locomotionEnded += snapTurnEndedHandler", inputRig);
+            StringAssert.Contains("BlockiverseHapticPattern.TeleportLand", inputRig);
+            StringAssert.Contains("BlockiverseHapticPattern.SnapTurn", inputRig);
+            StringAssert.Contains("static readonly System.Collections.Generic.List<InputDevice> DeviceScratch", haptics);
+            Assert.That(haptics, Does.Not.Contain("new System.Collections.Generic.List<InputDevice>()"));
+        }
+
+        [Test]
+        public void PerformanceOverlayImguiPathIsDevelopmentOnly()
+        {
+            string overlaySource = File.ReadAllText(PerformanceStatsOverlayPath);
+
+            StringAssert.Contains("#if !DEVELOPMENT_BUILD && !UNITY_EDITOR", overlaySource);
+            StringAssert.Contains("enabled = false;", overlaySource);
+            StringAssert.Contains("#if DEVELOPMENT_BUILD || UNITY_EDITOR", overlaySource);
+            StringAssert.Contains("void OnGUI()", overlaySource);
+            Assert.That(overlaySource, Does.Not.Contain("Debug.isDebugBuild"));
         }
 
         [Test]
@@ -109,6 +252,11 @@ namespace Blockiverse.Tests.EditMode
 
             var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
             namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
+
+            XmlNode internetPermission = manifest.SelectSingleNode(
+                "/manifest/uses-permission[@android:name='android.permission.INTERNET']",
+                namespaceManager);
+            Assert.That(internetPermission, Is.Not.Null);
 
             XmlNodeList activityNodes = manifest.SelectNodes("/manifest/application/activity", namespaceManager);
             Assert.That(activityNodes, Is.Not.Null);

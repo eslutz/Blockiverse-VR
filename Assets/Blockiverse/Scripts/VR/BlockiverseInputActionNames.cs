@@ -12,6 +12,8 @@ namespace Blockiverse.VR
         public const string TrackingState = "Tracking State";
         public const string Select = "Select";
         public const string Activate = "Activate";
+        public const string PrimaryButton = "Primary Button";
+        public const string SecondaryButton = "Secondary Button";
         public const string UiPress = "UI Press";
         public const string UiScroll = "UI Scroll";
         public const string HapticDevice = "Haptic Device";

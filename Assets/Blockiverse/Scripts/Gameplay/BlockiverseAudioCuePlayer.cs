@@ -35,7 +35,10 @@ namespace Blockiverse.Gameplay
         DayAmbienceLoop,
         NightAmbienceLoop,
         MultiplayerJoin,
-        MultiplayerLeave
+        MultiplayerLeave,
+        PlayerHurt,
+        LowHealth,
+        PlayerDeath
     }
 
     /// <summary>
@@ -65,6 +68,9 @@ namespace Blockiverse.Gameplay
         [SerializeField] AudioClip toolHitStoneClip;
         [SerializeField] AudioClip toolWrongClip;
         [SerializeField] AudioClip pickupItemClip;
+        [SerializeField] AudioClip playerHurtClip;
+        [SerializeField] AudioClip lowHealthClip;
+        [SerializeField] AudioClip playerDeathClip;
         [SerializeField] AudioClip containerOpenClip;
         [SerializeField] AudioClip containerCloseClip;
         [SerializeField] AudioClip torchIgniteClip;
@@ -236,6 +242,15 @@ namespace Blockiverse.Gameplay
                 case BlockiverseAudioCue.PickupItem:
                     pickupItemClip = clip;
                     break;
+                case BlockiverseAudioCue.PlayerHurt:
+                    playerHurtClip = clip;
+                    break;
+                case BlockiverseAudioCue.LowHealth:
+                    lowHealthClip = clip;
+                    break;
+                case BlockiverseAudioCue.PlayerDeath:
+                    playerDeathClip = clip;
+                    break;
                 case BlockiverseAudioCue.ContainerOpen:
                     containerOpenClip = clip;
                     break;
@@ -380,6 +395,9 @@ namespace Blockiverse.Gameplay
                 BlockiverseAudioCue.ToolHitStone => toolHitStoneClip,
                 BlockiverseAudioCue.ToolWrong => toolWrongClip,
                 BlockiverseAudioCue.PickupItem => pickupItemClip,
+                BlockiverseAudioCue.PlayerHurt => playerHurtClip != null ? playerHurtClip : toolHitStoneClip,
+                BlockiverseAudioCue.LowHealth => lowHealthClip != null ? lowHealthClip : craftFailClip,
+                BlockiverseAudioCue.PlayerDeath => playerDeathClip != null ? playerDeathClip : thunderNearClip,
                 BlockiverseAudioCue.ContainerOpen => containerOpenClip,
                 BlockiverseAudioCue.ContainerClose => containerCloseClip,
                 BlockiverseAudioCue.TorchIgnite => torchIgniteClip,

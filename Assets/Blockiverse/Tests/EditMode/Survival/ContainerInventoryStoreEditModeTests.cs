@@ -9,6 +9,17 @@ namespace Blockiverse.Tests.Survival.EditMode
         static readonly BlockPosition Pos = new(5, 6, 7);
 
         [Test]
+        public void DefaultPlacedContainerUsesTwentyFourSlots()
+        {
+            var store = new ContainerInventoryStore(ItemRegistry.CreateDefault());
+
+            Inventory inv = store.GetOrCreate(Pos);
+
+            Assert.That(ContainerInventoryStore.DefaultContainerSlotCount, Is.EqualTo(24));
+            Assert.That(inv.SlotCount, Is.EqualTo(24));
+        }
+
+        [Test]
         public void PopulateCreatesContainerWithGivenItems()
         {
             var store = new ContainerInventoryStore(ItemRegistry.CreateDefault());

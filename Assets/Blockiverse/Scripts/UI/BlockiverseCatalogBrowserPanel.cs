@@ -70,7 +70,7 @@ namespace Blockiverse.UI
             if (catalog != null)
                 return;
 
-            registry = BlockRegistry.CreateDefault();
+            registry = BlockRegistry.Default;
             catalog = CreativeCatalog.CreateDefault(registry);
         }
 
@@ -169,9 +169,14 @@ namespace Blockiverse.UI
 
             bool searching = !string.IsNullOrWhiteSpace(searchField != null ? searchField.text : null);
             if (categoryLabel != null)
-                categoryLabel.text = searching ? "Search" : Categories[categoryIndex].ToString();
+                categoryLabel.text = searching
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CatalogSearch)
+                    : BlockiverseLocalization.DisplayName(Categories[categoryIndex]);
             if (pageLabel != null)
-                pageLabel.text = $"{pageIndex + 1}/{pageCount}";
+                pageLabel.text = BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CommonPage,
+                    pageIndex + 1,
+                    pageCount);
         }
 
         void BuildVisibleBlocks()

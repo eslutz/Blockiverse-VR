@@ -67,14 +67,26 @@ namespace Blockiverse.VR
                 // rather than letting an undefined value degrade the rig to Teleport behavior.
                 if (!System.Enum.IsDefined(typeof(BlockiverseLocomotionMode), comfortSettings.LocomotionMode))
                     comfortSettings.LocomotionMode = BlockiverseLocomotionMode.Glide;
+                comfortSettings.DominantHand = (BlockiverseControllerRole)PlayerPrefs.GetInt(
+                    KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
+                if (!System.Enum.IsDefined(typeof(BlockiverseControllerRole), comfortSettings.DominantHand))
+                    comfortSettings.DominantHand = BlockiverseControllerRole.Right;
+                comfortSettings.DominantHandOnlyControls = PlayerPrefs.GetInt(
+                    KeyPrefix + "DominantHandOnlyControls", comfortSettings.DominantHandOnlyControls ? 1 : 0) != 0;
+                comfortSettings.ToggleToMineEnabled = PlayerPrefs.GetInt(
+                    KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0) != 0;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
                     KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 comfortSettings.SmoothTurnEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0) != 0;
+                comfortSettings.ContinuousTurnSpeed = PlayerPrefs.GetFloat(
+                    KeyPrefix + "ContinuousTurnSpeed", comfortSettings.ContinuousTurnSpeed);
                 comfortSettings.SnapTurnDegrees = PlayerPrefs.GetFloat(
                     KeyPrefix + "SnapTurnDegrees", comfortSettings.SnapTurnDegrees);
                 comfortSettings.StandingEyeHeight = PlayerPrefs.GetFloat(
                     KeyPrefix + "StandingEyeHeight", comfortSettings.StandingEyeHeight);
+                comfortSettings.UiScale = PlayerPrefs.GetFloat(
+                    KeyPrefix + "UiScale", comfortSettings.UiScale);
                 comfortSettings.VignetteEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0) != 0;
                 comfortSettings.VignetteStrength = PlayerPrefs.GetFloat(
@@ -110,10 +122,15 @@ namespace Blockiverse.VR
             if (comfortSettings != null)
             {
                 PlayerPrefs.SetInt(KeyPrefix + "LocomotionMode", (int)comfortSettings.LocomotionMode);
+                PlayerPrefs.SetInt(KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
+                PlayerPrefs.SetInt(KeyPrefix + "DominantHandOnlyControls", comfortSettings.DominantHandOnlyControls ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);
+                PlayerPrefs.SetFloat(KeyPrefix + "ContinuousTurnSpeed", comfortSettings.ContinuousTurnSpeed);
                 PlayerPrefs.SetFloat(KeyPrefix + "SnapTurnDegrees", comfortSettings.SnapTurnDegrees);
                 PlayerPrefs.SetFloat(KeyPrefix + "StandingEyeHeight", comfortSettings.StandingEyeHeight);
+                PlayerPrefs.SetFloat(KeyPrefix + "UiScale", comfortSettings.UiScale);
                 PlayerPrefs.SetInt(KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
             }
@@ -143,10 +160,15 @@ namespace Blockiverse.VR
                 if (comfortSettings != null)
                 {
                     hash = hash * 31 + (int)comfortSettings.LocomotionMode;
+                    hash = hash * 31 + (int)comfortSettings.DominantHand;
+                    hash = hash * 31 + (comfortSettings.DominantHandOnlyControls ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.ToggleToMineEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
                     hash = hash * 31 + (comfortSettings.SmoothTurnEnabled ? 1 : 0);
+                    hash = hash * 31 + comfortSettings.ContinuousTurnSpeed.GetHashCode();
                     hash = hash * 31 + comfortSettings.SnapTurnDegrees.GetHashCode();
                     hash = hash * 31 + comfortSettings.StandingEyeHeight.GetHashCode();
+                    hash = hash * 31 + comfortSettings.UiScale.GetHashCode();
                     hash = hash * 31 + (comfortSettings.VignetteEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.VignetteStrength.GetHashCode();
                 }

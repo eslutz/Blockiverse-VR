@@ -65,26 +65,37 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator BootSceneShowsDismissibleControllerMappingPopup()
         {
-            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            PlayerPrefs.DeleteKey(key);
 
-            GameObject popup = GameObject.Find("Controller Mapping Popup");
-            Assert.That(popup, Is.Not.Null);
+            try
+            {
+                yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-            Canvas canvas = popup.GetComponent<Canvas>();
-            Assert.That(canvas, Is.Not.Null);
-            Assert.That(canvas.enabled, Is.True);
+                GameObject popup = GameObject.Find("Controller Mapping Popup");
+                Assert.That(popup, Is.Not.Null);
 
-            BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(presenter, Is.Not.Null);
-            Assert.That(presenter.IsVisible, Is.True);
+                Canvas canvas = popup.GetComponent<Canvas>();
+                Assert.That(canvas, Is.Not.Null);
+                Assert.That(canvas.enabled, Is.True);
 
-            Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
-            Assert.That(closeButton, Is.Not.Null);
+                BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+                Assert.That(presenter, Is.Not.Null);
+                Assert.That(presenter.IsVisible, Is.True);
 
-            closeButton.onClick.Invoke();
-            yield return null;
+                Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
+                Assert.That(closeButton, Is.Not.Null);
 
-            Assert.That(canvas.enabled, Is.False);
+                closeButton.onClick.Invoke();
+                yield return null;
+
+                Assert.That(canvas.enabled, Is.False);
+                Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
+            }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
         }
 
         [UnityTest]
@@ -135,9 +146,9 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(rayInteractor.enableUIInteraction, Is.True);
             Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False);
 
-            BlockiverseVoidSafetyFloor voidFloor = UnityEngine.Object.FindFirstObjectByType<BlockiverseVoidSafetyFloor>();
-            Assert.That(voidFloor, Is.Not.Null, "Boot scene should catch players who fall below the voxel world.");
-            Assert.That(voidFloor.TopY, Is.EqualTo(-8.0f).Within(0.001f));
+            CreativeWorldManager worldManager = UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+            Assert.That(worldManager, Is.Not.Null);
+            Assert.That(worldManager.World, Is.Null, "Boot should wait for Create/Load/Join before generating a voxel world.");
         }
 
         static void AssertUiActionReference(InputActionReference reference, string expectedMap, string expectedAction)

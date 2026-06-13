@@ -37,9 +37,10 @@ namespace Blockiverse.Gameplay
             if (pool == null)
                 return;
 
-            float intensity = feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
             if (cue == BlockiverseVfxCue.LightningFlash && feedbackSettings != null && feedbackSettings.ReducedFlash)
-                intensity *= 0.35f;
+                return;
+
+            float intensity = feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
 
             pool.Play(cue, position, TintForCue(cue), intensity);
         }

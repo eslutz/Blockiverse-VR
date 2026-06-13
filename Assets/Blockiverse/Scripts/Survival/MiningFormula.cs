@@ -8,7 +8,7 @@ namespace Blockiverse.Survival
     // cost is derived from the block category and whether the correct tool/tier was used.
     public static class MiningFormula
     {
-        public const int TicksPerSecond = 20;
+        public const int TicksPerSecond = SimulationTime.TicksPerSecond;
         public const float HandSpeed = 0.5f;
 
         // Material mining speed by harvest tier (§7.1). Index 0 = bare hand.

@@ -1,3 +1,4 @@
+using System;
 using Blockiverse.Gameplay;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,6 +7,8 @@ namespace Blockiverse.VR
 {
     public sealed class BlockiverseWorldSpacePanelPresenter : MonoBehaviour
     {
+        public const string ControllerMappingPopupSeenPrefKey = "Blockiverse.ControllerMappingPopupSeen";
+
         [SerializeField] Canvas targetCanvas;
         [SerializeField] Transform headset;
         [SerializeField] float distanceMeters = 1.2f;
@@ -13,6 +16,7 @@ namespace Blockiverse.VR
         [SerializeField] float verticalOffsetMeters = -0.1f;
         [SerializeField] float pitchDegrees;
         [SerializeField] float panelScale = 0.002f;
+        [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] bool recenterOnShow = true;
         [SerializeField] bool showOnStart;
         [SerializeField] bool playShowFeedback;
@@ -21,11 +25,13 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseAudioCue hideFeedbackCue = BlockiverseAudioCue.UiCancel;
         [SerializeField] bool hapticOnShow = true;
         [SerializeField] bool hapticOnHide = true;
+        [SerializeField] string showOnStartPlayerPrefsKey;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
         CreativeHotbar hotbar;
         bool subscribedToHotbarSelection;
+        float lastAppliedPanelScale = -1.0f;
 
         public Canvas TargetCanvas => targetCanvas;
         public bool IsVisible => targetCanvas != null && targetCanvas.enabled;
@@ -34,6 +40,7 @@ namespace Blockiverse.VR
         public bool PlaysHideFeedback => playHideFeedback;
         public BlockiverseAudioCue ShowFeedbackCue => showFeedbackCue;
         public BlockiverseAudioCue HideFeedbackCue => hideFeedbackCue;
+        public string ShowOnStartPlayerPrefsKey => showOnStartPlayerPrefsKey;
 
         public void Configure(
             Canvas canvas,
@@ -44,7 +51,8 @@ namespace Blockiverse.VR
             float pitch,
             float scale = 0.002f,
             bool recenterWhenShown = true,
-            bool showWhenStarted = false)
+            bool showWhenStarted = false,
+            string showWhenStartedPlayerPrefsKey = null)
         {
             targetCanvas = canvas;
             headset = targetHeadset;
@@ -55,8 +63,14 @@ namespace Blockiverse.VR
             panelScale = scale;
             recenterOnShow = recenterWhenShown;
             showOnStart = showWhenStarted;
+            showOnStartPlayerPrefsKey = showWhenStartedPlayerPrefsKey;
             DiscoverHotbarSelection();
             SubscribeHotbarSelectionFeedback();
+        }
+
+        public void ConfigureComfortSettings(BlockiverseComfortSettings settings)
+        {
+            comfortSettings = settings;
         }
 
         public void ConfigureFeedback(
@@ -109,6 +123,8 @@ namespace Blockiverse.VR
             {
                 targetCanvas.enabled = false;
                 if (wasVisible)
+                    MarkShowOnStartSeen();
+                if (wasVisible)
                     PlayFeedback(hideFeedbackCue, playHideFeedback, hapticOnHide);
             }
         }
@@ -148,18 +164,23 @@ namespace Blockiverse.VR
             transform.SetPositionAndRotation(
                 position,
                 Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(pitchDegrees, 0.0f, 0.0f));
-            transform.localScale = Vector3.one * panelScale;
+            float resolvedScale = ResolvePanelScale();
+            transform.localScale = Vector3.one * resolvedScale;
+            lastAppliedPanelScale = resolvedScale;
         }
 
         void Awake()
         {
+            ApplyDefaultStartGateKey();
             EnsureCanvas();
             DiscoverHotbarSelection();
+            DiscoverComfortSettings();
         }
 
         void OnEnable()
         {
             DiscoverHotbarSelection();
+            DiscoverComfortSettings();
             SubscribeHotbarSelectionFeedback();
         }
 
@@ -170,8 +191,27 @@ namespace Blockiverse.VR
 
         void Start()
         {
-            if (showOnStart)
+            ApplyDefaultStartGateKey();
+            if (showOnStart && ShouldShowOnStart())
+            {
                 Show();
+                return;
+            }
+
+            if (showOnStart && targetCanvas != null)
+                targetCanvas.enabled = false;
+        }
+
+        void Update()
+        {
+            if (!IsVisible)
+                return;
+
+            if (!recenterOnShow)
+                return;
+
+            if (!Mathf.Approximately(lastAppliedPanelScale, ResolvePanelScale()))
+                Recenter();
         }
 
         void EnsureCanvas()
@@ -184,6 +224,42 @@ namespace Blockiverse.VR
         {
             if (hotbar == null)
                 TryGetComponent(out hotbar);
+        }
+
+        void DiscoverComfortSettings()
+        {
+            if (comfortSettings == null && Application.isPlaying)
+                comfortSettings = FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+        }
+
+        float ResolvePanelScale()
+        {
+            DiscoverComfortSettings();
+            return panelScale * (comfortSettings != null ? comfortSettings.UiScale : 1.0f);
+        }
+
+        bool ShouldShowOnStart()
+        {
+            return string.IsNullOrEmpty(showOnStartPlayerPrefsKey) ||
+                   PlayerPrefs.GetInt(showOnStartPlayerPrefsKey, 0) == 0;
+        }
+
+        void ApplyDefaultStartGateKey()
+        {
+            if (!string.IsNullOrEmpty(showOnStartPlayerPrefsKey))
+                return;
+
+            if (string.Equals(gameObject.name, "Controller Mapping Popup", StringComparison.Ordinal))
+                showOnStartPlayerPrefsKey = ControllerMappingPopupSeenPrefKey;
+        }
+
+        void MarkShowOnStartSeen()
+        {
+            if (string.IsNullOrEmpty(showOnStartPlayerPrefsKey))
+                return;
+
+            PlayerPrefs.SetInt(showOnStartPlayerPrefsKey, 1);
+            PlayerPrefs.Save();
         }
 
         void SubscribeHotbarSelectionFeedback()
@@ -215,25 +291,7 @@ namespace Blockiverse.VR
             if (!playAudio && !playHaptic)
                 return;
 
-            DiscoverFeedback();
-
-            if (playAudio)
-                audioCuePlayer?.PlayCue(cue);
-
-            if (playHaptic)
-                interactionHaptics?.PlayUiTick();
-        }
-
-        void DiscoverFeedback()
-        {
-            if (!Application.isPlaying)
-                return;
-
-            if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-
-            if (interactionHaptics == null)
-                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue, playAudio, playHaptic);
         }
     }
 }

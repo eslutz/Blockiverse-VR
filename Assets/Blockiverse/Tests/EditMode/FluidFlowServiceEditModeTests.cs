@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
@@ -236,6 +238,30 @@ namespace Blockiverse.Tests.EditMode
             AssertWorldsMatch(worldA, worldB);
         }
 
+        [Test]
+        public void LiveFlowLevelsImproveWhenNewSourceCreatesBetterSupportPath()
+        {
+            VoxelWorld liveWorld = CreateFlooredWorld();
+            FluidFlowService live = CreateWiredService(liveWorld);
+            var originalSource = new BlockPosition(8, 1, 8);
+            var newSource = new BlockPosition(14, 1, 8);
+            var improvedNeighbor = new BlockPosition(13, 1, 8);
+
+            liveWorld.SetBlock(originalSource, BlockRegistry.Freshwater);
+            live.Tick(liveWorld, 80);
+            Assert.That(liveWorld.GetBlock(improvedNeighbor), Is.EqualTo(BlockRegistry.FreshwaterFlow));
+
+            liveWorld.SetBlock(newSource, BlockRegistry.Freshwater);
+
+            var rebuilt = new FluidFlowService();
+            rebuilt.Configure(liveWorld, seed: 1, worldTick: 80);
+
+            Assert.That(
+                FlowLevel(live, improvedNeighbor),
+                Is.EqualTo(FlowLevel(rebuilt, improvedNeighbor)),
+                "Live level bookkeeping must converge to the same best support path Configure reconstructs.");
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
 
         // An emberflow source at (16,1,16) whose only non-solid neighbor is a flammable log at
@@ -321,6 +347,15 @@ namespace Blockiverse.Tests.EditMode
                     }
                 }
             }
+        }
+
+        static int FlowLevel(FluidFlowService service, BlockPosition position)
+        {
+            FieldInfo field = typeof(FluidFlowService).GetField(
+                "flowLevels",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var levels = (Dictionary<BlockPosition, int>)field.GetValue(service);
+            return levels.TryGetValue(position, out int level) ? level : -1;
         }
     }
 }

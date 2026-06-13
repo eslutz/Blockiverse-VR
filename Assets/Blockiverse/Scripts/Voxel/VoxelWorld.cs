@@ -64,7 +64,7 @@ namespace Blockiverse.Voxel
             var change = new BlockChange(position, previous, block);
 
             if (trackChange)
-                changedBlocks[position] = change;
+                RecordChangedBlock(change);
 
             BlockChanged?.Invoke(change);
         }
@@ -96,6 +96,28 @@ namespace Blockiverse.Voxel
             }
         }
 
+        public void CollectBlockPositions(ISet<BlockId> targetBlocks, ICollection<BlockPosition> results)
+        {
+            if (targetBlocks == null)
+                throw new ArgumentNullException(nameof(targetBlocks));
+            if (results == null)
+                throw new ArgumentNullException(nameof(results));
+            if (targetBlocks.Count == 0)
+                return;
+
+            int width = Bounds.Width;
+            int layer = width * Bounds.Depth;
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                if (!targetBlocks.Contains(blocks[i]))
+                    continue;
+
+                int y = i / layer;
+                int remainder = i - y * layer;
+                results.Add(new BlockPosition(remainder % width, y, remainder / width));
+            }
+        }
+
         public IReadOnlyCollection<BlockChange> GetChangedBlocks()
         {
             return changedBlocks.Values;
@@ -106,9 +128,26 @@ namespace Blockiverse.Voxel
             changedBlocks.Clear();
         }
 
-        public void TrackChangedBlock(BlockChange change)
+        void RecordChangedBlock(BlockChange change)
         {
-            EnsureInBounds(change.Position);
+            if (change.PreviousBlock == change.NewBlock)
+                return;
+
+            if (changedBlocks.TryGetValue(change.Position, out BlockChange existingChange))
+            {
+                if (existingChange.PreviousBlock == change.NewBlock)
+                {
+                    changedBlocks.Remove(change.Position);
+                    return;
+                }
+
+                changedBlocks[change.Position] = new BlockChange(
+                    change.Position,
+                    existingChange.PreviousBlock,
+                    change.NewBlock);
+                return;
+            }
+
             changedBlocks[change.Position] = change;
         }
 

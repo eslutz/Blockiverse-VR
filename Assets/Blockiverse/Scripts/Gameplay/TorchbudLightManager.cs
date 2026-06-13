@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Blockiverse.Core;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -8,15 +7,7 @@ namespace Blockiverse.Gameplay
 {
     public sealed class TorchbudLightManager : MonoBehaviour
     {
-        const int MaxActiveLights = 24;
-        const float LightRange = 6.0f;
-        const float LightIntensity = 2.2f;
-
-        static readonly Color TorchbudLightColor = new(1.0f, 0.62f, 0.28f, 1.0f);
-
-        readonly Dictionary<BlockPosition, Light> lightsByPosition = new();
-        // Emitters placed while at the MaxActiveLights cap, waiting for an active slot to free up.
-        readonly HashSet<BlockPosition> pendingLightPositions = new();
+        readonly HashSet<BlockPosition> emitterPositions = new();
 
         VoxelWorld world;
         BlockRegistry blockRegistry;
@@ -25,9 +16,9 @@ namespace Blockiverse.Gameplay
         // Suppressed during the initial full-world rebuild so loading a save does not chorus
         // dozens of ignite cues at once; only live placements crackle.
         bool igniteFeedbackEnabled;
-        bool lightCapWarningLogged;
 
-        public int ActiveLightCount => lightsByPosition.Count;
+        public int ActiveEmitterCount => emitterPositions.Count;
+        public int ActiveLightCount => ActiveEmitterCount;
 
         public static bool IsLightEmitter(BlockId block, BlockRegistry registry)
         {
@@ -54,7 +45,13 @@ namespace Blockiverse.Gameplay
 
         public bool TryGetLight(BlockPosition position, out Light light)
         {
-            return lightsByPosition.TryGetValue(position, out light);
+            light = null;
+            return false;
+        }
+
+        public bool IsTrackingEmitter(BlockPosition position)
+        {
+            return emitterPositions.Contains(position);
         }
 
         void RebuildAllLights()
@@ -86,40 +83,9 @@ namespace Blockiverse.Gameplay
 
         void AddLight(BlockPosition position)
         {
-            if (lightsByPosition.ContainsKey(position))
+            if (!emitterPositions.Add(position))
                 return;
 
-            if (lightsByPosition.Count >= MaxActiveLights)
-            {
-                // Over the cap: remember the emitter so RemoveLight can promote it later
-                // instead of dropping it for the rest of the session.
-                pendingLightPositions.Add(position);
-                if (!lightCapWarningLogged)
-                {
-                    lightCapWarningLogged = true;
-                    BlockiverseLog.Warning(
-                        BlockiverseLogCategory.Renderer,
-                        $"Torchbud light cap of {MaxActiveLights} reached; additional light emitters are queued until an active light is removed.",
-                        this);
-                }
-
-                return;
-            }
-
-            pendingLightPositions.Remove(position);
-
-            var lightObject = new GameObject($"Torchbud Light {position}");
-            lightObject.transform.SetParent(transform, false);
-            lightObject.transform.position = GetLightPosition(position);
-
-            Light light = lightObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = TorchbudLightColor;
-            light.range = LightRange;
-            light.intensity = LightIntensity;
-            light.shadows = LightShadows.None;
-            light.renderMode = LightRenderMode.Auto;
-            lightsByPosition.Add(position, light);
             PlayIgniteFeedback(position);
         }
 
@@ -140,50 +106,12 @@ namespace Blockiverse.Gameplay
 
         void RemoveLight(BlockPosition position)
         {
-            pendingLightPositions.Remove(position);
-
-            if (!lightsByPosition.Remove(position, out Light light))
-                return;
-
-            if (light != null)
-                DestroyUnityObject(light.gameObject);
-
-            PromotePendingLight();
-        }
-
-        // A removal freed an active slot: promote the next queued emitter whose block still
-        // emits light. Entries whose block changed while queued are stale and are discarded.
-        void PromotePendingLight()
-        {
-            while (pendingLightPositions.Count > 0 && lightsByPosition.Count < MaxActiveLights)
-            {
-                BlockPosition candidate = default;
-                foreach (BlockPosition pending in pendingLightPositions)
-                {
-                    candidate = pending;
-                    break;
-                }
-
-                pendingLightPositions.Remove(candidate);
-                if (IsLightEmitter(world.GetBlock(candidate), blockRegistry))
-                {
-                    AddLight(candidate);
-                    return;
-                }
-            }
+            emitterPositions.Remove(position);
         }
 
         void ClearLights()
         {
-            foreach (Light light in lightsByPosition.Values)
-            {
-                if (light != null)
-                    DestroyUnityObject(light.gameObject);
-            }
-
-            lightsByPosition.Clear();
-            pendingLightPositions.Clear();
-            lightCapWarningLogged = false;
+            emitterPositions.Clear();
         }
 
         void OnDestroy()
@@ -192,17 +120,6 @@ namespace Blockiverse.Gameplay
                 world.BlockChanged -= OnBlockChanged;
 
             ClearLights();
-        }
-
-        static void DestroyUnityObject(UnityEngine.Object target)
-        {
-            if (target == null)
-                return;
-
-            if (Application.isPlaying)
-                Destroy(target);
-            else
-                DestroyImmediate(target);
         }
     }
 }

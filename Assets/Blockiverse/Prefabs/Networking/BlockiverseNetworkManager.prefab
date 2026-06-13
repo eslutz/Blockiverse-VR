@@ -92,7 +92,7 @@ MonoBehaviour:
       NetworkPrefabsLists: []
     TickRate: 30
     ClientConnectionBufferTimeout: 10
-    ConnectionApproval: 0
+    ConnectionApproval: 1
     ConnectionData: 
     EnableTimeResync: 0
     TimeResyncInterval: 30
@@ -128,8 +128,15 @@ MonoBehaviour:
     address: 127.0.0.1
     listenAddress: 0.0.0.0
     port: 7777
+    maxPlayers: 2
+    joinCode: blockiverse-lan
   networkManager: {fileID: 0}
   unityTransport: {fileID: 0}
+  useEncryptedTransport: 0
+  transportServerCommonName: blockiverse-lan
+  serverCertificatePem:
+  serverPrivateKeyPem:
+  clientCaCertificatePem:
 --- !u!114 &6213910669066858669
 MonoBehaviour:
   m_ObjectHideFlags: 0

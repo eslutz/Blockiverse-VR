@@ -45,28 +45,25 @@ namespace Blockiverse.UI
         // §6.5 metadata block, limited to what the save manifest tracks today.
         public static string BuildMetadataText(WorldSaveSummary save)
         {
-            string mode = Capitalize(save.GameMode);
-            string difficulty = string.IsNullOrEmpty(save.Difficulty) ? "—" : Capitalize(save.Difficulty);
+            string mode = BlockiverseLocalization.DisplayNameForCanonicalId(save.GameMode);
+            string difficulty = BlockiverseLocalization.DisplayNameForCanonicalId(save.Difficulty);
 
-            return
-                $"Mode: {mode}    Difficulty: {difficulty}\n" +
-                $"Day: {save.DayCount}    Seed: {save.Seed}\n" +
-                $"Created: {FormatDate(save.CreatedUtc)}    Last Played: {FormatDate(save.LastPlayedUtc)}";
+            return BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.WorldDetailsMetadata,
+                mode,
+                difficulty,
+                save.DayCount,
+                save.Seed,
+                FormatDate(save.CreatedUtc),
+                FormatDate(save.LastPlayedUtc));
         }
 
         static string FormatDate(System.DateTime utc)
         {
             return utc == System.DateTime.MinValue
                 ? "—"
-                : utc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                : utc.ToLocalTime().ToString("d", CultureInfo.CurrentCulture);
         }
 
-        static string Capitalize(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return "—";
-
-            return char.ToUpperInvariant(value[0]) + value.Substring(1);
-        }
     }
 }

@@ -6,7 +6,7 @@ namespace Blockiverse.MetaAvatars
 {
     public struct MetaAvatarStreamMessage : INetworkSerializable
     {
-        public const int MaxPayloadBytes = 64 * 1024;
+        public const int MaxPayloadBytes = 8 * 1024;
 
         public ulong SenderClientId;
         public double SentTime;
@@ -18,6 +18,8 @@ namespace Blockiverse.MetaAvatars
             SentTime = sentTime;
             Payload = payload ?? Array.Empty<byte>();
         }
+
+        public bool HasValidPayload => Payload != null && Payload.Length > 0 && Payload.Length <= MaxPayloadBytes;
 
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {
@@ -32,9 +34,17 @@ namespace Blockiverse.MetaAvatars
             // up to 64 KiB at 15 Hz, so the byte loop costs tens of thousands of calls per message.
             if (serializer.IsReader)
             {
-                Payload = length == 0 ? Array.Empty<byte>() : new byte[length];
-                if (length > 0)
+                if (length == 0)
+                {
+                    Payload = Array.Empty<byte>();
+                }
+                else
+                {
+                    if (Payload == null || Payload.Length != length)
+                        Payload = new byte[length];
+
                     serializer.GetFastBufferReader().ReadBytesSafe(ref Payload, length);
+                }
             }
             else if (length > 0)
             {

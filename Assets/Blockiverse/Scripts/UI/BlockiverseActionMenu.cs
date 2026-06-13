@@ -12,18 +12,27 @@ namespace Blockiverse.UI
     public readonly struct MenuAction
     {
         public MenuAction(string actionId, string label)
+            : this(actionId, null, label)
+        {
+        }
+
+        public MenuAction(string actionId, string labelKey, string fallbackLabel)
         {
             if (string.IsNullOrWhiteSpace(actionId))
                 throw new ArgumentException("Menu action ids must be non-empty.", nameof(actionId));
-            if (string.IsNullOrWhiteSpace(label))
-                throw new ArgumentException("Menu action labels must be non-empty.", nameof(label));
+            if (string.IsNullOrWhiteSpace(labelKey) && string.IsNullOrWhiteSpace(fallbackLabel))
+                throw new ArgumentException("Menu action labels must be non-empty.", nameof(fallbackLabel));
 
             ActionId = actionId;
-            Label = label;
+            LabelKey = labelKey;
+            this.fallbackLabel = fallbackLabel;
         }
 
+        readonly string fallbackLabel;
+
         public string ActionId { get; }
-        public string Label { get; }
+        public string LabelKey { get; }
+        public string Label => BlockiverseLocalization.Text(LabelKey, fallbackLabel);
     }
 
     // Reusable button-list menu used by the Title, Pause, Death, and Confirmation screens
@@ -52,6 +61,7 @@ namespace Blockiverse.UI
             actionButtons = buttons ?? Array.Empty<Button>();
             actionLabels = labels ?? Array.Empty<TMP_Text>();
             statusLabel = status;
+            wired = false;
             WireButtons();
         }
 
@@ -68,7 +78,7 @@ namespace Blockiverse.UI
             if (actions == null)
                 throw new ArgumentNullException(nameof(actions));
 
-            WireButtons();
+            ResolveRuntimeReferences();
 
             if (titleLabel != null)
                 titleLabel.text = title;
@@ -98,6 +108,40 @@ namespace Blockiverse.UI
 
         void Awake()
         {
+            ResolveRuntimeReferences();
+        }
+
+        public void ResolveRuntimeReferences()
+        {
+            bool changed = false;
+
+            if (titleLabel == null)
+            {
+                titleLabel = FindChildComponent<TMP_Text>("Panel/Title") ?? FindChildComponent<TMP_Text>("Title");
+                changed |= titleLabel != null;
+            }
+
+            if (statusLabel == null)
+            {
+                statusLabel = FindChildComponent<TMP_Text>("Panel/Status") ?? FindChildComponent<TMP_Text>("Status");
+                changed |= statusLabel != null;
+            }
+
+            if (NeedsRefresh(actionButtons))
+            {
+                actionButtons = FindActionButtons();
+                changed |= actionButtons.Length > 0;
+            }
+
+            if (actionButtons != null && actionButtons.Length > 0 && NeedsRefresh(actionLabels, actionButtons.Length))
+            {
+                actionLabels = FindActionLabels(actionButtons);
+                changed |= actionLabels.Length > 0;
+            }
+
+            if (changed)
+                wired = false;
+
             WireButtons();
         }
 
@@ -134,16 +178,71 @@ namespace Blockiverse.UI
 
         void PlayFeedback(BlockiverseAudioCue cue)
         {
-            if (Application.isPlaying)
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
+        }
+
+        T FindChildComponent<T>(string path) where T : Component
+        {
+            Transform child = transform.Find(path);
+            return child != null ? child.GetComponent<T>() : null;
+        }
+
+        Button[] FindActionButtons()
+        {
+            var indexedButtons = new List<(int index, Button button)>();
+            foreach (Button button in GetComponentsInChildren<Button>(true))
             {
-                if (audioCuePlayer == null)
-                    audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-                if (interactionHaptics == null)
-                    interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+                if (button == null || !TryGetIndexedName(button.gameObject.name, "Action ", out int index))
+                    continue;
+
+                indexedButtons.Add((index, button));
             }
 
-            audioCuePlayer?.PlayCue(cue);
-            interactionHaptics?.PlayUiTick();
+            indexedButtons.Sort((a, b) => a.index.CompareTo(b.index));
+
+            var buttons = new Button[indexedButtons.Count];
+            for (int i = 0; i < indexedButtons.Count; i++)
+                buttons[i] = indexedButtons[i].button;
+            return buttons;
+        }
+
+        TMP_Text[] FindActionLabels(Button[] buttons)
+        {
+            var labels = new TMP_Text[buttons.Length];
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                Transform label = buttons[i] != null ? buttons[i].transform.Find("Label") : null;
+                labels[i] = label != null
+                    ? label.GetComponent<TMP_Text>()
+                    : buttons[i] != null ? buttons[i].GetComponentInChildren<TMP_Text>(true) : null;
+            }
+
+            return labels;
+        }
+
+        static bool NeedsRefresh<T>(T[] values) where T : class
+        {
+            return NeedsRefresh(values, values != null ? values.Length : 0);
+        }
+
+        static bool NeedsRefresh<T>(T[] values, int expectedLength) where T : class
+        {
+            if (values == null || values.Length != expectedLength || values.Length == 0)
+                return true;
+
+            for (int i = 0; i < values.Length; i++)
+                if (values[i] == null)
+                    return true;
+            return false;
+        }
+
+        static bool TryGetIndexedName(string value, string prefix, out int index)
+        {
+            index = 0;
+            if (string.IsNullOrEmpty(value) || !value.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            return int.TryParse(value.Substring(prefix.Length), out index) && index > 0;
         }
     }
 }

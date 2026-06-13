@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
@@ -42,10 +43,13 @@ namespace Blockiverse.Tests.EditMode
             panel.Configure(slotLabels, selectedHotbarLabel);
             panel.Bind(inventory, itemRegistry, selectedHotbarSlotIndex: 1);
 
-            Assert.That(slotLabels[0].text, Is.EqualTo("Branchwood Log x12"));
-            Assert.That(slotLabels[1].text, Is.EqualTo("Empty"));
-            Assert.That(slotLabels[2].text, Is.EqualTo("Reedwood Delver x1"));
-            Assert.That(selectedHotbarLabel.text, Is.EqualTo("Hotbar 2 / 2"));
+            Assert.That(slotLabels[0].text, Is.EqualTo(StackText(itemRegistry, ItemId.BranchwoodLog, 12)));
+            Assert.That(slotLabels[1].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonEmpty)));
+            Assert.That(slotLabels[2].text, Is.EqualTo(StackText(itemRegistry, ItemId.ReedwoodDelver, 1)));
+            Assert.That(selectedHotbarLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.InventoryHotbar,
+                2,
+                2)));
         }
 
         [Test]
@@ -74,14 +78,16 @@ namespace Blockiverse.Tests.EditMode
             panel.Bind(recipeBook, inventory, itemRegistry, CraftingStation.None);
 
             // Work Plank is the first handcraft recipe (§9.1): branchwood_log ×1 → work_plank ×6.
-            Assert.That(recipeLabels[0].text, Does.Contain("Work Plank x6"));
+            Assert.That(recipeLabels[0].text, Does.Contain(StackText(itemRegistry, ItemId.WorkPlank, 6)));
 
             CraftingResult result = panel.TryCraftByOutput(ItemId.WorkPlank);
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
             Assert.That(inventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6));
             Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(3));
-            Assert.That(statusLabel.text, Is.EqualTo("Crafted Work Plank x6"));
+            Assert.That(statusLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.CraftingCrafted,
+                StackText(itemRegistry, ItemId.WorkPlank, 6))));
         }
 
         [Test]
@@ -103,7 +109,9 @@ namespace Blockiverse.Tests.EditMode
 
             // Button 0 is bound to the first recipe (Work Plank).
             Assert.That(inventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6));
-            Assert.That(statusLabel.text, Is.EqualTo("Crafted Work Plank x6"));
+            Assert.That(statusLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.CraftingCrafted,
+                StackText(itemRegistry, ItemId.WorkPlank, 6))));
         }
 
         [Test]
@@ -122,7 +130,126 @@ namespace Blockiverse.Tests.EditMode
             slotButtons[2].onClick.Invoke();
 
             Assert.That(panel.SelectedHotbarSlotIndex, Is.EqualTo(2));
-            Assert.That(selectedHotbarLabel.text, Is.EqualTo("Hotbar 3 / 3"));
+            Assert.That(selectedHotbarLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.InventoryHotbar,
+                3,
+                3)));
+        }
+
+        [Test]
+        public void UiPanelsUseSharedFeedbackHelper()
+        {
+            string[] sourceFiles =
+            {
+                "Scripts/UI/BlockiverseActionMenu.cs",
+                "Scripts/UI/SurvivalCratePanel.cs",
+                "Scripts/UI/SurvivalInventoryPanel.cs",
+                "Scripts/UI/SurvivalCraftingPanel.cs",
+                "Scripts/UI/BlockiverseComfortMenu.cs",
+                "Scripts/UI/BlockiverseMultiplayerSessionMenu.cs",
+                "Scripts/VR/BlockiverseWorldSpacePanelPresenter.cs",
+            };
+
+            foreach (string sourceFile in sourceFiles)
+            {
+                string source = File.ReadAllText(Path.Combine(Application.dataPath, "Blockiverse", sourceFile));
+                Assert.That(source, Does.Contain("BlockiverseUiFeedback.Play"));
+                Assert.That(source, Does.Not.Contain("void DiscoverFeedback("));
+            }
+        }
+
+        [Test]
+        public void InventoryPanelPagesThroughAllDefaultInventorySlots()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry);
+            inventory.SetSlot(42, new ItemStack(ItemId.FieldBandage, 2));
+            TMP_Text[] slotLabels = CreateTexts(10);
+            TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            TMP_Text pageLabel = CreateText("Page");
+            Button previousPageButton = CreateComponent<Button>("PreviousPage");
+            Button nextPageButton = CreateComponent<Button>("NextPage");
+            SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
+
+            panel.Configure(
+                null,
+                slotLabels,
+                selectedHotbarLabel,
+                targetPreviousPageButton: previousPageButton,
+                targetNextPageButton: nextPageButton,
+                targetPageLabel: pageLabel);
+            panel.Bind(inventory, itemRegistry);
+
+            Assert.That(pageLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.InventorySlotsRange,
+                1,
+                10,
+                44)));
+            Assert.That(previousPageButton.interactable, Is.False);
+
+            nextPageButton.onClick.Invoke();
+            nextPageButton.onClick.Invoke();
+            nextPageButton.onClick.Invoke();
+            nextPageButton.onClick.Invoke();
+
+            Assert.That(panel.FirstVisibleSlotIndex, Is.EqualTo(40));
+            Assert.That(pageLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.InventorySlotsRange,
+                41,
+                44,
+                44)));
+            Assert.That(slotLabels[2].text, Is.EqualTo(StackText(itemRegistry, ItemId.FieldBandage, 2)));
+            Assert.That(nextPageButton.interactable, Is.False);
+        }
+
+        [Test]
+        public void InventoryPanelSelectsTenthHotbarSlotFromFirstPage()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry);
+            TMP_Text[] slotLabels = CreateTexts(10);
+            Button[] slotButtons = CreateButtons(10);
+            TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
+
+            panel.Configure(slotButtons, slotLabels, selectedHotbarLabel);
+            panel.Bind(inventory, itemRegistry);
+
+            slotButtons[9].onClick.Invoke();
+
+            Assert.That(panel.SelectedHotbarSlotIndex, Is.EqualTo(9));
+            Assert.That(selectedHotbarLabel.text, Is.EqualTo(BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.InventoryHotbar,
+                10,
+                10)));
+        }
+
+        [Test]
+        public void InventoryPanelSwapsPagedBackpackSlotIntoSelectedHotbarSlot()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry);
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 1));
+            inventory.SetSlot(10, new ItemStack(ItemId.FieldBandage, 2));
+            TMP_Text[] slotLabels = CreateTexts(10);
+            Button[] slotButtons = CreateButtons(10);
+            TMP_Text selectedHotbarLabel = CreateText("SelectedHotbar");
+            Button nextPageButton = CreateComponent<Button>("NextPage");
+            SurvivalInventoryPanel panel = CreateComponent<SurvivalInventoryPanel>("InventoryPanel");
+
+            panel.Configure(
+                slotButtons,
+                slotLabels,
+                selectedHotbarLabel,
+                targetNextPageButton: nextPageButton);
+            panel.Bind(inventory, itemRegistry, selectedHotbarSlotIndex: 0);
+
+            nextPageButton.onClick.Invoke();
+            slotButtons[0].onClick.Invoke();
+
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.FieldBandage, 2)));
+            Assert.That(inventory.GetSlot(10), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
+            Assert.That(slotLabels[0].text, Is.EqualTo(StackText(itemRegistry, ItemId.BranchwoodLog, 1)));
         }
 
         [Test]
@@ -207,13 +334,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(healthLabel.text, Is.EqualTo("75 / 100"));
             Assert.That(healthSlider.maxValue, Is.EqualTo(100f));
             Assert.That(healthSlider.value, Is.EqualTo(75f));
-            Assert.That(stateLabel.text, Is.EqualTo("Stable"));
+            Assert.That(stateLabel.text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthStable)));
 
             vitals.ApplyDamage(80);
 
             Assert.That(healthLabel.text, Is.EqualTo("0 / 100"));
             Assert.That(healthSlider.value, Is.EqualTo(0f));
-            Assert.That(stateLabel.text, Is.EqualTo("Down"));
+            Assert.That(stateLabel.text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthDown)));
         }
 
         TMP_Text[] CreateTexts(int count)
@@ -264,6 +391,11 @@ namespace Blockiverse.Tests.EditMode
         static AudioClip CreateClip(string name)
         {
             return AudioClip.Create(name, 16, 1, 44100, false);
+        }
+
+        static string StackText(ItemRegistry itemRegistry, ItemId itemId, int count)
+        {
+            return $"{itemRegistry.Get(itemId).Name} x{count}";
         }
 
         static bool CallsMethod(MethodInfo method, Type declaringType, string methodName)

@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using Blockiverse.Core;
 using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
-using Blockiverse.Voxel;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -16,7 +15,7 @@ namespace Blockiverse.Gameplay
     {
         const string DefaultSaveFileName = "multiplayer-world.vxlworld";
         const string DefaultWorldName = "Multiplayer World";
-        const string DefaultWorldPreset = "survival_terrain";
+        const string DefaultWorldPreset = WorldPresetIds.SurvivalTerrain;
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
@@ -29,6 +28,8 @@ namespace Blockiverse.Gameplay
         string configuredSavePath;
         bool subscribed;
         float lastAutoSaveTime;
+        Task autoSaveTask;
+        string autoSavePath;
 
         // Mirrors the single-player defaults in BlockiverseWorldSessionController so fresh
         // multiplayer worlds save the same difficulty/preset metadata.
@@ -39,6 +40,8 @@ namespace Blockiverse.Gameplay
         public bool LastHostLoadSucceeded { get; private set; }
         public bool LastShutdownSaveAttempted { get; private set; }
         public bool LastShutdownSaveSucceeded { get; private set; }
+        public bool LastApplicationPauseSaveAttempted { get; private set; }
+        public bool LastApplicationPauseSaveSucceeded { get; private set; }
         public string LastFailureReason { get; private set; } = string.Empty;
         public string SavePath => ResolveSavePath();
 
@@ -91,6 +94,17 @@ namespace Blockiverse.Gameplay
             Unsubscribe();
         }
 
+        void OnApplicationPause(bool paused)
+        {
+            if (paused)
+                SaveWorldForApplicationPause();
+        }
+
+        void OnApplicationQuit()
+        {
+            SaveWorldForApplicationPause();
+        }
+
         bool RestoreSavedWorldBeforeHostStart(out string failureReason)
         {
             failureReason = string.Empty;
@@ -102,10 +116,7 @@ namespace Blockiverse.Gameplay
 
             if (!File.Exists(path) && !Directory.Exists(path))
             {
-                // No save on disk means a fresh world; reset metadata to the defaults.
-                worldDifficulty = string.Empty;
-                worldPreset = DefaultWorldPreset;
-                return true;
+                return InitializeFreshMultiplayerWorldBeforeHostStart(path, out failureReason);
             }
 
             LastHostLoadAttempted = true;
@@ -139,13 +150,21 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            if (!SavedWorldMatchesInitializedWorld(result.Data, worldManager.World))
+            try
             {
-                failureReason = "Unable to load saved multiplayer world because the save metadata does not match the initialized host world.";
+                GeneratedCreativeWorld generated = WorldSaveGeneration.Regenerate(result.Data);
+                worldManager.InitializeGeneratedWorld(
+                    generated,
+                    chunkAuthoritySync,
+                    deferInitialRendererRebuild: Application.isPlaying);
+            }
+            catch (Exception exception)
+            {
+                failureReason = "Unable to load saved multiplayer world because the save metadata could not regenerate the host world.";
                 LastFailureReason = failureReason;
                 BlockiverseLog.Warning(
                     BlockiverseLogCategory.Persistence,
-                    $"Failed to load multiplayer host world before start file={SanitizeSavePath(path)} reason=world-metadata-mismatch",
+                    $"Failed to load multiplayer host world before start file={SanitizeSavePath(path)} reason=world-regeneration-failed exception={exception.GetType().Name}",
                     this);
                 return false;
             }
@@ -158,14 +177,21 @@ namespace Blockiverse.Gameplay
             {
                 result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
                 worldManager.RestoreSimulationState(result.Data);
-                worldManager.WorldTimeClock?.RestoreElapsedTicks(result.Data.WorldTimeTicks);
+                worldManager.RestoreWorldTimeTicks(result.Data.WorldTimeTicks);
                 worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(result.Data.GameMode));
                 RestoreContainers(result.Data.Containers);
 
                 // Always restore (an empty list clears any prior session's station models), and
                 // a save without player state resets vitals to a fresh spawn inside the restore.
                 if (survivalSync != null)
+                {
                     survivalSync.RestoreStationStates(WorldSaveStateMapper.FromSavedStations(result.Data.Stations));
+                    survivalSync.RestoreLocalInventory(
+                        result.CreateInventory(),
+                        result.Data.PlayerInventory != null ? result.Data.PlayerInventory.SelectedHotbarSlotIndex : 0);
+                    survivalSync.RestoreSharedCrateInventory(result.Data.SharedCrateInventory);
+                    survivalSync.RestorePersistedRemoteInventories(result.Data.MultiplayerPlayerInventories);
+                }
 
                 vitalsRuntime?.RestorePlayerSaveState(result.Data.PlayerState);
             }
@@ -174,13 +200,80 @@ namespace Blockiverse.Gameplay
                 worldManager.SuppressContainerAutoLoot = false;
             }
             worldDifficulty = result.Data.Difficulty ?? string.Empty;
+            vitalsRuntime?.ConfigureDifficulty(worldDifficulty);
             worldPreset = string.IsNullOrWhiteSpace(result.Data.WorldPreset) ? DefaultWorldPreset : result.Data.WorldPreset;
-            worldManager.Renderer?.RebuildAll();
+            if (!Application.isPlaying)
+                worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Persistence,
                 $"Loaded multiplayer host world before start file={SanitizeSavePath(path)}");
             return true;
+        }
+
+        bool InitializeFreshMultiplayerWorldBeforeHostStart(string path, out string failureReason)
+        {
+            failureReason = string.Empty;
+
+            if (!TryEnsureHostSaveAuthority(out failureReason, "initialize fresh multiplayer world before hosting"))
+            {
+                LastFailureReason = failureReason;
+                return false;
+            }
+
+            if (!TryResolveWorldManager(out failureReason, "initialize fresh multiplayer world before hosting"))
+            {
+                LastFailureReason = failureReason;
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to initialize fresh multiplayer host world before start file={SanitizeSavePath(path)} reason=world-unavailable",
+                    context: this);
+                return false;
+            }
+
+            try
+            {
+                GeneratedCreativeWorld generated = CreativeWorldManager.CreateDefaultGeneratedWorld();
+                worldManager.InitializeGeneratedWorld(
+                    generated,
+                    chunkAuthoritySync,
+                    deferInitialRendererRebuild: Application.isPlaying);
+                worldManager.SetGameMode(WorldGameMode.Survival);
+                ResetFreshMultiplayerSurvivalState();
+            }
+            catch (Exception exception)
+            {
+                failureReason = "Unable to initialize a fresh multiplayer world before hosting.";
+                LastFailureReason = failureReason;
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to initialize fresh multiplayer host world before start file={SanitizeSavePath(path)} reason=fresh-world-failed exception={exception.GetType().Name}",
+                    this);
+                return false;
+            }
+
+            worldDifficulty = string.Empty;
+            vitalsRuntime?.ConfigureDifficulty(worldDifficulty);
+            vitalsRuntime?.ResetVitalsToFull();
+            worldPreset = DefaultWorldPreset;
+            if (!Application.isPlaying)
+                worldManager.Renderer?.RebuildAll();
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Persistence,
+                $"Initialized fresh multiplayer host world before start file={SanitizeSavePath(path)}");
+            return true;
+        }
+
+        void ResetFreshMultiplayerSurvivalState()
+        {
+            if (survivalSync == null)
+                return;
+
+            survivalSync.SetMode(PlayerModeState.Survival);
+            survivalSync.RestoreStationStates(null);
+            survivalSync.RestoreLocalInventory(new Inventory(ItemRegistry.Default), selectedHotbarSlot: 0);
+            survivalSync.RestoreSharedCrateInventory(null);
+            survivalSync.RestorePersistedRemoteInventories(null);
         }
 
         bool SaveWorldBeforeHostShutdown(out string failureReason)
@@ -210,7 +303,7 @@ namespace Blockiverse.Gameplay
 
             try
             {
-                new WorldSaveService().Save(path, ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), difficulty: worldDifficulty, worldPreset: worldPreset, extras: BuildSaveExtras());
+                SaveCurrentMultiplayerWorld(path);
                 LastShutdownSaveSucceeded = true;
                 BlockiverseLog.Info(
                     BlockiverseLogCategory.Persistence,
@@ -229,6 +322,48 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        void SaveWorldForApplicationPause()
+        {
+            LastApplicationPauseSaveAttempted = false;
+            LastApplicationPauseSaveSucceeded = false;
+            LastFailureReason = string.Empty;
+
+            if (session == null ||
+                session.NetworkManager == null ||
+                !session.NetworkManager.IsListening)
+            {
+                return;
+            }
+
+            LastApplicationPauseSaveAttempted = true;
+
+            if (!TryEnsureHostSaveAuthority(out string failureReason, "save multiplayer world on application pause"))
+            {
+                LastFailureReason = failureReason;
+                return;
+            }
+
+            if (!TryResolveWorldManager(out failureReason, "save multiplayer world on application pause"))
+            {
+                LastFailureReason = failureReason;
+                return;
+            }
+
+            try
+            {
+                SaveCurrentMultiplayerWorld(ResolveSavePath());
+                LastApplicationPauseSaveSucceeded = true;
+            }
+            catch (Exception exception)
+            {
+                LastFailureReason = "Unable to save multiplayer world on application pause.";
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to save multiplayer host world on application pause file={SanitizeSavePath(ResolveSavePath())} exception={exception.GetType().Name}",
+                    context: this);
+            }
+        }
+
         // World-sim state beyond blocks/containers: weather machine, vegetation/farming queues,
         // timed-station contents, and the hosting player's presence/vitals.
         WorldSaveExtras BuildSaveExtras()
@@ -236,8 +371,17 @@ namespace Blockiverse.Gameplay
             var extras = new WorldSaveExtras();
             worldManager.FillSaveExtras(extras);
 
+            if (worldManager.Settings != null)
+            {
+                extras.HasSpawnPosition = true;
+                extras.SpawnPosition = worldManager.Settings.SpawnPosition;
+            }
+
             if (survivalSync != null)
+            {
                 extras.Stations = WorldSaveStateMapper.ToSavedStations(survivalSync.ExportStationStates());
+                extras.SharedCrateInventory = survivalSync.BuildPersistedSharedCrateInventory();
+            }
 
             extras.PlayerState = vitalsRuntime != null ? vitalsRuntime.BuildPlayerSaveState() : null;
             return extras;
@@ -247,10 +391,9 @@ namespace Blockiverse.Gameplay
         // cadence so a crash or battery death loses at most one interval (§6.7).
         void Update()
         {
-            if (session == null || !subscribed)
-                return;
+            CompleteAutoSaveIfReady();
 
-            if (Time.unscaledTime - lastAutoSaveTime < WorldSaveService.AutoSaveIntervalSeconds)
+            if (!ShouldStartHostAutoSave(session != null, subscribed, Time.unscaledTime, lastAutoSaveTime))
                 return;
 
             lastAutoSaveTime = Time.unscaledTime;
@@ -261,83 +404,127 @@ namespace Blockiverse.Gameplay
             if (!ResolveAuthorityBoundary().CanSaveMultiplayerWorld || worldManager == null || worldManager.World == null)
                 return;
 
+            StartAutoSave(ResolveSavePath());
+        }
+
+        public static bool ShouldStartHostAutoSave(
+            bool hasSession,
+            bool isSubscribed,
+            float currentUnscaledTime,
+            float lastAutoSaveTime) =>
+            hasSession &&
+            isSubscribed &&
+            WorldSaveService.ShouldAutoSave(currentUnscaledTime - lastAutoSaveTime);
+
+        void StartAutoSave(string path)
+        {
+            if (autoSaveTask != null)
+                return;
+
             try
             {
-                new WorldSaveService().Save(ResolveSavePath(), ResolveWorldName(), worldManager.World, weatherState: worldManager.CurrentWeatherState, gameMode: worldManager.GameModeString, worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L, containers: BuildSavedContainers(worldManager.ContainerStore), difficulty: worldDifficulty, worldPreset: worldPreset, extras: BuildSaveExtras());
+                WorldSaveService.WorldSaveSnapshot snapshot = CaptureCurrentMultiplayerWorldSnapshot(path);
+                autoSavePath = path;
+                autoSaveTask = Task.Run(() => new WorldSaveService().Save(snapshot));
             }
             catch (Exception exception)
             {
                 BlockiverseLog.Error(
                     BlockiverseLogCategory.Persistence,
-                    $"Failed to autosave multiplayer host world file={SanitizeSavePath(ResolveSavePath())} exception={exception.GetType().Name}",
+                    $"Failed to start autosave multiplayer host world file={SanitizeSavePath(path)} exception={exception.GetType().Name}",
                     context: this);
             }
         }
 
-        // Snapshots the manager's live container contents into the persistence model.
-        static IReadOnlyList<SavedContainer> BuildSavedContainers(ContainerInventoryStore store)
+        void SaveCurrentMultiplayerWorld(string path)
         {
-            if (store == null || store.Count == 0)
-                return null;
+            ResolveReferences();
+            WaitForAutoSave();
 
-            var result = new List<SavedContainer>(store.Count);
-            foreach (BlockPosition position in store.Positions)
+            new WorldSaveService().Save(CaptureCurrentMultiplayerWorldSnapshot(path));
+        }
+
+        WorldSaveService.WorldSaveSnapshot CaptureCurrentMultiplayerWorldSnapshot(string path)
+        {
+            Inventory inventory = survivalSync != null
+                ? survivalSync.BuildPersistedInventory()
+                : new Inventory(ItemRegistry.Default);
+            int selectedHotbarSlotIndex = survivalSync != null ? survivalSync.SelectedHotbarSlotIndex : 0;
+
+            return new WorldSaveService().CaptureSnapshot(
+                path,
+                ResolveWorldName(),
+                worldManager.World,
+                inventory,
+                selectedHotbarSlotIndex,
+                weatherState: worldManager.CurrentWeatherState,
+                gameMode: worldManager.GameModeString,
+                worldTimeTicks: worldManager.WorldTimeClock?.TotalElapsedTicks ?? 0L,
+                containers: WorldSaveContainerMapper.BuildSavedContainers(worldManager.ContainerStore),
+                difficulty: worldDifficulty,
+                worldPreset: worldPreset,
+                extras: BuildSaveExtras(),
+                additionalPlayerInventories: survivalSync?.BuildPersistedPlayerInventories());
+        }
+
+        void CompleteAutoSaveIfReady()
+        {
+            if (autoSaveTask == null || !autoSaveTask.IsCompleted)
+                return;
+
+            try
             {
-                if (!store.TryGet(position, out Inventory inventory) || inventory == null)
-                    continue;
-
-                var slots = new List<SavedContainerSlot>();
-                for (int i = 0; i < inventory.SlotCount; i++)
-                {
-                    ItemStack stack = inventory.GetSlot(i);
-                    if (stack.IsEmpty)
-                        continue;
-                    slots.Add(new SavedContainerSlot { CanonicalId = stack.ItemId.Value, Count = stack.Count });
-                }
-
-                // Persist the position even when empty so an emptied crate stays empty across reloads
-                // (otherwise the generated loot would refill it).
-                result.Add(new SavedContainer
-                {
-                    X = position.X,
-                    Y = position.Y,
-                    Z = position.Z,
-                    Slots = slots.ToArray()
-                });
+                autoSaveTask.GetAwaiter().GetResult();
             }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to autosave multiplayer host world file={SanitizeSavePath(autoSavePath)} exception={exception.GetType().Name}",
+                    context: this);
+            }
+            finally
+            {
+                autoSaveTask = null;
+                autoSavePath = null;
+            }
+        }
 
-            return result.Count > 0 ? result : null;
+        void WaitForAutoSave()
+        {
+            if (autoSaveTask == null)
+                return;
+
+            try
+            {
+                autoSaveTask.GetAwaiter().GetResult();
+            }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to finish pending multiplayer autosave file={SanitizeSavePath(autoSavePath)} exception={exception.GetType().Name}",
+                    context: this);
+            }
+            finally
+            {
+                autoSaveTask = null;
+                autoSavePath = null;
+            }
         }
 
         void RestoreContainers(SavedContainer[] saved)
         {
-            if (saved == null || saved.Length == 0)
-                return;
+            worldManager.RestoreContainerStore(
+                WorldSaveContainerMapper.BuildRestoredContainers(saved, LogInvalidContainerSlot));
+        }
 
-            var restored = new List<(BlockPosition, IEnumerable<(string, int)>)>(saved.Length);
-            foreach (SavedContainer container in saved)
-            {
-                SavedContainerSlot[] slots = container.Slots ?? Array.Empty<SavedContainerSlot>();
-                var items = new List<(string, int)>(slots.Length);
-                foreach (SavedContainerSlot slot in slots)
-                {
-                    // Corrupted saves can carry blank ids or non-positive counts; restoring them
-                    // would throw inside ItemId or corrupt the container inventory.
-                    if (string.IsNullOrWhiteSpace(slot.CanonicalId) || slot.Count <= 0)
-                    {
-                        BlockiverseLog.Warning(
-                            BlockiverseLogCategory.Persistence,
-                            $"Skipped invalid saved container slot world={ResolveWorldName()} container=({container.X},{container.Y},{container.Z}) id={(string.IsNullOrWhiteSpace(slot.CanonicalId) ? "(empty)" : slot.CanonicalId)} count={slot.Count}",
-                            this);
-                        continue;
-                    }
-
-                    items.Add((slot.CanonicalId, slot.Count));
-                }
-                restored.Add((new BlockPosition(container.X, container.Y, container.Z), items));
-            }
-
-            worldManager.RestoreContainerStore(restored);
+        void LogInvalidContainerSlot(SavedContainer container, SavedContainerSlot slot)
+        {
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Persistence,
+                $"Skipped invalid saved container slot world={ResolveWorldName()} container=({container.X},{container.Y},{container.Z}) id={(slot == null || string.IsNullOrWhiteSpace(slot.CanonicalId) ? "(empty)" : slot.CanonicalId)} count={slot?.Count ?? 0}",
+                this);
         }
 
         void ResolveReferences()
@@ -346,17 +533,17 @@ namespace Blockiverse.Gameplay
                 session = GetComponent<BlockiverseNetworkSession>();
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = BlockiverseSceneLookup.Find<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (chunkAuthoritySync == null)
                 chunkAuthoritySync = GetComponent<MultiplayerChunkAuthoritySync>();
 
             if (survivalSync == null)
                 survivalSync = GetComponent<MultiplayerSurvivalSync>() ??
-                    FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+                    BlockiverseSceneLookup.Find<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
 
             if (vitalsRuntime == null)
-                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+                vitalsRuntime = BlockiverseSceneLookup.Find<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
         }
 
         bool TryResolveWorldManager(out string failureReason, string operation)
@@ -388,18 +575,6 @@ namespace Blockiverse.Gameplay
 
             failureReason = $"Unable to {operation} because the host world is unavailable.";
             return false;
-        }
-
-        static bool SavedWorldMatchesInitializedWorld(WorldSaveData data, VoxelWorld world)
-        {
-            if (data == null || world == null)
-                return false;
-
-            return data.Width == world.Bounds.Width &&
-                   data.Height == world.Bounds.Height &&
-                   data.Depth == world.Bounds.Depth &&
-                   data.ChunkSize == world.ChunkSize &&
-                   data.Seed == world.Seed;
         }
 
         bool TryEnsureHostSaveAuthority(out string failureReason, string operation)

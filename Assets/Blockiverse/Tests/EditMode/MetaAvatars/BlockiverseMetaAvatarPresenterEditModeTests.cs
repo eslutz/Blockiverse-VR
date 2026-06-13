@@ -1,9 +1,12 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
 using Oculus.Avatar2;
 using NUnit.Framework;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -92,6 +95,51 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
 
             Assert.That(presenter.TryRecordLocalStream(out byte[] actual), Is.True);
             Assert.That(actual, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void AvatarStreamRelayUsesUnreliableDeliveryAndBoundedPayloads()
+        {
+            MethodInfo submit = typeof(MetaAvatarStreamRelay).GetMethod(
+                "SubmitAvatarStreamServerRpc",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo receive = typeof(MetaAvatarStreamRelay).GetMethod(
+                "ReceiveAvatarStreamClientRpc",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(MetaAvatarStreamMessage.MaxPayloadBytes, Is.LessThan(64 * 1024));
+            Assert.That(submit, Is.Not.Null);
+            Assert.That(receive, Is.Not.Null);
+            Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+            Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+            Assert.That(
+                new MetaAvatarStreamMessage(1, 0.0, new byte[MetaAvatarStreamMessage.MaxPayloadBytes + 1]).HasValidPayload,
+                Is.False);
+        }
+
+        [Test]
+        public void AvatarStreamMessageReusesExistingPayloadBufferWhenLengthMatches()
+        {
+            byte[] payload = { 1, 2, 3, 4 };
+            var encoded = new MetaAvatarStreamMessage(7, 12.5, payload);
+
+            using var writer = new FastBufferWriter(128, Allocator.Temp);
+            var writeSerializer = new BufferSerializer<BufferSerializerWriter>(new BufferSerializerWriter(writer));
+            encoded.NetworkSerialize(writeSerializer);
+
+            using var reader = new FastBufferReader(writer, Allocator.Temp);
+            byte[] reusablePayload = new byte[payload.Length];
+            var decoded = new MetaAvatarStreamMessage
+            {
+                Payload = reusablePayload,
+            };
+            var readSerializer = new BufferSerializer<BufferSerializerReader>(new BufferSerializerReader(reader));
+            decoded.NetworkSerialize(readSerializer);
+
+            Assert.That(decoded.Payload, Is.SameAs(reusablePayload));
+            CollectionAssert.AreEqual(payload, decoded.Payload);
+            Assert.That(decoded.SenderClientId, Is.EqualTo(7UL));
+            Assert.That(decoded.SentTime, Is.EqualTo(12.5));
         }
 
         [Test]

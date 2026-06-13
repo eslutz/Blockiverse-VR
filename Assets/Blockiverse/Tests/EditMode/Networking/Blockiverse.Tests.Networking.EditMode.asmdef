@@ -7,6 +7,7 @@
     "Blockiverse.Voxel",
     "Blockiverse.Survival",
     "Blockiverse.Persistence",
+    "Blockiverse.Gameplay",
     "Blockiverse.UI",
     "Unity.TextMeshPro",
     "UnityEngine.UI",

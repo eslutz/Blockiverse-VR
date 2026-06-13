@@ -90,11 +90,6 @@ namespace Blockiverse.Survival
             return new RespawnResult(safeSpawnPosition, previousHealth, CurrentHealth, MaxHealth, wasDead);
         }
 
-        public void ResetToFullHealth()
-        {
-            RespawnAt(new BlockPosition(0, 0, 0));
-        }
-
         // Restores saved health (world load). Clamped to [1, MaxHealth]: a save written while
         // alive can never restore into a dead state, and HealthChanged fires so HUDs repaint.
         public void RestoreHealth(int health)

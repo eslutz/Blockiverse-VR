@@ -12,6 +12,63 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
+    public enum BlockMutationSubmissionKind
+    {
+        CreativeDirect,
+        SurvivalCommand,
+        WorldSimulation,
+    }
+
+    public readonly struct ChunkAuthoritySyncDiagnostics
+    {
+        public ChunkAuthoritySyncDiagnostics(MultiplayerChunkAuthoritySync sync)
+        {
+            SentMutationRequestCount = sync.SentMutationRequestCount;
+            ReceivedMutationRequestCount = sync.ReceivedMutationRequestCount;
+            RateLimitedMutationRequestCount = sync.RateLimitedMutationRequestCount;
+            BroadcastDeltaCount = sync.BroadcastDeltaCount;
+            AppliedRemoteDeltaCount = sync.AppliedRemoteDeltaCount;
+            AppliedChunkDeltaCount = sync.AppliedChunkDeltaCount;
+            IgnoredOutOfOrderChunkDeltaCount = sync.IgnoredOutOfOrderChunkDeltaCount;
+            SentLateJoinSnapshotCount = sync.SentLateJoinSnapshotCount;
+            SentEnvironmentSnapshotCount = sync.SentEnvironmentSnapshotCount;
+            AppliedEnvironmentSnapshotCount = sync.AppliedEnvironmentSnapshotCount;
+            AppliedGenerationSnapshotCount = sync.AppliedGenerationSnapshotCount;
+            AppliedSnapshotBlockCount = sync.AppliedSnapshotBlockCount;
+            ReceivedMutationRejectionCount = sync.ReceivedMutationRejectionCount;
+            ConflictRejectedMutationCount = sync.ConflictRejectedMutationCount;
+            AcceptedMutationResponseCount = sync.AcceptedMutationResponseCount;
+            PendingMutationRequestCount = sync.PendingMutationRequestCount;
+            LastSentMutationRequestId = sync.LastSentMutationRequestId;
+            LastReceivedMutationRequestId = sync.LastReceivedMutationRequestId;
+            LastCompletedMutationRequestId = sync.LastCompletedMutationRequestId;
+            LastBroadcastChunkDeltaSequence = sync.LastBroadcastChunkDeltaSequence;
+            LastAppliedChunkDeltaSequence = sync.LastAppliedChunkDeltaSequence;
+        }
+
+        public int SentMutationRequestCount { get; }
+        public int ReceivedMutationRequestCount { get; }
+        public int RateLimitedMutationRequestCount { get; }
+        public int BroadcastDeltaCount { get; }
+        public int AppliedRemoteDeltaCount { get; }
+        public int AppliedChunkDeltaCount { get; }
+        public int IgnoredOutOfOrderChunkDeltaCount { get; }
+        public int SentLateJoinSnapshotCount { get; }
+        public int SentEnvironmentSnapshotCount { get; }
+        public int AppliedEnvironmentSnapshotCount { get; }
+        public int AppliedGenerationSnapshotCount { get; }
+        public int AppliedSnapshotBlockCount { get; }
+        public int ReceivedMutationRejectionCount { get; }
+        public int ConflictRejectedMutationCount { get; }
+        public int AcceptedMutationResponseCount { get; }
+        public int PendingMutationRequestCount { get; }
+        public uint LastSentMutationRequestId { get; }
+        public uint LastReceivedMutationRequestId { get; }
+        public uint LastCompletedMutationRequestId { get; }
+        public uint LastBroadcastChunkDeltaSequence { get; }
+        public uint LastAppliedChunkDeltaSequence { get; }
+    }
+
     [DisallowMultipleComponent]
     public sealed class MultiplayerChunkAuthoritySync : MonoBehaviour
     {
@@ -23,15 +80,22 @@ namespace Blockiverse.Gameplay
         const int MutationRequestMessageBytes = 128;
         const int MutationDeltaMessageBytes = 160;
         const int MutationResultMessageBytes = 128;
-        const int SnapshotHeaderBytes = 80;
+        public const int WorldSnapshotHeaderBytes = 80;
+        public const int EnvironmentSnapshotBytes = 20;
+        public const float EnvironmentResyncIntervalSeconds = 5.0f;
+        const int SnapshotHeaderBytes = WorldSnapshotHeaderBytes;
         const int SnapshotBlockBytes = 32;
+        const int HostMutationRateLimitMaxRequests = 30;
+        const double HostMutationRateLimitWindowSeconds = 1.0d;
         // WeatherState (int) + ticksInCurrentState (int) + weatherRng (uint) + totalElapsedTicks (long) = 20 bytes
-        const int EnvironmentSnapshotMessageBytes = 20;
+        const int EnvironmentSnapshotMessageBytes = EnvironmentSnapshotBytes;
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] CreativeWorldManager worldManager;
 
         readonly Dictionary<uint, BlockMutationRequest> pendingMutationRequests = new();
+        readonly PerClientRequestRateLimiter hostMutationRateLimiter =
+            new(HostMutationRateLimitMaxRequests, HostMutationRateLimitWindowSeconds);
         readonly List<PendingChunkDeltaMessage> bufferedChunkDeltas = new();
         // Reused by SendToRemoteClients so each broadcast avoids a per-delta list allocation.
         readonly List<ulong> remoteClientIdsScratch = new();
@@ -41,33 +105,38 @@ namespace Blockiverse.Gameplay
         uint nextMutationRequestId = 1;
         bool messagesRegistered;
         bool hasHostGenerationSnapshotForSession;
+        float environmentResyncTimer;
+        Func<double> hostMutationTimeProvider;
 
         public ChunkAuthorityBoundary CurrentBoundary { get; private set; } = ChunkAuthorityBoundary.ForHost();
         public BlockMutationAuthority MutationAuthority => ResolveMutationAuthority();
         public BlockMutationResult LastMutationResult { get; private set; }
         public bool IsClientRequestMode => IsActiveClientOnly() && CurrentBoundary.MustRequestMutations;
-        public int SentMutationRequestCount { get; private set; }
-        public int ReceivedMutationRequestCount { get; private set; }
-        public int BroadcastDeltaCount { get; private set; }
-        public int AppliedRemoteDeltaCount { get; private set; }
-        public int AppliedChunkDeltaCount { get; private set; }
-        public int IgnoredOutOfOrderChunkDeltaCount { get; private set; }
-        public int SentLateJoinSnapshotCount { get; private set; }
-        public int SentEnvironmentSnapshotCount { get; private set; }
-        public int AppliedEnvironmentSnapshotCount { get; private set; }
-        public int AppliedGenerationSnapshotCount { get; private set; }
-        public int AppliedSnapshotBlockCount { get; private set; }
-        public int ReceivedMutationRejectionCount { get; private set; }
-        public int ConflictRejectedMutationCount { get; private set; }
-        public int AcceptedMutationResponseCount { get; private set; }
-        public int PendingMutationRequestCount => pendingMutationRequests.Count;
-        public uint LastSentMutationRequestId { get; private set; }
-        public uint LastReceivedMutationRequestId { get; private set; }
-        public uint LastCompletedMutationRequestId { get; private set; }
-        public uint LastBroadcastChunkDeltaSequence { get; private set; }
-        public uint LastAppliedChunkDeltaSequence { get; private set; }
+        public ChunkAuthoritySyncDiagnostics Diagnostics => new(this);
+        internal int SentMutationRequestCount { get; private set; }
+        internal int ReceivedMutationRequestCount { get; private set; }
+        internal int RateLimitedMutationRequestCount { get; private set; }
+        internal int BroadcastDeltaCount { get; private set; }
+        internal int AppliedRemoteDeltaCount { get; private set; }
+        internal int AppliedChunkDeltaCount { get; private set; }
+        internal int IgnoredOutOfOrderChunkDeltaCount { get; private set; }
+        internal int SentLateJoinSnapshotCount { get; private set; }
+        internal int SentEnvironmentSnapshotCount { get; private set; }
+        internal int AppliedEnvironmentSnapshotCount { get; private set; }
+        internal int AppliedGenerationSnapshotCount { get; private set; }
+        internal int AppliedSnapshotBlockCount { get; private set; }
+        internal int ReceivedMutationRejectionCount { get; private set; }
+        internal int ConflictRejectedMutationCount { get; private set; }
+        internal int AcceptedMutationResponseCount { get; private set; }
+        internal int PendingMutationRequestCount => pendingMutationRequests.Count;
+        internal uint LastSentMutationRequestId { get; private set; }
+        internal uint LastReceivedMutationRequestId { get; private set; }
+        internal uint LastCompletedMutationRequestId { get; private set; }
+        internal uint LastBroadcastChunkDeltaSequence { get; private set; }
+        internal uint LastAppliedChunkDeltaSequence { get; private set; }
         public IReadOnlyList<ChunkDelta> RecordedChunkDeltas => chunkDeltaLog.Deltas;
         public bool HasHostGenerationSnapshotForSession => hasHostGenerationSnapshotForSession;
+        double HostMutationTimeSeconds => hostMutationTimeProvider?.Invoke() ?? Time.unscaledTimeAsDouble;
 
         enum ChunkDeltaApplyState
         {
@@ -76,21 +145,72 @@ namespace Blockiverse.Gameplay
             WaitingForEarlierDelta
         }
 
+        public readonly struct WorldSnapshotHeader
+        {
+            public WorldSnapshotHeader(
+                CreativeWorldGenerationPreset generationPreset,
+                int width,
+                int height,
+                int depth,
+                int chunkSize,
+                int seed,
+                int groundHeight,
+                BlockPosition spawnPosition,
+                uint hostDeltaSequence,
+                int changedBlockCount)
+            {
+                GenerationPreset = generationPreset;
+                Width = width;
+                Height = height;
+                Depth = depth;
+                ChunkSize = chunkSize;
+                Seed = seed;
+                GroundHeight = groundHeight;
+                SpawnPosition = spawnPosition;
+                HostDeltaSequence = hostDeltaSequence;
+                ChangedBlockCount = changedBlockCount;
+            }
+
+            public CreativeWorldGenerationPreset GenerationPreset { get; }
+            public int Width { get; }
+            public int Height { get; }
+            public int Depth { get; }
+            public int ChunkSize { get; }
+            public int Seed { get; }
+            public int GroundHeight { get; }
+            public BlockPosition SpawnPosition { get; }
+            public uint HostDeltaSequence { get; }
+            public int ChangedBlockCount { get; }
+        }
+
+        public readonly struct EnvironmentSnapshotState
+        {
+            public EnvironmentSnapshotState(
+                WeatherState weatherState,
+                int weatherTicks,
+                uint weatherRngState,
+                long worldTimeTicks)
+            {
+                WeatherState = weatherState;
+                WeatherTicks = weatherTicks;
+                WeatherRngState = weatherRngState;
+                WorldTimeTicks = worldTimeTicks;
+            }
+
+            public WeatherState WeatherState { get; }
+            public int WeatherTicks { get; }
+            public uint WeatherRngState { get; }
+            public long WorldTimeTicks { get; }
+        }
+
         public void Configure(BlockiverseNetworkSession targetSession, CreativeWorldManager targetWorldManager)
         {
             UnsubscribeNetworkCallbacks();
             session = targetSession;
             worldManager = targetWorldManager;
-            worldManager?.ConfigureAuthoritySync(this);
+            if (worldManager != null)
+                worldManager.ConfigureAuthoritySync(this);
             SubscribeNetworkCallbacks();
-            RefreshAuthorityBoundary();
-        }
-
-        public void ConfigureWorld(CreativeWorldManager targetWorldManager)
-        {
-            worldManager = targetWorldManager;
-            worldManager?.ConfigureAuthoritySync(this);
-            mutationAuthority = null;
             RefreshAuthorityBoundary();
         }
 
@@ -128,14 +248,53 @@ namespace Blockiverse.Gameplay
             UnsubscribeNetworkCallbacks();
         }
 
+        void Update()
+        {
+            TickEnvironmentResync(Time.unscaledDeltaTime);
+        }
+
+        public void TickEnvironmentResync(float deltaSeconds)
+        {
+            RefreshAuthorityBoundary();
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null ||
+                !networkManager.IsListening ||
+                !networkManager.IsServer ||
+                !CurrentBoundary.CanServeLateJoinSync ||
+                networkManager.ConnectedClientsIds.Count <= 1)
+            {
+                environmentResyncTimer = 0.0f;
+                return;
+            }
+
+            environmentResyncTimer += Mathf.Max(0.0f, deltaSeconds);
+            if (environmentResyncTimer < EnvironmentResyncIntervalSeconds)
+                return;
+
+            environmentResyncTimer = 0.0f;
+            BroadcastEnvironmentSnapshot();
+        }
+
         public BlockMutationResult TrySubmitMutation(
             BlockMutationRequest request,
             out SetBlockCommand appliedCommand,
-            out bool requestSentToHost)
+            out bool requestSentToHost,
+            BlockMutationSubmissionKind submissionKind = BlockMutationSubmissionKind.CreativeDirect)
         {
             appliedCommand = null;
             requestSentToHost = false;
             RefreshAuthorityBoundary();
+
+            if (submissionKind == BlockMutationSubmissionKind.CreativeDirect &&
+                worldManager != null &&
+                !CreativePermissionPolicy.CanSubmitDirectCreativeMutation(worldManager.GameMode))
+            {
+                LastMutationResult = BlockMutationResult.Reject(
+                    BlockMutationRejectionReason.GameModeForbidsDirectMutation,
+                    ChunkCoordinate.FromBlockPosition(request.Position, ResolveMutationChunkSize()),
+                    "Survival worlds accept block edits only through validated survival commands.");
+                return LastMutationResult;
+            }
 
             if (IsClientRequestMode)
             {
@@ -174,14 +333,15 @@ namespace Blockiverse.Gameplay
             BlockPosition position,
             BlockId newBlock,
             out SetBlockCommand appliedCommand,
-            out bool requestSentToHost)
+            out bool requestSentToHost,
+            BlockMutationSubmissionKind submissionKind = BlockMutationSubmissionKind.CreativeDirect)
         {
             RefreshAuthorityBoundary();
             VoxelWorld world = ResolveWorld();
             var request = world.Bounds.Contains(position)
                 ? new BlockMutationRequest(CurrentBoundary.LocalClientId, position, newBlock, world.GetBlock(position))
                 : new BlockMutationRequest(CurrentBoundary.LocalClientId, position, newBlock);
-            return TrySubmitMutation(request, out appliedCommand, out requestSentToHost);
+            return TrySubmitMutation(request, out appliedCommand, out requestSentToHost, submissionKind);
         }
 
         public bool CanSaveMultiplayerWorld()
@@ -193,6 +353,7 @@ namespace Blockiverse.Gameplay
         void HandleServerStarted()
         {
             RefreshAuthorityBoundary();
+            hostMutationRateLimiter.Clear();
             ResetHostChunkDeltaLog();
             RegisterMessageHandlers();
         }
@@ -232,6 +393,7 @@ namespace Blockiverse.Gameplay
 
         void HandleServerStopped(bool wasHost)
         {
+            hostMutationRateLimiter.Clear();
             UnregisterMessageHandlers();
             RefreshAuthorityBoundary();
         }
@@ -244,10 +406,16 @@ namespace Blockiverse.Gameplay
             ObserveAbandonedSnapshotTask(pendingSnapshot);
             pendingSnapshot = null;
             snapshotRoutine = null;
+            hostMutationRateLimiter.Clear();
             ResetClientChunkDeltaState();
             ResetPendingMutationRequests();
             UnregisterMessageHandlers();
             RefreshAuthorityBoundary();
+        }
+
+        void HandleClientDisconnected(ulong clientId)
+        {
+            hostMutationRateLimiter.RemoveClient(clientId);
         }
 
         void HandleMutationRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -263,6 +431,12 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
+            if (!hostMutationRateLimiter.TryConsume(senderClientId, HostMutationTimeSeconds))
+            {
+                RateLimitedMutationRequestCount++;
+                return;
+            }
+
             // Malformed payloads (negative block ids) are dropped — the same posture as an
             // unregistered message; nothing legitimate sends them.
             if (!TryReadMutationRequest(senderClientId, ref reader, out uint requestId, out BlockMutationRequest request))
@@ -271,12 +445,11 @@ namespace Blockiverse.Gameplay
             ReceivedMutationRequestCount++;
             LastReceivedMutationRequestId = requestId;
 
-            // Survival worlds accept client edits only through the validated survival command
-            // channel (harvest/place/till/…): the raw creative channel would bypass inventory,
-            // tool-tier, and durability rules. The host's own edits remain authorized.
-            NetworkManager networkManager = ResolveNetworkManagerOrNull();
-            bool senderIsHost = networkManager != null && senderClientId == networkManager.LocalClientId;
-            if (!senderIsHost && worldManager != null && worldManager.GameMode == WorldGameMode.Survival)
+            // Survival worlds accept edits only through validated survival commands
+            // (harvest/place/till/…). The raw creative channel would bypass inventory,
+            // tool-tier, durability, and world-mode permissions, so it is denied for
+            // everyone, including the host.
+            if (worldManager != null && !CreativePermissionPolicy.CanSubmitDirectCreativeMutation(worldManager.GameMode))
             {
                 BlockMutationResult gameModeRejection = BlockMutationResult.Reject(
                     BlockMutationRejectionReason.GameModeForbidsDirectMutation,
@@ -332,27 +505,26 @@ namespace Blockiverse.Gameplay
             // Read the entire payload inside the handler (the reader is only valid here), then
             // hand world generation to a background task: regenerating a full survival world
             // synchronously would stall the VR main thread for seconds.
-            reader.ReadValueSafe(out int generationPreset);
-            reader.ReadValueSafe(out int width);
-            reader.ReadValueSafe(out int height);
-            reader.ReadValueSafe(out int depth);
-            reader.ReadValueSafe(out int chunkSize);
-            reader.ReadValueSafe(out int seed);
-            reader.ReadValueSafe(out int groundHeight);
-            reader.ReadValueSafe(out uint hostDeltaSequence);
-            reader.ReadValueSafe(out int blockCount);
+            if (!TryReadWorldSnapshotHeader(ref reader, out WorldSnapshotHeader header))
+                return;
 
-            var blocks = new List<(BlockPosition position, int blockId)>(Mathf.Max(0, blockCount));
-            for (int index = 0; index < blockCount; index++)
+            var blocks = new List<(BlockPosition position, int blockId)>(header.ChangedBlockCount);
+            for (int index = 0; index < header.ChangedBlockCount; index++)
             {
                 BlockPosition position = ReadBlockPosition(ref reader);
                 reader.ReadValueSafe(out int blockId);
                 blocks.Add((position, blockId));
             }
 
-            var preset = (CreativeWorldGenerationPreset)generationPreset;
-            var settings = new WorldGenerationSettings(width, height, depth, chunkSize, seed, groundHeight);
-            StartSnapshotGeneration(preset, settings, hostDeltaSequence, blocks);
+            var settings = new WorldGenerationSettings(
+                header.Width,
+                header.Height,
+                header.Depth,
+                header.ChunkSize,
+                header.Seed,
+                header.GroundHeight,
+                header.SpawnPosition);
+            StartSnapshotGeneration(header.GenerationPreset, settings, header.HostDeltaSequence, blocks);
         }
 
         // The in-flight late-join snapshot. Only the newest one matters: a fresh snapshot
@@ -417,37 +589,13 @@ namespace Blockiverse.Gameplay
             CreativeWorldGenerationPreset preset,
             WorldGenerationSettings settings)
         {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-
-            if (preset == CreativeWorldGenerationPreset.FlatCreative)
-            {
-                return new GeneratedSnapshotWorld
-                {
-                    Registry = registry,
-                    World = new FlatCreativeWorldPreset(registry, settings).Generate(),
-                    ContainerLoot = null,
-                };
-            }
-
-            if (preset == CreativeWorldGenerationPreset.VoidBuilder)
-            {
-                return new GeneratedSnapshotWorld
-                {
-                    Registry = registry,
-                    World = new VoidBuilderPreset(registry, settings).Generate(),
-                    ContainerLoot = null,
-                };
-            }
-
-            // Loot is deterministic from the seed, so the client regenerates the exact same
-            // container contents the host generated — no per-container network sync needed.
-            var survivalPreset = new SurvivalTerrainPreset(registry, settings);
-            VoxelWorld world = survivalPreset.Generate();
+            BlockRegistry registry = BlockRegistry.Default;
+            GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateWorld(preset, registry, settings);
             return new GeneratedSnapshotWorld
             {
-                Registry = registry,
-                World = world,
-                ContainerLoot = survivalPreset.ContainerLoot,
+                Registry = generated.Registry,
+                World = generated.World,
+                ContainerLoot = generated.ContainerLoot,
             };
         }
 
@@ -490,7 +638,8 @@ namespace Blockiverse.Gameplay
             GeneratedSnapshotWorld generated = snapshot.GenerationTask.Result;
             worldManager.InitializeGeneratedWorld(
                 new GeneratedCreativeWorld(generated.Registry, snapshot.Settings, generated.World, snapshot.Preset, generated.ContainerLoot),
-                this);
+                this,
+                deferInitialRendererRebuild: true);
 
             // Batch the renderer rebuild: applying the snapshot block-by-block would otherwise
             // rebuild every dirty chunk mesh once per block (O(blocks × rebuild)).
@@ -503,8 +652,8 @@ namespace Blockiverse.Gameplay
                 AppliedSnapshotBlockCount++;
             }
 
-            if (snapshot.Blocks.Count > 0)
-                worldManager.Renderer?.RebuildDirty();
+            if (snapshot.Blocks.Count > 0 && worldManager.Renderer != null)
+                worldManager.Renderer.RebuildDirty();
 
             LastAppliedChunkDeltaSequence = snapshot.HostDeltaSequence;
             hasHostGenerationSnapshotForSession = true;
@@ -692,7 +841,8 @@ namespace Blockiverse.Gameplay
                 ResolveNetworkManager().CustomMessagingManager.SendNamedMessage(
                     ChunkSnapshotMessage,
                     clientId,
-                    writer);
+                    writer,
+                    NetworkDelivery.ReliableFragmentedSequenced);
                 SentLateJoinSnapshotCount++;
             }
             finally
@@ -708,15 +858,7 @@ namespace Blockiverse.Gameplay
             var writer = new FastBufferWriter(EnvironmentSnapshotMessageBytes, Allocator.Temp);
             try
             {
-                CreativeWorldManager.WeatherSyncState weather = worldManager.GetWeatherSyncState();
-                long worldTimeTicks = worldManager.WorldTimeClock != null
-                    ? worldManager.WorldTimeClock.TotalElapsedTicks
-                    : 0L;
-
-                writer.WriteValueSafe((int)weather.State);
-                writer.WriteValueSafe(weather.Ticks);
-                writer.WriteValueSafe(weather.RngState);
-                writer.WriteValueSafe(worldTimeTicks);
+                WriteEnvironmentSnapshot(ref writer, BuildEnvironmentSnapshot());
 
                 ResolveNetworkManager().CustomMessagingManager.SendNamedMessage(
                     EnvironmentSnapshotMessage,
@@ -730,15 +872,40 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        void BroadcastEnvironmentSnapshot()
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return;
+
+            remoteClientIdsScratch.Clear();
+            foreach (ulong clientId in networkManager.ConnectedClientsIds)
+            {
+                if (clientId != networkManager.LocalClientId)
+                    remoteClientIdsScratch.Add(clientId);
+            }
+
+            foreach (ulong clientId in remoteClientIdsScratch)
+                SendEnvironmentSnapshot(clientId);
+        }
+
+        EnvironmentSnapshotState BuildEnvironmentSnapshot()
+        {
+            CreativeWorldManager.WeatherSyncState weather = worldManager.GetWeatherSyncState();
+            long worldTimeTicks = worldManager.WorldTimeClock != null
+                ? worldManager.WorldTimeClock.TotalElapsedTicks
+                : 0L;
+
+            return new EnvironmentSnapshotState(weather.State, weather.Ticks, weather.RngState, worldTimeTicks);
+        }
+
         void HandleEnvironmentSnapshotMessage(ulong senderClientId, FastBufferReader reader)
         {
             if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
                 return;
 
-            reader.ReadValueSafe(out int weatherStateInt);
-            reader.ReadValueSafe(out int weatherTicks);
-            reader.ReadValueSafe(out uint weatherRng);
-            reader.ReadValueSafe(out long worldTimeTicks);
+            if (!TryReadEnvironmentSnapshot(ref reader, out EnvironmentSnapshotState snapshot))
+                return;
 
             if (worldManager != null)
             {
@@ -746,8 +913,12 @@ namespace Blockiverse.Gameplay
                 // ticks/RNG and world time survive regardless of message ordering relative to the
                 // generation snapshot.
                 worldManager.RestoreWeatherSyncState(
-                    new CreativeWorldManager.WeatherSyncState((WeatherState)weatherStateInt, weatherTicks, weatherRng));
-                worldManager.RestoreWorldTimeTicks(worldTimeTicks);
+                    new CreativeWorldManager.WeatherSyncState(
+                        snapshot.WeatherState,
+                        snapshot.WeatherTicks,
+                        snapshot.WeatherRngState),
+                    preserveForNextWorldInitialization: !hasHostGenerationSnapshotForSession);
+                worldManager.RestoreWorldTimeTicks(snapshot.WorldTimeTicks);
             }
 
             AppliedEnvironmentSnapshotCount++;
@@ -761,8 +932,8 @@ namespace Blockiverse.Gameplay
                 return;
 
             world.SetBlock(position, block, trackChange);
-            if (rebuildRenderer)
-                worldManager.Renderer?.RebuildDirty();
+            if (rebuildRenderer && worldManager.Renderer != null)
+                worldManager.Renderer.RebuildDirty();
         }
 
         ChunkDeltaApplyState TryApplyChunkDelta(ChunkDelta delta)
@@ -918,6 +1089,13 @@ namespace Blockiverse.Gameplay
             return worldManager.World ?? throw new InvalidOperationException("Multiplayer chunk authority requires a voxel world.");
         }
 
+        int ResolveMutationChunkSize()
+        {
+            return worldManager != null && worldManager.World != null
+                ? worldManager.World.ChunkSize
+                : 16;
+        }
+
         BlockRegistry ResolveRegistry()
         {
             ResolveWorldManager();
@@ -925,7 +1103,7 @@ namespace Blockiverse.Gameplay
             if (worldManager.Registry == null)
             {
                 if (CurrentBoundary.MustRequestMutations)
-                    return BlockRegistry.CreateDefault();
+                    return BlockRegistry.Default;
 
                 worldManager.InitializeDefaultWorld();
             }
@@ -946,7 +1124,8 @@ namespace Blockiverse.Gameplay
             if (worldManager == null)
                 worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
-            worldManager?.ConfigureAuthoritySync(this);
+            if (worldManager != null)
+                worldManager.ConfigureAuthoritySync(this);
         }
 
         bool IsActiveClientOnly()
@@ -970,6 +1149,7 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.OnServerStarted += HandleServerStarted;
             subscribedNetworkManager.OnClientStarted += HandleClientStarted;
             subscribedNetworkManager.OnClientConnectedCallback += HandleClientConnected;
+            subscribedNetworkManager.OnClientDisconnectCallback += HandleClientDisconnected;
             subscribedNetworkManager.OnServerStopped += HandleServerStopped;
             subscribedNetworkManager.OnClientStopped += HandleClientStopped;
             RegisterMessageHandlers();
@@ -985,6 +1165,7 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.OnServerStarted -= HandleServerStarted;
             subscribedNetworkManager.OnClientStarted -= HandleClientStarted;
             subscribedNetworkManager.OnClientConnectedCallback -= HandleClientConnected;
+            subscribedNetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
             subscribedNetworkManager.OnServerStopped -= HandleServerStopped;
             subscribedNetworkManager.OnClientStopped -= HandleClientStopped;
             subscribedNetworkManager = null;
@@ -1030,7 +1211,11 @@ namespace Blockiverse.Gameplay
 
         NetworkManager ResolveNetworkManager()
         {
-            return ResolveNetworkManagerOrNull() ?? throw new InvalidOperationException("Multiplayer chunk authority requires a network session.");
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null)
+                throw new InvalidOperationException("Multiplayer chunk authority requires a network session.");
+
+            return networkManager;
         }
 
         NetworkManager ResolveNetworkManagerOrNull()
@@ -1076,16 +1261,122 @@ namespace Blockiverse.Gameplay
             int groundHeight = settings != null
                 ? settings.GroundHeight
                 : Math.Max(1, Math.Min(world.Bounds.Height - 1, world.Bounds.Height / 2));
+            BlockPosition spawnPosition = settings != null
+                ? settings.SpawnPosition
+                : new BlockPosition(world.Bounds.Width / 2, Math.Min(world.Bounds.Height - 1, groundHeight + 1), world.Bounds.Depth / 2);
 
-            writer.WriteValueSafe((int)worldManager.GenerationPreset);
-            writer.WriteValueSafe(world.Bounds.Width);
-            writer.WriteValueSafe(world.Bounds.Height);
-            writer.WriteValueSafe(world.Bounds.Depth);
-            writer.WriteValueSafe(world.ChunkSize);
-            writer.WriteValueSafe(world.Seed);
-            writer.WriteValueSafe(groundHeight);
-            writer.WriteValueSafe(chunkDeltaLog.LastSequenceId);
-            writer.WriteValueSafe(changedBlockCount);
+            WriteWorldSnapshotHeader(
+                ref writer,
+                new WorldSnapshotHeader(
+                    worldManager.GenerationPreset,
+                    world.Bounds.Width,
+                    world.Bounds.Height,
+                    world.Bounds.Depth,
+                    world.ChunkSize,
+                    world.Seed,
+                    groundHeight,
+                    spawnPosition,
+                    chunkDeltaLog.LastSequenceId,
+                    changedBlockCount));
+        }
+
+        public static void WriteWorldSnapshotHeader(ref FastBufferWriter writer, WorldSnapshotHeader header)
+        {
+            writer.WriteValueSafe((int)header.GenerationPreset);
+            writer.WriteValueSafe(header.Width);
+            writer.WriteValueSafe(header.Height);
+            writer.WriteValueSafe(header.Depth);
+            writer.WriteValueSafe(header.ChunkSize);
+            writer.WriteValueSafe(header.Seed);
+            writer.WriteValueSafe(header.GroundHeight);
+            WriteBlockPosition(ref writer, header.SpawnPosition);
+            writer.WriteValueSafe(header.HostDeltaSequence);
+            writer.WriteValueSafe(header.ChangedBlockCount);
+        }
+
+        public static bool TryReadWorldSnapshotHeader(ref FastBufferReader reader, out WorldSnapshotHeader header)
+        {
+            header = default;
+
+            if (reader.Length - reader.Position < 48)
+                return false;
+
+            reader.ReadValueSafe(out int generationPreset);
+            reader.ReadValueSafe(out int width);
+            reader.ReadValueSafe(out int height);
+            reader.ReadValueSafe(out int depth);
+            reader.ReadValueSafe(out int chunkSize);
+            reader.ReadValueSafe(out int seed);
+            reader.ReadValueSafe(out int groundHeight);
+            BlockPosition spawnPosition = ReadBlockPosition(ref reader);
+            reader.ReadValueSafe(out uint hostDeltaSequence);
+            reader.ReadValueSafe(out int changedBlockCount);
+
+            if (generationPreset < 0 ||
+                generationPreset > (int)CreativeWorldGenerationPreset.VoidBuilder ||
+                width <= 0 ||
+                height <= 0 ||
+                depth <= 0 ||
+                chunkSize <= 0 ||
+                groundHeight < 1 ||
+                groundHeight >= height ||
+                changedBlockCount < 0)
+            {
+                return false;
+            }
+
+            var bounds = new WorldBounds(width, height, depth);
+            if (!bounds.Contains(spawnPosition))
+                return false;
+
+            header = new WorldSnapshotHeader(
+                (CreativeWorldGenerationPreset)generationPreset,
+                width,
+                height,
+                depth,
+                chunkSize,
+                seed,
+                groundHeight,
+                spawnPosition,
+                hostDeltaSequence,
+                changedBlockCount);
+            return true;
+        }
+
+        public static void WriteEnvironmentSnapshot(ref FastBufferWriter writer, EnvironmentSnapshotState snapshot)
+        {
+            writer.WriteValueSafe((int)snapshot.WeatherState);
+            writer.WriteValueSafe(snapshot.WeatherTicks);
+            writer.WriteValueSafe(snapshot.WeatherRngState);
+            writer.WriteValueSafe(snapshot.WorldTimeTicks);
+        }
+
+        public static bool TryReadEnvironmentSnapshot(ref FastBufferReader reader, out EnvironmentSnapshotState snapshot)
+        {
+            snapshot = default;
+
+            if (reader.Length - reader.Position < EnvironmentSnapshotBytes)
+                return false;
+
+            reader.ReadValueSafe(out int weatherState);
+            reader.ReadValueSafe(out int weatherTicks);
+            reader.ReadValueSafe(out uint weatherRngState);
+            reader.ReadValueSafe(out long worldTimeTicks);
+
+            if (weatherState < 0 ||
+                weatherState > (int)WeatherState.Fog ||
+                weatherTicks < 0 ||
+                worldTimeTicks < 0)
+            {
+                return false;
+            }
+
+            snapshot = new EnvironmentSnapshotState(
+                (WeatherState)weatherState,
+                weatherTicks,
+                weatherRngState,
+                worldTimeTicks);
+            return true;
         }
 
         static ChunkDelta ReadMutationDelta(ref FastBufferReader reader, out ulong requestingClientId, out uint requestId)

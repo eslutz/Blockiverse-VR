@@ -42,6 +42,10 @@ namespace Blockiverse.Gameplay
 
         void Awake()
         {
+#if !DEVELOPMENT_BUILD && !UNITY_EDITOR
+            enabled = false;
+            return;
+#endif
             sampler = new FrameStatisticsSampler(Mathf.Max(1, sampleWindow));
 
             if (worldRenderer == null)
@@ -76,9 +80,10 @@ namespace Blockiverse.Gameplay
                 this);
         }
 
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
         void OnGUI()
         {
-            if (!visible || !Sampler.HasSamples || !(Debug.isDebugBuild || Application.isEditor))
+            if (!visible || !Sampler.HasSamples)
                 return;
 
             VoxelRenderStats stats = worldRenderer != null ? worldRenderer.Stats : default;
@@ -96,7 +101,7 @@ namespace Blockiverse.Gameplay
             get
             {
                 if (overlayStyle != null)
-                    return overlayStyle;
+                return overlayStyle;
 
                 overlayStyle = new GUIStyle(GUI.skin.box)
                 {
@@ -107,5 +112,6 @@ namespace Blockiverse.Gameplay
                 return overlayStyle;
             }
         }
+#endif
     }
 }

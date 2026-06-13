@@ -42,6 +42,7 @@ namespace Blockiverse.Survival
         public static readonly ItemId SmoothBranchwood     = new("smooth_branchwood");
         public static readonly ItemId Leafmoss             = new("leafmoss");
         public static readonly ItemId Thornbrush           = new("thornbrush");
+        public static readonly ItemId Sapling              = new("sapling");
         public static readonly ItemId WorkPlank            = new("work_plank");
         public static readonly ItemId CutstoneBlock        = new("cutstone_block");
         public static readonly ItemId FiredBrick           = new("fired_brick");
@@ -56,6 +57,7 @@ namespace Blockiverse.Survival
         public static readonly ItemId ToolRack             = new("tool_rack");
         public static readonly ItemId PantryJar            = new("pantry_jar");
         public static readonly ItemId DeepLocker           = new("deep_locker");
+        public static readonly ItemId Bedroll              = new("bedroll");
         public static readonly ItemId Campfire             = new("campfire");
         public static readonly ItemId ClayKiln             = new("clay_kiln");
         public static readonly ItemId BellowsForge         = new("bellows_forge");
@@ -81,6 +83,7 @@ namespace Blockiverse.Survival
         // ── Farming drops and seeds (§3, §11.2) ───────────────────────────────
         public static readonly ItemId GrainBundle          = new("grain_bundle");
         public static readonly ItemId BerryCluster         = new("berry_cluster");
+        public static readonly ItemId RawMorsel            = new("raw_morsel");
         public static readonly ItemId MeadowSeed           = new("meadow_seed");
         public static readonly ItemId DrygrassSeed         = new("drygrass_seed");
         public static readonly ItemId ReedCutting          = new("reed_cutting");
@@ -130,6 +133,10 @@ namespace Blockiverse.Survival
 
         // ── Consumables ───────────────────────────────────────────────────────
         public static readonly ItemId FieldBandage         = new("field_bandage");
+        public static readonly ItemId BerryMash            = new("berry_mash");
+        public static readonly ItemId Flatbread            = new("flatbread");
+        public static readonly ItemId CookedMorsel         = new("cooked_morsel");
+        public static readonly ItemId TrailRation          = new("trail_ration");
 
         public bool Equals(ItemId other)
         {

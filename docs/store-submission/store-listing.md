@@ -9,8 +9,8 @@
 - **Developer / publisher:** <developer / studio name>
 - **Category:** Games — Building / Sandbox
 - **Supported devices:** Meta Quest 3, Meta Quest 3S
-- **Supported input:** Quest Touch controllers
-- **Player modes:** Single player, local LAN multiplayer (host-authoritative co-op)
+- **Supported input:** Quest Touch controllers required; hand-tracking-only input is not supported for the initial release
+- **Player modes:** Single player, local LAN multiplayer (host-authoritative co-op; host disconnect ends the LAN session)
 - **Internet required:** No for single player; local network required for LAN multiplayer
 - **Design source:** Current gameplay scope is defined by `../rulesets/` and the execution plan.
 
@@ -28,12 +28,14 @@ interaction and comfort-first locomotion.
 Key features:
 
 - **Creative and survival building** in canonical bounded voxel worlds with original block art.
-- **Natural VR interaction** — point, place, break, and undo with a dominant-hand ray and a
-  left-hand block menu.
+- **Natural VR interaction** — point, place, break, and undo with Quest Touch controllers,
+  a dominant-hand ray, and a left-hand block menu.
 - **Comfort options** — teleport movement, snap turning, height reset, and a comfort settings
   menu so you can play the way that feels best.
 - **Local co-op multiplayer** — host or join a LAN session and build together with
   host-authoritative canonical world sync and Meta Horizon avatars or fallback proxies.
+  The host owns the shared world; if the host disconnects, the session ends and clients
+  can reconnect when the host is available again.
 - **Audio and haptic feedback** on every block break and placement for a tactile feel.
 
 Blockiverse VR uses only original art, characters, and audio.
@@ -52,7 +54,7 @@ Blockiverse VR uses only original art, characters, and audio.
 
 ## Languages
 
-- Interface language(s): <English / others>
+- Interface language(s): English
 
 ## Assets required before submission (external)
 

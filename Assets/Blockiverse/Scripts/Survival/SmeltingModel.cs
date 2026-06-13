@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Voxel;
 
 namespace Blockiverse.Survival
 {
@@ -9,9 +10,7 @@ namespace Blockiverse.Survival
     // This is a pure model; a station controller drives it against real fuel/input/output slots.
     public static class SmeltingModel
     {
-        // Mirrors WorldConstants.TicksPerSecond; duplicated to keep the Survival assembly free of
-        // a WorldGen dependency (same convention as MiningFormula).
-        public const int TicksPerSecond = 20;
+        public const int TicksPerSecond = SimulationTime.TicksPerSecond;
 
         // Burn time per fuel unit, in seconds (§8.2).
         static readonly Dictionary<ItemId, int> FuelBurnSecondsById = new()

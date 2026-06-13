@@ -36,6 +36,21 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void CanonicalBiomeIdsResolveThroughWorldGenOwnedMapping()
+        {
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("balanced"), Is.EqualTo(SurvivalBiomeResolver.AnyBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("meadow"), Is.EqualTo(SurvivalBiomeResolver.MeadowBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("pinewild"), Is.EqualTo(SurvivalBiomeResolver.PinewildBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("wetland"), Is.EqualTo(SurvivalBiomeResolver.WetlandBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("drybrush"), Is.EqualTo(SurvivalBiomeResolver.DrybrushBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("dunes"), Is.EqualTo(SurvivalBiomeResolver.DunesBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("tundra"), Is.EqualTo(SurvivalBiomeResolver.TundraBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.BiomeIndexForCanonicalId("highlands"), Is.EqualTo(SurvivalBiomeResolver.HighlandsBiomeIndex));
+            Assert.That(SurvivalBiomeResolver.IsTundraBiomeIndex(SurvivalBiomeResolver.TundraBiomeIndex), Is.True);
+            Assert.That(SurvivalBiomeResolver.IsTundraBiomeIndex(SurvivalBiomeResolver.MeadowBiomeIndex), Is.False);
+        }
+
+        [Test]
         public void ResolverProducesMultipleDistinctBiomes()
         {
             var resolver = new SurvivalBiomeResolver(seed: 6401, WorldHeight);

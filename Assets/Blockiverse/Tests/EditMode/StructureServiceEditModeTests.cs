@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -26,6 +27,101 @@ namespace Blockiverse.Tests.EditMode
             for (int z = 0; z < settings.Bounds.Depth; z++)
                 world.SetBlock(new BlockPosition(x, groundY, z), BlockRegistry.MeadowTurf, trackChange: false);
             return world;
+        }
+
+        [Test]
+        public void StructureCatalogMatchesCanonicalRulesetIds()
+        {
+            string[] expected =
+            {
+                "pathmark_stones",
+                "old_wayflag",
+                "fallen_branchwood",
+                "saltmarker_cairn",
+                "frostmarker_cairn",
+                "forager_lean_to",
+                "resin_tap_grove",
+                "wetland_stilt_cache",
+                "drybrush_niter_pit",
+                "frost_shelter",
+                "bridge_segment",
+                "weathered_watchpost",
+                "ruined_kiln_yard",
+                "mossroot_hut_cluster",
+                "sunmetal_survey_tower",
+                "frost_beacon_ruin",
+                "cave_shrine",
+                "stoneburrow_cellar",
+                "lumen_hollow",
+                "ember_vent_outpost",
+                "deep_locker_room",
+                "staropal_pocket_shrine",
+            };
+
+            var actual = new HashSet<string>();
+            foreach (StructureCatalogEntry entry in StructureService.CatalogEntries)
+                actual.Add(entry.Id);
+
+            Assert.That(actual.Count, Is.EqualTo(expected.Length));
+            foreach (string id in expected)
+                Assert.That(actual.Contains(id), Is.True, $"Missing canonical structure '{id}'.");
+        }
+
+        [Test]
+        public void UndergroundLootTierStructuresAreCatalogedAsUnderground()
+        {
+            string[] underground =
+            {
+                "cave_shrine",
+                "stoneburrow_cellar",
+                "lumen_hollow",
+                "ember_vent_outpost",
+                "deep_locker_room",
+                "staropal_pocket_shrine",
+            };
+
+            foreach (string id in underground)
+            {
+                StructureCatalogEntry entry = FindCatalogEntry(id);
+                Assert.That(entry.IsUnderground, Is.True, $"{id} must use an underground/cave placement path.");
+                Assert.That(entry.LootTableId, Is.Not.EqualTo(StructureLootTable.EmptyRuinId), $"{id} must use a real loot table.");
+            }
+        }
+
+        [Test]
+        public void WeatheredWatchpostSpawnDistanceFitsDefaultWorld()
+        {
+            WorldGenerationSettings settings = MakeSettings();
+            StructureCatalogEntry watchpost = FindCatalogEntry("weathered_watchpost");
+            double farthestDefaultWorldCandidate = Math.Sqrt(
+                settings.SpawnPosition.X * settings.SpawnPosition.X +
+                settings.SpawnPosition.Z * settings.SpawnPosition.Z);
+
+            Assert.That(watchpost.MinDistanceFromSpawn, Is.LessThan(farthestDefaultWorldCandidate),
+                "The watchpost spawn exclusion must leave reachable candidates in the default 128x128 world.");
+        }
+
+        [Test]
+        public void StructureLootTablesCoverCanonicalRulesetIds()
+        {
+            string[] expected =
+            {
+                StructureLootTable.CommonSupplyId,
+                StructureLootTable.ForagerFoodId,
+                StructureLootTable.BuilderCacheId,
+                StructureLootTable.MinerCacheId,
+                StructureLootTable.MetalCacheId,
+                StructureLootTable.DeepCacheId,
+                StructureLootTable.EmptyRuinId,
+            };
+
+            var actual = new HashSet<string>();
+            foreach (StructureLootTable table in StructureLootTable.All)
+                actual.Add(table.Id);
+
+            Assert.That(actual.Count, Is.EqualTo(expected.Length));
+            foreach (string id in expected)
+                Assert.That(actual.Contains(id), Is.True, $"Missing canonical loot table '{id}'.");
         }
 
         [Test]
@@ -83,8 +179,8 @@ namespace Blockiverse.Tests.EditMode
             var wallCounts = new HashSet<int>();
             int seedsWithStructures = 0;
 
-            // Degradation drives the per-wall-block skip chance, so the Graystone total is the
-            // observable proxy for the seed-derived degradation state of each placed structure.
+            // Degradation drives the per-wall-block skip chance, so the generated wall total is
+            // the observable proxy for the seed-derived degradation state of each structure.
             for (int s = 1; s <= 8; s++)
             {
                 var w = FlatWorld(settings);
@@ -94,7 +190,7 @@ namespace Blockiverse.Tests.EditMode
                 for (int x = 0; x < settings.Bounds.Width; x++)
                 for (int z = 0; z < settings.Bounds.Depth; z++)
                 for (int y = WorldConstants.SeaLevel; y < WorldConstants.SeaLevel + 8; y++)
-                    if (w.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.Graystone)
+                    if (IsGeneratedStructureBlock(w.GetBlock(new BlockPosition(x, y, z))))
                         count++;
 
                 if (count == 0) continue;
@@ -119,6 +215,31 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PlaceStructureAtTracksRuntimeChangesOnlyWhenRequested()
+        {
+            var worldgenWorld = new VoxelWorld(new WorldBounds(32, 32, 32), chunkSize: 16, seed: 1);
+            StructureService.PlaceStructureAt(worldgenWorld, 8, 8, 8, seed: 1);
+            Assert.That(worldgenWorld.GetChangedBlocks(), Is.Empty);
+
+            var runtimeWorld = new VoxelWorld(new WorldBounds(32, 32, 32), chunkSize: 16, seed: 1);
+            StructureService.PlaceStructureAt(runtimeWorld, 8, 8, 8, seed: 1, trackChange: true);
+
+            Assert.That(runtimeWorld.GetChangedBlocks(), Is.Not.Empty);
+            Assert.That(HasChangedBlock(runtimeWorld, new BlockPosition(8, 8, 8), BlockRegistry.Graystone), Is.True);
+        }
+
+        static bool HasChangedBlock(VoxelWorld targetWorld, BlockPosition position, BlockId newBlock)
+        {
+            foreach (BlockChange change in targetWorld.GetChangedBlocks())
+            {
+                if (change.Position == position && change.NewBlock == newBlock)
+                    return true;
+            }
+
+            return false;
+        }
+
+        [Test]
         public void PlaceStructuresWithBiomeResolverPlacesStorageCrateForLootStructures()
         {
             // Seed 455 deterministically places loot-bearing structures (forager_lean_to) in an
@@ -134,7 +255,7 @@ namespace Blockiverse.Tests.EditMode
             int crates = 0;
             for (int x = 0; x < settings.Bounds.Width; x++)
             for (int z = 0; z < settings.Bounds.Depth; z++)
-            for (int y = WorldConstants.SeaLevel; y < WorldConstants.SeaLevel + 8; y++)
+            for (int y = 0; y < settings.Bounds.Height; y++)
                 if (world.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.StorageCrate)
                     crates++;
 
@@ -153,7 +274,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void LootTableRollIsDeterministicAndWithinRanges()
         {
-            foreach (StructureLootTable table in new[] { StructureLootTable.CommonSupply, StructureLootTable.ForagerFood })
+            foreach (StructureLootTable table in StructureLootTable.All)
             {
                 List<ContainerLootItem> a = table.Roll(seed: 4242u);
                 List<ContainerLootItem> b = table.Roll(seed: 4242u);
@@ -174,7 +295,7 @@ namespace Blockiverse.Tests.EditMode
             // Container population skips unknown items; guard that the canonical tables reference only
             // real registered items so generated crates are never silently empty.
             ItemRegistry registry = ItemRegistry.CreateDefault();
-            foreach (StructureLootTable table in new[] { StructureLootTable.CommonSupply, StructureLootTable.ForagerFood })
+            foreach (StructureLootTable table in StructureLootTable.All)
             foreach (StructureLootEntry entry in table.Entries)
                 Assert.That(registry.TryGet(new ItemId(entry.ItemId), out _), Is.True,
                     $"Loot item '{entry.ItemId}' in table '{table.Id}' is not registered.");
@@ -246,8 +367,8 @@ namespace Blockiverse.Tests.EditMode
                 bool found = false;
                 for (int x = rx * regionSize; x < (rx + 1) * regionSize && !found; x++)
                 for (int z = rz * regionSize; z < (rz + 1) * regionSize && !found; z++)
-                for (int y = WorldConstants.SeaLevel; y < WorldConstants.SeaLevel + 6; y++)
-                    if (world.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.Graystone)
+                for (int y = 0; y < settings.Bounds.Height; y++)
+                    if (IsGeneratedStructureBlock(world.GetBlock(new BlockPosition(x, y, z))))
                     {
                         found = true;
                         break;
@@ -286,8 +407,48 @@ namespace Blockiverse.Tests.EditMode
             StructureService.PlaceStructures(worldB, BlockRegistry.CreateDefault(), settings, 55,
                 biomeAt: (x, z) => 1); // Pinewild
 
-            // Both should place graystone (all structures use graystone walls currently); just verify no crash.
+            // Both biome palettes should be valid; the exact material depends on the picked structure.
             Assert.Pass("PlaceStructures completed without throwing for both biome inputs.");
+        }
+
+        [Test]
+        public void CatalogPlacementCanEmitUndergroundLootCrates()
+        {
+            var settings = MakeSettings(seed: 901);
+            var world = FlatWorld(settings);
+            var loot = new List<StructureContainerLoot>();
+
+            bool placed = StructureService.TryPlaceStructureAt(
+                world,
+                "deep_locker_room",
+                anchorX: 32,
+                surfaceY: WorldConstants.SeaLevel - 1,
+                anchorZ: 32,
+                seed: 901,
+                lootSink: loot);
+
+            Assert.That(placed, Is.True);
+            Assert.That(loot, Is.Not.Empty);
+            Assert.That(loot[0].Position.Y, Is.LessThan(WorldConstants.SeaLevel - 4));
+            Assert.That(world.GetBlock(loot[0].Position), Is.EqualTo(BlockRegistry.StorageCrate));
+        }
+
+        static StructureCatalogEntry FindCatalogEntry(string id)
+        {
+            foreach (StructureCatalogEntry entry in StructureService.CatalogEntries)
+            {
+                if (entry.Id == id)
+                    return entry;
+            }
+
+            Assert.Fail($"Missing structure catalog entry '{id}'.");
+            return default;
+        }
+
+        static bool IsGeneratedStructureBlock(BlockId block)
+        {
+            return block != BlockRegistry.Air &&
+                   block != BlockRegistry.MeadowTurf;
         }
     }
 }

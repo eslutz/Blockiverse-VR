@@ -179,6 +179,29 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ResetClearsUndoRedoAndClipboard()
+        {
+            var pos = new BlockPosition(0, 0, 0);
+            world.SetBlock(pos, BlockRegistry.Graystone);
+            service.Copy(world, pos, pos);
+            service.Fill(world, pos, pos, BlockRegistry.BranchwoodLog);
+            service.Undo(world);
+
+            Assert.That(service.HasClipboard, Is.True);
+            Assert.That(service.UndoCount, Is.EqualTo(0));
+            Assert.That(service.RedoCount, Is.EqualTo(1));
+
+            service.Reset();
+
+            Assert.That(service.HasClipboard, Is.False);
+            Assert.That(service.UndoCount, Is.EqualTo(0));
+            Assert.That(service.RedoCount, Is.EqualTo(0));
+            Assert.That(service.Undo(world), Is.EqualTo(WorldEditResult.NothingToUndo));
+            Assert.That(service.Redo(world), Is.EqualTo(WorldEditResult.NothingToRedo));
+            Assert.That(service.Paste(world, pos), Is.EqualTo(WorldEditResult.NoClipboard));
+        }
+
+        [Test]
         public void CopyRejectsVolumeExceedingLimit()
         {
             var hugeWorld = new VoxelWorld(new WorldBounds(64, 64, 64), chunkSize: 16, seed: 1);

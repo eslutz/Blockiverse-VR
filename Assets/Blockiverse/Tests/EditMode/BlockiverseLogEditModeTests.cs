@@ -71,6 +71,29 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
+        [Test]
+        public void SceneLookupFindsInactiveComponentsAndNamedGameObjects()
+        {
+            var target = new GameObject("Scene Lookup Probe");
+            target.SetActive(false);
+            LookupProbe probe = target.AddComponent<LookupProbe>();
+
+            try
+            {
+                Assert.That(BlockiverseSceneLookup.Find<LookupProbe>(FindObjectsInactive.Include), Is.SameAs(probe));
+                target.SetActive(true);
+                Assert.That(BlockiverseSceneLookup.FindGameObject("Scene Lookup Probe"), Is.SameAs(target));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        sealed class LookupProbe : MonoBehaviour
+        {
+        }
+
         sealed class CapturingLogSink : IBlockiverseLogSink
         {
             public readonly List<BlockiverseLogEntry> Entries = new();

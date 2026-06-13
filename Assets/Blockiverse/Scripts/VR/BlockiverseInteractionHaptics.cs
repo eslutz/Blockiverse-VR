@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Gameplay;
+using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -14,13 +15,16 @@ namespace Blockiverse.VR
     {
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
+        [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
         [SerializeField] BlockiverseControllerHaptics dominantHandHaptics;
         [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
 
         bool subscribed;
         bool subscribedToSurvival;
+        bool subscribedToVitals;
 
         public event Action UiTickRequested;
+        public event Action<BlockiverseHapticPattern> PatternRequested;
         public CreativeInteractionController InteractionController => interactionController;
         public BlockiverseControllerHaptics DominantHandHaptics => dominantHandHaptics;
         public BlockiverseFeedbackSettings FeedbackSettings => feedbackSettings;
@@ -31,6 +35,13 @@ namespace Blockiverse.VR
             interactionController = controller;
             dominantHandHaptics = haptics;
             Subscribe();
+        }
+
+        public void ConfigureVitalsRuntime(SurvivalVitalsRuntime runtime)
+        {
+            UnsubscribeVitals();
+            vitalsRuntime = runtime;
+            SubscribeVitals();
         }
 
         public void ConfigureFeedbackSettings(BlockiverseFeedbackSettings settings)
@@ -68,6 +79,9 @@ namespace Blockiverse.VR
 
             if (survivalSync == null && Application.isPlaying)
                 survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+
+            if (vitalsRuntime == null && Application.isPlaying)
+                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
         }
 
         void Subscribe()
@@ -83,6 +97,8 @@ namespace Blockiverse.VR
                 survivalSync.CommandFeedback += OnSurvivalCommandFeedback;
                 subscribedToSurvival = true;
             }
+
+            SubscribeVitals();
         }
 
         void Unsubscribe()
@@ -94,6 +110,33 @@ namespace Blockiverse.VR
             if (subscribedToSurvival && survivalSync != null)
                 survivalSync.CommandFeedback -= OnSurvivalCommandFeedback;
             subscribedToSurvival = false;
+
+            UnsubscribeVitals();
+        }
+
+        void SubscribeVitals()
+        {
+            if (subscribedToVitals || vitalsRuntime == null)
+                return;
+
+            vitalsRuntime.LocalPlayerDamaged += OnLocalPlayerDamaged;
+            vitalsRuntime.LocalPlayerLowHealth += OnLocalPlayerLowHealth;
+            vitalsRuntime.LocalPlayerDied += OnLocalPlayerDied;
+            subscribedToVitals = true;
+        }
+
+        void UnsubscribeVitals()
+        {
+            if (!subscribedToVitals || vitalsRuntime == null)
+            {
+                subscribedToVitals = false;
+                return;
+            }
+
+            vitalsRuntime.LocalPlayerDamaged -= OnLocalPlayerDamaged;
+            vitalsRuntime.LocalPlayerLowHealth -= OnLocalPlayerLowHealth;
+            vitalsRuntime.LocalPlayerDied -= OnLocalPlayerDied;
+            subscribedToVitals = false;
         }
 
         // Survival break/place resolve through the host-authoritative command channel rather
@@ -117,6 +160,21 @@ namespace Blockiverse.VR
             }
         }
 
+        void OnLocalPlayerDamaged(HealthChangeResult result)
+        {
+            SendPattern(BlockiverseHapticPattern.PlayerDamage);
+        }
+
+        void OnLocalPlayerLowHealth(HealthChangeResult result)
+        {
+            SendPattern(BlockiverseHapticPattern.LowHealth);
+        }
+
+        void OnLocalPlayerDied()
+        {
+            SendPattern(BlockiverseHapticPattern.PlayerDeath);
+        }
+
         void OnBlockMutationApplied(BlockChange change)
         {
             if (dominantHandHaptics == null)
@@ -130,6 +188,8 @@ namespace Blockiverse.VR
 
         void SendPattern(BlockiverseHapticPattern pattern)
         {
+            PatternRequested?.Invoke(pattern);
+
             if (dominantHandHaptics == null)
                 return;
 

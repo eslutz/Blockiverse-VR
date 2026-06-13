@@ -53,7 +53,7 @@ namespace Blockiverse.Gameplay
 
         public static CreativeCatalog CreateDefault(BlockRegistry blockRegistry = null)
         {
-            blockRegistry ??= BlockRegistry.CreateDefault();
+            blockRegistry ??= BlockRegistry.Default;
 
             var list = new List<CreativeCatalogEntry>
             {
@@ -147,6 +147,7 @@ namespace Blockiverse.Gameplay
                 new(BlockRegistry.ToolRack,         CreativeCatalogCategory.Storage),
                 new(BlockRegistry.PantryJar,        CreativeCatalogCategory.Storage),
                 new(BlockRegistry.DeepLocker,       CreativeCatalogCategory.Storage),
+                new(BlockRegistry.Bedroll,          CreativeCatalogCategory.Storage),
 
                 // Stations
                 new(BlockRegistry.BuildTable,       CreativeCatalogCategory.Stations),

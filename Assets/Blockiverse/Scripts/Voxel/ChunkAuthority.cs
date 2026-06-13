@@ -83,7 +83,8 @@ namespace Blockiverse.Voxel
         BlockEditingDisabled,
         // Survival worlds accept client edits only through the validated survival command
         // channel; the raw creative mutation channel is host-only there.
-        GameModeForbidsDirectMutation
+        GameModeForbidsDirectMutation,
+        WorldInputBlocked
     }
 
     public readonly struct BlockMutationRequest : IEquatable<BlockMutationRequest>
@@ -236,6 +237,8 @@ namespace Blockiverse.Voxel
             return new BlockMutationAuthority(voxelWorld, blockRegistry, ChunkAuthorityBoundary.ForHost(hostClientId));
         }
 
+        // Intentionally public for client-boundary validation without constructing Netcode
+        // runtime objects. Production clients send requests through MultiplayerChunkAuthoritySync.
         public static BlockMutationAuthority CreateClientProxy(
             VoxelWorld voxelWorld,
             BlockRegistry blockRegistry,

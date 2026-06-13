@@ -29,6 +29,47 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void MeshBuilderReusesSolidAndFluidOutputLists()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 1, 1), BlockRegistry.Freshwater, trackChange: false);
+
+            ChunkMeshData firstSolid = ChunkMeshBuilder.Build(
+                world,
+                registry,
+                new ChunkCoordinate(0, 0, 0),
+                out ChunkMeshData firstFluid);
+            List<Vector3> solidVertices = firstSolid.Vertices;
+            List<int> solidTriangles = firstSolid.Triangles;
+            List<Vector2> solidUvs = firstSolid.Uvs;
+            List<Color> solidColors = firstSolid.Colors;
+            List<Vector3> fluidVertices = firstFluid.Vertices;
+            List<int> fluidTriangles = firstFluid.Triangles;
+            List<Vector2> fluidUvs = firstFluid.Uvs;
+            List<Color> fluidColors = firstFluid.Colors;
+
+            Assert.That(firstSolid.FaceCount, Is.GreaterThan(0));
+            Assert.That(firstFluid.FaceCount, Is.GreaterThan(0));
+
+            ChunkMeshData secondSolid = ChunkMeshBuilder.Build(
+                world,
+                registry,
+                new ChunkCoordinate(0, 0, 0),
+                out ChunkMeshData secondFluid);
+
+            Assert.That(secondSolid.Vertices, Is.SameAs(solidVertices));
+            Assert.That(secondSolid.Triangles, Is.SameAs(solidTriangles));
+            Assert.That(secondSolid.Uvs, Is.SameAs(solidUvs));
+            Assert.That(secondSolid.Colors, Is.SameAs(solidColors));
+            Assert.That(secondFluid.Vertices, Is.SameAs(fluidVertices));
+            Assert.That(secondFluid.Triangles, Is.SameAs(fluidTriangles));
+            Assert.That(secondFluid.Uvs, Is.SameAs(fluidUvs));
+            Assert.That(secondFluid.Colors, Is.SameAs(fluidColors));
+        }
+
+        [Test]
         public void MeshBuilderRemovesInternalFacesBetweenAdjacentSolidBlocks()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
@@ -97,6 +138,68 @@ namespace Blockiverse.Tests.EditMode
             CollectionAssert.AreEquivalent(
                 new[] { new ChunkCoordinate(0, 0, 0), new ChunkCoordinate(1, 0, 0) },
                 queue.DrainDirtyChunks().ToArray());
+        }
+
+        [Test]
+        public void DirtyChunkQueueCanDrainAPartialBudget()
+        {
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 1);
+            var queue = new ChunkRebuildQueue(world);
+
+            queue.MarkDirty(new ChunkCoordinate(0, 0, 0));
+            queue.MarkDirty(new ChunkCoordinate(1, 0, 0));
+            queue.MarkDirty(new ChunkCoordinate(2, 0, 0));
+
+            IReadOnlyCollection<ChunkCoordinate> firstDrain = queue.DrainDirtyChunks(maxCount: 2);
+
+            Assert.That(firstDrain, Has.Count.EqualTo(2));
+            Assert.That(queue.Count, Is.EqualTo(1));
+            Assert.That(queue.DrainDirtyChunks(), Has.Count.EqualTo(1));
+            Assert.That(queue.Count, Is.Zero);
+        }
+
+        [Test]
+        public void DirtyChunkQueueConvenienceDrainReusesSnapshotCollection()
+        {
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 1);
+            var queue = new ChunkRebuildQueue(world);
+
+            queue.MarkDirty(new ChunkCoordinate(0, 0, 0));
+            IReadOnlyCollection<ChunkCoordinate> firstDrain = queue.DrainDirtyChunks();
+
+            queue.MarkDirty(new ChunkCoordinate(1, 0, 0));
+            IReadOnlyCollection<ChunkCoordinate> secondDrain = queue.DrainDirtyChunks();
+
+            Assert.That(secondDrain, Is.SameAs(firstDrain),
+                "The convenience drain should reuse its per-queue snapshot list instead of allocating per tick.");
+            Assert.That(secondDrain, Is.EquivalentTo(new[] { new ChunkCoordinate(1, 0, 0) }));
+        }
+
+        [Test]
+        public void DirtyChunkQueueCanDrainIntoReusableScratchList()
+        {
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 1);
+            var queue = new ChunkRebuildQueue(world);
+            var scratch = new List<ChunkCoordinate>
+            {
+                new(99, 99, 99)
+            };
+
+            queue.MarkDirty(new ChunkCoordinate(0, 0, 0));
+            queue.MarkDirty(new ChunkCoordinate(1, 0, 0));
+
+            int drained = queue.DrainDirtyChunks(scratch, maxCount: 1);
+
+            Assert.That(drained, Is.EqualTo(1));
+            Assert.That(scratch, Has.Count.EqualTo(1));
+            Assert.That(scratch[0], Is.Not.EqualTo(new ChunkCoordinate(99, 99, 99)));
+            Assert.That(queue.Count, Is.EqualTo(1));
+
+            drained = queue.DrainDirtyChunks(scratch, maxCount: 8);
+
+            Assert.That(drained, Is.EqualTo(1));
+            Assert.That(scratch, Has.Count.EqualTo(1));
+            Assert.That(queue.Count, Is.Zero);
         }
 
         [Test]
@@ -187,6 +290,132 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
                 Assert.That(collider.sharedMesh, Is.SameAs(filter.sharedMesh));
                 Assert.That(collider.sharedMesh.vertexCount, Is.GreaterThan(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void FluidColliderRebuildsUseTheColliderBudget()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.Freshwater, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
+
+                MeshFilter fluidFilter = worldObject
+                    .GetComponentsInChildren<MeshFilter>()
+                    .Single(filter => filter.gameObject.name == "Fluid");
+                MeshCollider fluidCollider = fluidFilter.GetComponent<MeshCollider>();
+                Assert.That(fluidCollider.sharedMesh, Is.SameAs(fluidFilter.sharedMesh));
+
+                renderer.ColliderRebuildBudget = 0;
+                world.SetBlock(new BlockPosition(2, 0, 1), BlockRegistry.FreshwaterFlow);
+                renderer.RebuildDirty();
+
+                Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0),
+                    "Fluid collider recooks should be throttled by the same budget as solid colliders.");
+
+                renderer.ProcessPendingColliderRebuilds(int.MaxValue);
+
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
+                Assert.That(fluidCollider.sharedMesh, Is.SameAs(fluidFilter.sharedMesh));
+                Assert.That(fluidCollider.sharedMesh.vertexCount, Is.GreaterThan(0));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void DirtyVisualRebuildsAreBudgetedAcrossCalls()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 5);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+                renderer.VisualRebuildBudget = 1;
+
+                world.SetBlock(new BlockPosition(15, 1, 4), BlockRegistry.Graystone);
+                renderer.RebuildDirty();
+
+                Assert.That(renderer.Stats.QueuedRebuildCount, Is.GreaterThanOrEqualTo(1));
+
+                renderer.RebuildDirty();
+
+                Assert.That(renderer.Stats.QueuedRebuildCount, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void DeferredInitialRebuildQueuesChunksAndHonorsBudgets()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+            world.SetBlock(new BlockPosition(20, 0, 1), BlockRegistry.Graystone, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.VisualRebuildBudget = 1;
+                renderer.ColliderRebuildBudget = 0;
+
+                renderer.Configure(world, registry, blockMaterial, -1, deferInitialRebuild: true);
+
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(2));
+                Assert.That(renderer.Stats.QueuedRebuildCount, Is.EqualTo(2));
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.Zero);
+
+                renderer.RebuildDirty();
+
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(1));
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(1));
+                Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0));
+
+                renderer.RebuildDirty();
+
+                Assert.That(renderer.PendingVisualRebuildCount, Is.Zero);
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(2));
+                Assert.That(renderer.PendingColliderRebuildCount, Is.GreaterThan(0));
+
+                renderer.ProcessPendingColliderRebuilds(int.MaxValue);
+
+                Assert.That(renderer.PendingColliderRebuildCount, Is.Zero);
             }
             finally
             {
@@ -413,8 +642,8 @@ namespace Blockiverse.Tests.EditMode
         static Material CreateBlockAtlasMaterial(out Texture2D atlasTexture)
         {
             atlasTexture = new Texture2D(
-                BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels,
-                BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels,
+                BlockVisualAtlas.AtlasWidthPixels,
+                BlockVisualAtlas.AtlasHeightPixels,
                 TextureFormat.RGBA32,
                 mipChain: false)
             {

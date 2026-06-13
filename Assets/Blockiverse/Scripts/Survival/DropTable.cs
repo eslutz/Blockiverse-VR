@@ -54,7 +54,32 @@ namespace Blockiverse.Survival
         }
 
         // Maximum count of the primary (first) entry — used for inventory-capacity pre-checks.
+        public ItemId PrimaryItemId => entries[0].ItemId;
         public int PrimaryMaxCount => entries[0].Max;
+        public bool CanRollNoDrops
+        {
+            get
+            {
+                for (int i = 0; i < entries.Length; i++)
+                {
+                    if (entries[i].Chance >= 1f)
+                        return false;
+                }
+
+                return true;
+            }
+        }
+
+        public ItemStack[] MaxStacks
+        {
+            get
+            {
+                var stacks = new ItemStack[entries.Length];
+                for (int i = 0; i < entries.Length; i++)
+                    stacks[i] = new ItemStack(entries[i].ItemId, entries[i].Max);
+                return stacks;
+            }
+        }
 
         // Roll all entries and return every non-empty result. Primary drop is [0] when present.
         public ItemStack[] Roll(ref uint rng)

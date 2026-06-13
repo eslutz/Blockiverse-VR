@@ -41,6 +41,10 @@ namespace Blockiverse.Gameplay
         [ThreadStatic] static List<int> pooledTriangles;
         [ThreadStatic] static List<Vector2> pooledUvs;
         [ThreadStatic] static List<Color> pooledColors;
+        [ThreadStatic] static List<Vector3> pooledFluidVertices;
+        [ThreadStatic] static List<int> pooledFluidTriangles;
+        [ThreadStatic] static List<Vector2> pooledFluidUvs;
+        [ThreadStatic] static List<Color> pooledFluidColors;
 
         static readonly BlockPosition[] NeighborOffsets =
         {
@@ -89,10 +93,14 @@ namespace Blockiverse.Gameplay
             colors.Clear();
             int faceCount = 0;
 
-            var fluidVertices = new List<Vector3>();
-            var fluidTriangles = new List<int>();
-            var fluidUvs = new List<Vector2>();
-            var fluidColors = new List<Color>();
+            List<Vector3> fluidVertices = pooledFluidVertices ??= new();
+            List<int> fluidTriangles = pooledFluidTriangles ??= new();
+            List<Vector2> fluidUvs = pooledFluidUvs ??= new();
+            List<Color> fluidColors = pooledFluidColors ??= new();
+            fluidVertices.Clear();
+            fluidTriangles.Clear();
+            fluidUvs.Clear();
+            fluidColors.Clear();
             int fluidFaceCount = 0;
 
             int startX = chunk.X * world.ChunkSize;
@@ -207,6 +215,7 @@ namespace Blockiverse.Gameplay
         readonly VoxelWorld world;
         readonly VoxelSkyLightMap skyLight;
         readonly HashSet<ChunkCoordinate> dirtyChunks = new();
+        readonly List<ChunkCoordinate> drainSnapshot = new();
 
         public ChunkRebuildQueue(VoxelWorld world, VoxelSkyLightMap skyLight = null)
         {
@@ -231,15 +240,49 @@ namespace Blockiverse.Gameplay
 
         public IReadOnlyCollection<ChunkCoordinate> DrainDirtyChunks()
         {
+            return DrainDirtyChunks(int.MaxValue);
+        }
+
+        public IReadOnlyCollection<ChunkCoordinate> DrainDirtyChunks(int maxCount)
+        {
             // The per-world-tick RebuildDirty pump drains this every tick even when nothing is
             // dirty; return the shared empty array in that case so a static world allocates no
             // garbage per tick.
-            if (dirtyChunks.Count == 0)
+            if (dirtyChunks.Count == 0 || maxCount <= 0)
                 return Array.Empty<ChunkCoordinate>();
 
-            var drained = new List<ChunkCoordinate>(dirtyChunks);
-            dirtyChunks.Clear();
-            return drained;
+            DrainDirtyChunks(drainSnapshot, maxCount);
+            return drainSnapshot;
+        }
+
+        public int DrainDirtyChunks(List<ChunkCoordinate> destination, int maxCount)
+        {
+            if (destination == null)
+                throw new ArgumentNullException(nameof(destination));
+
+            destination.Clear();
+
+            if (dirtyChunks.Count == 0 || maxCount <= 0)
+                return 0;
+
+            if (maxCount >= dirtyChunks.Count)
+            {
+                destination.AddRange(dirtyChunks);
+                dirtyChunks.Clear();
+                return destination.Count;
+            }
+
+            foreach (ChunkCoordinate chunk in dirtyChunks)
+            {
+                destination.Add(chunk);
+                if (destination.Count >= maxCount)
+                    break;
+            }
+
+            foreach (ChunkCoordinate chunk in destination)
+                dirtyChunks.Remove(chunk);
+
+            return destination.Count;
         }
 
         void OnBlockChanged(BlockChange change)

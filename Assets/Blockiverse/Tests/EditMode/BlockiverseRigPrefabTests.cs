@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
@@ -34,6 +35,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(prefab, Is.Not.Null);
             Assert.That(prefab.GetComponent<BlockiverseInputRig>(), Is.Not.Null);
+            Assert.That(prefab.GetComponent<BlockiverseComfortTransition>(), Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Right Controller"), Is.Not.Null);
 
@@ -82,7 +84,10 @@ namespace Blockiverse.Tests.EditMode
                 GravityProvider gravityProvider = instance.GetComponent<GravityProvider>();
                 JumpProvider jumpProvider = instance.GetComponent<JumpProvider>();
                 CharacterController characterController = instance.GetComponent<CharacterController>();
+                BlockiverseComfortTransition comfortTransition = instance.GetComponent<BlockiverseComfortTransition>();
                 TrackedPoseDriver poseDriver = inputRig?.HeadPoseDriver;
+                BlockiverseFoveatedRenderingController foveatedRenderingController =
+                    inputRig?.FoveatedRenderingController;
 
                 Assert.That(inputRig, Is.Not.Null);
                 Assert.That(bodyTransformer, Is.Not.Null);
@@ -97,6 +102,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(inputRig.TeleportationProvider, Is.SameAs(teleport));
                 Assert.That(continuousMove.mediator, Is.SameAs(mediator));
                 Assert.That(snapTurn.mediator, Is.SameAs(mediator));
+                Assert.That(snapTurn.enableTurnAround, Is.True, "Comfort defaults must expose the stick-down 180 degree turn-around option.");
                 Assert.That(teleport.mediator, Is.SameAs(mediator));
                 Assert.That(continuousTurn, Is.Not.Null);
                 Assert.That(inputRig.ContinuousTurnProvider, Is.SameAs(continuousTurn));
@@ -107,9 +113,14 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(characterController, Is.Not.Null, "Rig must have a CharacterController for physics-based locomotion.");
                 Assert.That(gravityProvider, Is.Not.Null, "Rig must have a GravityProvider for falling off edges.");
                 Assert.That(jumpProvider, Is.Not.Null, "Rig must have a JumpProvider for jumping.");
+                Assert.That(comfortTransition, Is.Not.Null, "Rig repair must preserve the comfort fade transition for load and respawn jumps.");
                 Assert.That(inputRig.CharacterController, Is.SameAs(characterController));
                 Assert.That(inputRig.GravityProvider, Is.SameAs(gravityProvider));
                 Assert.That(inputRig.JumpProvider, Is.SameAs(jumpProvider));
+                Assert.That(foveatedRenderingController, Is.Not.Null, "Rig repair must enable fixed foveated rendering for Quest builds.");
+                Assert.That(
+                    foveatedRenderingController.FoveatedRenderingLevel,
+                    Is.EqualTo(BlockiverseFoveatedRenderingController.DefaultFoveatedRenderingLevel));
                 Assert.That(gravityProvider.mediator, Is.SameAs(mediator));
                 Assert.That(gravityProvider.enabled, Is.True);
                 Assert.That(gravityProvider.useGravity, Is.True);
@@ -158,15 +169,14 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(menuTransform, Is.Not.Null);
             Assert.That(menu, Is.Not.Null);
             Assert.That(menu.IsVisible, Is.False);
-            Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(1));
+            Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(0),
+                "Hardware Menu is routed by BlockiverseMenuController at runtime; persistent comfort toggles double-handle pause/back.");
             BlockiverseWorldSpacePanelPresenter presenter = menuTransform.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(presenter, Is.Not.Null);
             Assert.That(presenter.PlaysShowFeedback, Is.True);
             Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
             Assert.That(presenter.PlaysHideFeedback, Is.True);
             Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
-            Assert.That(inputRig.MenuPressed.GetPersistentTarget(0), Is.SameAs(presenter));
-            Assert.That(inputRig.MenuPressed.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
             Assert.That(menuTransform.localScale.x, Is.LessThanOrEqualTo(0.00135f), "Comfort menu should no longer fill the first-person view.");
 
             Image panelImage = menuTransform.Find("Panel")?.GetComponent<Image>();
@@ -212,11 +222,32 @@ namespace Blockiverse.Tests.EditMode
 
             // Continuous motions and teleport mask vection/viewpoint jumps; snap turn is a discrete
             // comfort option and is intentionally excluded to avoid a per-turn vignette flicker.
-            Assert.That(providerTypes, Has.Count.EqualTo(3));
+            Assert.That(providerTypes, Has.Count.GreaterThanOrEqualTo(3));
             Assert.That(providerTypes, Contains.Item(typeof(ContinuousMoveProvider)));
             Assert.That(providerTypes, Contains.Item(typeof(ContinuousTurnProvider)));
             Assert.That(providerTypes, Contains.Item(typeof(TeleportationProvider)));
             Assert.That(providerTypes, Has.No.Member(typeof(SnapTurnProvider)));
+        }
+
+        [Test]
+        public void XrRigBootstrapperAddsFallAndJumpVignetteProviders()
+        {
+            string source = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs");
+
+            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())", source);
+            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())", source);
+        }
+
+        [Test]
+        public void InputRigSuppressesTurnWhileTurnHandRayHoversUi()
+        {
+            string source = File.ReadAllText("Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs");
+
+            StringAssert.Contains("UpdateTurnProviderEnabledState()", source);
+            StringAssert.Contains("IsActiveTurnRayOverUi()", source);
+            StringAssert.Contains("IsOverUIGameObject()", source);
+            StringAssert.Contains("!smoothTurn && !suppressTurnForUi", source);
+            StringAssert.Contains("smoothTurn && !suppressTurnForUi", source);
         }
 
         [Test]
@@ -349,6 +380,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(rightInteractionRay.enableUIInteraction, Is.True);
                 Assert.That(rightInteractionRay.blockUIOnInteractableSelection, Is.False,
                     "Selecting block interactables must not suppress UI clicks while a menu is visible.");
+                Assert.That(rightInteractionRay.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
                 AssertButtonReaderReferencesAction(rightTeleportRay.selectInput, rightTeleportSelect, "Right teleport ray must use right thumbstick select.");
                 AssertButtonReaderReferencesAction(leftTeleportRay.selectInput, leftTeleportSelect, "Left teleport ray must use left thumbstick select.");
                 Assert.That(rightInteractionRay.rayOriginTransform, Is.Not.Null, "UI/block ray should use the OpenXR aim pose, not the controller grip pose.");
@@ -356,6 +388,113 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightInteractionRay.rayOriginTransform));
                 Assert.That(leftTeleportRay.rayOriginTransform, Is.Not.Null);
                 Assert.That(leftTeleportRay.rayOriginTransform.name, Is.EqualTo("Left Aim Pose"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void CreativeFlightControllerTogglesXriFlightForCreativeWorlds()
+        {
+            var rigObject = new GameObject("Creative Flight Rig");
+            var worldObject = new GameObject("Creative Flight World");
+
+            try
+            {
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                var continuousMove = rigObject.AddComponent<ContinuousMoveProvider>();
+                var gravity = rigObject.AddComponent<GravityProvider>();
+                var jump = rigObject.AddComponent<JumpProvider>();
+                inputRig.ConfigureLocomotion(
+                    teleport: null,
+                    snapTurn: null,
+                    reset: null,
+                    continuousMove: continuousMove,
+                    gravity: gravity,
+                    jump: jump);
+
+                continuousMove.enabled = true;
+                continuousMove.enableFly = false;
+                continuousMove.moveSpeed = 1.0f;
+                gravity.useGravity = true;
+                jump.enabled = true;
+
+                CreativeWorldManager worldManager = worldObject.AddComponent<CreativeWorldManager>();
+                worldManager.SetGameMode(WorldGameMode.Creative);
+                var flight = rigObject.AddComponent<BlockiverseCreativeFlightController>();
+                flight.Configure(inputRig, worldManager);
+
+                flight.ApplyFlightState();
+
+                Assert.That(flight.IsFlightActive, Is.True);
+                Assert.That(continuousMove.enableFly, Is.True);
+                Assert.That(continuousMove.moveSpeed, Is.GreaterThanOrEqualTo(BlockiverseCreativeFlightController.FlightSpeedBlocksPerSecond));
+                Assert.That(gravity.useGravity, Is.False);
+                Assert.That(jump.enabled, Is.False);
+
+                worldManager.SetGameMode(WorldGameMode.Survival);
+                flight.ApplyFlightState();
+
+                Assert.That(flight.IsFlightActive, Is.False);
+                Assert.That(continuousMove.enableFly, Is.False);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(worldObject);
+            }
+        }
+
+        [Test]
+        public void XrRigRuntimeRepairReusesInputActionReferences()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+
+                XRRayInteractor rightInteractionRay = instance.transform
+                    .Find("Camera Offset/Right Controller/Interaction Ray")
+                    ?.GetComponent<XRRayInteractor>();
+                XRRayInteractor rightTeleportRay = instance.transform
+                    .Find("Camera Offset/Right Controller/Teleport Ray")
+                    ?.GetComponent<XRRayInteractor>();
+
+                Assert.That(inputRig.JumpProvider, Is.Not.Null);
+                Assert.That(rightInteractionRay, Is.Not.Null);
+                Assert.That(rightTeleportRay, Is.Not.Null);
+
+                InputActionReference jumpReference = inputRig.JumpProvider.jumpInput.inputActionReferencePerformed;
+                InputActionReference uiPressReference = rightInteractionRay.uiPressInput.inputActionReferencePerformed;
+                InputActionReference teleportReference = rightTeleportRay.selectInput.inputActionReferencePerformed;
+
+                Assert.That(jumpReference, Is.Not.Null);
+                Assert.That(uiPressReference, Is.Not.Null);
+                Assert.That(teleportReference, Is.Not.Null);
+
+                inputRig.RepairRuntimeTracking();
+
+                Assert.That(inputRig.JumpProvider.jumpInput.inputActionReferencePerformed,
+                    Is.SameAs(jumpReference),
+                    "Repeated repair should reuse the Jump InputActionReference instead of allocating a new ScriptableObject.");
+                Assert.That(rightInteractionRay.uiPressInput.inputActionReferencePerformed,
+                    Is.SameAs(uiPressReference),
+                    "Repeated repair should reuse the UI press InputActionReference instead of allocating a new ScriptableObject.");
+                Assert.That(rightTeleportRay.selectInput.inputActionReferencePerformed,
+                    Is.SameAs(teleportReference),
+                    "Repeated repair should reuse the teleport select InputActionReference instead of allocating a new ScriptableObject.");
             }
             finally
             {
@@ -394,6 +533,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(interactionRay.enableUIInteraction, Is.True);
             Assert.That(interactionRay.blockUIOnInteractableSelection, Is.False);
             Assert.That(interactionRay.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
+            Assert.That(interactionRay.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
             Assert.That(rightAimPose, Is.Not.Null, "Right app pointer should be driven by the OpenXR aim pose.");
             Assert.That(leftAimPose, Is.Not.Null, "Left teleport pointer should be driven by the OpenXR aim pose.");
             Assert.That(interactionRay.rayOriginTransform, Is.SameAs(rightAimPose));
@@ -538,6 +678,7 @@ namespace Blockiverse.Tests.EditMode
                 Component avatarRig = instance.GetComponent("BlockiverseNetworkAvatarRig");
 
                 Assert.That(avatarRig, Is.Not.Null);
+                Assert.That(instance.GetComponent("NetworkObject"), Is.Null, "The XR rig is an unspawned local pose proxy; NetworkObject belongs on the network player prefab.");
                 avatarRig.GetType().GetMethod("RefreshAvatarMode").Invoke(avatarRig, null);
                 Assert.That(GetAvatarProperty<bool>(avatarRig, "FallbackProxyEnabled"), Is.True);
                 Assert.That(GetAvatarProperty<bool>(avatarRig, "MetaAvatarAvailable"), Is.False);

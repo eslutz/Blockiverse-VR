@@ -19,7 +19,7 @@ namespace Blockiverse.Survival
             if (hotbarSlotCount < 0 || hotbarSlotCount > slotCount)
                 throw new ArgumentOutOfRangeException(nameof(hotbarSlotCount), "Hotbar slots must fit inside the inventory.");
 
-            this.registry = registry ?? ItemRegistry.CreateDefault();
+            this.registry = registry ?? ItemRegistry.Default;
             slots = new ItemStack[slotCount];
             HotbarSlotCount = hotbarSlotCount;
         }
@@ -46,6 +46,17 @@ namespace Blockiverse.Survival
             slots[slotIndex] = ItemStack.Empty;
         }
 
+        public void SwapSlots(int firstSlotIndex, int secondSlotIndex)
+        {
+            ValidateSlotIndex(firstSlotIndex);
+            ValidateSlotIndex(secondSlotIndex);
+
+            if (firstSlotIndex == secondSlotIndex)
+                return;
+
+            (slots[firstSlotIndex], slots[secondSlotIndex]) = (slots[secondSlotIndex], slots[firstSlotIndex]);
+        }
+
         public ItemStack Add(ItemStack stack)
         {
             if (stack.IsEmpty)
@@ -57,7 +68,7 @@ namespace Blockiverse.Survival
             for (int i = 0; i < slots.Length && remaining > 0; i++)
             {
                 ItemStack existing = slots[i];
-                if (existing.IsEmpty || existing.ItemId != stack.ItemId)
+                if (!existing.CanStackWith(stack))
                     continue;
 
                 int available = definition.MaxStackSize - existing.Count;
@@ -163,7 +174,7 @@ namespace Blockiverse.Survival
                 {
                     capacity += definition.MaxStackSize;
                 }
-                else if (stack.ItemId == itemId && stack.Count < definition.MaxStackSize)
+                else if (stack.CanStackWith(new ItemStack(itemId, 1)) && stack.Count < definition.MaxStackSize)
                 {
                     capacity += definition.MaxStackSize - stack.Count;
                 }

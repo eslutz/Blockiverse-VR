@@ -259,6 +259,33 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        [Test]
+        public void HeightResetCalibratesCameraOffsetForFloorOrigin()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+
+            try
+            {
+                origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
+                origin.Camera.transform.localPosition = new Vector3(0.0f, 1.05f, 0.0f);
+
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.StandingEyeHeight = 1.65f;
+                var heightReset = rigObject.AddComponent<BlockiverseHeightReset>();
+                heightReset.Configure(origin, settings);
+
+                heightReset.ResetHeight();
+
+                Assert.That(
+                    origin.CameraFloorOffsetObject.transform.localPosition.y,
+                    Is.EqualTo(0.60f).Within(0.01f));
+            }
+            finally
+            {
+                DestroyRigImmediate(rigObject);
+            }
+        }
+
         [UnityTest]
         public IEnumerator BootSceneContainsComfortSettingsMenu()
         {
@@ -390,7 +417,7 @@ namespace Blockiverse.Tests.PlayMode
             snapTurn = rigObject.AddComponent<SnapTurnProvider>();
             snapTurn.mediator = mediator;
             snapTurn.enableTurnLeftRight = true;
-            snapTurn.enableTurnAround = false;
+            snapTurn.enableTurnAround = true;
             snapTurn.delayTime = 0.0f;
             snapTurn.leftHandTurnInput = CreateUnusedVector2Reader("Left Hand Snap Turn");
             snapTurn.rightHandTurnInput = CreateUnusedVector2Reader("Right Hand Snap Turn");
@@ -539,6 +566,132 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(Vector3.Dot(movement.normalized, expectedMoveDirection), Is.GreaterThan(0.95f));
 
                 Set(gamepad.leftStick, Vector2.zero);
+                yield return null;
+            }
+            finally
+            {
+                DestroyRigImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator LeftHandedModeSwapsMoveAndTurnHands()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+            InputActionAsset actions = CreateTestActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.DominantHand = BlockiverseControllerRole.Left;
+                settings.ContinuousMoveSpeed = 2.0f;
+                settings.SnapTurnDegrees = 45.0f;
+
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
+
+                yield return null;
+                Assert.That(inputRig.ActiveMoveHand, Is.EqualTo(BlockiverseControllerRole.Right));
+                Assert.That(inputRig.ActiveTurnHand, Is.EqualTo(BlockiverseControllerRole.Left));
+
+                Vector3 startPosition = origin.transform.position;
+                Set(gamepad.rightStick, new Vector2(0.0f, 1.0f));
+                yield return null;
+
+                Assert.That((origin.transform.position - startPosition).magnitude, Is.GreaterThan(0.0f));
+
+                Set(gamepad.rightStick, Vector2.zero);
+                yield return null;
+
+                Set(gamepad.leftStick, Vector2.right);
+                yield return null;
+                yield return null;
+
+                Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
+
+                Set(gamepad.leftStick, Vector2.zero);
+                yield return null;
+            }
+            finally
+            {
+                DestroyRigImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator DominantHandOnlyModeMovesAndInteractsFromDominantHand()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+            InputActionAsset actions = CreateTestActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.DominantHand = BlockiverseControllerRole.Right;
+                settings.DominantHandOnlyControls = true;
+                settings.ContinuousMoveSpeed = 2.0f;
+
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
+
+                int breakPresses = 0;
+                int placePresses = 0;
+                int quickMenuPresses = 0;
+                inputRig.BreakPressed.AddListener(() => breakPresses++);
+                inputRig.PlacePressed.AddListener(() => placePresses++);
+                inputRig.QuickMenuPressed.AddListener(() => quickMenuPresses++);
+
+                yield return null;
+                Assert.That(inputRig.ActiveMoveHand, Is.EqualTo(BlockiverseControllerRole.Right));
+                Assert.That(inputRig.ActiveTurnHand, Is.EqualTo(BlockiverseControllerRole.Right));
+                Assert.That(inputRig.ActiveToolHand, Is.EqualTo(BlockiverseControllerRole.Right));
+
+                Vector3 startPosition = origin.transform.position;
+                Set(gamepad.rightStick, new Vector2(0.0f, 1.0f));
+                yield return null;
+
+                Assert.That((origin.transform.position - startPosition).magnitude, Is.GreaterThan(0.0f));
+
+                Press(gamepad.rightTrigger);
+                yield return null;
+                Assert.That(breakPresses, Is.EqualTo(1));
+                Release(gamepad.rightTrigger);
+                yield return null;
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+                Assert.That(placePresses, Is.EqualTo(1));
+                Release(gamepad.rightShoulder);
+                yield return null;
+
+                Press(gamepad.buttonEast);
+                yield return null;
+                Assert.That(quickMenuPresses, Is.EqualTo(1));
+                Release(gamepad.buttonEast);
                 yield return null;
             }
             finally
@@ -710,7 +863,7 @@ namespace Blockiverse.Tests.PlayMode
             snapTurn = rigObject.AddComponent<SnapTurnProvider>();
             snapTurn.mediator = mediator;
             snapTurn.enableTurnLeftRight = true;
-            snapTurn.enableTurnAround = false;
+            snapTurn.enableTurnAround = true;
             snapTurn.delayTime = 0.0f;
         }
 
@@ -745,13 +898,31 @@ namespace Blockiverse.Tests.PlayMode
                 InputActionType.PassThrough,
                 "<Gamepad>/leftStick",
                 expectedControlLayout: "Vector2");
+            leftHand.AddAction(
+                BlockiverseInputActionNames.Turn,
+                InputActionType.PassThrough,
+                "<Gamepad>/leftStick",
+                expectedControlLayout: "Vector2");
+            leftHand.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, "<Gamepad>/leftTrigger");
+            leftHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/leftShoulder");
+            leftHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonWest");
+            leftHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/select");
 
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
+            rightHand.AddAction(
+                BlockiverseInputActionNames.Move,
+                InputActionType.PassThrough,
+                "<Gamepad>/rightStick",
+                expectedControlLayout: "Vector2");
             rightHand.AddAction(
                 BlockiverseInputActionNames.Turn,
                 InputActionType.PassThrough,
                 "<Gamepad>/rightStick",
                 expectedControlLayout: "Vector2");
+            rightHand.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, "<Gamepad>/rightTrigger");
+            rightHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/rightShoulder");
+            rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonNorth");
+            rightHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/buttonEast");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 

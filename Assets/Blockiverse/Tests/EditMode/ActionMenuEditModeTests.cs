@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using Blockiverse.Gameplay;
+using Blockiverse.Survival;
 using Blockiverse.UI;
+using Blockiverse.WorldGen;
 using NUnit.Framework;
 using TMPro;
 using UnityEngine;
@@ -15,6 +18,8 @@ namespace Blockiverse.Tests.EditMode
         [TearDown]
         public void TearDown()
         {
+            BlockiverseLocalization.ClearOverridesForTesting();
+
             foreach (GameObject target in objectsToDestroy)
                 if (target != null)
                     Object.DestroyImmediate(target);
@@ -30,13 +35,15 @@ namespace Blockiverse.Tests.EditMode
             TMP_Text title = CreateText("Title");
             menu.Configure(title, buttons, labels);
 
-            menu.SetMenu("Paused", MenuActions.Pause);
+            menu.SetMenu(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused),
+                MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true));
 
-            Assert.That(title.text, Is.EqualTo("Paused"));
-            Assert.That(labels[0].text, Is.EqualTo("Resume"));
-            Assert.That(labels[2].text, Is.EqualTo("Switch Survival/Creative"));
-            Assert.That(labels[3].text, Is.EqualTo("Creative Tools"));
-            Assert.That(labels[5].text, Is.EqualTo("Return to Title"));
+            Assert.That(title.text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused)));
+            Assert.That(labels[0].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseResume)));
+            Assert.That(labels[2].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseToggleMode)));
+            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
+            Assert.That(labels[5].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseReturnToTitle)));
 
             string invoked = null;
             menu.ActionInvoked += id => invoked = id;
@@ -60,7 +67,11 @@ namespace Blockiverse.Tests.EditMode
             menu.Configure(CreateText("Title"), buttons, labels);
 
             // Confirmation dialog only uses two buttons.
-            menu.SetMenu("Delete World?", MenuActions.Confirm("Delete", "Cancel"));
+            menu.SetMenu(
+                BlockiverseLocalization.Format(BlockiverseLocalization.Keys.WorldDetailsDeletePrompt, "Test World"),
+                MenuActions.Confirm(
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonCancel)));
 
             Assert.That(buttons[0].gameObject.activeSelf, Is.True);
             Assert.That(buttons[1].gameObject.activeSelf, Is.True);
@@ -94,6 +105,28 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PauseMenuFiltersCreativeActionsByPermission()
+        {
+            string[] survivalIds = MenuActions.PauseMenu(canToggleMode: false, canOpenCreativeTools: false, canQuit: false)
+                .Select(a => a.ActionId)
+                .ToArray();
+
+            Assert.That(survivalIds, Does.Contain(MenuActions.PauseResume));
+            Assert.That(survivalIds, Does.Contain(MenuActions.PauseSaveGame));
+            Assert.That(survivalIds, Does.Not.Contain(MenuActions.PauseToggleMode));
+            Assert.That(survivalIds, Does.Not.Contain(MenuActions.PauseCreativeTools));
+            Assert.That(survivalIds, Does.Not.Contain(MenuActions.PauseQuit));
+
+            string[] creativeIds = MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true)
+                .Select(a => a.ActionId)
+                .ToArray();
+
+            Assert.That(creativeIds, Does.Contain(MenuActions.PauseToggleMode));
+            Assert.That(creativeIds, Does.Contain(MenuActions.PauseCreativeTools));
+            Assert.That(creativeIds, Does.Contain(MenuActions.PauseQuit));
+        }
+
+        [Test]
         public void DeathMenuOmitsBedrollWhenNoSpawnIsSet()
         {
             string[] withoutBedroll = MenuActions.Death(hasBedrollSpawn: false).Select(a => a.ActionId).ToArray();
@@ -107,11 +140,82 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ConfirmDialogUsesProvidedLabels()
         {
-            IReadOnlyList<MenuAction> confirm = MenuActions.Confirm("Delete", "Keep");
+            IReadOnlyList<MenuAction> confirm = MenuActions.Confirm("Accept generated save", "Keep generated save");
             Assert.That(confirm[0].ActionId, Is.EqualTo(MenuActions.ConfirmAccept));
-            Assert.That(confirm[0].Label, Is.EqualTo("Delete"));
+            Assert.That(confirm[0].Label, Is.EqualTo("Accept generated save"));
             Assert.That(confirm[1].ActionId, Is.EqualTo(MenuActions.ConfirmCancel));
-            Assert.That(confirm[1].Label, Is.EqualTo("Keep"));
+            Assert.That(confirm[1].Label, Is.EqualTo("Keep generated save"));
+        }
+
+        [Test]
+        public void BuiltInMenuLabelsResolveThroughLocalizationKeys()
+        {
+            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PauseResume, "Continuar");
+            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PauseToggleMode, "Cambiar modo");
+
+            BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("PauseMenu");
+            Button[] buttons = CreateButtons(7);
+            TMP_Text[] labels = CreateTexts(7);
+            menu.Configure(CreateText("Title"), buttons, labels);
+
+            menu.SetMenu(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused),
+                MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true));
+
+            Assert.That(labels[0].text, Is.EqualTo("Continuar"));
+            Assert.That(labels[2].text, Is.EqualTo("Cambiar modo"));
+            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
+        }
+
+        [Test]
+        public void LocalizedTextBindingAppliesKeyOverrides()
+        {
+            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.TitleSettings, "Ajustes");
+
+            TMP_Text label = CreateText("Generated Label");
+            BlockiverseLocalizedText binding = label.gameObject.AddComponent<BlockiverseLocalizedText>();
+            binding.Configure(BlockiverseLocalization.Keys.TitleSettings, "Settings");
+
+            Assert.That(label.text, Is.EqualTo("Ajustes"));
+
+            BlockiverseLocalization.ClearOverridesForTesting();
+            binding.RefreshText();
+
+            Assert.That(label.text, Is.EqualTo("Settings"));
+        }
+
+        [Test]
+        public void RuntimeDisplayNamesAvoidRawCanonicalIdsAndEnumMembers()
+        {
+            Assert.That(
+                BlockiverseLocalization.DisplayNameForCanonicalId("survival_terrain"),
+                Is.EqualTo("Survival Terrain"));
+            Assert.That(
+                BlockiverseLocalization.DisplayName(CreativeCatalogCategory.DeepRock),
+                Is.EqualTo("Deep Rock"));
+            Assert.That(
+                BlockiverseLocalization.DisplayName(CraftingStation.ClayKiln),
+                Is.EqualTo("Clay Kiln"));
+            Assert.That(
+                BlockiverseLocalization.DisplayName(SurvivalCommandFailureReason.NotAStation),
+                Is.EqualTo("Not a Station"));
+            Assert.That(
+                BlockiverseLocalization.DisplayName(WeatherState.HeavyRain),
+                Is.EqualTo("Heavy Rain"));
+        }
+
+        [Test]
+        public void RuntimeDisplayNamesUseGeneratedOverrideKeys()
+        {
+            BlockiverseLocalization.SetOverrideForTesting("ui.value.canonical.survival_terrain", "Terrain de survie");
+            BlockiverseLocalization.SetOverrideForTesting("ui.value.survival_command_failure.not_a_station", "Station indisponible");
+
+            Assert.That(
+                BlockiverseLocalization.DisplayNameForCanonicalId("survival_terrain"),
+                Is.EqualTo("Terrain de survie"));
+            Assert.That(
+                BlockiverseLocalization.DisplayName(SurvivalCommandFailureReason.NotAStation),
+                Is.EqualTo("Station indisponible"));
         }
 
         T CreateComponent<T>(string name) where T : Component

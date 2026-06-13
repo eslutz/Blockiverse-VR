@@ -3,7 +3,6 @@ using Blockiverse.Networking;
 using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
@@ -17,6 +16,8 @@ namespace Blockiverse.UI
         [SerializeField] Button stopButton;
         [SerializeField] TMP_InputField addressInput;
         [SerializeField] TMP_Text statusText;
+        [SerializeField] BlockiverseWorldSessionController worldSessionController;
+        [SerializeField] BlockiverseMenuController menuController;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
@@ -31,8 +32,8 @@ namespace Blockiverse.UI
         string lastDisplayedDisconnectReason = string.Empty;
         bool lastAppliedCanStart;
         bool lastAppliedCanStop;
-        Canvas[] sessionEndedCanvases;
-        BaseRaycaster[] sessionEndedRaycasters;
+        bool enteredGameplayForCurrentSession;
+        bool sessionEndedRouteRequested;
 
         public BlockiverseNetworkSession Session => session;
         public TMP_Text StatusText => statusText;
@@ -46,6 +47,12 @@ namespace Blockiverse.UI
 
         public void Configure(BlockiverseNetworkSession targetSession)
         {
+            if (session != targetSession)
+            {
+                enteredGameplayForCurrentSession = false;
+                sessionEndedRouteRequested = false;
+            }
+
             session = targetSession;
             RefreshStatus();
         }
@@ -56,6 +63,16 @@ namespace Blockiverse.UI
         {
             audioCuePlayer = targetAudioCuePlayer;
             interactionHaptics = targetInteractionHaptics;
+        }
+
+        public void ConfigureWorldSessionController(BlockiverseWorldSessionController controller)
+        {
+            worldSessionController = controller;
+        }
+
+        public void ConfigureMenuController(BlockiverseMenuController controller)
+        {
+            menuController = controller;
         }
 
         public void ConfigureControls(
@@ -79,42 +96,52 @@ namespace Blockiverse.UI
         {
             if (session == null)
             {
-                SetStatus("LAN session is unavailable.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
                 PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return;
             }
 
+            if (!TrySuspendSinglePlayerSessionForMultiplayer())
+                return;
+
             bool started = session.StartHost();
             SetStatus(started
-                ? "Starting LAN host..."
-                : $"Unable to start LAN host. {DescribeSessionState()}");
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStartingHost)
+                : BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LanStartHostFailed, DescribeSessionState()));
             PlayFeedback(started ? BlockiverseAudioCue.UiConfirm : BlockiverseAudioCue.UiCancel);
-            RefreshControls();
+            RefreshStatus();
         }
 
         public void JoinLanSession()
         {
             if (session == null)
             {
-                SetStatus("LAN session is unavailable.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
                 PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return;
             }
 
             string address = ResolveJoinAddress();
+            if (!TrySuspendSinglePlayerSessionForMultiplayer())
+                return;
+
             bool started = session.StartClient(address);
             SetStatus(started
-                ? $"Joining LAN session at {address}:{session.Config.Port}..."
-                : $"Unable to join LAN session at {address}:{session.Config.Port}. {DescribeSessionState()}");
+                ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LanJoining, address, session.Config.Port)
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanJoinFailed,
+                    address,
+                    session.Config.Port,
+                    DescribeSessionState()));
             PlayFeedback(started ? BlockiverseAudioCue.UiConfirm : BlockiverseAudioCue.UiCancel);
-            RefreshControls();
+            RefreshStatus();
         }
 
         public void StopSession()
         {
             if (session == null)
             {
-                SetStatus("LAN session is unavailable.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
                 PlayFeedback(BlockiverseAudioCue.UiCancel);
                 return;
             }
@@ -140,12 +167,18 @@ namespace Blockiverse.UI
 
             if (session == null)
             {
-                SetStatus("LAN session is unavailable.");
+                enteredGameplayForCurrentSession = false;
+                sessionEndedRouteRequested = false;
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
                 RefreshControls();
                 return;
             }
 
             SetStatus(DescribeSessionState());
+            if (!IsShowingSessionEndedMessage)
+                sessionEndedRouteRequested = false;
+
+            TryEnterGameplayForConnectedSession();
             EnsureSessionEndedMenuAvailable();
             RefreshControls();
             lastDisplayedState = session.CurrentState;
@@ -156,6 +189,8 @@ namespace Blockiverse.UI
         void Awake()
         {
             DiscoverSession();
+            DiscoverWorldSessionController();
+            DiscoverMenuController();
             RegisterControlCallbacks();
             ApplyDefaultAddressText();
             RefreshStatus();
@@ -172,6 +207,22 @@ namespace Blockiverse.UI
 
             nextSessionSearchTime = Time.unscaledTime + 1.0f;
             session = FindFirstObjectByType<BlockiverseNetworkSession>(FindObjectsInactive.Include);
+        }
+
+        void DiscoverWorldSessionController()
+        {
+            if (worldSessionController != null)
+                return;
+
+            worldSessionController = FindFirstObjectByType<BlockiverseWorldSessionController>(FindObjectsInactive.Include);
+        }
+
+        void DiscoverMenuController()
+        {
+            if (menuController != null)
+                return;
+
+            menuController = FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
         }
 
         void Update()
@@ -192,6 +243,9 @@ namespace Blockiverse.UI
                 return;
             }
 
+            if (IsShowingSessionEndedMessage)
+                EnsureSessionEndedMenuAvailable();
+
             // NetworkManager listening/shutdown flags can flip without a CurrentState transition
             // (e.g. ShutdownInProgress clearing after a host disconnect), so the control gating is
             // still polled — but only re-applied when the derived values change, to avoid dirtying
@@ -201,6 +255,52 @@ namespace Blockiverse.UI
                 RefreshControls();
         }
 
+        bool TrySuspendSinglePlayerSessionForMultiplayer()
+        {
+            DiscoverWorldSessionController();
+
+            if (worldSessionController == null)
+                return true;
+
+            if (worldSessionController.TrySuspendActiveSessionForMultiplayer(out string failureReason))
+                return true;
+
+            SetStatus(string.IsNullOrWhiteSpace(failureReason)
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSuspendSinglePlayerFailed)
+                : failureReason);
+            PlayFeedback(BlockiverseAudioCue.UiCancel);
+            RefreshControls();
+            return false;
+        }
+
+        void TryEnterGameplayForConnectedSession()
+        {
+            if (session == null)
+                return;
+
+            if (!IsGameplaySessionState(session.CurrentState))
+            {
+                enteredGameplayForCurrentSession = false;
+                return;
+            }
+
+            if (enteredGameplayForCurrentSession)
+                return;
+
+            DiscoverMenuController();
+            if (menuController == null)
+                return;
+
+            enteredGameplayForCurrentSession = true;
+            menuController.EnterGameplay();
+        }
+
+        static bool IsGameplaySessionState(BlockiverseConnectionState state)
+        {
+            return state == BlockiverseConnectionState.Hosting ||
+                state == BlockiverseConnectionState.ConnectedClient;
+        }
+
         void OnDestroy()
         {
             UnregisterControlCallbacks();
@@ -208,43 +308,80 @@ namespace Blockiverse.UI
 
         void ApplyDefaultAddressText()
         {
-            if (addressInput != null && string.IsNullOrWhiteSpace(addressInput.text))
-                addressInput.text = BlockiverseNetworkConfig.DefaultAddress;
+            if (addressInput == null)
+                return;
+
+            if (addressInput.placeholder is TMP_Text placeholder)
+                placeholder.text = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder);
         }
 
         string DescribeSessionState()
         {
             if (session == null)
-                return "LAN session is unavailable.";
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable);
 
             return session.CurrentState switch
             {
-                BlockiverseConnectionState.StartingHost => "Starting LAN host...",
+                BlockiverseConnectionState.StartingHost => BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStartingHost),
                 BlockiverseConnectionState.Hosting => session.LastStopRequestSucceeded
-                    ? $"Hosting LAN session on {session.Config.ListenAddress}:{session.Config.Port}."
+                    ? BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.LanHosting,
+                        DescribeHostJoinAddresses(),
+                        session.Config.Port)
                     : DescribeStopSessionResult(wasActive: true),
-                BlockiverseConnectionState.StartingClient => $"Joining LAN session at {ResolveJoinAddress()}:{session.Config.Port}...",
-                BlockiverseConnectionState.ConnectedClient => $"Connected to LAN session at {ResolveJoinAddress()}:{session.Config.Port}.",
-                BlockiverseConnectionState.Disconnecting => "Stopping LAN session...",
+                BlockiverseConnectionState.StartingClient => BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanJoining,
+                    ResolveJoinAddress(),
+                    session.Config.Port),
+                BlockiverseConnectionState.ConnectedClient => BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanConnected,
+                    ResolveJoinAddress(),
+                    session.Config.Port),
+                BlockiverseConnectionState.Disconnecting => DescribeStoppingState(),
                 BlockiverseConnectionState.Disconnected => DescribeDisconnectedState(),
                 BlockiverseConnectionState.Failed => DescribeFailedState(),
-                _ => $"LAN session stopped. Join address defaults to {BlockiverseNetworkConfig.DefaultAddress}.",
+                _ => BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanStoppedWithDefault,
+                    BlockiverseNetworkConfig.DefaultAddress),
             };
         }
 
         string DescribeStopSessionResult(bool wasActive)
         {
             if (session == null)
-                return "LAN session is unavailable.";
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable);
 
             if (!session.LastStopRequestSucceeded)
             {
                 return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
-                    ? "Unable to stop LAN session."
-                    : $"Unable to stop LAN session. {session.LastDisconnectReason}";
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopFailed)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.LanStopFailedWithReason,
+                        session.LastDisconnectReason);
             }
 
-            return wasActive ? "Stopping LAN session..." : "LAN session stopped.";
+            if (session.LastStopForcedAfterPreparationFailure)
+            {
+                return BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanStoppingWithoutShutdownSave,
+                    session.LastDisconnectReason);
+            }
+
+            return wasActive
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopping)
+                : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopped);
+        }
+
+        string DescribeStoppingState()
+        {
+            if (session != null && session.LastStopForcedAfterPreparationFailure)
+            {
+                return BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanStoppingWithoutShutdownSave,
+                    session.LastDisconnectReason);
+            }
+
+            return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopping);
         }
 
         string DescribeDisconnectedState()
@@ -253,27 +390,50 @@ namespace Blockiverse.UI
                 return DescribeUnableToReachHostState();
 
             string reconnectMessage =
-                $"LAN session ended because the host disconnected. Use Join to reconnect to {ResolveJoinAddress()}:{session.Config.Port} when the LAN host is available again.";
+                BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanHostDisconnected,
+                    ResolveJoinAddress(),
+                    session.Config.Port);
 
             return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
                 ? reconnectMessage
-                : $"{reconnectMessage} Last disconnect: {session.LastDisconnectReason}";
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanLastDisconnect,
+                    reconnectMessage,
+                    session.LastDisconnectReason);
         }
 
         string DescribeUnableToReachHostState()
         {
             string retryMessage =
-                $"Unable to reach LAN session at {ResolveJoinAddress()}:{session.Config.Port}. Check that the host is on the same LAN and try Join again.";
+                BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanUnableToReach,
+                    ResolveJoinAddress(),
+                    session.Config.Port);
 
             return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
                 ? retryMessage
-                : $"{retryMessage} Last disconnect: {session.LastDisconnectReason}";
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanLastDisconnect,
+                    retryMessage,
+                    session.LastDisconnectReason);
+        }
+
+        string DescribeHostJoinAddresses()
+        {
+            if (session == null)
+                return BlockiverseNetworkConfig.DefaultAddress;
+
+            string listenAddress = session.Config.ListenAddress;
+            return BlockiverseLanAddressUtility.IsWildcardListenAddress(listenAddress)
+                ? BlockiverseLanAddressUtility.DescribeLocalIPv4Addresses(BlockiverseNetworkConfig.DefaultAddress)
+                : listenAddress.Trim();
         }
 
         string DescribeFailedState()
         {
             return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
-                ? "LAN session failed."
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanFailed)
                 : session.LastDisconnectReason;
         }
 
@@ -315,18 +475,12 @@ namespace Blockiverse.UI
         {
             if (!IsShowingSessionEndedMessage)
                 return;
+            if (sessionEndedRouteRequested)
+                return;
 
-            // The panel's parent hierarchy is stable at runtime, so the allocating parent
-            // lookups run once and the results are reused on later state transitions.
-            sessionEndedCanvases ??= GetComponentsInParent<Canvas>(true);
-            foreach (Canvas canvas in sessionEndedCanvases)
-                canvas.enabled = true;
-
-            // BaseRaycaster covers both the legacy GraphicRaycaster and XRI's
-            // TrackedDeviceGraphicRaycaster used by the world-space VR menus.
-            sessionEndedRaycasters ??= GetComponentsInParent<BaseRaycaster>(true);
-            foreach (BaseRaycaster raycaster in sessionEndedRaycasters)
-                raycaster.enabled = true;
+            DiscoverMenuController();
+            if (menuController != null && menuController.ShowLanMultiplayerScreen())
+                sessionEndedRouteRequested = true;
         }
 
         void RegisterControlCallbacks()
@@ -372,21 +526,7 @@ namespace Blockiverse.UI
 
         void PlayFeedback(BlockiverseAudioCue cue)
         {
-            DiscoverFeedback();
-            audioCuePlayer?.PlayCue(cue);
-            interactionHaptics?.PlayUiTick();
-        }
-
-        void DiscoverFeedback()
-        {
-            if (!Application.isPlaying)
-                return;
-
-            if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-
-            if (interactionHaptics == null)
-                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
         }
     }
 }

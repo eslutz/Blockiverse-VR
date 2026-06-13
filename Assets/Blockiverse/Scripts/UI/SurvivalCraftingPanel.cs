@@ -13,7 +13,10 @@ namespace Blockiverse.UI
     {
         [SerializeField] Button[] recipeButtons;
         [SerializeField] Button repairButton;
+        [SerializeField] Button previousRecipePageButton;
+        [SerializeField] Button nextRecipePageButton;
         [SerializeField] TMP_Text[] recipeLabels;
+        [SerializeField] TMP_Text recipePageLabel;
         [SerializeField] Image[] recipeIcons;
         [SerializeField] BlockiverseItemIconLibrary iconLibrary;
         [SerializeField] TMP_Text statusLabel;
@@ -31,8 +34,29 @@ namespace Blockiverse.UI
         readonly List<CraftingRecipe> sortedRecipesCache = new();
         CraftingRecipeBook sortedRecipesSource;
         int sortedRecipesSourceCount = -1;
+        int recipePage;
+        RecipeRowRenderState[] recipeRowRenderCache = Array.Empty<RecipeRowRenderState>();
+
+        enum RecipeAvailability
+        {
+            Available,
+            MissingIngredients,
+            WrongStation
+        }
+
+        struct RecipeRowRenderState
+        {
+            public bool IsValid;
+            public bool HasRecipe;
+            public int RecipeIndex;
+            public CraftingRecipe Recipe;
+            public CraftingStationSet AvailableStations;
+            public int InventoryFingerprint;
+            public string Text;
+        }
 
         public event Action CraftingChanged;
+        public int RecipePage => recipePage;
 
         // Routes crafting through the host-authoritative survival sync when present, so a remote client
         // cannot craft against its local inventory mirror without host validation. Falls back to local
@@ -64,6 +88,7 @@ namespace Blockiverse.UI
             recipeIcons = targetRecipeIcons ?? Array.Empty<Image>();
             iconLibrary = targetIconLibrary;
             statusLabel = targetStatusLabel;
+            InvalidateRecipeRowCache();
             WireRecipeButtons();
             Refresh();
         }
@@ -74,6 +99,15 @@ namespace Blockiverse.UI
             WireRepairButton();
         }
 
+        public void ConfigurePaging(Button previousButton, Button nextButton, TMP_Text targetPageLabel)
+        {
+            previousRecipePageButton = previousButton;
+            nextRecipePageButton = nextButton;
+            recipePageLabel = targetPageLabel;
+            WirePagingButtons();
+            Refresh();
+        }
+
         public void Bind(
             CraftingRecipeBook targetRecipeBook,
             Inventory targetInventory,
@@ -82,9 +116,10 @@ namespace Blockiverse.UI
         {
             recipeBook = targetRecipeBook ?? throw new ArgumentNullException(nameof(targetRecipeBook));
             inventory = targetInventory ?? throw new ArgumentNullException(nameof(targetInventory));
-            itemRegistry = registry ?? ItemRegistry.CreateDefault();
+            itemRegistry = registry ?? ItemRegistry.Default;
             availableStations = CraftingStationSet.Of(station);
-            SetStatus("Ready");
+            InvalidateRecipeRowCache();
+            SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingReady));
             Refresh();
         }
 
@@ -93,6 +128,7 @@ namespace Blockiverse.UI
         public void SetAvailableStations(CraftingStationSet stations)
         {
             availableStations = stations;
+            InvalidateRecipeRowCache();
             Refresh();
         }
 
@@ -109,12 +145,18 @@ namespace Blockiverse.UI
 
             if (index < 0 || index >= recipes.Count)
             {
-                SetStatus("Recipe unavailable");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingRecipeUnavailable));
                 PlayFeedback(BlockiverseAudioCue.CraftFail);
                 return CraftingResult.Failure(CraftingFailureReason.MissingIngredient);
             }
 
             return TryCraft(recipes[index]);
+        }
+
+        public CraftingResult TryCraftVisibleIndex(int visibleIndex)
+        {
+            int pageSize = PageSize;
+            return TryCraftAtIndex(recipePage * pageSize + visibleIndex);
         }
 
         public CraftingResult TryCraftByOutput(ItemId outputItemId)
@@ -123,7 +165,7 @@ namespace Blockiverse.UI
 
             if (!recipeBook.TryGetByOutput(outputItemId, out CraftingRecipe recipe))
             {
-                SetStatus("Recipe unavailable");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingRecipeUnavailable));
                 PlayFeedback(BlockiverseAudioCue.CraftFail);
                 return CraftingResult.Failure(CraftingFailureReason.MissingIngredient, outputItemId);
             }
@@ -138,8 +180,11 @@ namespace Blockiverse.UI
 
             CraftingResult result = CraftingService.TryCraft(inventory, recipe, EffectiveStationFor(recipe));
             SetStatus(result.Succeeded
-                ? $"Crafted {FormatStack(recipe.Output)}"
-                : $"Cannot craft {itemRegistry.Get(recipe.Output.ItemId).Name}: {result.FailureReason}");
+                ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CraftingCrafted, FormatStack(recipe.Output))
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CraftingCannotCraft,
+                    itemRegistry.Get(recipe.Output.ItemId).Name,
+                    BlockiverseLocalization.DisplayName(result.FailureReason)));
             Refresh();
             PlayFeedback(result.Succeeded ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
 
@@ -158,10 +203,15 @@ namespace Blockiverse.UI
             bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
 
             SetStatus(command.Accepted
-                ? $"Crafted {FormatStack(recipe.Output)}"
+                ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CraftingCrafted, FormatStack(recipe.Output))
                 : sentToHost
-                    ? $"Crafting {itemRegistry.Get(recipe.Output.ItemId).Name}…"
-                    : $"Cannot craft {itemRegistry.Get(recipe.Output.ItemId).Name}: {command.CraftingFailureReason}");
+                    ? BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.CraftingPending,
+                        itemRegistry.Get(recipe.Output.ItemId).Name)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.CraftingCannotCraft,
+                        itemRegistry.Get(recipe.Output.ItemId).Name,
+                        BlockiverseLocalization.DisplayName(command.CraftingFailureReason)));
             Refresh();
             PlayFeedback(acceptedOrPending ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
 
@@ -187,10 +237,12 @@ namespace Blockiverse.UI
                 bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
 
                 SetStatus(command.Accepted
-                    ? "Tool repaired"
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingToolRepaired)
                     : sentToHost
-                        ? "Repairing…"
-                        : $"Cannot repair: {command.FailureReason}");
+                        ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingRepairing)
+                        : BlockiverseLocalization.Format(
+                            BlockiverseLocalization.Keys.CraftingCannotRepair,
+                            BlockiverseLocalization.DisplayName(command.FailureReason)));
                 Refresh();
                 PlayFeedback(acceptedOrPending ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
 
@@ -205,7 +257,11 @@ namespace Blockiverse.UI
                 : CraftingStation.None;
             RepairResult result = MendBenchRepair.TryRepair(itemRegistry, inventory, Math.Max(0, toolSlotIndex), station);
 
-            SetStatus(result.Succeeded ? "Tool repaired" : $"Cannot repair: {result.FailureReason}");
+            SetStatus(result.Succeeded
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingToolRepaired)
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CraftingCannotRepair,
+                    BlockiverseLocalization.DisplayName(result.FailureReason)));
             Refresh();
             PlayFeedback(result.Succeeded ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
 
@@ -221,14 +277,25 @@ namespace Blockiverse.UI
                 return;
 
             List<CraftingRecipe> recipes = GetSortedRecipes();
+            ClampRecipePage(recipes.Count);
+            int offset = recipePage * PageSize;
+            int inventoryFingerprint = ComputeInventoryFingerprint();
+            EnsureRecipeRowCache(recipeLabels.Length);
             for (int i = 0; i < recipeLabels.Length; i++)
             {
                 if (recipeLabels[i] == null)
                     continue;
 
-                recipeLabels[i].text = i < recipes.Count ? FormatRecipe(recipes[i]) : string.Empty;
-                SetRecipeIcon(i, i < recipes.Count ? recipes[i] : null);
+                int recipeIndex = offset + i;
+                bool hasRecipe = recipeIndex < recipes.Count;
+                CraftingRecipe recipe = hasRecipe ? recipes[recipeIndex] : null;
+                SetTextIfChanged(recipeLabels[i], GetRecipeRowText(i, recipeIndex, recipe, hasRecipe, inventoryFingerprint));
+                SetRecipeIcon(i, recipe);
+                if (recipeButtons != null && i < recipeButtons.Length && recipeButtons[i] != null)
+                    recipeButtons[i].interactable = hasRecipe;
             }
+
+            RefreshPagingControls(recipes.Count);
         }
 
         // Output-item icon next to the recipe row (blank when no icon exists for the output).
@@ -249,6 +316,26 @@ namespace Blockiverse.UI
         {
             WireRecipeButtons();
             WireRepairButton();
+            WirePagingButtons();
+        }
+
+        public void ShowNextRecipePage()
+        {
+            int pageCount = RecipePageCount(GetSortedRecipes().Count);
+            if (recipePage < pageCount - 1)
+            {
+                recipePage++;
+                Refresh();
+            }
+        }
+
+        public void ShowPreviousRecipePage()
+        {
+            if (recipePage > 0)
+            {
+                recipePage--;
+                Refresh();
+            }
         }
 
         void WireRepairButton()
@@ -300,16 +387,163 @@ namespace Blockiverse.UI
 
                 int recipeIndex = index;
                 button.onClick.RemoveAllListeners();
-                button.onClick.AddListener(() => TryCraftAtIndex(recipeIndex));
+                button.onClick.AddListener(() => TryCraftVisibleIndex(recipeIndex));
             }
+        }
+
+        void WirePagingButtons()
+        {
+            if (previousRecipePageButton != null)
+            {
+                previousRecipePageButton.onClick.RemoveAllListeners();
+                previousRecipePageButton.onClick.AddListener(ShowPreviousRecipePage);
+            }
+
+            if (nextRecipePageButton != null)
+            {
+                nextRecipePageButton.onClick.RemoveAllListeners();
+                nextRecipePageButton.onClick.AddListener(ShowNextRecipePage);
+            }
+        }
+
+        int PageSize => recipeLabels != null && recipeLabels.Length > 0 ? recipeLabels.Length : 1;
+
+        int RecipePageCount(int recipeCount)
+        {
+            int pageSize = PageSize;
+            return Math.Max(1, (recipeCount + pageSize - 1) / pageSize);
+        }
+
+        void ClampRecipePage(int recipeCount)
+        {
+            recipePage = Mathf.Clamp(recipePage, 0, RecipePageCount(recipeCount) - 1);
+        }
+
+        void RefreshPagingControls(int recipeCount)
+        {
+            int pageCount = RecipePageCount(recipeCount);
+            if (recipePageLabel != null)
+                SetTextIfChanged(
+                    recipePageLabel,
+                    BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.CommonPage,
+                        recipePage + 1,
+                        pageCount));
+
+            if (previousRecipePageButton != null)
+                previousRecipePageButton.interactable = recipePage > 0;
+
+            if (nextRecipePageButton != null)
+                nextRecipePageButton.interactable = recipePage < pageCount - 1;
         }
 
         string FormatRecipe(CraftingRecipe recipe)
         {
-            string text = $"{FormatStack(recipe.Output)} - {FormatIngredients(recipe)}";
+            string marker = AvailabilityMarker(AvailabilityFor(recipe));
+            string text = BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.CraftingRecipe,
+                FormatStack(recipe.Output),
+                FormatIngredients(recipe));
             if (!availableStations.Contains(recipe.RequiredStation))
-                text += $" [needs {CraftingStationNames.DisplayName(recipe.RequiredStation)}]";
+                text = BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CraftingNeedsStation,
+                    FormatStack(recipe.Output),
+                    FormatIngredients(recipe),
+                    BlockiverseLocalization.DisplayName(recipe.RequiredStation));
+            return marker + " " + text;
+        }
+
+        RecipeAvailability AvailabilityFor(CraftingRecipe recipe)
+        {
+            if (!availableStations.Contains(recipe.RequiredStation))
+                return RecipeAvailability.WrongStation;
+
+            foreach (ItemStack ingredient in recipe.Ingredients)
+                if (inventory == null || inventory.CountOf(ingredient.ItemId) < ingredient.Count)
+                    return RecipeAvailability.MissingIngredients;
+
+            return RecipeAvailability.Available;
+        }
+
+        static string AvailabilityMarker(RecipeAvailability availability) =>
+            availability switch
+            {
+                RecipeAvailability.Available => "✓",
+                RecipeAvailability.MissingIngredients => "✗",
+                RecipeAvailability.WrongStation => "!",
+                _ => "!"
+            };
+
+        string GetRecipeRowText(
+            int rowIndex,
+            int recipeIndex,
+            CraftingRecipe recipe,
+            bool hasRecipe,
+            int inventoryFingerprint)
+        {
+            RecipeRowRenderState previous = recipeRowRenderCache[rowIndex];
+            if (previous.IsValid &&
+                previous.HasRecipe == hasRecipe &&
+                previous.RecipeIndex == recipeIndex &&
+                ReferenceEquals(previous.Recipe, recipe) &&
+                previous.AvailableStations.Equals(availableStations) &&
+                previous.InventoryFingerprint == inventoryFingerprint)
+            {
+                return previous.Text;
+            }
+
+            string text = hasRecipe ? FormatRecipe(recipe) : string.Empty;
+            recipeRowRenderCache[rowIndex] = new RecipeRowRenderState
+            {
+                IsValid = true,
+                HasRecipe = hasRecipe,
+                RecipeIndex = recipeIndex,
+                Recipe = recipe,
+                AvailableStations = availableStations,
+                InventoryFingerprint = inventoryFingerprint,
+                Text = text,
+            };
             return text;
+        }
+
+        int ComputeInventoryFingerprint()
+        {
+            if (inventory == null)
+                return 0;
+
+            unchecked
+            {
+                int hash = 17;
+                for (int slot = 0; slot < inventory.SlotCount; slot++)
+                {
+                    ItemStack stack = inventory.GetSlot(slot);
+                    hash = (hash * 31) ^ stack.ItemId.GetHashCode();
+                    hash = (hash * 31) ^ stack.Count;
+                    hash = (hash * 31) ^ stack.Durability;
+                }
+                return hash;
+            }
+        }
+
+        static void SetTextIfChanged(TMP_Text label, string text)
+        {
+            if (label != null && !string.Equals(label.text, text, StringComparison.Ordinal))
+                label.text = text;
+        }
+
+        void EnsureRecipeRowCache(int length)
+        {
+            if (recipeRowRenderCache.Length == length)
+                return;
+
+            recipeRowRenderCache = new RecipeRowRenderState[length];
+            InvalidateRecipeRowCache();
+        }
+
+        void InvalidateRecipeRowCache()
+        {
+            for (int i = 0; i < recipeRowRenderCache.Length; i++)
+                recipeRowRenderCache[i].IsValid = false;
         }
 
         string FormatIngredients(CraftingRecipe recipe)
@@ -318,13 +552,15 @@ namespace Blockiverse.UI
             for (int i = 0; i < recipe.Ingredients.Count; i++)
                 parts[i] = FormatStack(recipe.Ingredients[i]);
 
-            return string.Join(", ", parts);
+            return string.Join(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonListSeparator),
+                parts);
         }
 
         string FormatStack(ItemStack stack)
         {
             ItemDefinition definition = itemRegistry.Get(stack.ItemId);
-            return $"{definition.Name} x{stack.Count}";
+            return BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CommonStack, definition.Name, stack.Count);
         }
 
         void SetStatus(string status)
@@ -335,9 +571,8 @@ namespace Blockiverse.UI
 
         void PlayFeedback(BlockiverseAudioCue cue)
         {
-            DiscoverFeedback();
-            audioCuePlayer?.PlayCue(cue);
-            interactionHaptics?.PlayUiTick();
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
+            DiscoverVfxFeedback();
 
             // Visual punctuation at the panel itself: sparks on success, a dull puff on failure.
             if (cue == BlockiverseAudioCue.CraftSuccess)
@@ -348,16 +583,10 @@ namespace Blockiverse.UI
 
         BlockiverseVfxCuePlayer vfxCuePlayer;
 
-        void DiscoverFeedback()
+        void DiscoverVfxFeedback()
         {
             if (!Application.isPlaying)
                 return;
-
-            if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-
-            if (interactionHaptics == null)
-                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
 
             if (vfxCuePlayer == null)
                 vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();

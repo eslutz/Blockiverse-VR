@@ -67,8 +67,8 @@ namespace Blockiverse.Gameplay
             sunLight.type = LightType.Directional;
             sunLight.intensity = state.SunIntensity * weatherFactor;
             sunLight.color = state.SunColor;
-            sunLight.shadows = LightShadows.Hard;
-            sunLight.shadowStrength = 0.85f;
+            sunLight.shadows = LightShadows.None;
+            sunLight.shadowStrength = 0f;
             sunLight.renderMode = LightRenderMode.ForcePixel;
 
             RenderSettings.ambientMode = AmbientMode.Flat;
