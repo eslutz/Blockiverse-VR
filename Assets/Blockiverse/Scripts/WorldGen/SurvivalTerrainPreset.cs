@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Blockiverse.Voxel;
-using Unity.Profiling;
 
 namespace Blockiverse.WorldGen
 {
@@ -9,8 +8,6 @@ namespace Blockiverse.WorldGen
 
     public sealed class SurvivalTerrainPreset
     {
-        static readonly ProfilerMarker GenerateMarker = new("Blockiverse.SurvivalTerrainPreset.Generate");
-
         const int SpawnClearanceRadius = 3;
         const int SpawnHeadroom = 3;
         const int SpawnProtectedRadius = 4;
@@ -38,8 +35,6 @@ namespace Blockiverse.WorldGen
 
         public VoxelWorld Generate()
         {
-            using ProfilerMarker.AutoScope scope = GenerateMarker.Auto();
-
             ValidateSettings();
             ValidateRegistry();
 

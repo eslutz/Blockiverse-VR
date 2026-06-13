@@ -21,6 +21,18 @@ namespace Blockiverse.Survival
         public const int FieldBandageStackSize = 20;
         public const int FluidContainerStackSize = 1; // Buckets and fluid containers stack to 1 (§14 stack table).
 
+        // Canonical tool classes with their durability multipliers (§7.2).
+        static readonly (HarvestToolKind kind, string idSuffix, string nameSuffix, float durabilityMultiplier)[] ToolClasses =
+        {
+            (HarvestToolKind.Delver, "delver", "Delver", 1.00f),
+            (HarvestToolKind.Spade,  "spade",  "Spade",  0.80f),
+            (HarvestToolKind.Feller, "feller", "Feller", 0.90f),
+            (HarvestToolKind.Sickle, "sickle", "Sickle", 0.70f),
+            (HarvestToolKind.Mallet, "mallet", "Mallet", 1.20f),
+            (HarvestToolKind.Carver, "carver", "Carver", 0.60f),
+            (HarvestToolKind.Tiller, "tiller", "Tiller", 0.80f),
+        };
+
         public IReadOnlyCollection<ItemDefinition> All => definitionsById.Values;
         public static ItemRegistry Default { get; } = CreateDefault();
 
@@ -188,18 +200,6 @@ namespace Blockiverse.Survival
 
             return registry;
         }
-
-        // Canonical tool classes with their durability multipliers (§7.2).
-        static readonly (HarvestToolKind kind, string idSuffix, string nameSuffix, float durabilityMultiplier)[] ToolClasses =
-        {
-            (HarvestToolKind.Delver, "delver", "Delver", 1.00f),
-            (HarvestToolKind.Spade,  "spade",  "Spade",  0.80f),
-            (HarvestToolKind.Feller, "feller", "Feller", 0.90f),
-            (HarvestToolKind.Sickle, "sickle", "Sickle", 0.70f),
-            (HarvestToolKind.Mallet, "mallet", "Mallet", 1.20f),
-            (HarvestToolKind.Carver, "carver", "Carver", 0.60f),
-            (HarvestToolKind.Tiller, "tiller", "Tiller", 0.80f),
-        };
 
         // Registers all seven tool classes for one material tier.
         static void RegisterToolTier(ItemRegistry registry, string materialId, string materialName, int tier, int baseDurability)

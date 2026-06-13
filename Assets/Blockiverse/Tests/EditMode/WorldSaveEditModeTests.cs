@@ -111,8 +111,8 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(result.Data.GameMode, Is.EqualTo("creative"));
                 Assert.That(result.Data.Difficulty, Is.EqualTo("hard"));
                 Assert.That(result.Data.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
-                Assert.That(result.Inventory.GetSlot(2), Is.EqualTo(new ItemStack(ItemId.Glowwick, 3)));
-                Assert.That(result.SelectedHotbarSlotIndex, Is.EqualTo(2));
+                Assert.That(result.CreateInventory(itemRegistry).GetSlot(2), Is.EqualTo(new ItemStack(ItemId.Glowwick, 3)));
+                Assert.That(result.Data.PlayerInventory.SelectedHotbarSlotIndex, Is.EqualTo(2));
             }
             finally
             {

@@ -6,6 +6,7 @@ using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
+using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
 using TMPro;

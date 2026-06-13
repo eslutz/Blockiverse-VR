@@ -124,8 +124,7 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             var encoded = new MetaAvatarStreamMessage(7, 12.5, payload);
 
             using var writer = new FastBufferWriter(128, Allocator.Temp);
-            var writeSerializer = new BufferSerializer<BufferSerializerWriter>(new BufferSerializerWriter(writer));
-            encoded.NetworkSerialize(writeSerializer);
+            writer.WriteNetworkSerializable(encoded);
 
             using var reader = new FastBufferReader(writer, Allocator.Temp);
             byte[] reusablePayload = new byte[payload.Length];
@@ -133,8 +132,7 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             {
                 Payload = reusablePayload,
             };
-            var readSerializer = new BufferSerializer<BufferSerializerReader>(new BufferSerializerReader(reader));
-            decoded.NetworkSerialize(readSerializer);
+            reader.ReadNetworkSerializableInPlace(ref decoded);
 
             Assert.That(decoded.Payload, Is.SameAs(reusablePayload));
             CollectionAssert.AreEqual(payload, decoded.Payload);

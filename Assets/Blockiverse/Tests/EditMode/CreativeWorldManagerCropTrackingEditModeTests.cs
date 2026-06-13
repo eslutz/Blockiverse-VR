@@ -9,6 +9,7 @@ using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Blockiverse.Tests.EditMode
 {

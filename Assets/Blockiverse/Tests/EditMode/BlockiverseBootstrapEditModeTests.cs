@@ -1,13 +1,15 @@
+using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Xml;
 using Blockiverse.Core;
 using NUnit.Framework;
-using Unity.Netcode.Editor.Configuration;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.OpenXR;
+using Object = UnityEngine.Object;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -60,7 +62,13 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void NetcodeDefaultNetworkPrefabGenerationIsDisabled()
         {
-            Assert.That(NetcodeForGameObjectsProjectSettings.instance.GenerateDefaultNetworkPrefabs, Is.False);
+            Type settingsType = Type.GetType(
+                "Unity.Netcode.Editor.Configuration.NetcodeForGameObjectsProjectSettings, Unity.Netcode.Editor");
+            Assert.That(settingsType, Is.Not.Null);
+
+            object instance = settingsType.GetProperty("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            object value = settingsType.GetProperty("GenerateDefaultNetworkPrefabs", BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance);
+            Assert.That(value, Is.EqualTo(false));
         }
 
         [Test]

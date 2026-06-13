@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
+    "Blockiverse.Survival.Health",
     "Blockiverse.Voxel",
     "Unity.InputSystem",
     "UnityEngine.UI",
