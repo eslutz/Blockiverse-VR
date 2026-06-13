@@ -41,7 +41,7 @@ namespace Blockiverse.Gameplay
 
         readonly List<ParticleSystem> systems = new();
         readonly ParticleSystem.Burst[] burstScratch = new ParticleSystem.Burst[1];
-        readonly MaterialPropertyBlock propertyBlock = new();
+        MaterialPropertyBlock propertyBlock;
         int nextIndex;
 
         public int PrewarmedCount => systems.Count;
@@ -175,6 +175,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             var renderer = system.GetComponent<ParticleSystemRenderer>();
+            propertyBlock ??= new();
             propertyBlock.Clear();
             renderer.GetPropertyBlock(propertyBlock);
             propertyBlock.SetTexture(BaseMapId, sprite.texture);

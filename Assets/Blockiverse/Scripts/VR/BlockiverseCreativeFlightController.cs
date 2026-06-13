@@ -1,5 +1,5 @@
 using Blockiverse.Gameplay;
-using Blockiverse.WorldGen;
+using Blockiverse.Voxel;
 using UnityEngine;
 
 namespace Blockiverse.VR
@@ -21,7 +21,7 @@ namespace Blockiverse.VR
             set => flightEnabledDefault = value;
         }
 
-        public static float FlightSpeedBlocksPerSecond => FlightSpeedBlocksPerTick * WorldConstants.TicksPerSecond;
+        public static float FlightSpeedBlocksPerSecond => FlightSpeedBlocksPerTick * SimulationTime.TicksPerSecond;
 
         public void Configure(
             BlockiverseInputRig rig,

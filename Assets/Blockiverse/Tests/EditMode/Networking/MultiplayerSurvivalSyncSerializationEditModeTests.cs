@@ -17,34 +17,60 @@ namespace Blockiverse.Tests.Networking.EditMode
         [Test]
         public void BoundedNetworkStringReadsValidNgoString()
         {
-            using var writer = new FastBufferWriter(64, Allocator.Temp);
-            writer.WriteValueSafe("clay_lump");
-            using var reader = new FastBufferReader(writer, Allocator.Temp);
+            var writer = new FastBufferWriter(64, Allocator.Temp);
+            try
+            {
+                writer.WriteValueSafe("clay_lump");
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+                try
+                {
+                    bool read = SurvivalSyncWireCodec.TryReadBoundedNetworkString(
+                        ref reader,
+                        maxChars: 32,
+                        out string value);
 
-            bool read = SurvivalSyncWireCodec.TryReadBoundedNetworkString(
-                ref reader,
-                maxChars: 32,
-                out string value);
-
-            Assert.That(read, Is.True);
-            Assert.That(value, Is.EqualTo("clay_lump"));
+                    Assert.That(read, Is.True);
+                    Assert.That(value, Is.EqualTo("clay_lump"));
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
         }
 
         [Test]
         public void BoundedNetworkStringRejectsOversizedLengthBeforeAllocatingString()
         {
-            using var writer = new FastBufferWriter(sizeof(int), Allocator.Temp);
-            writer.WriteValueSafe(4096);
-            using var reader = new FastBufferReader(writer, Allocator.Temp);
+            var writer = new FastBufferWriter(sizeof(int), Allocator.Temp);
+            try
+            {
+                writer.WriteValueSafe(4096);
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+                try
+                {
+                    bool read = SurvivalSyncWireCodec.TryReadBoundedNetworkString(
+                        ref reader,
+                        maxChars: 64,
+                        out string value);
 
-            bool read = SurvivalSyncWireCodec.TryReadBoundedNetworkString(
-                ref reader,
-                maxChars: 64,
-                out string value);
-
-            Assert.That(read, Is.False);
-            Assert.That(value, Is.Empty);
-            Assert.That(reader.Position, Is.EqualTo(reader.Length));
+                    Assert.That(read, Is.False);
+                    Assert.That(value, Is.Empty);
+                    Assert.That(reader.Position, Is.EqualTo(reader.Length));
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
         }
 
         [Test]
@@ -57,18 +83,31 @@ namespace Blockiverse.Tests.Networking.EditMode
                 item: new ItemStack(new ItemId("clay_lump"), 3).WithDurability(7),
                 harvestFailureReason: BlockHarvestFailureReason.InventoryFull);
 
-            using var writer = new FastBufferWriter(128, Allocator.Temp);
-            SurvivalSyncWireCodec.WriteCommandResult(ref writer, original);
-            using var reader = new FastBufferReader(writer, Allocator.Temp);
+            var writer = new FastBufferWriter(128, Allocator.Temp);
+            try
+            {
+                SurvivalSyncWireCodec.WriteCommandResult(ref writer, original);
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+                try
+                {
+                    SurvivalCommandResult decoded = SurvivalSyncWireCodec.ReadCommandResult(ref reader);
 
-            SurvivalCommandResult decoded = SurvivalSyncWireCodec.ReadCommandResult(ref reader);
-
-            Assert.That(decoded.Accepted, Is.EqualTo(original.Accepted));
-            Assert.That(decoded.CommandKind, Is.EqualTo(original.CommandKind));
-            Assert.That(decoded.FailureReason, Is.EqualTo(original.FailureReason));
-            Assert.That(decoded.RequestId, Is.EqualTo(original.RequestId));
-            Assert.That(decoded.Item, Is.EqualTo(original.Item));
-            Assert.That(decoded.HarvestFailureReason, Is.EqualTo(original.HarvestFailureReason));
+                    Assert.That(decoded.Accepted, Is.EqualTo(original.Accepted));
+                    Assert.That(decoded.CommandKind, Is.EqualTo(original.CommandKind));
+                    Assert.That(decoded.FailureReason, Is.EqualTo(original.FailureReason));
+                    Assert.That(decoded.RequestId, Is.EqualTo(original.RequestId));
+                    Assert.That(decoded.Item, Is.EqualTo(original.Item));
+                    Assert.That(decoded.HarvestFailureReason, Is.EqualTo(original.HarvestFailureReason));
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
         }
 
         [Test]

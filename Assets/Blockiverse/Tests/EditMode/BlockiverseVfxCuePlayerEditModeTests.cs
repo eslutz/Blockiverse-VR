@@ -112,9 +112,10 @@ namespace Blockiverse.Tests.EditMode
             string source = File.ReadAllText("Assets/Blockiverse/Scripts/Gameplay/BlockiverseVfxPool.cs");
 
             Assert.That(source, Does.Contain("readonly ParticleSystem.Burst[] burstScratch"));
-            Assert.That(source, Does.Contain("readonly MaterialPropertyBlock propertyBlock"));
+            Assert.That(source, Does.Contain("MaterialPropertyBlock propertyBlock;"));
+            Assert.That(source, Does.Contain("propertyBlock ??= new();"));
             Assert.That(source, Does.Not.Contain("SetBursts(new[]"));
-            Assert.That(source, Does.Not.Contain("new MaterialPropertyBlock()"));
+            Assert.That(source, Does.Not.Contain("MaterialPropertyBlock propertyBlock = new"));
         }
 
         static Sprite CreateSprite()

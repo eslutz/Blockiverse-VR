@@ -8,6 +8,7 @@
     "Blockiverse.Survival",
     "Blockiverse.Persistence",
     "Blockiverse.Gameplay",
+    "Blockiverse.WorldGen",
     "Blockiverse.UI",
     "Unity.TextMeshPro",
     "UnityEngine.UI",

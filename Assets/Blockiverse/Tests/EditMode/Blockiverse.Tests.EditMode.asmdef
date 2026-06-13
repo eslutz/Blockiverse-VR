@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
+    "Blockiverse.Networking",
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
     "Blockiverse.Survival.Health",
@@ -12,6 +13,7 @@
     "Blockiverse.UI",
     "Blockiverse.VR",
     "Unity.InputSystem",
+    "Unity.Netcode.Runtime",
     "Unity.XR.CoreUtils",
     "Unity.XR.Interaction.Toolkit",
     "Unity.TextMeshPro",

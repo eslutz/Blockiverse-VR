@@ -5,6 +5,7 @@ using Blockiverse.Core;
 using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
+using Blockiverse.Voxel;
 using Unity.Netcode;
 using UnityEngine;
 

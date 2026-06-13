@@ -2,6 +2,7 @@
   "name": "Blockiverse.Tests.EditMode.SurvivalHealth",
   "rootNamespace": "Blockiverse.Tests.EditMode.SurvivalHealth",
   "references": [
+    "Blockiverse.Survival",
     "Blockiverse.Survival.Health",
     "Blockiverse.Voxel",
     "UnityEditor.TestRunner",

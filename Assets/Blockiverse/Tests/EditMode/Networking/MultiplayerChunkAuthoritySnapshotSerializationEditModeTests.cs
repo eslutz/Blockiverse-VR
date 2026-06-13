@@ -26,23 +26,36 @@ namespace Blockiverse.Tests.Networking.EditMode
                 hostDeltaSequence: 9u,
                 changedBlockCount: 3);
 
-            using var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.WorldSnapshotHeaderBytes, Allocator.Temp);
-            MultiplayerChunkAuthoritySync.WriteWorldSnapshotHeader(ref writer, expected);
-            using var reader = new FastBufferReader(writer, Allocator.Temp);
+            var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.WorldSnapshotHeaderBytes, Allocator.Temp);
+            try
+            {
+                MultiplayerChunkAuthoritySync.WriteWorldSnapshotHeader(ref writer, expected);
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+                try
+                {
+                    bool read = MultiplayerChunkAuthoritySync.TryReadWorldSnapshotHeader(ref reader, out MultiplayerChunkAuthoritySync.WorldSnapshotHeader actual);
 
-            bool read = MultiplayerChunkAuthoritySync.TryReadWorldSnapshotHeader(ref reader, out MultiplayerChunkAuthoritySync.WorldSnapshotHeader actual);
-
-            Assert.That(read, Is.True);
-            Assert.That(actual.GenerationPreset, Is.EqualTo(expected.GenerationPreset));
-            Assert.That(actual.Width, Is.EqualTo(expected.Width));
-            Assert.That(actual.Height, Is.EqualTo(expected.Height));
-            Assert.That(actual.Depth, Is.EqualTo(expected.Depth));
-            Assert.That(actual.ChunkSize, Is.EqualTo(expected.ChunkSize));
-            Assert.That(actual.Seed, Is.EqualTo(expected.Seed));
-            Assert.That(actual.GroundHeight, Is.EqualTo(expected.GroundHeight));
-            Assert.That(actual.SpawnPosition, Is.EqualTo(expected.SpawnPosition));
-            Assert.That(actual.HostDeltaSequence, Is.EqualTo(expected.HostDeltaSequence));
-            Assert.That(actual.ChangedBlockCount, Is.EqualTo(expected.ChangedBlockCount));
+                    Assert.That(read, Is.True);
+                    Assert.That(actual.GenerationPreset, Is.EqualTo(expected.GenerationPreset));
+                    Assert.That(actual.Width, Is.EqualTo(expected.Width));
+                    Assert.That(actual.Height, Is.EqualTo(expected.Height));
+                    Assert.That(actual.Depth, Is.EqualTo(expected.Depth));
+                    Assert.That(actual.ChunkSize, Is.EqualTo(expected.ChunkSize));
+                    Assert.That(actual.Seed, Is.EqualTo(expected.Seed));
+                    Assert.That(actual.GroundHeight, Is.EqualTo(expected.GroundHeight));
+                    Assert.That(actual.SpawnPosition, Is.EqualTo(expected.SpawnPosition));
+                    Assert.That(actual.HostDeltaSequence, Is.EqualTo(expected.HostDeltaSequence));
+                    Assert.That(actual.ChangedBlockCount, Is.EqualTo(expected.ChangedBlockCount));
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
         }
 
         [Test]
@@ -54,20 +67,33 @@ namespace Blockiverse.Tests.Networking.EditMode
                 weatherRngState: 0x00C0FFEEu,
                 worldTimeTicks: 987654L);
 
-            using var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.EnvironmentSnapshotBytes, Allocator.Temp);
-            MultiplayerChunkAuthoritySync.WriteEnvironmentSnapshot(ref writer, expected);
-            using var reader = new FastBufferReader(writer, Allocator.Temp);
+            var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.EnvironmentSnapshotBytes, Allocator.Temp);
+            try
+            {
+                MultiplayerChunkAuthoritySync.WriteEnvironmentSnapshot(ref writer, expected);
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+                try
+                {
+                    bool read = MultiplayerChunkAuthoritySync.TryReadEnvironmentSnapshot(
+                        ref reader,
+                        out MultiplayerChunkAuthoritySync.EnvironmentSnapshotState actual);
 
-            bool read = MultiplayerChunkAuthoritySync.TryReadEnvironmentSnapshot(
-                ref reader,
-                out MultiplayerChunkAuthoritySync.EnvironmentSnapshotState actual);
-
-            Assert.That(read, Is.True);
-            Assert.That(actual.WeatherState, Is.EqualTo(expected.WeatherState));
-            Assert.That(actual.WeatherTicks, Is.EqualTo(expected.WeatherTicks));
-            Assert.That(actual.WeatherRngState, Is.EqualTo(expected.WeatherRngState));
-            Assert.That(actual.WorldTimeTicks, Is.EqualTo(expected.WorldTimeTicks));
-            Assert.That(MultiplayerChunkAuthoritySync.EnvironmentResyncIntervalSeconds, Is.InRange(1.0f, 10.0f));
+                    Assert.That(read, Is.True);
+                    Assert.That(actual.WeatherState, Is.EqualTo(expected.WeatherState));
+                    Assert.That(actual.WeatherTicks, Is.EqualTo(expected.WeatherTicks));
+                    Assert.That(actual.WeatherRngState, Is.EqualTo(expected.WeatherRngState));
+                    Assert.That(actual.WorldTimeTicks, Is.EqualTo(expected.WorldTimeTicks));
+                    Assert.That(MultiplayerChunkAuthoritySync.EnvironmentResyncIntervalSeconds, Is.InRange(1.0f, 10.0f));
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
         }
 
         [Test]
@@ -113,15 +139,29 @@ namespace Blockiverse.Tests.Networking.EditMode
                     weatherTicks: 3210,
                     weatherRngState: 0x00BADF00u,
                     worldTimeTicks: 98765L);
-                using var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.EnvironmentSnapshotBytes, Allocator.Temp);
-                MultiplayerChunkAuthoritySync.WriteEnvironmentSnapshot(ref writer, snapshot);
-                using var reader = new FastBufferReader(writer, Allocator.Temp);
 
-                MethodInfo handler = typeof(MultiplayerChunkAuthoritySync).GetMethod(
-                    "HandleEnvironmentSnapshotMessage",
-                    BindingFlags.NonPublic | BindingFlags.Instance);
-                Assert.That(handler, Is.Not.Null, "The environment snapshot message handler should remain present.");
-                handler.Invoke(sync, new object[] { 0ul, reader });
+                var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.EnvironmentSnapshotBytes, Allocator.Temp);
+                try
+                {
+                    MultiplayerChunkAuthoritySync.WriteEnvironmentSnapshot(ref writer, snapshot);
+                    var reader = new FastBufferReader(writer, Allocator.Temp);
+                    try
+                    {
+                        MethodInfo handler = typeof(MultiplayerChunkAuthoritySync).GetMethod(
+                            "HandleEnvironmentSnapshotMessage",
+                            BindingFlags.NonPublic | BindingFlags.Instance);
+                        Assert.That(handler, Is.Not.Null, "The environment snapshot message handler should remain present.");
+                        handler.Invoke(sync, new object[] { 0ul, reader });
+                    }
+                    finally
+                    {
+                        reader.Dispose();
+                    }
+                }
+                finally
+                {
+                    writer.Dispose();
+                }
 
                 CreativeWorldManager.WeatherSyncState restored = manager.GetWeatherSyncState();
                 Assert.That(sync.Diagnostics.AppliedEnvironmentSnapshotCount, Is.EqualTo(1));
@@ -130,7 +170,7 @@ namespace Blockiverse.Tests.Networking.EditMode
                 Assert.That(restored.RngState, Is.EqualTo(snapshot.WeatherRngState));
                 Assert.That(manager.WorldTimeClock.TotalElapsedTicks, Is.EqualTo(snapshot.WorldTimeTicks));
 
-                var hostWeather = new WeatherService(settings.Seed, WeatherState.Clear);
+                var hostWeather = new WeatherService(unchecked((uint)settings.Seed), WeatherState.Clear);
                 hostWeather.RestoreState(snapshot.WeatherState, snapshot.WeatherTicks, snapshot.WeatherRngState);
 
                 AdvanceWorldTicks(manager, 2500);
