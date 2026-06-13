@@ -8,18 +8,21 @@ namespace Blockiverse.Survival
     {
         readonly Dictionary<ItemId, ItemDefinition> definitionsById = new();
         readonly Dictionary<BlockId, ItemDefinition> definitionsByBlock = new();
-        readonly Dictionary<string, ItemDefinition> definitionsByName = new(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, ItemDefinition> definitionsByCanonicalId = new(StringComparer.OrdinalIgnoreCase);
 
         public const int BlockStackSize = 99;
         public const int OreStackSize = 50;
         public const int CrystalStackSize = 30;
         public const int FoodStackSize = 20;
         public const int ToolStackSize = 1;
+        public const int StationStackSize = 10;
+        public const int StorageContainerStackSize = 10;
         public const int ConsumableStackSize = 20;
         public const int FieldBandageStackSize = 20;
         public const int FluidContainerStackSize = 1; // Buckets and fluid containers stack to 1 (§14 stack table).
 
         public IReadOnlyCollection<ItemDefinition> All => definitionsById.Values;
+        public static ItemRegistry Default { get; } = CreateDefault();
 
         public static ItemRegistry CreateDefault()
         {
@@ -41,7 +44,6 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.WarmGranite, "Warm Granite", ItemKind.Resource, BlockStackSize, BlockRegistry.WarmGranite));
             registry.Register(new ItemDefinition(ItemId.WhiteLimestone, "White Limestone", ItemKind.Resource, BlockStackSize, BlockRegistry.WhiteLimestone));
             registry.Register(new ItemDefinition(ItemId.BlackBasalt, "Black Basalt", ItemKind.Resource, BlockStackSize, BlockRegistry.BlackBasalt));
-            registry.Register(new ItemDefinition(ItemId.Worldroot, "Worldroot", ItemKind.Resource, BlockStackSize, BlockRegistry.Worldroot));
             registry.Register(new ItemDefinition(ItemId.Deepmantle, "Deepmantle", ItemKind.Resource, BlockStackSize, BlockRegistry.Deepmantle));
             registry.Register(new ItemDefinition(ItemId.Snowpack, "Snowpack", ItemKind.Resource, BlockStackSize, BlockRegistry.Snowpack));
             registry.Register(new ItemDefinition(ItemId.Frostglass, "Frostglass", ItemKind.Resource, BlockStackSize, BlockRegistry.Frostglass));
@@ -53,7 +55,11 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.SmoothBranchwood, "Smooth Branchwood", ItemKind.Resource, BlockStackSize, BlockRegistry.SmoothBranchwood));
             registry.Register(new ItemDefinition(ItemId.Leafmoss, "Leafmoss", ItemKind.Resource, BlockStackSize, BlockRegistry.Leafmoss));
             registry.Register(new ItemDefinition(ItemId.Thornbrush, "Thornbrush", ItemKind.Resource, BlockStackSize, BlockRegistry.Thornbrush));
-            // Reedgrass drops reed_fiber (§3); the crop blocks' drops are aliased below.
+            registry.Register(new ItemDefinition(ItemId.Sapling, "Sapling", ItemKind.Placeable, BlockStackSize, BlockRegistry.Sapling));
+            // Sapling growth stages drop the placeable sapling item; reedgrass and crop
+            // drops are aliased below.
+            registry.RegisterDropAlias(BlockRegistry.Sapling_S1, ItemId.Sapling);
+            registry.RegisterDropAlias(BlockRegistry.Sapling_S2, ItemId.Sapling);
 
             // ── Block items (crafted) ─────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.WorkPlank, "Work Plank", ItemKind.Resource, BlockStackSize, BlockRegistry.WorkPlank));
@@ -65,20 +71,21 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.ClearpaneGlass, "Clearpane Glass", ItemKind.Resource, BlockStackSize, BlockRegistry.ClearpaneGlass));
 
             // ── Block items (placeable stations/lights) ───────────────────────
-            registry.Register(new ItemDefinition(ItemId.BuildTable, "Build Table", ItemKind.Placeable, BlockStackSize, BlockRegistry.BuildTable));
+            registry.Register(new ItemDefinition(ItemId.BuildTable, "Build Table", ItemKind.Placeable, StationStackSize, BlockRegistry.BuildTable));
             registry.Register(new ItemDefinition(ItemId.Glowwick, "Glowwick", ItemKind.Placeable, BlockStackSize, BlockRegistry.Glowwick));
             registry.Register(new ItemDefinition(ItemId.LumenLamp, "Lumen Lamp", ItemKind.Placeable, BlockStackSize, BlockRegistry.LumenLamp));
             registry.Register(new ItemDefinition(ItemId.SparkFlare, "Spark Flare", ItemKind.Placeable, BlockStackSize, BlockRegistry.SparkFlare));
-            registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, BlockStackSize, BlockRegistry.StorageCrate));
-            registry.Register(new ItemDefinition(ItemId.ReedBasket, "Reed Basket", ItemKind.Placeable, BlockStackSize, BlockRegistry.ReedBasket));
-            registry.Register(new ItemDefinition(ItemId.ToolRack, "Tool Rack", ItemKind.Placeable, BlockStackSize, BlockRegistry.ToolRack));
-            registry.Register(new ItemDefinition(ItemId.PantryJar, "Pantry Jar", ItemKind.Placeable, BlockStackSize, BlockRegistry.PantryJar));
-            registry.Register(new ItemDefinition(ItemId.DeepLocker, "Deep Locker", ItemKind.Placeable, BlockStackSize, BlockRegistry.DeepLocker));
-            registry.Register(new ItemDefinition(ItemId.Campfire, "Campfire", ItemKind.Placeable, BlockStackSize, BlockRegistry.Campfire));
-            registry.Register(new ItemDefinition(ItemId.ClayKiln, "Clay Kiln", ItemKind.Placeable, BlockStackSize, BlockRegistry.ClayKiln));
-            registry.Register(new ItemDefinition(ItemId.BellowsForge, "Bellows Forge", ItemKind.Placeable, BlockStackSize, BlockRegistry.BellowsForge));
-            registry.Register(new ItemDefinition(ItemId.PrepBoard, "Prep Board", ItemKind.Placeable, BlockStackSize, BlockRegistry.PrepBoard));
-            registry.Register(new ItemDefinition(ItemId.MendBench, "Mend Bench", ItemKind.Placeable, BlockStackSize, BlockRegistry.MendBench));
+            registry.Register(new ItemDefinition(ItemId.StorageCrate, "Storage Crate", ItemKind.Placeable, StorageContainerStackSize, BlockRegistry.StorageCrate));
+            registry.Register(new ItemDefinition(ItemId.ReedBasket, "Reed Basket", ItemKind.Placeable, StorageContainerStackSize, BlockRegistry.ReedBasket));
+            registry.Register(new ItemDefinition(ItemId.ToolRack, "Tool Rack", ItemKind.Placeable, StorageContainerStackSize, BlockRegistry.ToolRack));
+            registry.Register(new ItemDefinition(ItemId.PantryJar, "Pantry Jar", ItemKind.Placeable, StorageContainerStackSize, BlockRegistry.PantryJar));
+            registry.Register(new ItemDefinition(ItemId.DeepLocker, "Deep Locker", ItemKind.Placeable, StorageContainerStackSize, BlockRegistry.DeepLocker));
+            registry.Register(new ItemDefinition(ItemId.Bedroll, "Bedroll", ItemKind.Placeable, BlockStackSize, BlockRegistry.Bedroll));
+            registry.Register(new ItemDefinition(ItemId.Campfire, "Campfire", ItemKind.Placeable, StationStackSize, BlockRegistry.Campfire));
+            registry.Register(new ItemDefinition(ItemId.ClayKiln, "Clay Kiln", ItemKind.Placeable, StationStackSize, BlockRegistry.ClayKiln));
+            registry.Register(new ItemDefinition(ItemId.BellowsForge, "Bellows Forge", ItemKind.Placeable, StationStackSize, BlockRegistry.BellowsForge));
+            registry.Register(new ItemDefinition(ItemId.PrepBoard, "Prep Board", ItemKind.Placeable, StationStackSize, BlockRegistry.PrepBoard));
+            registry.Register(new ItemDefinition(ItemId.MendBench, "Mend Bench", ItemKind.Placeable, StationStackSize, BlockRegistry.MendBench));
 
             // ── Raw resource items (block mapping used for harvest drop lookup until M6 drop tables) ──
             registry.Register(new ItemDefinition(ItemId.SurfacePebbles, "Surface Pebbles", ItemKind.Resource, BlockStackSize,  BlockRegistry.SurfacePebbles));
@@ -142,6 +149,7 @@ namespace Blockiverse.Survival
             // Crop foods are consumables (§13): eating them is the hunger-restore loop.
             registry.Register(new ItemDefinition(ItemId.GrainBundle, "Grain Bundle",  ItemKind.Consumable, FoodStackSize));
             registry.Register(new ItemDefinition(ItemId.BerryCluster, "Berry Cluster", ItemKind.Consumable, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.RawMorsel,    "Raw Morsel",    ItemKind.Resource,   FoodStackSize));
             registry.Register(new ItemDefinition(ItemId.MeadowSeed,   "Meadow Seed",   ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.DrygrassSeed, "Drygrass Seed", ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.ReedCutting,  "Reed Cutting",  ItemKind.Resource, BlockStackSize));
@@ -173,6 +181,10 @@ namespace Blockiverse.Survival
 
             // ── Consumables ───────────────────────────────────────────────────
             registry.Register(new ItemDefinition(ItemId.FieldBandage, "Field Bandage", ItemKind.Consumable, FieldBandageStackSize));
+            registry.Register(new ItemDefinition(ItemId.BerryMash, "Berry Mash", ItemKind.Consumable, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.Flatbread, "Flatbread", ItemKind.Consumable, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.CookedMorsel, "Cooked Morsel", ItemKind.Consumable, FoodStackSize));
+            registry.Register(new ItemDefinition(ItemId.TrailRation, "Trail Ration", ItemKind.Consumable, FoodStackSize));
 
             return registry;
         }
@@ -224,14 +236,14 @@ namespace Blockiverse.Survival
             if (definitionsById.ContainsKey(definition.Id))
                 throw new InvalidOperationException($"Item ID is already registered: {definition.Id}");
 
-            if (definitionsByName.ContainsKey(definition.Name))
-                throw new InvalidOperationException($"Item name is already registered: {definition.Name}");
+            if (definitionsByCanonicalId.ContainsKey(definition.CanonicalId))
+                throw new InvalidOperationException($"Item canonical ID is already registered: {definition.CanonicalId}");
 
             if (definition.BlockId.HasValue && definitionsByBlock.ContainsKey(definition.BlockId.Value))
                 throw new InvalidOperationException($"Block ID already has an item mapping: {definition.BlockId.Value}");
 
             definitionsById.Add(definition.Id, definition);
-            definitionsByName.Add(definition.Name, definition);
+            definitionsByCanonicalId.Add(definition.CanonicalId, definition);
 
             if (definition.BlockId.HasValue)
                 definitionsByBlock.Add(definition.BlockId.Value, definition);
@@ -248,6 +260,17 @@ namespace Blockiverse.Survival
         public bool TryGet(ItemId id, out ItemDefinition definition)
         {
             return definitionsById.TryGetValue(id, out definition);
+        }
+
+        public bool TryGetByCanonicalId(string canonicalId, out ItemDefinition definition)
+        {
+            if (string.IsNullOrWhiteSpace(canonicalId))
+            {
+                definition = null;
+                return false;
+            }
+
+            return definitionsByCanonicalId.TryGetValue(canonicalId, out definition);
         }
 
         public bool TryGetItemForBlock(BlockId blockId, out ItemDefinition definition)

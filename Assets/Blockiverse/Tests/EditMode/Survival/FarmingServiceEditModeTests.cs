@@ -134,6 +134,21 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
+        public void BerrybushRegrowthQueuesOnlyAfterMatureStageHarvest()
+        {
+            var immature = new BlockPosition(3, 3, 3);
+            var mature = new BlockPosition(4, 3, 3);
+
+            farming.OnBlockHarvested(BlockRegistry.Berrybush_S4, immature);
+            farming.OnBlockHarvested(BlockRegistry.Berrybush_S5, mature);
+
+            Assert.That(farming.HasPendingRegrowth(immature), Is.False);
+            Assert.That(farming.HasPendingRegrowth(mature), Is.True);
+            Assert.That(FarmingService.IsMatureBerrybushStage(BlockRegistry.Berrybush_S5), Is.True);
+            Assert.That(FarmingService.IsMatureBerrybushStage(BlockRegistry.Berrybush_S4), Is.False);
+        }
+
+        [Test]
         public void HasFreshwaterNearbyFindsWaterWithinTheReachBox()
         {
             // dx=4, dy=+1: the far corner of the §11.1 reach box.
@@ -326,10 +341,13 @@ namespace Blockiverse.Tests.Survival.EditMode
             var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
             var service = new ResourceHarvestService(BlockRegistry.CreateDefault(), itemRegistry, BlockHarvestRuleSet.CreateDefault(itemRegistry));
 
-            BlockHarvestResult result = service.TryHarvest(world, inventory, CropPos, ItemStack.Empty);
+            BlockHarvestResult result = service.TryHarvest(world, inventory, CropPos, new ItemStack(ItemId.ReedwoodSickle, 1));
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
-            Assert.That(inventory.CountOf(ItemId.GrainBundle), Is.EqualTo(1));
+            Assert.That(result.Drop.ItemId, Is.EqualTo(ItemId.GrainBundle));
+            Assert.That(result.Drops, Does.Contain(new ItemStack(ItemId.MeadowSeed, 1)));
+            Assert.That(inventory.CountOf(ItemId.GrainBundle), Is.InRange(1, 3));
+            Assert.That(inventory.CountOf(ItemId.MeadowSeed), Is.EqualTo(1));
             Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Air));
         }
 
@@ -349,6 +367,56 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
             Assert.That(inventory.CountOf(ItemId.BerryCluster), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MatureBerrybushDropsBerriesAndSeed()
+        {
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.Berrybush);
+            Grow(FarmingService.GrowthIntervalTicks * 5);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Berrybush_S5));
+
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(),
+                itemRegistry,
+                BlockHarvestRuleSet.CreateDefault(itemRegistry),
+                rngSeed: 12);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, CropPos, new ItemStack(ItemId.ReedwoodSickle, 1));
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(result.Drop.ItemId, Is.EqualTo(ItemId.BerryCluster));
+            Assert.That(result.Drops, Does.Contain(new ItemStack(ItemId.BerrySeed, 1)));
+            Assert.That(inventory.CountOf(ItemId.BerryCluster), Is.InRange(2, 4));
+            Assert.That(inventory.CountOf(ItemId.BerrySeed), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MatureReedgrassDropsFiberAndCutting()
+        {
+            farming.Till(world, SoilPos);
+            farming.PlantCrop(world, SoilPos, BlockRegistry.Reedgrass);
+            Grow(FarmingService.GrowthIntervalTicks * 3);
+            Assert.That(world.GetBlock(CropPos), Is.EqualTo(BlockRegistry.Reedgrass_S3));
+
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(),
+                itemRegistry,
+                BlockHarvestRuleSet.CreateDefault(itemRegistry),
+                rngSeed: 9);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, CropPos, new ItemStack(ItemId.ReedwoodSickle, 1));
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(result.Drop.ItemId, Is.EqualTo(ItemId.ReedFiber));
+            Assert.That(result.Drops, Does.Contain(new ItemStack(ItemId.ReedCutting, 1)));
+            Assert.That(inventory.CountOf(ItemId.ReedFiber), Is.InRange(1, 3));
+            Assert.That(inventory.CountOf(ItemId.ReedCutting), Is.EqualTo(1));
         }
 
         // ── Berrybush regrowth (§3) ──────────────────────────────────────────

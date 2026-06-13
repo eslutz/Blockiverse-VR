@@ -58,6 +58,18 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(SmeltingModel.HasEnoughFuel(recipe, ItemStack.Empty, CraftingStation.ClayKiln), Is.False);
         }
 
+        [Test]
+        public void StationDepositsPreserveStackDurability()
+        {
+            var station = new SmeltingStationModel(CraftingStation.ClayKiln, inputSlotCount: 1);
+            ItemStack wornTool = new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(7);
+
+            bool deposited = station.TryDepositInput(wornTool);
+
+            Assert.That(deposited, Is.True);
+            Assert.That(station.GetInput(0), Is.EqualTo(wornTool));
+        }
+
         // ── Mend Bench repair (§10.7) ────────────────────────────────────────
 
         [Test]

@@ -13,23 +13,23 @@ namespace Blockiverse.Survival
 
         public CraftingRecipeBook(ItemRegistry itemRegistry = null)
         {
-            this.itemRegistry = itemRegistry ?? ItemRegistry.CreateDefault();
+            this.itemRegistry = itemRegistry ?? ItemRegistry.Default;
         }
 
         public IReadOnlyCollection<CraftingRecipe> All => orderedRecipes;
+        public static CraftingRecipeBook Default { get; } = CreateDefault(ItemRegistry.Default);
 
         // Seconds → ticks for timed (kiln/forge) recipes (§9.3/§9.4).
         static int Seconds(int seconds) => seconds * SmeltingModel.TicksPerSecond;
 
         public static CraftingRecipeBook CreateDefault(ItemRegistry itemRegistry = null)
         {
-            itemRegistry ??= ItemRegistry.CreateDefault();
+            itemRegistry ??= ItemRegistry.Default;
             var book = new CraftingRecipeBook(itemRegistry);
 
             // Where the ruleset names a resource the project tracks under a different id, the
             // existing id is used: flint_shard → flinty_shingle, resin_blob → resin_knot,
-            // stone_pebble → surface_pebbles. Recipes whose outputs are not yet registered
-            // (furniture, containers, food/drink) are added with those items in later units.
+            // stone_pebble → surface_pebbles.
 
             // ── §9.1 Basic recipes (Handcraft, instant) ──────────────────────
             book.Register(new CraftingRecipe(new ItemStack(ItemId.WorkPlank, 6), CraftingStation.None,
@@ -52,6 +52,14 @@ namespace Blockiverse.Survival
             // ── §9.2 Build Table recipes (instant) ───────────────────────────
             book.Register(new CraftingRecipe(new ItemStack(ItemId.StorageCrate, 1), CraftingStation.BuildTable,
                 new ItemStack(ItemId.WorkPlank, 12), new ItemStack(ItemId.StoutPole, 2)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.ReedBasket, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.ReedFiber, 10), new ItemStack(ItemId.FiberCord, 2)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.ToolRack, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.WorkPlank, 8), new ItemStack(ItemId.StoutPole, 4), new ItemStack(ItemId.FiberCord, 2)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.PantryJar, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.ClayLump, 6), new ItemStack(ItemId.GlassShard, 2), new ItemStack(ItemId.ResinKnot, 1)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.DeepLocker, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.CutstoneBlock, 4), new ItemStack(ItemId.IronrootBar, 2), new ItemStack(ItemId.FiberCord, 2)));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.ClayKiln, 1), CraftingStation.BuildTable,
                 new ItemStack(ItemId.ClayLump, 12), new ItemStack(ItemId.StoneRubble, 8), new ItemStack(ItemId.Embercoal, 2)));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.PrepBoard, 1), CraftingStation.BuildTable,
@@ -62,10 +70,14 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.StoneRubble, 8)));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.FiredBrickBlock, 4), CraftingStation.BuildTable,
                 new ItemStack(ItemId.FiredBrick, 8)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.EmbercoalBlock, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.Embercoal, 9)));
             // Buckets are only crafted empty (§9.6); filled buckets come from the fill action at
             // a fluid source, never from a recipe.
             book.Register(new CraftingRecipe(new ItemStack(ItemId.EmptyBucket, 1), CraftingStation.BuildTable,
                 new ItemStack(ItemId.RosycopperBar, 3)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.Bedroll, 1), CraftingStation.BuildTable,
+                new ItemStack(ItemId.Leafmoss, 6), new ItemStack(ItemId.ReedFiber, 8), new ItemStack(ItemId.FiberCord, 4)));
 
             // ── §9.3 Clay Kiln recipes (timed) ───────────────────────────────
             book.Register(new CraftingRecipe(new ItemStack(ItemId.FiredBrick, 1), CraftingStation.ClayKiln, Seconds(8),
@@ -92,6 +104,10 @@ namespace Blockiverse.Survival
             book.Register(new CraftingRecipe(new ItemStack(ItemId.Brightsalt, 3), CraftingStation.Campfire, 0,
                 new[] { new ItemStack(ItemId.BrineBucket, 1) },
                 new[] { new ItemStack(ItemId.EmptyBucket, 1) }));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.Flatbread, 1), CraftingStation.Campfire,
+                new ItemStack(ItemId.GrainBundle, 2)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.CookedMorsel, 1), CraftingStation.Campfire,
+                new ItemStack(ItemId.RawMorsel, 1)));
 
             // ── §9.4 Bellows Forge recipes ───────────────────────────────────
             book.Register(new CraftingRecipe(new ItemStack(ItemId.BellowsForge, 1), CraftingStation.BuildTable,
@@ -118,6 +134,10 @@ namespace Blockiverse.Survival
                 new ItemStack(ItemId.SparkNiter, 1), new ItemStack(ItemId.ReedFiber, 1), new ItemStack(ItemId.Embercoal, 1)));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.FieldBandage, 2), CraftingStation.PrepBoard,
                 new ItemStack(ItemId.ReedFiber, 4), new ItemStack(ItemId.ResinKnot, 1)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.TrailRation, 2), CraftingStation.PrepBoard,
+                new ItemStack(ItemId.GrainBundle, 2), new ItemStack(ItemId.BerryCluster, 2), new ItemStack(ItemId.Brightsalt, 1)));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.BerryMash, 1), CraftingStation.PrepBoard,
+                new ItemStack(ItemId.BerryCluster, 3)));
 
             return book;
         }
@@ -126,13 +146,20 @@ namespace Blockiverse.Survival
         // tools at the Bellows Forge.
         static void RegisterToolRecipes(CraftingRecipeBook book, ItemRegistry itemRegistry)
         {
-            // Reedwood (work_plank head) and Flint (flinty_shingle head): Delver/Spade/Feller only.
+            // Reedwood (work_plank head) and Flint (flinty_shingle head): early field tools.
             book.RegisterTool("reedwood_delver", CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 3), new ItemStack(ItemId.StoutPole, 2));
             book.RegisterTool("reedwood_spade",  CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 1), new ItemStack(ItemId.StoutPole, 2));
             book.RegisterTool("reedwood_feller", CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 3), new ItemStack(ItemId.StoutPole, 2));
+            book.RegisterTool("reedwood_sickle", CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 2), new ItemStack(ItemId.StoutPole, 1), new ItemStack(ItemId.FiberCord, 1));
+            book.RegisterTool("reedwood_mallet", CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 4), new ItemStack(ItemId.StoutPole, 2));
+            book.RegisterTool("reedwood_carver", CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 1), new ItemStack(ItemId.StoutPole, 1), new ItemStack(ItemId.FiberCord, 1));
+            book.RegisterTool("reedwood_tiller", CraftingStation.BuildTable, new ItemStack(ItemId.WorkPlank, 2), new ItemStack(ItemId.StoutPole, 2));
             book.RegisterTool("flint_delver", CraftingStation.BuildTable, new ItemStack(ItemId.FlintyShingle, 3), new ItemStack(ItemId.StoutPole, 2), new ItemStack(ItemId.FiberCord, 1));
             book.RegisterTool("flint_spade",  CraftingStation.BuildTable, new ItemStack(ItemId.FlintyShingle, 1), new ItemStack(ItemId.StoutPole, 2), new ItemStack(ItemId.FiberCord, 1));
             book.RegisterTool("flint_feller", CraftingStation.BuildTable, new ItemStack(ItemId.FlintyShingle, 3), new ItemStack(ItemId.StoutPole, 2), new ItemStack(ItemId.FiberCord, 1));
+            book.RegisterTool("flint_sickle", CraftingStation.BuildTable, new ItemStack(ItemId.FlintyShingle, 2), new ItemStack(ItemId.StoutPole, 1), new ItemStack(ItemId.FiberCord, 1));
+            book.RegisterTool("flint_mallet", CraftingStation.BuildTable, new ItemStack(ItemId.FlintyShingle, 4), new ItemStack(ItemId.StoutPole, 2));
+            book.RegisterTool("flint_tiller", CraftingStation.BuildTable, new ItemStack(ItemId.FlintyShingle, 2), new ItemStack(ItemId.StoutPole, 2), new ItemStack(ItemId.FiberCord, 1));
 
             // Metal tools: bar count per class (§9.5), at the Bellows Forge.
             foreach ((string material, ItemId bar) in MetalToolMaterials)

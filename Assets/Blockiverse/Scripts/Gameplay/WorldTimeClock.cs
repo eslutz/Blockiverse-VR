@@ -1,4 +1,5 @@
 using System;
+using Blockiverse.Core;
 using UnityEngine;
 using Blockiverse.WorldGen;
 
@@ -89,13 +90,16 @@ namespace Blockiverse.Gameplay
             normalizedTime = Normalize(normalizedTime + deltaSeconds * timeScale / dayLengthSeconds);
         }
 
-        void Update()
+        public void AdvanceRuntime(float deltaSeconds)
         {
-            Tick(Time.deltaTime);
+            if (BlockiverseRuntimeState.IsGamePaused)
+                return;
+
+            Tick(deltaSeconds);
 
             if (!Mathf.Approximately(timeScale, 0.0f))
             {
-                tickAccumulator += Time.deltaTime * timeScale * WorldConstants.TicksPerSecond;
+                tickAccumulator += deltaSeconds * timeScale * WorldConstants.TicksPerSecond;
                 int elapsed = (int)tickAccumulator;
                 if (elapsed > 0)
                 {
@@ -104,6 +108,11 @@ namespace Blockiverse.Gameplay
                     Ticked?.Invoke(elapsed);
                 }
             }
+        }
+
+        void Update()
+        {
+            AdvanceRuntime(Time.deltaTime);
         }
 
         static float Normalize(float value)

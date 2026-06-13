@@ -10,22 +10,38 @@ namespace Blockiverse.UI
 {
     public sealed class SurvivalInventoryPanel : MonoBehaviour
     {
-        static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.CreateDefault();
+        static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.Default;
+        static readonly string[] CachedStackCounts = BuildCachedStackCounts();
 
         [SerializeField] Button[] slotButtons;
         [SerializeField] TMP_Text[] slotLabels;
         [SerializeField] Image[] slotIcons;
         [SerializeField] BlockiverseItemIconLibrary iconLibrary;
         [SerializeField] TMP_Text selectedHotbarLabel;
+        [SerializeField] Button previousPageButton;
+        [SerializeField] Button nextPageButton;
+        [SerializeField] TMP_Text pageLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
         Inventory inventory;
         ItemRegistry itemRegistry;
         int selectedHotbarSlotIndex;
+        int firstVisibleSlotIndex;
         bool enableFeedbackReady;
+        SlotRenderState[] slotRenderCache = Array.Empty<SlotRenderState>();
+        string renderedHotbarText;
+
+        struct SlotRenderState
+        {
+            public int SlotIndex;
+            public ItemStack Stack;
+            public bool UsesIcon;
+            public bool IsValid;
+        }
 
         public int SelectedHotbarSlotIndex => selectedHotbarSlotIndex;
+        public int FirstVisibleSlotIndex => firstVisibleSlotIndex;
 
         // Raised when the selected hotbar slot changes, so the survival runtime can mirror the held
         // tool/block for harvest and placement.
@@ -41,14 +57,22 @@ namespace Blockiverse.UI
             TMP_Text[] targetSlotLabels,
             TMP_Text targetSelectedHotbarLabel,
             Image[] targetSlotIcons = null,
-            BlockiverseItemIconLibrary targetIconLibrary = null)
+            BlockiverseItemIconLibrary targetIconLibrary = null,
+            Button targetPreviousPageButton = null,
+            Button targetNextPageButton = null,
+            TMP_Text targetPageLabel = null)
         {
             slotLabels = targetSlotLabels ?? Array.Empty<TMP_Text>();
             slotButtons = targetSlotButtons ?? Array.Empty<Button>();
             slotIcons = targetSlotIcons ?? Array.Empty<Image>();
             iconLibrary = targetIconLibrary;
             selectedHotbarLabel = targetSelectedHotbarLabel;
+            previousPageButton = targetPreviousPageButton;
+            nextPageButton = targetNextPageButton;
+            pageLabel = targetPageLabel;
+            InvalidateRenderCache();
             WireSlotButtons();
+            WirePageButtons();
             Refresh();
         }
 
@@ -64,6 +88,8 @@ namespace Blockiverse.UI
         {
             inventory = targetInventory ?? throw new ArgumentNullException(nameof(targetInventory));
             itemRegistry = registry ?? DefaultItemRegistry;
+            firstVisibleSlotIndex = ClampFirstVisibleSlot(firstVisibleSlotIndex);
+            InvalidateRenderCache();
             SetSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
         }
 
@@ -81,81 +107,143 @@ namespace Blockiverse.UI
         {
             if (slotLabels != null)
             {
+                EnsureRenderCache(slotLabels.Length);
                 for (int i = 0; i < slotLabels.Length; i++)
                 {
                     if (slotLabels[i] == null)
                         continue;
 
+                    int slotIndex = firstVisibleSlotIndex + i;
+                    ItemStack stack = GetSlotStack(slotIndex);
+                    bool hasIcon = TryGetSlotIcon(slotIndex, i, stack, out Sprite icon);
+                    SlotRenderState previous = slotRenderCache[i];
+                    if (previous.IsValid &&
+                        previous.SlotIndex == slotIndex &&
+                        previous.Stack.Equals(stack) &&
+                        previous.UsesIcon == hasIcon)
+                    {
+                        continue;
+                    }
+
                     // Icon + count when the item has an icon; the text-only fallback keeps slots
                     // readable for icons that don't exist (and for icon-less configurations).
-                    if (TryGetSlotIcon(i, out Sprite icon, out ItemStack stack))
+                    if (hasIcon)
                     {
                         SetSlotIcon(i, icon);
-                        slotLabels[i].text = $"x{stack.Count}";
+                        SetTextIfChanged(slotLabels[i], StackCountText(stack.Count));
                     }
                     else
                     {
                         SetSlotIcon(i, null);
-                        slotLabels[i].text = FormatSlot(i);
+                        SetTextIfChanged(slotLabels[i], FormatStack(stack, itemRegistry));
                     }
+
+                    slotRenderCache[i] = new SlotRenderState
+                    {
+                        SlotIndex = slotIndex,
+                        Stack = stack,
+                        UsesIcon = hasIcon,
+                        IsValid = true,
+                    };
                 }
             }
 
             if (selectedHotbarLabel != null)
             {
-                selectedHotbarLabel.text = inventory == null || inventory.HotbarSlotCount == 0
-                    ? "Hotbar -"
-                    : $"Hotbar {selectedHotbarSlotIndex + 1} / {inventory.HotbarSlotCount}";
+                string hotbarText = inventory == null || inventory.HotbarSlotCount == 0
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.InventoryHotbarEmpty)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.InventoryHotbar,
+                        selectedHotbarSlotIndex + 1,
+                        inventory.HotbarSlotCount);
+                if (!string.Equals(renderedHotbarText, hotbarText, StringComparison.Ordinal))
+                {
+                    selectedHotbarLabel.text = hotbarText;
+                    renderedHotbarText = hotbarText;
+                }
             }
+
+            RefreshPageControls();
         }
 
         void Awake()
         {
             WireSlotButtons();
+            WirePageButtons();
         }
 
-        string FormatSlot(int slotIndex)
+        ItemStack GetSlotStack(int slotIndex)
         {
-            if (inventory == null)
-                return string.Empty;
+            if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount)
+                return ItemStack.Empty;
 
-            if (slotIndex < 0 || slotIndex >= inventory.SlotCount)
-                return string.Empty;
-
-            return FormatStack(inventory.GetSlot(slotIndex), itemRegistry);
+            return inventory.GetSlot(slotIndex);
         }
 
-        bool TryGetSlotIcon(int slotIndex, out Sprite icon, out ItemStack stack)
+        bool TryGetSlotIcon(int slotIndex, int visibleIndex, ItemStack stack, out Sprite icon)
         {
             icon = null;
-            stack = ItemStack.Empty;
 
-            if (iconLibrary == null || slotIcons == null || slotIndex >= slotIcons.Length || slotIcons[slotIndex] == null)
+            if (iconLibrary == null || slotIcons == null || visibleIndex >= slotIcons.Length || slotIcons[visibleIndex] == null)
                 return false;
 
-            if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount)
+            if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount || stack.IsEmpty)
                 return false;
 
-            stack = inventory.GetSlot(slotIndex);
-            return !stack.IsEmpty && iconLibrary.TryGetIcon(stack.ItemId, out icon);
+            return iconLibrary.TryGetIcon(stack.ItemId, out icon);
         }
 
-        void SetSlotIcon(int slotIndex, Sprite icon)
+        void SetSlotIcon(int visibleIndex, Sprite icon)
         {
-            if (slotIcons == null || slotIndex >= slotIcons.Length || slotIcons[slotIndex] == null)
+            if (slotIcons == null || visibleIndex >= slotIcons.Length || slotIcons[visibleIndex] == null)
                 return;
 
-            slotIcons[slotIndex].sprite = icon;
-            slotIcons[slotIndex].enabled = icon != null;
+            slotIcons[visibleIndex].sprite = icon;
+            slotIcons[visibleIndex].enabled = icon != null;
         }
 
         static string FormatStack(ItemStack stack, ItemRegistry registry)
         {
             if (stack.IsEmpty)
-                return "Empty";
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonEmpty);
 
             ItemDefinition definition = (registry ?? DefaultItemRegistry).Get(stack.ItemId);
-            return $"{definition.Name} x{stack.Count}";
+            return BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CommonStack, definition.Name, stack.Count);
+        }
+
+        static string StackCountText(int count) =>
+            count >= 0 && count < CachedStackCounts.Length
+                ? CachedStackCounts[count]
+                : BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CommonStackCount, count);
+
+        static string[] BuildCachedStackCounts()
+        {
+            var values = new string[100];
+            for (int i = 0; i < values.Length; i++)
+                values[i] = BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CommonStackCount, i);
+            return values;
+        }
+
+        static void SetTextIfChanged(TMP_Text label, string text)
+        {
+            if (label != null && !string.Equals(label.text, text, StringComparison.Ordinal))
+                label.text = text;
+        }
+
+        void EnsureRenderCache(int length)
+        {
+            if (slotRenderCache.Length == length)
+                return;
+
+            slotRenderCache = new SlotRenderState[length];
+            InvalidateRenderCache();
+        }
+
+        void InvalidateRenderCache()
+        {
+            for (int i = 0; i < slotRenderCache.Length; i++)
+                slotRenderCache[i].IsValid = false;
+            renderedHotbarText = null;
         }
 
         static bool IsValidHotbarSlot(int slotIndex, int hotbarSlotCount)
@@ -182,14 +270,98 @@ namespace Blockiverse.UI
                 button.onClick.RemoveAllListeners();
                 button.onClick.AddListener(() =>
                 {
-                    if (inventory == null || slotIndex < inventory.HotbarSlotCount)
-                    {
-                        SetSelectedHotbarSlotIndex(slotIndex);
-                        PlayFeedback(BlockiverseAudioCue.UiSelect);
-                    }
+                    HandleSlotClicked(firstVisibleSlotIndex + slotIndex);
                 });
             }
         }
+
+        void WirePageButtons()
+        {
+            if (previousPageButton != null)
+            {
+                previousPageButton.onClick.RemoveAllListeners();
+                previousPageButton.onClick.AddListener(ShowPreviousPage);
+            }
+
+            if (nextPageButton != null)
+            {
+                nextPageButton.onClick.RemoveAllListeners();
+                nextPageButton.onClick.AddListener(ShowNextPage);
+            }
+        }
+
+        public void ShowPreviousPage()
+        {
+            SetFirstVisibleSlotIndex(firstVisibleSlotIndex - VisibleSlotCount);
+        }
+
+        public void ShowNextPage()
+        {
+            SetFirstVisibleSlotIndex(firstVisibleSlotIndex + VisibleSlotCount);
+        }
+
+        void SetFirstVisibleSlotIndex(int slotIndex)
+        {
+            firstVisibleSlotIndex = ClampFirstVisibleSlot(slotIndex);
+            Refresh();
+        }
+
+        void HandleSlotClicked(int slotIndex)
+        {
+            if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount)
+                return;
+
+            if (slotIndex < inventory.HotbarSlotCount)
+            {
+                SetSelectedHotbarSlotIndex(slotIndex);
+                PlayFeedback(BlockiverseAudioCue.UiSelect);
+                return;
+            }
+
+            if (inventory.HotbarSlotCount == 0)
+                return;
+
+            inventory.SwapSlots(selectedHotbarSlotIndex, slotIndex);
+            Refresh();
+            PlayFeedback(BlockiverseAudioCue.UiSelect);
+        }
+
+        void RefreshPageControls()
+        {
+            int visibleSlotCount = VisibleSlotCount;
+            int slotCount = inventory != null ? inventory.SlotCount : visibleSlotCount;
+            int first = visibleSlotCount == 0 ? 0 : Math.Min(firstVisibleSlotIndex, Math.Max(0, slotCount - 1));
+            int last = visibleSlotCount == 0 ? 0 : Math.Min(slotCount, first + visibleSlotCount);
+
+            if (pageLabel != null)
+            {
+                pageLabel.text = slotCount <= visibleSlotCount || visibleSlotCount == 0
+                    ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.InventorySlotsCount, slotCount)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.InventorySlotsRange,
+                        first + 1,
+                        last,
+                        slotCount);
+            }
+
+            if (previousPageButton != null)
+                previousPageButton.interactable = firstVisibleSlotIndex > 0;
+
+            if (nextPageButton != null)
+                nextPageButton.interactable = inventory != null && firstVisibleSlotIndex + visibleSlotCount < inventory.SlotCount;
+        }
+
+        int ClampFirstVisibleSlot(int slotIndex)
+        {
+            int visibleSlotCount = VisibleSlotCount;
+            if (inventory == null || visibleSlotCount <= 0)
+                return 0;
+
+            int maxFirst = ((inventory.SlotCount - 1) / visibleSlotCount) * visibleSlotCount;
+            return Math.Clamp(slotIndex, 0, maxFirst);
+        }
+
+        int VisibleSlotCount => slotLabels != null ? slotLabels.Length : 0;
 
         void Start()
         {
@@ -210,21 +382,7 @@ namespace Blockiverse.UI
 
         void PlayFeedback(BlockiverseAudioCue cue)
         {
-            DiscoverFeedback();
-            audioCuePlayer?.PlayCue(cue);
-            interactionHaptics?.PlayUiTick();
-        }
-
-        void DiscoverFeedback()
-        {
-            if (!Application.isPlaying)
-                return;
-
-            if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-
-            if (interactionHaptics == null)
-                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
         }
     }
 }

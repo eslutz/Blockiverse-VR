@@ -29,6 +29,16 @@ namespace Blockiverse.Gameplay
         public int UndoCount => undoHistory.Count;
         public int RedoCount => redoHistory.Count;
 
+        public void Reset()
+        {
+            undoHistory.Clear();
+            redoHistory.Clear();
+            clipboard = null;
+            clipboardWidth = 0;
+            clipboardHeight = 0;
+            clipboardDepth = 0;
+        }
+
         public WorldEditResult Fill(VoxelWorld world, BlockPosition min, BlockPosition max, BlockId block)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));

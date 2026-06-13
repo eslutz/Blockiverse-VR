@@ -1,3 +1,4 @@
+using Blockiverse.Core;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using UnityEngine;
@@ -19,6 +20,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseVfxCuePlayer vfxCuePlayer;
+        [SerializeField] EnvironmentDynamicsController environmentDynamics;
 
         float nextPollTime;
         float nextPrecipitationVfxTime;
@@ -27,6 +29,7 @@ namespace Blockiverse.Gameplay
         WeatherState lastWeatherState = WeatherState.Clear;
         BlockiverseAudioCue? activePrecipitationLoop;
         BlockiverseAudioCue? activeAmbienceLoop;
+        EnvironmentDynamicsController subscribedEnvironmentDynamics;
         bool campfireLoopActive;
 
         void OnEnable()
@@ -36,6 +39,7 @@ namespace Blockiverse.Gameplay
 
         void OnDisable()
         {
+            UnsubscribeLightningStrikes();
             StopLoops();
         }
 
@@ -56,13 +60,41 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = BlockiverseSceneLookup.Find<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = BlockiverseSceneLookup.Find<BlockiverseAudioCuePlayer>();
 
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = BlockiverseSceneLookup.Find<BlockiverseVfxCuePlayer>();
+
+            if (environmentDynamics == null)
+                environmentDynamics = BlockiverseSceneLookup.Find<EnvironmentDynamicsController>(FindObjectsInactive.Include);
+
+            SubscribeLightningStrikes();
+        }
+
+        void SubscribeLightningStrikes()
+        {
+            if (subscribedEnvironmentDynamics == environmentDynamics)
+                return;
+
+            UnsubscribeLightningStrikes();
+
+            if (environmentDynamics == null)
+                return;
+
+            subscribedEnvironmentDynamics = environmentDynamics;
+            subscribedEnvironmentDynamics.LightningStruck += OnLightningStruck;
+        }
+
+        void UnsubscribeLightningStrikes()
+        {
+            if (subscribedEnvironmentDynamics == null)
+                return;
+
+            subscribedEnvironmentDynamics.LightningStruck -= OnLightningStruck;
+            subscribedEnvironmentDynamics = null;
         }
 
         void Poll()
@@ -200,6 +232,15 @@ namespace Blockiverse.Gameplay
         }
 
         // ── Thunder + precipitation/fog VFX ───────────────────────────────────
+
+        void OnLightningStruck(BlockPosition strike)
+        {
+            DiscoverDependencies();
+
+            Vector3 strikePosition = new(strike.X + 0.5f, strike.Y + 1.0f, strike.Z + 0.5f);
+            audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.ThunderNear, strikePosition);
+            vfxCuePlayer?.PlayCue(BlockiverseVfxCue.LightningFlash, strikePosition + Vector3.up * 6.0f);
+        }
 
         void TickThunder(WeatherState state)
         {

@@ -843,6 +843,12 @@ When a client loses the host:
 
 The initial LAN implementation does not support host migration.
 
+Because the host is the only authoritative world owner, a host disconnect ends the session
+instead of promoting a client. Shared progress is bounded by the host's last successful
+multiplayer save: graceful host shutdown saves before disconnecting clients, while an
+unexpected host loss can lose edits made since the previous host autosave. Clients must not
+attempt to save or continue the authoritative world from their local mirrored snapshot.
+
 ### Future host migration support
 
 Host migration is a future enhancement and is not required for the first multiplayer milestone.

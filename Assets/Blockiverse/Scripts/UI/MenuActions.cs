@@ -14,6 +14,7 @@ namespace Blockiverse.UI
         public const string GameplayHudScreen = "gameplay_hud";
         public const string PauseScreen = "pause_menu";
         public const string SettingsScreen = "settings";
+        public const string ComfortSettingsScreen = "settings_comfort";
         public const string AudioSettingsScreen = "settings_audio";
         public const string ControlsScreen = "controls";
         public const string CreativeToolsScreen = "creative_tools";
@@ -61,6 +62,7 @@ namespace Blockiverse.UI
         public const string SettingsOpenAudio = "settings.open_audio";
         public const string SettingsOpenControls = "settings.open_controls";
         public const string SettingsClose = "settings.close";
+        public const string ComfortSettingsClose = "settings_comfort.close";
         public const string AudioSettingsClose = "settings_audio.close";
         public const string ControlsClose = "controls.close";
 
@@ -83,45 +85,56 @@ namespace Blockiverse.UI
         {
             var actions = new List<MenuAction>(6);
             if (hasLatestSave)
-                actions.Add(new MenuAction(TitleContinue, "Continue"));
-            actions.Add(new MenuAction(TitleNewWorld, "New World"));
+                actions.Add(Localized(TitleContinue, BlockiverseLocalization.Keys.TitleContinue, "Continue"));
+            actions.Add(Localized(TitleNewWorld, BlockiverseLocalization.Keys.TitleNewWorld, "New World"));
             if (hasAnySave)
-                actions.Add(new MenuAction(TitleLoadWorld, "Load World"));
-            actions.Add(new MenuAction(TitleMultiplayer, "LAN Multiplayer"));
-            actions.Add(new MenuAction(TitleSettings, "Settings"));
+                actions.Add(Localized(TitleLoadWorld, BlockiverseLocalization.Keys.TitleLoadWorld, "Load World"));
+            actions.Add(Localized(TitleMultiplayer, BlockiverseLocalization.Keys.TitleMultiplayer, "LAN Multiplayer"));
+            actions.Add(Localized(TitleSettings, BlockiverseLocalization.Keys.TitleSettingsAction, "Settings"));
             if (canQuit)
-                actions.Add(new MenuAction(TitleQuit, "Quit"));
+                actions.Add(Localized(TitleQuit, BlockiverseLocalization.Keys.TitleQuit, "Quit"));
             return actions;
         }
 
-        public static readonly IReadOnlyList<MenuAction> Pause = new[]
+        public static IReadOnlyList<MenuAction> PauseMenu(bool canToggleMode, bool canOpenCreativeTools, bool canQuit = true)
         {
-            new MenuAction(PauseResume, "Resume"),
-            new MenuAction(PauseSaveGame, "Save Game"),
-            new MenuAction(PauseToggleMode, "Switch Survival/Creative"),
-            new MenuAction(PauseCreativeTools, "Creative Tools"),
-            new MenuAction(PauseSettings, "Settings"),
-            new MenuAction(PauseReturnToTitle, "Return to Title"),
-            new MenuAction(PauseQuit, "Quit Game"),
-        };
+            var actions = new List<MenuAction>(7)
+            {
+                Localized(PauseResume, BlockiverseLocalization.Keys.PauseResume, "Resume"),
+                Localized(PauseSaveGame, BlockiverseLocalization.Keys.PauseSaveGame, "Save Game"),
+            };
+            if (canToggleMode)
+                actions.Add(Localized(PauseToggleMode, BlockiverseLocalization.Keys.PauseToggleMode, "Switch Survival/Creative"));
+            if (canOpenCreativeTools)
+                actions.Add(Localized(PauseCreativeTools, BlockiverseLocalization.Keys.PauseCreativeTools, "Creative Tools"));
+            actions.Add(Localized(PauseSettings, BlockiverseLocalization.Keys.PauseSettings, "Settings"));
+            actions.Add(Localized(PauseReturnToTitle, BlockiverseLocalization.Keys.PauseReturnToTitle, "Return to Title"));
+            if (canQuit)
+                actions.Add(Localized(PauseQuit, BlockiverseLocalization.Keys.PauseQuit, "Quit Game"));
+            return actions;
+        }
 
         // Death respawn options; the bedroll option is offered only when a bedroll spawn is set.
         public static IReadOnlyList<MenuAction> Death(bool hasBedrollSpawn)
         {
             var actions = new List<MenuAction>(3);
             if (hasBedrollSpawn)
-                actions.Add(new MenuAction(DeathRespawnBedroll, "Respawn at Bedroll"));
-            actions.Add(new MenuAction(DeathRespawnWorldSpawn, "Respawn at World Spawn"));
-            actions.Add(new MenuAction(DeathReturnToTitle, "Return to Title"));
+                actions.Add(Localized(DeathRespawnBedroll, BlockiverseLocalization.Keys.DeathRespawnBedroll, "Respawn at Bedroll"));
+            actions.Add(Localized(DeathRespawnWorldSpawn, BlockiverseLocalization.Keys.DeathRespawnWorldSpawn, "Respawn at World Spawn"));
+            actions.Add(Localized(DeathReturnToTitle, BlockiverseLocalization.Keys.DeathReturnToTitle, "Return to Title"));
             return actions;
         }
 
-        public static IReadOnlyList<MenuAction> Confirm(string confirmLabel = "Confirm", string cancelLabel = "Cancel")
+        public static IReadOnlyList<MenuAction> Confirm(string confirmLabel = null, string cancelLabel = null)
         {
             return new[]
             {
-                new MenuAction(ConfirmAccept, confirmLabel),
-                new MenuAction(ConfirmCancel, cancelLabel),
+                confirmLabel == null
+                    ? Localized(ConfirmAccept, BlockiverseLocalization.Keys.ConfirmAccept, "Confirm")
+                    : new MenuAction(ConfirmAccept, confirmLabel),
+                cancelLabel == null
+                    ? Localized(ConfirmCancel, BlockiverseLocalization.Keys.ConfirmCancel, "Cancel")
+                    : new MenuAction(ConfirmCancel, cancelLabel),
             };
         }
 
@@ -129,20 +142,23 @@ namespace Blockiverse.UI
         // controls reference are their own screens/panels.
         public static readonly IReadOnlyList<MenuAction> Settings = new[]
         {
-            new MenuAction(SettingsOpenComfort, "Comfort"),
-            new MenuAction(SettingsOpenAudio, "Audio"),
-            new MenuAction(SettingsOpenControls, "Controls"),
-            new MenuAction(SettingsClose, "Close"),
+            Localized(SettingsOpenComfort, BlockiverseLocalization.Keys.SettingsComfort, "Comfort"),
+            Localized(SettingsOpenAudio, BlockiverseLocalization.Keys.SettingsAudio, "Audio"),
+            Localized(SettingsOpenControls, BlockiverseLocalization.Keys.SettingsControls, "Controls"),
+            Localized(SettingsClose, BlockiverseLocalization.Keys.SettingsClose, "Close"),
         };
 
         // World Details management actions (§6.5).
         public static readonly IReadOnlyList<MenuAction> WorldDetails = new[]
         {
-            new MenuAction(WorldDetailsPlay, "Play"),
-            new MenuAction(WorldDetailsRename, "Rename"),
-            new MenuAction(WorldDetailsDuplicate, "Duplicate"),
-            new MenuAction(WorldDetailsDeleteRequested, "Delete"),
-            new MenuAction(WorldDetailsBack, "Back"),
+            Localized(WorldDetailsPlay, BlockiverseLocalization.Keys.WorldDetailsPlay, "Play"),
+            Localized(WorldDetailsRename, BlockiverseLocalization.Keys.WorldDetailsRename, "Rename"),
+            Localized(WorldDetailsDuplicate, BlockiverseLocalization.Keys.WorldDetailsDuplicate, "Duplicate"),
+            Localized(WorldDetailsDeleteRequested, BlockiverseLocalization.Keys.WorldDetailsDelete, "Delete"),
+            Localized(WorldDetailsBack, BlockiverseLocalization.Keys.WorldDetailsBack, "Back"),
         };
+
+        static MenuAction Localized(string actionId, string labelKey, string fallbackLabel) =>
+            new(actionId, labelKey, fallbackLabel);
     }
 }

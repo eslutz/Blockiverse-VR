@@ -1,6 +1,8 @@
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -18,7 +20,7 @@ namespace Blockiverse.Tests.EditMode
             string path = CreateTempSavePath();
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2202, groundHeight: 2);
-            var preset = new FlatCreativeWorldPreset(registry, settings);
+            var preset = new FlatBuilderPreset(registry, settings);
             VoxelWorld world = preset.Generate();
             world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.LumenQuartzCluster);
             world.SetBlock(new BlockPosition(3, 2, 2), BlockRegistry.Glowwick);
@@ -48,6 +50,77 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SaveSnapshotFreezesChangedBlocksBeforeBackgroundWrite()
+        {
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2302, groundHeight: 2);
+            var preset = new FlatBuilderPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+            world.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.LumenQuartzCluster);
+
+            try
+            {
+                var service = new WorldSaveService();
+                WorldSaveService.WorldSaveSnapshot snapshot = service.CaptureSnapshot(path, "snapshot-test", world);
+
+                world.SetBlock(new BlockPosition(3, 2, 2), BlockRegistry.Glowwick);
+                service.Save(snapshot);
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.ChangedBlocks, Has.Length.EqualTo(1));
+                Assert.That(result.Data.ChangedBlocks[0].X, Is.EqualTo(2));
+                Assert.That(result.Data.ChangedBlocks[0].Y, Is.EqualTo(2));
+                Assert.That(result.Data.ChangedBlocks[0].Z, Is.EqualTo(2));
+                Assert.That(result.Data.ChangedBlocks[0].CanonicalId, Is.EqualTo("lumen_quartz_cluster"));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SaveRequestOverloadRoundTripsMetadataAndInventory()
+        {
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2402, groundHeight: 2);
+            VoxelWorld world = new FlatBuilderPreset(registry, settings).Generate();
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry);
+            inventory.SetSlot(2, new ItemStack(ItemId.Glowwick, 3));
+
+            try
+            {
+                var service = new WorldSaveService(itemRegistry);
+                service.Save(new WorldSaveRequest(path, "request-test", world)
+                {
+                    Inventory = inventory,
+                    SelectedHotbarSlotIndex = 2,
+                    GameMode = "creative",
+                    Difficulty = "hard",
+                    WorldPreset = WorldPresetIds.FlatBuilder,
+                });
+
+                WorldLoadResult result = service.Load(path);
+
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.WorldName, Is.EqualTo("request-test"));
+                Assert.That(result.Data.GameMode, Is.EqualTo("creative"));
+                Assert.That(result.Data.Difficulty, Is.EqualTo("hard"));
+                Assert.That(result.Data.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
+                Assert.That(result.Inventory.GetSlot(2), Is.EqualTo(new ItemStack(ItemId.Glowwick, 3)));
+                Assert.That(result.SelectedHotbarSlotIndex, Is.EqualTo(2));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void SaveThenLoadPreservesDifficultyAndWorldPreset()
         {
             string path = CreateTempSavePath();
@@ -56,12 +129,89 @@ namespace Blockiverse.Tests.EditMode
             try
             {
                 var service = new WorldSaveService();
-                service.Save(path, "settings-test", world, difficulty: "hard", worldPreset: "flat_builder");
+                service.Save(path, "settings-test", world, difficulty: "hard", worldPreset: WorldPresetIds.FlatBuilder);
 
                 WorldLoadResult result = service.Load(path);
                 Assert.That(result.Success, Is.True, result.Error);
                 Assert.That(result.Data.Difficulty, Is.EqualTo("hard"));
-                Assert.That(result.Data.WorldPreset, Is.EqualTo("flat_builder"));
+                Assert.That(result.Data.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void WorldSaveGenerationMapsPresetIdsAndBuildsThroughSharedFactory()
+        {
+            Assert.That(
+                WorldSaveGeneration.GenerationPresetForId(WorldPresetIds.SurvivalTerrain),
+                Is.EqualTo(CreativeWorldGenerationPreset.SurvivalLite));
+            Assert.That(
+                WorldSaveGeneration.GenerationPresetForId(WorldPresetIds.FlatBuilder),
+                Is.EqualTo(CreativeWorldGenerationPreset.FlatCreative));
+            Assert.That(
+                WorldSaveGeneration.GenerationPresetForId(WorldPresetIds.VoidBuilder),
+                Is.EqualTo(CreativeWorldGenerationPreset.VoidBuilder));
+            Assert.That(
+                WorldSaveGeneration.GenerationPresetForId("unknown"),
+                Is.EqualTo(CreativeWorldGenerationPreset.SurvivalLite));
+
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(
+                width: 32,
+                height: 32,
+                depth: 32,
+                chunkSize: 16,
+                seed: 3403,
+                groundHeight: 4);
+
+            GeneratedCreativeWorld flat = WorldSaveGeneration.GenerateWorld(
+                CreativeWorldGenerationPreset.FlatCreative,
+                registry,
+                settings);
+            GeneratedCreativeWorld empty = WorldSaveGeneration.GenerateWorld(
+                CreativeWorldGenerationPreset.VoidBuilder,
+                registry,
+                settings);
+
+            Assert.That(flat.GenerationPreset, Is.EqualTo(CreativeWorldGenerationPreset.FlatCreative));
+            Assert.That(flat.World.GetBlock(new BlockPosition(1, 3, 1)), Is.Not.EqualTo(BlockRegistry.Air));
+            Assert.That(empty.GenerationPreset, Is.EqualTo(CreativeWorldGenerationPreset.VoidBuilder));
+            Assert.That(empty.World.GetBlock(new BlockPosition(1, 3, 1)), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
+        public void SaveThenLoadPreservesGenerationSpawnPosition()
+        {
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var spawn = new BlockPosition(6, 5, 7);
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 3303, groundHeight: 4, spawnPosition: spawn);
+            VoxelWorld world = new FlatBuilderPreset(registry, settings).Generate();
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "spawn-test", world, extras: new WorldSaveExtras
+                {
+                    HasSpawnPosition = true,
+                    SpawnPosition = spawn
+                });
+
+                string manifestJson = File.ReadAllText(Path.Combine(path, "manifest.json"));
+                VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(manifestJson);
+                Assert.That(manifest.HasSpawnPosition, Is.True);
+                Assert.That(new BlockPosition(manifest.SpawnX, manifest.SpawnY, manifest.SpawnZ), Is.EqualTo(spawn));
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.HasSpawnPosition, Is.True);
+                Assert.That(new BlockPosition(result.Data.SpawnX, result.Data.SpawnY, result.Data.SpawnZ), Is.EqualTo(spawn));
+
+                GeneratedCreativeWorld regenerated = WorldSaveGeneration.Regenerate(result.Data);
+                Assert.That(regenerated.Settings.SpawnPosition, Is.EqualTo(spawn));
             }
             finally
             {
@@ -129,14 +279,92 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void MismatchedRegistryHashLoadsWithWarningAndSkipsUnknownIds()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+            BlockPosition changedPosition = new(2, 2, 2);
+            var sink = new CapturingLogSink();
+
+            try
+            {
+                world.SetBlock(changedPosition, BlockRegistry.LumenQuartzCluster);
+
+                var service = new WorldSaveService();
+                service.Save(path, "hash-mismatch-test", world);
+
+                string manifestPath = Path.Combine(path, "manifest.json");
+                VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(File.ReadAllText(manifestPath));
+                manifest.BlockRegistryHash = "foreign-block-registry-hash";
+                File.WriteAllText(manifestPath, JsonUtility.ToJson(manifest, prettyPrint: true));
+                ReplaceFirstRegionPaletteEntry(path, "no_such_block");
+
+                BlockiverseLog.SetSinkForTesting(sink);
+                WorldLoadResult result = service.Load(path);
+
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.ChangedBlocks, Has.Length.EqualTo(1));
+                Assert.That(result.Data.ChangedBlocks[0].CanonicalId, Is.EqualTo("no_such_block"));
+
+                VoxelWorld loadedWorld = CreateDefaultWorld();
+                BlockId baselineBlock = loadedWorld.GetBlock(changedPosition);
+                result.ApplyTo(loadedWorld);
+                Assert.That(loadedWorld.GetBlock(changedPosition), Is.EqualTo(baselineBlock));
+
+                BlockiverseLogEntry warning = sink.Entries.Single(log =>
+                    log.Category == BlockiverseLogCategory.Persistence &&
+                    log.Level == LogType.Warning &&
+                    log.Message.Contains("registry hash mismatch"));
+                Assert.That(warning.Message, Does.Contain(new DirectoryInfo(path).Name));
+                Assert.That(warning.Message, Does.Not.Contain(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar)));
+            }
+            finally
+            {
+                BlockiverseLog.ResetSinkForTesting();
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void RegistryHashesUseOrdinalOrderingAcrossCultures()
+        {
+            CultureInfo previousCulture = CultureInfo.CurrentCulture;
+
+            try
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+                string enBlockHash = WorldSaveService.ComputeBlockRegistryHash(BlockRegistry.CreateDefault());
+                string enItemHash = WorldSaveService.ComputeItemRegistryHash(ItemRegistry.CreateDefault());
+
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
+                string trBlockHash = WorldSaveService.ComputeBlockRegistryHash(BlockRegistry.CreateDefault());
+                string trItemHash = WorldSaveService.ComputeItemRegistryHash(ItemRegistry.CreateDefault());
+
+                Assert.That(trBlockHash, Is.EqualTo(enBlockHash));
+                Assert.That(trItemHash, Is.EqualTo(enItemHash));
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previousCulture;
+            }
+        }
+
+        [Test]
+        public void RegistryHashImplementationUsesOrdinalStringComparer()
+        {
+            string source = File.ReadAllText("Assets/Blockiverse/Scripts/Persistence/WorldSaveService.cs");
+
+            Assert.That(source, Does.Contain("OrderBy(id => id, StringComparer.Ordinal)"));
+            Assert.That(source, Does.Not.Contain("OrderBy(id => id));"));
+        }
+
+        [Test]
         public void ShouldAutoSaveReturnsTrueAfterIntervalAndFalseBeforeIt()
         {
-            var service = new WorldSaveService();
-
-            Assert.That(service.ShouldAutoSave(0f), Is.False);
-            Assert.That(service.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds - 1f), Is.False);
-            Assert.That(service.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds), Is.True);
-            Assert.That(service.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds + 60f), Is.True);
+            Assert.That(WorldSaveService.ShouldAutoSave(0f), Is.False);
+            Assert.That(WorldSaveService.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds - 1f), Is.False);
+            Assert.That(WorldSaveService.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds), Is.True);
+            Assert.That(WorldSaveService.ShouldAutoSave(WorldSaveService.AutoSaveIntervalSeconds + 60f), Is.True);
         }
 
         [Test]
@@ -285,6 +513,101 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SaveThenLoadReproducesMultiplayerPlayerInventories()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var hostInventory = new Inventory(itemRegistry);
+            var remoteInventory = new Inventory(itemRegistry);
+            hostInventory.SetSlot(5, new ItemStack(ItemId.ReedwoodDelver, 1));
+            remoteInventory.SetSlot(1, new ItemStack(ItemId.FieldBandage, 2));
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(
+                    path,
+                    "multiplayer-inventory-test",
+                    world,
+                    hostInventory,
+                    selectedHotbarSlotIndex: 5,
+                    additionalPlayerInventories: new[]
+                    {
+                        new WorldSavePlayerInventory("client_guid", remoteInventory)
+                    });
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(File.Exists(Path.Combine(path, "players", "mp_client_guid.json")), Is.True);
+                Assert.That(result.Data.PlayerInventory.SelectedHotbarSlotIndex, Is.EqualTo(5));
+                Assert.That(result.CreateInventory(itemRegistry).GetSlot(5), Is.EqualTo(new ItemStack(ItemId.ReedwoodDelver, 1)));
+                Assert.That(result.Data.MultiplayerPlayerInventories, Has.Length.EqualTo(1));
+                Assert.That(result.Data.MultiplayerPlayerInventories[0].PlayerId, Is.EqualTo("client_guid"));
+
+                Inventory loadedRemote = WorldSaveService.CreateInventoryFromData(
+                    result.Data.MultiplayerPlayerInventories[0].Inventory,
+                    itemRegistry);
+                Assert.That(loadedRemote.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.FieldBandage, 2)));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SaveThenLoadReproducesSharedCrateInventory()
+        {
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var sharedCrate = new Inventory(itemRegistry, slotCount: 12, hotbarSlotCount: 0);
+            sharedCrate.SetSlot(3, new ItemStack(ItemId.BranchwoodLog, 4));
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(
+                    path,
+                    "shared-crate-test",
+                    world,
+                    new Inventory(itemRegistry),
+                    extras: new WorldSaveExtras { SharedCrateInventory = sharedCrate });
+
+                WorldLoadResult result = service.Load(path);
+
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(File.Exists(Path.Combine(path, "players", "shared_crate.json")), Is.True);
+                Assert.That(result.Data.SharedCrateInventory, Is.Not.Null);
+
+                Inventory loadedCrate = WorldSaveService.CreateInventoryFromData(
+                    result.Data.SharedCrateInventory,
+                    itemRegistry);
+                Assert.That(loadedCrate.SlotCount, Is.EqualTo(12));
+                Assert.That(loadedCrate.HotbarSlotCount, Is.EqualTo(0));
+                Assert.That(loadedCrate.GetSlot(3), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 4)));
+
+                sharedCrate.ClearSlot(3);
+                service.Save(
+                    path,
+                    "shared-crate-test",
+                    world,
+                    new Inventory(itemRegistry),
+                    extras: new WorldSaveExtras { SharedCrateInventory = sharedCrate });
+
+                WorldLoadResult emptied = service.Load(path);
+                Assert.That(emptied.Success, Is.True, emptied.Error);
+                Assert.That(File.Exists(Path.Combine(path, "players", "shared_crate.json")), Is.False);
+                Assert.That(emptied.Data.SharedCrateInventory, Is.Null);
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void SurvivalInventorySnapshotRoundTripsThroughSave()
         {
             string path = CreateTempSavePath();
@@ -350,8 +673,8 @@ namespace Blockiverse.Tests.EditMode
         {
             string path = CreateTempSavePath();
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            VoxelWorld firstWorld = new FlatCreativeWorldPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
-            VoxelWorld secondWorld = new FlatCreativeWorldPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
+            VoxelWorld firstWorld = new FlatBuilderPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
+            VoxelWorld secondWorld = new FlatBuilderPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
             secondWorld.SetBlock(new BlockPosition(2, 2, 2), BlockRegistry.LumenQuartzCluster);
 
             try
@@ -796,7 +1119,7 @@ namespace Blockiverse.Tests.EditMode
                     Slots = new[]
                     {
                         new SavedContainerSlot { CanonicalId = "reed_fiber", Count = 6 },
-                        new SavedContainerSlot { CanonicalId = "stout_pole", Count = 2 },
+                        new SavedContainerSlot { CanonicalId = "reedwood_feller", Count = 1, Durability = 7 },
                     }
                 },
                 new SavedContainer { X = 5, Y = 6, Z = 7, Slots = System.Array.Empty<SavedContainerSlot>() },
@@ -818,6 +1141,7 @@ namespace Blockiverse.Tests.EditMode
                 SavedContainer full = result.Data.Containers.First(c => c.X == 2 && c.Y == 3 && c.Z == 4);
                 Assert.That(full.Slots.Length, Is.EqualTo(2));
                 Assert.That(full.Slots.First(s => s.CanonicalId == "reed_fiber").Count, Is.EqualTo(6));
+                Assert.That(full.Slots.First(s => s.CanonicalId == "reedwood_feller").Durability, Is.EqualTo(7));
 
                 SavedContainer emptied = result.Data.Containers.First(c => c.X == 5);
                 Assert.That(emptied.Slots, Is.Empty, "An emptied container persists as a zero-slot entry.");
@@ -826,6 +1150,88 @@ namespace Blockiverse.Tests.EditMode
             {
                 DeleteIfExists(path);
             }
+        }
+
+        [Test]
+        public void ContainerMapperPersistsEmptyContainersAndSlots()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var store = new ContainerInventoryStore(itemRegistry, slotCount: 3);
+            var emptyPosition = new BlockPosition(1, 2, 3);
+            var filledPosition = new BlockPosition(4, 5, 6);
+            store.GetOrCreate(emptyPosition);
+            store.GetOrCreate(filledPosition).SetSlot(0, new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(11));
+
+            SavedContainer[] saved = WorldSaveContainerMapper.BuildSavedContainers(store).ToArray();
+
+            Assert.That(saved, Has.Length.EqualTo(2));
+            Assert.That(saved.First(c => c.X == emptyPosition.X && c.Y == emptyPosition.Y && c.Z == emptyPosition.Z).Slots, Is.Empty);
+            SavedContainer filled = saved.First(c => c.X == filledPosition.X && c.Y == filledPosition.Y && c.Z == filledPosition.Z);
+            Assert.That(filled.Slots, Has.Length.EqualTo(1));
+            Assert.That(filled.Slots[0].CanonicalId, Is.EqualTo(ItemId.ReedwoodFeller.Value));
+            Assert.That(filled.Slots[0].Count, Is.EqualTo(1));
+            Assert.That(filled.Slots[0].Durability, Is.EqualTo(11));
+        }
+
+        [Test]
+        public void ContainerMapperSkipsInvalidRestoreSlots()
+        {
+            var saved = new[]
+            {
+                new SavedContainer
+                {
+                    X = 2,
+                    Y = 3,
+                    Z = 4,
+                    Slots = new[]
+                    {
+                        new SavedContainerSlot { CanonicalId = "reedwood_feller", Count = 1, Durability = 9 },
+                        new SavedContainerSlot { CanonicalId = string.Empty, Count = 1 },
+                        new SavedContainerSlot { CanonicalId = "stout_pole", Count = 0 },
+                    }
+                }
+            };
+            int invalidSlots = 0;
+
+            var restored = WorldSaveContainerMapper.BuildRestoredContainers(saved, (_, _) => invalidSlots++);
+
+            Assert.That(restored, Has.Count.EqualTo(1));
+            var entry = restored[0];
+            Assert.That(entry.Position, Is.EqualTo(new BlockPosition(2, 3, 4)));
+            var items = entry.Items.ToArray();
+            Assert.That(items, Has.Length.EqualTo(1));
+            Assert.That(items[0].ItemId, Is.EqualTo("reedwood_feller"));
+            Assert.That(items[0].Count, Is.EqualTo(1));
+            Assert.That(items[0].Durability, Is.EqualTo(9));
+            Assert.That(invalidSlots, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void StationStateMapperPreservesSlotDurability()
+        {
+            var position = new BlockPosition(2, 3, 4);
+            var states = new[]
+            {
+                new MultiplayerSurvivalSync.StationPersistentState(
+                    position,
+                    CraftingStation.ClayKiln,
+                    new[] { new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(7) },
+                    new ItemStack(ItemId.ReedwoodMallet, 1).WithDurability(8),
+                    new ItemStack(ItemId.FlintDelver, 1).WithDurability(9),
+                    ItemId.FiredBrick,
+                    progressTicks: 12)
+            };
+
+            VxlwStation[] saved = WorldSaveStateMapper.ToSavedStations(states);
+            var restored = WorldSaveStateMapper.FromSavedStations(saved);
+
+            Assert.That(saved[0].Inputs[0].Durability, Is.EqualTo(7));
+            Assert.That(saved[0].Fuel.Durability, Is.EqualTo(8));
+            Assert.That(saved[0].Output.Durability, Is.EqualTo(9));
+            Assert.That(restored, Has.Count.EqualTo(1));
+            Assert.That(restored[0].Inputs[0], Is.EqualTo(new ItemStack(ItemId.ReedwoodFeller, 1).WithDurability(7)));
+            Assert.That(restored[0].Fuel, Is.EqualTo(new ItemStack(ItemId.ReedwoodMallet, 1).WithDurability(8)));
+            Assert.That(restored[0].Output, Is.EqualTo(new ItemStack(ItemId.FlintDelver, 1).WithDurability(9)));
         }
 
         [Test]
@@ -1069,7 +1475,21 @@ namespace Blockiverse.Tests.EditMode
         static VoxelWorld CreateDefaultWorld()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            return new FlatCreativeWorldPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
+            return new FlatBuilderPreset(registry, WorldGenerationSettings.CreateDefaultCreative()).Generate();
+        }
+
+        static void ReplaceFirstRegionPaletteEntry(string path, string canonicalId)
+        {
+            string regionsDir = Path.Combine(path, "dimensions", "main", "regions");
+            string regionPath = Directory.GetFiles(regionsDir, "r.*.*.vxlr").Single();
+            VxlwRegionFile region = JsonUtility.FromJson<VxlwRegionFile>(File.ReadAllText(regionPath));
+
+            Assert.That(region.Chunks, Is.Not.Empty);
+            Assert.That(region.Chunks[0].Sections, Is.Not.Empty);
+            Assert.That(region.Chunks[0].Sections[0].BlockPalette, Is.Not.Empty);
+
+            region.Chunks[0].Sections[0].BlockPalette[0] = canonicalId;
+            File.WriteAllText(regionPath, JsonUtility.ToJson(region, prettyPrint: true));
         }
 
         // Overwrites the saved player file with a valid base inventory plus the supplied

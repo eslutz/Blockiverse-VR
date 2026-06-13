@@ -47,6 +47,8 @@ namespace Blockiverse.Survival
         }
 
         public ItemId Id { get; }
+        public string CanonicalId => Id.IsNone ? "none" : Id.Value;
+        public string DisplayKey => $"item.{CanonicalId}.name";
         public string Name { get; }
         public ItemKind Kind { get; }
         public int MaxStackSize { get; }

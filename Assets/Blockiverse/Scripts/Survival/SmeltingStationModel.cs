@@ -42,8 +42,8 @@ namespace Blockiverse.Survival
                 throw new ArgumentOutOfRangeException(nameof(inputSlotCount));
 
             this.stationType = stationType;
-            this.itemRegistry = itemRegistry ?? ItemRegistry.CreateDefault();
-            this.recipeBook = recipeBook ?? CraftingRecipeBook.CreateDefault(this.itemRegistry);
+            this.itemRegistry = itemRegistry ?? ItemRegistry.Default;
+            this.recipeBook = recipeBook ?? (ReferenceEquals(this.itemRegistry, ItemRegistry.Default) ? CraftingRecipeBook.Default : CraftingRecipeBook.CreateDefault(this.itemRegistry));
             inputs = new ItemStack[inputSlotCount];
             for (int i = 0; i < inputs.Length; i++)
                 inputs[i] = ItemStack.Empty;
@@ -86,11 +86,14 @@ namespace Blockiverse.Survival
                 return false;
 
             int max = itemRegistry.Get(stack.ItemId).MaxStackSize;
+            if (stack.Count > max)
+                return false;
+
             for (int i = 0; i < inputs.Length; i++)
             {
-                if (!inputs[i].IsEmpty && inputs[i].ItemId == stack.ItemId && inputs[i].Count + stack.Count <= max)
+                if (inputs[i].CanStackWith(stack) && inputs[i].Count + stack.Count <= max)
                 {
-                    inputs[i] = new ItemStack(stack.ItemId, inputs[i].Count + stack.Count);
+                    inputs[i] = inputs[i].WithCount(inputs[i].Count + stack.Count);
                     ContentVersion++;
                     return true;
                 }
@@ -123,14 +126,14 @@ namespace Blockiverse.Survival
                 return true;
             }
 
-            if (Fuel.ItemId != stack.ItemId)
+            if (!Fuel.CanStackWith(stack))
                 return false;
 
             int max = itemRegistry.Get(stack.ItemId).MaxStackSize;
             if (Fuel.Count + stack.Count > max)
                 return false;
 
-            Fuel = new ItemStack(stack.ItemId, Fuel.Count + stack.Count);
+            Fuel = Fuel.WithCount(Fuel.Count + stack.Count);
             ContentVersion++;
             return true;
         }
@@ -144,9 +147,76 @@ namespace Blockiverse.Survival
             return collected;
         }
 
+        public bool TryWithdrawInput(ItemId itemId, int count, out ItemStack withdrawn)
+        {
+            withdrawn = ItemStack.Empty;
+
+            if (IsActive || itemId.IsNone || count <= 0)
+                return false;
+
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                ItemStack slot = inputs[i];
+                if (slot.IsEmpty || slot.ItemId != itemId || slot.Count < count)
+                    continue;
+
+                withdrawn = slot.WithCount(count);
+                inputs[i] = Decrement(slot, count);
+                ContentVersion++;
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool TryWithdrawFuel(ItemId itemId, int count, out ItemStack withdrawn)
+        {
+            withdrawn = ItemStack.Empty;
+
+            if (itemId.IsNone || count <= 0 || Fuel.IsEmpty || Fuel.ItemId != itemId || Fuel.Count < count)
+                return false;
+
+            withdrawn = Fuel.WithCount(count);
+            Fuel = Decrement(Fuel, count);
+            ContentVersion++;
+            return true;
+        }
+
+        public IReadOnlyList<ItemStack> DrainContents()
+        {
+            var contents = new List<ItemStack>(inputs.Length + 2);
+
+            for (int i = 0; i < inputs.Length; i++)
+            {
+                if (inputs[i].IsEmpty)
+                    continue;
+
+                contents.Add(inputs[i]);
+                inputs[i] = ItemStack.Empty;
+            }
+
+            if (!Fuel.IsEmpty)
+            {
+                contents.Add(Fuel);
+                Fuel = ItemStack.Empty;
+            }
+
+            if (!Output.IsEmpty)
+            {
+                contents.Add(Output);
+                Output = ItemStack.Empty;
+            }
+
+            bool wasActive = ActiveRecipe != null || ProgressTicks != 0;
+            ActiveRecipe = null;
+            ProgressTicks = 0;
+            if (contents.Count > 0 || wasActive)
+                ContentVersion++;
+            return contents;
+        }
+
         // Applies a host-authoritative snapshot to this client-side display mirror. Mirrors are
-        // never ticked locally (the host owns station ticking); progress between snapshots is
-        // extrapolated by the displaying panel only.
+        // never ticked locally (the host owns station ticking).
         public void ApplyHostSnapshot(
             ItemStack[] snapshotInputs,
             ItemStack fuel,
@@ -278,13 +348,13 @@ namespace Blockiverse.Survival
         {
             if (current.IsEmpty)
                 return addition;
-            return new ItemStack(current.ItemId, current.Count + addition.Count);
+            return current.WithCount(current.Count + addition.Count);
         }
 
         static ItemStack Decrement(ItemStack stack, int amount)
         {
             int remaining = stack.Count - amount;
-            return remaining > 0 ? new ItemStack(stack.ItemId, remaining) : ItemStack.Empty;
+            return remaining > 0 ? stack.WithCount(remaining) : ItemStack.Empty;
         }
     }
 }

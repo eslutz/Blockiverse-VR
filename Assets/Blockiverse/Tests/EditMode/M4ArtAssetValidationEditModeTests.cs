@@ -53,21 +53,57 @@ namespace Blockiverse.Tests.EditMode
             TextureImporter importer = AssetImporter.GetAtPath(BlockVisualAtlas.AuthoredAtlasPath) as TextureImporter;
 
             Assert.That(atlas, Is.Not.Null);
-            Assert.That(atlas.width, Is.EqualTo(BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels));
-            Assert.That(atlas.height, Is.EqualTo(BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels));
+            Assert.That(atlas.width, Is.EqualTo(BlockVisualAtlas.AtlasWidthPixels));
+            Assert.That(atlas.height, Is.EqualTo(BlockVisualAtlas.AtlasHeightPixels));
             Assert.That(importer, Is.Not.Null);
-            Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Point));
+            Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Trilinear));
             Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp));
-            Assert.That(importer.mipmapEnabled, Is.False);
+            Assert.That(importer.mipmapEnabled, Is.True);
+            Assert.That(importer.anisoLevel, Is.GreaterThanOrEqualTo(4));
 
             TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
             Assert.That(androidSettings.overridden, Is.True);
+            Assert.That(androidSettings.textureCompression, Is.Not.EqualTo(TextureImporterCompression.Uncompressed));
             // The atlas is non-square; Android max texture size must be large
             // enough to hold the larger dimension without downscaling (which would misalign tiles), and
             // no larger than the next power of two above it to keep the Quest texture budget tight.
-            int largestAtlasDimension = Math.Max(BlockVisualAtlas.Columns, BlockVisualAtlas.Rows) * BlockVisualAtlas.TilePixels;
+            int largestAtlasDimension = Math.Max(BlockVisualAtlas.AtlasWidthPixels, BlockVisualAtlas.AtlasHeightPixels);
             Assert.That(androidSettings.maxTextureSize, Is.GreaterThanOrEqualTo(largestAtlasDimension));
             Assert.That(androidSettings.maxTextureSize, Is.LessThanOrEqualTo(NextPowerOfTwo(largestAtlasDimension)));
+        }
+
+        [Test]
+        public void LaunchArtworkUsesCompressedFilteredMipmappedImportSettings()
+        {
+            Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            TextureImporter importer = AssetImporter.GetAtPath(BlockiverseProject.LaunchArtworkPath) as TextureImporter;
+
+            Assert.That(launchArtwork, Is.Not.Null);
+            Assert.That(importer, Is.Not.Null);
+            Assert.That(importer.mipmapEnabled, Is.True, "Launch backdrop is scaled in VR UI and must sample from mipmaps.");
+            Assert.That(importer.streamingMipmaps, Is.True, "Large menu backdrop should participate in texture streaming.");
+            Assert.That(importer.filterMode, Is.Not.EqualTo(FilterMode.Point), "Launch backdrop should not use blocky point filtering.");
+
+            TextureImporterPlatformSettings defaultSettings = importer.GetDefaultPlatformTextureSettings();
+            TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
+
+            Assert.That(defaultSettings.textureCompression, Is.Not.EqualTo(TextureImporterCompression.Uncompressed));
+            Assert.That(androidSettings.overridden, Is.True);
+            Assert.That(androidSettings.textureCompression, Is.Not.EqualTo(TextureImporterCompression.Uncompressed));
+            Assert.That(androidSettings.maxTextureSize, Is.LessThanOrEqualTo(2048));
+        }
+
+        [Test]
+        public void GeneratedUiAndVfxSpritesAreReferencedByBootstrapperWiring()
+        {
+            string[] bootstrapperFiles = Directory
+                .GetFiles("Assets/Blockiverse/Scripts/Editor", "BlockiverseProjectBootstrapper*.cs")
+                .OrderBy(path => path)
+                .ToArray();
+            string bootstrapperSource = string.Join("\n", bootstrapperFiles.Select(File.ReadAllText));
+
+            foreach (string spriteName in UiSpriteNames.Concat(VfxSpriteNames))
+                Assert.That(bootstrapperSource, Does.Contain(spriteName), $"{spriteName} must be wired into generated runtime UI/VFX.");
         }
 
         [Test]
@@ -108,9 +144,75 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ItemTextureFilesMatchRegisteredItemIds()
+        {
+            var registeredIds = new HashSet<string>(
+                ItemRegistry.CreateDefault().All
+                    .Where(item => !item.Id.IsNone)
+                    .Select(item => item.Id.Value),
+                StringComparer.OrdinalIgnoreCase);
+            string[] orphanTextureIds = Directory
+                .GetFiles("Assets/Blockiverse/Art/Textures/Items", "*.png", SearchOption.TopDirectoryOnly)
+                .Select(path => Path.GetFileNameWithoutExtension(path))
+                .Where(id => !registeredIds.Contains(id))
+                .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            Assert.That(orphanTextureIds, Is.Empty, $"Item icon textures without registered item IDs: {string.Join(", ", orphanTextureIds)}");
+        }
+
+        [Test]
+        public void EveryRegisteredItemResolvesGeneratedIconSprite()
+        {
+            ItemDefinition[] items = ItemRegistry.CreateDefault().All
+                .Where(item => !item.Id.IsNone)
+                .ToArray();
+            string[] ids = items.Select(item => item.Id.Value).ToArray();
+            Sprite[] sprites = ids
+                .Select(id => AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Textures/Items/{id}.png"))
+                .ToArray();
+            var iconLibraryObject = new GameObject("Item Icon Library Test");
+            try
+            {
+                BlockiverseItemIconLibrary library = iconLibraryObject.AddComponent<BlockiverseItemIconLibrary>();
+                library.Configure(ids, sprites);
+
+                foreach (ItemDefinition item in items)
+                {
+                    Assert.That(
+                        library.TryGetIcon(item.Id, out Sprite sprite),
+                        Is.True,
+                        $"Expected icon library to resolve {item.Id.Value}.");
+                    Assert.That(sprite, Is.Not.Null, $"Expected generated icon sprite for {item.Id.Value}.");
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(iconLibraryObject);
+            }
+        }
+
+        [Test]
+        public void IconLibraryConfigureRejectsMismatchedArrayLengths()
+        {
+            var iconLibraryObject = new GameObject("Item Icon Library Test");
+            try
+            {
+                BlockiverseItemIconLibrary library = iconLibraryObject.AddComponent<BlockiverseItemIconLibrary>();
+
+                Assert.Throws<ArgumentException>(() =>
+                    library.Configure(new[] { ItemId.ReedFiber.Value }, Array.Empty<Sprite>()));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(iconLibraryObject);
+            }
+        }
+
+        [Test]
         public void AuthoredAtlasMaterialUsesExpectedTexture()
         {
-            Material sourceMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.TestBlockMaterialPath);
+            Material sourceMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
 
             Material material = BlockVisualAtlas.CreateMaterial(sourceMaterial);
 
@@ -118,6 +220,17 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(BlockVisualAtlas.TryGetBaseTexture(material, out Texture texture), Is.True);
             Assert.That(texture, Is.SameAs(AssetDatabase.LoadAssetAtPath<Texture2D>(BlockVisualAtlas.AuthoredAtlasPath)));
             Assert.That(BlockVisualAtlas.IsAuthoredAtlasTexture(texture), Is.True);
+        }
+
+        [Test]
+        public void VoxelLitShaderIsAlwaysIncludedForPlayerBuilds()
+        {
+            string shaderPath = "Assets/Blockiverse/Shaders/BlockiverseVoxelLit.shader";
+            string shaderGuid = AssetDatabase.AssetPathToGUID(shaderPath);
+            string graphicsSettings = File.ReadAllText("ProjectSettings/GraphicsSettings.asset");
+
+            Assert.That(shaderGuid, Is.Not.Empty);
+            Assert.That(graphicsSettings, Does.Contain($"guid: {shaderGuid}"));
         }
 
         [Test]
@@ -141,8 +254,8 @@ namespace Blockiverse.Tests.EditMode
         {
             Material sourceMaterial = new(Shader.Find("Sprites/Default"));
             Texture2D unrelatedTexture = new(
-                BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels,
-                BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels,
+                BlockVisualAtlas.AtlasWidthPixels,
+                BlockVisualAtlas.AtlasHeightPixels,
                 TextureFormat.RGBA32,
                 mipChain: false)
             {

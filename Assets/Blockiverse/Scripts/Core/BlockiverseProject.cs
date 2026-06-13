@@ -21,8 +21,8 @@ namespace Blockiverse.Core
         public const string AndroidBrandingLibraryPath = "Assets/Plugins/Android/BlockiverseBranding.androidlib";
         public const string AndroidAppStringsPath = AndroidBrandingLibraryPath + "/res/values/strings.xml";
         public const string PointerLineMaterialPath = "Assets/Blockiverse/Materials/BlockiversePointerLine.mat";
-        public const string HighlightMaterialPath = "Assets/Blockiverse/Materials/BlockiverseHighlight.mat";
-        public const string TestBlockMaterialPath = "Assets/Blockiverse/Materials/BlockiverseTestBlock.mat";
+        public const string VfxParticleMaterialPath = "Assets/Blockiverse/Materials/BlockiverseVfxParticle.mat";
+        public const string ChunkAtlasMaterialPath = "Assets/Blockiverse/Materials/BlockiverseChunkAtlas.mat";
         public const string InteractionLayerName = "BlockiverseInteractable";
     }
 }

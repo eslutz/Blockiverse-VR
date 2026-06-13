@@ -444,7 +444,7 @@ Comfort rules:
 | Setting | Effect |
 |---|---|
 | Reduced Flash disabled | Lightning flash may briefly raise sky/key light. |
-| Reduced Flash enabled | Use muted sky pulse only; no high-contrast full-screen flash. |
+| Reduced Flash enabled | Suppress lightning flash VFX entirely; thunder audio may still convey the storm. |
 | Weather volume low | Thunder respects weather bus volume. |
 | Haptics disabled | No thunder rumble. |
 
@@ -542,7 +542,7 @@ inventory item count animation
 | Mute All | Mutes all game audio except platform/system audio outside game control. |
 | Haptics Toggle | Disables all game-triggered haptics. |
 | Haptic Intensity | Scales amplitudes 0–100%. |
-| Reduced Flash | Reduces lightning and intense VFX pulses. |
+| Reduced Flash | Suppresses lightning flashes and reduces other intense VFX pulses where available. |
 | Reduced Particles | Lowers particle counts for weather and block effects. |
 | Feedback Toasts | Shows text/icon confirmation for important audio-only events. |
 
@@ -568,7 +568,7 @@ block edit disabled: haptic/UI hint + status icon
 | Weather particles visible | ≤ 250 rain or ≤ 160 snow for the initial Quest budget. |
 | Total active audio voices | ≤ 24. |
 | Long-running spatial loops | ≤ 8 nearest relevant loops. |
-| Lightning flash duration | ≤ 0.12s, reduced by accessibility setting. |
+| Lightning flash duration | ≤ 0.12s, suppressed by Reduced Flash. |
 | Full-screen overdraw effects | Avoid for Quest comfort and performance. |
 | Particle collision | Avoid except cheap rain splash approximations. |
 
@@ -684,7 +684,7 @@ Haptics can be disabled and intensity-scaled.
 Block break/place feedback works in single-player, LAN host, and LAN client modes.
 Rejected client edits do not play final confirmation feedback.
 VFX are pooled and allocate no garbage during repeated block edits.
-Reduced Flash lowers lightning intensity.
+Reduced Flash suppresses lightning flash VFX.
 Reduced Particles lowers weather/block particle counts.
 Quest-device smoke testing confirms no obvious audio clipping, runaway haptics, or particle frame spikes.
 ```

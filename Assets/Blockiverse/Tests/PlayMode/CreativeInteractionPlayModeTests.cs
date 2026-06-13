@@ -1,3 +1,4 @@
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using NUnit.Framework;
@@ -101,6 +102,49 @@ namespace Blockiverse.Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(hotbarObject);
+            }
+        }
+
+        [Test]
+        public void BlockedWorldInputRejectsBreakPlaceAndUndoWithoutMutatingWorld()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            var breakPosition = new BlockPosition(1, 1, 1);
+            var placePosition = new BlockPosition(2, 1, 1);
+            world.SetBlock(breakPosition, BlockRegistry.MeadowTurf, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+
+            var controllerObject = new GameObject("Creative Controller");
+            var hotbarObject = new GameObject("Hotbar");
+
+            try
+            {
+                CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam }, null);
+
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
+                Assert.That(controller.TryBreakBlock(breakPosition), Is.True);
+                Assert.That(controller.UndoLast(), Is.True);
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+                Assert.That(controller.TryBreakBlock(breakPosition), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.WorldInputBlocked));
+                Assert.That(world.GetBlock(breakPosition), Is.EqualTo(BlockRegistry.MeadowTurf));
+
+                Assert.That(controller.TryPlaceAt(placePosition), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.WorldInputBlocked));
+                Assert.That(world.GetBlock(placePosition), Is.EqualTo(BlockRegistry.Air));
+
+                Assert.That(controller.UndoLast(), Is.False);
+                Assert.That(controller.LastMutationResult.RejectionReason, Is.EqualTo(BlockMutationRejectionReason.WorldInputBlocked));
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
                 Object.DestroyImmediate(controllerObject);
                 Object.DestroyImmediate(hotbarObject);
             }
@@ -413,8 +457,8 @@ namespace Blockiverse.Tests.PlayMode
         static Material CreateBlockAtlasMaterial(out Texture2D atlasTexture)
         {
             atlasTexture = new Texture2D(
-                BlockVisualAtlas.Columns * BlockVisualAtlas.TilePixels,
-                BlockVisualAtlas.Rows * BlockVisualAtlas.TilePixels,
+                BlockVisualAtlas.AtlasWidthPixels,
+                BlockVisualAtlas.AtlasHeightPixels,
                 TextureFormat.RGBA32,
                 mipChain: false)
             {

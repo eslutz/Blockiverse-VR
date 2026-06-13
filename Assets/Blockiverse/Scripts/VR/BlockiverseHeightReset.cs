@@ -21,9 +21,33 @@ namespace Blockiverse.VR
             if (origin == null)
                 return;
 
-            origin.CameraYOffset = settings != null
+            ApplyStandingEyeHeight(settings != null
                 ? settings.StandingEyeHeight
-                : DefaultStandingEyeHeight;
+                : DefaultStandingEyeHeight);
+        }
+
+        public void ApplyStandingEyeHeight(float standingEyeHeight)
+        {
+            if (origin == null)
+                return;
+
+            origin.CameraYOffset = standingEyeHeight;
+
+            if (origin.RequestedTrackingOriginMode != XROrigin.TrackingOriginMode.Floor)
+                return;
+
+            Transform cameraOffset = origin.CameraFloorOffsetObject != null
+                ? origin.CameraFloorOffsetObject.transform
+                : null;
+            if (cameraOffset == null)
+                return;
+
+            float trackedEyeHeight = origin.Camera != null
+                ? origin.Camera.transform.localPosition.y
+                : 0.0f;
+            Vector3 offset = cameraOffset.localPosition;
+            offset.y = standingEyeHeight - trackedEyeHeight;
+            cameraOffset.localPosition = offset;
         }
     }
 }

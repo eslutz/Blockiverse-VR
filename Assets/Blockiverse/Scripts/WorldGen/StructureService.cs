@@ -5,7 +5,23 @@ using Blockiverse.Voxel;
 namespace Blockiverse.WorldGen
 {
     public enum StructureDegradation { Intact, Weathered, Ruined, Crumbled }
-    public enum StructureTerrainFit  { SnapToSurface, Flatten }
+    enum StructurePlacementKind { Surface, Underground, CaveFeature }
+
+    public readonly struct StructureCatalogEntry
+    {
+        public readonly string Id;
+        public readonly bool IsUnderground;
+        public readonly int MinDistanceFromSpawn;
+        public readonly string LootTableId;
+
+        public StructureCatalogEntry(string id, bool isUnderground, int minDistanceFromSpawn, string lootTableId)
+        {
+            Id = id;
+            IsUnderground = isUnderground;
+            MinDistanceFromSpawn = minDistanceFromSpawn;
+            LootTableId = lootTableId;
+        }
+    }
 
     // One stack of rolled container loot (canonical item id + count). Kept string-based so the
     // WorldGen assembly need not depend on the Survival item registry.
@@ -45,6 +61,11 @@ namespace Blockiverse.WorldGen
         public readonly bool HasLoot;
         public readonly bool HasStation;
         public readonly string LootTableId; // which StructureLootTable fills this structure's crate
+        public readonly StructurePlacementKind PlacementKind;
+        public readonly BlockId PrimaryBlock;
+        public readonly BlockId StationBlock;
+        public readonly int MinPlacementY;
+        public readonly int MaxPlacementY;
 
         public StructureDefinition(
             string id,
@@ -54,7 +75,12 @@ namespace Blockiverse.WorldGen
             StructureDegradation maxDegradation = StructureDegradation.Ruined,
             bool hasLoot = false,
             bool hasStation = false,
-            string lootTableId = null)
+            string lootTableId = null,
+            StructurePlacementKind placementKind = StructurePlacementKind.Surface,
+            BlockId? primaryBlock = null,
+            BlockId? stationBlock = null,
+            int minPlacementY = 0,
+            int maxPlacementY = int.MaxValue)
         {
             Id = id;
             AllowedBiomes = allowedBiomes;
@@ -64,6 +90,11 @@ namespace Blockiverse.WorldGen
             HasLoot = hasLoot;
             HasStation = hasStation;
             LootTableId = lootTableId ?? StructureLootTable.CommonSupply.Id;
+            PlacementKind = placementKind;
+            PrimaryBlock = primaryBlock ?? BlockRegistry.Graystone;
+            StationBlock = stationBlock ?? BlockRegistry.Campfire;
+            MinPlacementY = minPlacementY;
+            MaxPlacementY = maxPlacementY;
         }
     }
 
@@ -77,21 +108,61 @@ namespace Blockiverse.WorldGen
         // Number of TerrainBiome enum values; biome indices are wrapped into this range.
         const int BiomeCount = 7;
 
+        static readonly TerrainBiome[] AllBiomes =
+        {
+            TerrainBiome.Meadow,
+            TerrainBiome.Pinewild,
+            TerrainBiome.Wetland,
+            TerrainBiome.Drybrush,
+            TerrainBiome.Dunes,
+            TerrainBiome.Tundra,
+            TerrainBiome.Highlands,
+        };
+
+        static readonly TerrainBiome[] AllExceptDunes =
+        {
+            TerrainBiome.Meadow,
+            TerrainBiome.Pinewild,
+            TerrainBiome.Wetland,
+            TerrainBiome.Drybrush,
+            TerrainBiome.Tundra,
+            TerrainBiome.Highlands,
+        };
+
         static readonly StructureDefinition[] Catalog =
         {
-            new("pathmark_stones",     new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Wetland, TerrainBiome.Drybrush, TerrainBiome.Highlands, TerrainBiome.Tundra }, 80, minDistanceFromSpawn: 20, StructureDegradation.Weathered),
-            new("forager_lean_to",     new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Drybrush }, 55, hasLoot: true, lootTableId: "loot_forager_food"),
-            new("resin_tap_grove",     new[]{ TerrainBiome.Pinewild, TerrainBiome.Meadow }, 35, hasLoot: true, hasStation: false),
-            new("frost_shelter",       new[]{ TerrainBiome.Tundra, TerrainBiome.Highlands }, 30, hasLoot: true, hasStation: true),
-            new("drybrush_niter_pit",  new[]{ TerrainBiome.Drybrush, TerrainBiome.Dunes }, 30, hasLoot: true),
-            new("weathered_watchpost", new[]{ TerrainBiome.Meadow, TerrainBiome.Drybrush, TerrainBiome.Highlands }, 20, minDistanceFromSpawn: 128, hasLoot: true, hasStation: true),
-            // Rare finds: a shrine tucked into the first cave pocket under its column (surface
-            // fallback when the column has no cave), and a weathered plank crossing. The shrine
-            // is the reliable all-biome loot source, so it stays placeable across the map (a small
-            // spawn keep-out only) rather than corner-confined like the high-minDistance ruins.
-            new("cave_shrine",         new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Wetland, TerrainBiome.Drybrush, TerrainBiome.Dunes, TerrainBiome.Tundra, TerrainBiome.Highlands }, 10, minDistanceFromSpawn: 28, StructureDegradation.Weathered, hasLoot: true),
-            new("bridge_segment",      new[]{ TerrainBiome.Meadow, TerrainBiome.Wetland, TerrainBiome.Pinewild }, 12, minDistanceFromSpawn: 28, StructureDegradation.Weathered),
+            new("pathmark_stones",       AllExceptDunes, 95, minDistanceFromSpawn: 20, maxDegradation: StructureDegradation.Weathered),
+            new("old_wayflag",           new[]{ TerrainBiome.Meadow, TerrainBiome.Drybrush, TerrainBiome.Highlands }, 45, minDistanceFromSpawn: 24, maxDegradation: StructureDegradation.Weathered, hasLoot: true, lootTableId: StructureLootTable.EmptyRuinId, primaryBlock: BlockRegistry.CutstoneBlock),
+            new("fallen_branchwood",     new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Tundra }, 70, minDistanceFromSpawn: 24, maxDegradation: StructureDegradation.Weathered, primaryBlock: BlockRegistry.SmoothBranchwood),
+            new("saltmarker_cairn",      new[]{ TerrainBiome.Dunes, TerrainBiome.Drybrush }, 45, minDistanceFromSpawn: 24, maxDegradation: StructureDegradation.Weathered, hasLoot: true, lootTableId: StructureLootTable.MinerCacheId, primaryBlock: BlockRegistry.WarmGranite),
+            new("frostmarker_cairn",     new[]{ TerrainBiome.Tundra, TerrainBiome.Highlands }, 45, minDistanceFromSpawn: 24, maxDegradation: StructureDegradation.Weathered, hasLoot: true, lootTableId: StructureLootTable.CommonSupplyId, primaryBlock: BlockRegistry.DarkSlate),
+
+            new("forager_lean_to",       new[]{ TerrainBiome.Meadow, TerrainBiome.Pinewild, TerrainBiome.Drybrush }, 55, hasLoot: true, lootTableId: StructureLootTable.ForagerFoodId, primaryBlock: BlockRegistry.BranchwoodLog),
+            new("resin_tap_grove",       new[]{ TerrainBiome.Pinewild, TerrainBiome.Meadow }, 35, hasLoot: true, lootTableId: StructureLootTable.BuilderCacheId, primaryBlock: BlockRegistry.BranchwoodLog),
+            new("wetland_stilt_cache",   new[]{ TerrainBiome.Wetland }, 35, minDistanceFromSpawn: 64, hasLoot: true, lootTableId: StructureLootTable.ForagerFoodId, primaryBlock: BlockRegistry.WorkPlank),
+            new("drybrush_niter_pit",    new[]{ TerrainBiome.Drybrush, TerrainBiome.Dunes }, 30, hasLoot: true, lootTableId: StructureLootTable.MinerCacheId, primaryBlock: BlockRegistry.ShingleGravel),
+            new("frost_shelter",         new[]{ TerrainBiome.Tundra, TerrainBiome.Highlands }, 30, hasLoot: true, hasStation: true, lootTableId: StructureLootTable.ForagerFoodId, primaryBlock: BlockRegistry.DarkSlate),
+            new("bridge_segment",        new[]{ TerrainBiome.Meadow, TerrainBiome.Wetland, TerrainBiome.Pinewild }, 35, minDistanceFromSpawn: 28, maxDegradation: StructureDegradation.Weathered),
+
+            new("weathered_watchpost",   new[]{ TerrainBiome.Meadow, TerrainBiome.Drybrush, TerrainBiome.Highlands }, 20, minDistanceFromSpawn: 56, hasLoot: true, hasStation: true, lootTableId: StructureLootTable.BuilderCacheId, primaryBlock: BlockRegistry.CutstoneBlock, stationBlock: BlockRegistry.MendBench),
+            new("ruined_kiln_yard",      new[]{ TerrainBiome.Meadow, TerrainBiome.Drybrush, TerrainBiome.Dunes }, 18, hasLoot: true, hasStation: true, lootTableId: StructureLootTable.BuilderCacheId, primaryBlock: BlockRegistry.FiredBrickBlock, stationBlock: BlockRegistry.ClayKiln),
+            new("mossroot_hut_cluster",  new[]{ TerrainBiome.Pinewild, TerrainBiome.Wetland }, 12, hasLoot: true, lootTableId: StructureLootTable.ForagerFoodId, primaryBlock: BlockRegistry.Rootsoil),
+            new("sunmetal_survey_tower", new[]{ TerrainBiome.Dunes, TerrainBiome.Highlands }, 6, hasLoot: true, lootTableId: StructureLootTable.MetalCacheId, primaryBlock: BlockRegistry.WarmGranite),
+            new("frost_beacon_ruin",     new[]{ TerrainBiome.Tundra, TerrainBiome.Highlands }, 6, hasLoot: true, lootTableId: StructureLootTable.MetalCacheId, primaryBlock: BlockRegistry.DarkSlate),
+
+            // Underground/cave entries use a compact procedural room until authored templates
+            // exist. The cave shrine keeps its existing cave-pocket fallback behavior.
+            new("cave_shrine",           AllBiomes, 10, minDistanceFromSpawn: 28, maxDegradation: StructureDegradation.Weathered, hasLoot: true, lootTableId: StructureLootTable.CommonSupplyId, placementKind: StructurePlacementKind.CaveFeature),
+            new("stoneburrow_cellar",    AllBiomes, 18, hasLoot: true, lootTableId: StructureLootTable.MinerCacheId, placementKind: StructurePlacementKind.Underground, primaryBlock: BlockRegistry.CutstoneBlock, minPlacementY: 45, maxPlacementY: 110),
+            new("lumen_hollow",          AllBiomes, 22, hasLoot: true, lootTableId: StructureLootTable.MinerCacheId, placementKind: StructurePlacementKind.CaveFeature, primaryBlock: BlockRegistry.WhiteLimestone, minPlacementY: 20, maxPlacementY: 100),
+            new("ember_vent_outpost",    AllBiomes, 12, hasLoot: true, hasStation: true, lootTableId: StructureLootTable.MetalCacheId, placementKind: StructurePlacementKind.CaveFeature, primaryBlock: BlockRegistry.BlackBasalt, stationBlock: BlockRegistry.BellowsForge, minPlacementY: 5, maxPlacementY: 35),
+            new("deep_locker_room",      AllBiomes, 6, hasLoot: true, lootTableId: StructureLootTable.DeepCacheId, placementKind: StructurePlacementKind.Underground, primaryBlock: BlockRegistry.Deepmantle, minPlacementY: 8, maxPlacementY: 28),
+            new("staropal_pocket_shrine",AllBiomes, 3, hasLoot: true, lootTableId: StructureLootTable.DeepCacheId, placementKind: StructurePlacementKind.CaveFeature, primaryBlock: BlockRegistry.Deepmantle, minPlacementY: 2, maxPlacementY: 22),
         };
+
+        static readonly StructureCatalogEntry[] CatalogSnapshot = BuildCatalogSnapshot();
+
+        public static IReadOnlyList<StructureCatalogEntry> CatalogEntries => CatalogSnapshot;
 
         public static void PlaceStructures(
             VoxelWorld world,
@@ -144,25 +215,77 @@ namespace Blockiverse.WorldGen
                     // the fluid top — ruins don't float on water or emberflow (§5.4).
                     if (FluidBlocks.IsFluid(world.GetBlock(new BlockPosition(worldX, surfaceY, worldZ)))) continue;
 
-                    accepted.Add((worldX, worldZ));
                     var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(regionHash % 4u)));
+                    bool placed;
 
                     if (def.Id == "cave_shrine")
+                    {
                         PlaceCaveShrine(world, worldX, surfaceY, worldZ, seed, def, lootSink);
+                        placed = true;
+                    }
                     else if (def.Id == "bridge_segment")
+                    {
                         PlaceBridgeSegment(world, worldX, surfaceY + 1, worldZ, degradation, seed);
+                        placed = true;
+                    }
+                    else if (def.PlacementKind != StructurePlacementKind.Surface)
+                    {
+                        placed = PlaceUndergroundStructure(world, worldX, surfaceY, worldZ, degradation, seed, def, lootSink);
+                    }
                     else
+                    {
                         PlaceRuin(world, worldX, surfaceY + 1, worldZ, degradation, seed, def, lootSink);
+                        placed = true;
+                    }
+
+                    if (placed)
+                        accepted.Add((worldX, worldZ));
                 }
             }
         }
 
         // Creative spawner: places one default ruin with its base at the given position (no
         // degradation, no loot roll). Offline/host creative tools only.
-        public static void PlaceStructureAt(VoxelWorld world, int baseX, int baseY, int baseZ, int seed = 0)
+        public static void PlaceStructureAt(VoxelWorld world, int baseX, int baseY, int baseZ, int seed = 0, bool trackChange = false)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
-            PlaceRuin(world, baseX, baseY, baseZ, StructureDegradation.Intact, seed);
+            PlaceRuin(world, baseX, baseY, baseZ, StructureDegradation.Intact, seed, trackChange: trackChange);
+        }
+
+        public static bool TryPlaceStructureAt(
+            VoxelWorld world,
+            string structureId,
+            int anchorX,
+            int surfaceY,
+            int anchorZ,
+            int seed = 0,
+            List<StructureContainerLoot> lootSink = null,
+            bool trackChange = false)
+        {
+            if (world == null) throw new ArgumentNullException(nameof(world));
+            if (string.IsNullOrWhiteSpace(structureId)) return false;
+
+            StructureDefinition def = FindDefinitionById(structureId);
+            if (def == null)
+                return false;
+
+            if (def.Id == "cave_shrine")
+            {
+                PlaceCaveShrine(world, anchorX, surfaceY, anchorZ, seed, def, lootSink);
+                return true;
+            }
+
+            if (def.Id == "bridge_segment")
+            {
+                PlaceBridgeSegment(world, anchorX, surfaceY + 1, anchorZ, StructureDegradation.Intact, seed);
+                return true;
+            }
+
+            if (def.PlacementKind != StructurePlacementKind.Surface)
+                return PlaceUndergroundStructure(world, anchorX, surfaceY, anchorZ, StructureDegradation.Intact, seed, def, lootSink);
+
+            PlaceRuin(world, anchorX, surfaceY + 1, anchorZ, StructureDegradation.Intact, seed, def, lootSink, trackChange);
+            return true;
         }
 
         public static int FindSurfaceY(VoxelWorld world, int x, int z)
@@ -179,21 +302,31 @@ namespace Blockiverse.WorldGen
             return -1;
         }
 
-        static void PlaceRuin(VoxelWorld world, int baseX, int baseY, int baseZ, StructureDegradation degradation, int seed, StructureDefinition def = null, List<StructureContainerLoot> lootSink = null)
+        static void PlaceRuin(
+            VoxelWorld world,
+            int baseX,
+            int baseY,
+            int baseZ,
+            StructureDegradation degradation,
+            int seed,
+            StructureDefinition def = null,
+            List<StructureContainerLoot> lootSink = null,
+            bool trackChange = false)
         {
             // 5×5 footprint, 3-block-high walls. Each wall block rolls its own degradation skip
             // (hashed over its actual position + wall index) so weathering holes are not
             // mirrored identically onto all four walls.
             const int wallH = 3;
+            BlockId wallBlock = def?.PrimaryBlock ?? BlockRegistry.Graystone;
 
             for (int dy = 0; dy < wallH; dy++)
             {
                 for (int side = 0; side < 5; side++)
                 {
-                    TryPlaceWallBlock(world, new BlockPosition(baseX + side, baseY + dy, baseZ), degradation, seed, wall: 0);
-                    TryPlaceWallBlock(world, new BlockPosition(baseX + side, baseY + dy, baseZ + 4), degradation, seed, wall: 1);
-                    TryPlaceWallBlock(world, new BlockPosition(baseX, baseY + dy, baseZ + side), degradation, seed, wall: 2);
-                    TryPlaceWallBlock(world, new BlockPosition(baseX + 4, baseY + dy, baseZ + side), degradation, seed, wall: 3);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX + side, baseY + dy, baseZ), degradation, seed, wall: 0, solidBlock: wallBlock, trackChange: trackChange);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX + side, baseY + dy, baseZ + 4), degradation, seed, wall: 1, solidBlock: wallBlock, trackChange: trackChange);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX, baseY + dy, baseZ + side), degradation, seed, wall: 2, solidBlock: wallBlock, trackChange: trackChange);
+                    TryPlaceWallBlock(world, new BlockPosition(baseX + 4, baseY + dy, baseZ + side), degradation, seed, wall: 3, solidBlock: wallBlock, trackChange: trackChange);
                 }
             }
 
@@ -202,29 +335,14 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(baseX + 2, baseY, baseZ + 2);
                 if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
-                {
-                    // Worldgen placements are not player changes — keep them out of change tracking
-                    // (matching TrySetSolid) so they don't pollute save deltas.
-                    world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange: false);
-
-                    // Roll this structure's loot table deterministically from the crate position so the
-                    // host and any client that regenerates the world produce identical contents.
-                    if (lootSink != null)
-                    {
-                        uint lootSeed = Hash(seed, baseX, baseY, baseZ, salt: 6151);
-                        StructureLootTable table = StructureLootTable.GetById(def.LootTableId);
-                        List<ContainerLootItem> items = table.Roll(lootSeed);
-                        if (items.Count > 0)
-                            lootSink.Add(new StructureContainerLoot(lootPos, items));
-                    }
-                }
+                    PlaceLootCrate(world, lootPos, seed, baseX, baseY, baseZ, def, lootSink, trackChange);
             }
 
             if (def != null && def.HasStation)
             {
                 var stationPos = new BlockPosition(baseX + 1, baseY, baseZ + 1);
                 if (world.Bounds.Contains(stationPos) && world.GetBlock(stationPos) == BlockRegistry.Air)
-                    world.SetBlock(stationPos, BlockRegistry.Campfire, trackChange: false);
+                    world.SetBlock(stationPos, def.StationBlock, trackChange);
             }
 
             // Place a glowwick inside intact or weathered structures
@@ -232,7 +350,7 @@ namespace Blockiverse.WorldGen
             {
                 var lightPos = new BlockPosition(baseX + 2, baseY + 1, baseZ + 2);
                 if (world.Bounds.Contains(lightPos) && world.GetBlock(lightPos) == BlockRegistry.Air)
-                    world.SetBlock(lightPos, BlockRegistry.Glowwick, trackChange: false);
+                    world.SetBlock(lightPos, BlockRegistry.Glowwick, trackChange);
             }
         }
 
@@ -280,18 +398,37 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(centerX + 1, baseY, centerZ);
                 if (world.Bounds.Contains(lootPos))
-                {
-                    world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange: false);
+                    PlaceLootCrate(world, lootPos, seed, centerX, baseY, centerZ, def, lootSink);
+            }
+        }
 
-                    if (lootSink != null)
-                    {
-                        uint lootSeed = Hash(seed, centerX, baseY, centerZ, salt: 6151);
-                        StructureLootTable table = StructureLootTable.GetById(def.LootTableId);
-                        List<ContainerLootItem> items = table.Roll(lootSeed);
-                        if (items.Count > 0)
-                            lootSink.Add(new StructureContainerLoot(lootPos, items));
-                    }
-                }
+        static void PlaceLootCrate(
+            VoxelWorld world,
+            BlockPosition lootPos,
+            int seed,
+            int anchorX,
+            int anchorY,
+            int anchorZ,
+            StructureDefinition def,
+            List<StructureContainerLoot> lootSink,
+            bool trackChange = false)
+        {
+            if (!world.Bounds.Contains(lootPos))
+                return;
+
+            // Worldgen placements are not player changes — keep them out of change tracking so
+            // they don't pollute save deltas. Creative/admin structure placement may opt in.
+            world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange);
+
+            // Roll this structure's loot table deterministically from the anchor position so the
+            // host and any client that regenerates the world produce identical contents.
+            if (lootSink != null)
+            {
+                uint lootSeed = Hash(seed, anchorX, anchorY, anchorZ, salt: 6151);
+                StructureLootTable table = StructureLootTable.GetById(def.LootTableId);
+                List<ContainerLootItem> items = table.Roll(lootSeed);
+                if (items.Count > 0)
+                    lootSink.Add(new StructureContainerLoot(lootPos, items));
             }
         }
 
@@ -346,19 +483,106 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        static void TryPlaceWallBlock(VoxelWorld world, BlockPosition pos, StructureDegradation degradation, int seed, int wall)
+        // Compact underground/cave room used by the ruleset's deep structure IDs until authored
+        // templates exist. It cuts a reachable shaft from the surface column, builds a small
+        // themed chamber, and rolls the structure's configured loot table.
+        static bool PlaceUndergroundStructure(
+            VoxelWorld world,
+            int centerX,
+            int surfaceY,
+            int centerZ,
+            StructureDegradation degradation,
+            int seed,
+            StructureDefinition def,
+            List<StructureContainerLoot> lootSink)
+        {
+            int maxY = Math.Min(def.MaxPlacementY, surfaceY - 6);
+            int minY = Math.Max(2, def.MinPlacementY);
+            if (maxY < minY)
+                return false;
+
+            int baseY = minY + (int)(Hash(seed, centerX, surfaceY, centerZ, salt: 6211) % (uint)(maxY - minY + 1));
+            const int radius = 2;
+            const int roomHeight = 3;
+
+            for (int y = baseY; y <= surfaceY; y++)
+            {
+                var shaft = new BlockPosition(centerX, y, centerZ);
+                if (world.Bounds.Contains(shaft))
+                    world.SetBlock(shaft, BlockRegistry.Air, trackChange: false);
+            }
+
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                for (int dz = -radius; dz <= radius; dz++)
+                {
+                    var floor = new BlockPosition(centerX + dx, baseY - 1, centerZ + dz);
+                    var ceiling = new BlockPosition(centerX + dx, baseY + roomHeight, centerZ + dz);
+                    if (world.Bounds.Contains(floor))
+                        world.SetBlock(floor, def.PrimaryBlock, trackChange: false);
+                    if (world.Bounds.Contains(ceiling))
+                        world.SetBlock(ceiling, def.PrimaryBlock, trackChange: false);
+
+                    bool wall = Math.Abs(dx) == radius || Math.Abs(dz) == radius;
+                    for (int dy = 0; dy < roomHeight; dy++)
+                    {
+                        var cell = new BlockPosition(centerX + dx, baseY + dy, centerZ + dz);
+                        if (!world.Bounds.Contains(cell))
+                            continue;
+
+                        if (wall)
+                        {
+                            int skipChance = Math.Min(45, (int)degradation * 12);
+                            if (skipChance > 0 && Hash(seed, cell.X, cell.Y, cell.Z, salt: 6221) % 100u < (uint)skipChance)
+                                world.SetBlock(cell, BlockRegistry.Air, trackChange: false);
+                            else
+                                world.SetBlock(cell, def.PrimaryBlock, trackChange: false);
+                        }
+                        else
+                        {
+                            world.SetBlock(cell, BlockRegistry.Air, trackChange: false);
+                        }
+                    }
+                }
+            }
+
+            var lamp = new BlockPosition(centerX, baseY + 1, centerZ);
+            if (world.Bounds.Contains(lamp))
+                world.SetBlock(lamp, BlockRegistry.LumenLamp, trackChange: false);
+
+            if (def.HasStation)
+            {
+                var station = new BlockPosition(centerX - 1, baseY, centerZ);
+                if (world.Bounds.Contains(station))
+                    world.SetBlock(station, def.StationBlock, trackChange: false);
+            }
+
+            if (def.HasLoot)
+                PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ), seed, centerX, baseY, centerZ, def, lootSink);
+
+            return true;
+        }
+
+        static void TryPlaceWallBlock(
+            VoxelWorld world,
+            BlockPosition pos,
+            StructureDegradation degradation,
+            int seed,
+            int wall,
+            BlockId solidBlock,
+            bool trackChange = false)
         {
             int skipChance = (int)degradation * 20;
             if (skipChance > 0 && Hash(seed, pos.X, pos.Y, pos.Z, salt: 4093 + wall) % 100u < (uint)skipChance)
                 return;
 
-            TrySetSolid(world, pos);
+            TrySetSolid(world, pos, solidBlock, trackChange);
         }
 
-        static void TrySetSolid(VoxelWorld world, BlockPosition pos)
+        static void TrySetSolid(VoxelWorld world, BlockPosition pos, BlockId solidBlock, bool trackChange = false)
         {
             if (world.Bounds.Contains(pos))
-                world.SetBlock(pos, BlockRegistry.Graystone, trackChange: false);
+                world.SetBlock(pos, solidBlock, trackChange);
         }
 
         static StructureDefinition PickStructureForBiome(TerrainBiome biome, int seed, int rx, int rz)
@@ -382,6 +606,33 @@ namespace Blockiverse.WorldGen
                 if (pick < accumulated) return Catalog[i];
             }
             return null;
+        }
+
+        static StructureDefinition FindDefinitionById(string id)
+        {
+            for (int i = 0; i < Catalog.Length; i++)
+            {
+                if (Catalog[i].Id == id)
+                    return Catalog[i];
+            }
+
+            return null;
+        }
+
+        static StructureCatalogEntry[] BuildCatalogSnapshot()
+        {
+            var result = new StructureCatalogEntry[Catalog.Length];
+            for (int i = 0; i < Catalog.Length; i++)
+            {
+                StructureDefinition def = Catalog[i];
+                result[i] = new StructureCatalogEntry(
+                    def.Id,
+                    def.PlacementKind != StructurePlacementKind.Surface,
+                    def.MinDistanceFromSpawn,
+                    def.LootTableId);
+            }
+
+            return result;
         }
 
         static bool IsAllowedBiome(StructureDefinition def, TerrainBiome biome)
@@ -431,6 +682,14 @@ namespace Blockiverse.WorldGen
 
     public sealed class StructureLootTable
     {
+        public const string CommonSupplyId = "loot_common_supply";
+        public const string ForagerFoodId = "loot_forager_food";
+        public const string BuilderCacheId = "loot_builder_cache";
+        public const string MinerCacheId = "loot_miner_cache";
+        public const string MetalCacheId = "loot_metal_cache";
+        public const string DeepCacheId = "loot_deep_cache";
+        public const string EmptyRuinId = "loot_empty_ruin";
+
         public readonly string Id;
         public readonly int MinRolls;
         public readonly int MaxRolls;
@@ -498,11 +757,16 @@ namespace Blockiverse.WorldGen
         public static StructureLootTable GetById(string id)
         {
             if (id == ForagerFood.Id) return ForagerFood;
+            if (id == BuilderCache.Id) return BuilderCache;
+            if (id == MinerCache.Id) return MinerCache;
+            if (id == MetalCache.Id) return MetalCache;
+            if (id == DeepCache.Id) return DeepCache;
+            if (id == EmptyRuin.Id) return EmptyRuin;
             return CommonSupply;
         }
 
         // Canonical common supply loot table
-        public static readonly StructureLootTable CommonSupply = new("loot_common_supply", 2, 4,
+        public static readonly StructureLootTable CommonSupply = new(CommonSupplyId, 2, 4,
             new[]
             {
                 new StructureLootEntry("reed_fiber",     2, 8, 16),
@@ -515,7 +779,7 @@ namespace Blockiverse.WorldGen
             });
 
         // Canonical forager food loot table
-        public static readonly StructureLootTable ForagerFood = new("loot_forager_food", 2, 5,
+        public static readonly StructureLootTable ForagerFood = new(ForagerFoodId, 2, 5,
             new[]
             {
                 new StructureLootEntry("berry_cluster",    2, 8, 14),
@@ -525,5 +789,71 @@ namespace Blockiverse.WorldGen
                 new StructureLootEntry("brightsalt",       1, 4,  4),
                 new StructureLootEntry("field_bandage",    1, 2,  3),
             });
+
+        public static readonly StructureLootTable BuilderCache = new(BuilderCacheId, 3, 6,
+            new[]
+            {
+                new StructureLootEntry("work_plank",        2, 8, 14),
+                new StructureLootEntry("cutstone_block",    1, 6, 10),
+                new StructureLootEntry("fired_brick",       2, 6,  8),
+                new StructureLootEntry("fiber_cord",        1, 4,  7),
+                new StructureLootEntry("clay_lump",         2, 6,  6),
+                new StructureLootEntry("glowwick",          1, 2,  3),
+            });
+
+        public static readonly StructureLootTable MinerCache = new(MinerCacheId, 2, 5,
+            new[]
+            {
+                new StructureLootEntry("stone_rubble",      2, 8, 14),
+                new StructureLootEntry("flinty_shingle",    1, 5, 11),
+                new StructureLootEntry("spark_niter",       1, 4,  8),
+                new StructureLootEntry("embercoal",         1, 4,  7),
+                new StructureLootEntry("raw_paletin",       1, 2,  4),
+                new StructureLootEntry("lumen_dust",        1, 3,  3),
+            });
+
+        public static readonly StructureLootTable MetalCache = new(MetalCacheId, 1, 4,
+            new[]
+            {
+                new StructureLootEntry("raw_rosycopper",    1, 3, 10),
+                new StructureLootEntry("raw_paletin",       1, 3,  8),
+                new StructureLootEntry("raw_rustcore",      1, 2,  6),
+                new StructureLootEntry("rosycopper_bar",    1, 2,  5),
+                new StructureLootEntry("paletin_bar",       1, 2,  4),
+                new StructureLootEntry("ironroot_bar",      1, 1,  3),
+                new StructureLootEntry("sunmetal_bar",      1, 1,  1),
+            });
+
+        public static readonly StructureLootTable DeepCache = new(DeepCacheId, 2, 4,
+            new[]
+            {
+                new StructureLootEntry("raw_umbralite",     1, 3, 10),
+                new StructureLootEntry("staropal_shard",    1, 2,  8),
+                new StructureLootEntry("lumen_crystal",     1, 2,  6),
+                new StructureLootEntry("deepsteel_bar",     1, 1,  3),
+                new StructureLootEntry("starforged_core",   1, 1,  1),
+            });
+
+        public static readonly StructureLootTable EmptyRuin = new(EmptyRuinId, 0, 1,
+            new[]
+            {
+                new StructureLootEntry("reed_fiber",        1, 2,  8),
+                new StructureLootEntry("surface_pebbles",   1, 3,  7),
+                new StructureLootEntry("brightsalt",        1, 1,  3),
+                new StructureLootEntry("frostglass",        1, 1,  2),
+            });
+
+        static readonly StructureLootTable[] AllTables =
+        {
+            CommonSupply,
+            ForagerFood,
+            BuilderCache,
+            MinerCache,
+            MetalCache,
+            DeepCache,
+            EmptyRuin,
+        };
+
+        public static IReadOnlyList<StructureLootTable> All => AllTables;
     }
 }

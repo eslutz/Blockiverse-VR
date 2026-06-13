@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading.Tasks;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Persistence;
@@ -20,11 +22,6 @@ namespace Blockiverse.UI
     [DisallowMultipleComponent]
     public sealed class BlockiverseWorldSessionController : MonoBehaviour
     {
-        const string SaveDirectoryExtension = ".vxlworld";
-        // Survival worlds always generate at the canonical full height; derived from
-        // WorldConstants.WorldMaxY because WorldConstants has no height constant of its own.
-        const int SurvivalWorldHeight = WorldConstants.WorldMaxY + 1;
-
         [SerializeField] BlockiverseMenuController menuController;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
@@ -34,11 +31,14 @@ namespace Blockiverse.UI
         string currentSavePath;
         string currentWorldName;
         string currentDifficulty = string.Empty;
-        string currentWorldPreset = "survival_terrain";
+        string currentWorldPreset = WorldPresetIds.SurvivalTerrain;
         // Save list rows keyed back to their on-disk paths so Load resolves the exact slot even
         // when two saves share a display name (rebuilt by RefreshSaveList).
         readonly Dictionary<string, string> savePathsBySummaryKey = new();
         float lastSaveTime;
+        bool worldTransitionInProgress;
+        Task autoSaveTask;
+        string autoSaveWorldName;
 
         public string CurrentSavePath => currentSavePath;
         public bool HasActiveSession => !string.IsNullOrEmpty(currentSavePath);
@@ -78,31 +78,44 @@ namespace Blockiverse.UI
         {
             if (menuController == null)
                 menuController = GetComponent<BlockiverseMenuController>() ??
-                    FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
+                    BlockiverseSceneLookup.Find<BlockiverseMenuController>(FindObjectsInactive.Include);
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = BlockiverseSceneLookup.Find<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (survivalSync == null)
-                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+                survivalSync = BlockiverseSceneLookup.Find<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
 
             if (chunkAuthoritySync == null)
-                chunkAuthoritySync = FindFirstObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
+                chunkAuthoritySync = BlockiverseSceneLookup.Find<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
 
             if (vitalsRuntime == null)
-                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+                vitalsRuntime = BlockiverseSceneLookup.Find<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
         }
 
         // Autosave: while a session is active, save on the WorldSaveService cadence (§6.7).
         // Multiplayer-hosted worlds are autosaved by MultiplayerWorldPersistence instead.
         void Update()
         {
-            if (!HasActiveSession)
+            CompleteAutoSaveIfReady();
+
+            if (!ShouldStartAutoSave(HasActiveSession, Time.unscaledTime, lastSaveTime))
                 return;
 
-            if (Time.unscaledTime - lastSaveTime < WorldSaveService.AutoSaveIntervalSeconds)
-                return;
+            StartAutoSave();
+        }
 
+        public static bool ShouldStartAutoSave(bool hasActiveSession, float currentUnscaledTime, float lastSaveTime) =>
+            hasActiveSession && WorldSaveService.ShouldAutoSave(currentUnscaledTime - lastSaveTime);
+
+        void OnApplicationPause(bool paused)
+        {
+            if (paused)
+                SaveCurrentWorld();
+        }
+
+        void OnApplicationQuit()
+        {
             SaveCurrentWorld();
         }
 
@@ -151,11 +164,14 @@ namespace Blockiverse.UI
                     CreateNewWorld();
                     break;
                 case MenuActions.PauseSaveGame:
+                    ReportManualSaveStatus(SaveCurrentWorld());
+                    break;
                 case MenuActions.PauseReturnToTitle:
-                // Order dependency: BlockiverseMenuController respawns the vitals runtime *before*
-                // raising DeathReturnToTitle, so this save sees post-respawn player state rather
-                // than a dead player.
+                    SaveCurrentWorld();
+                    break;
                 case MenuActions.DeathReturnToTitle:
+                    SaveCurrentWorld(respawnDeadPlayer: true);
+                    break;
                 case MenuActions.TitleQuit:
                     SaveCurrentWorld();
                     break;
@@ -164,9 +180,32 @@ namespace Blockiverse.UI
 
         // ── Save ──────────────────────────────────────────────────────────────
 
-        public bool SaveCurrentWorld()
+        public bool TrySuspendActiveSessionForMultiplayer(out string failureReason)
+        {
+            failureReason = string.Empty;
+
+            if (!HasActiveSession)
+                return true;
+
+            if (!SaveCurrentWorld())
+            {
+                failureReason = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSuspendSinglePlayerFailed);
+                return false;
+            }
+
+            currentSavePath = null;
+            currentWorldName = null;
+            currentDifficulty = string.Empty;
+            currentWorldPreset = WorldPresetIds.SurvivalTerrain;
+            lastSaveTime = 0.0f;
+            RefreshSaveList();
+            return true;
+        }
+
+        public bool SaveCurrentWorld(bool respawnDeadPlayer = false)
         {
             ResolveReferences();
+            WaitForAutoSave();
 
             if (worldManager == null || worldManager.World == null || !HasActiveSession)
                 return false;
@@ -177,24 +216,8 @@ namespace Blockiverse.UI
 
             try
             {
-                Inventory inventory = survivalSync != null
-                    ? survivalSync.BuildPersistedInventory()
-                    : new Inventory(ItemRegistry.CreateDefault());
-                int selectedHotbarSlot = survivalSync != null ? survivalSync.SelectedHotbarSlotIndex : 0;
-
-                new WorldSaveService().Save(
-                    currentSavePath,
-                    currentWorldName,
-                    worldManager.World,
-                    inventory,
-                    selectedHotbarSlot,
-                    weatherState: worldManager.CurrentWeatherState,
-                    gameMode: worldManager.GameModeString,
-                    worldTimeTicks: worldManager.WorldTimeClock != null ? worldManager.WorldTimeClock.TotalElapsedTicks : 0L,
-                    containers: BuildSavedContainers(worldManager.ContainerStore),
-                    difficulty: currentDifficulty,
-                    worldPreset: currentWorldPreset,
-                    extras: BuildSaveExtras());
+                WorldSaveService.WorldSaveSnapshot snapshot = CaptureCurrentWorldSaveSnapshot(respawnDeadPlayer);
+                new WorldSaveService().Save(snapshot);
 
                 RefreshSaveList();
                 return true;
@@ -209,46 +232,141 @@ namespace Blockiverse.UI
             }
         }
 
+        void StartAutoSave()
+        {
+            if (autoSaveTask != null)
+                return;
+
+            // Stamp when the snapshot is captured so repeated background failures still wait for
+            // the normal autosave cadence instead of retrying every frame.
+            lastSaveTime = Time.unscaledTime;
+
+            try
+            {
+                WorldSaveService.WorldSaveSnapshot snapshot = CaptureCurrentWorldSaveSnapshot();
+                autoSaveWorldName = currentWorldName;
+                autoSaveTask = Task.Run(() => new WorldSaveService().Save(snapshot));
+            }
+            catch (Exception exception)
+            {
+                ReportAutoSaveStatus(success: false);
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to start autosave world session name={currentWorldName} exception={exception.GetType().Name}",
+                    context: this);
+            }
+        }
+
+        void CompleteAutoSaveIfReady()
+        {
+            if (autoSaveTask == null || !autoSaveTask.IsCompleted)
+                return;
+
+            try
+            {
+                autoSaveTask.GetAwaiter().GetResult();
+                RefreshSaveList();
+                ReportAutoSaveStatus(success: true);
+            }
+            catch (Exception exception)
+            {
+                ReportAutoSaveStatus(success: false);
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to autosave world session name={autoSaveWorldName} exception={exception.GetType().Name}",
+                    context: this);
+            }
+            finally
+            {
+                autoSaveTask = null;
+                autoSaveWorldName = null;
+            }
+        }
+
+        void ReportManualSaveStatus(bool success)
+        {
+            menuController?.SetPauseStatus(BlockiverseLocalization.Text(success
+                ? BlockiverseLocalization.Keys.StatusSaveSucceeded
+                : BlockiverseLocalization.Keys.StatusSaveFailed));
+        }
+
+        void ReportAutoSaveStatus(bool success)
+        {
+            menuController?.SetPauseStatus(BlockiverseLocalization.Text(success
+                ? BlockiverseLocalization.Keys.StatusAutosaveSucceeded
+                : BlockiverseLocalization.Keys.StatusAutosaveFailed));
+        }
+
+        void WaitForAutoSave()
+        {
+            if (autoSaveTask == null)
+                return;
+
+            try
+            {
+                autoSaveTask.GetAwaiter().GetResult();
+            }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to finish pending autosave world session name={autoSaveWorldName} exception={exception.GetType().Name}",
+                    context: this);
+            }
+            finally
+            {
+                autoSaveTask = null;
+                autoSaveWorldName = null;
+            }
+        }
+
+        WorldSaveService.WorldSaveSnapshot CaptureCurrentWorldSaveSnapshot(bool respawnDeadPlayer = false)
+        {
+            Inventory inventory = survivalSync != null
+                ? survivalSync.BuildPersistedInventory()
+                : new Inventory(ItemRegistry.Default);
+            int selectedHotbarSlot = survivalSync != null ? survivalSync.SelectedHotbarSlotIndex : 0;
+
+            return new WorldSaveService().CaptureSnapshot(
+                currentSavePath,
+                currentWorldName,
+                worldManager.World,
+                inventory,
+                selectedHotbarSlot,
+                weatherState: worldManager.CurrentWeatherState,
+                gameMode: worldManager.GameModeString,
+                worldTimeTicks: worldManager.WorldTimeClock != null ? worldManager.WorldTimeClock.TotalElapsedTicks : 0L,
+                containers: WorldSaveContainerMapper.BuildSavedContainers(worldManager.ContainerStore),
+                difficulty: currentDifficulty,
+                worldPreset: currentWorldPreset,
+                extras: BuildSaveExtras(respawnDeadPlayer));
+        }
+
         // World-sim state beyond blocks/inventory: weather machine, vegetation/farming queues
         // (world manager), timed-station contents (survival sync), and player presence/vitals.
-        WorldSaveExtras BuildSaveExtras()
+        WorldSaveExtras BuildSaveExtras(bool respawnDeadPlayer = false)
         {
             var extras = new WorldSaveExtras();
             worldManager.FillSaveExtras(extras);
 
-            if (survivalSync != null)
-                extras.Stations = WorldSaveStateMapper.ToSavedStations(survivalSync.ExportStationStates());
-
-            extras.PlayerState = vitalsRuntime != null ? vitalsRuntime.BuildPlayerSaveState() : null;
-            return extras;
-        }
-
-        static IReadOnlyList<SavedContainer> BuildSavedContainers(ContainerInventoryStore store)
-        {
-            if (store == null || store.Count == 0)
-                return null;
-
-            var result = new List<SavedContainer>(store.Count);
-            foreach (BlockPosition position in store.Positions)
+            if (worldManager.Settings != null)
             {
-                if (!store.TryGet(position, out Inventory inventory) || inventory == null)
-                    continue;
-
-                var slots = new List<SavedContainerSlot>();
-                for (int index = 0; index < inventory.SlotCount; index++)
-                {
-                    ItemStack stack = inventory.GetSlot(index);
-                    if (stack.IsEmpty)
-                        continue;
-
-                    slots.Add(new SavedContainerSlot { CanonicalId = stack.ItemId.Value, Count = stack.Count });
-                }
-
-                // Persist the position even when empty so an emptied crate stays empty on reload.
-                result.Add(new SavedContainer { X = position.X, Y = position.Y, Z = position.Z, Slots = slots.ToArray() });
+                extras.HasSpawnPosition = true;
+                extras.SpawnPosition = worldManager.Settings.SpawnPosition;
             }
 
-            return result.Count > 0 ? result : null;
+            if (survivalSync != null)
+            {
+                extras.Stations = WorldSaveStateMapper.ToSavedStations(survivalSync.ExportStationStates());
+                extras.SharedCrateInventory = survivalSync.BuildPersistedSharedCrateInventory();
+            }
+
+            extras.PlayerState = vitalsRuntime != null
+                ? respawnDeadPlayer
+                    ? vitalsRuntime.BuildRespawnedPlayerSaveState()
+                    : vitalsRuntime.BuildPlayerSaveState()
+                : null;
+            return extras;
         }
 
         // ── New world ─────────────────────────────────────────────────────────
@@ -258,29 +376,29 @@ namespace Blockiverse.UI
             ResolveReferences();
             NewWorldConfig config = menuController != null ? menuController.PendingNewWorldConfig : null;
 
-            if (worldManager == null || config == null || !config.IsValid(out _))
+            if (worldTransitionInProgress || worldManager == null || config == null || !config.IsValid(out _))
                 return;
 
+            if (Application.isPlaying)
+            {
+                StartCoroutine(CreateNewWorldRoutine(config));
+                return;
+            }
+
+            CreateNewWorldSynchronously(config, deferRendererRebuild: false);
+        }
+
+        void CreateNewWorldSynchronously(NewWorldConfig config, bool deferRendererRebuild)
+        {
             try
             {
-                int seed = FoldSeed(config.Seed);
-                (int width, int depth) = SizeFor(config.WorldSize);
-                GeneratedCreativeWorld generated = GenerateWorld(config.WorldPreset, seed, width, depth, config.StartingBiome);
+                GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateNewWorld(
+                    config.WorldPreset,
+                    config.Seed,
+                    config.WorldSize,
+                    config.StartingBiome);
 
-                worldManager.InitializeGeneratedWorld(generated, chunkAuthoritySync);
-                worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(config.GameMode));
-                ApplyPlayerMode();
-
-                currentDifficulty = config.Difficulty;
-                currentWorldPreset = config.WorldPreset;
-                // The allocated slot may suffix the name ("Camp (2)") — the manifest world name
-                // follows it so Load World rows stay unique and selectable.
-                (currentSavePath, currentWorldName) = AllocateSavePath(config.Name.Trim());
-
-                // Write the slot immediately so the world exists on disk (and Continue works)
-                // even if the player never opens the pause menu.
-                SaveCurrentWorld();
-                menuController?.EnterGameplay();
+                EnterGeneratedNewWorld(config, generated, deferRendererRebuild);
             }
             catch (Exception exception)
             {
@@ -288,120 +406,93 @@ namespace Blockiverse.UI
                     BlockiverseLogCategory.Persistence,
                     $"Failed to create new world name={config.Name} exception={exception.GetType().Name}",
                     context: this);
-                menuController?.SetTitleStatus("Failed to create the world.");
+                menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreateWorldFailed));
             }
         }
 
-        // Builder presets are mid-height worlds (§11.2/§11.3): the flat surface sits low for
-        // stacking room; the void platform sits centered for build space above and below it.
-        const int BuilderWorldHeight = 64;
-        const int FlatBuilderGroundHeight = 8;
-        const int VoidBuilderGroundHeight = 32;
-
-        GeneratedCreativeWorld GenerateWorld(string worldPreset, int seed, int width, int depth, string startingBiome)
+        IEnumerator CreateNewWorldRoutine(NewWorldConfig config)
         {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
+            worldTransitionInProgress = true;
+            menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreatingWorld));
 
-            if (string.Equals(worldPreset, "flat_builder", StringComparison.OrdinalIgnoreCase))
+            string name = config.Name.Trim();
+            string gameMode = config.GameMode;
+            string difficulty = config.Difficulty;
+            string worldPreset = config.WorldPreset;
+            string startingBiome = config.StartingBiome;
+            string worldSize = config.WorldSize;
+            ulong seed = config.Seed;
+            Task<GeneratedCreativeWorld> generationTask = Task.Run(
+                () => WorldSaveGeneration.GenerateNewWorld(worldPreset, seed, worldSize, startingBiome));
+
+            while (!generationTask.IsCompleted)
+                yield return null;
+
+            try
             {
-                var flatSettings = new WorldGenerationSettings(width, BuilderWorldHeight, depth, WorldConstants.ChunkSize, seed, FlatBuilderGroundHeight);
-                VoxelWorld flatWorld = new FlatBuilderPreset(registry, flatSettings).Generate();
-                return new GeneratedCreativeWorld(registry, flatSettings, flatWorld, CreativeWorldGenerationPreset.FlatCreative);
-            }
+                if (generationTask.IsFaulted)
+                    throw generationTask.Exception?.GetBaseException() ?? new InvalidOperationException("World generation failed.");
 
-            if (string.Equals(worldPreset, "void_builder", StringComparison.OrdinalIgnoreCase))
+                EnterGeneratedNewWorld(
+                    name,
+                    gameMode,
+                    difficulty,
+                    worldPreset,
+                    generationTask.Result,
+                    deferRendererRebuild: true);
+            }
+            catch (Exception exception)
             {
-                var voidSettings = new WorldGenerationSettings(width, BuilderWorldHeight, depth, WorldConstants.ChunkSize, seed, VoidBuilderGroundHeight);
-                VoxelWorld voidWorld = new VoidBuilderPreset(registry, voidSettings).Generate();
-                return new GeneratedCreativeWorld(registry, voidSettings, voidWorld, CreativeWorldGenerationPreset.VoidBuilder);
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to create new world name={name} exception={exception.GetType().Name}",
+                    context: this);
+                menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreateWorldFailed));
             }
-
-            BlockPosition? spawn = FindSpawnForBiome(seed, width, SurvivalWorldHeight, depth, WorldConstants.SeaLevel, startingBiome);
-            var settings = new WorldGenerationSettings(width, SurvivalWorldHeight, depth, WorldConstants.ChunkSize, seed, WorldConstants.SeaLevel, spawn);
-            var preset = new SurvivalTerrainPreset(registry, settings);
-            VoxelWorld world = preset.Generate();
-            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite, preset.ContainerLoot);
+            finally
+            {
+                worldTransitionInProgress = false;
+            }
         }
 
-        // Maps the menu's world-size selector to bounded dimensions (§6.3; "infinite" is not a
-        // bounded-world option and falls back to large).
-        static (int width, int depth) SizeFor(string worldSize)
+        void EnterGeneratedNewWorld(NewWorldConfig config, GeneratedCreativeWorld generated, bool deferRendererRebuild)
         {
-            switch (worldSize)
-            {
-                case "medium": return (192, 192);
-                case "large":
-                case "infinite": return (256, 256);
-                default: return (128, 128);
-            }
+            EnterGeneratedNewWorld(
+                config.Name.Trim(),
+                config.GameMode,
+                config.Difficulty,
+                config.WorldPreset,
+                generated,
+                deferRendererRebuild);
         }
 
-        // Searches outward from the world center for a dry-land column of the requested starting
-        // biome ("balanced" accepts any biome). Columns below sea level flood with fluid (§5.4),
-        // so the spawn prefers terrain at or above it rather than terraforming an island into a
-        // lake. Pure seed math via SurvivalBiomeResolver, so the search agrees with what the
-        // generator will build.
-        static BlockPosition? FindSpawnForBiome(int seed, int width, int height, int depth, int groundHeight, string startingBiome)
+        void EnterGeneratedNewWorld(
+            string worldName,
+            string gameMode,
+            string difficulty,
+            string worldPreset,
+            GeneratedCreativeWorld generated,
+            bool deferRendererRebuild)
         {
-            int target = BiomeIndexFor(startingBiome); // -1 = any biome (balanced)
+            worldManager.InitializeGeneratedWorld(
+                generated,
+                chunkAuthoritySync,
+                deferInitialRendererRebuild: deferRendererRebuild);
+            worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(gameMode));
+            ApplyPlayerMode();
 
-            var resolver = new SurvivalBiomeResolver(seed, height);
-            int centerX = width / 2;
-            int centerZ = depth / 2;
-            const int edgeMargin = 8;
-            const int step = 4;
+            currentDifficulty = difficulty;
+            vitalsRuntime?.ConfigureDifficulty(currentDifficulty);
+            currentWorldPreset = worldPreset;
+            // The allocated slot may suffix the name ("Camp (2)") — the manifest world name
+            // follows it so Load World rows stay unique and selectable.
+            (currentSavePath, currentWorldName) = WorldSaveSlotService.AllocateSavePath(SavesRoot, worldName);
 
-            bool Matches(int x, int z) =>
-                (target < 0 || resolver.BiomeIndexAt(x, z) == target) &&
-                resolver.SurfaceHeight(x, z) >= groundHeight;
-
-            if (Matches(centerX, centerZ))
-                return null; // center already matches — keep the default spawn
-
-            int maxRadius = Math.Max(width, depth);
-            for (int radius = step; radius < maxRadius; radius += step)
-            {
-                for (int dx = -radius; dx <= radius; dx += step)
-                {
-                    for (int dz = -radius; dz <= radius; dz += step)
-                    {
-                        // Ring only — interior radii were already covered.
-                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius)
-                            continue;
-
-                        int x = centerX + dx;
-                        int z = centerZ + dz;
-                        if (x < edgeMargin || x >= width - edgeMargin || z < edgeMargin || z >= depth - edgeMargin)
-                            continue;
-
-                        if (Matches(x, z))
-                            return new BlockPosition(x, groundHeight + 1, z);
-                    }
-                }
-            }
-
-            return null; // no dry match in this seed — fall back to the center spawn
+            // Write the slot immediately so the world exists on disk (and Continue works)
+            // even if the player never opens the pause menu.
+            SaveCurrentWorld();
+            menuController?.EnterGameplay();
         }
-
-        // TerrainBiome is internal to WorldGen; the resolver exposes biome indexes, whose order
-        // is canonical: Meadow, Pinewild, Wetland, Drybrush, Dunes, Tundra, Highlands.
-        static int BiomeIndexFor(string startingBiome)
-        {
-            switch (startingBiome)
-            {
-                case "meadow": return 0;
-                case "pinewild": return 1;
-                case "wetland": return 2;
-                case "drybrush": return 3;
-                case "dunes": return 4;
-                case "tundra": return 5;
-                case "highlands": return 6;
-                default: return -1; // "balanced"
-            }
-        }
-
-        // Folds the 64-bit menu seed into the generator's int seed deterministically.
-        static int FoldSeed(ulong seed) => unchecked((int)(seed ^ (seed >> 32)));
 
         // ── Load / continue ───────────────────────────────────────────────────
 
@@ -418,7 +509,7 @@ namespace Blockiverse.UI
             }
 
             if (latest != null)
-                LoadSave(latest.Path);
+                StartLoadSave(latest.Path);
         }
 
         void LoadSelectedSave()
@@ -427,28 +518,33 @@ namespace Blockiverse.UI
             if (!selected.HasValue)
                 return;
 
-            // Prefer the path cached by RefreshSaveList — it pins the exact slot even when two
-            // saves share a display name. The name scan below covers a stale or missing mapping.
-            if (savePathsBySummaryKey.TryGetValue(SummaryKey(selected.Value), out string mappedPath) &&
-                Directory.Exists(mappedPath))
+            if (TryResolveSavePath(selected.Value, out string path))
             {
-                LoadSave(mappedPath);
+                StartLoadSave(path);
                 return;
             }
 
-            if (TryResolveSavePathByName(selected.Value.Name, out string path))
-            {
-                LoadSave(path);
-                return;
-            }
-
-            menuController?.SetTitleStatus("Save not found.");
+            ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSaveNotFound), isFailure: true);
         }
 
         // Seed + created timestamp disambiguate slots whose display names collide; built from the
         // summary on both sides so lookups see exactly what RefreshSaveList stored.
         static string SummaryKey(WorldSaveSummary summary) =>
             $"{summary.Name}\n{summary.Seed}\n{summary.CreatedUtc.Ticks}";
+
+        bool TryResolveSavePath(WorldSaveSummary summary, out string path)
+        {
+            // Prefer the path cached by RefreshSaveList — it pins the exact slot even when two
+            // saves share a display name. The name scan below covers a stale or missing mapping.
+            if (savePathsBySummaryKey.TryGetValue(SummaryKey(summary), out string mappedPath) &&
+                Directory.Exists(mappedPath))
+            {
+                path = mappedPath;
+                return true;
+            }
+
+            return TryResolveSavePathByName(summary.Name, out path);
+        }
 
         bool TryResolveSavePathByName(string worldName, out string path)
         {
@@ -473,10 +569,10 @@ namespace Blockiverse.UI
             if (!save.HasValue)
                 return;
 
-            if (TryResolveSavePathByName(save.Value.Name, out string path))
-                LoadSave(path);
+            if (TryResolveSavePath(save.Value, out string path))
+                StartLoadSave(path);
             else
-                menuController?.ShowError("Save not found.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSaveNotFound));
         }
 
         void RenameDetailsSave()
@@ -485,23 +581,23 @@ namespace Blockiverse.UI
             string newName = menuController?.PendingDetailsRenameText?.Trim();
             if (!save.HasValue || string.IsNullOrEmpty(newName))
             {
-                menuController?.ShowError("Enter a world name first.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusEnterWorldNameFirst));
                 return;
             }
 
             if (string.Equals(newName, save.Value.Name, StringComparison.Ordinal))
                 return; // unchanged
 
-            if (!TryResolveSavePathByName(save.Value.Name, out string path))
+            if (!TryResolveSavePath(save.Value, out string path))
             {
-                menuController?.ShowError("Save not found.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSaveNotFound));
                 return;
             }
 
-            (string destinationPath, string uniqueName) = AllocateSavePath(newName);
+            (string destinationPath, string uniqueName) = WorldSaveSlotService.AllocateSavePath(SavesRoot, newName);
             if (!WorldSaveService.TryRenameSave(path, destinationPath, uniqueName))
             {
-                menuController?.ShowError("Failed to rename the world.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusRenameFailed));
                 return;
             }
 
@@ -522,16 +618,16 @@ namespace Blockiverse.UI
             if (!save.HasValue)
                 return;
 
-            if (!TryResolveSavePathByName(save.Value.Name, out string path))
+            if (!TryResolveSavePath(save.Value, out string path))
             {
-                menuController?.ShowError("Save not found.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSaveNotFound));
                 return;
             }
 
-            (string destinationPath, string uniqueName) = AllocateSavePath(save.Value.Name + " Copy");
+            (string destinationPath, string uniqueName) = WorldSaveSlotService.AllocateSavePath(SavesRoot, save.Value.Name + " Copy");
             if (!WorldSaveService.TryDuplicateSave(path, destinationPath, uniqueName))
             {
-                menuController?.ShowError("Failed to duplicate the world.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusDuplicateFailed));
                 return;
             }
 
@@ -544,15 +640,15 @@ namespace Blockiverse.UI
             if (!save.HasValue)
                 return;
 
-            if (!TryResolveSavePathByName(save.Value.Name, out string path))
+            if (!TryResolveSavePath(save.Value, out string path))
             {
-                menuController?.ShowError("Save not found.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSaveNotFound));
                 return;
             }
 
             if (!WorldSaveService.TryDeleteSave(path))
             {
-                menuController?.ShowError("Failed to delete the world.");
+                menuController?.ShowError(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusDeleteFailed));
                 return;
             }
 
@@ -587,6 +683,58 @@ namespace Blockiverse.UI
             }
         }
 
+        void StartLoadSave(string path)
+        {
+            if (worldTransitionInProgress)
+                return;
+
+            if (Application.isPlaying)
+                StartCoroutine(LoadSaveRoutine(path));
+            else
+                LoadSave(path);
+        }
+
+        IEnumerator LoadSaveRoutine(string path)
+        {
+            worldTransitionInProgress = true;
+            ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadingWorld), isFailure: false);
+
+            WorldLoadResult result = new WorldSaveService().Load(path);
+            if (!result.Success)
+            {
+                RefreshSaveList();
+                ReportLoadStatus(
+                    BlockiverseLocalization.Format(BlockiverseLocalization.Keys.StatusLoadFailed, result.Error),
+                    isFailure: true);
+                worldTransitionInProgress = false;
+                yield break;
+            }
+
+            Task<GeneratedCreativeWorld> regenerationTask = Task.Run(() => WorldSaveGeneration.Regenerate(result.Data));
+            while (!regenerationTask.IsCompleted)
+                yield return null;
+
+            try
+            {
+                if (regenerationTask.IsFaulted)
+                    throw regenerationTask.Exception?.GetBaseException() ?? new InvalidOperationException("World regeneration failed.");
+
+                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: true);
+            }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Persistence,
+                    $"Failed to enter loaded world file={Path.GetFileName(path)} exception={exception.GetType().Name}",
+                    context: this);
+                ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadWorldFailed), isFailure: true);
+            }
+            finally
+            {
+                worldTransitionInProgress = false;
+            }
+        }
+
         public bool LoadSave(string path)
         {
             ResolveReferences();
@@ -597,47 +745,20 @@ namespace Blockiverse.UI
             WorldLoadResult result = new WorldSaveService().Load(path);
             if (!result.Success)
             {
-                menuController?.SetTitleStatus($"Failed to load: {result.Error}");
                 RefreshSaveList();
+                ReportLoadStatus(
+                    BlockiverseLocalization.Format(BlockiverseLocalization.Keys.StatusLoadFailed, result.Error),
+                    isFailure: true);
                 return false;
             }
 
             try
             {
-                WorldSaveData data = result.Data;
-                GeneratedCreativeWorld generated = RegenerateBaseWorld(data);
-                worldManager.InitializeGeneratedWorld(generated, chunkAuthoritySync);
-
-                // Saved state is authoritative over the regenerated baseline: block deltas,
-                // weather + simulation queues, world time, game mode, container contents,
-                // station contents, then the inventory.
-                worldManager.SuppressContainerAutoLoot = true;
-                try
-                {
-                    result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
-                    worldManager.RestoreSimulationState(data);
-                    worldManager.RestoreWorldTimeTicks(data.WorldTimeTicks);
-                    worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(data.GameMode));
-                    RestoreContainers(data.Containers);
-                    RestoreStations(data.Stations);
-                }
-                finally
-                {
-                    worldManager.SuppressContainerAutoLoot = false;
-                }
-
-                worldManager.Renderer?.RebuildAll();
-                RestoreInventory(result, data);
-                ApplyPlayerMode();
-                RestorePlayer(data.PlayerState);
-
-                currentSavePath = path;
-                currentWorldName = data.WorldName;
-                currentDifficulty = data.Difficulty ?? string.Empty;
-                currentWorldPreset = data.WorldPreset;
-                lastSaveTime = Time.unscaledTime;
-                menuController?.EnterGameplay();
-                return true;
+                return ApplyLoadedWorld(
+                    path,
+                    result,
+                    RegenerateBaseWorld(result.Data),
+                    deferRendererRebuild: false);
             }
             catch (Exception exception)
             {
@@ -645,56 +766,85 @@ namespace Blockiverse.UI
                     BlockiverseLogCategory.Persistence,
                     $"Failed to enter loaded world file={Path.GetFileName(path)} exception={exception.GetType().Name}",
                     context: this);
-                menuController?.SetTitleStatus("Failed to load the world.");
+                ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadWorldFailed), isFailure: true);
                 return false;
             }
         }
 
+        void ReportLoadStatus(string message, bool isFailure)
+        {
+            if (menuController == null)
+                return;
+
+            if (menuController.IsActiveScreen(MenuActions.LoadWorldScreen))
+            {
+                menuController.SetLoadWorldStatus(message);
+                return;
+            }
+
+            if (isFailure && menuController.IsActiveScreen(MenuActions.WorldDetailsScreen))
+            {
+                menuController.ShowError(message);
+                return;
+            }
+
+            menuController.SetTitleStatus(message);
+        }
+
+        bool ApplyLoadedWorld(
+            string path,
+            WorldLoadResult result,
+            GeneratedCreativeWorld generated,
+            bool deferRendererRebuild)
+        {
+            WorldSaveData data = result.Data;
+            worldManager.InitializeGeneratedWorld(
+                generated,
+                chunkAuthoritySync,
+                deferInitialRendererRebuild: deferRendererRebuild);
+
+            // Saved state is authoritative over the regenerated baseline: block deltas,
+            // weather + simulation queues, world time, game mode, container contents,
+            // station contents, then the inventory.
+            worldManager.SuppressContainerAutoLoot = true;
+            try
+            {
+                result.ApplyTo(worldManager.World, preserveLoadedBlockChanges: true);
+                worldManager.RestoreSimulationState(data);
+                worldManager.RestoreWorldTimeTicks(data.WorldTimeTicks);
+                worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(data.GameMode));
+                RestoreContainers(data.Containers);
+                RestoreStations(data.Stations);
+            }
+            finally
+            {
+                worldManager.SuppressContainerAutoLoot = false;
+            }
+
+            if (!deferRendererRebuild)
+                worldManager.Renderer?.RebuildAll();
+            RestoreInventory(result, data);
+            ApplyPlayerMode();
+            RestorePlayer(data.PlayerState);
+
+            currentSavePath = path;
+            currentWorldName = data.WorldName;
+            currentDifficulty = data.Difficulty ?? string.Empty;
+            vitalsRuntime?.ConfigureDifficulty(currentDifficulty);
+            currentWorldPreset = data.WorldPreset;
+            lastSaveTime = Time.unscaledTime;
+            menuController?.EnterGameplay();
+            return true;
+        }
+
         GeneratedCreativeWorld RegenerateBaseWorld(WorldSaveData data)
         {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-
-            if (string.Equals(data.WorldPreset, "flat_builder", StringComparison.OrdinalIgnoreCase))
-            {
-                var flatSettings = new WorldGenerationSettings(
-                    data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed,
-                    groundHeight: Math.Min(FlatBuilderGroundHeight, data.Height - 2));
-                VoxelWorld flatWorld = new FlatBuilderPreset(registry, flatSettings).Generate();
-                return new GeneratedCreativeWorld(registry, flatSettings, flatWorld, CreativeWorldGenerationPreset.FlatCreative);
-            }
-
-            if (string.Equals(data.WorldPreset, "void_builder", StringComparison.OrdinalIgnoreCase))
-            {
-                var voidSettings = new WorldGenerationSettings(
-                    data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed,
-                    groundHeight: Math.Min(VoidBuilderGroundHeight, data.Height - 2));
-                VoxelWorld voidWorld = new VoidBuilderPreset(registry, voidSettings).Generate();
-                return new GeneratedCreativeWorld(registry, voidSettings, voidWorld, CreativeWorldGenerationPreset.VoidBuilder);
-            }
-
-            var settings = new WorldGenerationSettings(
-                data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed, WorldConstants.SeaLevel);
-            var preset = new SurvivalTerrainPreset(registry, settings);
-            VoxelWorld world = preset.Generate();
-            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite, preset.ContainerLoot);
+            return WorldSaveGeneration.Regenerate(data);
         }
 
         void RestoreContainers(SavedContainer[] saved)
         {
-            if (saved == null || saved.Length == 0)
-                return;
-
-            var restored = new List<(BlockPosition, IEnumerable<(string, int)>)>(saved.Length);
-            foreach (SavedContainer container in saved)
-            {
-                SavedContainerSlot[] slots = container.Slots ?? Array.Empty<SavedContainerSlot>();
-                var items = new List<(string, int)>(slots.Length);
-                foreach (SavedContainerSlot slot in slots)
-                    items.Add((slot.CanonicalId, slot.Count));
-                restored.Add((new BlockPosition(container.X, container.Y, container.Z), items));
-            }
-
-            worldManager.RestoreContainerStore(restored);
+            worldManager.RestoreContainerStore(WorldSaveContainerMapper.BuildRestoredContainers(saved));
         }
 
         void RestoreInventory(WorldLoadResult result, WorldSaveData data)
@@ -705,6 +855,7 @@ namespace Blockiverse.UI
             Inventory loaded = result.CreateInventory();
             int selectedHotbarSlot = data.PlayerInventory != null ? data.PlayerInventory.SelectedHotbarSlotIndex : 0;
             survivalSync.RestoreLocalInventory(loaded, selectedHotbarSlot);
+            survivalSync.RestoreSharedCrateInventory(data.SharedCrateInventory);
         }
 
         // Rebuilds timed-station contents (kiln/forge slots and in-flight crafts) from the save.
@@ -799,52 +950,5 @@ namespace Blockiverse.UI
                 : DateTime.MinValue;
         }
 
-        // Allocates a unique save directory for a world name (existing names get " (2)", " (3)"…)
-        // and returns both the path and the uniquified display name.
-        static (string path, string worldName) AllocateSavePath(string worldName)
-        {
-            Directory.CreateDirectory(SavesRoot);
-            string baseName = SanitizeFileName(worldName);
-
-            // Bounded so a broken filesystem (or thousands of stale slots) fails loudly instead
-            // of spinning forever; CreateNewWorld surfaces the failure on the title screen.
-            const int maxSuffix = 9999;
-            for (int suffix = 1; suffix <= maxSuffix; suffix++)
-            {
-                string candidateName = suffix == 1 ? baseName : $"{baseName} ({suffix})";
-                string candidate = Path.Combine(SavesRoot, candidateName + SaveDirectoryExtension);
-                if (!Directory.Exists(candidate) && !File.Exists(candidate))
-                    return (candidate, candidateName);
-            }
-
-            throw new InvalidOperationException(
-                $"Unable to allocate a save slot for \"{baseName}\" after {maxSuffix} attempts.");
-        }
-
-        // Path.GetInvalidFileNameChars() returns an empty array on Android, so '/' and '\' would
-        // pass through and let a world name escape the Saves root. Sanitize with a platform-
-        // independent allowlist instead: anything outside [a-zA-Z0-9 _\-.()] becomes '_'
-        // (matching the old replacement so already-valid names keep their save directories).
-        static string SanitizeFileName(string name)
-        {
-            var builder = new System.Text.StringBuilder(name.Length);
-            foreach (char character in name)
-                builder.Append(IsSafeFileNameChar(character) ? character : '_');
-
-            string sanitized = builder.ToString().Trim();
-            if (string.IsNullOrEmpty(sanitized) || sanitized == "." || sanitized == "..")
-                return "world";
-
-            return sanitized;
-        }
-
-        static bool IsSafeFileNameChar(char character)
-        {
-            return (character >= 'a' && character <= 'z') ||
-                   (character >= 'A' && character <= 'Z') ||
-                   (character >= '0' && character <= '9') ||
-                   character == ' ' || character == '_' || character == '-' ||
-                   character == '.' || character == '(' || character == ')';
-        }
     }
 }

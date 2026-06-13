@@ -20,7 +20,7 @@ Copy this file to `report-YYYY-MM-DD.md` and fill in each section from a headset
 
 ## Capture method
 
-- In-headset HUD: enable `PerformanceStatsOverlay` (FPS avg/min/max, frame ms, chunk count, triangles, rebuild queue).
+- In-headset HUD: use the generated World object's `PerformanceStatsOverlay` in a development build (FPS avg/min/max, frame ms, chunk count, triangles, rebuild queue).
 - ProfilerMarkers to watch in the Unity Profiler / OVR Metrics Tool:
   - `Blockiverse.SurvivalLiteWorldPreset.Generate`
   - `Blockiverse.VoxelWorldRenderer.RebuildAll`

@@ -15,13 +15,31 @@ namespace Blockiverse.Gameplay
     {
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] CreativeWorldManager worldManager;
+        [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseVfxCuePlayer vfxCuePlayer;
+        [SerializeField] BlockiverseSubtitleToastPanel toastPanel;
 
         BlockiverseNetworkSession session;
         NetworkManager subscribedNetworkManager;
         bool subscribedToSync;
         bool subscribedToLoot;
+        bool subscribedToVitals;
+
+        public void ConfigureVitalsFeedback(
+            SurvivalVitalsRuntime runtime,
+            BlockiverseAudioCuePlayer cuePlayer)
+        {
+            UnsubscribeVitals();
+            vitalsRuntime = runtime;
+            audioCuePlayer = cuePlayer;
+            SubscribeVitals();
+        }
+
+        public void ConfigureToastPanel(BlockiverseSubtitleToastPanel panel)
+        {
+            toastPanel = panel;
+        }
 
         void OnEnable()
         {
@@ -45,11 +63,17 @@ namespace Blockiverse.Gameplay
             if (worldManager == null)
                 worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
+            if (vitalsRuntime == null)
+                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+
             if (audioCuePlayer == null)
                 audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
 
             if (vfxCuePlayer == null)
                 vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+
+            if (toastPanel == null)
+                toastPanel = FindFirstObjectByType<BlockiverseSubtitleToastPanel>(FindObjectsInactive.Include);
 
             if (session == null)
                 session = FindFirstObjectByType<BlockiverseNetworkSession>(FindObjectsInactive.Include);
@@ -68,6 +92,8 @@ namespace Blockiverse.Gameplay
                 worldManager.ContainerLooted += OnContainerLooted;
                 subscribedToLoot = true;
             }
+
+            SubscribeVitals();
 
             NetworkManager networkManager = session != null ? session.NetworkManager : null;
             if (networkManager != null && subscribedNetworkManager != networkManager)
@@ -88,12 +114,39 @@ namespace Blockiverse.Gameplay
                 worldManager.ContainerLooted -= OnContainerLooted;
             subscribedToLoot = false;
 
+            UnsubscribeVitals();
+
             if (subscribedNetworkManager != null)
             {
                 subscribedNetworkManager.OnClientConnectedCallback -= OnClientConnected;
                 subscribedNetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
                 subscribedNetworkManager = null;
             }
+        }
+
+        void SubscribeVitals()
+        {
+            if (subscribedToVitals || vitalsRuntime == null)
+                return;
+
+            vitalsRuntime.LocalPlayerDamaged += OnLocalPlayerDamaged;
+            vitalsRuntime.LocalPlayerLowHealth += OnLocalPlayerLowHealth;
+            vitalsRuntime.LocalPlayerDied += OnLocalPlayerDied;
+            subscribedToVitals = true;
+        }
+
+        void UnsubscribeVitals()
+        {
+            if (!subscribedToVitals || vitalsRuntime == null)
+            {
+                subscribedToVitals = false;
+                return;
+            }
+
+            vitalsRuntime.LocalPlayerDamaged -= OnLocalPlayerDamaged;
+            vitalsRuntime.LocalPlayerLowHealth -= OnLocalPlayerLowHealth;
+            vitalsRuntime.LocalPlayerDied -= OnLocalPlayerDied;
+            subscribedToVitals = false;
         }
 
         void OnCommandFeedback(SurvivalCommandResult result, BlockPosition position)
@@ -110,9 +163,12 @@ namespace Blockiverse.Gameplay
                         vfxCuePlayer?.PlayCue(BlockiverseVfxCue.BlockBreakDust, worldCenter);
                         vfxCuePlayer?.PlayCue(BlockiverseVfxCue.ResourceSpark, worldCenter);
                     }
-                    else if (result.HarvestFailureReason == BlockHarvestFailureReason.InsufficientTool)
+                    else if (result.HarvestFailureReason == BlockHarvestFailureReason.InsufficientTool ||
+                             result.HarvestFailureReason == BlockHarvestFailureReason.InventoryFull ||
+                             result.FailureReason == SurvivalCommandFailureReason.InventoryFull)
                     {
                         audioCuePlayer?.PlayCue(BlockiverseAudioCue.ToolWrong);
+                        ShowToast(DescribeHarvestRejection(result));
                     }
                     break;
 
@@ -155,6 +211,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerJoin);
+            ShowToast("Player joined.");
         }
 
         void OnClientDisconnected(ulong clientId)
@@ -163,6 +220,38 @@ namespace Blockiverse.Gameplay
                 return;
 
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerLeave);
+            ShowToast("Player left.");
+        }
+
+        void ShowToast(string message)
+        {
+            toastPanel?.ShowToast(message);
+        }
+
+        static string DescribeHarvestRejection(SurvivalCommandResult result)
+        {
+            if (result.HarvestFailureReason == BlockHarvestFailureReason.InventoryFull ||
+                result.FailureReason == SurvivalCommandFailureReason.InventoryFull)
+            {
+                return "Inventory full.";
+            }
+
+            return "This tool is not strong enough.";
+        }
+
+        void OnLocalPlayerDamaged(HealthChangeResult result)
+        {
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.PlayerHurt);
+        }
+
+        void OnLocalPlayerLowHealth(HealthChangeResult result)
+        {
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.LowHealth);
+        }
+
+        void OnLocalPlayerDied()
+        {
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.PlayerDeath);
         }
     }
 }

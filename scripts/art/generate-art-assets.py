@@ -12,7 +12,10 @@ UI_DIR = "Assets/Blockiverse/Art/Sprites/UI"
 VFX_DIR = "Assets/Blockiverse/Art/Sprites/VFX"
 ATLAS_PATH = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png"
 ATLAS_COLUMNS = 8
-ATLAS_ROWS = 7
+ATLAS_ROWS = 10
+TILE_PIXELS = 16
+ATLAS_TILE_PADDING_PIXELS = 4
+ATLAS_TILE_STRIDE_PIXELS = TILE_PIXELS + ATLAS_TILE_PADDING_PIXELS * 2
 
 
 BLOCKS = [
@@ -22,9 +25,9 @@ BLOCKS = [
     ("branchwood_log", 3, (139, 90, 43), (215, 151, 76), "rings", 41),
     ("leafmoss", 4, (48, 125, 57), (106, 199, 74), "leaves", 53),
     ("lumen_quartz_cluster", 5, (72, 176, 208), (203, 242, 250), "crystal", 67),
-    ("embercoal_seam", 6, (29, 30, 34), (86, 87, 98), "veins", 71),
-    ("rosycopper_bloom", 7, (92, 83, 74), (234, 125, 62), "veins", 83),
-    ("rustcore_ore", 8, (82, 87, 90), (215, 203, 176), "veins", 97),
+    ("embercoal_seam", 6, (29, 30, 34), (86, 87, 98), "ore_bands", 71),
+    ("rosycopper_bloom", 7, (92, 83, 74), (234, 125, 62), "ore_diagonal", 83),
+    ("rustcore_ore", 8, (82, 87, 90), (215, 203, 176), "ore_cross", 97),
     ("build_table", 9, (144, 94, 48), (231, 183, 101), "grid", 101),
     ("glowwick", 10, (61, 82, 49), (255, 191, 51), "glow", 109),
     ("storage_crate", 11, (116, 77, 41), (205, 144, 70), "crate", 127),
@@ -47,18 +50,18 @@ BLOCKS = [
     ("reedgrass", 28, (84, 128, 64), (176, 190, 85), "reeds", 223),
     ("work_plank", 29, (132, 82, 42), (212, 145, 70), "planks", 227),
     ("cutstone_block", 30, (100, 106, 112), (175, 181, 187), "brick", 229),
-    ("fired_brick", 31, (128, 58, 43), (208, 102, 65), "brick", 233),
+    ("fired_brick_block", 31, (128, 58, 43), (208, 102, 65), "brick", 233),
     ("clearpane_glass", 32, (105, 188, 214), (220, 250, 255), "glass", 239),
     ("surface_pebbles", 33, (92, 87, 78), (181, 174, 151), "pebbles", 241),
     ("flinty_shingle", 34, (60, 67, 73), (187, 192, 186), "chips", 251),
-    ("paletin_thread", 35, (79, 84, 89), (213, 196, 155), "veins", 257),
+    ("paletin_thread", 35, (79, 84, 89), (213, 196, 155), "ore_threads", 257),
     ("sunmetal_fleck", 36, (127, 81, 43), (255, 196, 74), "sparkle", 263),
     ("niterstone_pocket", 37, (95, 90, 82), (220, 214, 184), "speckles", 269),
     ("brightsalt_crust", 38, (164, 174, 164), (246, 246, 225), "crust", 271),
     ("shellgrit_bed", 39, (156, 139, 110), (229, 205, 171), "chips", 277),
     ("resin_knot", 40, (110, 72, 39), (230, 143, 50), "rings", 281),
-    ("berrybush", 41, (50, 112, 54), (203, 56, 91), "berries", 283),
-    ("grain_stalk", 42, (119, 135, 54), (228, 196, 81), "reeds", 293),
+    ("berrybush", 41, (50, 112, 54), (203, 56, 91), "berries_cluster", 283),
+    ("grain_stalk", 42, (119, 135, 54), (228, 196, 81), "grain_heads", 293),
     ("umbralite_node", 43, (37, 32, 59), (117, 81, 181), "crystal", 307),
     ("staropal_geode", 44, (45, 42, 70), (227, 196, 255), "crystal", 311),
     ("campfire", 45, (112, 68, 42), (255, 132, 43), "flame", 313),
@@ -66,6 +69,7 @@ BLOCKS = [
     ("bellows_forge", 47, (66, 68, 72), (235, 116, 57), "forge", 331),
     ("prep_board", 48, (143, 92, 50), (227, 178, 102), "grid", 337),
     ("mend_bench", 49, (104, 74, 52), (196, 165, 94), "tools", 347),
+    ("bedroll", 76, (70, 88, 98), (219, 92, 83), "planks", 353),
 ]
 
 
@@ -87,7 +91,6 @@ ITEMS = [
     ("branchwood_log", (139, 90, 43), (215, 151, 76), "log"),
     ("leafmoss", (48, 125, 57), (106, 199, 74), "leaf"),
     ("thornbrush", (91, 76, 42), (169, 112, 57), "plant"),
-    ("reedgrass", (84, 128, 64), (176, 190, 85), "plant"),
     ("work_plank", (132, 82, 42), (212, 145, 70), "block"),
     ("cutstone_block", (100, 106, 112), (175, 181, 187), "block"),
     ("fired_brick", (128, 58, 43), (208, 102, 65), "block"),
@@ -100,22 +103,29 @@ ITEMS = [
     ("bellows_forge", (66, 68, 72), (235, 116, 57), "kit"),
     ("prep_board", (143, 92, 50), (227, 178, 102), "kit"),
     ("mend_bench", (104, 74, 52), (196, 165, 94), "kit"),
+    ("bedroll", (70, 88, 98), (219, 92, 83), "kit"),
     ("surface_pebbles", (92, 87, 78), (181, 174, 151), "nugget"),
     ("flinty_shingle", (60, 67, 73), (187, 192, 186), "shard"),
     ("embercoal", (29, 30, 34), (86, 87, 98), "nugget"),
     ("raw_rosycopper", (118, 76, 48), (241, 135, 70), "nugget"),
-    ("paletin_thread", (79, 84, 89), (213, 196, 155), "thread"),
+    ("raw_paletin", (79, 84, 89), (213, 196, 155), "thread"),
     ("raw_rustcore", (89, 91, 94), (223, 216, 194), "nugget"),
-    ("sunmetal_fleck", (127, 81, 43), (255, 196, 74), "nugget"),
+    ("raw_sunmetal", (127, 81, 43), (255, 196, 74), "nugget"),
     ("lumen_crystal", (72, 176, 208), (203, 242, 250), "shard"),
-    ("niterstone", (95, 90, 82), (220, 214, 184), "nugget"),
+    ("spark_niter", (95, 90, 82), (220, 214, 184), "nugget"),
     ("brightsalt", (164, 174, 164), (246, 246, 225), "nugget"),
     ("shellgrit", (156, 139, 110), (229, 205, 171), "nugget"),
     ("resin_knot", (110, 72, 39), (230, 143, 50), "drop"),
-    ("berrybush", (50, 112, 54), (203, 56, 91), "berry"),
-    ("grain_stalk", (119, 135, 54), (228, 196, 81), "grain"),
-    ("umbralite_node", (37, 32, 59), (117, 81, 181), "shard"),
-    ("staropal_geode", (45, 42, 70), (227, 196, 255), "shard"),
+    ("berry_cluster", (50, 112, 54), (203, 56, 91), "berry"),
+    ("grain_bundle", (119, 135, 54), (228, 196, 81), "grain"),
+    ("reed_fiber", (84, 128, 64), (176, 190, 85), "thread"),
+    ("raw_morsel", (126, 63, 58), (226, 129, 112), "drop"),
+    ("berry_mash", (88, 42, 83), (210, 67, 129), "berry"),
+    ("flatbread", (164, 122, 62), (238, 196, 117), "grain"),
+    ("cooked_morsel", (99, 54, 40), (218, 126, 70), "drop"),
+    ("trail_ration", (116, 83, 48), (228, 176, 94), "kit"),
+    ("raw_umbralite", (37, 32, 59), (117, 81, 181), "shard"),
+    ("staropal_shard", (45, 42, 70), (227, 196, 255), "shard"),
     ("reedwood_delver", (113, 76, 48), (195, 217, 210), "pick"),
     ("reedwood_spade", (113, 76, 48), (195, 217, 210), "spade"),
     ("reedwood_feller", (113, 76, 48), (195, 217, 210), "axe"),
@@ -212,6 +222,14 @@ def block_pixel(base, accent, pattern, seed, x, y):
         use_accent = x == y or x + y == 15 or h % 13 == 0
     elif pattern == "veins":
         use_accent = x == (h + y) % 16 or h % 19 == 0
+    elif pattern == "ore_bands":
+        use_accent = y in (3, 4, 9, 10, 14) or (h % 37 == 0)
+    elif pattern == "ore_diagonal":
+        use_accent = (x + y) % 7 in (0, 1) or h % 31 == 0
+    elif pattern == "ore_cross":
+        use_accent = abs(x - y) <= 1 or abs((15 - x) - y) <= 1 or h % 41 == 0
+    elif pattern == "ore_threads":
+        use_accent = abs(math.sin((x + y) * 0.55) * 4 + (x - 8)) < 1.4 or h % 43 == 0
     elif pattern == "grid":
         use_accent = x % 7 == 0 or y % 7 == 0
     elif pattern == "glow":
@@ -250,6 +268,11 @@ def block_pixel(base, accent, pattern, seed, x, y):
         use_accent = y < 3 or x < 2 or h % 13 <= 1
     elif pattern == "berries":
         use_accent = h % 8 <= 2
+    elif pattern == "berries_cluster":
+        berry_centers = ((4, 5), (10, 4), (7, 9), (12, 11), (3, 12))
+        use_accent = any((x - cx) * (x - cx) + (y - cy) * (y - cy) <= 4 for cx, cy in berry_centers)
+    elif pattern == "grain_heads":
+        use_accent = x in (4, 7, 10, 13) or ((x + y) % 5 == 0 and 3 <= y <= 10)
     elif pattern == "flame":
         use_accent = center < 4 or y < 5 or h % 23 == 0
     elif pattern == "kiln":
@@ -267,7 +290,15 @@ def block_pixel(base, accent, pattern, seed, x, y):
 
 def make_block_tile(block):
     _, _, base, accent, pattern, seed = block
-    return [[block_pixel(base, accent, pattern, seed, x, y) for x in range(16)] for y in range(16)]
+    return [[block_pixel(base, accent, pattern, seed, x, y) for x in range(TILE_PIXELS)] for y in range(TILE_PIXELS)]
+
+
+def atlas_width():
+    return ATLAS_COLUMNS * ATLAS_TILE_STRIDE_PIXELS
+
+
+def atlas_height():
+    return ATLAS_ROWS * ATLAS_TILE_STRIDE_PIXELS
 
 
 def empty_image(width, height, color=(0, 0, 0, 0)):
@@ -493,7 +524,15 @@ def write_folder_meta(relative_path):
         )
 
 
-def write_texture_meta(relative_path, sprite=False, max_size=64):
+def write_texture_meta(
+    relative_path,
+    sprite=False,
+    max_size=64,
+    enable_mipmaps=False,
+    filter_mode=0,
+    aniso=1,
+    android_texture_compression=0,
+):
     path = os.path.join(ROOT, f"{relative_path}.meta")
     texture_type = 8 if sprite else 0
     sprite_mode = 1 if sprite else 0
@@ -509,7 +548,7 @@ def write_texture_meta(relative_path, sprite=False, max_size=64):
             "  serializedVersion: 13\n"
             "  mipmaps:\n"
             "    mipMapMode: 0\n"
-            "    enableMipMap: 0\n"
+            f"    enableMipMap: {1 if enable_mipmaps else 0}\n"
             "    sRGBTexture: 1\n"
             "    linearTexture: 0\n"
             "    fadeOut: 0\n"
@@ -536,8 +575,8 @@ def write_texture_meta(relative_path, sprite=False, max_size=64):
             f"  maxTextureSize: {max_size}\n"
             "  textureSettings:\n"
             "    serializedVersion: 2\n"
-            "    filterMode: 0\n"
-            "    aniso: 1\n"
+            f"    filterMode: {filter_mode}\n"
+            f"    aniso: {aniso}\n"
             "    mipBias: 0\n"
             "    wrapU: 1\n"
             "    wrapV: 1\n"
@@ -586,7 +625,7 @@ def write_texture_meta(relative_path, sprite=False, max_size=64):
             f"    maxTextureSize: {max_size}\n"
             "    resizeAlgorithm: 0\n"
             "    textureFormat: -1\n"
-            "    textureCompression: 0\n"
+            f"    textureCompression: {android_texture_compression}\n"
             "    compressionQuality: 50\n"
             "    crunchedCompression: 0\n"
             "    allowsAlphaSplitting: 0\n"
@@ -615,6 +654,22 @@ def write_texture_meta(relative_path, sprite=False, max_size=64):
         )
 
 
+def next_power_of_two(value):
+    return 1 << (value - 1).bit_length()
+
+
+def atlas_max_texture_size():
+    return next_power_of_two(max(atlas_width(), atlas_height()))
+
+
+def blit_padded_tile(atlas, tile, origin_x, origin_y):
+    for y in range(-ATLAS_TILE_PADDING_PIXELS, TILE_PIXELS + ATLAS_TILE_PADDING_PIXELS):
+        source_y = max(0, min(TILE_PIXELS - 1, y))
+        for x in range(-ATLAS_TILE_PADDING_PIXELS, TILE_PIXELS + ATLAS_TILE_PADDING_PIXELS):
+            source_x = max(0, min(TILE_PIXELS - 1, x))
+            atlas[origin_y + y][origin_x + x] = tile[source_y][source_x]
+
+
 def write_assets():
     for folder in [
         "Assets/Blockiverse/Art/Textures",
@@ -628,7 +683,7 @@ def write_assets():
         os.makedirs(os.path.join(ROOT, folder), exist_ok=True)
         write_folder_meta(folder)
 
-    atlas = empty_image(ATLAS_COLUMNS * 16, ATLAS_ROWS * 16, (58, 60, 65, 255))
+    atlas = empty_image(atlas_width(), atlas_height(), (58, 60, 65, 255))
 
     for block in BLOCKS:
         name, tile_index, *_ = block
@@ -637,14 +692,20 @@ def write_assets():
         write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=16)
         tile_x = tile_index % ATLAS_COLUMNS
         tile_y = tile_index // ATLAS_COLUMNS
-        origin_x = tile_x * 16
-        origin_y = tile_y * 16
-        for y in range(16):
-            for x in range(16):
-                atlas[origin_y + y][origin_x + x] = tile[y][x]
+        origin_x = tile_x * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
+        origin_y = tile_y * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
+        blit_padded_tile(atlas, tile, origin_x, origin_y)
 
     write_png(ATLAS_PATH, atlas)
-    write_texture_meta(ATLAS_PATH, sprite=False, max_size=max(ATLAS_COLUMNS, ATLAS_ROWS) * 16)
+    write_texture_meta(
+        ATLAS_PATH,
+        sprite=False,
+        max_size=atlas_max_texture_size(),
+        enable_mipmaps=True,
+        filter_mode=2,
+        aniso=4,
+        android_texture_compression=1,
+    )
 
     for item in ITEMS:
         name = item[0]

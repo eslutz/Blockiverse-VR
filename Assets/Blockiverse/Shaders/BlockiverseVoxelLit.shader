@@ -23,9 +23,6 @@ Shader "Blockiverse/Voxel Lit"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
-            #pragma multi_compile _ _ADDITIONAL_LIGHTS
-            #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_fog
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -55,7 +52,6 @@ Shader "Blockiverse/Voxel Lit"
                 float2 uv : TEXCOORD2;
                 float4 color : COLOR;
                 float fogCoord : TEXCOORD3;
-                float4 shadowCoord : TEXCOORD4;
             };
 
             Varyings vert(Attributes input)
@@ -70,7 +66,6 @@ Shader "Blockiverse/Voxel Lit"
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.color = input.color;
                 output.fogCoord = ComputeFogFactor(positionInputs.positionCS.z);
-                output.shadowCoord = GetShadowCoord(positionInputs);
                 return output;
             }
 
@@ -78,20 +73,10 @@ Shader "Blockiverse/Voxel Lit"
             {
                 half4 sampled = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor * input.color;
                 half3 normalWS = NormalizeNormalPerPixel(input.normalWS);
-                Light mainLight = GetMainLight(input.shadowCoord);
+                Light mainLight = GetMainLight();
                 half3 lighting = SampleSH(normalWS);
                 half mainNdotL = saturate(dot(normalWS, mainLight.direction));
-                lighting += mainLight.color * (mainNdotL * mainLight.shadowAttenuation);
-
-                #if defined(_ADDITIONAL_LIGHTS)
-                uint pixelLightCount = GetAdditionalLightsCount();
-                for (uint lightIndex = 0u; lightIndex < pixelLightCount; lightIndex++)
-                {
-                    Light light = GetAdditionalLight(lightIndex, input.positionWS);
-                    half ndotl = saturate(dot(normalWS, light.direction));
-                    lighting += light.color * (ndotl * light.distanceAttenuation * light.shadowAttenuation);
-                }
-                #endif
+                lighting += mainLight.color * mainNdotL;
 
                 half3 color = sampled.rgb * lighting;
                 color = MixFog(color, input.fogCoord);
@@ -100,20 +85,6 @@ Shader "Blockiverse/Voxel Lit"
             ENDHLSL
         }
 
-        Pass
-        {
-            Name "ShadowCaster"
-            Tags { "LightMode" = "ShadowCaster" }
-
-            ColorMask 0
-
-            HLSLPROGRAM
-            #pragma vertex ShadowPassVertex
-            #pragma fragment ShadowPassFragment
-
-            #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
-            ENDHLSL
-        }
     }
 
     FallBack "Hidden/Universal Render Pipeline/FallbackError"

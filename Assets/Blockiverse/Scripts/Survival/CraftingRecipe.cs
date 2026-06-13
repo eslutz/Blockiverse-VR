@@ -18,19 +18,17 @@ namespace Blockiverse.Survival
     {
         // Human-readable station name for UI ("ClayKiln" → "Clay Kiln"); matches the placed
         // station blocks' display names in BlockRegistry.
-        public static string DisplayName(CraftingStation station)
+        public static string DisplayName(CraftingStation station) => station switch
         {
-            string name = station.ToString();
-            var builder = new System.Text.StringBuilder(name.Length + 2);
-            for (int i = 0; i < name.Length; i++)
-            {
-                if (i > 0 && char.IsUpper(name[i]))
-                    builder.Append(' ');
-                builder.Append(name[i]);
-            }
-
-            return builder.ToString();
-        }
+            CraftingStation.None => "Handcraft",
+            CraftingStation.BuildTable => "Build Table",
+            CraftingStation.ClayKiln => "Clay Kiln",
+            CraftingStation.BellowsForge => "Bellows Forge",
+            CraftingStation.PrepBoard => "Prep Board",
+            CraftingStation.MendBench => "Mend Bench",
+            CraftingStation.Campfire => "Campfire",
+            _ => "Unknown Station",
+        };
     }
 
     public sealed class CraftingRecipe

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Core;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -7,6 +8,8 @@ namespace Blockiverse.Gameplay
 {
     public sealed class CreativeInteractionController : MonoBehaviour
     {
+        public const float MaxBlockInteractionReachMeters = 6.0f;
+
         readonly List<SetBlockCommand> undoStack = new();
         // Undone edits eligible for redo (§12.1); cleared whenever a fresh edit lands.
         readonly List<SetBlockCommand> redoStack = new();
@@ -24,6 +27,8 @@ namespace Blockiverse.Gameplay
         public BlockMutationAuthority MutationAuthority => mutationAuthority;
         public BlockMutationResult LastMutationResult { get; private set; }
         public bool BlockEditingEnabled => blockEditingEnabled;
+        public int UndoHistoryCount => undoStack.Count;
+        public int RedoHistoryCount => redoStack.Count;
 
         /// <summary>Raised after a block mutation is locally applied so presentation systems (audio, haptics) can react.</summary>
         public event Action<BlockChange> BlockMutationApplied;
@@ -39,6 +44,7 @@ namespace Blockiverse.Gameplay
             BlockMutationAuthority authority = null,
             MultiplayerChunkAuthoritySync authoritySync = null)
         {
+            bool worldChanged = world != null && !ReferenceEquals(world, voxelWorld);
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             hotbar = creativeHotbar;
@@ -47,6 +53,17 @@ namespace Blockiverse.Gameplay
             worldRenderer = renderer;
             mutationAuthority = authority ?? BlockMutationAuthority.CreateHost(world, registry);
             chunkAuthoritySync = authoritySync;
+
+            if (worldChanged)
+                ResetEditHistory();
+        }
+
+        public void ResetEditHistory()
+        {
+            undoStack.Clear();
+            redoStack.Clear();
+            CurrentTarget = null;
+            placementPreview?.Hide();
         }
 
         public static BlockPosition ComputePlacementPosition(BlockPosition targetPosition, Vector3 faceNormal)
@@ -77,9 +94,33 @@ namespace Blockiverse.Gameplay
             Mathf.FloorToInt(worldPosition.y),
             Mathf.FloorToInt(worldPosition.z));
 
+        public static bool IsBlockWithinInteractionReach(Vector3 origin, BlockPosition target)
+        {
+            float distanceX = DistanceOutsideAxis(origin.x, target.X, target.X + 1);
+            float distanceY = DistanceOutsideAxis(origin.y, target.Y, target.Y + 1);
+            float distanceZ = DistanceOutsideAxis(origin.z, target.Z, target.Z + 1);
+            float maxDistance = MaxBlockInteractionReachMeters;
+
+            return distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ <= maxDistance * maxDistance;
+        }
+
+        static float DistanceOutsideAxis(float value, int minInclusive, int maxExclusive)
+        {
+            if (value < minInclusive)
+                return minInclusive - value;
+
+            if (value > maxExclusive)
+                return value - maxExclusive;
+
+            return 0.0f;
+        }
+
         public bool TryBreakBlock(BlockPosition position)
         {
             EnsureConfigured();
+
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return RejectWorldInputBlocked(position);
 
             if (!blockEditingEnabled)
                 return RejectBlockEditingDisabled(position);
@@ -95,6 +136,9 @@ namespace Blockiverse.Gameplay
         public bool TryPlaceAt(BlockPosition position)
         {
             EnsureConfigured();
+
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return RejectWorldInputBlocked(position);
 
             if (!blockEditingEnabled)
                 return RejectBlockEditingDisabled(position);
@@ -114,6 +158,9 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return false;
+
             if (!blockEditingEnabled)
                 return false;
 
@@ -132,6 +179,12 @@ namespace Blockiverse.Gameplay
         public bool UndoLast()
         {
             EnsureConfigured();
+
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+            {
+                BlockPosition position = undoStack.Count > 0 ? undoStack[undoStack.Count - 1].Position : default;
+                return RejectWorldInputBlocked(position);
+            }
 
             if (!blockEditingEnabled)
             {
@@ -188,6 +241,12 @@ namespace Blockiverse.Gameplay
         {
             EnsureConfigured();
 
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+            {
+                BlockPosition position = redoStack.Count > 0 ? redoStack[redoStack.Count - 1].Position : default;
+                return RejectWorldInputBlocked(position);
+            }
+
             if (!blockEditingEnabled)
             {
                 BlockPosition position = redoStack.Count > 0 ? redoStack[redoStack.Count - 1].Position : default;
@@ -240,6 +299,18 @@ namespace Blockiverse.Gameplay
         // Consumed by the creative tools panel for corner selection / pick-block.
         public BlockPosition? CurrentTarget { get; private set; }
 
+        public bool TryGetBlock(BlockPosition position, out BlockId block)
+        {
+            if (world != null && world.Bounds.Contains(position))
+            {
+                block = world.GetBlock(position);
+                return true;
+            }
+
+            block = BlockRegistry.Air;
+            return false;
+        }
+
         public void UpdatePreview(BlockPosition targetPosition, Vector3 faceNormal)
         {
             CurrentTarget = targetPosition;
@@ -247,7 +318,7 @@ namespace Blockiverse.Gameplay
             if (placementPreview == null)
                 return;
 
-            if (!blockEditingEnabled)
+            if (!BlockiverseRuntimeState.AllowWorldInput || !blockEditingEnabled)
             {
                 placementPreview?.Hide();
                 return;
@@ -290,6 +361,9 @@ namespace Blockiverse.Gameplay
 
         bool TryMutate(BlockPosition position, BlockId newBlock, bool pushUndo)
         {
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return RejectWorldInputBlocked(position);
+
             if (!blockEditingEnabled)
                 return RejectBlockEditingDisabled(position);
 
@@ -323,6 +397,15 @@ namespace Blockiverse.Gameplay
                 BlockMutationRejectionReason.BlockEditingDisabled,
                 ChunkCoordinate.FromBlockPosition(position, world.ChunkSize),
                 "Block editing is disabled.");
+            return false;
+        }
+
+        bool RejectWorldInputBlocked(BlockPosition position)
+        {
+            LastMutationResult = BlockMutationResult.Reject(
+                BlockMutationRejectionReason.WorldInputBlocked,
+                ChunkCoordinate.FromBlockPosition(position, world.ChunkSize),
+                "World input is blocked by the active UI screen.");
             return false;
         }
 

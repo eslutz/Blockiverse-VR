@@ -78,9 +78,9 @@ The palette should stay bright, readable, and varied:
 Block textures:
 
 - Source tiles are 16x16 RGBA PNG files.
-- The runtime atlas is a committed 8x10, 128x160 RGBA PNG.
+- The runtime atlas is a committed 8x10 padded RGBA PNG: 16x16 source pixels per tile, 4 duplicated border pixels per side, 192x240 total.
 - Tile order follows the runtime atlas mapping for the current canonical registry. Historical temporary atlas ordering may be retained only while migration tests still cover old saved worlds.
-- Use point filtering, clamp wrapping, and no mipmaps unless headset validation proves a different import profile is readable.
+- Use trilinear filtering, mipmaps, clamp wrapping, and the duplicated tile borders to avoid stereo shimmer without mip bleed across neighboring tiles.
 - Keep silhouettes and color families distinct enough to read in Quest headset validation.
 
 Item and UI textures:

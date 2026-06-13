@@ -26,11 +26,6 @@ namespace Blockiverse.Gameplay
 
     public readonly struct GeneratedCreativeWorld
     {
-        public GeneratedCreativeWorld(BlockRegistry registry, WorldGenerationSettings settings, VoxelWorld world)
-            : this(registry, settings, world, InferGenerationPreset(settings))
-        {
-        }
-
         public GeneratedCreativeWorld(
             BlockRegistry registry,
             WorldGenerationSettings settings,
@@ -51,13 +46,6 @@ namespace Blockiverse.Gameplay
         public CreativeWorldGenerationPreset GenerationPreset { get; }
         // Container loot rolled during generation (null when the preset places none).
         public IReadOnlyList<StructureContainerLoot> ContainerLoot { get; }
-
-        static CreativeWorldGenerationPreset InferGenerationPreset(WorldGenerationSettings settings)
-        {
-            return settings != null && settings.Bounds.Height >= 32
-                ? CreativeWorldGenerationPreset.SurvivalLite
-                : CreativeWorldGenerationPreset.FlatCreative;
-        }
     }
 
     public sealed class CreativeWorldManager : MonoBehaviour
@@ -68,6 +56,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeHotbar hotbar;
         [SerializeField] PlacementPreview placementPreview;
         [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
+        [SerializeField] bool initializeDefaultWorldOnAwake;
         MultiplayerChunkAuthoritySync authoritySync;
         TorchbudLightManager torchbudLightManager;
         WeatherService weatherService;
@@ -98,9 +87,14 @@ namespace Blockiverse.Gameplay
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
 
-        // The world's rules mode. The bare boot sandbox defaults to Creative; saves and the
-        // new-world flow set it from their manifest/config (see SetGameMode/ParseGameMode).
+        // The world's rules mode. Explicitly initialized sandbox worlds default to Creative; saves
+        // and the new-world flow set it from their manifest/config (see SetGameMode/ParseGameMode).
         public WorldGameMode GameMode { get; private set; } = WorldGameMode.Creative;
+        public bool InitializeDefaultWorldOnAwake
+        {
+            get => initializeDefaultWorldOnAwake;
+            set => initializeDefaultWorldOnAwake = value;
+        }
 
         public void SetGameMode(WorldGameMode mode) => GameMode = mode;
 
@@ -168,15 +162,20 @@ namespace Blockiverse.Gameplay
                 : new WeatherSyncState(WeatherState.Clear, 0, 1u);
 
         // Restores weather state (incl. RNG) received from a host snapshot, preserving lockstep.
-        // If the service does not exist yet (snapshot arrived before world init), the full state is
-        // buffered and applied at the end of ConfigureEnvironmentServices — no ticks/RNG are lost.
-        public void RestoreWeatherSyncState(WeatherSyncState sync)
+        // If the service does not exist yet, or if a network caller knows the host world is about
+        // to replace this world, the full state is buffered and applied at the end of
+        // ConfigureEnvironmentServices — no ticks/RNG are lost across message ordering.
+        public void RestoreWeatherSyncState(WeatherSyncState sync, bool preserveForNextWorldInitialization = false)
         {
+            if (preserveForNextWorldInitialization)
+                pendingWeatherSync = sync;
+
             if (weatherService == null)
             {
                 pendingWeatherSync = sync;
                 return;
             }
+
             weatherService.RestoreState(sync.State, sync.Ticks, sync.RngState);
         }
 
@@ -348,7 +347,8 @@ namespace Blockiverse.Gameplay
 
         public void InitializeGeneratedWorld(
             GeneratedCreativeWorld generatedWorld,
-            MultiplayerChunkAuthoritySync authoritySyncOverride = null)
+            MultiplayerChunkAuthoritySync authoritySyncOverride = null,
+            bool deferInitialRendererRebuild = false)
         {
             if (generatedWorld.Registry == null)
                 throw new ArgumentException("Generated world requires a block registry.", nameof(generatedWorld));
@@ -363,20 +363,9 @@ namespace Blockiverse.Gameplay
             GenerationPreset = generatedWorld.GenerationPreset;
             World = generatedWorld.World;
             pendingContainerLoot = generatedWorld.ContainerLoot;
-            ConfigureWorldRuntime(settings, authoritySyncOverride);
+            pendingWorldTimeTicks = 0;
+            ConfigureWorldRuntime(settings, authoritySyncOverride, deferInitialRendererRebuild);
             PositionRigAtSpawn(settings.SpawnPosition);
-        }
-
-        public void InitializeAuthoritativeWorldSnapshot(
-            BlockRegistry registry,
-            VoxelWorld world,
-            MultiplayerChunkAuthoritySync authoritySyncOverride = null)
-        {
-            Registry = registry ?? throw new ArgumentNullException(nameof(registry));
-            Settings = null;
-            GenerationPreset = CreativeWorldGenerationPreset.SurvivalLite;
-            World = world ?? throw new ArgumentNullException(nameof(world));
-            ConfigureWorldRuntime(null, authoritySyncOverride);
         }
 
         public void ConfigureAuthoritySync(MultiplayerChunkAuthoritySync sync)
@@ -392,7 +381,8 @@ namespace Blockiverse.Gameplay
 
         void ConfigureWorldRuntime(
             WorldGenerationSettings settings,
-            MultiplayerChunkAuthoritySync authoritySyncOverride = null)
+            MultiplayerChunkAuthoritySync authoritySyncOverride = null,
+            bool deferInitialRendererRebuild = false)
         {
             if (World == null)
                 throw new InvalidOperationException("Creative world runtime requires voxel data.");
@@ -407,7 +397,8 @@ namespace Blockiverse.Gameplay
                 World,
                 Registry,
                 chunkMaterial,
-                interactionLayer);
+                interactionLayer,
+                deferInitialRendererRebuild);
 
             ConfigureTorchbudLights();
             ConfigureEnvironmentServices(settings);
@@ -527,7 +518,7 @@ namespace Blockiverse.Gameplay
             // and removing a log may orphan the leaves around it.
             if (b == BlockRegistry.Leafmoss)
                 vegetationService?.MarkLeafDecayCandidate(change.Position);
-            if (change.PreviousBlock == BlockRegistry.BranchwoodLog && b != BlockRegistry.BranchwoodLog)
+            if (VegetationService.IsLeafSupportBlock(change.PreviousBlock) && !VegetationService.IsLeafSupportBlock(b))
                 vegetationService?.MarkLeafDecayCandidates(World, change.Position);
 
             // Harvesting a berrybush (cleared to air) queues it to regrow after two game days (§3).
@@ -571,7 +562,7 @@ namespace Blockiverse.Gameplay
 
         // ── Container contents (structure loot crates) ───────────────────────
 
-        ItemRegistry ContainerItemRegistry => containerItemRegistry ??= ItemRegistry.CreateDefault();
+        ItemRegistry ContainerItemRegistry => containerItemRegistry ??= ItemRegistry.Default;
 
         void BuildContainerStore()
         {
@@ -595,6 +586,11 @@ namespace Blockiverse.Gameplay
 
         // The container contents store (structure loot crates). May be null before a world is loaded.
         public ContainerInventoryStore ContainerStore => containerStore;
+        public ContainerInventoryStore GetOrCreateContainerStore()
+        {
+            containerStore ??= new ContainerInventoryStore(ContainerItemRegistry);
+            return containerStore;
+        }
 
         // The inventory that receives loot when a player breaks a container. Set by the survival
         // runtime (the active player's inventory). Null disables auto-loot.
@@ -629,15 +625,20 @@ namespace Blockiverse.Gameplay
             return looted;
         }
 
+        public void NotifyContainerLooted(BlockPosition position)
+        {
+            ContainerLooted?.Invoke(position);
+        }
+
         // Replaces the live container store with saved contents on load (saved state is authoritative
         // over regenerated loot, so emptied crates stay empty across reloads).
-        public void RestoreContainerStore(IEnumerable<(BlockPosition position, IEnumerable<(string itemId, int count)> items)> savedContainers)
+        public void RestoreContainerStore(IEnumerable<(BlockPosition position, IEnumerable<(string itemId, int count, int durability)> items)> savedContainers)
         {
-            containerStore ??= new ContainerInventoryStore(ContainerItemRegistry);
+            containerStore = new ContainerInventoryStore(ContainerItemRegistry);
             if (savedContainers == null)
                 return;
 
-            foreach ((BlockPosition position, IEnumerable<(string itemId, int count)> items) in savedContainers)
+            foreach ((BlockPosition position, IEnumerable<(string itemId, int count, int durability)> items) in savedContainers)
                 containerStore.Populate(position, items);
         }
 
@@ -649,14 +650,31 @@ namespace Blockiverse.Gameplay
                 vegetationService?.TickLeafDecay(World, ticks);
                 vegetationService?.TickSapling(World, ticks);
                 vegetationService?.TickWildRegrowth(World, CurrentWorldTick);
-                farmingService?.TickGrowth(World, CurrentWorldTick);
+                farmingService?.TickGrowth(World, CurrentWorldTick, ResolveCropGrowthConditions);
                 farmingService?.TickRegrowth(World, ticks);
                 fluidFlowService?.Tick(World, CurrentWorldTick);
 
                 // World-sim mutations only mark chunks dirty; repaint them here so growth and
                 // flow are visible without waiting for a player edit to trigger a rebuild.
-                Renderer?.RebuildDirty();
+                if (Renderer != null)
+                    Renderer.RebuildDirty();
             }
+        }
+
+        CropGrowthConditions ResolveCropGrowthConditions(BlockPosition cropPosition)
+        {
+            if (World == null)
+                return CropGrowthConditions.Favorable;
+
+            BlockRegistry registry = Registry ?? BlockRegistry.Default;
+            VoxelSkyLightMap skyLight = Renderer != null ? Renderer.SkyLight : null;
+            float sampledLight = VoxelLightSampler.SampleAirLight(World, registry, cropPosition, skyLight: skyLight);
+            int lightLevel = Mathf.RoundToInt(Mathf.Clamp01(sampledLight) * 15.0f);
+
+            var soilPosition = new BlockPosition(cropPosition.X, cropPosition.Y - 1, cropPosition.Z);
+            bool soilMoist = World.Bounds.Contains(soilPosition) &&
+                             FarmingService.HasFreshwaterNearby(World, soilPosition);
+            return new CropGrowthConditions(lightLevel, soilMoist);
         }
 
         void OnDestroy()
@@ -713,21 +731,29 @@ namespace Blockiverse.Gameplay
                 BlockiverseVoidSafetyFloor.DefaultFallAllowanceMeters,
                 BlockiverseVoidSafetyFloor.DefaultThicknessMeters,
                 BlockiverseVoidSafetyFloor.DefaultHorizontalMarginMeters,
-                interactionLayer);
+                interactionLayer,
+                ResolveVoidRecoverySpawnPosition());
+        }
+
+        BlockPosition ResolveVoidRecoverySpawnPosition()
+        {
+            if (Settings != null)
+                return Settings.SpawnPosition;
+
+            int x = World.Bounds.Width / 2;
+            int z = World.Bounds.Depth / 2;
+            int surfaceY = StructureService.FindSurfaceY(World, x, z);
+            return new BlockPosition(x, surfaceY >= 0 ? surfaceY + 1 : 1, z);
         }
 
         public static GeneratedCreativeWorld CreateDefaultGeneratedWorld(int seed = 6401)
         {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
-            var preset = new SurvivalTerrainPreset(registry, settings);
-            VoxelWorld world = preset.Generate();
-            return new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.SurvivalLite, preset.ContainerLoot);
+            return WorldSaveGeneration.GenerateDefaultWorld(seed);
         }
 
         void Awake()
         {
-            if (World == null)
+            if (initializeDefaultWorldOnAwake && World == null)
                 InitializeDefaultWorld();
         }
 
@@ -735,21 +761,23 @@ namespace Blockiverse.Gameplay
         // respawn (SurvivalVitalsRuntime) — public because no InternalsVisibleTo covers the UI assembly.
         public static void PositionRigAtSpawn(BlockPosition spawnPosition)
         {
-            GameObject rigObject = GameObject.Find(BlockiverseProject.XrRigRootName);
-            if (rigObject == null)
+            if (!BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig))
                 return;
 
-            rigObject.transform.position = new Vector3(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
+            Vector3 position = new(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
+            float yawDegrees = rig.eulerAngles.y;
+            if (!BlockiverseComfortTransition.TryMoveRigWithComfort(rig, position, yawDegrees))
+                rig.position = position;
         }
 
         // Places the rig at a saved player position/heading (world load with saved player state).
         public static void PositionRig(Vector3 position, float yawDegrees)
         {
-            GameObject rigObject = GameObject.Find(BlockiverseProject.XrRigRootName);
-            if (rigObject == null)
+            if (!BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig))
                 return;
 
-            rigObject.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yawDegrees, 0f));
+            if (!BlockiverseComfortTransition.TryMoveRigWithComfort(rig, position, yawDegrees))
+                rig.SetPositionAndRotation(position, Quaternion.Euler(0f, yawDegrees, 0f));
         }
 
         PlacementPreview CreatePlacementPreview()
@@ -778,9 +806,11 @@ namespace Blockiverse.Gameplay
 
         static Material CreatePreviewMaterial()
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ??
-                            Shader.Find("Sprites/Default") ??
-                            Shader.Find("Standard");
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null)
+                shader = Shader.Find("Sprites/Default");
+            if (shader == null)
+                shader = Shader.Find("Standard");
             var material = new Material(shader);
 
             if (material.HasProperty("_BaseColor"))

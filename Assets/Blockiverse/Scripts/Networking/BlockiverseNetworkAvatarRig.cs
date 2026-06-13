@@ -1,9 +1,14 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace Blockiverse.Networking
 {
+    // Used in two modes:
+    // - On the local XR rig prefab as an unspawned pose/fallback-avatar proxy; do not add a
+    //   NetworkObject to BlockiverseXRRig just to satisfy the NetworkBehaviour base type.
+    // - On the spawned network player prefab with a NetworkObject, where RPC pose relay runs.
     [DisallowMultipleComponent]
     public sealed class BlockiverseNetworkAvatarRig : NetworkBehaviour
     {
@@ -15,19 +20,20 @@ namespace Blockiverse.Networking
         const string HeadVisualName = "Fallback Head";
         const string LeftHandVisualName = "Fallback Left Hand";
         const string RightHandVisualName = "Fallback Right Hand";
+        const string CameraOffsetName = "Camera Offset";
+        const string LeftControllerName = "Left Controller";
+        const string RightControllerName = "Right Controller";
+        const float TrackingFallbackSearchIntervalSeconds = 1.0f;
 
         static readonly Vector3 DefaultHeadLocalPosition = new(0.0f, 1.62f, 0.0f);
         static readonly Vector3 DefaultLeftHandLocalPosition = new(-0.38f, 1.18f, 0.28f);
         static readonly Vector3 DefaultRightHandLocalPosition = new(0.38f, 1.18f, 0.28f);
 
-        readonly NetworkVariable<AvatarPose> synchronizedPose = new(
-            AvatarPose.Default,
-            NetworkVariableReadPermission.Everyone,
-            NetworkVariableWritePermission.Owner);
-
         [SerializeField] bool fallbackProxyEnabled = true;
         [SerializeField] bool metaAvatarAvailable;
         [SerializeField] float poseSendRateHz = 30.0f;
+        [SerializeField] float remotePoseInterpolationSpeed = 18.0f;
+        [SerializeField] Transform rootTrackingSource;
         [SerializeField] Transform headTrackingSource;
         [SerializeField] Transform leftHandTrackingSource;
         [SerializeField] Transform rightHandTrackingSource;
@@ -40,11 +46,17 @@ namespace Blockiverse.Networking
 
         Renderer[] fallbackRenderers = Array.Empty<Renderer>();
         Material fallbackMaterial;
+        readonly List<ulong> remotePoseTargetClientIds = new();
+        AvatarPose targetRemotePose = AvatarPose.Default;
+        AvatarPose smoothedRemotePose = AvatarPose.Default;
+        bool hasRemotePose;
         float nextPoseSendTime;
+        float nextTrackingFallbackSearchTime;
 
         public bool FallbackProxyEnabled => fallbackProxyEnabled;
         public bool MetaAvatarAvailable => metaAvatarAvailable;
         public bool IsUsingFallbackProxy { get; private set; }
+        public float RemotePoseInterpolationSpeed => remotePoseInterpolationSpeed;
         public Transform FallbackRoot => fallbackRoot;
         public Transform HeadAnchor => headAnchor;
         public Transform LeftHandAnchor => leftHandAnchor;
@@ -52,6 +64,12 @@ namespace Blockiverse.Networking
 
         public void ConfigureTrackingSources(Transform head, Transform leftHand, Transform rightHand)
         {
+            ConfigureTrackingSources(null, head, leftHand, rightHand);
+        }
+
+        public void ConfigureTrackingSources(Transform root, Transform head, Transform leftHand, Transform rightHand)
+        {
+            rootTrackingSource = root;
             headTrackingSource = head;
             leftHandTrackingSource = leftHand;
             rightHandTrackingSource = rightHand;
@@ -72,7 +90,7 @@ namespace Blockiverse.Networking
             if (IsOwner)
                 PublishPose();
             else
-                ApplyPose(synchronizedPose.Value);
+                ApplySmoothedRemotePose(snap: true);
         }
 
         void LateUpdate()
@@ -90,7 +108,7 @@ namespace Blockiverse.Networking
             }
             else
             {
-                ApplyPose(synchronizedPose.Value);
+                ApplySmoothedRemotePose();
             }
         }
 
@@ -152,11 +170,58 @@ namespace Blockiverse.Networking
                 return;
 
             nextPoseSendTime = Time.unscaledTime + minInterval;
-            synchronizedPose.Value = AvatarPose.FromTransforms(
+            AvatarPose pose = AvatarPose.FromTransforms(
                 transform,
                 headAnchor,
                 leftHandAnchor,
                 rightHandAnchor);
+
+            SubmitAvatarPoseServerRpc(pose);
+        }
+
+        [ServerRpc(Delivery = RpcDelivery.Unreliable)]
+        void SubmitAvatarPoseServerRpc(AvatarPose pose)
+        {
+            ClientRpcParams recipients = BuildRemotePoseRecipients();
+            if (remotePoseTargetClientIds.Count > 0)
+                ReceiveAvatarPoseClientRpc(pose, recipients);
+        }
+
+        [ClientRpc(Delivery = RpcDelivery.Unreliable)]
+        void ReceiveAvatarPoseClientRpc(AvatarPose pose, ClientRpcParams clientRpcParams = default)
+        {
+            if (IsOwner)
+                return;
+
+            targetRemotePose = pose;
+            if (!hasRemotePose)
+            {
+                smoothedRemotePose = pose;
+                hasRemotePose = true;
+                ApplyPose(smoothedRemotePose);
+            }
+        }
+
+        ClientRpcParams BuildRemotePoseRecipients()
+        {
+            remotePoseTargetClientIds.Clear();
+
+            if (NetworkManager != null)
+            {
+                foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+                {
+                    if (clientId != OwnerClientId)
+                        remotePoseTargetClientIds.Add(clientId);
+                }
+            }
+
+            return new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams
+                {
+                    TargetClientIds = remotePoseTargetClientIds,
+                },
+            };
         }
 
         void ApplyTrackingSources()
@@ -166,10 +231,19 @@ namespace Blockiverse.Networking
             if (headTrackingSource == null && leftHandTrackingSource == null && rightHandTrackingSource == null)
                 return;
 
+            ApplyRootTrackingSource();
             ApplyLocalPose(
                 ToLocalPose(headTrackingSource, DefaultHeadLocalPosition),
                 ToLocalPose(leftHandTrackingSource, DefaultLeftHandLocalPosition),
                 ToLocalPose(rightHandTrackingSource, DefaultRightHandLocalPosition));
+        }
+
+        void ApplyRootTrackingSource()
+        {
+            if (rootTrackingSource == null || rootTrackingSource == transform)
+                return;
+
+            transform.SetPositionAndRotation(rootTrackingSource.position, rootTrackingSource.rotation);
         }
 
         Pose ToLocalPose(Transform source, Vector3 fallbackPosition)
@@ -189,6 +263,22 @@ namespace Blockiverse.Networking
                 new Pose(pose.HeadLocalPosition, pose.HeadLocalRotation),
                 new Pose(pose.LeftHandLocalPosition, pose.LeftHandLocalRotation),
                 new Pose(pose.RightHandLocalPosition, pose.RightHandLocalRotation));
+        }
+
+        void ApplySmoothedRemotePose(bool snap = false)
+        {
+            if (!hasRemotePose)
+            {
+                smoothedRemotePose = targetRemotePose;
+                ApplyPose(smoothedRemotePose);
+                return;
+            }
+
+            float t = snap
+                ? 1.0f
+                : 1.0f - Mathf.Exp(-Mathf.Max(0.0f, remotePoseInterpolationSpeed) * Time.deltaTime);
+            smoothedRemotePose = AvatarPose.Lerp(smoothedRemotePose, targetRemotePose, t);
+            ApplyPose(smoothedRemotePose);
         }
 
         void ApplyLocalPose(Pose headPose, Pose leftHandPose, Pose rightHandPose)
@@ -273,14 +363,62 @@ namespace Blockiverse.Networking
             if (headTrackingSource == null && Camera.main != null)
                 headTrackingSource = Camera.main.transform;
 
-            if (leftHandTrackingSource == null)
-                leftHandTrackingSource = FindNamedTransform("Left Controller");
+            ResolveHandSourcesFromKnownRig();
 
-            if (rightHandTrackingSource == null)
-                rightHandTrackingSource = FindNamedTransform("Right Controller");
+            if ((leftHandTrackingSource == null || rightHandTrackingSource == null) &&
+                Time.unscaledTime >= nextTrackingFallbackSearchTime)
+            {
+                nextTrackingFallbackSearchTime = Time.unscaledTime + TrackingFallbackSearchIntervalSeconds;
+
+                if (leftHandTrackingSource == null)
+                    leftHandTrackingSource = FindNamedTransformGlobally(LeftControllerName);
+
+                if (rightHandTrackingSource == null)
+                    rightHandTrackingSource = FindNamedTransformGlobally(RightControllerName);
+            }
+
+            if (rootTrackingSource == null)
+                rootTrackingSource = InferTrackingRootSource();
         }
 
-        static Transform FindNamedTransform(string targetName)
+        void ResolveHandSourcesFromKnownRig()
+        {
+            Transform cameraOffset = ResolveCameraOffset();
+
+            if (leftHandTrackingSource == null)
+                leftHandTrackingSource = cameraOffset != null ? cameraOffset.Find(LeftControllerName) : null;
+
+            if (rightHandTrackingSource == null)
+                rightHandTrackingSource = cameraOffset != null ? cameraOffset.Find(RightControllerName) : null;
+        }
+
+        Transform ResolveCameraOffset()
+        {
+            if (rootTrackingSource != null)
+            {
+                Transform cameraOffset = rootTrackingSource.Find(CameraOffsetName);
+                if (cameraOffset != null)
+                    return cameraOffset;
+            }
+
+            if (headTrackingSource != null && headTrackingSource.parent != null)
+            {
+                Transform parent = headTrackingSource.parent;
+                if (parent.name == CameraOffsetName)
+                    return parent;
+            }
+
+            return null;
+        }
+
+        Transform InferTrackingRootSource()
+        {
+            Transform source = headTrackingSource ?? leftHandTrackingSource ?? rightHandTrackingSource;
+            Transform root = source != null ? source.root : null;
+            return root != null && root != source && root != transform ? root : null;
+        }
+
+        static Transform FindNamedTransformGlobally(string targetName)
         {
             foreach (Transform candidate in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
@@ -363,7 +501,7 @@ namespace Blockiverse.Networking
                 DestroyImmediate(target);
         }
 
-        struct AvatarPose : INetworkSerializable, IEquatable<AvatarPose>
+        public struct AvatarPose : INetworkSerializable, IEquatable<AvatarPose>
         {
             public Vector3 RootPosition;
             public Quaternion RootRotation;
@@ -402,6 +540,22 @@ namespace Blockiverse.Networking
                     LeftHandLocalRotation = leftHand != null ? leftHand.localRotation : Quaternion.identity,
                     RightHandLocalPosition = rightHand != null ? rightHand.localPosition : DefaultRightHandLocalPosition,
                     RightHandLocalRotation = rightHand != null ? rightHand.localRotation : Quaternion.identity
+                };
+            }
+
+            public static AvatarPose Lerp(AvatarPose from, AvatarPose to, float t)
+            {
+                t = Mathf.Clamp01(t);
+                return new AvatarPose
+                {
+                    RootPosition = Vector3.LerpUnclamped(from.RootPosition, to.RootPosition, t),
+                    RootRotation = Quaternion.SlerpUnclamped(from.RootRotation, to.RootRotation, t),
+                    HeadLocalPosition = Vector3.LerpUnclamped(from.HeadLocalPosition, to.HeadLocalPosition, t),
+                    HeadLocalRotation = Quaternion.SlerpUnclamped(from.HeadLocalRotation, to.HeadLocalRotation, t),
+                    LeftHandLocalPosition = Vector3.LerpUnclamped(from.LeftHandLocalPosition, to.LeftHandLocalPosition, t),
+                    LeftHandLocalRotation = Quaternion.SlerpUnclamped(from.LeftHandLocalRotation, to.LeftHandLocalRotation, t),
+                    RightHandLocalPosition = Vector3.LerpUnclamped(from.RightHandLocalPosition, to.RightHandLocalPosition, t),
+                    RightHandLocalRotation = Quaternion.SlerpUnclamped(from.RightHandLocalRotation, to.RightHandLocalRotation, t),
                 };
             }
 

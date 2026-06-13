@@ -41,12 +41,15 @@ namespace Blockiverse.WorldGen
             new(0, 0, -1),
         };
 
+        static readonly Comparison<BlockPosition> PositionComparison = ComparePositions;
+
         // Horizontal flow budget per flowing cell; sources implicitly carry the family maximum.
         readonly Dictionary<BlockPosition, int> flowLevels = new();
         // Cells that may act on their family's next step (spread, retract, ignite, quench),
         // partitioned by family so a step only walks its own family's cells.
         readonly HashSet<BlockPosition>[] active;
         readonly List<BlockPosition> processScratch = new();
+        readonly Queue<BlockPosition> levelRefreshQueue = new();
 
         int worldSeed;
         // The absolute world tick the simulation has advanced to. Families step at absolute-tick
@@ -256,7 +259,11 @@ namespace Blockiverse.WorldGen
 
             if (FluidBlocks.TryGetFamily(change.NewBlock, out FluidFamily family))
             {
+                if (FluidBlocks.IsSource(change.NewBlock))
+                    flowLevels.Remove(cell);
+
                 active[(int)family].Add(cell);
+                RefreshFlowLevelsFrom(world, family, cell);
             }
             else
             {
@@ -267,6 +274,90 @@ namespace Blockiverse.WorldGen
 
             // Neighbors may now spread into an opening, fall into it, or retract without it.
             ActivateFluidNeighbors(world, cell);
+        }
+
+        void RefreshFlowLevelsFrom(VoxelWorld world, FluidFamily family, BlockPosition origin)
+        {
+            if (!world.Bounds.Contains(origin) ||
+                !FluidBlocks.TryGetFamily(world.GetBlock(origin), out FluidFamily originFamily) ||
+                originFamily != family)
+            {
+                return;
+            }
+
+            if (!FluidBlocks.IsSource(world.GetBlock(origin)))
+                TryImproveFlowLevelFromExistingSupport(world, family, origin);
+
+            levelRefreshQueue.Clear();
+            levelRefreshQueue.Enqueue(origin);
+
+            while (levelRefreshQueue.Count > 0)
+            {
+                BlockPosition cell = levelRefreshQueue.Dequeue();
+                BlockId block = world.GetBlock(cell);
+                if (!FluidBlocks.TryGetFamily(block, out FluidFamily cellFamily) || cellFamily != family)
+                    continue;
+
+                int level = FluidBlocks.IsSource(block)
+                    ? FluidBlocks.FlowDistance(family)
+                    : (flowLevels.TryGetValue(cell, out int known) ? known : 0);
+
+                BlockPosition below = cell + Down;
+                if (TryImproveLevel(world, family, below, FluidBlocks.FlowDistance(family)))
+                {
+                    active[(int)family].Add(below);
+                    levelRefreshQueue.Enqueue(below);
+                }
+
+                if (level < 2)
+                    continue;
+
+                foreach (BlockPosition offset in HorizontalOffsets)
+                {
+                    BlockPosition next = cell + offset;
+                    if (TryImproveLevel(world, family, next, level - 1))
+                    {
+                        active[(int)family].Add(next);
+                        levelRefreshQueue.Enqueue(next);
+                    }
+                }
+            }
+        }
+
+        void TryImproveFlowLevelFromExistingSupport(VoxelWorld world, FluidFamily family, BlockPosition cell)
+        {
+            int bestLevel = 0;
+            BlockPosition above = cell + Up;
+            if (world.Bounds.Contains(above) &&
+                FluidBlocks.TryGetFamily(world.GetBlock(above), out FluidFamily aboveFamily) &&
+                aboveFamily == family)
+            {
+                bestLevel = FluidBlocks.FlowDistance(family);
+            }
+
+            foreach (BlockPosition offset in HorizontalOffsets)
+            {
+                BlockPosition next = cell + offset;
+                if (!world.Bounds.Contains(next))
+                    continue;
+
+                BlockId neighbor = world.GetBlock(next);
+                if (!FluidBlocks.TryGetFamily(neighbor, out FluidFamily neighborFamily) ||
+                    neighborFamily != family)
+                {
+                    continue;
+                }
+
+                int neighborLevel = FluidBlocks.IsSource(neighbor)
+                    ? FluidBlocks.FlowDistance(family)
+                    : (flowLevels.TryGetValue(next, out int known) ? known : 0);
+
+                if (neighborLevel >= 2)
+                    bestLevel = Math.Max(bestLevel, neighborLevel - 1);
+            }
+
+            if (bestLevel > 0 && TryImproveLevel(world, family, cell, bestLevel))
+                active[(int)family].Add(cell);
         }
 
         void ActivateFluidNeighbors(VoxelWorld world, BlockPosition cell)
@@ -324,7 +415,7 @@ namespace Blockiverse.WorldGen
             // across peers.
             processScratch.Clear();
             processScratch.AddRange(familyActive);
-            processScratch.Sort(ComparePositions);
+            processScratch.Sort(PositionComparison);
 
             foreach (BlockPosition cell in processScratch)
                 ProcessCell(world, family, cell, tick);

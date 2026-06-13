@@ -1,6 +1,8 @@
 using System;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -13,6 +15,7 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class EnvironmentDynamicsController : MonoBehaviour
     {
+        const string LightningStrikeMessage = "Blockiverse.Environment.LightningStrike";
         // Lightning cadence/odds: roughly one strike roll every 10 seconds of storm, ~35% each.
         public const int LightningCheckIntervalTicks = 200;
         public const int LightningStrikeChancePercent = 35;
@@ -34,9 +37,11 @@ namespace Blockiverse.Gameplay
         // Biome lookups are pure seed math; cache the resolver per settings instance.
         SurvivalBiomeResolver biomeResolver;
         WorldGenerationSettings biomeResolverSettings;
+        NetworkManager subscribedNetworkManager;
+        bool messageHandlerRegistered;
 
-        // Fired on the host when a strike lands (world position of the struck surface block).
-        // Feedback layers can flash/thunder from it; clients get the block change via deltas.
+        // Fired on the local peer when a strike lands (world position of the struck surface block).
+        // The host raises it directly and mirrors it to clients as a small presentation event.
         public event Action<BlockPosition> LightningStruck;
 
         public void Configure(CreativeWorldManager manager, MultiplayerChunkAuthoritySync authoritySync)
@@ -48,6 +53,7 @@ namespace Blockiverse.Gameplay
         void OnEnable()
         {
             ResolveReferences();
+            RegisterMessageHandler();
         }
 
         void OnDisable()
@@ -57,6 +63,8 @@ namespace Blockiverse.Gameplay
                 worldTimeClock.Ticked -= OnWorldTick;
                 worldTimeClock = null;
             }
+
+            UnregisterMessageHandler();
         }
 
         void Update()
@@ -64,6 +72,7 @@ namespace Blockiverse.Gameplay
             if (worldTimeClock == null)
             {
                 ResolveReferences();
+                RegisterMessageHandler();
                 if (worldManager != null && worldManager.WorldTimeClock != null)
                 {
                     worldTimeClock = worldManager.WorldTimeClock;
@@ -179,7 +188,7 @@ namespace Blockiverse.Gameplay
             if (TryGetScorchResult(world.GetBlock(strike), out BlockId scorched))
                 SubmitMutation(strike, scorched);
 
-            LightningStruck?.Invoke(strike);
+            RaiseLightningStruck(strike, broadcastToClients: true);
             return true;
         }
 
@@ -225,7 +234,12 @@ namespace Blockiverse.Gameplay
 
         void SubmitMutation(BlockPosition position, BlockId newBlock)
         {
-            chunkAuthoritySync.TrySubmitMutation(position, newBlock, out _, out _);
+            chunkAuthoritySync.TrySubmitMutation(
+                position,
+                newBlock,
+                out _,
+                out _,
+                BlockMutationSubmissionKind.WorldSimulation);
         }
 
         bool OwnsWorldMutations()
@@ -247,6 +261,100 @@ namespace Blockiverse.Gameplay
             return dx * dx + dz * dz <= StrikeSpawnExclusionRadius * StrikeSpawnExclusionRadius;
         }
 
+        void RaiseLightningStruck(BlockPosition strike, bool broadcastToClients)
+        {
+            LightningStruck?.Invoke(strike);
+
+            if (broadcastToClients)
+                BroadcastLightningStrike(strike);
+        }
+
+        void BroadcastLightningStrike(BlockPosition strike)
+        {
+            NetworkManager networkManager = NetworkManager.Singleton;
+            if (networkManager == null ||
+                !networkManager.IsListening ||
+                !networkManager.IsServer ||
+                networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            var writer = new FastBufferWriter(sizeof(int) * 3, Allocator.Temp);
+            try
+            {
+                WriteBlockPosition(ref writer, strike);
+                foreach (ulong clientId in networkManager.ConnectedClientsIds)
+                {
+                    if (clientId != networkManager.LocalClientId)
+                        networkManager.CustomMessagingManager.SendNamedMessage(LightningStrikeMessage, clientId, writer);
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        void RegisterMessageHandler()
+        {
+            NetworkManager networkManager = NetworkManager.Singleton;
+            if (networkManager == null)
+                return;
+
+            if (subscribedNetworkManager != null && subscribedNetworkManager != networkManager)
+                UnregisterMessageHandler();
+
+            if (messageHandlerRegistered || networkManager.CustomMessagingManager == null)
+                return;
+
+            subscribedNetworkManager = networkManager;
+            subscribedNetworkManager.CustomMessagingManager.RegisterNamedMessageHandler(
+                LightningStrikeMessage,
+                HandleLightningStrikeMessage);
+            messageHandlerRegistered = true;
+        }
+
+        void UnregisterMessageHandler()
+        {
+            if (!messageHandlerRegistered ||
+                subscribedNetworkManager == null ||
+                subscribedNetworkManager.CustomMessagingManager == null)
+            {
+                subscribedNetworkManager = null;
+                messageHandlerRegistered = false;
+                return;
+            }
+
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(LightningStrikeMessage);
+            subscribedNetworkManager = null;
+            messageHandlerRegistered = false;
+        }
+
+        void HandleLightningStrikeMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (senderClientId != NetworkManager.ServerClientId)
+                return;
+
+            BlockPosition strike = ReadBlockPosition(ref reader);
+            RaiseLightningStruck(strike, broadcastToClients: false);
+        }
+
+        static void WriteBlockPosition(ref FastBufferWriter writer, BlockPosition position)
+        {
+            writer.WriteValueSafe(position.X);
+            writer.WriteValueSafe(position.Y);
+            writer.WriteValueSafe(position.Z);
+        }
+
+        static BlockPosition ReadBlockPosition(ref FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out int x);
+            reader.ReadValueSafe(out int y);
+            reader.ReadValueSafe(out int z);
+            return new BlockPosition(x, y, z);
+        }
+
         // Horizontal distance check against the local head and every connected player object.
         bool IsNearAnyPlayerHead(BlockPosition strike)
         {
@@ -259,14 +367,26 @@ namespace Blockiverse.Gameplay
 
             foreach (NetworkClient client in networkManager.ConnectedClientsList)
             {
-                if (client.PlayerObject != null &&
-                    IsHeadNear(client.PlayerObject.transform.position, strike))
+                if (TryResolvePlayerHeadWorldPosition(client.PlayerObject, out Vector3 headPosition) &&
+                    IsHeadNear(headPosition, strike))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        public static bool TryResolvePlayerHeadWorldPosition(NetworkObject playerObject, out Vector3 position)
+        {
+            position = default;
+            if (playerObject == null)
+                return false;
+
+            BlockiverseNetworkAvatarRig avatarRig = playerObject.GetComponent<BlockiverseNetworkAvatarRig>();
+            Transform headTransform = avatarRig?.HeadAnchor != null ? avatarRig.HeadAnchor : playerObject.transform;
+            position = headTransform.position;
+            return true;
         }
 
         static bool IsHeadNear(Vector3? head, BlockPosition strike)
@@ -294,7 +414,7 @@ namespace Blockiverse.Gameplay
                 biomeResolverSettings = settings;
             }
 
-            return biomeResolver.BiomeIndexAt(x, z) == 5; // canonical biome order: Tundra = 5
+            return SurvivalBiomeResolver.IsTundraBiomeIndex(biomeResolver.BiomeIndexAt(x, z));
         }
 
         // Topmost non-air cell of a column (-1 for an empty or out-of-range column). The top

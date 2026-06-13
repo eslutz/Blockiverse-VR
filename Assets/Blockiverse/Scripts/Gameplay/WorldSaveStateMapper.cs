@@ -76,12 +76,16 @@ namespace Blockiverse.Gameplay
         public static SavedContainerSlot ToSavedSlot(ItemStack stack) => new()
         {
             CanonicalId = stack.IsEmpty ? string.Empty : stack.ItemId.Value,
-            Count = stack.IsEmpty ? 0 : stack.Count
+            Count = stack.IsEmpty ? 0 : stack.Count,
+            Durability = stack.IsEmpty ? 0 : stack.Durability
         };
 
         public static ItemStack FromSavedSlot(SavedContainerSlot slot) =>
             slot == null || string.IsNullOrEmpty(slot.CanonicalId) || slot.Count <= 0
                 ? ItemStack.Empty
-                : new ItemStack(new ItemId(slot.CanonicalId), slot.Count);
+                : WithDurability(new ItemStack(new ItemId(slot.CanonicalId), slot.Count), slot.Durability);
+
+        static ItemStack WithDurability(ItemStack stack, int durability) =>
+            durability > 0 ? stack.WithDurability(durability) : stack;
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Blockiverse.Networking;
 using Unity.Netcode;
 using UnityEngine;
@@ -14,6 +15,7 @@ namespace Blockiverse.MetaAvatars
 
         BlockiverseMetaAvatarPresenter localFirstPersonPresenter;
         BlockiverseNetworkAvatarRig ownerNetworkFallbackRig;
+        readonly List<ulong> remoteStreamTargetClientIds = new();
         double nextSendTime;
         double nextPresenterSearchTime;
 
@@ -49,35 +51,63 @@ namespace Blockiverse.MetaAvatars
             if (minInterval > 0.0f && now < nextSendTime)
                 return;
 
-            if (!localFirstPersonPresenter.TryRecordLocalStream(out byte[] streamData) || streamData.Length == 0)
+            if (!localFirstPersonPresenter.TryRecordLocalStream(out byte[] streamData) ||
+                streamData.Length == 0 ||
+                streamData.Length > MetaAvatarStreamMessage.MaxPayloadBytes)
+            {
                 return;
+            }
 
             nextSendTime = now + minInterval;
             SubmitAvatarStreamServerRpc(new MetaAvatarStreamMessage(OwnerClientId, now, streamData));
         }
 
-        public void ApplyRemoteStreamForTests(MetaAvatarStreamMessage message)
-        {
-            remotePresenter ??= GetComponent<BlockiverseMetaAvatarPresenter>();
-            remotePresenter?.ApplyRemoteStream(message.Payload ?? Array.Empty<byte>());
-        }
-
-        [ServerRpc]
+        [ServerRpc(Delivery = RpcDelivery.Unreliable)]
         void SubmitAvatarStreamServerRpc(MetaAvatarStreamMessage message)
         {
+            if (!message.HasValidPayload)
+                return;
+
             // Re-stamp the sender id server-side: a modified client could spoof any identity.
             message.SenderClientId = OwnerClientId;
-            ReceiveAvatarStreamClientRpc(message);
+            ClientRpcParams recipients = BuildRemoteStreamRecipients();
+            if (remoteStreamTargetClientIds.Count > 0)
+                ReceiveAvatarStreamClientRpc(message, recipients);
         }
 
-        [ClientRpc]
-        void ReceiveAvatarStreamClientRpc(MetaAvatarStreamMessage message)
+        [ClientRpc(Delivery = RpcDelivery.Unreliable)]
+        void ReceiveAvatarStreamClientRpc(MetaAvatarStreamMessage message, ClientRpcParams clientRpcParams = default)
         {
-            if (IsOwner || message.SenderClientId == NetworkManager.LocalClientId)
+            if (!message.HasValidPayload)
+                return;
+
+            if (IsOwner || (NetworkManager != null && message.SenderClientId == NetworkManager.LocalClientId))
                 return;
 
             remotePresenter ??= GetComponent<BlockiverseMetaAvatarPresenter>();
-            remotePresenter?.ApplyRemoteStream(message.Payload ?? Array.Empty<byte>());
+            remotePresenter?.ApplyRemoteStream(message.Payload);
+        }
+
+        ClientRpcParams BuildRemoteStreamRecipients()
+        {
+            remoteStreamTargetClientIds.Clear();
+
+            if (NetworkManager != null)
+            {
+                foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+                {
+                    if (clientId != OwnerClientId)
+                        remoteStreamTargetClientIds.Add(clientId);
+                }
+            }
+
+            return new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams
+                {
+                    TargetClientIds = remoteStreamTargetClientIds,
+                },
+            };
         }
 
         void HideOwnerNetworkFallbackWhenLocalAvatarIsReady()

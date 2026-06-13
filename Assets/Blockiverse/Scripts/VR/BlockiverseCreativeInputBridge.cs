@@ -1,3 +1,5 @@
+using System;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using UnityEngine;
@@ -8,7 +10,7 @@ using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 namespace Blockiverse.VR
 {
     /// <summary>
-    /// Drives creative block break/place/undo from the native controller ray interactor.
+    /// Drives creative block break/place from the native controller ray interactor.
     /// Targeting uses the interactor's current 3D raycast hit; break/place are suppressed while
     /// the ray is over UI (native <see cref="XRRayInteractor.IsOverUIGameObject"/>) or while the
     /// interactor is disabled (e.g. teleport aiming), so menus and locomotion never break blocks.
@@ -21,11 +23,11 @@ namespace Blockiverse.VR
         [SerializeField] XRInteractorLineVisual interactionLineVisual;
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
+        [SerializeField] BlockiverseComfortSettings comfortSettings;
 
         UnityAction breakAction;
         UnityAction breakReleasedAction;
         UnityAction placeAction;
-        UnityAction undoAction;
         UnityAction blockEditingToggleAction;
         bool capturedLineRendererDefault;
         bool lineRendererDefaultEnabled;
@@ -40,12 +42,15 @@ namespace Blockiverse.VR
         BlockiverseAudioCuePlayer audioCuePlayer;
         BlockiverseVfxCuePlayer vfxCuePlayer;
         bool mining;
+        bool miningStartedByToggle;
         BlockPosition miningTarget;
         float miningElapsedSeconds;
         float miningRequiredSeconds;
         float nextMineCueTime;
 
         public XRRayInteractor InteractionRay => interactionRay;
+        public event Action<BlockPosition, float, float> MiningProgressChanged;
+        public event Action MiningProgressCleared;
 
         public void Configure(
             BlockiverseInputRig rig,
@@ -91,15 +96,20 @@ namespace Blockiverse.VR
             TickMining(target);
         }
 
-        // Advances an active hold-to-mine: cancels when the aim leaves the started block or the
-        // trigger is no longer held, plays the strike cadence, and submits the harvest when the
-        // block's work time elapses.
+        // Advances an active mine action: hold mode cancels when the trigger is released; toggle
+        // mode keeps mining until the started target is lost, blocked, completed, or toggled off.
         void TickMining(BlockPosition currentTarget)
         {
             if (!mining)
                 return;
 
-            bool stillHeld = inputRig == null || inputRig.IsBreakHeld;
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+            {
+                CancelMining();
+                return;
+            }
+
+            bool stillHeld = miningStartedByToggle || inputRig == null || inputRig.IsBreakHeld;
             bool stillAimed = interactionController.CurrentTarget.HasValue && currentTarget == miningTarget;
 
             if (!stillHeld || !stillAimed || !SurvivalInteractionActive)
@@ -109,6 +119,7 @@ namespace Blockiverse.VR
             }
 
             miningElapsedSeconds += Time.deltaTime;
+            RaiseMiningProgress();
 
             if (Time.time >= nextMineCueTime)
             {
@@ -119,13 +130,20 @@ namespace Blockiverse.VR
             if (miningElapsedSeconds >= miningRequiredSeconds)
             {
                 mining = false;
+                miningStartedByToggle = false;
+                MiningProgressCleared?.Invoke();
                 survivalSync.TrySubmitHarvest(miningTarget, out _);
             }
         }
 
         void CancelMining()
         {
+            bool wasMining = mining;
             mining = false;
+            miningStartedByToggle = false;
+
+            if (wasMining)
+                MiningProgressCleared?.Invoke();
         }
 
         void PlayMineStrikeFeedback()
@@ -136,7 +154,11 @@ namespace Blockiverse.VR
                 vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
 
             var worldCenter = new Vector3(miningTarget.X + 0.5f, miningTarget.Y + 0.5f, miningTarget.Z + 0.5f);
-            audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.ToolHitSoft, worldCenter);
+            BlockiverseAudioCue cue = interactionController != null &&
+                                      interactionController.TryGetBlock(miningTarget, out BlockId targetBlock)
+                ? BlockiverseBlockFeedbackCues.ToolHitForBlock(BlockRegistry.Default, targetBlock)
+                : BlockiverseAudioCue.ToolHitSoft;
+            audioCuePlayer?.PlayCueAt(cue, worldCenter);
             vfxCuePlayer?.PlayCue(BlockiverseVfxCue.BlockChipBurst, worldCenter);
         }
 
@@ -151,12 +173,10 @@ namespace Blockiverse.VR
             inputRig.BreakPressed.RemoveListener(breakAction);
             inputRig.BreakReleased.RemoveListener(breakReleasedAction);
             inputRig.PlacePressed.RemoveListener(placeAction);
-            inputRig.UndoPressed.RemoveListener(undoAction);
             inputRig.BlockEditingTogglePressed.RemoveListener(blockEditingToggleAction);
             inputRig.BreakPressed.AddListener(breakAction);
             inputRig.BreakReleased.AddListener(breakReleasedAction);
             inputRig.PlacePressed.AddListener(placeAction);
-            inputRig.UndoPressed.AddListener(undoAction);
             inputRig.BlockEditingTogglePressed.AddListener(blockEditingToggleAction);
         }
 
@@ -169,7 +189,6 @@ namespace Blockiverse.VR
             inputRig.BreakPressed.RemoveListener(breakAction);
             inputRig.BreakReleased.RemoveListener(breakReleasedAction);
             inputRig.PlacePressed.RemoveListener(placeAction);
-            inputRig.UndoPressed.RemoveListener(undoAction);
             inputRig.BlockEditingTogglePressed.RemoveListener(blockEditingToggleAction);
             CancelMining();
         }
@@ -179,7 +198,6 @@ namespace Blockiverse.VR
             breakAction ??= TryBreakTarget;
             breakReleasedAction ??= OnBreakReleased;
             placeAction ??= TryPlaceTarget;
-            undoAction ??= TryUndo;
             blockEditingToggleAction ??= ToggleBlockEditing;
         }
 
@@ -198,20 +216,27 @@ namespace Blockiverse.VR
 
             if (survivalSync == null && Application.isPlaying)
                 survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>();
+
+            if (comfortSettings == null)
+                comfortSettings = GetComponentInParent<BlockiverseComfortSettings>() ??
+                    FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
         }
 
         // The current interaction mode for this player (resolved from the survival sync).
         public PlayerModeState CurrentMode =>
             survivalSync != null ? survivalSync.CurrentMode : PlayerModeState.Creative;
+        public bool CanToggleSurvivalCreativeMode =>
+            survivalSync != null && survivalSync.CanToggleMode;
 
         // Flips between survival and creative interaction. Invoked by the mode-toggle menu action.
-        public void ToggleSurvivalCreativeMode()
+        public bool ToggleSurvivalCreativeMode()
         {
             DiscoverDependencies();
-            survivalSync?.ToggleMode();
+            return survivalSync != null && survivalSync.ToggleMode();
         }
 
         bool SurvivalInteractionActive => survivalSync != null && survivalSync.CurrentMode == PlayerModeState.Survival;
+        bool UseToggleToMine => comfortSettings != null && comfortSettings.ToggleToMineEnabled;
 
         void DiscoverInteractionRayVisuals()
         {
@@ -252,20 +277,21 @@ namespace Blockiverse.VR
             if (!TryGetTarget(out BlockPosition target, out _))
                 return;
 
-            // Survival mode: hold-to-mine — the press starts a timed hold whose harvest submits
-            // when the block's work time elapses (server-authoritative on submit). Blocks the
-            // preview already rejects (wrong tool, full inventory, no rule) submit immediately so
-            // the host's rejection feedback (e.g. ToolWrong) plays. Creative mode: instant delete.
+            // Survival mode: hold-to-mine or toggle-to-mine starts a timed action whose harvest
+            // submits when the block's work time elapses. Preview failures such as full inventory
+            // or no harvest rule submit immediately so host-side rejection feedback can play.
             if (SurvivalInteractionActive)
             {
+                if (mining && miningStartedByToggle && target == miningTarget)
+                {
+                    CancelMining();
+                    return;
+                }
+
                 if (survivalSync.TryEvaluateHarvestWorkSeconds(target, out float requiredSeconds) &&
                     requiredSeconds > 0f)
                 {
-                    mining = true;
-                    miningTarget = target;
-                    miningElapsedSeconds = 0f;
-                    miningRequiredSeconds = requiredSeconds;
-                    nextMineCueTime = Time.time;
+                    StartMining(target, requiredSeconds, UseToggleToMine);
                     return;
                 }
 
@@ -279,7 +305,30 @@ namespace Blockiverse.VR
 
         void OnBreakReleased()
         {
-            CancelMining();
+            if (!miningStartedByToggle)
+                CancelMining();
+        }
+
+        void StartMining(BlockPosition target, float requiredSeconds, bool startedByToggle)
+        {
+            mining = true;
+            miningStartedByToggle = startedByToggle;
+            miningTarget = target;
+            miningElapsedSeconds = 0f;
+            miningRequiredSeconds = requiredSeconds;
+            nextMineCueTime = Time.time;
+            RaiseMiningProgress();
+        }
+
+        void RaiseMiningProgress()
+        {
+            if (miningRequiredSeconds <= 0f)
+                return;
+
+            MiningProgressChanged?.Invoke(
+                miningTarget,
+                miningElapsedSeconds,
+                miningRequiredSeconds);
         }
 
         void TryPlaceTarget()
@@ -301,11 +350,6 @@ namespace Blockiverse.VR
             }
         }
 
-        void TryUndo()
-        {
-            interactionController?.UndoLast();
-        }
-
         void ToggleBlockEditing()
         {
             if (interactionController == null)
@@ -320,8 +364,13 @@ namespace Blockiverse.VR
             target = default;
             normal = Vector3.up;
 
-            if (interactionController == null || !interactionController.BlockEditingEnabled || !CanInteract())
+            if (interactionController == null ||
+                !BlockiverseRuntimeState.AllowWorldInput ||
+                !interactionController.BlockEditingEnabled ||
+                !CanInteract())
+            {
                 return false;
+            }
 
             if (!interactionRay.TryGetCurrent3DRaycastHit(out RaycastHit hit))
                 return false;
@@ -339,7 +388,8 @@ namespace Blockiverse.VR
         {
             DiscoverInteractionRayVisuals();
 
-            bool shouldShow = interactionController == null || interactionController.BlockEditingEnabled;
+            bool shouldShow = BlockiverseRuntimeState.AllowWorldInput &&
+                (interactionController == null || interactionController.BlockEditingEnabled);
 
             if (interactionLineRenderer != null)
                 interactionLineRenderer.enabled = shouldShow && (!capturedLineRendererDefault || lineRendererDefaultEnabled);

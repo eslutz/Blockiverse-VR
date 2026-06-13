@@ -12,7 +12,7 @@ namespace Blockiverse.Tests.PlayMode
         const string BootSceneName = "Boot";
 
         [UnityTest]
-        public IEnumerator BootSceneCreatesLightingCycleAndShadowCastingSun()
+        public IEnumerator BootSceneCreatesLightingCycleAndNonShadowCastingSun()
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
             yield return null;
@@ -23,12 +23,13 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(controller.Clock, Is.Not.Null);
             Assert.That(controller.SunLight, Is.Not.Null);
             Assert.That(controller.SunLight.type, Is.EqualTo(LightType.Directional));
-            Assert.That(controller.SunLight.shadows, Is.EqualTo(LightShadows.Hard));
+            Assert.That(controller.SunLight.shadows, Is.EqualTo(LightShadows.None));
+            Assert.That(controller.SunLight.shadowStrength, Is.Zero);
             Assert.That(RenderSettings.ambientLight.grayscale, Is.LessThan(0.35f));
         }
 
         [UnityTest]
-        public IEnumerator TorchbudLightManagerTracksPlacedAndRemovedTorchbuds()
+        public IEnumerator TorchbudLightManagerTracksPlacedEmittersWithoutRealtimeLights()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
@@ -44,15 +45,17 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
 
                 Assert.That(manager.ActiveLightCount, Is.EqualTo(1));
-                Assert.That(manager.TryGetLight(torchPosition, out Light light), Is.True);
-                Assert.That(light.type, Is.EqualTo(LightType.Point));
-                Assert.That(light.shadows, Is.EqualTo(LightShadows.None));
-                Assert.That(light.transform.position, Is.EqualTo(TorchbudLightManager.GetLightPosition(torchPosition)));
+                Assert.That(manager.ActiveEmitterCount, Is.EqualTo(1));
+                Assert.That(manager.IsTrackingEmitter(torchPosition), Is.True);
+                Assert.That(manager.TryGetLight(torchPosition, out Light light), Is.False);
+                Assert.That(light, Is.Null);
+                Assert.That(host.GetComponentsInChildren<Light>(includeInactive: true), Is.Empty);
 
                 world.SetBlock(torchPosition, BlockRegistry.Air);
                 yield return null;
 
                 Assert.That(manager.ActiveLightCount, Is.Zero);
+                Assert.That(manager.ActiveEmitterCount, Is.Zero);
             }
             finally
             {

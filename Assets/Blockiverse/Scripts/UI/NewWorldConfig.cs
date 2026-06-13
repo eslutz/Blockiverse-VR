@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using Blockiverse.Core;
 
 namespace Blockiverse.UI
 {
@@ -12,7 +14,7 @@ namespace Blockiverse.UI
         static readonly string[] GameModeOptions = { "survival", "creative" };
         static readonly string[] DifficultyOptions = { "easy", "normal", "hard" };
         static readonly string[] WorldSizeOptions = { "small", "medium", "large", "infinite" };
-        static readonly string[] WorldPresetOptions = { "survival_terrain", "flat_builder", "void_builder" };
+        static readonly string[] WorldPresetOptions = WorldPresetIds.MenuOptions;
         static readonly string[] StartingBiomeOptions =
         {
             "balanced", "meadow", "pinewild", "wetland", "drybrush", "dunes", "tundra", "highlands",
@@ -21,7 +23,7 @@ namespace Blockiverse.UI
         int gameModeIndex = 0;     // survival
         int difficultyIndex = 1;   // normal
         int worldSizeIndex = 0;    // small
-        int worldPresetIndex = 0;  // survival_terrain
+        int worldPresetIndex = 0;  // WorldPresetIds.SurvivalTerrain
         int startingBiomeIndex = 0; // balanced
 
         public NewWorldConfig(string seedText = null)
@@ -31,7 +33,6 @@ namespace Blockiverse.UI
 
         public string Name { get; private set; } = DefaultName;
         public string SeedText { get; private set; }
-        public bool ExperimentalRulesEnabled { get; private set; }
 
         public string GameMode => GameModeOptions[gameModeIndex];
         public string Difficulty => DifficultyOptions[difficultyIndex];
@@ -49,7 +50,7 @@ namespace Blockiverse.UI
         public void RandomizeSeed(Func<ulong> randomSource = null)
         {
             ulong value = randomSource?.Invoke() ?? unchecked((ulong)Guid.NewGuid().GetHashCode() << 32 | (uint)Environment.TickCount);
-            SeedText = value.ToString();
+            SeedText = value.ToString(CultureInfo.InvariantCulture);
         }
 
         public void CycleGameMode(bool forward = true) => gameModeIndex = Step(gameModeIndex, GameModeOptions.Length, forward);
@@ -57,14 +58,19 @@ namespace Blockiverse.UI
         public void CycleWorldSize(bool forward = true) => worldSizeIndex = Step(worldSizeIndex, WorldSizeOptions.Length, forward);
         public void CycleWorldPreset(bool forward = true) => worldPresetIndex = Step(worldPresetIndex, WorldPresetOptions.Length, forward);
         public void CycleStartingBiome(bool forward = true) => startingBiomeIndex = Step(startingBiomeIndex, StartingBiomeOptions.Length, forward);
-        public void ToggleExperimentalRules() => ExperimentalRulesEnabled = !ExperimentalRulesEnabled;
 
         // Validates settings before world creation (§6.3): the name must be non-empty after trimming.
         public bool IsValid(out string error)
         {
             if (string.IsNullOrWhiteSpace(Name))
             {
-                error = "World name cannot be empty.";
+                error = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusWorldNameEmpty);
+                return false;
+            }
+
+            if (!IsCreativeMode && IsBuilderPreset(WorldPreset))
+            {
+                error = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.NewWorldSurvivalPresetUnsupported);
                 return false;
             }
 
@@ -77,13 +83,17 @@ namespace Blockiverse.UI
         static int Step(int index, int length, bool forward) =>
             forward ? (index + 1) % length : (index - 1 + length) % length;
 
+        static bool IsBuilderPreset(string worldPreset) =>
+            string.Equals(worldPreset, WorldPresetIds.FlatBuilder, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(worldPreset, WorldPresetIds.VoidBuilder, StringComparison.OrdinalIgnoreCase);
+
         public static ulong HashSeed(string seedText)
         {
             if (string.IsNullOrWhiteSpace(seedText))
                 return 0;
 
             string trimmed = seedText.Trim();
-            if (ulong.TryParse(trimmed, out ulong numeric))
+            if (ulong.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out ulong numeric))
                 return numeric;
 
             // FNV-1a 64-bit over the text so text seeds are stable across runs.

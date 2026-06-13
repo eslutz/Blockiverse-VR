@@ -19,6 +19,7 @@ namespace Blockiverse.Gameplay
         // MeshCollider cooking is the expensive part of a rebuild on Quest; cap how many colliders
         // are rebaked per RebuildDirty call / frame and let the rest catch up over later frames.
         public const int DefaultColliderRebuildBudget = 4;
+        public const int DefaultVisualRebuildBudget = 8;
 
         readonly Dictionary<ChunkCoordinate, GameObject> chunkObjects = new();
         // Per-chunk fluid child: renders fluid faces and carries a contact-excluded collider so
@@ -27,6 +28,9 @@ namespace Blockiverse.Gameplay
         readonly Dictionary<ChunkCoordinate, int> chunkTriangleCounts = new();
         readonly Queue<ChunkCoordinate> pendingColliderRebuilds = new();
         readonly HashSet<ChunkCoordinate> pendingColliderSet = new();
+        readonly Queue<ChunkCoordinate> pendingFluidColliderRebuilds = new();
+        readonly HashSet<ChunkCoordinate> pendingFluidColliderSet = new();
+        readonly List<ChunkCoordinate> dirtyChunkScratch = new();
 
         VoxelWorld world;
         BlockRegistry registry;
@@ -45,16 +49,19 @@ namespace Blockiverse.Gameplay
         public VoxelSkyLightMap SkyLight => skyLight;
 
         // Colliders awaiting a (throttled) rebake. Visual meshes are always current.
-        public int PendingColliderRebuildCount => pendingColliderRebuilds.Count;
+        public int PendingColliderRebuildCount => pendingColliderRebuilds.Count + pendingFluidColliderRebuilds.Count;
+        public int PendingVisualRebuildCount => rebuildQueue?.Count ?? 0;
 
         // Maximum MeshCollider rebakes performed per RebuildDirty call and per frame.
         public int ColliderRebuildBudget { get; set; } = DefaultColliderRebuildBudget;
+        public int VisualRebuildBudget { get; set; } = DefaultVisualRebuildBudget;
 
         public void Configure(
             VoxelWorld voxelWorld,
             BlockRegistry blockRegistry,
             Material material,
-            int layer)
+            int layer,
+            bool deferInitialRebuild = false)
         {
             // Reconfiguring onto a new world (new/load from the menus) must not leave the old
             // world's chunk meshes, queue subscription, or material behind.
@@ -69,7 +76,11 @@ namespace Blockiverse.Gameplay
             interactionLayer = layer;
             skyLight = new VoxelSkyLightMap(world, registry);
             rebuildQueue = new ChunkRebuildQueue(world, skyLight);
-            RebuildAll();
+
+            if (deferInitialRebuild)
+                QueueFullRebuild();
+            else
+                RebuildAll();
         }
 
         public void RebuildAll()
@@ -106,15 +117,36 @@ namespace Blockiverse.Gameplay
                 this);
         }
 
+        public void QueueFullRebuild()
+        {
+            EnsureConfigured();
+
+            for (int y = 0; y < ChunkCount(world.Bounds.Height); y++)
+            {
+                for (int z = 0; z < ChunkCount(world.Bounds.Depth); z++)
+                {
+                    for (int x = 0; x < ChunkCount(world.Bounds.Width); x++)
+                        rebuildQueue.MarkDirty(new ChunkCoordinate(x, y, z));
+                }
+            }
+
+            RefreshStats();
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Renderer,
+                $"Queued full chunk rebuild: queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
+                this);
+        }
+
         public void RebuildDirty()
         {
             EnsureConfigured();
 
             using ProfilerMarker.AutoScope scope = RebuildDirtyMarker.Auto();
 
-            IReadOnlyCollection<ChunkCoordinate> dirtyChunks = rebuildQueue.DrainDirtyChunks();
+            int visualBudget = Math.Max(1, VisualRebuildBudget);
+            rebuildQueue.DrainDirtyChunks(dirtyChunkScratch, visualBudget);
 
-            foreach (ChunkCoordinate chunk in dirtyChunks)
+            foreach (ChunkCoordinate chunk in dirtyChunkScratch)
                 RebuildChunk(chunk);
 
             // Visual meshes are now current; rebake colliders within this call's budget and leave the
@@ -123,11 +155,11 @@ namespace Blockiverse.Gameplay
 
             RefreshStats();
 
-            if (dirtyChunks.Count >= LargeDirtyRebuildWarningThreshold)
+            if (dirtyChunkScratch.Count >= LargeDirtyRebuildWarningThreshold)
             {
                 BlockiverseLog.Warning(
                     BlockiverseLogCategory.Renderer,
-                    $"Large dirty chunk rebuild: drainedChunks={dirtyChunks.Count} chunks={stats.ChunkCount} triangles={stats.TriangleCount} queuedRebuilds={stats.QueuedRebuildCount}",
+                    $"Large dirty chunk rebuild: drainedChunks={dirtyChunkScratch.Count} chunks={stats.ChunkCount} triangles={stats.TriangleCount} queuedRebuilds={stats.QueuedRebuildCount}",
                     this);
             }
         }
@@ -178,8 +210,9 @@ namespace Blockiverse.Gameplay
             mesh.RecalculateBounds();
         }
 
-        // Refills the chunk's pooled fluid mesh in place. Fluid meshes are small, so the collider
-        // bake is done synchronously instead of through the throttled solid-collider queue.
+        // Refills the chunk's pooled fluid mesh in place. Fluid colliders are queued through the
+        // same throttle as solid colliders so flowing water cannot force synchronous PhysX recooks
+        // on every fluid simulation step.
         void UpdateFluidChunkMesh(ChunkCoordinate chunk, GameObject chunkObject, ChunkMeshData fluidData)
         {
             fluidObjects.TryGetValue(chunk, out GameObject fluidObject);
@@ -208,11 +241,7 @@ namespace Blockiverse.Gameplay
             }
 
             FillMesh(mesh, fluidData);
-
-            // FaceCount > 0 here, so the mesh has vertices and is safe to cook.
-            MeshCollider collider = fluidObject.GetComponent<MeshCollider>();
-            collider.sharedMesh = null;
-            collider.sharedMesh = mesh;
+            EnqueueFluidColliderRebuild(chunk);
         }
 
         GameObject CreateFluidObject(ChunkCoordinate chunk, GameObject chunkObject)
@@ -226,7 +255,7 @@ namespace Blockiverse.Gameplay
             fluidObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = fluidObject.AddComponent<MeshRenderer>();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = true;
+            renderer.receiveShadows = false;
 
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;
@@ -248,37 +277,81 @@ namespace Blockiverse.Gameplay
                 pendingColliderRebuilds.Enqueue(chunk);
         }
 
+        void EnqueueFluidColliderRebuild(ChunkCoordinate chunk)
+        {
+            if (pendingFluidColliderSet.Add(chunk))
+                pendingFluidColliderRebuilds.Enqueue(chunk);
+        }
+
         // Rebakes up to budget pending colliders against the chunk's pooled mesh (the reassign
         // forces PhysX to recook from the refilled geometry).
         public void ProcessPendingColliderRebuilds(int budget)
         {
             int processed = 0;
-            while (processed < budget && pendingColliderRebuilds.Count > 0)
+            while (processed < budget && (pendingColliderRebuilds.Count > 0 || pendingFluidColliderRebuilds.Count > 0))
             {
-                ChunkCoordinate chunk = pendingColliderRebuilds.Dequeue();
-                pendingColliderSet.Remove(chunk);
-
-                if (!chunkObjects.TryGetValue(chunk, out GameObject chunkObject) || chunkObject == null)
+                if (pendingColliderRebuilds.Count > 0)
+                {
+                    if (ProcessNextSolidColliderRebuild())
+                        processed++;
                     continue;
+                }
 
-                Mesh currentMesh = chunkObject.GetComponent<MeshFilter>().sharedMesh;
-                MeshCollider collider = chunkObject.GetComponent<MeshCollider>();
-
-                // An empty chunk's pooled mesh has no vertices; assigning it to a MeshCollider
-                // logs a PhysX error and cooks nothing, so detach instead. The reassign forces a
-                // recook from the refilled geometry for non-empty chunks.
-                collider.sharedMesh = null;
-                if (currentMesh != null && currentMesh.vertexCount > 0)
-                    collider.sharedMesh = currentMesh;
-
-                processed++;
+                if (ProcessNextFluidColliderRebuild())
+                    processed++;
             }
+        }
+
+        bool ProcessNextSolidColliderRebuild()
+        {
+            ChunkCoordinate chunk = pendingColliderRebuilds.Dequeue();
+            pendingColliderSet.Remove(chunk);
+
+            if (!chunkObjects.TryGetValue(chunk, out GameObject chunkObject) || chunkObject == null)
+                return false;
+
+            Mesh currentMesh = chunkObject.GetComponent<MeshFilter>().sharedMesh;
+            MeshCollider collider = chunkObject.GetComponent<MeshCollider>();
+
+            AssignColliderMesh(collider, currentMesh);
+            return true;
+        }
+
+        bool ProcessNextFluidColliderRebuild()
+        {
+            ChunkCoordinate chunk = pendingFluidColliderRebuilds.Dequeue();
+            pendingFluidColliderSet.Remove(chunk);
+
+            if (!fluidObjects.TryGetValue(chunk, out GameObject fluidObject) || fluidObject == null)
+                return false;
+
+            Mesh currentMesh = fluidObject.GetComponent<MeshFilter>().sharedMesh;
+            MeshCollider collider = fluidObject.GetComponent<MeshCollider>();
+
+            AssignColliderMesh(collider, currentMesh);
+            return true;
+        }
+
+        static void AssignColliderMesh(MeshCollider collider, Mesh currentMesh)
+        {
+            // An empty chunk's pooled mesh has no vertices; assigning it to a MeshCollider logs a
+            // PhysX error and cooks nothing, so detach instead. The reassign forces a recook from
+            // the refilled geometry for non-empty chunks.
+            collider.sharedMesh = null;
+            if (currentMesh != null && currentMesh.vertexCount > 0)
+                collider.sharedMesh = currentMesh;
         }
 
         // Per-frame pump so a throttled collider backlog drains even without further edits.
         void Update()
         {
-            if (pendingColliderRebuilds.Count > 0)
+            if (rebuildQueue != null && rebuildQueue.Count > 0)
+            {
+                RebuildDirty();
+                return;
+            }
+
+            if (PendingColliderRebuildCount > 0)
                 ProcessPendingColliderRebuilds(ColliderRebuildBudget);
         }
 
@@ -387,6 +460,8 @@ namespace Blockiverse.Gameplay
             chunkTriangleCounts.Clear();
             pendingColliderRebuilds.Clear();
             pendingColliderSet.Clear();
+            pendingFluidColliderRebuilds.Clear();
+            pendingFluidColliderSet.Clear();
             totalTriangleCount = 0;
         }
 

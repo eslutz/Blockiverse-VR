@@ -1,5 +1,8 @@
+using System.Reflection;
+using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using NUnit.Framework;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace Blockiverse.Tests.Networking.EditMode
@@ -43,6 +46,22 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void AvatarPoseRpcsUseUnreliableDelivery()
+        {
+            MethodInfo submit = typeof(BlockiverseNetworkAvatarRig).GetMethod(
+                "SubmitAvatarPoseServerRpc",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo receive = typeof(BlockiverseNetworkAvatarRig).GetMethod(
+                "ReceiveAvatarPoseClientRpc",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(submit, Is.Not.Null);
+            Assert.That(receive, Is.Not.Null);
+            Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+            Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+        }
+
+        [Test]
         public void LocalRigPoseUpdatesFallbackAnchors()
         {
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
@@ -56,6 +75,25 @@ namespace Blockiverse.Tests.Networking.EditMode
             Assert.That(avatarRig.LeftHandAnchor.localPosition, Is.EqualTo(leftHandPose.position));
             Assert.That(avatarRig.RightHandAnchor.localPosition, Is.EqualTo(rightHandPose.position));
             Assert.That(avatarRig.HeadAnchor.localRotation.eulerAngles.y, Is.EqualTo(30.0f).Within(0.01f));
+        }
+
+        [Test]
+        public void LightningSafetyResolvesSyncedHeadAnchorInsteadOfPlayerRoot()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            NetworkObject playerObject = avatarRig.gameObject.AddComponent<NetworkObject>();
+            var headPose = new Pose(new Vector3(12.5f, 1.7f, -6.5f), Quaternion.identity);
+
+            avatarRig.SetLocalRigPose(
+                headPose,
+                new Pose(new Vector3(-0.4f, 1.2f, 0.3f), Quaternion.identity),
+                new Pose(new Vector3(0.4f, 1.2f, 0.3f), Quaternion.identity));
+
+            Assert.That(
+                EnvironmentDynamicsController.TryResolvePlayerHeadWorldPosition(playerObject, out Vector3 resolvedHead),
+                Is.True);
+            AssertVector3Approximately(resolvedHead, headPose.position);
+            Assert.That(resolvedHead, Is.Not.EqualTo(avatarRig.transform.position));
         }
 
         [Test]
@@ -83,6 +121,68 @@ namespace Blockiverse.Tests.Networking.EditMode
             }
         }
 
+        [Test]
+        public void ParentedTrackingSourcesMoveAvatarRootBeforeLocalAnchorPose()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            GameObject rigRoot = new("XR Tracking Root");
+            rigRoot.transform.SetPositionAndRotation(
+                new Vector3(2.0f, 0.0f, -3.0f),
+                Quaternion.Euler(0.0f, 35.0f, 0.0f));
+            Transform cameraOffset = new GameObject("Camera Offset").transform;
+            cameraOffset.SetParent(rigRoot.transform, worldPositionStays: false);
+            Transform head = CreateTrackingChild(cameraOffset, "Main Camera", new Vector3(0.0f, 1.7f, 0.1f));
+            Transform leftHand = CreateTrackingChild(cameraOffset, "Left Controller", new Vector3(-0.45f, 1.16f, 0.28f));
+            Transform rightHand = CreateTrackingChild(cameraOffset, "Right Controller", new Vector3(0.45f, 1.16f, 0.28f));
+
+            try
+            {
+                avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
+                avatarRig.RefreshLocalTrackingPose();
+
+                AssertVector3Approximately(avatarRig.transform.position, rigRoot.transform.position);
+                AssertQuaternionYApproximately(avatarRig.transform.rotation, rigRoot.transform.rotation);
+                AssertVector3Approximately(avatarRig.HeadAnchor.localPosition, head.localPosition);
+                AssertVector3Approximately(avatarRig.LeftHandAnchor.localPosition, leftHand.localPosition);
+                AssertVector3Approximately(avatarRig.RightHandAnchor.localPosition, rightHand.localPosition);
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigRoot);
+            }
+        }
+
+        [Test]
+        public void HeadOnlyTrackingFallbackFindsSiblingControllersUnderCameraOffset()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            GameObject rigRoot = new("XR Tracking Root");
+            rigRoot.transform.SetPositionAndRotation(
+                new Vector3(-1.0f, 0.0f, 2.0f),
+                Quaternion.Euler(0.0f, -20.0f, 0.0f));
+            Transform cameraOffset = new GameObject("Camera Offset").transform;
+            cameraOffset.SetParent(rigRoot.transform, worldPositionStays: false);
+            Transform head = CreateTrackingChild(cameraOffset, "Main Camera", new Vector3(0.0f, 1.65f, 0.04f));
+            Transform leftHand = CreateTrackingChild(cameraOffset, "Left Controller", new Vector3(-0.36f, 1.14f, 0.25f));
+            Transform rightHand = CreateTrackingChild(cameraOffset, "Right Controller", new Vector3(0.36f, 1.14f, 0.25f));
+
+            try
+            {
+                avatarRig.ConfigureTrackingSources(null, head, null, null);
+                avatarRig.RefreshLocalTrackingPose();
+
+                AssertVector3Approximately(avatarRig.transform.position, rigRoot.transform.position);
+                AssertQuaternionYApproximately(avatarRig.transform.rotation, rigRoot.transform.rotation);
+                AssertVector3Approximately(avatarRig.HeadAnchor.localPosition, head.localPosition);
+                AssertVector3Approximately(avatarRig.LeftHandAnchor.localPosition, leftHand.localPosition);
+                AssertVector3Approximately(avatarRig.RightHandAnchor.localPosition, rightHand.localPosition);
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigRoot);
+            }
+        }
+
         BlockiverseNetworkAvatarRig CreateAvatarRig()
         {
             avatarObject = new GameObject("Network Avatar Test");
@@ -94,6 +194,26 @@ namespace Blockiverse.Tests.Networking.EditMode
             GameObject source = new(name);
             source.transform.position = position;
             return source;
+        }
+
+        static Transform CreateTrackingChild(Transform parent, string name, Vector3 localPosition)
+        {
+            Transform child = new GameObject(name).transform;
+            child.SetParent(parent, worldPositionStays: false);
+            child.localPosition = localPosition;
+            return child;
+        }
+
+        static void AssertVector3Approximately(Vector3 actual, Vector3 expected)
+        {
+            Assert.That(actual.x, Is.EqualTo(expected.x).Within(0.001f));
+            Assert.That(actual.y, Is.EqualTo(expected.y).Within(0.001f));
+            Assert.That(actual.z, Is.EqualTo(expected.z).Within(0.001f));
+        }
+
+        static void AssertQuaternionYApproximately(Quaternion actual, Quaternion expected)
+        {
+            Assert.That(actual.eulerAngles.y, Is.EqualTo(expected.eulerAngles.y).Within(0.001f));
         }
     }
 }

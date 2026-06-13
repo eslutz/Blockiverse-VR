@@ -158,6 +158,44 @@ namespace Blockiverse.Tests.EditMode.SurvivalHealth
         }
 
         [Test]
+        public void RestoreHealthClampsZeroOrNegativeToOneAndNeverRestoresDead()
+        {
+            var vitals = new PlayerVitals(currentHealth: 25);
+
+            vitals.RestoreHealth(0);
+
+            Assert.That(vitals.CurrentHealth, Is.EqualTo(1));
+            Assert.That(vitals.IsDead, Is.False);
+
+            vitals.RestoreHealth(50);
+            vitals.RestoreHealth(-25);
+
+            Assert.That(vitals.CurrentHealth, Is.EqualTo(1));
+            Assert.That(vitals.IsDead, Is.False);
+        }
+
+        [Test]
+        public void RestoreHealthClampsAboveMaxAndRaisesHealthChanged()
+        {
+            var vitals = new PlayerVitals(maxHealth: 100, currentHealth: 40);
+            var changes = new List<HealthChangeResult>();
+            var deaths = new List<HealthChangeResult>();
+            vitals.HealthChanged += changes.Add;
+            vitals.Died += deaths.Add;
+
+            vitals.RestoreHealth(150);
+
+            Assert.That(vitals.CurrentHealth, Is.EqualTo(100));
+            Assert.That(vitals.IsDead, Is.False);
+            Assert.That(changes, Has.Count.EqualTo(1));
+            Assert.That(changes[0].Kind, Is.EqualTo(HealthChangeKind.Respawn));
+            Assert.That(changes[0].PreviousHealth, Is.EqualTo(40));
+            Assert.That(changes[0].CurrentHealth, Is.EqualTo(100));
+            Assert.That(changes[0].AppliedAmount, Is.EqualTo(60));
+            Assert.That(deaths, Is.Empty, "Loading clamped health should not fire a death event.");
+        }
+
+        [Test]
         public void NegativeDamageOrHealingAmountsAreRejected()
         {
             var vitals = new PlayerVitals();

@@ -13,9 +13,18 @@ namespace Blockiverse.UI
         [SerializeField] Toggle teleportToggle;
         [SerializeField] Toggle smoothTurnToggle;
         [SerializeField] Slider snapTurnSlider;
+        [SerializeField] Toggle turnAroundToggle;
+        [SerializeField] Slider moveSpeedSlider;
+        [SerializeField] Slider smoothTurnSpeedSlider;
+        [SerializeField] Toggle leftHandToggle;
+        [SerializeField] Toggle dominantHandOnlyToggle;
+        [SerializeField] Toggle toggleToMineToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
+        [SerializeField] Slider eyeHeightSlider;
+        [SerializeField] Slider uiScaleSlider;
         [SerializeField] BlockiverseComfortSettings settings;
+        [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
@@ -29,16 +38,28 @@ namespace Blockiverse.UI
         UnityAction<bool> toggleChanged;
         UnityAction<float> sliderChanged;
         Toggle registeredSmoothTurnToggle;
+        Toggle registeredTurnAroundToggle;
+        Toggle registeredLeftHandToggle;
+        Toggle registeredDominantHandOnlyToggle;
+        Toggle registeredToggleToMineToggle;
         Toggle registeredVignetteToggle;
         Slider registeredSnapTurnSlider;
+        Slider registeredMoveSpeedSlider;
+        Slider registeredSmoothTurnSpeedSlider;
         Slider registeredVignetteStrengthSlider;
+        Slider registeredEyeHeightSlider;
+        Slider registeredUiScaleSlider;
 
         public bool IsVisible => canvas != null && canvas.enabled;
 
-        public void Configure(Canvas targetCanvas, BlockiverseComfortSettings comfortSettings)
+        public void Configure(
+            Canvas targetCanvas,
+            BlockiverseComfortSettings comfortSettings,
+            BlockiverseHeightReset targetHeightReset = null)
         {
             canvas = targetCanvas;
             settings = comfortSettings;
+            heightReset = targetHeightReset;
             Hide(playFeedback: false);
         }
 
@@ -47,15 +68,31 @@ namespace Blockiverse.UI
             Toggle targetTeleportToggle,
             Toggle targetSmoothTurnToggle,
             Slider targetSnapTurnSlider,
+            Toggle targetTurnAroundToggle = null,
             Toggle targetVignetteToggle = null,
-            Slider targetVignetteStrengthSlider = null)
+            Slider targetVignetteStrengthSlider = null,
+            Toggle targetLeftHandToggle = null,
+            Toggle targetDominantHandOnlyToggle = null,
+            Toggle targetToggleToMineToggle = null,
+            Slider targetEyeHeightSlider = null,
+            Slider targetMoveSpeedSlider = null,
+            Slider targetSmoothTurnSpeedSlider = null,
+            Slider targetUiScaleSlider = null)
         {
             glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
             smoothTurnToggle = targetSmoothTurnToggle;
             snapTurnSlider = targetSnapTurnSlider;
+            turnAroundToggle = targetTurnAroundToggle;
+            moveSpeedSlider = targetMoveSpeedSlider;
+            smoothTurnSpeedSlider = targetSmoothTurnSpeedSlider;
             vignetteToggle = targetVignetteToggle;
             vignetteStrengthSlider = targetVignetteStrengthSlider;
+            leftHandToggle = targetLeftHandToggle;
+            dominantHandOnlyToggle = targetDominantHandOnlyToggle;
+            toggleToMineToggle = targetToggleToMineToggle;
+            eyeHeightSlider = targetEyeHeightSlider;
+            uiScaleSlider = targetUiScaleSlider;
             RegisterControlCallbacks();
             SyncTogglesToSettings();
         }
@@ -122,9 +159,17 @@ namespace Blockiverse.UI
             toggleChanged ??= _ => ApplyOtherControlsWithFeedback();
             sliderChanged ??= _ => ApplyOtherControlsWithFeedback();
             RegisterToggleCallback(smoothTurnToggle, ref registeredSmoothTurnToggle);
+            RegisterToggleCallback(turnAroundToggle, ref registeredTurnAroundToggle);
+            RegisterToggleCallback(leftHandToggle, ref registeredLeftHandToggle);
+            RegisterToggleCallback(dominantHandOnlyToggle, ref registeredDominantHandOnlyToggle);
+            RegisterToggleCallback(toggleToMineToggle, ref registeredToggleToMineToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
+            RegisterSliderCallback(moveSpeedSlider, ref registeredMoveSpeedSlider);
+            RegisterSliderCallback(smoothTurnSpeedSlider, ref registeredSmoothTurnSpeedSlider);
             RegisterSliderCallback(vignetteStrengthSlider, ref registeredVignetteStrengthSlider);
+            RegisterSliderCallback(eyeHeightSlider, ref registeredEyeHeightSlider);
+            RegisterSliderCallback(uiScaleSlider, ref registeredUiScaleSlider);
         }
 
         void OnGlideToggled(bool isOn)
@@ -172,11 +217,40 @@ namespace Blockiverse.UI
             if (snapTurnSlider != null)
                 settings.SnapTurnDegrees = snapTurnSlider.value;
 
+            if (turnAroundToggle != null)
+                settings.SnapTurnAroundEnabled = turnAroundToggle.isOn;
+
+            if (moveSpeedSlider != null)
+                settings.ContinuousMoveSpeed = moveSpeedSlider.value;
+
+            if (smoothTurnSpeedSlider != null)
+                settings.ContinuousTurnSpeed = smoothTurnSpeedSlider.value;
+
+            if (leftHandToggle != null)
+                settings.DominantHand = leftHandToggle.isOn
+                    ? BlockiverseControllerRole.Left
+                    : BlockiverseControllerRole.Right;
+
+            if (dominantHandOnlyToggle != null)
+                settings.DominantHandOnlyControls = dominantHandOnlyToggle.isOn;
+
+            if (toggleToMineToggle != null)
+                settings.ToggleToMineEnabled = toggleToMineToggle.isOn;
+
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.isOn;
 
             if (vignetteStrengthSlider != null)
                 settings.VignetteStrength = vignetteStrengthSlider.value;
+
+            if (eyeHeightSlider != null)
+            {
+                settings.StandingEyeHeight = eyeHeightSlider.value;
+                heightReset?.ApplyStandingEyeHeight(settings.StandingEyeHeight);
+            }
+
+            if (uiScaleSlider != null)
+                settings.UiScale = uiScaleSlider.value;
 
             PlayFeedback(BlockiverseAudioCue.UiSelect);
         }
@@ -191,16 +265,32 @@ namespace Blockiverse.UI
             teleportToggle?.SetIsOnWithoutNotify(!isGlide);
 
             smoothTurnToggle?.SetIsOnWithoutNotify(settings.SmoothTurnEnabled);
+            turnAroundToggle?.SetIsOnWithoutNotify(settings.SnapTurnAroundEnabled);
+            leftHandToggle?.SetIsOnWithoutNotify(settings.DominantHand == BlockiverseControllerRole.Left);
+            dominantHandOnlyToggle?.SetIsOnWithoutNotify(settings.DominantHandOnlyControls);
+            toggleToMineToggle?.SetIsOnWithoutNotify(settings.ToggleToMineEnabled);
 
             if (snapTurnSlider != null)
             {
                 snapTurnSlider.SetValueWithoutNotify(settings.SnapTurnDegrees);
             }
 
+            if (moveSpeedSlider != null)
+                moveSpeedSlider.SetValueWithoutNotify(settings.ContinuousMoveSpeed);
+
+            if (smoothTurnSpeedSlider != null)
+                smoothTurnSpeedSlider.SetValueWithoutNotify(settings.ContinuousTurnSpeed);
+
             vignetteToggle?.SetIsOnWithoutNotify(settings.VignetteEnabled);
 
             if (vignetteStrengthSlider != null)
                 vignetteStrengthSlider.SetValueWithoutNotify(settings.VignetteStrength);
+
+            if (eyeHeightSlider != null)
+                eyeHeightSlider.SetValueWithoutNotify(settings.StandingEyeHeight);
+
+            if (uiScaleSlider != null)
+                uiScaleSlider.SetValueWithoutNotify(settings.UiScale);
         }
 
         void RegisterLocomotionToggle(Toggle target, ref Toggle registered, UnityAction<bool> action)
@@ -232,35 +322,35 @@ namespace Blockiverse.UI
             registeredGlideToggle?.onValueChanged.RemoveListener(onGlideChanged);
             registeredTeleportToggle?.onValueChanged.RemoveListener(onTeleportChanged);
             registeredSmoothTurnToggle?.onValueChanged.RemoveListener(toggleChanged);
+            registeredTurnAroundToggle?.onValueChanged.RemoveListener(toggleChanged);
+            registeredLeftHandToggle?.onValueChanged.RemoveListener(toggleChanged);
+            registeredDominantHandOnlyToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredVignetteToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredSnapTurnSlider?.onValueChanged.RemoveListener(sliderChanged);
+            registeredMoveSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
+            registeredSmoothTurnSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredVignetteStrengthSlider?.onValueChanged.RemoveListener(sliderChanged);
+            registeredEyeHeightSlider?.onValueChanged.RemoveListener(sliderChanged);
+            registeredUiScaleSlider?.onValueChanged.RemoveListener(sliderChanged);
 
             registeredGlideToggle = null;
             registeredTeleportToggle = null;
             registeredSmoothTurnToggle = null;
+            registeredTurnAroundToggle = null;
+            registeredLeftHandToggle = null;
+            registeredDominantHandOnlyToggle = null;
             registeredVignetteToggle = null;
             registeredSnapTurnSlider = null;
+            registeredMoveSpeedSlider = null;
+            registeredSmoothTurnSpeedSlider = null;
             registeredVignetteStrengthSlider = null;
+            registeredEyeHeightSlider = null;
+            registeredUiScaleSlider = null;
         }
 
         void PlayFeedback(BlockiverseAudioCue cue)
         {
-            DiscoverFeedback();
-            audioCuePlayer?.PlayCue(cue);
-            interactionHaptics?.PlayUiTick();
-        }
-
-        void DiscoverFeedback()
-        {
-            if (!Application.isPlaying)
-                return;
-
-            if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
-
-            if (interactionHaptics == null)
-                interactionHaptics = FindFirstObjectByType<BlockiverseInteractionHaptics>();
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
         }
     }
 }

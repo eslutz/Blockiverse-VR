@@ -33,7 +33,17 @@ namespace Blockiverse.UI
         // The last block the interaction ray pointed at: pressing a panel button moves the ray
         // over UI (clearing the live target), so actions use this cached aim instead.
         BlockPosition? lastTarget;
+        VoxelWorld trackedWorld;
+        Func<bool> networkSessionActiveProvider;
         bool wired;
+
+        public int WorldEditUndoCount => editService.UndoCount;
+        public bool HasWorldEditClipboard => editService.HasClipboard;
+
+        public void ConfigureNetworkSessionActiveProvider(Func<bool> provider)
+        {
+            networkSessionActiveProvider = provider;
+        }
 
         public void Configure(
             CreativeInteractionController controller,
@@ -55,11 +65,13 @@ namespace Blockiverse.UI
             timeOfDaySlider = timeOfDay;
             timeScaleSlider = timeScale;
             WireSliders();
+            ResetWorldEditStateIfWorldChanged();
         }
 
         void OnEnable()
         {
             ResolveReferences();
+            ResetWorldEditStateIfWorldChanged();
             WireSliders();
             RefreshEnvironmentControls();
             RefreshCornersLabel();
@@ -72,6 +84,8 @@ namespace Blockiverse.UI
 
         void Update()
         {
+            ResetWorldEditStateIfWorldChanged();
+
             BlockPosition? target = interactionController != null ? interactionController.CurrentTarget : null;
             if (target.HasValue)
                 lastTarget = target;
@@ -120,20 +134,22 @@ namespace Blockiverse.UI
             }
 
             if (weatherLabel != null && worldManager != null)
-                weatherLabel.text = $"Weather: {worldManager.GetWeatherSyncState().State}";
+                weatherLabel.text = BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CreativeWeather,
+                    BlockiverseLocalization.DisplayName(worldManager.GetWeatherSyncState().State));
         }
 
         // ── Region selection ──────────────────────────────────────────────────
 
         public void SetCornerA()
         {
-            cornerA = CaptureAim("corner A");
+            cornerA = CaptureAim(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeCornerA));
             RefreshCornersLabel();
         }
 
         public void SetCornerB()
         {
-            cornerB = CaptureAim("corner B");
+            cornerB = CaptureAim(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeCornerB));
             RefreshCornersLabel();
         }
 
@@ -141,11 +157,11 @@ namespace Blockiverse.UI
         {
             if (!lastTarget.HasValue)
             {
-                SetStatus($"Aim at a block to set {what}.");
+                SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSetCornerAim, what));
                 return null;
             }
 
-            SetStatus($"Set {what} to {lastTarget.Value}.");
+            SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSetCorner, what, lastTarget.Value));
             return lastTarget;
         }
 
@@ -156,7 +172,7 @@ namespace Blockiverse.UI
 
             string a = cornerA.HasValue ? cornerA.Value.ToString() : "—";
             string b = cornerB.HasValue ? cornerB.Value.ToString() : "—";
-            cornersLabel.text = $"A: {a}    B: {b}";
+            cornersLabel.text = BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeCorners, a, b);
         }
 
         // ── Region operations (§12.1) ─────────────────────────────────────────
@@ -166,7 +182,9 @@ namespace Blockiverse.UI
             if (!TryGetRegion(out BlockPosition min, out BlockPosition max) || !CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit("Fill", editService.Fill(world, min, max, hotbar.SelectedBlockId));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsFill),
+                editService.Fill(world, min, max, hotbar.SelectedBlockId));
         }
 
         public void DeleteRegion()
@@ -174,7 +192,9 @@ namespace Blockiverse.UI
             if (!TryGetRegion(out BlockPosition min, out BlockPosition max) || !CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit("Delete", editService.Delete(world, min, max));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
+                editService.Delete(world, min, max));
         }
 
         // Replaces every block of the aimed-at type inside the region with the hotbar selection.
@@ -185,12 +205,14 @@ namespace Blockiverse.UI
 
             if (!lastTarget.HasValue || !world.Bounds.Contains(lastTarget.Value))
             {
-                SetStatus("Aim at a block of the type to replace.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeAimReplace));
                 return;
             }
 
             BlockId targetType = world.GetBlock(lastTarget.Value);
-            ReportEdit("Replace", editService.Replace(world, min, max, targetType, hotbar.SelectedBlockId));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsReplace),
+                editService.Replace(world, min, max, targetType, hotbar.SelectedBlockId));
         }
 
         public void CopyRegion()
@@ -198,7 +220,9 @@ namespace Blockiverse.UI
             if (!TryGetRegion(out BlockPosition min, out BlockPosition max) || !CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit("Copy", editService.Copy(world, min, max));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsCopy),
+                editService.Copy(world, min, max));
         }
 
         // Pastes the clipboard with its min corner at corner A (or the current aim).
@@ -210,11 +234,13 @@ namespace Blockiverse.UI
             BlockPosition? origin = cornerA ?? lastTarget;
             if (!origin.HasValue)
             {
-                SetStatus("Set corner A (or aim at a block) to choose the paste origin.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeChoosePasteOrigin));
                 return;
             }
 
-            ReportEdit("Paste", editService.Paste(world, origin.Value));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsPaste),
+                editService.Paste(world, origin.Value));
         }
 
         public void UndoEdit()
@@ -222,7 +248,9 @@ namespace Blockiverse.UI
             if (!CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit("Undo", editService.Undo(world));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsUndo),
+                editService.Undo(world));
         }
 
         public void RedoEdit()
@@ -230,7 +258,9 @@ namespace Blockiverse.UI
             if (!CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit("Redo", editService.Redo(world));
+            ReportEdit(
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsRedo),
+                editService.Redo(world));
         }
 
         // ── Spawners / pick block ─────────────────────────────────────────────
@@ -240,9 +270,9 @@ namespace Blockiverse.UI
             if (!CanEdit(out VoxelWorld world) || !TryGetAimAbove(world, out BlockPosition basePos))
                 return;
 
-            new VegetationService().PlaceStandardTree(world, basePos);
+            new VegetationService().PlaceStandardTree(world, basePos, trackChange: true);
             worldManager.Renderer?.RebuildDirty();
-            SetStatus($"Spawned tree at {basePos}.");
+            SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSpawnedTree, basePos));
         }
 
         public void SpawnRuin()
@@ -250,37 +280,53 @@ namespace Blockiverse.UI
             if (!CanEdit(out VoxelWorld world) || !TryGetAimAbove(world, out BlockPosition basePos))
                 return;
 
-            StructureService.PlaceStructureAt(world, basePos.X, basePos.Y, basePos.Z, world.Seed);
+            StructureService.PlaceStructureAt(world, basePos.X, basePos.Y, basePos.Z, world.Seed, trackChange: true);
             worldManager.Renderer?.RebuildDirty();
-            SetStatus($"Spawned ruin at {basePos}.");
+            SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSpawnedRuin, basePos));
         }
 
         // Puts the aimed-at block into the hotbar selection (block picker).
         public void PickBlock()
         {
+            ResetWorldEditStateIfWorldChanged();
+
             VoxelWorld world = worldManager != null ? worldManager.World : null;
             if (world == null || hotbar == null || !lastTarget.HasValue || !world.Bounds.Contains(lastTarget.Value))
             {
-                SetStatus("Aim at a block to pick it.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeAimPick));
                 return;
             }
 
             BlockId picked = world.GetBlock(lastTarget.Value);
             if (hotbar.SelectBlock(picked))
-                SetStatus($"Picked {picked}.");
+                SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativePicked, picked));
             else
-                SetStatus("That block is not in the creative catalog.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeMissingCatalogBlock));
         }
 
         // ── Environment controls ──────────────────────────────────────────────
 
         void OnTimeOfDayChanged(float value)
         {
+            if (NetworkSessionActive())
+            {
+                RefreshEnvironmentControls();
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeTimeHostOnly));
+                return;
+            }
+
             worldManager?.WorldTimeClock?.SetNormalizedTime(value);
         }
 
         void OnTimeScaleChanged(float value)
         {
+            if (NetworkSessionActive())
+            {
+                RefreshEnvironmentControls();
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeTimeHostOnly));
+                return;
+            }
+
             worldManager?.WorldTimeClock?.SetTimeScale(value);
         }
 
@@ -292,7 +338,7 @@ namespace Blockiverse.UI
 
             if (NetworkSessionActive())
             {
-                SetStatus("Weather control is host/offline only.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeWeatherHostOnly));
                 return;
             }
 
@@ -312,7 +358,7 @@ namespace Blockiverse.UI
 
             if (!cornerA.HasValue || !cornerB.HasValue)
             {
-                SetStatus("Set corners A and B first.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeSetCornersFirst));
                 return false;
             }
 
@@ -327,31 +373,49 @@ namespace Blockiverse.UI
         // are only legal in offline creative worlds (§12 permission gating).
         bool CanEdit(out VoxelWorld world)
         {
+            ResetWorldEditStateIfWorldChanged();
             world = worldManager != null ? worldManager.World : null;
 
             if (world == null)
             {
-                SetStatus("No world loaded.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeNoWorld));
                 return false;
             }
 
             if (worldManager.GameMode != WorldGameMode.Creative)
             {
-                SetStatus("Region tools work in creative worlds only.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeOnly));
                 return false;
             }
 
             if (NetworkSessionActive())
             {
-                SetStatus("Region tools are unavailable during a LAN session.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeLanUnavailable));
                 return false;
             }
 
             return true;
         }
 
-        static bool NetworkSessionActive()
+        void ResetWorldEditStateIfWorldChanged()
         {
+            VoxelWorld currentWorld = worldManager != null ? worldManager.World : null;
+            if (ReferenceEquals(currentWorld, trackedWorld))
+                return;
+
+            trackedWorld = currentWorld;
+            editService.Reset();
+            cornerA = null;
+            cornerB = null;
+            lastTarget = null;
+            RefreshCornersLabel();
+        }
+
+        bool NetworkSessionActive()
+        {
+            if (networkSessionActiveProvider != null)
+                return networkSessionActiveProvider();
+
             return NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
         }
 
@@ -361,14 +425,14 @@ namespace Blockiverse.UI
 
             if (!lastTarget.HasValue || !world.Bounds.Contains(lastTarget.Value))
             {
-                SetStatus("Aim at a ground block first.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeAimGround));
                 return false;
             }
 
             above = new BlockPosition(lastTarget.Value.X, lastTarget.Value.Y + 1, lastTarget.Value.Z);
             if (!world.Bounds.Contains(above))
             {
-                SetStatus("No room above the aimed block.");
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeNoRoomAbove));
                 return false;
             }
 
@@ -380,19 +444,19 @@ namespace Blockiverse.UI
             if (result == WorldEditResult.Success)
             {
                 worldManager.Renderer?.RebuildDirty();
-                SetStatus($"{operation} done.");
+                SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeOperationDone, operation));
                 return;
             }
 
             SetStatus(result switch
             {
-                WorldEditResult.VolumeLimitExceeded => $"{operation} failed: region exceeds the volume limit.",
-                WorldEditResult.OutOfBounds => $"{operation} failed: region leaves the world bounds.",
-                WorldEditResult.NoClipboard => "Nothing copied yet.",
-                WorldEditResult.NothingToUndo => "Nothing to undo.",
-                WorldEditResult.NothingToRedo => "Nothing to redo.",
-                WorldEditResult.NothingToReplace => "No blocks of that type in the region.",
-                _ => $"{operation} failed."
+                WorldEditResult.VolumeLimitExceeded => BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeVolumeLimit, operation),
+                WorldEditResult.OutOfBounds => BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeOutOfBounds, operation),
+                WorldEditResult.NoClipboard => BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeNoClipboard),
+                WorldEditResult.NothingToUndo => BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeNothingToUndo),
+                WorldEditResult.NothingToRedo => BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeNothingToRedo),
+                WorldEditResult.NothingToReplace => BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeNothingToReplace),
+                _ => BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeOperationFailed, operation)
             });
         }
 

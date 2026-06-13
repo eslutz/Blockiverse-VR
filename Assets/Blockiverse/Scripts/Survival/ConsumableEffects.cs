@@ -12,6 +12,12 @@ namespace Blockiverse.Survival
         public const int BerryClusterHungerRestore = 12;
         public const int BerryClusterThirstRestore = 4;
         public const int GrainBundleHungerRestore = 25;
+        public const int BerryMashHungerRestore = 20;
+        public const int BerryMashThirstRestore = 8;
+        public const int FlatbreadHungerRestore = 40;
+        public const int CookedMorselHungerRestore = 35;
+        public const int TrailRationHungerRestore = 55;
+        public const int TrailRationStaminaRestore = 10;
 
         // Applies the consumable's effect; returns false when the item has no known effect.
         public static bool TryApply(ItemId itemId, PlayerVitals vitals, SurvivalVitals survivalVitals)
@@ -39,6 +45,32 @@ namespace Blockiverse.Survival
             if (itemId == ItemId.GrainBundle)
             {
                 survivalVitals.Eat(GrainBundleHungerRestore);
+                return true;
+            }
+
+            if (itemId == ItemId.BerryMash)
+            {
+                survivalVitals.Eat(BerryMashHungerRestore);
+                survivalVitals.Drink(BerryMashThirstRestore);
+                return true;
+            }
+
+            if (itemId == ItemId.Flatbread)
+            {
+                survivalVitals.Eat(FlatbreadHungerRestore);
+                return true;
+            }
+
+            if (itemId == ItemId.CookedMorsel)
+            {
+                survivalVitals.Eat(CookedMorselHungerRestore);
+                return true;
+            }
+
+            if (itemId == ItemId.TrailRation)
+            {
+                survivalVitals.Eat(TrailRationHungerRestore);
+                survivalVitals.RecoverStamina(TrailRationStaminaRestore);
                 return true;
             }
 

@@ -36,73 +36,76 @@ namespace Blockiverse.WorldGen
             biomeResolver = biomeAt;
         }
 
+        public static bool IsLeafSupportBlock(BlockId block) =>
+            block == BlockRegistry.BranchwoodLog || block == BlockRegistry.SmoothBranchwood;
+
         // ── 7 tree variants ─────────────────────────────────────────────────
 
-        public void PlaceStandardTree(VoxelWorld world, BlockPosition basePos)
+        public void PlaceStandardTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 4)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 4);
-            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 2, layers: 2);
+            PlaceTrunk(world, basePos, trunkHeight: 4, trackChange: trackChange);
+            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 2, layers: 2, trackChange: trackChange);
         }
 
-        public void PlaceTallTree(VoxelWorld world, BlockPosition basePos)
+        public void PlaceTallTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 7)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 7);
-            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 7, basePos.Z), radius: 1, layers: 2);
+            PlaceTrunk(world, basePos, trunkHeight: 7, trackChange: trackChange);
+            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 7, basePos.Z), radius: 1, layers: 2, trackChange: trackChange);
         }
 
-        public void PlaceConicalTree(VoxelWorld world, BlockPosition basePos)
+        public void PlaceConicalTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 6)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 6);
+            PlaceTrunk(world, basePos, trunkHeight: 6, trackChange: trackChange);
             // Layered conical canopy: each layer one block smaller
             for (int layer = 0; layer < 4; layer++)
             {
                 int r = 3 - layer;
                 var center = new BlockPosition(basePos.X, basePos.Y + 3 + layer, basePos.Z);
-                PlaceCanopySquare(world, center, radius: r);
+                PlaceCanopySquare(world, center, radius: r, trackChange: trackChange);
             }
         }
 
-        public void PlaceShrubTree(VoxelWorld world, BlockPosition basePos)
+        public void PlaceShrubTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 2)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 2);
-            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 2, basePos.Z), radius: 3, layers: 1);
+            PlaceTrunk(world, basePos, trunkHeight: 2, trackChange: trackChange);
+            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 2, basePos.Z), radius: 3, layers: 1, trackChange: trackChange);
         }
 
-        public void PlaceWillowTree(VoxelWorld world, BlockPosition basePos)
+        public void PlaceWillowTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 5)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 5);
+            PlaceTrunk(world, basePos, trunkHeight: 5, trackChange: trackChange);
             var canopyBase = new BlockPosition(basePos.X, basePos.Y + 5, basePos.Z);
-            PlaceCanopyRound(world, canopyBase, radius: 3, layers: 2);
+            PlaceCanopyRound(world, canopyBase, radius: 3, layers: 2, trackChange: trackChange);
             // Drooping leaves one below canopy edge
-            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 2, layers: 1);
+            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 2, layers: 1, trackChange: trackChange);
         }
 
-        public void PlaceSparseTree(VoxelWorld world, BlockPosition basePos)
+        public void PlaceSparseTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 8)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 8);
-            PlaceCanopySquare(world, new BlockPosition(basePos.X, basePos.Y + 8, basePos.Z), radius: 1);
-            PlaceCanopySquare(world, new BlockPosition(basePos.X, basePos.Y + 9, basePos.Z), radius: 1);
+            PlaceTrunk(world, basePos, trunkHeight: 8, trackChange: trackChange);
+            PlaceCanopySquare(world, new BlockPosition(basePos.X, basePos.Y + 8, basePos.Z), radius: 1, trackChange: trackChange);
+            PlaceCanopySquare(world, new BlockPosition(basePos.X, basePos.Y + 9, basePos.Z), radius: 1, trackChange: trackChange);
         }
 
         // ── Biome-aware tree dispatch ────────────────────────────────────────
 
-        void PlaceBiomeTree(VoxelWorld world, BlockPosition pos, TerrainBiome biome)
+        void PlaceBiomeTree(VoxelWorld world, BlockPosition pos, TerrainBiome biome, bool trackChange = false)
         {
             switch (biome)
             {
-                case TerrainBiome.Pinewild:   PlaceConicalTree(world, pos);  break;
-                case TerrainBiome.Wetland:    PlaceWillowTree(world, pos);   break;
-                case TerrainBiome.Drybrush:   PlaceShrubTree(world, pos);    break;
-                case TerrainBiome.Tundra:     PlaceSparseTree(world, pos);   break;
-                case TerrainBiome.Highlands:  PlaceTallTree(world, pos);     break;
-                case TerrainBiome.Dunes:      PlaceShrubTree(world, pos);    break;
-                default:                      PlaceStandardTree(world, pos); break;
+                case TerrainBiome.Pinewild:   PlaceConicalTree(world, pos, trackChange);  break;
+                case TerrainBiome.Wetland:    PlaceWillowTree(world, pos, trackChange);   break;
+                case TerrainBiome.Drybrush:   PlaceShrubTree(world, pos, trackChange);    break;
+                case TerrainBiome.Tundra:     PlaceSparseTree(world, pos, trackChange);   break;
+                case TerrainBiome.Highlands:  PlaceTallTree(world, pos, trackChange);     break;
+                case TerrainBiome.Dunes:      PlaceShrubTree(world, pos, trackChange);    break;
+                default:                      PlaceStandardTree(world, pos, trackChange); break;
             }
         }
 
@@ -194,7 +197,7 @@ namespace Blockiverse.WorldGen
                 {
                     world.SetBlock(pos, BlockRegistry.Air);
                     int biomeIndex = biomeResolver != null ? biomeResolver(pos.X, pos.Z) : 0;
-                    PlaceBiomeTree(world, pos, (TerrainBiome)biomeIndex);
+                    PlaceBiomeTree(world, pos, (TerrainBiome)biomeIndex, trackChange: true);
 
                     // Each biome tree checks its own trunk clearance (4–8 blocks) and silently
                     // no-ops when blocked; in that case the trunk base is still Air — restore the
@@ -242,7 +245,7 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        const long WildRegrowthRetryDelayTicks = 24000; // one game day before retrying a blocked spot
+        const long WildRegrowthRetryDelayTicks = SimulationTime.TicksPerDay;
 
         readonly List<WildRegrowthMarker> wildRegrowthQueue = new();
 
@@ -338,11 +341,11 @@ namespace Blockiverse.WorldGen
 
         static int WildRegrowthDelayTicks(BlockId blockId)
         {
-            if (blockId == BlockRegistry.Berrybush)   return 48000;
-            if (blockId == BlockRegistry.GrainStalk)  return 72000;
-            if (blockId == BlockRegistry.Reedgrass)   return 24000;
-            if (blockId == BlockRegistry.Thornbrush)  return 96000;
-            return 48000; // default 2 days for any other small plant
+            if (blockId == BlockRegistry.Berrybush)   return 2 * SimulationTime.TicksPerDay;
+            if (blockId == BlockRegistry.GrainStalk)  return 3 * SimulationTime.TicksPerDay;
+            if (blockId == BlockRegistry.Reedgrass)   return SimulationTime.TicksPerDay;
+            if (blockId == BlockRegistry.Thornbrush)  return 4 * SimulationTime.TicksPerDay;
+            return 2 * SimulationTime.TicksPerDay; // default 2 days for any other small plant
         }
 
         // ── Leaf decay ───────────────────────────────────────────────────────
@@ -437,7 +440,7 @@ namespace Blockiverse.WorldGen
             for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++)
             {
-                if (world.GetBlock(new BlockPosition(x, y, z)) == BlockRegistry.BranchwoodLog)
+                if (IsLeafSupportBlock(world.GetBlock(new BlockPosition(x, y, z))))
                     return true;
             }
 
@@ -446,28 +449,28 @@ namespace Blockiverse.WorldGen
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
-        static void PlaceTrunk(VoxelWorld world, BlockPosition basePos, int trunkHeight)
+        static void PlaceTrunk(VoxelWorld world, BlockPosition basePos, int trunkHeight, bool trackChange)
         {
             for (int dy = 0; dy < trunkHeight; dy++)
-                TrySetBlock(world, new BlockPosition(basePos.X, basePos.Y + dy, basePos.Z), BlockRegistry.BranchwoodLog);
+                TrySetBlock(world, new BlockPosition(basePos.X, basePos.Y + dy, basePos.Z), BlockRegistry.BranchwoodLog, trackChange);
         }
 
-        static void PlaceCanopyRound(VoxelWorld world, BlockPosition center, int radius, int layers)
+        static void PlaceCanopyRound(VoxelWorld world, BlockPosition center, int radius, int layers, bool trackChange)
         {
             for (int layer = 0; layer < layers; layer++)
             for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++)
             {
                 if (dx * dx + dz * dz <= radius * radius + 1)
-                    TrySetBlock(world, new BlockPosition(center.X + dx, center.Y + layer, center.Z + dz), BlockRegistry.Leafmoss);
+                    TrySetBlock(world, new BlockPosition(center.X + dx, center.Y + layer, center.Z + dz), BlockRegistry.Leafmoss, trackChange);
             }
         }
 
-        static void PlaceCanopySquare(VoxelWorld world, BlockPosition center, int radius)
+        static void PlaceCanopySquare(VoxelWorld world, BlockPosition center, int radius, bool trackChange)
         {
             for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++)
-                TrySetBlock(world, new BlockPosition(center.X + dx, center.Y, center.Z + dz), BlockRegistry.Leafmoss);
+                TrySetBlock(world, new BlockPosition(center.X + dx, center.Y, center.Z + dz), BlockRegistry.Leafmoss, trackChange);
         }
 
         static bool TrunkClear(VoxelWorld world, BlockPosition basePos, int trunkHeight)
@@ -481,10 +484,10 @@ namespace Blockiverse.WorldGen
             return true;
         }
 
-        static void TrySetBlock(VoxelWorld world, BlockPosition pos, BlockId block)
+        static void TrySetBlock(VoxelWorld world, BlockPosition pos, BlockId block, bool trackChange)
         {
             if (world.Bounds.Contains(pos) && world.GetBlock(pos) == BlockRegistry.Air)
-                world.SetBlock(pos, block, trackChange: false);
+                world.SetBlock(pos, block, trackChange);
         }
     }
 }

@@ -55,7 +55,7 @@ namespace Blockiverse.Gameplay
 
         public void ConfigureDefault(TMP_Text selectedLabel)
         {
-            BlockRegistry defaultRegistry = BlockRegistry.CreateDefault();
+            BlockRegistry defaultRegistry = BlockRegistry.Default;
             Configure(
                 defaultRegistry,
                 defaultRegistry.All.Where(block => block.Id != BlockRegistry.Air).Select(block => block.Id),
@@ -68,7 +68,7 @@ namespace Blockiverse.Gameplay
                 throw new ArgumentNullException(nameof(catalog));
 
             Configure(
-                blockRegistry ?? BlockRegistry.CreateDefault(),
+                blockRegistry ?? BlockRegistry.Default,
                 catalog.All.Select(entry => entry.BlockId),
                 selectedLabel);
         }
@@ -113,14 +113,6 @@ namespace Blockiverse.Gameplay
             }
 
             return false;
-        }
-
-        public void SelectPrevious()
-        {
-            if (blockIds.Count == 0)
-                return;
-
-            SelectIndex((selectedIndex - 1 + blockIds.Count) % blockIds.Count);
         }
 
         public void ToggleVisible()

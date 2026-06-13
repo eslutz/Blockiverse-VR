@@ -11,7 +11,7 @@ namespace Blockiverse.Survival
     // populates this store; harvesting/opening a container reads and mutates its inventory here.
     public sealed class ContainerInventoryStore
     {
-        public const int DefaultContainerSlotCount = 12;
+        public const int DefaultContainerSlotCount = 24;
 
         readonly Dictionary<BlockPosition, Inventory> containers = new();
         readonly ItemRegistry itemRegistry;
@@ -19,7 +19,7 @@ namespace Blockiverse.Survival
 
         public ContainerInventoryStore(ItemRegistry itemRegistry = null, int slotCount = DefaultContainerSlotCount)
         {
-            this.itemRegistry = itemRegistry ?? ItemRegistry.CreateDefault();
+            this.itemRegistry = itemRegistry ?? ItemRegistry.Default;
             this.slotCount = slotCount > 0 ? slotCount : DefaultContainerSlotCount;
         }
 
@@ -63,17 +63,37 @@ namespace Blockiverse.Survival
             if (items != null)
             {
                 foreach ((string itemId, int count) in items)
-                {
-                    if (string.IsNullOrEmpty(itemId) || count <= 0)
-                        continue;
-                    var id = new ItemId(itemId);
-                    if (!itemRegistry.TryGet(id, out _))
-                        continue;
-                    inventory.TryAddAll(new ItemStack(id, count));
-                }
+                    TryPopulateStack(inventory, itemId, count, durability: 0);
             }
             containers[position] = inventory;
             return inventory;
+        }
+
+        public Inventory Populate(BlockPosition position, IEnumerable<(string itemId, int count, int durability)> items)
+        {
+            var inventory = new Inventory(itemRegistry, slotCount, hotbarSlotCount: 0);
+            if (items != null)
+            {
+                foreach ((string itemId, int count, int durability) in items)
+                    TryPopulateStack(inventory, itemId, count, durability);
+            }
+            containers[position] = inventory;
+            return inventory;
+        }
+
+        void TryPopulateStack(Inventory inventory, string itemId, int count, int durability)
+        {
+            if (string.IsNullOrEmpty(itemId) || count <= 0)
+                return;
+
+            var id = new ItemId(itemId);
+            if (!itemRegistry.TryGet(id, out _))
+                return;
+
+            ItemStack stack = new ItemStack(id, count);
+            if (durability > 0)
+                stack = stack.WithDurability(durability);
+            inventory.TryAddAll(stack);
         }
 
         // Moves every stack from the container at a position into the target inventory. Returns true if

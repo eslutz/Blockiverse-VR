@@ -42,6 +42,28 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
+        public void WorldrootHasNoSurvivalDropOrHarvestRule()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            Assert.That(itemRegistry.TryGet(ItemId.Worldroot, out _), Is.False);
+            Assert.That(itemRegistry.TryGetItemForBlock(BlockRegistry.Worldroot, out _), Is.False);
+
+            BlockRegistry blockRegistry = BlockRegistry.CreateDefault();
+            BlockDefinition worldroot = blockRegistry.Get(BlockRegistry.Worldroot);
+            Assert.That(float.IsPositiveInfinity(worldroot.Hardness), Is.True);
+
+            var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.Worldroot);
+            var service = CreateService(itemRegistry);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.FailureReason, Is.EqualTo(BlockHarvestFailureReason.NoHarvestRule));
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Worldroot));
+        }
+
+        [Test]
         public void MatchingToolsReduceMiningTimeComparedWithHand()
         {
             BlockHarvestRuleSet rules = BlockHarvestRuleSet.CreateDefault(ItemRegistry.CreateDefault());
@@ -115,7 +137,7 @@ namespace Blockiverse.Tests.Survival.EditMode
         }
 
         [Test]
-        public void HarvestTierMinBlockFailsWithWrongToolOrInsufficientTier()
+        public void HarvestTierMinResourceBreaksSlowlyButDropsNothingWithWrongToolOrInsufficientTier()
         {
             // RosycopperBloom: EffectiveTool=Delver, HarvestTierMin=2
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
@@ -125,19 +147,22 @@ namespace Blockiverse.Tests.Survival.EditMode
 
             // Bare hand — wrong tool, no tier
             BlockHarvestResult handResult = service.TryPreviewHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
-            Assert.That(handResult.Succeeded, Is.False);
-            Assert.That(handResult.FailureReason, Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+            Assert.That(handResult.Succeeded, Is.True);
+            Assert.That(handResult.Drops, Is.Empty);
+            Assert.That(handResult.WorkRequired, Is.GreaterThan(0));
 
             // Tier-1 delver — right tool, insufficient tier
             ItemStack tier1Delver = new ItemStack(ItemId.ReedwoodDelver, 1).WithDurability(20);
             BlockHarvestResult tier1Result = service.TryPreviewHarvest(world, inventory, HarvestPosition, tier1Delver);
-            Assert.That(tier1Result.Succeeded, Is.False);
-            Assert.That(tier1Result.FailureReason, Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+            Assert.That(tier1Result.Succeeded, Is.True);
+            Assert.That(tier1Result.Drops, Is.Empty);
+            Assert.That(tier1Result.WorkRequired, Is.GreaterThan(0));
 
             // Tier-2 delver — right tool, meets tier
             ItemStack tier2Delver = new ItemStack(ItemId.FlintDelver, 1).WithDurability(35);
             BlockHarvestResult tier2Result = service.TryPreviewHarvest(world, inventory, HarvestPosition, tier2Delver);
             Assert.That(tier2Result.Succeeded, Is.True);
+            Assert.That(tier2Result.Drops, Is.Not.Empty);
         }
 
         [Test]
@@ -194,14 +219,34 @@ namespace Blockiverse.Tests.Survival.EditMode
             VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.RustcoreOre);
             var service = CreateService(itemRegistry);
 
-            // Tier-2 Flint Delver cannot mine iron (Rustcore is Delver/3).
+            // Tier-2 Flint Delver can slowly break iron (Rustcore is Delver/3), but gets no ore.
             ItemStack flint = itemRegistry.CreateItemStack(ItemId.FlintDelver);
-            Assert.That(service.TryPreviewHarvest(world, inventory, HarvestPosition, flint).FailureReason,
-                Is.EqualTo(BlockHarvestFailureReason.InsufficientTool));
+            BlockHarvestResult flintPreview = service.TryPreviewHarvest(world, inventory, HarvestPosition, flint);
+            Assert.That(flintPreview.Succeeded, Is.True);
+            Assert.That(flintPreview.Drops, Is.Empty);
 
-            // Tier-3 Rosycopper Delver (from the new tool ladder) can.
+            // Tier-3 Rosycopper Delver (from the new tool ladder) can break and collect ore.
             ItemStack rosycopper = itemRegistry.CreateItemStack(new ItemId("rosycopper_delver"));
-            Assert.That(service.TryPreviewHarvest(world, inventory, HarvestPosition, rosycopper).Succeeded, Is.True);
+            BlockHarvestResult rosycopperPreview = service.TryPreviewHarvest(world, inventory, HarvestPosition, rosycopper);
+            Assert.That(rosycopperPreview.Succeeded, Is.True);
+            Assert.That(rosycopperPreview.Drops, Is.Not.Empty);
+        }
+
+        [Test]
+        public void LowTierResourceHarvestBreaksBlockWithoutGrantingOre()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            var inventory = new Inventory(itemRegistry, slotCount: 4, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.RustcoreOre);
+            var service = CreateService(itemRegistry);
+            ItemStack flint = itemRegistry.CreateItemStack(ItemId.FlintDelver);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, flint);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(result.Drops, Is.Empty);
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Air));
+            Assert.That(inventory.GetSlot(0).IsEmpty, Is.True);
         }
 
         [Test]
@@ -251,6 +296,107 @@ namespace Blockiverse.Tests.Survival.EditMode
                 ItemStack[] result = table.Roll(ref rng);
                 Assert.That(result.Length, Is.EqualTo(1), "Zero-chance secondary entry must never roll a drop.");
             }
+        }
+
+        [Test]
+        public void ClaybedDropsClayLumpWithinCanonicalRange()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+
+            bool sawVariableYield = false;
+            for (uint seed = 1; seed <= 40; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: seed);
+
+                ItemStack drop = service.RollHarvestDrop(BlockRegistry.Claybed, HarvestToolKind.Spade);
+
+                Assert.That(drop.ItemId, Is.EqualTo(ItemId.ClayLump));
+                Assert.That(drop.Count, Is.InRange(2, 4));
+                if (drop.Count > 2)
+                    sawVariableYield = true;
+            }
+
+            Assert.That(sawVariableYield, Is.True, "Claybed must sometimes drop more than the minimum clay_lump yield.");
+        }
+
+        [Test]
+        public void CropStageHarvestUsesLowerBaseYieldAndHigherMatureYield()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            bool sawBaseGrainTwo = false;
+            bool sawMatureGrainThree = false;
+            bool sawMatureBerryFour = false;
+
+            for (uint seed = 1; seed <= 80; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: seed);
+
+                ItemStack baseGrain = service.RollHarvestDrop(BlockRegistry.GrainStalk, HarvestToolKind.Sickle);
+                ItemStack matureGrain = service.RollHarvestDrop(BlockRegistry.GrainStalk_S4, HarvestToolKind.Sickle);
+                ItemStack immatureBerry = service.RollHarvestDrop(BlockRegistry.Berrybush_S1, HarvestToolKind.Sickle);
+                ItemStack matureBerry = service.RollHarvestDrop(BlockRegistry.Berrybush_S5, HarvestToolKind.Sickle);
+
+                Assert.That(baseGrain.ItemId, Is.EqualTo(ItemId.GrainBundle));
+                Assert.That(baseGrain.Count, Is.InRange(1, 2));
+                Assert.That(matureGrain.ItemId, Is.EqualTo(ItemId.GrainBundle));
+                Assert.That(matureGrain.Count, Is.InRange(1, 3));
+                Assert.That(immatureBerry.ItemId, Is.EqualTo(ItemId.BerryCluster));
+                Assert.That(immatureBerry.Count, Is.EqualTo(1));
+                Assert.That(matureBerry.ItemId, Is.EqualTo(ItemId.BerryCluster));
+                Assert.That(matureBerry.Count, Is.InRange(2, 4));
+
+                if (baseGrain.Count == 2) sawBaseGrainTwo = true;
+                if (matureGrain.Count == 3) sawMatureGrainThree = true;
+                if (matureBerry.Count == 4) sawMatureBerryFour = true;
+            }
+
+            Assert.That(sawBaseGrainTwo, Is.True, "Base grain should use the lower 1-2 wild grain range.");
+            Assert.That(sawMatureGrainThree, Is.True, "Mature grain must reach the canonical 1-3 crop range.");
+            Assert.That(sawMatureBerryFour, Is.True, "Mature berrybush must reach the canonical 2-4 crop range.");
+        }
+
+        [Test]
+        public void HarvestingClaybedAddsClayLumpAndClearsWorldBlock()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 7);
+            var inventory = new Inventory(ir, slotCount: 4, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.Claybed);
+            ItemStack spade = ir.CreateItemStack(ItemId.ReedwoodSpade);
+
+            BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, spade);
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(result.Drop.ItemId, Is.EqualTo(ItemId.ClayLump));
+            Assert.That(result.Drop.Count, Is.InRange(2, 4));
+            Assert.That(inventory.CountOf(ItemId.ClayLump), Is.EqualTo(result.Drop.Count));
+            Assert.That(inventory.CountOf(ItemId.Claybed), Is.Zero);
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
+        public void RiverSiltCanProduceClayLumpWithSpade()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            bool sawClay = false;
+
+            for (uint seed = 1; seed <= 80 && !sawClay; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: seed);
+
+                ItemStack drop = service.RollHarvestDrop(BlockRegistry.RiverSilt, HarvestToolKind.Spade);
+                if (drop.ItemId == ItemId.ClayLump)
+                {
+                    Assert.That(drop.Count, Is.EqualTo(1));
+                    sawClay = true;
+                }
+            }
+
+            Assert.That(sawClay, Is.True, "River silt must have a reachable clay_lump roll.");
         }
 
         [Test]
@@ -390,6 +536,207 @@ namespace Blockiverse.Tests.Survival.EditMode
             // BranchwoodLog has no drop table → always the base 1× log.
             ItemStack drop = service.RollHarvestDrop(BlockRegistry.BranchwoodLog, HarvestToolKind.Feller);
             Assert.That(drop, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
+        }
+
+        [Test]
+        public void MultiDropHarvestAddsSecondaryStacksAtomically()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 6);
+            var inventory = new Inventory(ir, slotCount: 2, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.Reedgrass_S3);
+
+            BlockHarvestResult result = service.TryHarvest(
+                world,
+                inventory,
+                HarvestPosition,
+                new ItemStack(ItemId.ReedwoodSickle, 1));
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(result.Drop.ItemId, Is.EqualTo(ItemId.ReedFiber));
+            Assert.That(result.Drops, Does.Contain(new ItemStack(ItemId.ReedCutting, 1)));
+            Assert.That(inventory.CountOf(ItemId.ReedFiber), Is.InRange(1, 3));
+            Assert.That(inventory.CountOf(ItemId.ReedCutting), Is.EqualTo(1));
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Air));
+        }
+
+        [Test]
+        public void MultiDropHarvestDoesNotRemoveBlockWhenOnlyOneUniqueDropFits()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = new ResourceHarvestService(
+                BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: 6);
+            var inventory = new Inventory(ir, slotCount: 1, hotbarSlotCount: 1);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.Reedgrass_S3);
+
+            BlockHarvestResult result = service.TryHarvest(
+                world,
+                inventory,
+                HarvestPosition,
+                new ItemStack(ItemId.ReedwoodSickle, 1));
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.FailureReason, Is.EqualTo(BlockHarvestFailureReason.InventoryFull));
+            Assert.That(inventory.CountOf(ItemId.ReedFiber), Is.Zero);
+            Assert.That(inventory.CountOf(ItemId.ReedCutting), Is.Zero);
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Reedgrass_S3));
+        }
+
+        [Test]
+        public void DryTurfHarvestCanReturnDrygrassSeed()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            bool sawSeed = false;
+
+            for (uint seed = 1; seed <= 120 && !sawSeed; seed++)
+            {
+                var service = new ResourceHarvestService(
+                    BlockRegistry.CreateDefault(), ir, BlockHarvestRuleSet.CreateDefault(ir), rngSeed: seed);
+                ItemStack[] drops = service.RollHarvestDrops(BlockRegistry.DryTurf, HarvestToolKind.Spade);
+                for (int i = 0; i < drops.Length; i++)
+                {
+                    if (drops[i].ItemId == ItemId.DrygrassSeed)
+                        sawSeed = true;
+                }
+            }
+
+            Assert.That(sawSeed, Is.True, "Dry turf must have a reachable drygrass_seed roll.");
+        }
+
+        [Test]
+        public void SaplingStagesHarvestAsPlaceableSaplingItem()
+        {
+            ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
+            ItemDefinition sapling = itemRegistry.Get(ItemId.Sapling);
+            Assert.That(sapling.Kind, Is.EqualTo(ItemKind.Placeable));
+            Assert.That(sapling.BlockId, Is.EqualTo(BlockRegistry.Sapling));
+
+            var service = CreateService(itemRegistry);
+            BlockId[] stages = { BlockRegistry.Sapling, BlockRegistry.Sapling_S1, BlockRegistry.Sapling_S2 };
+            for (int i = 0; i < stages.Length; i++)
+            {
+                var inventory = new Inventory(itemRegistry, slotCount: 2, hotbarSlotCount: 1);
+                VoxelWorld world = CreateSingleBlockWorld(stages[i]);
+
+                BlockHarvestResult result = service.TryHarvest(world, inventory, HarvestPosition, ItemStack.Empty);
+
+                Assert.That(result.Succeeded, Is.True, $"stage={stages[i]} failure={result.FailureReason}");
+                Assert.That(result.Drop, Is.EqualTo(new ItemStack(ItemId.Sapling, 1)));
+                Assert.That(inventory.CountOf(ItemId.Sapling), Is.EqualTo(1));
+                Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Air));
+            }
+        }
+
+        [Test]
+        public void GroundItemPickupRespectsRadiusAndRecentDropProtection()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var store = new GroundItemStore(ir);
+            var inventory = new Inventory(ir, slotCount: 4, hotbarSlotCount: 1);
+            long startTick = 100;
+            store.Spawn(new ItemStack(ItemId.ReedFiber, 2), 0f, 0f, 0f, startTick, droppedByPlayerId: "player-a");
+
+            bool protectedPickup = store.TryPickupNearest(
+                inventory,
+                0f,
+                0f,
+                0f,
+                startTick + GroundItemStore.RecentDropProtectionTicks - 1,
+                "player-b",
+                out _);
+            Assert.That(protectedPickup, Is.False, "Recent player drops are protected from other players for 3 seconds.");
+            Assert.That(store.Count, Is.EqualTo(1));
+
+            bool outsideRadius = store.TryPickupNearest(
+                inventory,
+                GroundItemStore.PickupRadiusBlocks + 0.1f,
+                0f,
+                0f,
+                startTick + GroundItemStore.RecentDropProtectionTicks,
+                "player-b",
+                out _);
+            Assert.That(outsideRadius, Is.False, "Items outside the 2.5-block pickup radius must not be collected.");
+            Assert.That(store.Count, Is.EqualTo(1));
+
+            bool pickedUp = store.TryPickupNearest(
+                inventory,
+                GroundItemStore.PickupRadiusBlocks,
+                0f,
+                0f,
+                startTick + GroundItemStore.RecentDropProtectionTicks,
+                "player-b",
+                out ItemStack stack);
+            Assert.That(pickedUp, Is.True);
+            Assert.That(stack, Is.EqualTo(new ItemStack(ItemId.ReedFiber, 2)));
+            Assert.That(inventory.CountOf(ItemId.ReedFiber), Is.EqualTo(2));
+            Assert.That(store.Count, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GroundItemDespawnsAfterTenLoadedMinutes()
+        {
+            var store = new GroundItemStore(ItemRegistry.CreateDefault());
+            long startTick = 250;
+            store.Spawn(new ItemStack(ItemId.Leafmoss, 1), 1f, 0f, 1f, startTick);
+
+            Assert.That(store.RemoveExpired(startTick + GroundItemStore.DespawnTicks - 1), Is.EqualTo(0));
+            Assert.That(store.Count, Is.EqualTo(1));
+            Assert.That(store.RemoveExpired(startTick + GroundItemStore.DespawnTicks), Is.EqualTo(1));
+            Assert.That(store.Count, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GroundItemPickupDoesNotRemoveItemWhenInventoryIsFull()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var store = new GroundItemStore(ir);
+            var inventory = new Inventory(ir, slotCount: 1, hotbarSlotCount: 1);
+            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, ItemRegistry.BlockStackSize));
+            store.Spawn(new ItemStack(ItemId.ReedFiber, 1), 0f, 0f, 0f, worldTick: 0);
+
+            bool pickedUp = store.TryPickupNearest(
+                inventory,
+                0f,
+                0f,
+                0f,
+                worldTick: 0,
+                playerId: "player-a",
+                out ItemStack stack);
+
+            Assert.That(pickedUp, Is.False);
+            Assert.That(stack.IsEmpty, Is.True);
+            Assert.That(store.Count, Is.EqualTo(1));
+            Assert.That(inventory.CountOf(ItemId.ReedFiber), Is.Zero);
+        }
+
+        [Test]
+        public void HarvestToGroundBreaksBlockAndSpawnsOverflowDropWhenInventoryIsFull()
+        {
+            ItemRegistry ir = ItemRegistry.CreateDefault();
+            var service = CreateService(ir);
+            var inventory = new Inventory(ir, slotCount: 1, hotbarSlotCount: 1);
+            inventory.SetSlot(0, new ItemStack(ItemId.LooseLoam, ItemRegistry.BlockStackSize));
+            var groundItems = new GroundItemStore(ir);
+            VoxelWorld world = CreateSingleBlockWorld(BlockRegistry.BranchwoodLog);
+
+            BlockHarvestResult result = service.TryHarvestToGround(
+                world,
+                inventory,
+                HarvestPosition,
+                ItemStack.Empty,
+                groundItems,
+                dropX: 1.5f,
+                dropY: 1.5f,
+                dropZ: 1.5f,
+                worldTick: 0,
+                droppedByPlayerId: "player-a");
+
+            Assert.That(result.Succeeded, Is.True, result.FailureReason.ToString());
+            Assert.That(world.GetBlock(HarvestPosition), Is.EqualTo(BlockRegistry.Air));
+            Assert.That(inventory.CountOf(ItemId.BranchwoodLog), Is.Zero);
+            Assert.That(groundItems.Count, Is.EqualTo(1));
+            Assert.That(groundItems.Items[0].Stack, Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 1)));
         }
 
         static readonly BlockPosition HarvestPosition = new(1, 1, 1);

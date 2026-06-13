@@ -90,9 +90,8 @@ Recommended behavior:
 | New World Menu | `new_world` | Title Menu | Yes | Configure and create world |
 | Load World Menu | `load_world` | Title Menu | Yes | Select existing save |
 | World Details Menu | `world_details` | Load World | Yes | Load, rename, duplicate, delete selected world |
-| Settings Menu | `settings` | Title, Pause | Yes | Game, controls, audio, video, accessibility |
+| Settings Menu | `settings` | Title, Pause | Yes | Comfort, audio/feedback, and controls |
 | Controls Menu | `controls` | Settings | Yes | View/remap controls |
-| Credits Menu | `credits` | Title Menu | Yes | Credits and licenses |
 | Gameplay HUD | `gameplay_hud` | World loaded | No | Health/status, hotbar, crosshair, prompts |
 | Pause Menu | `pause_menu` | Gameplay | Yes | Resume, settings, save, quit |
 | Inventory Menu | `inventory` | Gameplay | Yes by default | Player inventory, equipment, quick crafting |
@@ -104,7 +103,7 @@ Recommended behavior:
 | Prep Board Menu | `prep_board` | Interacting with Prep Board | Yes | Food and utility recipes |
 | Mend Bench Menu | `mend_bench` | Interacting with Mend Bench | Yes | Repair damaged tools |
 | Map / Wayflag Menu | `map` | Keybind or Wayflag interaction | Yes | View discovered areas and markers |
-| LAN Multiplayer Menu | `lan_multiplayer` | Pause, Title, World loaded | Yes | Host, join, stop, or reconnect a LAN co-op session |
+| LAN Multiplayer Menu | `lan_multiplayer` | Title | Yes | Host, join, or stop a LAN co-op session |
 | Death Screen | `death_screen` | Player death | Yes | Respawn or return to title |
 | Confirmation Dialog | `confirm_dialog` | Any risky action | Inherits parent | Confirm/cancel destructive actions |
 | Item Details Popover | `item_details` | Inventory hover/focus | Inherits parent | Stats, description, actions |
@@ -122,7 +121,6 @@ flowchart TD
     Title --> LoadWorld[Load World Menu]
     Title --> SettingsTitle[Settings Menu]
     Title --> LanMenu[LAN Multiplayer Menu]
-    Title --> Credits[Credits Menu]
     Title --> QuitConfirm[Confirm Quit Dialog]
 
     NewWorld --> WorldGen[Generating World]
@@ -134,10 +132,8 @@ flowchart TD
     DeleteConfirm --> LoadWorld
 
     HUD --> Pause[Pause Menu]
-    HUD --> LanMenu
     Pause --> HUD
     Pause --> SettingsPause[Settings Menu]
-    Pause --> LanMenu
     Pause --> SaveGame[Save Game Action]
     Pause --> ReturnTitleConfirm[Confirm Return to Title]
     ReturnTitleConfirm --> Title
@@ -183,7 +179,6 @@ flowchart TD
 | `title_menu` | Load World | At least one save exists | `load_world` |
 | `title_menu` | Settings | Always | `settings` |
 | `title_menu` | Multiplayer | Always | `lan_multiplayer` |
-| `title_menu` | Credits | Always | `credits` |
 | `title_menu` | Quit | Desktop/platform supports quit | `confirm_dialog` then exit app |
 | `new_world` | Create | Valid name and settings | Generate world, save metadata, then `gameplay_hud` |
 | `new_world` | Back | Always | `title_menu` |
@@ -198,11 +193,9 @@ flowchart TD
 | `gameplay_hud` | Interact with station | Targeted station block | Matching station menu |
 | `gameplay_hud` | Interact with container | Targeted container block | `container` |
 | `gameplay_hud` | Map input | Player has map or wayflag discovered | `map` |
-| `gameplay_hud` | Multiplayer input | LAN co-op enabled | `lan_multiplayer` |
 | `pause_menu` | Resume | Always | Pop to `gameplay_hud` |
 | `pause_menu` | Save Game | World allows saving | Save world, stay on `pause_menu` |
 | `pause_menu` | Settings | Always | `settings` |
-| `pause_menu` | Multiplayer | Always | `lan_multiplayer` |
 | `pause_menu` | Return to Title | Unsaved changes | `confirm_dialog`; on confirm `title_menu` |
 | `pause_menu` | Quit Game | Unsaved changes | `confirm_dialog`; on confirm exit app |
 | `inventory` | Open Crafting tab | Always | Same screen with `activeTab = crafting` or `crafting` |
@@ -218,8 +211,7 @@ flowchart TD
 | `lan_multiplayer` | Host LAN Session | Valid local world and no active session | Start host, remain on `lan_multiplayer` |
 | `lan_multiplayer` | Join LAN Session | Address valid and no active session | Start client, remain on `lan_multiplayer` until connected |
 | `lan_multiplayer` | Stop Session | Active host/client session | Shutdown session; host saves before stopping |
-| `lan_multiplayer` | Reconnect | Previous address exists after host disconnect | Join previous host address |
-| `lan_multiplayer` | Back | Always | Previous screen |
+| `lan_multiplayer` | Close | Always | Previous screen |
 
 ---
 
@@ -277,8 +269,8 @@ type BootScreenState = {
 |                 [ Continue ]                     |
 |                 [ New World ]                    |
 |                 [ Load World ]                   |
+|                 [ LAN Multiplayer ]              |
 |                 [ Settings ]                     |
-|                 [ Credits ]                      |
 |                 [ Quit ]                         |
 |                                                  |
 |  v0.1.0-alpha                         Profile: P1|
@@ -292,8 +284,8 @@ type BootScreenState = {
 | Continue | `title.continue_latest_save` | Latest save exists | Loads most recently played world |
 | New World | `title.open_new_world` | Always | Opens `new_world` |
 | Load World | `title.open_load_world` | Any save exists | Opens `load_world` |
+| Multiplayer | `title.open_lan_multiplayer` | Always | Opens `lan_multiplayer` |
 | Settings | `title.open_settings` | Always | Opens `settings` with `returnTo = title_menu` |
-| Credits | `title.open_credits` | Always | Opens `credits` |
 | Quit | `title.quit_requested` | Platform allows app quit | Opens quit confirmation dialog |
 
 ---
@@ -312,7 +304,6 @@ difficulty = "normal";
 worldSize = "small";
 worldPreset = "survival_terrain";
 startingBiomePreference = "balanced";
-allowExperimentalRules = false;
 ```
 
 **Mockup:**
@@ -328,7 +319,6 @@ allowExperimentalRules = false;
 | World Size              | < Small >                       |
 | World Preset            | < Survival Terrain >            |
 | Starting Biome          | < Balanced >                    |
-| Experimental Rules      | [ ] Enabled                     |
 +--------------------------+---------------------------------+
 | [ Create World ]                         [ Back ]          |
 +------------------------------------------------------------+
@@ -340,15 +330,15 @@ allowExperimentalRules = false;
 |---|---|---|
 | World Name field | `new_world.set_name` | Updates pending world name; validates non-empty and unique display name |
 | Seed field | `new_world.set_seed` | Accepts text or number; hashes text seeds into numeric seed |
-| Random Seed | `new_world.randomize_seed` | Generates new seed value |
 | Game Mode selector | `new_world.cycle_game_mode` | Cycles `survival`, `creative` |
 | Difficulty selector | `new_world.cycle_difficulty` | Cycles `easy`, `normal`, `hard` |
-| World Size selector | `new_world.cycle_world_size` | Cycles `small`, `medium`, `large`, `infinite` |
+| World Size selector | `new_world.cycle_world_size` | Cycles `small`, `medium`, `large`, `infinite`; current bounded implementation displays `infinite` as an Infinite Preview (256x256) until region-streamed worlds ship. |
 | World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain`, `flat_builder`, `void_builder`; advanced presets may unlock later |
 | Starting Biome selector | `new_world.cycle_starting_biome` | Changes spawn-biome preference |
-| Experimental Rules toggle | `new_world.toggle_experimental` | Enables optional test systems |
 | Create World | `new_world.create` | Validates settings, creates save, starts generation |
 | Back | `new_world.back` | Returns to Title Menu |
+
+Experimental rules are deferred until optional rules systems exist; they are not part of the current New World menu or save schema.
 
 **Create world logic:**
 
@@ -381,10 +371,10 @@ function createWorld(config) {
 |   Salt Flats Test             | Progression: Bronze            |
 |   Day 4 - Easy - Survival     | Biome: Meadow                  |
 |                               |                                |
-|   Deep Cave Run               | [ Play ] [ Details ] [ Delete ]|
+|   Deep Cave Run               | [ Load ] [ Details ]           |
 |   Day 33 - Hard - Survival    |                                |
 +-------------------------------+--------------------------------+
-| [ Back ]                 Sort: Last Played v                  |
+| [ Back ]                                                       |
 +----------------------------------------------------------------+
 ```
 
@@ -393,12 +383,11 @@ function createWorld(config) {
 | Element | Action ID | Logic |
 |---|---|---|
 | World list item | `load_world.select_save` | Updates selected save and preview panel |
-| Play | `load_world.play_selected` | Loads selected save if compatible |
+| Load | `load_world.load` | Loads selected save if compatible |
 | Details | `load_world.open_details` | Opens `world_details` for selected save |
-| Delete | `load_world.delete_selected_requested` | Opens delete confirmation dialog |
-| Sort selector | `load_world.set_sort` | Sorts by last played, name, day, mode, created date |
-| Search field | `load_world.search` | Filters save list by name/seed/mode |
 | Back | `load_world.back` | Returns to Title Menu |
+
+Deleting, renaming, and duplicating saves are handled from the World Details menu. Sort and search controls are deferred until the save list needs more than the current paged selector.
 
 ---
 
@@ -976,7 +965,7 @@ canRepair =
 
 ### 6.18 LAN Multiplayer Menu
 
-**Purpose:** Host, join, stop, or reconnect a local LAN co-op session while keeping the host authoritative over world state.
+**Purpose:** Host, join, or stop a local LAN co-op session while keeping the host authoritative over world state.
 
 **State fields:**
 
@@ -986,10 +975,9 @@ type LanMultiplayerMenuState = {
   connectionState: "stopped" | "starting_host" | "hosting" | "starting_client" | "connected_client" | "disconnecting" | "disconnected" | "failed";
   address: string;        // default: 127.0.0.1
   listenAddress: string;  // default: 0.0.0.0
-  port: number;           // default: 7777
+  port: number;           // configured default: 7777
   lastDisconnectReason?: string;
   lastHostSaveError?: string;
-  previousJoinAddress?: string;
 };
 ```
 
@@ -1002,10 +990,9 @@ type LanMultiplayerMenuState = {
 | Status: LAN session stopped.                   |
 |                                                |
 | Host Address: [ 127.0.0.1                 ]    |
-| Port: 7777                                     |
 |                                                |
 | [ Host LAN Session ] [ Join LAN Session ]      |
-| [ Stop Session ] [ Reconnect ]                 |
+| [ Stop Session ] [ Close ]                     |
 |                                                |
 | Voice: Use Meta Quest party chat.              |
 | Host owns world save state and validation.      |
@@ -1017,11 +1004,10 @@ type LanMultiplayerMenuState = {
 | Element | Action ID | Enabled When | Logic |
 |---|---|---|---|
 | Host LAN Session | `multiplayer.host_lan` | No active session; local world can load/generate | Loads or initializes canonical world state, then starts host session. |
-| Join LAN Session | `multiplayer.join_lan` | No active session; address is valid | Starts client connection to `address:port`. |
+| Join LAN Session | `multiplayer.join_lan` | No active session; address is valid | Starts client connection to `address` on the configured default port. |
 | Stop Session | `multiplayer.stop_session` | Host/client session active or disconnecting | Host attempts save-on-shutdown, then stops session; client disconnects. |
-| Reconnect | `multiplayer.reconnect` | Previous join address exists and session is stopped/disconnected | Attempts to join the previous address. |
 | Address input | `multiplayer.set_address` | No active session | Updates pending join address. |
-| Back | `multiplayer.back` | Always | Returns to previous screen. |
+| Close | `lan_multiplayer.close` | Always | Returns to previous screen. |
 
 **Status text rules:**
 
@@ -1033,20 +1019,10 @@ type LanMultiplayerMenuState = {
 | `starting_client` | `Joining LAN session at <address>:7777...` |
 | `connected_client` | `Connected to LAN session at <address>:7777.` |
 | `disconnecting` | `Stopping LAN session...` |
-| `disconnected` | `LAN session ended. Reconnect when the host is available.` |
+| `disconnected` | `LAN session ended. Join again when the host is available.` |
 | `failed` | Show failure reason if available; otherwise `LAN session failed.` |
 
-**Session-ended / reconnect flow:**
-
-```mermaid
-flowchart TD
-    Connected[Connected Client] --> LostHost[Host Disconnects]
-    LostHost --> SessionEnded[Session Ended Message]
-    SessionEnded --> Reconnect[Reconnect]
-    Reconnect --> Joining[Starting Client]
-    Joining --> Connected[Connected Client]
-    Joining --> Failed[Failed / Retry]
-```
+Host shutdown save failures first keep the session alive; repeated failures allow the host to stop anyway with an explicit "without latest shutdown save" warning.
 
 Voice communication uses Meta Quest party chat. Blockiverse VR does not capture or transmit microphone audio in the LAN protocol.
 
@@ -1054,7 +1030,7 @@ Voice communication uses Meta Quest party chat. Blockiverse VR does not capture 
 
 ### 6.19 Settings Menu
 
-**Purpose:** Configure game, video, audio, controls, and accessibility options.
+**Purpose:** Configure comfort, audio/feedback, and controls reference options.
 
 In VR the Settings menu is a hub of focused panels rather than a tabbed desktop dialog: each
 entry opens its own world-space screen, and every control applies immediately (settings persist
@@ -1077,7 +1053,7 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 
 | Section | Settings |
 |---|---|
-| Comfort | Locomotion mode (glide/teleport), move speed, smooth/snap turn, snap-turn degrees, standing eye height, vignette toggle/strength |
+| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, height reset |
 | Audio | Master, effects, UI, and weather volume; haptic strength; mute all; haptics toggle; reduced flash; reduced particles |
 | Controls | Read-only controller mapping reference (shared with the first-launch popup) |
 
@@ -1091,6 +1067,8 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 | Close | `settings.close` | Returns to the previous screen |
 | Audio close | `settings_audio.close` | Returns from the audio screen |
 | Controls close | `controls.close` | Returns from the controls screen |
+
+Move-speed and standing-eye-height sliders are deferred; the current comfort panel exposes height reset instead of direct eye-height editing.
 
 ---
 
@@ -1286,11 +1264,10 @@ type ConfirmDialogParams = {
 | Action ID | Payload | Result |
 |---|---|---|
 | `multiplayer.host_lan` | None | Starts a host-authoritative LAN session after host world load/validation |
-| `multiplayer.join_lan` | `{ address, port }` | Starts a LAN client connection to the entered address |
+| `multiplayer.join_lan` | `{ address }` | Starts a LAN client connection to the entered address on the configured default port |
 | `multiplayer.stop_session` | None | Stops an active host/client session; host saves before shutdown |
-| `multiplayer.reconnect` | `{ previousAddress, port }` | Attempts to rejoin the previous LAN host address |
 | `multiplayer.set_address` | `{ address }` | Updates pending join address |
-| `multiplayer.back` | None | Returns to the previous screen |
+| `lan_multiplayer.close` | None | Returns to the previous screen |
 
 ---
 

@@ -34,6 +34,7 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.ToolRack,           ItemId.ToolRack);
             AssertBlockMapsToItem(registry, BlockRegistry.PantryJar,          ItemId.PantryJar);
             AssertBlockMapsToItem(registry, BlockRegistry.DeepLocker,         ItemId.DeepLocker);
+            AssertBlockMapsToItem(registry, BlockRegistry.Bedroll,            ItemId.Bedroll);
 
             // Metal/crystal nodes drop their canonical raw resource (§3).
             AssertBlockMapsToItem(registry, BlockRegistry.PaletinThread,      ItemId.RawPaletin);
@@ -41,6 +42,33 @@ namespace Blockiverse.Tests.Survival.EditMode
             AssertBlockMapsToItem(registry, BlockRegistry.NiterstonePocket,   ItemId.SparkNiter);
             AssertBlockMapsToItem(registry, BlockRegistry.UmbraliteNode,      ItemId.RawUmbralite);
             AssertBlockMapsToItem(registry, BlockRegistry.StaropalGeode,      ItemId.StaropalShard);
+
+            Assert.That(registry.Get(ItemId.ReedwoodDelver).DisplayKey, Is.EqualTo("item.reedwood_delver.name"));
+        }
+
+        [Test]
+        public void SharedDefaultRegistryIsStableAndMatchesFactoryContents()
+        {
+            ItemRegistry shared = ItemRegistry.Default;
+            ItemRegistry factory = ItemRegistry.CreateDefault();
+
+            Assert.That(ItemRegistry.Default, Is.SameAs(shared));
+            Assert.That(shared.All.Count, Is.EqualTo(factory.All.Count));
+            AssertBlockMapsToItem(shared, BlockRegistry.SmoothBranchwood, ItemId.SmoothBranchwood);
+            Assert.That(shared.Get(ItemId.BuildTable).MaxStackSize, Is.EqualTo(ItemRegistry.StationStackSize));
+        }
+
+        [Test]
+        public void ItemRegistryKeysItemsByCanonicalIdNotDisplayName()
+        {
+            var registry = new ItemRegistry();
+            registry.Register(new ItemDefinition(new ItemId("test_first"), "Shared Display", ItemKind.Resource, maxStackSize: 1));
+            registry.Register(new ItemDefinition(new ItemId("test_second"), "Shared Display", ItemKind.Resource, maxStackSize: 1));
+
+            Assert.That(registry.TryGetByCanonicalId("test_first", out ItemDefinition first), Is.True);
+            Assert.That(first.Id, Is.EqualTo(new ItemId("test_first")));
+            Assert.That(first.DisplayKey, Is.EqualTo("item.test_first.name"));
+            Assert.That(registry.TryGetByCanonicalId("Shared Display", out _), Is.False);
         }
 
         [Test]
@@ -72,17 +100,24 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(registry.Get(ItemId.BranchwoodLog).MaxStackSize,  Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.Embercoal).MaxStackSize,      Is.EqualTo(ItemRegistry.OreStackSize));
             Assert.That(registry.Get(ItemId.LumenCrystal).MaxStackSize,   Is.EqualTo(ItemRegistry.CrystalStackSize));
-            Assert.That(registry.Get(ItemId.BuildTable).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
-            Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize,   Is.EqualTo(ItemRegistry.BlockStackSize));
-            Assert.That(registry.Get(ItemId.DeepLocker).MaxStackSize,     Is.EqualTo(ItemRegistry.BlockStackSize));
+            Assert.That(registry.Get(ItemId.BuildTable).MaxStackSize,     Is.EqualTo(ItemRegistry.StationStackSize));
+            Assert.That(registry.Get(ItemId.ClayKiln).MaxStackSize,       Is.EqualTo(ItemRegistry.StationStackSize));
+            Assert.That(registry.Get(ItemId.StorageCrate).MaxStackSize,   Is.EqualTo(ItemRegistry.StorageContainerStackSize));
+            Assert.That(registry.Get(ItemId.DeepLocker).MaxStackSize,     Is.EqualTo(ItemRegistry.StorageContainerStackSize));
+            Assert.That(registry.Get(ItemId.Bedroll).MaxStackSize,        Is.EqualTo(ItemRegistry.BlockStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodFeller).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodMallet).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.ReedwoodDelver).MaxStackSize, Is.EqualTo(ItemRegistry.ToolStackSize));
             Assert.That(registry.Get(ItemId.FieldBandage).MaxStackSize,   Is.EqualTo(ItemRegistry.FieldBandageStackSize));
+            Assert.That(registry.Get(ItemId.RawMorsel).Kind,              Is.EqualTo(ItemKind.Resource));
+            Assert.That(registry.Get(ItemId.BerryMash).Kind,              Is.EqualTo(ItemKind.Consumable));
+            Assert.That(registry.Get(ItemId.Flatbread).MaxStackSize,      Is.EqualTo(ItemRegistry.FoodStackSize));
+            Assert.That(registry.Get(ItemId.CookedMorsel).MaxStackSize,   Is.EqualTo(ItemRegistry.FoodStackSize));
+            Assert.That(registry.Get(ItemId.TrailRation).MaxStackSize,    Is.EqualTo(ItemRegistry.FoodStackSize));
         }
 
         [Test]
-        public void DefaultInventoryHasTwentyFourSlotsAndSixHotbarSlots()
+        public void DefaultInventoryHasFortyFourSlotsAndTenHotbarSlots()
         {
             var inventory = new Inventory(ItemRegistry.CreateDefault());
 
@@ -91,6 +126,19 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(inventory.HotbarSlotCount, Is.EqualTo(Inventory.DefaultHotbarSlotCount));
             Assert.That(inventory.HotbarSlotCount, Is.EqualTo(10));
             Assert.That(Enumerable.Range(0, inventory.SlotCount).All(slot => inventory.GetSlot(slot).IsEmpty), Is.True);
+        }
+
+        [Test]
+        public void SwapSlotsExchangesStacksWithoutChangingCounts()
+        {
+            var inventory = new Inventory(ItemRegistry.CreateDefault(), slotCount: 4, hotbarSlotCount: 2);
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 4));
+            inventory.SetSlot(3, new ItemStack(ItemId.FieldBandage, 2));
+
+            inventory.SwapSlots(0, 3);
+
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.FieldBandage, 2)));
+            Assert.That(inventory.GetSlot(3), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 4)));
         }
 
         [Test]
@@ -105,6 +153,21 @@ namespace Blockiverse.Tests.Survival.EditMode
             Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 99)));
             Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.LooseLoam, 6)));
             Assert.That(inventory.GetSlot(2).IsEmpty, Is.True);
+        }
+
+        [Test]
+        public void AddDoesNotMergeStacksWithDurability()
+        {
+            var inventory = new Inventory(ItemRegistry.CreateDefault(), slotCount: 3, hotbarSlotCount: 1);
+            inventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2).WithDurability(5));
+            inventory.SetSlot(1, new ItemStack(ItemId.BranchwoodLog, 2));
+
+            ItemStack leftover = inventory.Add(new ItemStack(ItemId.BranchwoodLog, 2).WithDurability(5));
+
+            Assert.That(leftover.IsEmpty, Is.True);
+            Assert.That(inventory.GetSlot(0), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 2).WithDurability(5)));
+            Assert.That(inventory.GetSlot(1), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 2)));
+            Assert.That(inventory.GetSlot(2), Is.EqualTo(new ItemStack(ItemId.BranchwoodLog, 2).WithDurability(5)));
         }
 
         [Test]

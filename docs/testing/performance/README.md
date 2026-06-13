@@ -11,9 +11,10 @@ Minimum internal target:
 
 ## Instrumentation
 
-- **In-headset HUD:** `PerformanceStatsOverlay` (Gameplay) shows live FPS (avg/min/max),
-  frame time, chunk count, triangle count, and the rebuild queue depth. It also logs a
-  periodic `Performance` summary through `BlockiverseLog` for Quest log capture.
+- **In-headset HUD:** the generated World object carries `PerformanceStatsOverlay`
+  (Gameplay), which shows live FPS (avg/min/max), frame time, chunk count, triangle
+  count, and the rebuild queue depth in development builds. It also logs a periodic
+  `Performance` summary through `BlockiverseLog` for Quest log capture.
 - **ProfilerMarkers:** generation and meshing are wrapped with named markers
   (canonical world generation,
   `Blockiverse.VoxelWorldRenderer.RebuildAll` / `RebuildDirty` / `RebuildChunk`,
