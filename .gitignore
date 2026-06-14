@@ -484,6 +484,9 @@ TestResults/
 # assets under Assets/Blockiverse/Art/Textures/Blocks/TextureSets are tracked.
 /docs/art/block-texture-set-generation/raw/
 
+# One-off texture method comparison reports are local review artifacts.
+/docs/art/texture-method-comparison-*/
+
 # Local agent planning artifacts.
 docs/superpowers/
 
