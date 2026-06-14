@@ -10,10 +10,6 @@ permissions:
   checks: write
   contents: read
 
-env:
-  UNITY_VERSION: ${{ vars.UNITY_VERSION || '6000.3.16f1' }}
-  ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME || 'dev.ericslutz.blockiversevr' }}
-
 jobs:
   repository-checks:
     name: Repository checks
@@ -57,9 +53,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: unity-library-ci-${{ runner.os }}-${{ env.UNITY_VERSION }}-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          key: unity-library-ci-${{ runner.os }}-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
-            unity-library-ci-${{ runner.os }}-${{ env.UNITY_VERSION }}-
+            unity-library-ci-${{ runner.os }}-6000.3.16f1-
             unity-library-ci-${{ runner.os }}-
 
       - name: Run Unity tests
@@ -69,7 +65,7 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion: ${{ env.UNITY_VERSION }}
+          unityVersion: 6000.3.16f1
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           checkName: Unity Test Results
           artifactsPath: TestResults/Unity
@@ -101,7 +97,7 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion: ${{ env.UNITY_VERSION }}
+          unityVersion: 6000.3.16f1
           targetPlatform: Android
           buildMethod: Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid
           versioning: None
@@ -109,7 +105,6 @@ jobs:
             -blockiverseBuildOutput ${{ steps.settings.outputs.output_path }}
             -blockiverseBuildVersionName ${{ steps.settings.outputs.version_name }}
             -blockiverseBuildVersionCode ${{ steps.settings.outputs.version_code }}
-            -blockiverseAndroidPackageName ${{ env.ANDROID_PACKAGE_NAME }}
 
       - name: Upload CI APK artifact
         uses: actions/upload-artifact@v7

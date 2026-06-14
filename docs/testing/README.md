@@ -50,22 +50,20 @@ Repository secrets:
 - `UNITY_EMAIL` — the Unity account email used for Unity Personal activation.
 - `UNITY_PASSWORD` — the Unity account password used for Unity Personal activation.
 - `ANDROID_KEYSTORE_BASE64` — base64-encoded Android release keystore.
-- `ANDROID_KEYSTORE_PASS` — Android keystore password.
-- `ANDROID_KEYALIAS_NAME` — Android key alias.
-- `ANDROID_KEYALIAS_PASS` — Android key password.
+- `ANDROID_KEYSTORE_PASSWORD` — Android keystore password.
+- `ANDROID_KEY_ALIAS` — Android key alias.
+- `ANDROID_KEY_PASSWORD` — Android key password.
 
 Environment secrets for `meta-alpha`, `meta-beta`, `meta-rc`, and `meta-production`:
 
 - `META_APP_ID` — Meta Horizon app ID for Blockiverse VR.
-- `META_USER_TOKEN` — OVR Platform Utility token for upload and promotion.
+- `META_APP_SECRET` — Meta app secret used by OVR Platform Utility for upload and promotion.
 
 Repository variables:
 
-- `UNITY_VERSION` — for example, `6000.3.16f1`.
 - `META_AGE_GROUP` — normally `TEENS_AND_ADULTS`.
-- `ANDROID_PACKAGE_NAME` — stable Android package name; current fallback is `dev.ericslutz.blockiversevr`.
-- `OVR_PLATFORM_UTIL_URL` — Linux OVR Platform Utility download URL.
-- `OVR_PLATFORM_UTIL_SHA256` — optional checksum for the downloaded utility.
+- `OVR_PLATFORM_UTIL_LINUX_URL` — Linux OVR Platform Utility download URL.
+- `OVR_PLATFORM_UTIL_LINUX_SHA256` — checksum for the downloaded utility.
 
 Unity Personal activation follows the GameCI model: activate Unity Personal once locally, copy the generated `.ulf` file into `UNITY_LICENSE`, and provide `UNITY_EMAIL` and `UNITY_PASSWORD`. Do not commit, log, or upload the Unity license file.
 
@@ -89,10 +87,9 @@ For local release signing, use:
 
 ```sh
 export ANDROID_KEYSTORE_PATH=/path/to/blockiverse-release.keystore
-export ANDROID_KEYSTORE_PASS=...
-export ANDROID_KEYALIAS_NAME=...
-export ANDROID_KEYALIAS_PASS=...
-export ANDROID_PACKAGE_NAME=dev.ericslutz.blockiversevr
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=...
+export ANDROID_KEY_PASSWORD=...
 scripts/unity/build-release-apk.sh /tmp/blockiverse-vr-release.apk
 ```
 

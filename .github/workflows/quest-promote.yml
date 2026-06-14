@@ -53,12 +53,12 @@ jobs:
 
       - name: Install Meta platform utility
         env:
-          OVR_PLATFORM_UTIL_SHA256: ${{ vars.OVR_PLATFORM_UTIL_SHA256 }}
-          OVR_PLATFORM_UTIL_URL: ${{ vars.OVR_PLATFORM_UTIL_URL }}
+          OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
+          OVR_PLATFORM_UTIL_LINUX_URL: ${{ vars.OVR_PLATFORM_UTIL_LINUX_URL }}
         run: |
-          curl -fsSL "$OVR_PLATFORM_UTIL_URL" -o "$RUNNER_TEMP/ovr-platform-util"
-          if [ -n "$OVR_PLATFORM_UTIL_SHA256" ]; then
-            echo "${OVR_PLATFORM_UTIL_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
+          curl -fsSL "$OVR_PLATFORM_UTIL_LINUX_URL" -o "$RUNNER_TEMP/ovr-platform-util"
+          if [ -n "$OVR_PLATFORM_UTIL_LINUX_SHA256" ]; then
+            echo "${OVR_PLATFORM_UTIL_LINUX_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
           fi
           chmod +x "$RUNNER_TEMP/ovr-platform-util"
           "$RUNNER_TEMP/ovr-platform-util" version
@@ -68,7 +68,7 @@ jobs:
           BUILD_ID: ${{ inputs.build_id }}
           DESTINATION_CHANNEL: ${{ inputs.destination_channel }}
           META_APP_ID: ${{ secrets.META_APP_ID }}
-          META_USER_TOKEN: ${{ secrets.META_USER_TOKEN }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
           SOURCE_CHANNEL: ${{ inputs.source_channel }}
         run: |
           case "$META_AGE_GROUP" in
@@ -87,7 +87,7 @@ jobs:
             set-release-channel-build
             --age-group "$META_AGE_GROUP"
             --app-id "$META_APP_ID"
-            --token "$META_USER_TOKEN"
+            --app-secret "$META_APP_SECRET"
             --source-channel "$SOURCE_CHANNEL"
             --destination-channel "$DESTINATION_CHANNEL"
             --disable-progress-bar true
