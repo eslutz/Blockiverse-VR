@@ -36,7 +36,7 @@ jobs:
           grep -q "BuildReleaseAndroid" Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs
           grep -q "BuildDevelopmentAndroid" Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs
           grep -q "ANDROID_KEYSTORE_BASE64" .github/workflows/meta-release.yml
-          grep -q "unityci/editor:ubuntu-6000.3.16f1-android-3.2.2" .github/workflows/meta-release.yml
+          grep -q "unityci/editor:ubuntu-6000.3.16f1-android-3" .github/workflows/meta-release.yml
           grep -q "upload-quest-build" .github/workflows/meta-release.yml
           grep -q "set-release-channel-build" .github/workflows/meta-release.yml
           grep -q "META_AGE_GROUP" .github/workflows/meta-release.yml
@@ -50,7 +50,7 @@ jobs:
           grep -q "destination_channel=\"rc\"" .github/workflows/meta-release.yml
           grep -q "source_channel=\"rc\"" .github/workflows/meta-release.yml
           grep -q "destination_channel=\"store\"" .github/workflows/meta-release.yml
-          grep -q "store_review_approved" .github/workflows/meta-release.yml
+          ! grep -q "store_review_approved" .github/workflows/meta-release.yml
           test ! -f .github/workflows/alpha-release.yml
           test ! -f .github/workflows/beta-release.yml
           test ! -f .github/workflows/release-candidate.yml

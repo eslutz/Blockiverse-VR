@@ -26,15 +26,10 @@ on:
         required: true
         type: string
       candidate:
-        description: RC candidate number, used only when promotion is rc
-        required: true
+        description: RC candidate number; ignored for Production
+        required: false
         type: string
         default: "1"
-      store_review_approved:
-        description: Confirm Meta Store submission/review approval before Production
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -49,7 +44,7 @@ jobs:
     if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
     container:
-      image: unityci/editor:ubuntu-6000.3.16f1-android-3.2.2
+      image: unityci/editor:ubuntu-6000.3.16f1-android-3
     permissions:
       contents: read
     outputs:
@@ -202,7 +197,6 @@ jobs:
   upload-alpha-beta:
     name: Upload Alpha/Beta to Meta
     needs: build-alpha-beta
-    if: ${{ needs.build-alpha-beta.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.build-alpha-beta.outputs.github_environment }}
@@ -323,7 +317,7 @@ jobs:
 
   promote-release:
     name: Promote Beta/RC release
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.promotion == 'rc' || inputs.store_review_approved) }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.promotion == 'production' && 'meta-production' || 'meta-rc' }}
@@ -345,7 +339,6 @@ jobs:
           CANDIDATE: ${{ inputs.candidate }}
           PROMOTION: ${{ inputs.promotion }}
           SOURCE_VERSION: ${{ inputs.source_version }}
-          STORE_REVIEW_APPROVED: ${{ inputs.store_review_approved }}
         run: |
           base_version="$(tr -d '[:space:]' < VERSION)"
           if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -372,10 +365,6 @@ jobs:
             artifact_dir=".ci-artifacts/rc"
             prerelease="true"
           else
-            if [ "$STORE_REVIEW_APPROVED" != "true" ]; then
-              echo "Production promotion requires store_review_approved=true." >&2
-              exit 64
-            fi
             case "$SOURCE_VERSION" in
               "v${base_version}-rc."*) ;;
               *)
@@ -548,15 +537,3 @@ jobs:
             args+=(--prerelease --latest=false)
           fi
           "${args[@]}"
-
-  production-review-required:
-    name: Await Store review approval
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promotion == 'production' && !inputs.store_review_approved }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Explain skipped production promotion
-        run: |
-          echo "Production promotion requires store_review_approved=true after Meta Store submission/review approval." >&2
-          exit 64

@@ -1337,7 +1337,7 @@ Smoke: boot scene reaches playable state.
 The Meta release workflow creates a `vX.Y.Z-alpha.*` GitHub pre-release for same-repository PR commits.
 Merging to main creates a `vX.Y.Z-beta.*` GitHub pre-release and uploads the signed APK to Meta `beta`.
 Manual RC dispatch creates a `vX.Y.Z-rc.*` GitHub pre-release and promotes the selected Beta GitHub release to Meta `rc`.
-Manual production dispatch creates a `vX.Y.Z` GitHub Release and promotes the selected RC GitHub release to Meta `store` only after the Store review approval toggle is set.
+Manual production dispatch creates a `vX.Y.Z` GitHub Release and promotes the selected RC GitHub release to Meta `store` only after the `meta-production` environment approval gate is approved.
 APK can be sideloaded.
 Version appears correctly in game.
 Release notes include known issues.

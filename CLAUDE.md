@@ -35,7 +35,7 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
   - pull request updates build and upload Alpha to Meta `alpha`;
   - pushes to `main` build and upload signed Beta to Meta `beta`;
   - manual RC promotion promotes a selected Beta GitHub release to Meta `rc`;
-  - manual Production promotion promotes a selected RC GitHub release to Meta `store` only after Store review approval.
+  - manual Production promotion promotes a selected RC GitHub release to Meta `store` only after the `meta-production` environment approval gate is approved.
 - Known-good engineering checkpoint tags use the `kg/...` family and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). They are recovery checkpoints, not release tags.
 
 ### Project Guardrails
