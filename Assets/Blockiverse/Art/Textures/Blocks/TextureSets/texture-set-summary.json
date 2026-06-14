@@ -1,0 +1,21 @@
+{
+  "textureCount": 80,
+  "sets": {
+    "original": {
+      "sourceCount": 80
+    },
+    "enhanced": {
+      "sourceCount": 80
+    },
+    "ai_simplified": {
+      "sourceCount": 80,
+      "missingCount": 0,
+      "missingPromptManifest": "ai_simplified/missing-prompts.json"
+    },
+    "ai": {
+      "sourceCount": 80,
+      "missingCount": 0,
+      "missingPromptManifest": "ai/missing-prompts.json"
+    }
+  }
+}
