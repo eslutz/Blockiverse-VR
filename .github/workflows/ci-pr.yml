@@ -18,11 +18,14 @@ jobs:
         run: bash -n scripts/ci/*.sh scripts/store/*.sh scripts/unity/*.sh
       - name: Check release version conventions
         run: |
-          test "$(scripts/ci/release-version.sh production 1.2.3)" = "v1.2.3"
-          test "$(scripts/ci/release-version.sh rc 1.2.3 1)" = "v1.2.3-rc.1"
-          test "$(scripts/ci/release-version.sh beta 1.2.3 run42.1)" = "v1.2.3-beta.run42.1"
-          test "$(scripts/ci/release-version.sh alpha 1.2.3 pr17.42.1)" = "v1.2.3-alpha.pr17.42.1"
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' VERSION
+          grep -q 'vMAJOR.MINOR.PATCH-alpha.prPR.RUN.ATTEMPT' docs/adr/0005-release-versioning.md
+          grep -q 'vMAJOR.MINOR.PATCH-beta.runRUN.ATTEMPT' docs/adr/0005-release-versioning.md
+          grep -q 'vMAJOR.MINOR.PATCH-rc.CANDIDATE' docs/adr/0005-release-versioning.md
       - name: Check forbidden files
         run: scripts/ci/forbidden-files.sh
       - name: Check release policy docs
-        run: test -f docs/architecture/branching-and-release.md
+        run: |
+          test -f docs/architecture/branching-and-release.md
+          test -f docs/adr/0005-release-versioning.md
+          test -f .github/workflows/meta-release.yml

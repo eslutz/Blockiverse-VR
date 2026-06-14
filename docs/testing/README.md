@@ -52,7 +52,7 @@ Local Unity validation requires globally installed tools on the developer machin
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
 - `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity`.
 
-Current GitHub Actions release workflows use the UnityCI editor container for alpha and beta APK builds and do not require UNITY_LICENSE, UNITY_EMAIL, or UNITY_PASSWORD secrets. RC and production workflows promote already-uploaded Meta build IDs and do not rebuild APKs. Unity Personal activation remains local for developer-run validation, and the local license file is not committed, copied into CI, or uploaded as an artifact.
+`.github/workflows/meta-release.yml` uses the UnityCI editor container for Alpha and Beta APK builds. RC and Production jobs in that same workflow promote already-uploaded Meta build IDs from selected GitHub releases and do not rebuild APKs. Unity Personal activation remains local for developer-run validation unless the CI build path is later moved to a CI-compatible Unity license or self-hosted runner; the local license file is not committed, copied into CI, or uploaded as an artifact.
 
 Record the local Unity validation commands, result summary, output APK path when applicable, promoted Meta build ID when applicable, and any residual risk in the pull request or linked issue. Local development APKs usually use `/tmp/blockiverse-vr-development.apk`; alpha channel development APKs are uploaded by the alpha release workflow for same-repository pull request commits.
 

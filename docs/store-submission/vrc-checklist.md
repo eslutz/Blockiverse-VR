@@ -55,8 +55,8 @@
 ## Release Packaging
 
 - [ ] Signed Beta APK built from `main` and uploaded to Meta `beta` using
-      `.github/workflows/beta-release.yml` after production signing secrets are configured.
-- [ ] RC release promotes the selected Beta Meta build ID to Meta `rc` using
-      `.github/workflows/release-candidate.yml`.
-- [ ] Production release promotes the selected RC Meta build ID to Meta `store` using
-      `.github/workflows/production-release.yml` only after Store submission/review approval.
+      `.github/workflows/meta-release.yml` after production signing secrets are configured.
+- [ ] RC release promotes the selected Beta GitHub release's Meta build ID to Meta `rc`
+      using `.github/workflows/meta-release.yml`.
+- [ ] Production release promotes the selected RC GitHub release's Meta build ID to Meta
+      `store` using `.github/workflows/meta-release.yml` only after Store submission/review approval.

@@ -1,0 +1,562 @@
+name: Meta Release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      promotion:
+        description: Release promotion to perform
+        required: true
+        type: choice
+        default: rc
+        options:
+          - rc
+          - production
+      source_version:
+        description: Beta tag for RC, or RC tag for Production
+        required: true
+        type: string
+      candidate:
+        description: RC candidate number, used only when promotion is rc
+        required: true
+        type: string
+        default: "1"
+      store_review_approved:
+        description: Confirm Meta Store submission/review approval before Production
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'push' && 'meta-release-beta' || github.event_name == 'pull_request' && format('meta-release-alpha-pr-{0}', github.event.pull_request.number) || format('meta-release-{0}', inputs.promotion) }}
+  cancel-in-progress: false
+
+jobs:
+  build-alpha-beta:
+    name: Build Alpha/Beta APK
+    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    container:
+      image: unityci/editor:ubuntu-6000.3.16f1-android-3.2.2
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: ${{ steps.settings.outputs.artifact_name }}
+      apk_filename: ${{ steps.settings.outputs.apk_filename }}
+      channel: ${{ steps.settings.outputs.channel }}
+      github_environment: ${{ steps.settings.outputs.github_environment }}
+      release_notes_filename: ${{ steps.settings.outputs.release_notes_filename }}
+      source_sha: ${{ steps.settings.outputs.source_sha }}
+      version: ${{ steps.settings.outputs.version }}
+    env:
+      UNITY_EDITOR: /opt/unity/Editor/Unity
+    steps:
+      - name: Check out PR commit
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Check out main commit
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Trust checked-out repository
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Compute release settings
+        id: settings
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          base_version="$(tr -d '[:space:]' < VERSION)"
+          if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "VERSION must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            exit 64
+          fi
+
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            channel="alpha"
+            build_mode="development"
+            github_environment="meta-alpha"
+            version="v${base_version}-alpha.pr${PR_NUMBER}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          else
+            channel="beta"
+            build_mode="release"
+            github_environment="meta-beta"
+            version="v${base_version}-beta.run${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          fi
+
+          version_name="${version#v}"
+          version_code="$(( $(date -u +%s) - 1577836800 ))"
+          source_sha="$(git rev-parse HEAD)"
+          artifact_name="blockiverse-${channel}-${version}"
+          apk_filename="BlockiverseVR-${version}-${channel}.apk"
+          release_notes_filename="release-notes.md"
+
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "apk_filename=$apk_filename" >> "$GITHUB_OUTPUT"
+          echo "build_mode=$build_mode" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "github_environment=$github_environment" >> "$GITHUB_OUTPUT"
+          echo "release_notes_filename=$release_notes_filename" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Check repository safety
+        run: scripts/ci/forbidden-files.sh
+
+      - name: Validate signing secrets
+        if: ${{ steps.settings.outputs.build_mode == 'release' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+
+      - name: Prepare build directories
+        run: mkdir -p ".ci-artifacts/${{ steps.settings.outputs.channel }}" .ci-secrets
+
+      - name: Decode Android signing keystore
+        if: ${{ steps.settings.outputs.build_mode == 'release' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > .ci-secrets/blockiverse-release.keystore
+
+      - name: Build Android APK
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/.ci-secrets/blockiverse-release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          APK_FILENAME: ${{ steps.settings.outputs.apk_filename }}
+          BUILD_MODE: ${{ steps.settings.outputs.build_mode }}
+          CHANNEL: ${{ steps.settings.outputs.channel }}
+          UNITY_ANDROID_VERSION_CODE: ${{ steps.settings.outputs.version_code }}
+          UNITY_ANDROID_VERSION_NAME: ${{ steps.settings.outputs.version_name }}
+        run: |
+          output_path=".ci-artifacts/${CHANNEL}/${APK_FILENAME}"
+          if [ "$BUILD_MODE" = "release" ]; then
+            scripts/unity/build-release-apk.sh "$output_path"
+          else
+            scripts/unity/build-development-apk.sh "$output_path"
+          fi
+
+      - name: Generate checksums and release notes
+        env:
+          BUILD_MODE: ${{ steps.settings.outputs.build_mode }}
+          CHANNEL: ${{ steps.settings.outputs.channel }}
+          SOURCE_SHA: ${{ steps.settings.outputs.source_sha }}
+          VERSION: ${{ steps.settings.outputs.version }}
+          VERSION_CODE: ${{ steps.settings.outputs.version_code }}
+          VERSION_NAME: ${{ steps.settings.outputs.version_name }}
+        run: |
+          artifact_dir=".ci-artifacts/${CHANNEL}"
+          cd "$artifact_dir"
+          sha256sum *.apk > checksums.txt
+          {
+            echo "# Blockiverse VR ${VERSION}"
+            echo
+            echo "- Channel: ${CHANNEL}"
+            echo "- Build mode: ${BUILD_MODE}"
+            echo "- Android versionName: ${VERSION_NAME}"
+            echo "- Android versionCode: ${VERSION_CODE}"
+            echo "- Source commit: ${SOURCE_SHA}"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "Versioning follows docs/adr/0005-release-versioning.md."
+            echo
+            echo "See CHANGELOG.md for the current release notes source."
+          } > release-notes.md
+
+      - name: Upload APK artifact bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.settings.outputs.artifact_name }}
+          path: .ci-artifacts/${{ steps.settings.outputs.channel }}/
+          if-no-files-found: error
+
+  upload-alpha-beta:
+    name: Upload Alpha/Beta to Meta
+    needs: build-alpha-beta
+    if: ${{ needs.build-alpha-beta.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.build-alpha-beta.outputs.github_environment }}
+    permissions:
+      actions: read
+      contents: write
+    env:
+      ARTIFACT_NAME: ${{ needs.build-alpha-beta.outputs.artifact_name }}
+      APK_FILENAME: ${{ needs.build-alpha-beta.outputs.apk_filename }}
+      CHANNEL: ${{ needs.build-alpha-beta.outputs.channel }}
+      RELEASE_NOTES_FILENAME: ${{ needs.build-alpha-beta.outputs.release_notes_filename }}
+      SOURCE_SHA: ${{ needs.build-alpha-beta.outputs.source_sha }}
+      VERSION: ${{ needs.build-alpha-beta.outputs.version }}
+    steps:
+      - name: Download APK artifact bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: .ci-artifacts/${{ env.CHANNEL }}
+
+      - name: Install Meta platform utility
+        env:
+          OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_SHA256 || vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
+          OVR_PLATFORM_UTIL_LINUX_URL: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_URL || vars.OVR_PLATFORM_UTIL_LINUX_URL }}
+        run: |
+          test -n "$OVR_PLATFORM_UTIL_LINUX_URL"
+          test -n "$OVR_PLATFORM_UTIL_LINUX_SHA256"
+          curl -fsSL "$OVR_PLATFORM_UTIL_LINUX_URL" -o "$RUNNER_TEMP/ovr-platform-util"
+          echo "${OVR_PLATFORM_UTIL_LINUX_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/ovr-platform-util"
+          "$RUNNER_TEMP/ovr-platform-util" version
+
+      - name: Upload build to Meta
+        id: upload
+        env:
+          META_AGE_GROUP: ${{ secrets.META_AGE_GROUP || vars.META_AGE_GROUP || 'MIXED_AGES' }}
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+        run: |
+          test -n "$META_APP_ID"
+          test -n "$META_APP_SECRET"
+          case "$META_AGE_GROUP" in
+            TEENS_AND_ADULTS|MIXED_AGES|CHILDREN) ;;
+            *)
+              echo "META_AGE_GROUP must be TEENS_AND_ADULTS, MIXED_AGES, or CHILDREN." >&2
+              exit 65
+              ;;
+          esac
+
+          artifact_dir=".ci-artifacts/${CHANNEL}"
+          notes="$(cat "${artifact_dir}/${RELEASE_NOTES_FILENAME}")"
+          output_path="${artifact_dir}/meta-upload-output.txt"
+          summary_path="${artifact_dir}/meta-upload-summary.json"
+
+          echo "Running ovr-platform-util upload-quest-build --channel ${CHANNEL} --apk ${artifact_dir}/${APK_FILENAME}"
+          "$RUNNER_TEMP/ovr-platform-util" upload-quest-build \
+            --age-group "$META_AGE_GROUP" \
+            --app-id "$META_APP_ID" \
+            --app-secret "$META_APP_SECRET" \
+            --apk "${artifact_dir}/${APK_FILENAME}" \
+            --channel "$CHANNEL" \
+            --notes "$notes" \
+            --disable-progress-bar true 2>&1 | tee "$output_path"
+
+          meta_build_id="$(
+            sed -nE 's/.*[Bb]uild[ _-]?[Ii][Dd][^0-9A-Za-z_-]*([0-9A-Za-z_-]+).*/\1/p' "$output_path" | head -n 1
+          )"
+          if [ -z "$meta_build_id" ]; then
+            meta_build_id="$(
+              sed -nE 's/.*"build[_-]?id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/ip' "$output_path" | head -n 1
+            )"
+          fi
+          if [ -z "$meta_build_id" ]; then
+            echo "Could not find a Meta build ID in ${output_path}." >&2
+            exit 67
+          fi
+
+          export CHANNEL VERSION SOURCE_SHA meta_build_id summary_path
+          python3 - <<'PY'
+          import json
+          import os
+
+          summary = {
+              "meta_build_id": os.environ["meta_build_id"],
+              "channel": os.environ["CHANNEL"],
+              "version": os.environ["VERSION"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "action": "upload",
+          }
+          with open(os.environ["summary_path"], "w", encoding="utf-8") as handle:
+              json.dump(summary, handle, separators=(",", ":"))
+              handle.write("\n")
+          PY
+
+          echo "meta_build_id=${meta_build_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_dir=".ci-artifacts/${CHANNEL}"
+          gh release create "$VERSION" "${artifact_dir}"/* \
+            --target "$SOURCE_SHA" \
+            --title "Blockiverse VR ${VERSION}" \
+            --notes-file "${artifact_dir}/${RELEASE_NOTES_FILENAME}" \
+            --prerelease \
+            --latest=false
+
+  alpha-release-skipped:
+    name: Skip fork Alpha release
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain skipped release
+        run: echo "Alpha release publication is skipped for fork pull requests."
+
+  promote-release:
+    name: Promote Beta/RC release
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.promotion == 'rc' || inputs.store_review_approved) }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.promotion == 'production' && 'meta-production' || 'meta-rc' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Check out trusted release workflow
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate store submission documents
+        run: scripts/store/validate-store-submission-docs.sh
+
+      - name: Resolve promotion
+        id: promotion
+        env:
+          CANDIDATE: ${{ inputs.candidate }}
+          PROMOTION: ${{ inputs.promotion }}
+          SOURCE_VERSION: ${{ inputs.source_version }}
+          STORE_REVIEW_APPROVED: ${{ inputs.store_review_approved }}
+        run: |
+          base_version="$(tr -d '[:space:]' < VERSION)"
+          if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "VERSION must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            exit 64
+          fi
+          test -n "$SOURCE_VERSION"
+
+          if [ "$PROMOTION" = "rc" ]; then
+            if ! printf '%s' "$CANDIDATE" | grep -Eq '^[0-9]+$'; then
+              echo "candidate must be a positive integer." >&2
+              exit 64
+            fi
+            case "$SOURCE_VERSION" in
+              "v${base_version}-beta.run"*) ;;
+              *)
+                echo "RC promotion requires a Beta release tag for VERSION ${base_version}." >&2
+                exit 64
+                ;;
+            esac
+            version="v${base_version}-rc.${CANDIDATE}"
+            source_channel="beta"
+            destination_channel="rc"
+            artifact_dir=".ci-artifacts/rc"
+            prerelease="true"
+          else
+            if [ "$STORE_REVIEW_APPROVED" != "true" ]; then
+              echo "Production promotion requires store_review_approved=true." >&2
+              exit 64
+            fi
+            case "$SOURCE_VERSION" in
+              "v${base_version}-rc."*) ;;
+              *)
+                echo "Production promotion requires an RC release tag for VERSION ${base_version}." >&2
+                exit 64
+                ;;
+            esac
+            version="v${base_version}"
+            source_channel="rc"
+            destination_channel="store"
+            artifact_dir=".ci-artifacts/production"
+            prerelease="false"
+          fi
+
+          mkdir -p .ci-source "$artifact_dir"
+
+          echo "artifact_dir=$artifact_dir" >> "$GITHUB_OUTPUT"
+          echo "destination_channel=$destination_channel" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "source_channel=$source_channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download source release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_VERSION: ${{ inputs.source_version }}
+        run: |
+          gh release download "$SOURCE_VERSION" \
+            --pattern meta-upload-summary.json \
+            --dir .ci-source \
+            --clobber
+
+      - name: Read source Meta build
+        id: source
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          with open(".ci-source/meta-upload-summary.json", encoding="utf-8") as handle:
+              summary = json.load(handle)
+
+          meta_build_id = summary.get("meta_build_id", "")
+          source_sha = summary.get("source_sha", "")
+          if not meta_build_id:
+              print("meta-upload-summary.json did not contain meta_build_id.", file=sys.stderr)
+              sys.exit(65)
+          if not source_sha:
+              print("meta-upload-summary.json did not contain source_sha.", file=sys.stderr)
+              sys.exit(65)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"meta_build_id={meta_build_id}\n")
+              output.write(f"source_sha={source_sha}\n")
+          PY
+
+      - name: Download source release artifacts
+        env:
+          ARTIFACT_DIR: ${{ steps.promotion.outputs.artifact_dir }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_VERSION: ${{ inputs.source_version }}
+        run: gh release download "$SOURCE_VERSION" --dir "$ARTIFACT_DIR" --clobber
+
+      - name: Write promotion release notes
+        env:
+          ARTIFACT_DIR: ${{ steps.promotion.outputs.artifact_dir }}
+          DESTINATION_CHANNEL: ${{ steps.promotion.outputs.destination_channel }}
+          META_BUILD_ID: ${{ steps.source.outputs.meta_build_id }}
+          SOURCE_CHANNEL: ${{ steps.promotion.outputs.source_channel }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          SOURCE_VERSION: ${{ inputs.source_version }}
+          VERSION: ${{ steps.promotion.outputs.version }}
+        run: |
+          {
+            echo "# Blockiverse VR ${VERSION}"
+            echo
+            echo "- Channel: ${DESTINATION_CHANNEL}"
+            echo "- Source Meta channel: ${SOURCE_CHANNEL}"
+            echo "- Meta build ID: ${META_BUILD_ID}"
+            echo "- Promoted from GitHub release: ${SOURCE_VERSION}"
+            echo "- Source commit: ${SOURCE_SHA}"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "This release promotes an existing Meta build without rebuilding the APK."
+          } > "${ARTIFACT_DIR}/release-notes.md"
+
+      - name: Install Meta platform utility
+        env:
+          OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_SHA256 || vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
+          OVR_PLATFORM_UTIL_LINUX_URL: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_URL || vars.OVR_PLATFORM_UTIL_LINUX_URL }}
+        run: |
+          test -n "$OVR_PLATFORM_UTIL_LINUX_URL"
+          test -n "$OVR_PLATFORM_UTIL_LINUX_SHA256"
+          curl -fsSL "$OVR_PLATFORM_UTIL_LINUX_URL" -o "$RUNNER_TEMP/ovr-platform-util"
+          echo "${OVR_PLATFORM_UTIL_LINUX_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/ovr-platform-util"
+          "$RUNNER_TEMP/ovr-platform-util" version
+
+      - name: Promote Meta build
+        env:
+          ARTIFACT_DIR: ${{ steps.promotion.outputs.artifact_dir }}
+          DESTINATION_CHANNEL: ${{ steps.promotion.outputs.destination_channel }}
+          META_AGE_GROUP: ${{ secrets.META_AGE_GROUP || vars.META_AGE_GROUP || 'MIXED_AGES' }}
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_BUILD_ID: ${{ steps.source.outputs.meta_build_id }}
+          SOURCE_CHANNEL: ${{ steps.promotion.outputs.source_channel }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          SOURCE_VERSION: ${{ inputs.source_version }}
+          VERSION: ${{ steps.promotion.outputs.version }}
+        run: |
+          test -n "$META_APP_ID"
+          test -n "$META_APP_SECRET"
+          case "$META_AGE_GROUP" in
+            TEENS_AND_ADULTS|MIXED_AGES|CHILDREN) ;;
+            *)
+              echo "META_AGE_GROUP must be TEENS_AND_ADULTS, MIXED_AGES, or CHILDREN." >&2
+              exit 65
+              ;;
+          esac
+
+          output_path="${ARTIFACT_DIR}/meta-upload-output.txt"
+          summary_path="${ARTIFACT_DIR}/meta-upload-summary.json"
+
+          echo "Running ovr-platform-util set-release-channel-build --source-channel ${SOURCE_CHANNEL} --destination-channel ${DESTINATION_CHANNEL} --build-id ${META_BUILD_ID}"
+          "$RUNNER_TEMP/ovr-platform-util" set-release-channel-build \
+            --age-group "$META_AGE_GROUP" \
+            --app-id "$META_APP_ID" \
+            --app-secret "$META_APP_SECRET" \
+            --source-channel "$SOURCE_CHANNEL" \
+            --destination-channel "$DESTINATION_CHANNEL" \
+            --build-id "$META_BUILD_ID" \
+            --disable-progress-bar true 2>&1 | tee "$output_path"
+
+          export DESTINATION_CHANNEL META_BUILD_ID SOURCE_CHANNEL SOURCE_SHA SOURCE_VERSION VERSION summary_path
+          python3 - <<'PY'
+          import json
+          import os
+
+          summary = {
+              "meta_build_id": os.environ["META_BUILD_ID"],
+              "source_channel": os.environ["SOURCE_CHANNEL"],
+              "destination_channel": os.environ["DESTINATION_CHANNEL"],
+              "source_version": os.environ["SOURCE_VERSION"],
+              "version": os.environ["VERSION"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "action": "promote",
+          }
+          with open(os.environ["summary_path"], "w", encoding="utf-8") as handle:
+              json.dump(summary, handle, separators=(",", ":"))
+              handle.write("\n")
+          PY
+
+      - name: Create GitHub release
+        env:
+          ARTIFACT_DIR: ${{ steps.promotion.outputs.artifact_dir }}
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.promotion.outputs.prerelease }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          VERSION: ${{ steps.promotion.outputs.version }}
+        run: |
+          args=(
+            gh release create "$VERSION" "${ARTIFACT_DIR}"/*
+            --target "$SOURCE_SHA"
+            --title "Blockiverse VR ${VERSION}"
+            --notes-file "${ARTIFACT_DIR}/release-notes.md"
+          )
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease --latest=false)
+          fi
+          "${args[@]}"
+
+  production-review-required:
+    name: Await Store review approval
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promotion == 'production' && !inputs.store_review_approved }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain skipped production promotion
+        run: |
+          echo "Production promotion requires store_review_approved=true after Meta Store submission/review approval." >&2
+          exit 64

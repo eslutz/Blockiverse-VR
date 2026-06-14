@@ -10,7 +10,9 @@ Blockiverse VR uses trunk-based development.
 - There are no long-lived release branches.
 - GitHub should automatically delete head branches after pull requests merge.
 
-Release channels use SemVer-compatible tags and GitHub Releases:
+Release channels use SemVer-compatible tags and GitHub Releases. The root
+`VERSION` file is the SemVer base version source; see
+[ADR 0005](../adr/0005-release-versioning.md).
 
 | Channel | Trigger | Version convention | Build | Main ancestry |
 |---|---|---|---|---|
@@ -19,7 +21,9 @@ Release channels use SemVer-compatible tags and GitHub Releases:
 | Release candidate | Manual workflow dispatch | `vX.Y.Z-rc.N` | Promote selected Meta Beta build to Meta `rc` | Required for promoted GitHub release tags |
 | Production | Manual workflow dispatch after Meta Store submission/review approval | `vX.Y.Z` | Promote selected Meta RC build to Meta `store` | Required for production tags |
 
-The `-alpha`, `-beta`, and `-rc` families are GitHub pre-releases. Production tags must match `vX.Y.Z` and point to commits reachable from `origin/main`. The shared release build workflow creates only alpha and beta APKs. RC and production workflows must preserve Meta artifact identity by promoting the selected `meta_build_id` instead of rebuilding.
+The `-alpha`, `-beta`, and `-rc` families are GitHub pre-releases. Production tags must match `vX.Y.Z` and point to commits reachable from `origin/main`. `.github/workflows/meta-release.yml` is the only Meta release workflow: Alpha and Beta create APK uploads, while RC and Production preserve Meta artifact identity by promoting the Meta build ID stored in the selected source GitHub release.
+
+Beta uses workflow-level GitHub Actions concurrency with `cancel-in-progress: false` so a newer Beta build/upload run cannot overtake a running Beta build/upload run. GitHub Actions keeps at most one pending run for a concurrency group; that is an intentional simplification tradeoff.
 
 Known-good engineering checkpoint tags use the `kg/...` family and are governed by [Voxel Known-Good Git Tagging Policy](../rulesets/voxel_git_known_good_tagging_policy.md). They are recovery points, not player-facing releases.
 

@@ -243,7 +243,7 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 SECURITY.md
 CHANGELOG.md
-AGENTS.md
+CLAUDE.md
 docs/
   architecture/
   adr/
@@ -363,7 +363,7 @@ Keep roadmap in docs/roadmap/blockiverse_vr_execution_plan.md
 Add ruleset docs under docs/rulesets/ or equivalent
 Document canonical world replacement strategy
 Document temporary ID migration strategy
-Keep AGENTS.md aligned with roadmap
+Keep CLAUDE.md aligned with roadmap
 Keep CHANGELOG.md updated for material changes
 Use source-available / All Rights Reserved until licensing posture changes
 ```
@@ -1294,8 +1294,8 @@ GitHub Actions secret-based signing
 Version code/version name automation
 Alpha builds from same-repository pull request commits
 Beta builds from main merges
-RC promotion from selected Beta Meta build ID by manual dispatch
-Production promotion from selected RC Meta build ID after Store submission/review
+RC promotion from selected Beta GitHub release by manual dispatch
+Production promotion from selected RC GitHub release after Store submission/review
 APK checksum
 Symbols/log artifacts
 Release notes template
@@ -1324,7 +1324,7 @@ CI: alpha prerelease tags may point to same-repository PR commits.
 CI: beta, RC, and production tags must be on main.
 CI: APK artifact exists.
 CI: checksum is generated.
-CI: RC and production workflows do not build APKs.
+CI: RC and production promotion jobs do not build APKs.
 CI: promoted RC and production releases preserve the selected Meta build ID.
 Smoke: APK installs on Quest.
 Smoke: app launches to main menu.
@@ -1334,10 +1334,10 @@ Smoke: boot scene reaches playable state.
 ### Validation
 
 ```text
-The alpha PR workflow creates a `vX.Y.Z-alpha.*` GitHub pre-release for same-repository PR commits.
+The Meta release workflow creates a `vX.Y.Z-alpha.*` GitHub pre-release for same-repository PR commits.
 Merging to main creates a `vX.Y.Z-beta.*` GitHub pre-release and uploads the signed APK to Meta `beta`.
-Manual RC dispatch creates a `vX.Y.Z-rc.*` GitHub pre-release and promotes the selected Beta build to Meta `rc` when the promotion toggle is set.
-Manual production dispatch creates a `vX.Y.Z` GitHub Release and promotes the selected RC build to Meta `store` only after the Store review approval toggle is set.
+Manual RC dispatch creates a `vX.Y.Z-rc.*` GitHub pre-release and promotes the selected Beta GitHub release to Meta `rc`.
+Manual production dispatch creates a `vX.Y.Z` GitHub Release and promotes the selected RC GitHub release to Meta `store` only after the Store review approval toggle is set.
 APK can be sideloaded.
 Version appears correctly in game.
 Release notes include known issues.

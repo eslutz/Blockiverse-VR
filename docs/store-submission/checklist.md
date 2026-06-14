@@ -22,7 +22,6 @@ submission, or Submit for Review action is performed by this repository checklis
 - Known issues — `known-issues-and-support.md`
 - Release notes — `release-notes-template.md`
 - Ruleset/design consistency — `../rulesets/` and `../roadmap/blockiverse_vr_execution_plan.md`
-- Signed release APK from `main` — `.github/workflows/beta-release.yml` builds and uploads
-  the signed Beta APK; `.github/workflows/release-candidate.yml` promotes the selected Beta
-  Meta build to RC, and `.github/workflows/production-release.yml` promotes the selected RC
-  Meta build to `store` only after Store review is approved
+- Signed release APK from `main` — `.github/workflows/meta-release.yml` builds and uploads
+  the signed Beta APK; the same workflow promotes a selected Beta GitHub release to RC
+  and promotes a selected RC GitHub release to `store` only after Store review is approved
