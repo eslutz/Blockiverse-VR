@@ -5,6 +5,7 @@
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
     "Blockiverse.MetaAvatars",
+    "Blockiverse.MetaPlatform",
     "Blockiverse.Networking",
     "Blockiverse.Survival",
     "Blockiverse.UI",

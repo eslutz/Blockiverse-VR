@@ -214,15 +214,13 @@ namespace Blockiverse.Editor
 
             Canvas canvas = EnsureComponent<Canvas>(overlayObject);
             canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 30;
+            canvas.sortingOrder = 5;
             canvas.enabled = false;
             ConfigureCanvasWorldCamera(canvas, head);
 
             CanvasScaler scaler = EnsureComponent<CanvasScaler>(overlayObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
             scaler.dynamicPixelsPerUnit = 10.0f;
-
-            EnsureTrackedDeviceRaycaster(overlayObject);
 
             GameObject artworkObject = EnsureRectChild(overlayObject.transform, "Artwork");
             RectTransform artworkRect = artworkObject.GetComponent<RectTransform>();
@@ -234,6 +232,7 @@ namespace Blockiverse.Editor
             RawImage artworkImage = EnsureComponent<RawImage>(artworkObject);
             artworkImage.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
             artworkImage.color = Color.white;
+            artworkImage.raycastTarget = false;
 
             GameObject tintObject = EnsureRectChild(overlayObject.transform, "Title Tint");
             RectTransform tintRect = tintObject.GetComponent<RectTransform>();
@@ -244,8 +243,9 @@ namespace Blockiverse.Editor
             Image tintImage = EnsureComponent<Image>(tintObject);
             ApplySlicedSprite(tintImage, GetUiSprite("feedback_toast"));
             tintImage.color = StartupOverlayPanelColor;
+            tintImage.raycastTarget = false;
 
-            EnsureLabel(
+            TMP_Text titleLabel = EnsureLabel(
                 overlayObject.transform,
                 "Title",
                 BlockiverseProject.ProductName,
@@ -256,8 +256,9 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 0.0f),
                 new Vector2(58.0f, 118.0f),
                 new Vector2(720.0f, 92.0f));
+            titleLabel.raycastTarget = false;
 
-            EnsureLabel(
+            TMP_Text subtitleLabel = EnsureLabel(
                 overlayObject.transform,
                 "Subtitle",
                 "Survive, craft, and shape the world.",
@@ -268,6 +269,7 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 0.0f),
                 new Vector2(62.0f, 72.0f),
                 new Vector2(720.0f, 48.0f));
+            subtitleLabel.raycastTarget = false;
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(overlayObject);
             presenter.Configure(
@@ -278,12 +280,16 @@ namespace Blockiverse.Editor
                 -0.14f,
                 0.0f,
                 0.00165f,
-                showWhenStarted: true);
+                showWhenStarted: false);
 
             BlockiverseStartupOverlay startupOverlay = EnsureComponent<BlockiverseStartupOverlay>(overlayObject);
             startupOverlay.Configure(canvas, presenter, 2.25f, automaticHide: true);
+            EnsureDecorativeCanvasDoesNotReceiveUi(overlayObject);
 
             EditorUtility.SetDirty(artworkImage);
+            EditorUtility.SetDirty(tintImage);
+            EditorUtility.SetDirty(titleLabel);
+            EditorUtility.SetDirty(subtitleLabel);
             EditorUtility.SetDirty(presenter);
             EditorUtility.SetDirty(startupOverlay);
             EditorUtility.SetDirty(overlayObject);
@@ -308,7 +314,7 @@ namespace Blockiverse.Editor
 
             Canvas canvas = EnsureComponent<Canvas>(popupObject);
             canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 22;
+            canvas.sortingOrder = 40;
             canvas.enabled = false;
             ConfigureCanvasWorldCamera(canvas, head);
 
@@ -338,7 +344,7 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(34.0f, -28.0f),
-                new Vector2(420.0f, 58.0f));
+                TitleSizeWithClose(ControllerMappingPopupSize.x, 58.0f));
 
             EnsureLabel(
                 panelObject.transform,
@@ -356,8 +362,8 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Close Button",
                 "Close",
-                new Vector2(34.0f, -342.0f),
-                new Vector2(180.0f, 52.0f));
+                TopRightClosePosition(ControllerMappingPopupSize.x),
+                MenuCloseButtonSize);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(popupObject);
             presenter.Configure(
@@ -368,7 +374,7 @@ namespace Blockiverse.Editor
                 -0.14f,
                 0.0f,
                 0.0013f,
-                showWhenStarted: true,
+                showWhenStarted: false,
                 showWhenStartedPlayerPrefsKey: BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey);
 
             RemovePersistentListeners(
@@ -391,9 +397,9 @@ namespace Blockiverse.Editor
                 return;
 
             GameObject hudObject = EnsureRectChild(cameraOffset, SurvivalHudName);
-            hudObject.transform.localPosition = new Vector3(0.0f, 1.38f, 1.15f);
-            hudObject.transform.localRotation = Quaternion.Euler(10.0f, 0.0f, 0.0f);
-            hudObject.transform.localScale = Vector3.one * 0.0016f;
+            hudObject.transform.localPosition = new Vector3(0.0f, 1.16f, 1.25f);
+            hudObject.transform.localRotation = Quaternion.Euler(12.0f, 0.0f, 0.0f);
+            hudObject.transform.localScale = Vector3.one * SurvivalHudScale;
 
             RectTransform hudRect = hudObject.GetComponent<RectTransform>();
             hudRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, SurvivalHudSize.x);
@@ -424,13 +430,13 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Title",
                 "Survival",
-                34,
+                24,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
-                new Vector2(24.0f, -24.0f),
-                new Vector2(280.0f, 48.0f));
+                new Vector2(18.0f, -14.0f),
+                new Vector2(130.0f, 34.0f));
 
             TMP_Text statusLabel = EnsureLabel(
                 panelObject.transform,
@@ -441,16 +447,16 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
-                new Vector2(320.0f, -24.0f),
-                new Vector2(360.0f, 44.0f),
+                new Vector2(160.0f, -16.0f),
+                new Vector2(350.0f, 32.0f),
                 TextDimColor);
             statusLabel.gameObject.SetActive(false);
 
             Slider miningProgressSlider = EnsureHudSlider(
                 panelObject.transform,
                 "Mining Progress",
-                new Vector2(700.0f, -36.0f),
-                new Vector2(200.0f, 18.0f));
+                new Vector2(304.0f, -60.0f),
+                new Vector2(220.0f, 14.0f));
             miningProgressSlider.gameObject.SetActive(false);
 
             BlockiverseItemIconLibrary iconLibrary = EnsureItemIconLibrary(rig);
@@ -458,6 +464,9 @@ namespace Blockiverse.Editor
             SurvivalInventoryPanel inventoryPanel = EnsureSurvivalInventorySection(panelObject.transform, iconLibrary);
             SurvivalCraftingPanel craftingPanel = EnsureSurvivalCraftingSection(panelObject.transform, iconLibrary);
             SurvivalCratePanel cratePanel = EnsureSurvivalCrateSection(panelObject.transform);
+            SetGameplayHudBackingSectionVisible(inventoryPanel, false);
+            SetGameplayHudBackingSectionVisible(craftingPanel, false);
+            SetGameplayHudBackingSectionVisible(cratePanel, false);
 
             SurvivalHudController controller = EnsureComponent<SurvivalHudController>(hudObject);
             controller.Configure(
@@ -474,9 +483,9 @@ namespace Blockiverse.Editor
                 head,
                 1.15f,
                 0.0f,
-                -0.04f,
-                10.0f,
-                0.0016f,
+                -0.30f,
+                12.0f,
+                SurvivalHudScale,
                 recenterWhenShown: false);
 
             BlockiverseSubtitleToastPanel toastPanel = EnsureComponent<BlockiverseSubtitleToastPanel>(rig);
@@ -493,50 +502,56 @@ namespace Blockiverse.Editor
 
         static SurvivalHealthPanel EnsureSurvivalHealthSection(Transform parent)
         {
-            GameObject sectionObject = EnsureHudSection(parent, "Health", new Vector2(24.0f, -82.0f), new Vector2(206.0f, 150.0f));
+            GameObject sectionObject = EnsureHudSection(parent, "Health", new Vector2(18.0f, -56.0f), new Vector2(240.0f, 104.0f));
 
             EnsureLabel(
                 sectionObject.transform,
                 "Label",
                 "Health",
-                24,
+                18,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
-                new Vector2(16.0f, -10.0f),
-                new Vector2(170.0f, 34.0f));
+                new Vector2(14.0f, -6.0f),
+                new Vector2(200.0f, 24.0f));
 
             TMP_Text valueLabel = EnsureLabel(
                 sectionObject.transform,
                 "Value",
                 "100 / 100",
-                28,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(16.0f, -48.0f),
-                new Vector2(170.0f, 38.0f));
-
-            Slider slider = EnsureHudSlider(sectionObject.transform, "Health Slider", new Vector2(16.0f, -92.0f), new Vector2(170.0f, 20.0f));
-
-            TMP_Text stateLabel = EnsureLabel(
-                sectionObject.transform,
-                "State",
-                "Stable",
                 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
-                new Vector2(16.0f, -116.0f),
-                new Vector2(170.0f, 28.0f));
+                new Vector2(14.0f, -32.0f),
+                new Vector2(200.0f, 28.0f));
+
+            Slider slider = EnsureHudSlider(sectionObject.transform, "Health Slider", new Vector2(14.0f, -66.0f), new Vector2(200.0f, 14.0f));
+
+            TMP_Text stateLabel = EnsureLabel(
+                sectionObject.transform,
+                "State",
+                "Stable",
+                16,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(14.0f, -80.0f),
+                new Vector2(200.0f, 20.0f));
 
             SurvivalHealthPanel panel = EnsureComponent<SurvivalHealthPanel>(sectionObject);
             panel.Configure(valueLabel, slider, stateLabel);
             EditorUtility.SetDirty(panel);
             return panel;
+        }
+
+        static void SetGameplayHudBackingSectionVisible(Component section, bool visible)
+        {
+            if (section != null)
+                section.gameObject.SetActive(visible);
         }
 
         // Populates the rig's item icon library from the committed sprites for registered items.
@@ -978,6 +993,7 @@ namespace Blockiverse.Editor
                 background.type = Image.Type.Sliced;
             }
             background.color = ControlNormalColor;
+            ConfigureUiRaycastBlocker(background);
 
             GameObject checkmarkObject = EnsureRectChild(backgroundObject.transform, "Checkmark");
             RectTransform checkmarkRect = checkmarkObject.GetComponent<RectTransform>();
@@ -990,6 +1006,7 @@ namespace Blockiverse.Editor
             if (checkmarkSprite != null)
                 checkmark.sprite = checkmarkSprite;
             checkmark.color = AccentColor;
+            checkmark.raycastTarget = false;
 
             EnsureLabel(
                 toggleObject.transform,
@@ -1016,6 +1033,7 @@ namespace Blockiverse.Editor
                 fadeDuration     = 0.08f
             };
             toggle.isOn = isOn;
+            ConfigureSelectableFeedback(toggle);
             return toggle;
         }
 
@@ -1062,6 +1080,7 @@ namespace Blockiverse.Editor
                 background.type = Image.Type.Sliced;
             }
             background.color = ControlNormalColor;
+            ConfigureUiRaycastBlocker(background);
 
             GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
             RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
@@ -1083,6 +1102,7 @@ namespace Blockiverse.Editor
                 fill.type = Image.Type.Sliced;
             }
             fill.color = AccentColor;
+            fill.raycastTarget = false;
 
             GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
             RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
@@ -1101,6 +1121,7 @@ namespace Blockiverse.Editor
             if (knobSprite != null)
                 handle.sprite = knobSprite;
             handle.color = TextPrimaryColor;
+            ConfigureUiRaycastBlocker(handle);
 
             slider.fillRect = fillRect;
             slider.handleRect = handleRect;
@@ -1116,6 +1137,7 @@ namespace Blockiverse.Editor
                 fadeDuration     = 0.08f
             };
             slider.value = value;
+            ConfigureSelectableFeedback(slider);
             return slider;
         }
 
@@ -1145,7 +1167,9 @@ namespace Blockiverse.Editor
             backgroundRect.anchorMax = new Vector2(1.0f, 0.65f);
             backgroundRect.offsetMin = Vector2.zero;
             backgroundRect.offsetMax = Vector2.zero;
-            EnsureComponent<Image>(backgroundObject).color = ComfortMenuControlColor;
+            Image background = EnsureComponent<Image>(backgroundObject);
+            background.color = ComfortMenuControlColor;
+            ConfigureUiRaycastBlocker(background);
 
             GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
             RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
@@ -1160,7 +1184,9 @@ namespace Blockiverse.Editor
             fillRect.anchorMax = new Vector2(1.0f, 0.65f);
             fillRect.offsetMin = Vector2.zero;
             fillRect.offsetMax = Vector2.zero;
-            EnsureComponent<Image>(fillObject).color = ComfortMenuAccentColor;
+            Image fill = EnsureComponent<Image>(fillObject);
+            fill.color = ComfortMenuAccentColor;
+            fill.raycastTarget = false;
 
             GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
             RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
@@ -1176,11 +1202,13 @@ namespace Blockiverse.Editor
             handleRect.sizeDelta = new Vector2(32.0f, 32.0f);
             Image handle = EnsureComponent<Image>(handleObject);
             handle.color = Color.white;
+            ConfigureUiRaycastBlocker(handle);
 
             slider.fillRect = fillRect;
             slider.handleRect = handleRect;
             slider.targetGraphic = handle;
             slider.value = value;
+            ConfigureSelectableFeedback(slider);
             return slider;
         }
 
@@ -1209,6 +1237,7 @@ namespace Blockiverse.Editor
                 image.type = Image.Type.Sliced;
             }
             image.color = ControlNormalColor;
+            ConfigureUiRaycastBlocker(image);
 
             Button button = EnsureComponent<Button>(buttonObject);
             button.targetGraphic = image;
@@ -1216,13 +1245,14 @@ namespace Blockiverse.Editor
             button.colors = new ColorBlock
             {
                 normalColor      = ControlNormalColor,
-                highlightedColor = ControlHighlightColor,
+                highlightedColor = AccentHighlightColor,
                 pressedColor     = ControlPressedColor,
-                selectedColor    = ControlSelectedColor,
+                selectedColor    = AccentColor,
                 disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
                 colorMultiplier  = 1.0f,
                 fadeDuration     = 0.08f
             };
+            ConfigureSelectableFeedback(button);
 
             EnsureLabel(
                 buttonObject.transform,
@@ -1237,6 +1267,7 @@ namespace Blockiverse.Editor
                 Vector2.zero);
 
             TextMeshProUGUI buttonLabel = buttonObject.transform.Find("Label").GetComponent<TextMeshProUGUI>();
+            buttonLabel.raycastTarget = false;
             RectTransform labelRect = buttonLabel.GetComponent<RectTransform>();
             labelRect.offsetMin = new Vector2(8.0f, 4.0f);
             labelRect.offsetMax = new Vector2(-8.0f, -4.0f);
@@ -1269,6 +1300,7 @@ namespace Blockiverse.Editor
                 colorMultiplier  = 1.0f,
                 fadeDuration     = 0.08f
             };
+            ConfigureSelectableFeedback(button);
             return button;
         }
 
@@ -1278,7 +1310,9 @@ namespace Blockiverse.Editor
             string placeholder,
             string value,
             Vector2 anchoredPosition,
-            Vector2 size)
+            Vector2 size,
+            TMP_InputField.ContentType contentType = TMP_InputField.ContentType.Standard,
+            TouchScreenKeyboardType keyboardType = TouchScreenKeyboardType.Default)
         {
             GameObject inputObject = EnsureRectChild(parent, name);
             RectTransform inputRect = inputObject.GetComponent<RectTransform>();
@@ -1297,12 +1331,19 @@ namespace Blockiverse.Editor
                 image.type = Image.Type.Sliced;
             }
             image.color = ControlNormalColor;
+            ConfigureUiRaycastBlocker(image);
 
             TMP_InputField input = EnsureComponent<TMP_InputField>(inputObject);
             input.targetGraphic = image;
             input.text = value;
-            input.contentType = TMP_InputField.ContentType.Standard;
+            input.contentType = contentType;
             input.lineType = TMP_InputField.LineType.SingleLine;
+            input.keyboardType = TouchScreenKeyboardType.Default;
+            input.characterValidation = contentType == TMP_InputField.ContentType.IntegerNumber
+                ? TMP_InputField.CharacterValidation.Integer
+                : TMP_InputField.CharacterValidation.None;
+            input.interactable = true;
+            input.readOnly = false;
 
             TextMeshProUGUI textComp = EnsureLabel(
                 inputObject.transform,
@@ -1316,6 +1357,7 @@ namespace Blockiverse.Editor
                 new Vector2(18.0f, 0.0f),
                 new Vector2(-36.0f, 0.0f));
             textComp.richText = false;
+            textComp.raycastTarget = false;
             ClearLocalizedTextBinding(textComp);
 
             TextMeshProUGUI placeholderText = EnsureLabel(
@@ -1330,14 +1372,16 @@ namespace Blockiverse.Editor
                 new Vector2(18.0f, 0.0f),
                 new Vector2(-36.0f, 0.0f),
                 new Color(0.65f, 0.70f, 0.75f, 0.60f));
+            placeholderText.raycastTarget = false;
 
             input.textComponent = textComp;
             input.placeholder = placeholderText;
 
             // Native VR text entry: open the Quest system keyboard when the field is selected.
             BlockiverseSystemKeyboardField keyboardField = EnsureComponent<BlockiverseSystemKeyboardField>(inputObject);
-            keyboardField.Configure(input);
+            keyboardField.Configure(input, TouchScreenKeyboardType.Default);
 
+            ConfigureSelectableFeedback(input);
             return input;
         }
 
@@ -1455,10 +1499,16 @@ namespace Blockiverse.Editor
             Transform existing = parent.Find(name);
 
             if (existing != null)
+            {
+                existing.gameObject.layer = parent.gameObject.layer;
+                EditorUtility.SetDirty(existing.gameObject);
                 return existing.gameObject;
+            }
 
             GameObject child = new(name, typeof(RectTransform));
             child.transform.SetParent(parent, false);
+            child.layer = parent.gameObject.layer;
+            EditorUtility.SetDirty(child);
             return child;
         }
 
@@ -1470,6 +1520,8 @@ namespace Blockiverse.Editor
             if (existing == null && legacy != null)
             {
                 legacy.SetParent(parent, false);
+                legacy.gameObject.layer = parent.gameObject.layer;
+                EditorUtility.SetDirty(legacy.gameObject);
                 return legacy.gameObject;
             }
 
@@ -1497,9 +1549,47 @@ namespace Blockiverse.Editor
             if (legacyRaycaster != null)
                 UnityEngine.Object.DestroyImmediate(legacyRaycaster);
 
+            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+            if (interactionLayer >= 0)
+                SetLayerRecursively(canvasObject, interactionLayer);
+
+            CanvasGroup inputGate = EnsureComponent<CanvasGroup>(canvasObject);
+            inputGate.interactable = true;
+            inputGate.blocksRaycasts = true;
+            inputGate.ignoreParentGroups = false;
+
             TrackedDeviceGraphicRaycaster raycaster = EnsureComponent<TrackedDeviceGraphicRaycaster>(canvasObject);
+            EditorUtility.SetDirty(inputGate);
             EditorUtility.SetDirty(canvasObject);
             return raycaster;
+        }
+
+        static void EnsureDecorativeCanvasDoesNotReceiveUi(GameObject canvasObject)
+        {
+            if (canvasObject == null)
+                return;
+
+            GraphicRaycaster legacyRaycaster = canvasObject.GetComponent<GraphicRaycaster>();
+            if (legacyRaycaster != null)
+                UnityEngine.Object.DestroyImmediate(legacyRaycaster);
+
+            TrackedDeviceGraphicRaycaster trackedRaycaster = canvasObject.GetComponent<TrackedDeviceGraphicRaycaster>();
+            if (trackedRaycaster != null)
+                UnityEngine.Object.DestroyImmediate(trackedRaycaster);
+
+            CanvasGroup inputGate = EnsureComponent<CanvasGroup>(canvasObject);
+            inputGate.interactable = false;
+            inputGate.blocksRaycasts = false;
+            inputGate.ignoreParentGroups = false;
+
+            foreach (Graphic graphic in canvasObject.GetComponentsInChildren<Graphic>(true))
+            {
+                graphic.raycastTarget = false;
+                EditorUtility.SetDirty(graphic);
+            }
+
+            EditorUtility.SetDirty(inputGate);
+            EditorUtility.SetDirty(canvasObject);
         }
 
         static GameObject EnsureChild(Transform parent, string name)
@@ -1512,6 +1602,38 @@ namespace Blockiverse.Editor
             GameObject child = new(name);
             child.transform.SetParent(parent, false);
             return child;
+        }
+
+        static void SetLayerRecursively(GameObject root, int layer)
+        {
+            if (root == null || layer < 0)
+                return;
+
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(includeInactive: true))
+            {
+                child.gameObject.layer = layer;
+                EditorUtility.SetDirty(child.gameObject);
+            }
+        }
+
+        static void ConfigureUiRaycastBlocker(Graphic graphic)
+        {
+            if (graphic == null)
+                return;
+
+            graphic.raycastTarget = true;
+            EditorUtility.SetDirty(graphic);
+        }
+
+        static void ConfigureSelectableFeedback(Selectable selectable)
+        {
+            if (selectable == null)
+                return;
+
+            BlockiverseUiSelectableFeedback feedback =
+                EnsureComponent<BlockiverseUiSelectableFeedback>(selectable.gameObject);
+            feedback.Configure();
+            EditorUtility.SetDirty(feedback);
         }
 
         static T EnsureComponent<T>(GameObject gameObject) where T : Component
@@ -1545,6 +1667,7 @@ namespace Blockiverse.Editor
 
             image.sprite = sprite;
             image.type = Image.Type.Sliced;
+            ConfigureUiRaycastBlocker(image);
         }
 
         static void ConfigureTopLeftRect(RectTransform rectTransform, Vector2 anchoredPosition, Vector2 size)

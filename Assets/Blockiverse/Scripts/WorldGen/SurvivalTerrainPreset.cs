@@ -13,6 +13,12 @@ namespace Blockiverse.WorldGen
         const int SpawnProtectedRadius = 4;
         // §5.5: emberflow pools only occur in deep caves, below this height.
         const int EmberflowMaxY = 18;
+        const int EasterEggSeed = 8675309;
+        const int EasterEggWatchpostOffsetX = 8;
+        const int EasterEggWatchpostOffsetZ = -2;
+        const int EasterEggWatchpostFootprintSize = 5;
+        const int EasterEggWatchpostHeadroom = 4;
+        const string EasterEggWatchpostId = "weathered_watchpost";
 
         readonly BlockRegistry registry;
         readonly WorldGenerationSettings settings;
@@ -24,7 +30,7 @@ namespace Blockiverse.WorldGen
         {
             this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.resourceTuning = resourceTuning ?? SurvivalResourceTuning.CreateDefault();
+            this.resourceTuning = resourceTuning ?? CreateResourceTuning(settings.Seed);
             this.biomeResolver = new SurvivalBiomeResolver(settings.Seed, settings.Bounds.Height);
         }
 
@@ -52,8 +58,16 @@ namespace Blockiverse.WorldGen
             PlaceWildPlants(world, surfaceHeights, biomeMap);
             PlaceSurfaceResourceNodes(world, surfaceHeights, biomeMap);
             ApplySpawnSafety(world);
+            PlaceEasterEggWatchpost(world);
 
             return world;
+        }
+
+        static SurvivalResourceTuning CreateResourceTuning(int seed)
+        {
+            return seed == EasterEggSeed
+                ? SurvivalResourceTuning.CreateResourceRich()
+                : SurvivalResourceTuning.CreateDefault();
         }
 
         void ValidateSettings()
@@ -747,6 +761,70 @@ namespace Blockiverse.WorldGen
                         if (y < world.Bounds.Height)
                             world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Air, trackChange: false);
                     }
+                }
+            }
+        }
+
+        void PlaceEasterEggWatchpost(VoxelWorld world)
+        {
+            if (settings.Seed != EasterEggSeed)
+                return;
+
+            BlockPosition spawn = settings.SpawnPosition;
+            int anchorX = spawn.X + EasterEggWatchpostOffsetX;
+            int anchorZ = spawn.Z + EasterEggWatchpostOffsetZ;
+            int surfaceY = spawn.Y - 1;
+
+            if (!CanPrepareEasterEggWatchpostFootprint(anchorX, surfaceY, anchorZ))
+                return;
+
+            PrepareEasterEggWatchpostFootprint(world, anchorX, surfaceY, anchorZ);
+            StructureService.TryPlaceStructureAt(world, EasterEggWatchpostId, anchorX, surfaceY, anchorZ, settings.Seed, containerLoot);
+        }
+
+        bool CanPrepareEasterEggWatchpostFootprint(int anchorX, int surfaceY, int anchorZ)
+        {
+            if (surfaceY < 1 || surfaceY + EasterEggWatchpostHeadroom >= settings.Bounds.Height)
+                return false;
+
+            for (int dx = 0; dx < EasterEggWatchpostFootprintSize; dx++)
+            {
+                for (int dz = 0; dz < EasterEggWatchpostFootprintSize; dz++)
+                {
+                    int x = anchorX + dx;
+                    int z = anchorZ + dz;
+
+                    if (!IsColumnInBounds(x, z) || IsInsideSpawnProtectedColumn(x, z))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        void PrepareEasterEggWatchpostFootprint(VoxelWorld world, int anchorX, int surfaceY, int anchorZ)
+        {
+            for (int dx = 0; dx < EasterEggWatchpostFootprintSize; dx++)
+            {
+                for (int dz = 0; dz < EasterEggWatchpostFootprintSize; dz++)
+                {
+                    int x = anchorX + dx;
+                    int z = anchorZ + dz;
+
+                    for (int y = 0; y < surfaceY; y++)
+                    {
+                        BlockId support = y >= surfaceY - 3 ? BlockRegistry.LooseLoam : BlockRegistry.Graystone;
+                        world.SetBlock(new BlockPosition(x, y, z), support, trackChange: false);
+                    }
+
+                    BlockId floor = dx == 0 || dz == 0 || dx == EasterEggWatchpostFootprintSize - 1 || dz == EasterEggWatchpostFootprintSize - 1
+                        ? BlockRegistry.CutstoneBlock
+                        : BlockRegistry.MeadowTurf;
+
+                    world.SetBlock(new BlockPosition(x, surfaceY, z), floor, trackChange: false);
+
+                    for (int y = surfaceY + 1; y <= surfaceY + EasterEggWatchpostHeadroom; y++)
+                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Air, trackChange: false);
                 }
             }
         }

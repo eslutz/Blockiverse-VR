@@ -11,19 +11,33 @@ namespace Blockiverse.VR
     /// UI input fields cannot be typed into without a hardware keyboard otherwise.
     /// </summary>
     [RequireComponent(typeof(TMP_InputField))]
-    public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, ISelectHandler
+    public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, IPointerDownHandler, ISelectHandler, ISubmitHandler
     {
         [SerializeField] TMP_InputField inputField;
+        [SerializeField] TouchScreenKeyboardType keyboardType = TouchScreenKeyboardType.Default;
 
         TouchScreenKeyboard keyboard;
         string textBeforeEdit;
 
+        public TouchScreenKeyboardType KeyboardType => keyboardType;
+
         public void Configure(TMP_InputField field)
         {
+            Configure(field, field != null ? field.keyboardType : TouchScreenKeyboardType.Default);
+        }
+
+        public void Configure(TMP_InputField field, TouchScreenKeyboardType keyboardType)
+        {
             inputField = field;
+            this.keyboardType = SupportedKeyboardType(keyboardType);
         }
 
         public void OnPointerClick(PointerEventData eventData)
+        {
+            OpenKeyboard();
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
         {
             OpenKeyboard();
         }
@@ -33,10 +47,16 @@ namespace Blockiverse.VR
             OpenKeyboard();
         }
 
+        public void OnSubmit(BaseEventData eventData)
+        {
+            OpenKeyboard();
+        }
+
         void Awake()
         {
             if (inputField == null)
                 inputField = GetComponent<TMP_InputField>();
+            keyboardType = SupportedKeyboardType(inputField != null ? inputField.keyboardType : keyboardType);
         }
 
         void OpenKeyboard()
@@ -48,7 +68,13 @@ namespace Blockiverse.VR
                 return;
 
             textBeforeEdit = inputField.text;
-            keyboard = TouchScreenKeyboard.Open(inputField.text, TouchScreenKeyboardType.Default);
+            keyboard = TouchScreenKeyboard.Open(inputField.text, keyboardType);
+        }
+
+        static TouchScreenKeyboardType SupportedKeyboardType(TouchScreenKeyboardType requestedType)
+        {
+            // Meta Quest's system keyboard overlay only supports Default when opened from Unity.
+            return TouchScreenKeyboardType.Default;
         }
 
         void Update()

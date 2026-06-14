@@ -47,7 +47,7 @@ namespace Blockiverse.MetaAvatars
                 _creationInfo.renderFilters.viewFlags =
                     CAPI.ovrAvatar2EntityViewFlags.FirstPerson;
                 _creationInfo.renderFilters.manifestationFlags =
-                    CAPI.ovrAvatar2EntityManifestationFlags.Full;
+                    CAPI.ovrAvatar2EntityManifestationFlags.Hands;
                 _creationInfo.renderFilters.quality =
                     CAPI.ovrAvatar2EntityQuality.Standard;
             }
@@ -62,6 +62,12 @@ namespace Blockiverse.MetaAvatars
             }
 
             SetIsLocal(isLocal);
+            if (IsCreated)
+            {
+                SetActiveView(_creationInfo.renderFilters.viewFlags);
+                SetActiveManifestation(_creationInfo.renderFilters.manifestationFlags);
+            }
+
             ApplyFirstPersonVisibility();
         }
 

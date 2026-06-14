@@ -402,6 +402,7 @@ namespace Blockiverse.Editor
             avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
             avatarRig.SetMetaAvatarAvailable(false);
             avatarRig.ConfigureFallbackProxy(true);
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
             avatarPresenter.Configure(
                 avatarProvider,
                 avatarRig,
@@ -426,9 +427,10 @@ namespace Blockiverse.Editor
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
             GameObject menuObject = EnsureRectChildMigrated(cameraOffset, leftController, ComfortMenuName);
+            const float comfortMenuScale = 0.00105f;
             menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
             menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
-            menuObject.transform.localScale = Vector3.one * 0.0013f;
+            menuObject.transform.localScale = Vector3.one * comfortMenuScale;
 
             RectTransform menuRect = menuObject.GetComponent<RectTransform>();
             menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ComfortMenuSize.x);
@@ -471,114 +473,134 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(32.0f, -36.0f),
-                new Vector2(460.0f, 56.0f));
+                TitleSizeWithClose(ComfortMenuSize.x, 56.0f));
 
             EnsureButtonControl(
                 panelObject.transform,
                 "Close Button",
                 "Close",
-                new Vector2(344.0f, -36.0f),
-                new Vector2(144.0f, 48.0f));
+                TopRightClosePosition(ComfortMenuSize.x),
+                MenuCloseButtonSize);
 
             // --- Movement Mode (Glide / Teleport) ---
             EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -90.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(32.0f, -94.0f), new Vector2(300.0f, 36.0f));
 
             Toggle glideToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Glide Toggle",
                 "Glide Motion",
                 settings == null || settings.LocomotionMode == BlockiverseLocomotionMode.Glide,
-                new Vector2(32.0f, -126.0f));
+                new Vector2(32.0f, -134.0f));
 
             Toggle teleportToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Teleport Toggle",
                 "Teleport",
                 settings != null && settings.LocomotionMode == BlockiverseLocomotionMode.Teleport,
-                new Vector2(32.0f, -170.0f));
+                new Vector2(32.0f, -182.0f));
 
             Slider moveSpeedSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Move Speed Slider",
                 "Move Speed",
                 settings != null ? settings.ContinuousMoveSpeed : 1.8f,
-                new Vector2(32.0f, -222.0f),
+                new Vector2(32.0f, -246.0f),
                 minValue: 0.5f,
                 maxValue: 4.0f);
 
             // --- Turning ---
+            EnsureLabel(panelObject.transform, "Turning Label", "Turning", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(532.0f, -94.0f), new Vector2(300.0f, 36.0f));
+
             Toggle smoothTurnToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Smooth Turn Toggle",
                 "Smooth Turn",
                 settings != null && settings.SmoothTurnEnabled,
-                new Vector2(32.0f, -324.0f));
+                new Vector2(532.0f, -134.0f));
 
             Slider snapTurnSlider = EnsureSnapTurnSlider(
                 panelObject.transform,
                 settings != null ? settings.SnapTurnDegrees : 45.0f,
-                new Vector2(32.0f, -370.0f));
+                new Vector2(532.0f, -198.0f));
 
             Toggle turnAroundToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Turn Around Toggle",
                 "Turn Around",
                 settings == null || settings.SnapTurnAroundEnabled,
-                new Vector2(32.0f, -416.0f));
+                new Vector2(532.0f, -300.0f));
 
             Slider smoothTurnSpeedSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Smooth Turn Speed Slider",
                 "Smooth Turn Speed",
                 settings != null ? settings.ContinuousTurnSpeed : 60.0f,
-                new Vector2(32.0f, -506.0f),
+                new Vector2(532.0f, -364.0f),
                 minValue: 30.0f,
                 maxValue: 180.0f);
 
             // --- Hand Roles ---
+            EnsureLabel(panelObject.transform, "Control Options Label", "Control Options", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(32.0f, -380.0f), new Vector2(300.0f, 36.0f));
+
             Toggle leftHandToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Left Hand Toggle",
                 "Left-Handed",
                 settings != null && settings.DominantHand == BlockiverseControllerRole.Left,
-                new Vector2(32.0f, -610.0f));
+                new Vector2(32.0f, -420.0f));
 
             Toggle dominantHandOnlyToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Dominant Hand Only Toggle",
                 "One-Handed Controls",
                 settings != null && settings.DominantHandOnlyControls,
-                new Vector2(32.0f, -654.0f));
+                new Vector2(32.0f, -468.0f));
 
             Toggle toggleToMineToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Toggle To Mine Toggle",
                 "Toggle To Mine",
                 settings != null && settings.ToggleToMineEnabled,
-                new Vector2(32.0f, -698.0f));
+                new Vector2(32.0f, -516.0f));
 
             // --- Vignette ---
+            EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(532.0f, -500.0f), new Vector2(300.0f, 36.0f));
+
             Toggle vignetteToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Vignette Toggle",
                 "Motion Vignette",
-                settings == null || settings.VignetteEnabled,
-                new Vector2(32.0f, -762.0f));
+                settings != null && settings.VignetteEnabled,
+                new Vector2(532.0f, -540.0f));
 
             Slider vignetteSlider = EnsureVignetteSlider(
                 panelObject.transform,
-                settings != null ? settings.VignetteStrength : 1.0f,
-                new Vector2(32.0f, -806.0f));
+                settings != null ? settings.VignetteStrength : 0.0f,
+                new Vector2(532.0f, -604.0f));
+
+            EnsureLabel(panelObject.transform, "Player View Label", "Player View", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(32.0f, -590.0f), new Vector2(300.0f, 36.0f));
 
             Slider eyeHeightSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Eye Height Slider",
                 "Eye Height",
                 settings != null ? settings.StandingEyeHeight : 1.6f,
-                new Vector2(32.0f, -902.0f),
+                new Vector2(32.0f, -632.0f),
                 minValue: 1.0f,
                 maxValue: 2.2f);
 
@@ -587,7 +609,7 @@ namespace Blockiverse.Editor
                 "UI Scale Slider",
                 "UI Scale",
                 settings != null ? settings.UiScale : 1.0f,
-                new Vector2(32.0f, -994.0f),
+                new Vector2(532.0f, -724.0f),
                 minValue: 0.85f,
                 maxValue: 1.35f);
 
@@ -596,7 +618,7 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Height Reset Button",
                 "Reset Height",
-                new Vector2(32.0f, -1106.0f));
+                new Vector2(32.0f, -742.0f));
 
             if (heightReset != null)
             {
@@ -626,7 +648,7 @@ namespace Blockiverse.Editor
                 smoothTurnSpeedSlider,
                 uiScaleSlider);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
-            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, 0.0013f);
+            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
@@ -686,6 +708,7 @@ namespace Blockiverse.Editor
 
             BlockiverseComfortSettings vignetteSettings = rig.GetComponent<BlockiverseComfortSettings>();
             float aperture = vignetteSettings != null ? vignetteSettings.VignetteAperture : 0.85f;
+            MeshRenderer vignetteRenderer = controller.GetComponent<MeshRenderer>();
 
             // Default parameters: aperture 0.85 is subtler than the XRI default (0.7).
             // The comfort menu's vignette strength slider adjusts this at runtime.
@@ -697,19 +720,23 @@ namespace Blockiverse.Editor
                 easeOutTime = 0.3f,
             };
 
-            // Ease the comfort vignette in/out during locomotion that causes vection or a viewpoint
-            // jump: continuous move, continuous (smooth) turn, teleport, gravity-driven falls, and
-            // physics jump arcs. Snap turn is itself a discrete comfort option, so it is intentionally
-            // excluded to avoid a vignette flicker on every snap.
+            // Ease the comfort vignette in/out only for intentional player locomotion that causes
+            // vection or a viewpoint jump. Gravity and jump providers can report active while the
+            // rig settles onto terrain during startup, which would close the menu view while idle.
+            // Snap turn is itself a discrete comfort option, so it is intentionally excluded too.
             controller.locomotionVignetteProviders.Clear();
             AddVignetteProvider(controller, rig.GetComponent<ContinuousMoveProvider>());
             AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
             AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
-            AddVignetteProvider(controller, rig.GetComponent<GravityProvider>());
-            AddVignetteProvider(controller, rig.GetComponent<JumpProvider>());
 
             BlockiverseVignetteSettingsDriver driver = EnsureComponent<BlockiverseVignetteSettingsDriver>(controller.gameObject);
             driver.Configure(vignetteSettings);
+
+            if (vignetteRenderer != null)
+            {
+                vignetteRenderer.enabled = vignetteSettings != null && vignetteSettings.VignetteEnabled;
+                EditorUtility.SetDirty(vignetteRenderer);
+            }
 
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(driver);
@@ -781,8 +808,7 @@ namespace Blockiverse.Editor
             audioCuePlayer.ConfigureFeedbackSettings(feedbackSettings);
 
             BlockiverseVfxPool vfxPool = EnsureComponent<BlockiverseVfxPool>(rig);
-            vfxPool.ConfigureParticleMaterial(
-                EnsureMaterial(BlockiverseProject.VfxParticleMaterialPath, Color.white, preferUnlit: true));
+            vfxPool.ConfigureParticleMaterial(EnsureTransparentVfxParticleMaterial());
             vfxPool.ConfigureParticleSprites(
                 GetVfxSprite("block_dust_particle"),
                 GetVfxSprite("block_puff_particle"),
@@ -824,6 +850,10 @@ namespace Blockiverse.Editor
             BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
             EditorUtility.SetDirty(settingsPersistence);
 
+            BlockiverseVerboseTraceController verboseTrace = EnsureComponent<BlockiverseVerboseTraceController>(rig);
+            verboseTrace.Configure(inputRig, null, controller, audioCuePlayer, vfxCuePlayer, musicController, interactionHaptics);
+            EditorUtility.SetDirty(verboseTrace);
+
             inputRig?.ConfigureTeleportFeedback(audioCuePlayer);
             ConfigurePanelFeedbackReferences(rig, audioCuePlayer, interactionHaptics);
 
@@ -834,6 +864,7 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(interactionHaptics);
             EditorUtility.SetDirty(survivalFeedback);
             EditorUtility.SetDirty(weatherFeedback);
+            EditorUtility.SetDirty(verboseTrace);
 
             if (inputRig != null)
                 EditorUtility.SetDirty(inputRig);

@@ -7,7 +7,14 @@ namespace Blockiverse.Gameplay
 {
     public sealed class TorchbudLightManager : MonoBehaviour
     {
+        const int MaxRuntimePointLights = 24;
+        const float MinimumLightRange = 4.0f;
+        const float LightRangePerLevel = 0.42f;
+        const float MinimumLightIntensity = 0.8f;
+        const float LightIntensityPerLevel = 0.11f;
+
         readonly HashSet<BlockPosition> emitterPositions = new();
+        readonly Dictionary<BlockPosition, Light> lightsByPosition = new();
 
         VoxelWorld world;
         BlockRegistry blockRegistry;
@@ -18,7 +25,7 @@ namespace Blockiverse.Gameplay
         bool igniteFeedbackEnabled;
 
         public int ActiveEmitterCount => emitterPositions.Count;
-        public int ActiveLightCount => ActiveEmitterCount;
+        public int ActiveLightCount => lightsByPosition.Count;
 
         public static bool IsLightEmitter(BlockId block, BlockRegistry registry)
         {
@@ -45,8 +52,7 @@ namespace Blockiverse.Gameplay
 
         public bool TryGetLight(BlockPosition position, out Light light)
         {
-            light = null;
-            return false;
+            return lightsByPosition.TryGetValue(position, out light);
         }
 
         public bool IsTrackingEmitter(BlockPosition position)
@@ -86,6 +92,7 @@ namespace Blockiverse.Gameplay
             if (!emitterPositions.Add(position))
                 return;
 
+            FillLightSlots();
             PlayIgniteFeedback(position);
         }
 
@@ -106,12 +113,93 @@ namespace Blockiverse.Gameplay
 
         void RemoveLight(BlockPosition position)
         {
-            emitterPositions.Remove(position);
+            if (!emitterPositions.Remove(position))
+                return;
+
+            DestroyLight(position);
+            FillLightSlots();
         }
 
         void ClearLights()
         {
+            foreach (Light light in lightsByPosition.Values)
+                DestroyLight(light);
+
+            lightsByPosition.Clear();
             emitterPositions.Clear();
+        }
+
+        void FillLightSlots()
+        {
+            if (world == null || blockRegistry == null)
+                return;
+
+            foreach (BlockPosition position in emitterPositions)
+            {
+                if (lightsByPosition.Count >= MaxRuntimePointLights)
+                    break;
+
+                if (!lightsByPosition.ContainsKey(position))
+                    CreateLight(position);
+            }
+        }
+
+        void CreateLight(BlockPosition position)
+        {
+            if (!blockRegistry.TryGet(world.GetBlock(position), out BlockDefinition definition) ||
+                definition.EmissiveLight <= 0)
+                return;
+
+            var lightObject = new GameObject($"Torchbud Light {position}");
+            lightObject.transform.SetParent(transform, worldPositionStays: false);
+            lightObject.transform.position = GetLightPosition(position);
+
+            Light light = lightObject.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.shadows = LightShadows.None;
+            light.renderMode = LightRenderMode.ForcePixel;
+            light.range = Mathf.Max(MinimumLightRange, definition.EmissiveLight * LightRangePerLevel);
+            light.intensity = MinimumLightIntensity + definition.EmissiveLight * LightIntensityPerLevel;
+            light.color = LightColorForBlock(definition.Id);
+
+            lightsByPosition[position] = light;
+        }
+
+        void DestroyLight(BlockPosition position)
+        {
+            if (!lightsByPosition.TryGetValue(position, out Light light))
+                return;
+
+            lightsByPosition.Remove(position);
+            DestroyLight(light);
+        }
+
+        static void DestroyLight(Light light)
+        {
+            if (light == null)
+                return;
+
+            GameObject lightObject = light.gameObject;
+            if (Application.isPlaying)
+                Destroy(lightObject);
+            else
+                DestroyImmediate(lightObject);
+        }
+
+        static Color LightColorForBlock(BlockId block)
+        {
+            if (block == BlockRegistry.LumenLamp)
+                return new Color(1.0f, 0.92f, 0.64f);
+            if (block == BlockRegistry.SparkFlare)
+                return new Color(1.0f, 0.72f, 0.28f);
+            if (block == BlockRegistry.Campfire || block == BlockRegistry.Emberflow || block == BlockRegistry.EmberflowFlow)
+                return new Color(1.0f, 0.45f, 0.18f);
+            if (block == BlockRegistry.LumenQuartzCluster)
+                return new Color(0.54f, 0.93f, 1.0f);
+            if (block == BlockRegistry.StaropalGeode)
+                return new Color(0.88f, 0.68f, 1.0f);
+
+            return new Color(1.0f, 0.78f, 0.36f);
         }
 
         void OnDestroy()

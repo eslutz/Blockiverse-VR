@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "BlockiverseInputActions",
     "maps": [
         {
@@ -54,24 +55,6 @@
                     "name": "Activate",
                     "type": "Button",
                     "id": "00000000-0000-0000-0000-000000000007",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "Primary Button",
-                    "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000013",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "Secondary Button",
-                    "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000014",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -205,28 +188,6 @@
                     "processors": "",
                     "groups": "",
                     "action": "Activate",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "{F7F2C4E4-B23D-49B4-93F7-AAC678C101AA}",
-                    "path": "<XRController>{LeftHand}/primaryButton",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Primary Button",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "{0342A9DC-A9B6-4E87-A521-954E5B9B0781}",
-                    "path": "<XRController>{LeftHand}/secondaryButton",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Secondary Button",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -691,6 +652,15 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Sprint",
+                    "type": "Button",
+                    "id": "00000000-0000-0000-0000-00000000005C",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -718,17 +688,6 @@
                 },
                 {
                     "name": "",
-                    "id": "{EC012C97-D6CE-496C-A566-F02C28613690}",
-                    "path": "<XRController>{LeftHand}/primaryButton",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Jump",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
                     "id": "00000000-0000-0000-0000-00000000005B",
                     "path": "<XRController>{RightHand}/secondaryButton",
                     "interactions": "",
@@ -740,12 +699,12 @@
                 },
                 {
                     "name": "",
-                    "id": "{A62087CE-14F6-4BD0-92DB-B6F24430E886}",
-                    "path": "<XRController>{LeftHand}/secondaryButton",
+                    "id": "00000000-0000-0000-0000-00000000005D",
+                    "path": "<XRController>{LeftHand}/thumbstickClicked",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "Block Editing Toggle",
+                    "action": "Sprint",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

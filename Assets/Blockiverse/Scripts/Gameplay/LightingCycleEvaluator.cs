@@ -33,7 +33,7 @@ namespace Blockiverse.Gameplay
         {
             float dayAmount = Mathf.Clamp01(Mathf.Sin(Normalize(normalizedTime) * Mathf.PI * 2.0f));
             dayAmount = Mathf.SmoothStep(0.0f, 1.0f, dayAmount);
-            float sunPitch = Mathf.Lerp(-18.0f, 78.0f, dayAmount);
+            float sunPitch = Normalize(normalizedTime) * 360.0f;
 
             return new LightingCycleState(
                 Quaternion.Euler(sunPitch, SunYawDegrees, 0.0f),

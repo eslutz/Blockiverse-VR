@@ -74,14 +74,21 @@ namespace Blockiverse.Tests.PlayMode
 
                 GameObject popup = GameObject.Find("Controller Mapping Popup");
                 Assert.That(popup, Is.Not.Null);
+                GameObject titleMenu = GameObject.Find("Title Menu");
+                Assert.That(titleMenu, Is.Not.Null);
 
                 Canvas canvas = popup.GetComponent<Canvas>();
                 Assert.That(canvas, Is.Not.Null);
                 Assert.That(canvas.enabled, Is.True);
+                Canvas titleCanvas = titleMenu.GetComponent<Canvas>();
+                Assert.That(titleCanvas, Is.Not.Null);
+                Assert.That(titleCanvas.enabled, Is.False,
+                    "The title menu must wait until the first-run controller map is dismissed.");
 
                 BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
                 Assert.That(presenter, Is.Not.Null);
                 Assert.That(presenter.IsVisible, Is.True);
+                Assert.That(presenter.ShowOnStart, Is.False);
 
                 Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
                 Assert.That(closeButton, Is.Not.Null);
@@ -90,6 +97,7 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
 
                 Assert.That(canvas.enabled, Is.False);
+                Assert.That(titleCanvas.enabled, Is.True);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally

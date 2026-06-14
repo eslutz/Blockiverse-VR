@@ -9,14 +9,13 @@ Read and follow AGENTS.md. It owns all workflow policy: issues, PRs, branching, 
 Unity 6000.3.16f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
 
 ```sh
-# Required validation — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
+# Required full Unity gate — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
 scripts/unity/run-tests.sh
 
-# Single test / one platform (the script takes no args; invoke Unity directly)
-"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity}" \
-  -batchmode -nographics -projectPath . -runTests -testPlatform EditMode \
-  -testFilter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" \
-  -testResults TestResults/Unity/Single.xml -logFile -
+# Targeted iteration while coding
+scripts/unity/run-tests.sh --platform EditMode \
+  --filter Blockiverse.Tests.EditMode.SomeClass.SomeTest \
+  --results-name Single
 
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
@@ -29,7 +28,7 @@ python3 scripts/audio/generate-audio.py           # all SFX
 scripts/ci/forbidden-files.sh                     # what PR CI actually runs
 ```
 
-**PR CI does not compile or test Unity code** (it only checks forbidden files and shell syntax). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. Releases build from `v*` tags via `release-apk.yml`.
+**PR CI does not compile or test Unity code** (it only checks forbidden files and shell syntax). Use targeted `scripts/unity/run-tests.sh` filters while iterating, but the no-arg script remains the full local compile/test gate before Unity-impacting PR review or merge. Release channel workflows build and upload alpha/beta APKs, then promote Beta to RC and RC to Meta `store` without rebuilding.
 
 ## Architecture
 

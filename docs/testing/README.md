@@ -3,9 +3,11 @@
 Testing is split into:
 
 - Repository safety checks for shell syntax, release policy docs, and forbidden tracked files
-- Local Unity validation for tests and development APK build smoke checks
+- Targeted local Unity validation for changed fixtures and subsystems
+- Full local Unity validation before review or merge for Unity-impacting changes
+- Development APK and Quest-device validation when Android, headset, release, or Quest performance behavior changes
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
-- Release APK workflow checks that publish CI artifacts
+- Release channel workflow checks that upload alpha/beta builds and promote beta-to-RC and RC-to-store builds
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
 - Multiplayer Play Mode tests for local multi-client behavior
@@ -26,11 +28,18 @@ hzdb log --tag Unity --level I --lines 200
 hzdb log --tag Unity --level W --lines 200
 ```
 
+Verbose gameplay tracing is available only in the Unity Editor and development builds. Enable it by setting `PlayerPrefs["Blockiverse.Diagnostics.VerboseTraceEnabled"]` to `1` or by creating the marker file `Diagnostics/enable-verbose-trace` under `Application.persistentDataPath`. When enabled, the game writes rolling JSONL files named `blockiverse-trace-<session>-NNN.jsonl` under `Application.persistentDataPath/Diagnostics` with timed player snapshots and sanitized interaction, audio/VFX, haptic, environment, and world-event records. Unity/player logs only receive trace start/stop/file summary lines.
+
 Attach relevant excerpts to issues or pull requests when they are needed as validation evidence. Do not commit local device logs, screenshots, recordings, traces, APKs, or other generated validation artifacts unless a tracked artifact is explicitly required.
 
-Run the repository checks locally with:
+## Validation tiers
+
+### Docs/Repo
+
+Use this tier for documentation-only, governance-only, PR-template, issue-template, and markdown-only policy changes that do not alter Unity project behavior:
 
 ```sh
+git diff --check
 bash -n scripts/ci/forbidden-files.sh scripts/unity/*.sh
 scripts/ci/forbidden-files.sh
 test -f docs/architecture/branching-and-release.md
@@ -38,12 +47,53 @@ test -f docs/architecture/branching-and-release.md
 
 GitHub-hosted CI validates repository checks only. Unity validation is manual and local with Unity Hub Personal.
 
-Run Unity validation locally before moving a Unity-impacting pull request to review or merge:
+### Targeted Unity
+
+Use targeted Unity validation while iterating on Unity-impacting changes. Prefer the smallest fixture, test fullname, or subsystem filter that covers the changed behavior:
+
+```sh
+scripts/unity/run-tests.sh \
+  --platform EditMode \
+  --filter Blockiverse.Tests.EditMode.BlockiverseInputActionAssetTests \
+  --results-name validation-editmode-smoke
+
+scripts/unity/run-tests.sh \
+  --platform PlayMode \
+  --filter Blockiverse.Tests.PlayMode.BootScenePlayModeTests.BootSceneLoadsWithXrRigAndCamera \
+  --results-name validation-playmode-smoke
+```
+
+`scripts/unity/run-tests.sh` supports `--platform EditMode|PlayMode|all`, `--filter <test-filter>`, `--results-name <slug>`, and `--results-dir <path>`. Named single-platform runs write `TestResults/Unity/<slug>.xml`; named `--platform all` runs write `TestResults/Unity/<slug>-EditMode.xml` and `TestResults/Unity/<slug>-PlayMode.xml`.
+
+### Unity Full Gate
+
+Run the full local Unity gate before moving any Unity-impacting pull request to review or merge, before creating a known-good `kg/...` checkpoint for Unity work, and before release-candidate validation:
 
 ```sh
 scripts/unity/run-tests.sh
-scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk
 ```
+
+With no arguments, the script remains the canonical full gate. It runs EditMode then PlayMode and writes `TestResults/Unity/EditMode.xml` and `TestResults/Unity/PlayMode.xml`.
+
+### APK/Quest Gate
+
+Add this tier when the change affects VR comfort, Android or Quest behavior, headset-only behavior, networking on devices, release signing, store submission, or Quest performance:
+
+```sh
+scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk
+hzdb --version
+hzdb device list
+```
+
+Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
+
+## Test selection rules
+
+- Docs, governance, PR templates, issue templates, and markdown-only policy changes: run the Docs/Repo tier only.
+- Pure C# logic in engine-free assemblies: run the targeted EditMode fixture first, then the Unity Full Gate before review.
+- Boot scene, prefabs, input, UI, VR interaction, assets, bootstrapper, or rendering: run targeted EditMode plus the relevant Boot or interaction PlayMode filter; add the APK/Quest Gate only if Android or device behavior could change.
+- Save/load, schema, worldgen, survival, networking, multiplayer, or authority changes: run targeted subsystem tests plus the relevant PlayMode or networking filter; run the Unity Full Gate before review.
+- Release, signing, store, Quest comfort, Quest performance, device multiplayer, or headset-only behavior: run the Unity Full Gate plus the APK/Quest Gate.
 
 Local Unity validation requires globally installed tools on the developer machine:
 
@@ -52,8 +102,8 @@ Local Unity validation requires globally installed tools on the developer machin
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
 - `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity`.
 
-Current GitHub Actions workflows do not require UNITY_LICENSE, UNITY_EMAIL, or UNITY_PASSWORD secrets. Unity Personal activation is handled by Unity Hub on the local developer machine, and the local license file is not committed, copied into CI, or uploaded as an artifact.
+Current GitHub Actions release workflows use the UnityCI editor container for alpha and beta APK builds and do not require UNITY_LICENSE, UNITY_EMAIL, or UNITY_PASSWORD secrets. RC and production workflows promote already-uploaded Meta build IDs and do not rebuild APKs. Unity Personal activation remains local for developer-run validation, and the local license file is not committed, copied into CI, or uploaded as an artifact.
 
-Record the local Unity validation commands, result summary, output APK path, and any residual risk in the pull request or linked issue. The current development APK build artifact is local only, usually `/tmp/blockiverse-vr-development.apk`, and is not uploaded by GitHub Actions.
+Record the selected validation tier, exact commands, result summary, output APK path when applicable, promoted Meta build ID when applicable, intentionally deferred validation, and any residual risk in the pull request or linked issue. Local development APKs usually use `/tmp/blockiverse-vr-development.apk`; alpha channel development APKs are uploaded by the alpha release workflow for same-repository pull request commits.
 
 If the project later adopts a CI-compatible Unity license, Unity Build Automation, or a self-hosted runner with an accepted local license, reintroduce hosted Unity test and build jobs in a separate issue and update this document with the new validation contract.

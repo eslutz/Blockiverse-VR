@@ -11,6 +11,7 @@ namespace Blockiverse.VR
     public sealed class BlockiverseSettingsPersistence : MonoBehaviour
     {
         const string KeyPrefix = "Blockiverse.Settings.";
+        const int VignettePrefsVersion = 2;
         const float PollIntervalSeconds = 5.0f;
 
         [SerializeField] BlockiverseComfortSettings comfortSettings;
@@ -87,10 +88,18 @@ namespace Blockiverse.VR
                     KeyPrefix + "StandingEyeHeight", comfortSettings.StandingEyeHeight);
                 comfortSettings.UiScale = PlayerPrefs.GetFloat(
                     KeyPrefix + "UiScale", comfortSettings.UiScale);
-                comfortSettings.VignetteEnabled = PlayerPrefs.GetInt(
-                    KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0) != 0;
-                comfortSettings.VignetteStrength = PlayerPrefs.GetFloat(
-                    KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
+
+                if (HasCurrentVignettePrefs())
+                {
+                    comfortSettings.VignetteEnabled = PlayerPrefs.GetInt(
+                        KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0) != 0;
+                    comfortSettings.VignetteStrength = PlayerPrefs.GetFloat(
+                        KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
+                }
+                else
+                {
+                    ResetVignettePrefsForReadableStartup();
+                }
             }
 
             if (feedbackSettings != null)
@@ -133,6 +142,7 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetFloat(KeyPrefix + "UiScale", comfortSettings.UiScale);
                 PlayerPrefs.SetInt(KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
+                PlayerPrefs.SetInt(KeyPrefix + "VignettePrefsVersion", VignettePrefsVersion);
             }
 
             if (feedbackSettings != null)
@@ -189,6 +199,21 @@ namespace Blockiverse.VR
 
                 return hash;
             }
+        }
+
+        static bool HasCurrentVignettePrefs()
+        {
+            return PlayerPrefs.GetInt(KeyPrefix + "VignettePrefsVersion", 0) >= VignettePrefsVersion;
+        }
+
+        void ResetVignettePrefsForReadableStartup()
+        {
+            comfortSettings.VignetteEnabled = false;
+            comfortSettings.VignetteStrength = 0.0f;
+            PlayerPrefs.DeleteKey(KeyPrefix + "VignetteEnabled");
+            PlayerPrefs.DeleteKey(KeyPrefix + "VignetteStrength");
+            PlayerPrefs.SetInt(KeyPrefix + "VignettePrefsVersion", VignettePrefsVersion);
+            PlayerPrefs.Save();
         }
     }
 }

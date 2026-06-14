@@ -1,7 +1,9 @@
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
@@ -21,6 +23,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using TMPro;
 using UnityEngine.UI;
 
@@ -165,6 +168,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
             Assert.That(settings, Is.Not.Null);
+            Assert.That(settings.VignetteEnabled, Is.False, "Generated rig should not start with the motion vignette enabled over the title/menu.");
+            Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f), "Generated rig should start with a fully open vignette strength.");
+            Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f), "Generated rig should leave the title/menu view unobscured.");
             Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
             Assert.That(menuTransform, Is.Not.Null);
             Assert.That(menu, Is.Not.Null);
@@ -207,10 +213,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefab, Is.Not.Null);
 
             TunnelingVignetteController vignette = prefab.GetComponentInChildren<TunnelingVignetteController>(true);
+            MeshRenderer vignetteRenderer = vignette != null ? vignette.GetComponent<MeshRenderer>() : null;
 
             Assert.That(vignette, Is.Not.Null, "Rig should carry a TunnelingVignetteController for comfort.");
             Assert.That(vignette.GetComponent<MeshFilter>()?.sharedMesh, Is.Not.Null, "Vignette mesh must be imported from the sample.");
-            Assert.That(vignette.GetComponent<MeshRenderer>()?.sharedMaterial, Is.Not.Null, "Vignette material must be assigned.");
+            Assert.That(vignetteRenderer?.sharedMaterial, Is.Not.Null, "Vignette material must be assigned.");
+            Assert.That(vignetteRenderer.enabled, Is.False, "Disabled comfort vignette must not render over the menu before locomotion.");
+            Assert.That(vignette.defaultParameters.apertureSize, Is.EqualTo(1.0f).Within(0.001f), "Startup vignette aperture should be fully open until intentional locomotion.");
             Assert.That(
                 vignette.locomotionVignetteProviders,
                 Has.All.Matches<LocomotionVignetteProvider>(p => p.enabled && p.locomotionProvider != null),
@@ -220,22 +229,100 @@ namespace Blockiverse.Tests.EditMode
                 .Select(provider => provider.locomotionProvider.GetType())
                 .ToList();
 
-            // Continuous motions and teleport mask vection/viewpoint jumps; snap turn is a discrete
-            // comfort option and is intentionally excluded to avoid a per-turn vignette flicker.
+            // Continuous motions and teleport mask intentional vection/viewpoint jumps. Snap turn,
+            // gravity, and jump are excluded so the vignette does not close while the title/menu rig
+            // is idle, settling, or performing a discrete comfort turn.
             Assert.That(providerTypes, Has.Count.GreaterThanOrEqualTo(3));
             Assert.That(providerTypes, Contains.Item(typeof(ContinuousMoveProvider)));
             Assert.That(providerTypes, Contains.Item(typeof(ContinuousTurnProvider)));
             Assert.That(providerTypes, Contains.Item(typeof(TeleportationProvider)));
             Assert.That(providerTypes, Has.No.Member(typeof(SnapTurnProvider)));
+            Assert.That(providerTypes, Has.No.Member(typeof(GravityProvider)));
+            Assert.That(providerTypes, Has.No.Member(typeof(JumpProvider)));
         }
 
         [Test]
-        public void XrRigBootstrapperAddsFallAndJumpVignetteProviders()
+        public void XrRigPrefabShowsFallbackHandsUntilLocalMetaAvatarIsReady()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseNetworkAvatarRig avatarRig = instance.GetComponent<BlockiverseNetworkAvatarRig>();
+
+                Assert.That(avatarRig, Is.Not.Null);
+                Assert.That(avatarRig.FirstPersonFallbackVisualsEnabled, Is.True);
+
+                avatarRig.SetMetaAvatarAvailable(false);
+                avatarRig.RefreshAvatarMode();
+
+                Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+
+                Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+                Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+                Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Head" && renderer.enabled));
+                Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Body" && renderer.enabled));
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void CreativeInputBridgeKeepsRayVisibleForPausedMenus()
+        {
+            GameObject root = new("Menu Ray Test");
+
+            try
+            {
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+                GameObject rayObject = new("Interaction Ray");
+                rayObject.transform.SetParent(root.transform, worldPositionStays: false);
+                XRRayInteractor ray = rayObject.AddComponent<XRRayInteractor>();
+                LineRenderer lineRenderer = rayObject.AddComponent<LineRenderer>();
+                XRInteractorLineVisual lineVisual = rayObject.AddComponent<XRInteractorLineVisual>();
+                CreativeInteractionController interactionController = root.AddComponent<CreativeInteractionController>();
+                BlockiverseCreativeInputBridge bridge = root.AddComponent<BlockiverseCreativeInputBridge>();
+
+                interactionController.SetBlockEditingEnabled(false);
+                lineRenderer.enabled = true;
+                lineVisual.enabled = true;
+
+                bridge.Configure(null, ray, interactionController);
+
+                Assert.That(lineRenderer.enabled, Is.True, "Menus need the ray visual even while world input is blocked.");
+                Assert.That(lineVisual.enabled, Is.True, "Menus need the XRI line visual even while world input is blocked.");
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void XrRigBootstrapperLeavesFallAndJumpOutOfVignetteProviders()
         {
             string source = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs");
 
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())", source);
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())", source);
+            Assert.That(
+                source,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())"),
+                "Gravity can become active during startup grounding, so it must not close the comfort vignette while idle.");
+            Assert.That(
+                source,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())"),
+                "Jump arcs are discrete gameplay movement and should not be a startup/menu vignette trigger.");
         }
 
         [Test]
@@ -302,6 +389,11 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(blockEditingToggle.bindings, Has.Some.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/secondaryButton"),
                 "Block editing toggle should be bound to Right B.");
+            InputAction sprintAction = gameplayMap.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false);
+            Assert.That(sprintAction, Is.Not.Null, "Left stick click should drive sprint through the gameplay map.");
+            Assert.That(sprintAction.bindings, Has.Some.Matches<InputBinding>(b =>
+                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/thumbstickClicked"),
+                "Sprint should be bound to left stick click.");
             Assert.That(inputRig.InputActions.actionMaps.SelectMany(map => map.bindings), Has.None.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/primaryButton" ||
                 (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/secondaryButton"),
@@ -429,8 +521,24 @@ namespace Blockiverse.Tests.EditMode
                 flight.ApplyFlightState();
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enableFly, Is.True);
-                Assert.That(continuousMove.moveSpeed, Is.GreaterThanOrEqualTo(BlockiverseCreativeFlightController.FlightSpeedBlocksPerSecond));
+                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding Right A toward the right-hand aim pose, not by stick locomotion.");
+                Assert.That(continuousMove.enableFly, Is.False);
+                Assert.That(gravity.useGravity, Is.False);
+                Assert.That(jump.enabled, Is.False);
+                Assert.That(inputRig.TurnWithBothHands, Is.True, "Both sticks should keep turning available while the player is in creative flight.");
+
+                flight.SetFlightActive(false);
+
+                Assert.That(flight.IsFlightActive, Is.False);
+                Assert.That(continuousMove.enableFly, Is.False);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+                Assert.That(inputRig.TurnWithBothHands, Is.False);
+
+                flight.SetFlightActive(true);
+
+                Assert.That(flight.IsFlightActive, Is.True);
+                Assert.That(continuousMove.enabled, Is.False);
                 Assert.That(gravity.useGravity, Is.False);
                 Assert.That(jump.enabled, Is.False);
 
@@ -441,12 +549,71 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(continuousMove.enableFly, Is.False);
                 Assert.That(gravity.useGravity, Is.True);
                 Assert.That(jump.enabled, Is.True);
+                Assert.That(inputRig.TurnWithBothHands, Is.False);
             }
             finally
             {
                 Object.DestroyImmediate(rigObject);
                 Object.DestroyImmediate(worldObject);
             }
+        }
+
+        [Test]
+        public void SprintClickTogglesAndHoldTemporarilyRaisesMoveSpeed()
+        {
+            MethodInfo toggleMethod = typeof(BlockiverseInputRig).GetMethod(
+                "ShouldToggleSprint",
+                BindingFlags.Public | BindingFlags.Static);
+            MethodInfo speedMethod = typeof(BlockiverseInputRig).GetMethod(
+                "ResolveSprintMoveSpeed",
+                BindingFlags.Public | BindingFlags.Static);
+
+            Assert.That(toggleMethod, Is.Not.Null, "Sprint should expose its click-vs-hold threshold for tests.");
+            Assert.That(speedMethod, Is.Not.Null, "Sprint should expose move-speed scaling for tests.");
+            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.10f }), Is.True);
+            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.50f }), Is.False);
+            Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, false }), Is.EqualTo(1.8f).Within(0.001f));
+            Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, true }), Is.EqualTo(3.96f).Within(0.001f));
+        }
+
+        [Test]
+        public void CreativeFlightMovementUsesRightHandAimOnlyWhileJumpHeld()
+        {
+            Vector3 displacement = BlockiverseCreativeFlightController.ComputeFlightDisplacement(
+                new Vector3(0.0f, 0.25f, 1.0f),
+                moveHeld: true,
+                deltaSeconds: 0.5f);
+            Vector3 expectedDirection = new Vector3(0.0f, 0.25f, 1.0f).normalized;
+
+            Assert.That(displacement.normalized.x, Is.EqualTo(expectedDirection.x).Within(0.001f));
+            Assert.That(displacement.normalized.y, Is.EqualTo(expectedDirection.y).Within(0.001f));
+            Assert.That(displacement.normalized.z, Is.EqualTo(expectedDirection.z).Within(0.001f));
+            Assert.That(displacement.magnitude, Is.EqualTo(BlockiverseCreativeFlightController.FlightSpeedBlocksPerSecond * 0.5f).Within(0.001f));
+
+            Vector3 idle = BlockiverseCreativeFlightController.ComputeFlightDisplacement(Vector3.forward, moveHeld: false, deltaSeconds: 1.0f);
+
+            Assert.That(idle, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void CreativeFlightSprintUsesCanonicalSprintSpeed()
+        {
+            MethodInfo sprintFlightMethod = typeof(BlockiverseCreativeFlightController).GetMethod(
+                nameof(BlockiverseCreativeFlightController.ComputeFlightDisplacement),
+                new[] { typeof(Vector3), typeof(bool), typeof(bool), typeof(float) });
+
+            Assert.That(sprintFlightMethod, Is.Not.Null, "Creative flight should accept sprint state when computing displacement.");
+
+            Vector3 sprint = (Vector3)sprintFlightMethod.Invoke(null, new object[]
+            {
+                Vector3.forward,
+                true,
+                true,
+                0.5f,
+            });
+
+            Assert.That(sprint.normalized, Is.EqualTo(Vector3.forward));
+            Assert.That(sprint.magnitude, Is.EqualTo(2.2f).Within(0.001f));
         }
 
         [Test]
@@ -632,7 +799,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popup, Is.Not.Null);
             BlockiverseWorldSpacePanelPresenter popupPresenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(popupPresenter, Is.Not.Null);
-            Assert.That(popupPresenter.ShowOnStart, Is.True);
+            Assert.That(popupPresenter.ShowOnStart, Is.False,
+                "The title router must own first-frame menu visibility; controls stay available from Settings.");
             Assert.That(popup.GetComponent<Canvas>()?.enabled, Is.False);
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
             string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
@@ -647,6 +815,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popupText, Does.Contain("Right A: jump"));
             Assert.That(popupText, Does.Contain("Right B: toggle block editing"));
             Assert.That(popupText, Does.Contain("Left stick: move"));
+            Assert.That(popupText, Does.Contain("Left stick click: sprint toggle / hold sprint"));
             Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
             Assert.That(popupText, Does.Not.Contain("Left X: jump"));
             Assert.That(popupText, Does.Not.Contain("Left Y: undo"));
@@ -655,13 +824,44 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(startupOverlay, Is.Not.Null);
             BlockiverseWorldSpacePanelPresenter startupPresenter = startupOverlay.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(startupPresenter, Is.Not.Null);
-            Assert.That(startupPresenter.ShowOnStart, Is.True);
+            Assert.That(startupPresenter.ShowOnStart, Is.False,
+                "The loading artwork must not auto-render over the title menu after the app reaches the menu.");
             Assert.That(startupOverlay.GetComponent<Canvas>()?.enabled, Is.False);
+            Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
+                "Startup artwork is decorative and must not intercept tracked-device UI rays.");
+
+            Canvas popupCanvas = popup.GetComponent<Canvas>();
+            Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
+            Assert.That(popupCanvas, Is.Not.Null);
+            Assert.That(startupCanvas, Is.Not.Null);
+            Assert.That(popupCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
+                "The first-run controller map must render in front of any startup artwork.");
+
+            CanvasGroup startupInputGate = startupOverlay.GetComponent<CanvasGroup>();
+            Assert.That(startupInputGate, Is.Not.Null);
+            Assert.That(startupInputGate.interactable, Is.False);
+            Assert.That(startupInputGate.blocksRaycasts, Is.False);
+
+            foreach (Graphic graphic in startupOverlay.GetComponentsInChildren<Graphic>(includeInactive: true))
+                Assert.That(graphic.raycastTarget, Is.False, $"{graphic.name} must not receive UI raycasts.");
 
             Assert.That(survivalHud, Is.Not.Null);
             Assert.That(survivalHud.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(11));
             Assert.That(survivalHud.GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true), Is.Not.Null);
             Assert.That(survivalHud.GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true), Is.Not.Null);
+
+            RectTransform survivalHudRect = survivalHud.GetComponent<RectTransform>();
+            Assert.That(survivalHudRect, Is.Not.Null);
+            Assert.That(survivalHudRect.rect.width, Is.LessThanOrEqualTo(600.0f),
+                "Gameplay HUD should be a compact overlay, not the full survival menu.");
+            Assert.That(survivalHudRect.rect.height, Is.LessThanOrEqualTo(220.0f),
+                "Gameplay HUD should not occupy the player's central field of view.");
+            Assert.That(survivalHud.Find("Panel/Inventory")?.gameObject.activeSelf, Is.False,
+                "The full inventory panel belongs behind an explicit inventory route, not always-visible gameplay HUD.");
+            Assert.That(survivalHud.Find("Panel/Crafting")?.gameObject.activeSelf, Is.False,
+                "The full crafting panel belongs behind an explicit crafting route, not always-visible gameplay HUD.");
+            Assert.That(survivalHud.Find("Panel/Shared Crate")?.gameObject.activeSelf, Is.False,
+                "The shared crate panel belongs behind an explicit crate route, not always-visible gameplay HUD.");
         }
 
         [Test]

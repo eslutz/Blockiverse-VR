@@ -125,10 +125,13 @@ namespace Blockiverse.Editor
         const string StickDeadzoneProcessor = "stickDeadzone(min=0.2,max=0.95)";
         const string InteractionTestBlockName = "Interaction Test Block";
         const float JumpHeightMeters = 1.3f;
-        static readonly Vector2 ComfortMenuSize = new(520.0f, 1160.0f);
+        const float MenuPanelInset = 28.0f;
+        static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
+        static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
         // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
         static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
-        static readonly Vector2 SurvivalHudSize = new(940.0f, 420.0f);
+        const float SurvivalHudScale = 0.00105f;
+        static readonly Vector2 SurvivalHudSize = new(560.0f, 180.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
@@ -438,6 +441,8 @@ namespace Blockiverse.Editor
             projectConfig.eyeTrackingSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.colocationSessionSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.sceneSupport = global::OVRProjectConfig.FeatureSupport.None;
+            projectConfig.focusAware = true;
+            projectConfig.requiresSystemKeyboard = true;
             global::OVRProjectConfig.CommitProjectConfig(projectConfig);
         }
 
@@ -582,6 +587,24 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(feature);
             }
 
+            UnityEngine.XR.OpenXR.Features.OpenXRFeature metaQuestFeature =
+                FeatureHelpers.GetFeatureWithIdForBuildTarget(BuildTargetGroup.Android, "com.unity.openxr.feature.metaquest");
+            if (metaQuestFeature != null)
+            {
+                var serializedFeature = new SerializedObject(metaQuestFeature);
+                SerializedProperty keyboardProperty = serializedFeature.FindProperty("enableSystemKeyboard");
+                if (keyboardProperty != null)
+                    keyboardProperty.boolValue = true;
+                else
+                    BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "Meta Quest OpenXR feature does not expose enableSystemKeyboard.");
+                serializedFeature.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(metaQuestFeature);
+            }
+            else
+            {
+                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "Meta Quest OpenXR feature was not found; system keyboard support could not be enabled.");
+            }
+
             EditorUtility.SetDirty(openXrSettings);
         }
 
@@ -719,8 +742,12 @@ namespace Blockiverse.Editor
             map.AddAction(BlockiverseInputActionNames.TrackingState, InputActionType.PassThrough, $"{controllerPath}/trackingState", expectedControlLayout: "Integer");
             map.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, $"{controllerPath}/triggerPressed");
             map.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, $"{controllerPath}/gripPressed");
-            map.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, $"{controllerPath}/primaryButton");
-            map.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, $"{controllerPath}/secondaryButton");
+            if (!controllerPath.Contains("{LeftHand}", StringComparison.Ordinal))
+            {
+                map.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, $"{controllerPath}/primaryButton");
+                map.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, $"{controllerPath}/secondaryButton");
+            }
+
             map.AddAction(BlockiverseInputActionNames.UiPress, InputActionType.Button, $"{controllerPath}/triggerPressed");
             map.AddAction(BlockiverseInputActionNames.UiScroll, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
             map.AddAction(BlockiverseInputActionNames.HapticDevice, InputActionType.PassThrough, $"{controllerPath}/*");
@@ -736,10 +763,9 @@ namespace Blockiverse.Editor
         {
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
-            InputAction jump = map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
-            jump.AddBinding("<XRController>{LeftHand}/primaryButton");
-            InputAction blockEditingToggle = map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
-            blockEditingToggle.AddBinding("<XRController>{LeftHand}/secondaryButton");
+            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
+            map.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<XRController>{LeftHand}/thumbstickClicked");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)

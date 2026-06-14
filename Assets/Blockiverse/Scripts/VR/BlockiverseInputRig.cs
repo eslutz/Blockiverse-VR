@@ -22,6 +22,8 @@ namespace Blockiverse.VR
     public sealed class BlockiverseInputRig : MonoBehaviour
     {
         const float DefaultContinuousMoveSpeed = 1.8f;
+        const float SprintMoveMultiplier = 2.2f;
+        const float SprintClickToggleMaxSeconds = 0.25f;
         const float DefaultSnapTurnDegrees = 45.0f;
         const float DefaultContinuousTurnSpeed = 60.0f;
         const float DefaultJumpHeightMeters = 1.3f;
@@ -76,6 +78,7 @@ namespace Blockiverse.VR
         InputAction cachedBreakAction;
         InputAction cachedPlaceAction;
         InputAction cachedBlockEditingToggleAction;
+        InputAction cachedSprintAction;
         BlockiverseControllerRole cachedDominantHand;
         bool cachedDominantHandOnlyControls;
 
@@ -91,6 +94,14 @@ namespace Blockiverse.VR
         bool lastSnapTurnAroundEnabled;
         BlockiverseControllerRole lastDominantHand;
         bool lastDominantHandOnlyControls;
+        bool lastTurnWithBothHands;
+        bool lastSprintActive;
+        bool locomotionSuppressed;
+        bool turnWithBothHands;
+        bool creativeFlightLocomotionActive;
+        bool sprintToggled;
+        bool sprintHeld;
+        float sprintPressStartedAt = -1.0f;
         XRRayInteractor leftInteractionRay;
         XRRayInteractor rightInteractionRay;
 
@@ -105,6 +116,7 @@ namespace Blockiverse.VR
         public bool IsBreakHeld => cachedBreakAction != null && cachedBreakAction.IsPressed();
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
+        public bool SprintActive => sprintToggled || sprintHeld;
         public TrackedPoseDriver HeadPoseDriver => headPoseDriver;
         public XRBodyTransformer BodyTransformer => bodyTransformer;
         public LocomotionMediator LocomotionMediator => locomotionMediator;
@@ -122,6 +134,54 @@ namespace Blockiverse.VR
         public BlockiverseControllerRole ActiveMoveHand => GetMoveHand();
         public BlockiverseControllerRole ActiveTurnHand => GetTurnHand();
         public BlockiverseControllerRole ActiveToolHand => GetToolHand();
+        public bool LocomotionSuppressed
+        {
+            get => locomotionSuppressed;
+            set
+            {
+                if (locomotionSuppressed == value)
+                    return;
+
+                locomotionSuppressed = value;
+                comfortApplied = false;
+                ApplyComfortSettingsToProviders();
+                UpdateTurnProviderEnabledState();
+            }
+        }
+        public bool TurnWithBothHands
+        {
+            get => turnWithBothHands;
+            set
+            {
+                if (turnWithBothHands == value)
+                    return;
+
+                turnWithBothHands = value;
+                comfortApplied = false;
+                ConfigureXriProviderInputs();
+            }
+        }
+        public bool CreativeFlightLocomotionActive
+        {
+            get => creativeFlightLocomotionActive;
+            set
+            {
+                if (creativeFlightLocomotionActive == value)
+                    return;
+
+                creativeFlightLocomotionActive = value;
+                comfortApplied = false;
+                ApplyComfortSettingsToProviders();
+                UpdateTurnProviderEnabledState();
+            }
+        }
+
+        public void RefreshLocomotionProviderState()
+        {
+            comfortApplied = false;
+            ApplyComfortSettingsToProviders();
+            UpdateTurnProviderEnabledState();
+        }
 
         public void Configure(InputActionAsset actions)
         {
@@ -238,6 +298,12 @@ namespace Blockiverse.VR
             }
         }
 
+        public static bool ShouldToggleSprint(float pressDurationSeconds) =>
+            pressDurationSeconds >= 0.0f && pressDurationSeconds <= SprintClickToggleMaxSeconds;
+
+        public static float ResolveSprintMoveSpeed(float baseMoveSpeed, bool sprintActive) =>
+            sprintActive ? baseMoveSpeed * SprintMoveMultiplier : baseMoveSpeed;
+
         static void ConfigurePoseDriverActions(
             TrackedPoseDriver driver,
             string positionPath,
@@ -292,6 +358,7 @@ namespace Blockiverse.VR
 
         void OnDisable()
         {
+            ClearTransientSprintState();
             UnsubscribeLocomotionFeedback();
             inputActions?.Disable();
             DisableTrackedPoseDrivers();
@@ -299,6 +366,7 @@ namespace Blockiverse.VR
 
         void OnDestroy()
         {
+            ClearTransientSprintState();
             UnsubscribeLocomotionFeedback();
             inputActions?.Disable();
             DisableTrackedPoseDrivers();
@@ -306,9 +374,10 @@ namespace Blockiverse.VR
 
         void Update()
         {
+            RefreshCachedActions();
+            UpdateSprintInput(Time.unscaledTime);
             ApplyComfortSettingsToProviders();
             UpdateTurnProviderEnabledState();
-            RefreshCachedActions();
             UpdateMenu();
             UpdateQuickMenu();
             UpdateCreativeBindings();
@@ -345,6 +414,42 @@ namespace Blockiverse.VR
                 cachedBlockEditingToggleAction = null;
             else
                 TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, out cachedBlockEditingToggleAction);
+            TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
+        }
+
+        void UpdateSprintInput(float now)
+        {
+            if (!BlockiverseRuntimeState.AllowWorldInput || cachedSprintAction == null)
+            {
+                ClearTransientSprintState();
+                return;
+            }
+
+            if (cachedSprintAction.WasPressedThisFrame())
+            {
+                sprintHeld = true;
+                sprintPressStartedAt = now;
+            }
+
+            if (cachedSprintAction.IsPressed())
+                sprintHeld = true;
+
+            if (cachedSprintAction.WasReleasedThisFrame())
+            {
+                float pressDuration = sprintPressStartedAt >= 0.0f
+                    ? now - sprintPressStartedAt
+                    : float.PositiveInfinity;
+
+                ClearTransientSprintState();
+                if (ShouldToggleSprint(pressDuration))
+                    sprintToggled = !sprintToggled;
+            }
+        }
+
+        void ClearTransientSprintState()
+        {
+            sprintHeld = false;
+            sprintPressStartedAt = -1.0f;
         }
 
         void UpdateMenu()
@@ -663,13 +768,13 @@ namespace Blockiverse.VR
                 snapTurnProvider.leftHandTurnInput = CreateVector2ActionReader(
                     snapTurnProvider.leftHandTurnInput,
                     "Left Hand Snap Turn",
-                    turnHand == BlockiverseControllerRole.Left && hasLeftTurn
+                    (turnWithBothHands || turnHand == BlockiverseControllerRole.Left) && hasLeftTurn
                         ? leftTurn
                         : null);
                 snapTurnProvider.rightHandTurnInput = CreateVector2ActionReader(
                     snapTurnProvider.rightHandTurnInput,
                     "Right Hand Snap Turn",
-                    turnHand == BlockiverseControllerRole.Right && hasRightTurn
+                    (turnWithBothHands || turnHand == BlockiverseControllerRole.Right) && hasRightTurn
                         ? rightTurn
                         : null);
             }
@@ -679,13 +784,13 @@ namespace Blockiverse.VR
                 continuousTurnProvider.leftHandTurnInput = CreateVector2ActionReader(
                     continuousTurnProvider.leftHandTurnInput,
                     "Left Hand Smooth Turn",
-                    turnHand == BlockiverseControllerRole.Left && hasLeftTurn
+                    (turnWithBothHands || turnHand == BlockiverseControllerRole.Left) && hasLeftTurn
                         ? leftTurn
                         : null);
                 continuousTurnProvider.rightHandTurnInput = CreateVector2ActionReader(
                     continuousTurnProvider.rightHandTurnInput,
                     "Right Hand Smooth Turn",
-                    turnHand == BlockiverseControllerRole.Right && hasRightTurn
+                    (turnWithBothHands || turnHand == BlockiverseControllerRole.Right) && hasRightTurn
                         ? rightTurn
                         : null);
             }
@@ -839,6 +944,8 @@ namespace Blockiverse.VR
             float moveSpeed = comfortSettings != null
                 ? comfortSettings.ContinuousMoveSpeed
                 : DefaultContinuousMoveSpeed;
+            bool sprintActive = SprintActive;
+            float resolvedMoveSpeed = ResolveSprintMoveSpeed(moveSpeed, sprintActive);
             float continuousTurnSpeed = comfortSettings != null
                 ? comfortSettings.ContinuousTurnSpeed
                 : DefaultContinuousTurnSpeed;
@@ -851,7 +958,8 @@ namespace Blockiverse.VR
             bool controlHandChanged =
                 !comfortApplied ||
                 dominantHand != lastDominantHand ||
-                dominantHandOnly != lastDominantHandOnlyControls;
+                dominantHandOnly != lastDominantHandOnlyControls ||
+                turnWithBothHands != lastTurnWithBothHands;
 
             // Update runs hot; only push to the providers when a comfort value actually changed
             // (ConfigureXriLocomotionProviders resets comfortApplied so reconfigures re-push).
@@ -862,6 +970,7 @@ namespace Blockiverse.VR
                 Mathf.Approximately(continuousTurnSpeed, lastContinuousTurnSpeed) &&
                 Mathf.Approximately(snapTurnDegrees, lastSnapTurnDegrees) &&
                 snapTurnAroundEnabled == lastSnapTurnAroundEnabled &&
+                sprintActive == lastSprintActive &&
                 !controlHandChanged)
             {
                 return;
@@ -876,6 +985,8 @@ namespace Blockiverse.VR
             lastSnapTurnAroundEnabled = snapTurnAroundEnabled;
             lastDominantHand = dominantHand;
             lastDominantHandOnlyControls = dominantHandOnly;
+            lastTurnWithBothHands = turnWithBothHands;
+            lastSprintActive = sprintActive;
 
             if (controlHandChanged)
             {
@@ -884,11 +995,12 @@ namespace Blockiverse.VR
             }
 
             bool isGlide = mode == BlockiverseLocomotionMode.Glide;
+            bool locomotionAllowed = !locomotionSuppressed && !creativeFlightLocomotionActive;
 
             if (continuousMoveProvider != null)
             {
-                continuousMoveProvider.moveSpeed = moveSpeed;
-                continuousMoveProvider.enabled = isGlide;
+                continuousMoveProvider.moveSpeed = resolvedMoveSpeed;
+                continuousMoveProvider.enabled = isGlide && locomotionAllowed;
             }
 
             if (snapTurnProvider != null)
@@ -907,7 +1019,7 @@ namespace Blockiverse.VR
             if (gravityProvider != null)
             {
                 gravityProvider.enabled = true;
-                gravityProvider.useGravity = true;
+                gravityProvider.useGravity = locomotionAllowed;
                 gravityProvider.useLocalSpaceGravity = true;
                 gravityProvider.sphereCastLayerMask = GetVoxelTerrainLayerMask();
                 gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
@@ -918,15 +1030,15 @@ namespace Blockiverse.VR
             // needed here. Jump is only meaningful in Glide mode (Teleport mode teleports instead);
             // the jump reader itself is wired once in ConfigureXriProviderInputs, never per frame.
             if (jumpProvider != null)
-                jumpProvider.enabled = isGlide;
+                jumpProvider.enabled = isGlide && locomotionAllowed;
         }
 
         void UpdateTurnProviderEnabledState()
         {
             bool smoothTurn = comfortSettings != null && comfortSettings.SmoothTurnEnabled;
             bool suppressTurnForUi = IsActiveTurnRayOverUi();
-            bool enableSnapTurn = !smoothTurn && !suppressTurnForUi;
-            bool enableContinuousTurn = smoothTurn && !suppressTurnForUi;
+            bool enableSnapTurn = !locomotionSuppressed && !smoothTurn && !suppressTurnForUi;
+            bool enableContinuousTurn = !locomotionSuppressed && smoothTurn && !suppressTurnForUi;
 
             if (snapTurnProvider != null && snapTurnProvider.enabled != enableSnapTurn)
                 snapTurnProvider.enabled = enableSnapTurn;

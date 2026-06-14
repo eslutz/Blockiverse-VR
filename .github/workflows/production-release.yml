@@ -1,0 +1,172 @@
+name: Production Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      rc_version:
+        description: RC GitHub release tag to promote, for example v0.1.0-rc.1
+        required: false
+        type: string
+      meta_build_id:
+        description: Meta RC build ID to promote when rc_version is not available
+        required: false
+        type: string
+      production_version:
+        description: Production SemVer without a leading v, used only when rc_version is omitted
+        required: true
+        type: string
+        default: "0.1.0"
+      store_review_approved:
+        description: Confirm Meta Store submission/review approval before promoting to store
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release-${{ inputs.rc_version || inputs.production_version }}
+  cancel-in-progress: false
+
+jobs:
+  production-release:
+    name: Promote release candidate to production
+    if: ${{ inputs.store_review_approved }}
+    runs-on: ubuntu-latest
+    environment: meta-production
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      meta_build_id: ${{ steps.resolve.outputs.meta_build_id }}
+    steps:
+      - name: Check out trusted workflow helpers
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate store submission documents
+        run: scripts/store/validate-store-submission-docs.sh
+
+      - name: Resolve RC build
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC_VERSION: ${{ inputs.rc_version }}
+          META_BUILD_ID_INPUT: ${{ inputs.meta_build_id }}
+          PRODUCTION_VERSION_INPUT: ${{ inputs.production_version }}
+        run: |
+          mkdir -p .ci-source .ci-artifacts/production
+
+          if [ -z "$RC_VERSION" ] && [ -z "$META_BUILD_ID_INPUT" ]; then
+            echo "Provide rc_version or meta_build_id." >&2
+            exit 64
+          fi
+
+          production_base="$PRODUCTION_VERSION_INPUT"
+          meta_build_id="$META_BUILD_ID_INPUT"
+          source_sha=""
+
+          if [ -n "$RC_VERSION" ]; then
+            gh release download "$RC_VERSION" \
+              --pattern meta-upload-summary.json \
+              --dir .ci-source \
+              --clobber
+
+            if [ -z "$meta_build_id" ]; then
+              meta_build_id="$(
+                sed -nE 's/.*"meta_build_id":"([^"]+)".*/\1/p' .ci-source/meta-upload-summary.json | head -n 1
+              )"
+            fi
+
+            source_sha="$(
+              sed -nE 's/.*"source_sha":"([^"]+)".*/\1/p' .ci-source/meta-upload-summary.json | head -n 1
+            )"
+
+            rc_base="${RC_VERSION#v}"
+            production_base="${rc_base%%-*}"
+
+            gh release download "$RC_VERSION" \
+              --dir .ci-artifacts/production \
+              --clobber
+          else
+            git fetch origin main --depth=1
+            source_sha="$(git rev-parse origin/main)"
+          fi
+
+          if [ -z "$source_sha" ]; then
+            source_sha="$(gh release view "$RC_VERSION" --json targetCommitish --jq '.targetCommitish')"
+          fi
+
+          if [ -z "$meta_build_id" ]; then
+            echo "Could not resolve a Meta build ID." >&2
+            exit 65
+          fi
+
+          production_version="$(scripts/ci/release-version.sh production "$production_base")"
+
+          {
+            echo "# Blockiverse VR ${production_version}"
+            echo
+            echo "- Channel: store"
+            echo "- Source Meta channel: rc"
+            echo "- Meta build ID: ${meta_build_id}"
+            if [ -n "$RC_VERSION" ]; then
+              echo "- Promoted from GitHub release: ${RC_VERSION}"
+            fi
+            echo "- Source commit: ${source_sha}"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "This production release promotes an existing Meta RC build to the store channel without rebuilding the APK."
+          } > .ci-artifacts/production/release-notes.md
+
+          echo "version=$production_version" >> "$GITHUB_OUTPUT"
+          echo "meta_build_id=$meta_build_id" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Install Meta platform utility
+        env:
+          OVR_PLATFORM_UTIL_LINUX_URL: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_URL || vars.OVR_PLATFORM_UTIL_LINUX_URL }}
+          OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_SHA256 || vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
+        run: scripts/ci/install-ovr-platform-util.sh --output "$RUNNER_TEMP/ovr-platform-util"
+
+      - name: Promote RC build to Meta Store
+        env:
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          META_AGE_GROUP: ${{ secrets.META_AGE_GROUP || vars.META_AGE_GROUP || 'MIXED_AGES' }}
+          META_BUILD_ID: ${{ steps.resolve.outputs.meta_build_id }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          SOURCE_SHA: ${{ steps.resolve.outputs.source_sha }}
+        run: |
+          scripts/ci/meta-promote-release-channel.sh \
+            --source-channel rc \
+            --destination-channel store \
+            --build-id "$META_BUILD_ID" \
+            --output ".ci-artifacts/production/meta-upload-output.txt" \
+            --summary ".ci-artifacts/production/meta-upload-summary.json" \
+            --version "$VERSION" \
+            --source-sha "$SOURCE_SHA"
+
+      - name: Create GitHub production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          SOURCE_SHA: ${{ steps.resolve.outputs.source_sha }}
+        run: |
+          gh release create "$VERSION" .ci-artifacts/production/* \
+            --target "$SOURCE_SHA" \
+            --title "Blockiverse VR ${VERSION}" \
+            --notes-file .ci-artifacts/production/release-notes.md
+
+  production-release-toggle:
+    name: Await store review approval toggle
+    if: ${{ !inputs.store_review_approved }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain skipped release
+        run: echo "Set store_review_approved to true only after Meta Store submission/review approval."

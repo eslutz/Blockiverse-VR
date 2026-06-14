@@ -73,6 +73,34 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void AuthoredBlockSourceTilesUseProductionResolution()
+        {
+            Assert.That(BlockVisualAtlas.TilePixels, Is.EqualTo(32));
+
+            foreach (BlockDefinition block in BlockRegistry.CreateDefault().All.Where(block => block.Id != BlockRegistry.Air))
+            {
+                string path = $"Assets/Blockiverse/Art/Textures/Blocks/Source/{block.CanonicalId}.png";
+                Texture2D sourceTile = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+
+                Assert.That(sourceTile, Is.Not.Null, $"Missing block source tile: {path}");
+                Assert.That(sourceTile.width, Is.EqualTo(BlockVisualAtlas.TilePixels), $"{block.CanonicalId} source width should match atlas tile size.");
+                Assert.That(sourceTile.height, Is.EqualTo(BlockVisualAtlas.TilePixels), $"{block.CanonicalId} source height should match atlas tile size.");
+            }
+        }
+
+        [Test]
+        public void ArtGeneratorCoversEveryRegisteredBlockTexture()
+        {
+            string generatorSource = File.ReadAllText("scripts/art/generate-art-assets.py");
+
+            foreach (BlockDefinition block in BlockRegistry.CreateDefault().All.Where(block => block.Id != BlockRegistry.Air))
+                Assert.That(
+                    generatorSource,
+                    Does.Contain($"\"{block.CanonicalId}\""),
+                    $"Art generator must produce {block.CanonicalId}; committed source tiles are not enough.");
+        }
+
+        [Test]
         public void LaunchArtworkUsesCompressedFilteredMipmappedImportSettings()
         {
             Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);

@@ -114,9 +114,26 @@ namespace Blockiverse.Gameplay
             var particleObject = new GameObject($"VFX Particle {index + 1:00}");
             particleObject.transform.SetParent(transform, worldPositionStays: false);
             var system = particleObject.AddComponent<ParticleSystem>();
+            ConfigureDormantParticleSystem(system);
             ApplyParticleMaterial(system);
             particleObject.SetActive(true);
+            system.Stop(withChildren: false, ParticleSystemStopBehavior.StopEmittingAndClear);
             return system;
+        }
+
+        static void ConfigureDormantParticleSystem(ParticleSystem system)
+        {
+            ParticleSystem.MainModule main = system.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = 0.05f;
+            main.startSpeed = 0.0f;
+            main.startSize = 0.01f;
+            main.maxParticles = 1;
+
+            ParticleSystem.EmissionModule emission = system.emission;
+            emission.enabled = false;
+            emission.rateOverTime = 0.0f;
         }
 
         void ConfigureParticleSystem(ParticleSystem system, BlockiverseVfxCue cue, Color tint, float intensity)

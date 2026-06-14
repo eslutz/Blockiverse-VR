@@ -1,4 +1,5 @@
 using System.Reflection;
+using Blockiverse.MetaPlatform;
 using Blockiverse.Networking;
 using Blockiverse.UI;
 using NUnit.Framework;
@@ -17,6 +18,8 @@ namespace Blockiverse.Tests.Networking.EditMode
         [TearDown]
         public void TearDown()
         {
+            BlockiverseUserAgeCategoryService.ResetForTests();
+
             if (menuObject != null)
                 Object.DestroyImmediate(menuObject);
         }
@@ -71,6 +74,29 @@ namespace Blockiverse.Tests.Networking.EditMode
             StringAssert.Contains("Hosting LAN session", menu.StatusText.text);
             StringAssert.Contains("Join at", menu.StatusText.text);
             Assert.That(menu.StatusText.text, Does.Not.Contain(BlockiverseNetworkConfig.DefaultListenAddress));
+        }
+
+        [Test]
+        public void ChildAccountStatusMentionsFallbackIdentityBehavior()
+        {
+            BlockiverseUserAgeCategoryService.SetCurrentForTests(new BlockiverseUserAgeCategoryState(
+                BlockiverseUserAgeCategory.Child,
+                BlockiverseUserAgeCategorySource.LiveApi,
+                1,
+                "child"));
+            BlockiverseMultiplayerSessionMenu menu = CreateMenu();
+            BlockiverseNetworkSession session = CreateSession();
+            session.Configure(new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultListenAddress,
+                BlockiverseNetworkConfig.DefaultPort));
+            SetAutoProperty(session, nameof(BlockiverseNetworkSession.CurrentState), BlockiverseConnectionState.Hosting);
+            SetAutoProperty(session, nameof(BlockiverseNetworkSession.CurrentMode), NetworkSessionMode.Host);
+
+            menu.Configure(session);
+            menu.RefreshStatus();
+
+            Assert.That(menu.StatusText.text.ToLowerInvariant(), Does.Contain("fallback identity"));
         }
 
         [Test]

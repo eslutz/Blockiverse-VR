@@ -1,3 +1,4 @@
+using System;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -15,6 +16,7 @@ namespace Blockiverse.Gameplay
         public CreativeInteractionController InteractionController => interactionController;
         public BlockiverseVfxPool Pool => pool;
         public BlockiverseFeedbackSettings FeedbackSettings => feedbackSettings;
+        public event Action<BlockiverseVfxCue, Vector3> CuePlayed;
 
         public void Configure(BlockiverseVfxPool targetPool, BlockiverseFeedbackSettings settings)
         {
@@ -43,6 +45,7 @@ namespace Blockiverse.Gameplay
             float intensity = feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
 
             pool.Play(cue, position, TintForCue(cue), intensity);
+            CuePlayed?.Invoke(cue, position);
         }
 
         void OnEnable()

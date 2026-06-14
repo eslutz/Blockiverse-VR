@@ -10,8 +10,8 @@ namespace Blockiverse.Gameplay
     {
         public const int Columns = 8;
         public const int Rows = 10;
-        public const int TilePixels = 16;
-        public const int TilePaddingPixels = 4;
+        public const int TilePixels = 32;
+        public const int TilePaddingPixels = 8;
         public const int TileStridePixels = TilePixels + TilePaddingPixels * 2;
         public const int AtlasWidthPixels = Columns * TileStridePixels;
         public const int AtlasHeightPixels = Rows * TileStridePixels;

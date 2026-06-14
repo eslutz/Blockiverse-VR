@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -89,6 +90,8 @@ namespace Blockiverse.Gameplay
 
         public BlockiverseMusicContext CurrentContext => currentContext;
         public bool IsPlayingTrack => musicSource != null && musicSource.isPlaying;
+        public event Action<BlockiverseMusicContext> ContextChanged;
+        public event Action<BlockiverseMusicContext, AudioClip> TrackStarted;
 
         public void ConfigureFeedbackSettings(BlockiverseFeedbackSettings settings)
         {
@@ -167,6 +170,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             currentContext = resolved;
+            ContextChanged?.Invoke(currentContext);
 
             if (musicSource != null && musicSource.isPlaying)
             {
@@ -219,6 +223,7 @@ namespace Blockiverse.Gameplay
             musicSource.clip = clip;
             musicSource.volume = 0.0f;
             musicSource.Play();
+            TrackStarted?.Invoke(currentContext, clip);
         }
 
         float ResolveMusicVolume() =>

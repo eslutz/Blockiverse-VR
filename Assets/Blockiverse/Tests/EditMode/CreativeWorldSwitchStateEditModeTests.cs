@@ -7,6 +7,7 @@ using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -52,7 +53,7 @@ namespace Blockiverse.Tests.EditMode
         {
             CreativeInteractionController controller = CreateRoot("Creative Controller").AddComponent<CreativeInteractionController>();
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
-            manager.Configure(material: null, layer: -1, controller: controller);
+            ConfigureWorldManager(manager, controller);
             BlockiverseCreativeToolsPanel panel = CreateRoot("Creative Tools Panel").AddComponent<BlockiverseCreativeToolsPanel>();
             panel.Configure(controller, manager, null, null, null, null, null, null);
 
@@ -61,7 +62,7 @@ namespace Blockiverse.Tests.EditMode
             firstWorld.World.SetBlock(target, BlockRegistry.Graystone);
             manager.InitializeGeneratedWorld(firstWorld);
             controller.UpdatePreview(target, Vector3.up);
-            panel.SendMessage("Update");
+            InvokePanelUpdate(panel);
             panel.SetCornerA();
             panel.SetCornerB();
 
@@ -72,7 +73,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(panel.WorldEditUndoCount, Is.EqualTo(1));
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 22));
-            panel.SendMessage("Update");
+            InvokePanelUpdate(panel);
 
             Assert.That(panel.HasWorldEditClipboard, Is.False);
             Assert.That(panel.WorldEditUndoCount, Is.EqualTo(0));
@@ -82,6 +83,7 @@ namespace Blockiverse.Tests.EditMode
         public void CreativeTimeSlidersAreIgnoredDuringLanSession()
         {
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
+            ConfigureWorldManager(manager);
             WorldTimeClock clock = manager.gameObject.AddComponent<WorldTimeClock>();
             clock.Configure(
                 WorldTimeClock.DefaultDayLengthSeconds,
@@ -96,22 +98,77 @@ namespace Blockiverse.Tests.EditMode
             panel.ConfigureNetworkSessionActiveProvider(() => true);
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 23));
+            WorldTimeClock activeClock = manager.WorldTimeClock;
+            Assert.That(activeClock, Is.Not.Null);
+            activeClock.Configure(
+                WorldTimeClock.DefaultDayLengthSeconds,
+                startNormalizedTime: 0.25f,
+                timeScale: 1.0f);
             panel.RefreshEnvironmentControls();
 
             timeOfDay.value = 0.75f;
             timeScale.value = 3.0f;
 
-            Assert.That(clock.NormalizedTime, Is.EqualTo(0.25f).Within(0.0001f));
-            Assert.That(clock.TimeScale, Is.EqualTo(1.0f).Within(0.0001f));
+            Assert.That(activeClock.NormalizedTime, Is.EqualTo(0.25f).Within(0.0001f));
+            Assert.That(activeClock.TimeScale, Is.EqualTo(1.0f).Within(0.0001f));
             Assert.That(timeOfDay.value, Is.EqualTo(0.25f).Within(0.0001f));
             Assert.That(timeScale.value, Is.EqualTo(1.0f).Within(0.0001f));
             Assert.That(status.text, Is.EqualTo("Time controls are host/offline only."));
         }
 
         [Test]
+        public void CreativeToolsPanelTogglesDayNightCycleAndWeatherOffline()
+        {
+            CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
+            ConfigureWorldManager(manager);
+            WorldTimeClock clock = manager.gameObject.AddComponent<WorldTimeClock>();
+            clock.Configure(
+                WorldTimeClock.DefaultDayLengthSeconds,
+                startNormalizedTime: 0.25f,
+                timeScale: 1.0f);
+
+            TMP_Text status = CreateRoot("Status").AddComponent<TextMeshProUGUI>();
+            TMP_Text weather = CreateRoot("Weather").AddComponent<TextMeshProUGUI>();
+            Slider timeOfDay = CreateSlider("Time Of Day", 0.0f, 1.0f);
+            Slider timeScale = CreateSlider("Time Scale", 0.0f, 5.0f);
+            BlockiverseCreativeToolsPanel panel = CreateRoot("Creative Tools Panel").AddComponent<BlockiverseCreativeToolsPanel>();
+            panel.Configure(null, manager, null, null, status, weather, timeOfDay, timeScale);
+            panel.ConfigureNetworkSessionActiveProvider(() => false);
+
+            manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 26));
+            WorldTimeClock activeClock = manager.WorldTimeClock;
+            Assert.That(activeClock, Is.Not.Null);
+            activeClock.Configure(
+                WorldTimeClock.DefaultDayLengthSeconds,
+                startNormalizedTime: 0.25f,
+                timeScale: 1.0f);
+            panel.RefreshEnvironmentControls();
+
+            panel.ToggleDayNightCycle();
+            float frozenTime = activeClock.NormalizedTime;
+            activeClock.AdvanceRuntime(60.0f);
+
+            Assert.That(activeClock.TimeScale, Is.EqualTo(0.0f).Within(0.0001f));
+            Assert.That(activeClock.NormalizedTime, Is.EqualTo(frozenTime).Within(0.0001f));
+            Assert.That(status.text, Is.EqualTo("Day/night cycle paused."));
+
+            panel.ToggleDayNightCycle();
+
+            Assert.That(activeClock.TimeScale, Is.EqualTo(1.0f).Within(0.0001f));
+            Assert.That(status.text, Is.EqualTo("Day/night cycle resumed."));
+
+            WeatherState before = manager.GetWeatherSyncState().State;
+            panel.CycleWeather();
+
+            Assert.That(manager.GetWeatherSyncState().State, Is.Not.EqualTo(before));
+            Assert.That(weather.text, Does.StartWith("Weather: "));
+        }
+
+        [Test]
         public void RestoreWorldTimeTicksAlsoSyncsFluidFlowAnchor()
         {
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
+            ConfigureWorldManager(manager);
             WorldTimeClock clock = manager.gameObject.AddComponent<WorldTimeClock>();
             clock.Configure(
                 WorldTimeClock.DefaultDayLengthSeconds,
@@ -132,6 +189,7 @@ namespace Blockiverse.Tests.EditMode
         public void InitializeGeneratedWorldResetsInheritedWorldClock()
         {
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
+            ConfigureWorldManager(manager);
             WorldTimeClock clock = manager.gameObject.AddComponent<WorldTimeClock>();
             clock.Configure(
                 WorldTimeClock.DefaultDayLengthSeconds,
@@ -223,13 +281,23 @@ namespace Blockiverse.Tests.EditMode
                 depth: 4,
                 chunkSize: 2,
                 seed: 37,
-                groundHeight: 0,
+                groundHeight: 1,
                 spawnPosition: new BlockPosition(1, 1, 1));
             var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
+            ConfigureWorldManager(manager);
             manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.FlatCreative));
             manager.SetGameMode(mode);
             return manager;
+        }
+
+        static void ConfigureWorldManager(
+            CreativeWorldManager manager,
+            CreativeInteractionController controller = null)
+        {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
+            Assert.That(material, Is.Not.Null, "Creative world tests should use the committed authored chunk material.");
+            manager.Configure(material, layer: -1, controller: controller);
         }
 
         Slider CreateSlider(string name, float min, float max)
@@ -247,6 +315,15 @@ namespace Blockiverse.Tests.EditMode
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{fieldName} should exist.");
             return (T)field.GetValue(target);
+        }
+
+        static void InvokePanelUpdate(BlockiverseCreativeToolsPanel panel)
+        {
+            MethodInfo method = typeof(BlockiverseCreativeToolsPanel).GetMethod(
+                "Update",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "Creative tools panel should expose the expected Unity update callback.");
+            method.Invoke(panel, null);
         }
     }
 }

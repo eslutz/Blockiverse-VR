@@ -29,7 +29,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TorchbudLightManagerTracksPlacedEmittersWithoutRealtimeLights()
+        public IEnumerator TorchbudLightManagerCreatesRealtimePointLightsForPlacedEmitters()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
@@ -47,9 +47,10 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(manager.ActiveLightCount, Is.EqualTo(1));
                 Assert.That(manager.ActiveEmitterCount, Is.EqualTo(1));
                 Assert.That(manager.IsTrackingEmitter(torchPosition), Is.True);
-                Assert.That(manager.TryGetLight(torchPosition, out Light light), Is.False);
-                Assert.That(light, Is.Null);
-                Assert.That(host.GetComponentsInChildren<Light>(includeInactive: true), Is.Empty);
+                Assert.That(manager.TryGetLight(torchPosition, out Light light), Is.True);
+                Assert.That(light, Is.Not.Null);
+                Assert.That(light.type, Is.EqualTo(LightType.Point));
+                Assert.That(host.GetComponentsInChildren<Light>(includeInactive: true), Has.Length.EqualTo(1));
 
                 world.SetBlock(torchPosition, BlockRegistry.Air);
                 yield return null;

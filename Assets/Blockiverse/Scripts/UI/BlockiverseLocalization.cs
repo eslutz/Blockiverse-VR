@@ -96,7 +96,10 @@ namespace Blockiverse.UI
             public const string CreativeToolsSpawnRuin = "ui.generated.creative_tools.spawn_ruin";
             public const string CreativeToolsTimeOfDay = "ui.generated.creative_tools.time_of_day";
             public const string CreativeToolsDaySpeed = "ui.generated.creative_tools.day_speed";
+            public const string CreativeToolsToggleCycle = "ui.generated.creative_tools.toggle_cycle";
             public const string CreativeToolsCycleWeather = "ui.generated.creative_tools.cycle_weather";
+            public const string CreativeCyclePaused = "ui.generated.creative_tools.cycle_paused";
+            public const string CreativeCycleResumed = "ui.generated.creative_tools.cycle_resumed";
             public const string ControlsTitle = "ui.generated.controls.title";
             public const string WorldDetailsName = "ui.generated.world_details.name";
             public const string StationTitle = "ui.generated.station.title";
@@ -331,7 +334,10 @@ namespace Blockiverse.UI
             [Keys.CreativeToolsSpawnRuin] = "Spawn Ruin",
             [Keys.CreativeToolsTimeOfDay] = "Time of Day",
             [Keys.CreativeToolsDaySpeed] = "Day Speed",
+            [Keys.CreativeToolsToggleCycle] = "Pause / Resume Cycle",
             [Keys.CreativeToolsCycleWeather] = "Cycle Weather",
+            [Keys.CreativeCyclePaused] = "Day/night cycle paused.",
+            [Keys.CreativeCycleResumed] = "Day/night cycle resumed.",
             [Keys.ControlsTitle] = "Controls",
             [Keys.WorldDetailsName] = "Name",
             [Keys.StationTitle] = "Station",

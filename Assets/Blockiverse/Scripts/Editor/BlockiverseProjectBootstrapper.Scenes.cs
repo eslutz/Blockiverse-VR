@@ -6,6 +6,7 @@ using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
+using Blockiverse.MetaPlatform;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
@@ -64,9 +65,21 @@ namespace Blockiverse.Editor
             EnsureBootSceneLight(scene);
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
-            EnsureBootSceneCreativeWorld(scene);
-            EnsureBootSceneNetworkStack(scene);
-            RemoveRootGameObject(scene, InteractionTestBlockName);
+            EnsureMetaPlatformCompliance(scene);
+            if (BlockiverseProject.UseXrUiInteractionLabStartupOverride)
+            {
+                RemoveRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
+                RemoveRootGameObject(scene, NetworkManagerRootName);
+                RemoveRootGameObject(scene, InteractionTestBlockName);
+                EnsureXrUiInteractionLab(scene);
+            }
+            else
+            {
+                RemoveRootGameObject(scene, XrUiInteractionLabName);
+                EnsureBootSceneCreativeWorld(scene);
+                EnsureBootSceneNetworkStack(scene);
+                RemoveRootGameObject(scene, InteractionTestBlockName);
+            }
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
@@ -134,6 +147,7 @@ namespace Blockiverse.Editor
                 null,
                 null,
                 MetaAvatarPresentationMode.RemoteThirdPerson);
+            avatarRig.ConfigureFirstPersonFallbackVisuals(false);
 
             EditorUtility.SetDirty(networkObject);
             EditorUtility.SetDirty(avatarRig);
@@ -331,6 +345,30 @@ namespace Blockiverse.Editor
                 managerObject.SetActive(false);
                 EditorUtility.SetDirty(managerObject);
             }
+        }
+
+        static void EnsureMetaPlatformCompliance(Scene scene)
+        {
+            const string ComplianceRootName = "Meta Platform Compliance";
+
+            GameObject complianceObject = FindRootGameObject(scene, ComplianceRootName);
+            if (complianceObject == null)
+            {
+                complianceObject = new GameObject(ComplianceRootName);
+                SceneManager.MoveGameObjectToScene(complianceObject, scene);
+            }
+
+            BlockiverseUserAgeCategoryService service = EnsureComponent<BlockiverseUserAgeCategoryService>(complianceObject);
+            BlockiverseUserAgeCategoryService[] services = scene.GetRootGameObjects()
+                .SelectMany(sceneRoot => sceneRoot.GetComponentsInChildren<BlockiverseUserAgeCategoryService>(true))
+                .Where(existingService => existingService != service)
+                .ToArray();
+
+            foreach (BlockiverseUserAgeCategoryService duplicate in services)
+                UnityEngine.Object.DestroyImmediate(duplicate);
+
+            EditorUtility.SetDirty(service);
+            EditorUtility.SetDirty(complianceObject);
         }
 
         static void EnsureMultiplayerTestCamera(Scene scene)

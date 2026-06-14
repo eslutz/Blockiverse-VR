@@ -10,6 +10,7 @@ using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
@@ -828,6 +829,51 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        [UnityTest]
+        public IEnumerator TeleportRayRemainsActiveForReleaseFrame()
+        {
+            GameObject controllerObject = new("Teleport Mediator");
+            GameObject interactionObject = new("Interaction Ray");
+            GameObject teleportObject = new("Teleport Ray");
+
+            try
+            {
+                interactionObject.transform.SetParent(controllerObject.transform, false);
+                teleportObject.transform.SetParent(controllerObject.transform, false);
+                XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+                XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+                BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+
+                mediator.Configure(
+                    rig: null,
+                    settings: null,
+                    interaction: interactionRay,
+                    teleport: teleportRay,
+                    controllerRole: BlockiverseControllerRole.Right);
+
+                InvokePrivate(mediator, "SetTeleportActive", true);
+
+                Assert.That(teleportObject.activeSelf, Is.True);
+                Assert.That(interactionObject.activeSelf, Is.False);
+
+                InvokePrivate(mediator, "SetTeleportActive", false);
+
+                Assert.That(teleportObject.activeSelf, Is.True,
+                    "Thumbstick release must leave the teleport interactor alive for one frame so XRI can process select exit.");
+                Assert.That(interactionObject.activeSelf, Is.False,
+                    "The regular interaction ray should not re-enable until the teleport release frame has drained.");
+
+                yield return null;
+
+                Assert.That(teleportObject.activeSelf, Is.False);
+                Assert.That(interactionObject.activeSelf, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+            }
+        }
+
         static void ConfigureXriLocomotionStack(
             GameObject rigObject,
             XROrigin origin,
@@ -961,6 +1007,15 @@ namespace Blockiverse.Tests.PlayMode
 
             Assert.That(updateMethod, Is.Not.Null);
             updateMethod.Invoke(null, new object[] { updateType });
+        }
+
+        static object InvokePrivate(object target, string methodName, params object[] args)
+        {
+            MethodInfo method = target.GetType().GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"{methodName} should exist.");
+            return method.Invoke(target, args);
         }
     }
 }

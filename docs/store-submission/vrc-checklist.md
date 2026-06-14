@@ -45,6 +45,9 @@
 - [ ] Privacy policy published and linked at `https://blockiversevr.com/privacy/` (see local pointer `privacy-policy.md`).
 - [ ] Data-use declarations match actual behavior (see `data-and-safety.md`).
 - [ ] Age rating questionnaire (IARC) completed.
+- [ ] Age group self-certification is current in the Meta Developer Dashboard.
+- [ ] Mixed Ages builds call `UserAgeCategory.Get()` at least once per online session.
+- [ ] CH/TN/AD/UNKNOWN handling is validated on Quest or documented with Meta dashboard/API evidence.
 
 ## Store presence
 
@@ -52,7 +55,11 @@
 - [ ] Required artwork and screenshots uploaded.
 - [ ] Support contact provided.
 
-## Release packaging
+## Release Packaging
 
-- [ ] Signed release APK built from a `main` tag using `.github/workflows/release-apk.yml`
-      after production signing secrets are configured.
+- [ ] Signed Beta APK built from `main` and uploaded to Meta `beta` using
+      `.github/workflows/beta-release.yml` after production signing secrets are configured.
+- [ ] RC release promotes the selected Beta Meta build ID to Meta `rc` using
+      `.github/workflows/release-candidate.yml`.
+- [ ] Production release promotes the selected RC Meta build ID to Meta `store` using
+      `.github/workflows/production-release.yml` only after Store submission/review approval.

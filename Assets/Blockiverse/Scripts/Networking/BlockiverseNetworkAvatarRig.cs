@@ -30,6 +30,7 @@ namespace Blockiverse.Networking
         static readonly Vector3 DefaultRightHandLocalPosition = new(0.38f, 1.18f, 0.28f);
 
         [SerializeField] bool fallbackProxyEnabled = true;
+        [SerializeField] bool firstPersonFallbackVisualsEnabled;
         [SerializeField] bool metaAvatarAvailable;
         [SerializeField] float poseSendRateHz = 30.0f;
         [SerializeField] float remotePoseInterpolationSpeed = 18.0f;
@@ -54,8 +55,10 @@ namespace Blockiverse.Networking
         float nextTrackingFallbackSearchTime;
 
         public bool FallbackProxyEnabled => fallbackProxyEnabled;
+        public bool FirstPersonFallbackVisualsEnabled => firstPersonFallbackVisualsEnabled;
         public bool MetaAvatarAvailable => metaAvatarAvailable;
         public bool IsUsingFallbackProxy { get; private set; }
+        public bool FallbackRenderersVisible { get; private set; }
         public float RemotePoseInterpolationSpeed => remotePoseInterpolationSpeed;
         public Transform FallbackRoot => fallbackRoot;
         public Transform HeadAnchor => headAnchor;
@@ -129,6 +132,15 @@ namespace Blockiverse.Networking
             RefreshAvatarMode();
         }
 
+        public void ConfigureFirstPersonFallbackVisuals(bool enabled)
+        {
+            if (firstPersonFallbackVisualsEnabled == enabled && fallbackRoot != null)
+                return;
+
+            firstPersonFallbackVisualsEnabled = enabled;
+            RefreshAvatarMode();
+        }
+
         public void SetMetaAvatarAvailable(bool available)
         {
             if (metaAvatarAvailable == available && fallbackRoot != null)
@@ -160,6 +172,8 @@ namespace Blockiverse.Networking
 
             if (fallbackRoot != null)
                 fallbackRoot.gameObject.SetActive(IsUsingFallbackProxy);
+
+            ApplyFallbackRendererVisibility();
         }
 
         void PublishPose()
@@ -356,6 +370,42 @@ namespace Blockiverse.Networking
 
                 fallbackRenderer.sharedMaterial = fallbackMaterial;
             }
+
+            ApplyFallbackRendererVisibility();
+        }
+
+        void ApplyFallbackRendererVisibility()
+        {
+            bool showThirdPersonProxy = IsUsingFallbackProxy && ShouldRenderThirdPersonFallbackVisuals();
+            bool showFirstPersonHands = IsUsingFallbackProxy && firstPersonFallbackVisualsEnabled;
+            bool anyVisible = false;
+
+            if (fallbackRenderers == null)
+                return;
+
+            foreach (Renderer fallbackRenderer in fallbackRenderers)
+            {
+                if (fallbackRenderer == null)
+                    continue;
+
+                bool visible = showThirdPersonProxy ||
+                    (showFirstPersonHands && IsFirstPersonFallbackRenderer(fallbackRenderer));
+                fallbackRenderer.enabled = visible;
+                anyVisible |= visible;
+            }
+
+            FallbackRenderersVisible = anyVisible;
+        }
+
+        bool ShouldRenderThirdPersonFallbackVisuals()
+        {
+            return IsSpawned && !IsOwner;
+        }
+
+        static bool IsFirstPersonFallbackRenderer(Renderer fallbackRenderer)
+        {
+            return fallbackRenderer.transform.name == LeftHandVisualName ||
+                fallbackRenderer.transform.name == RightHandVisualName;
         }
 
         void ResolveTrackingSources()

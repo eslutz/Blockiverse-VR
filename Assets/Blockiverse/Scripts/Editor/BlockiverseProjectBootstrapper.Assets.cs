@@ -302,6 +302,32 @@ namespace Blockiverse.Editor
             return material;
         }
 
+        static Material EnsureTransparentVfxParticleMaterial()
+        {
+            Material material = EnsureMaterial(
+                BlockiverseProject.VfxParticleMaterialPath,
+                new Color(1.0f, 1.0f, 1.0f, 0.72f),
+                preferUnlit: true);
+
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.renderQueue = (int)RenderQueue.Transparent;
+
+            SetMaterialFloatIfPresent(material, "_Surface", 1.0f);
+            SetMaterialFloatIfPresent(material, "_Blend", 0.0f);
+            SetMaterialFloatIfPresent(material, "_AlphaClip", 0.0f);
+            SetMaterialFloatIfPresent(material, "_SrcBlend", (float)BlendMode.SrcAlpha);
+            SetMaterialFloatIfPresent(material, "_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            SetMaterialFloatIfPresent(material, "_SrcBlendAlpha", (float)BlendMode.One);
+            SetMaterialFloatIfPresent(material, "_DstBlendAlpha", (float)BlendMode.OneMinusSrcAlpha);
+            SetMaterialFloatIfPresent(material, "_ZWrite", 0.0f);
+
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         static Shader FindShader(bool preferUnlit)
         {
             string[] shaderNames = preferUnlit
@@ -336,6 +362,12 @@ namespace Blockiverse.Editor
 
             if (material.HasProperty("_MainTex"))
                 material.SetTexture("_MainTex", texture);
+        }
+
+        static void SetMaterialFloatIfPresent(Material material, string propertyName, float value)
+        {
+            if (material.HasProperty(propertyName))
+                material.SetFloat(propertyName, value);
         }
     }
 }

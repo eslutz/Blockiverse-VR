@@ -4,6 +4,7 @@ namespace Blockiverse.Core
     {
         public const string ProductName = "Blockiverse VR";
         public const string CompanyName = "Eric Slutz";
+        public const bool UseXrUiInteractionLabStartupOverride = false;
         public const string AndroidApplicationIdentifier = "dev.ericslutz.blockiversevr";
         public const string XrRigRootName = "BlockiverseXRRig";
         public const string CreativeWorldRootName = "Creative World";

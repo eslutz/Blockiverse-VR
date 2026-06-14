@@ -51,6 +51,9 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             Assert.That(provider.HideFirstPersonHead, Is.True);
             Assert.That(provider.Sources.Head, Is.SameAs(head.transform));
             Assert.That(fallbackRig.IsUsingFallbackProxy, Is.True);
+            Assert.That(
+                fallbackRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true),
+                Has.All.Matches<Renderer>(renderer => !renderer.enabled));
             Assert.That(fallbackRig.MetaAvatarAvailable, Is.False);
             Assert.That(presenter.LastFallbackReason, Is.EqualTo(provider.FallbackReason));
 
@@ -151,6 +154,10 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             Assert.That(entity.IsCreated, Is.False);
             Assert.That(entity.IsRenderableReady, Is.False);
             Assert.That(entity.InputManager, Is.Null);
+            Assert.That(GetCreationInfoRenderFilters(entity).viewFlags, Is.EqualTo(CAPI.ovrAvatar2EntityViewFlags.FirstPerson));
+            Assert.That(
+                GetCreationInfoRenderFilters(entity).manifestationFlags,
+                Is.EqualTo(CAPI.ovrAvatar2EntityManifestationFlags.Hands));
             LogAssert.NoUnexpectedReceived();
         }
 
@@ -227,6 +234,19 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
         {
             if (gameObject != null)
                 UnityEngine.Object.DestroyImmediate(gameObject);
+        }
+
+        static CAPI.ovrAvatar2EntityFilters GetCreationInfoRenderFilters(BlockiverseMetaAvatarEntity entity)
+        {
+            FieldInfo creationInfoField = typeof(OvrAvatarEntity).GetField(
+                "_creationInfo",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(creationInfoField, Is.Not.Null);
+
+            object creationInfo = creationInfoField.GetValue(entity);
+            FieldInfo renderFiltersField = creationInfo.GetType().GetField("renderFilters");
+            Assert.That(renderFiltersField, Is.Not.Null);
+            return (CAPI.ovrAvatar2EntityFilters)renderFiltersField.GetValue(creationInfo);
         }
 
         sealed class FakeMetaAvatarProvider : MonoBehaviour, IBlockiverseMetaAvatarProvider

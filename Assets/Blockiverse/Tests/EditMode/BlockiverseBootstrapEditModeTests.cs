@@ -4,10 +4,13 @@ using System.Linq;
 using System.Reflection;
 using System.Xml;
 using Blockiverse.Core;
+using Blockiverse.MetaPlatform;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 using UnityEngine.XR.OpenXR;
 using Object = UnityEngine.Object;
 
@@ -23,6 +26,7 @@ namespace Blockiverse.Tests.EditMode
         const string BlockiverseInputRigPath = "Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs";
         const string BlockiverseControllerHapticsPath = "Assets/Blockiverse/Scripts/VR/BlockiverseControllerHaptics.cs";
         const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
+        const string OculusProjectConfigPath = "Assets/Oculus/OculusProjectConfig.asset";
         const string LegacyAndroidResourcePath = "Assets/Plugins/Android/res";
         const string OculusRuntimeSettingsPath = "Assets/Resources/OculusRuntimeSettings.asset";
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
@@ -130,6 +134,24 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void BootSceneContainsOneMetaUserAgeCategoryService()
+        {
+            try
+            {
+                Scene scene = EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
+                BlockiverseUserAgeCategoryService[] services = scene.GetRootGameObjects()
+                    .SelectMany(sceneRoot => sceneRoot.GetComponentsInChildren<BlockiverseUserAgeCategoryService>(true))
+                    .ToArray();
+
+                Assert.That(services, Has.Length.EqualTo(1));
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        [Test]
         public void GeneratedMenuLabelsAutoSizeForLocalizedText()
         {
             string menuBootstrapper = File.ReadAllText(MenuBootstrapperPath);
@@ -159,6 +181,15 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void GeneratedXrRigWiresVerboseTraceController()
+        {
+            string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);
+
+            StringAssert.Contains("EnsureComponent<BlockiverseVerboseTraceController>(rig)", xrRigBootstrapper);
+            StringAssert.Contains("verboseTrace.Configure(inputRig, null, controller, audioCuePlayer, vfxCuePlayer, musicController, interactionHaptics)", xrRigBootstrapper);
+        }
+
+        [Test]
         public void GeneratedWorldWiresPerformanceStatsOverlay()
         {
             string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
@@ -168,12 +199,18 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void GeneratedXrRigVignetteIncludesFallsAndJumps()
+        public void GeneratedXrRigVignetteExcludesStartupGravityAndJump()
         {
             string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);
 
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())", xrRigBootstrapper);
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())", xrRigBootstrapper);
+            Assert.That(
+                xrRigBootstrapper,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())"),
+                "Gravity can report active while the rig settles, so it must not close the startup/menu vignette.");
+            Assert.That(
+                xrRigBootstrapper,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())"),
+                "Jump arcs should not be wired as startup/menu vignette triggers.");
         }
 
         [Test]
@@ -225,6 +262,25 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(androidSettings.renderMode, Is.EqualTo(OpenXRSettings.RenderMode.SinglePassInstanced));
             Assert.That(androidSettings.GetFeatures(), Has.Some.Matches<UnityEngine.XR.OpenXR.Features.OpenXRFeature>(
                 feature => feature.enabled && feature.GetType().Name == "MetaQuestFeature"));
+
+            UnityEngine.XR.OpenXR.Features.OpenXRFeature metaQuestFeature = androidSettings.GetFeatures()
+                .FirstOrDefault(feature => feature.GetType().Name == "MetaQuestFeature");
+            Assert.That(metaQuestFeature, Is.Not.Null);
+
+            var serializedFeature = new SerializedObject(metaQuestFeature);
+            SerializedProperty keyboardProperty = serializedFeature.FindProperty("enableSystemKeyboard");
+            Assert.That(keyboardProperty, Is.Not.Null, "Meta Quest OpenXR feature must expose the system keyboard setting.");
+            Assert.That(keyboardProperty.boolValue, Is.True,
+                "Quest builds must enable the OpenXR system keyboard overlay for TouchScreenKeyboard.");
+        }
+
+        [Test]
+        public void MetaProjectConfigRequiresSystemKeyboard()
+        {
+            string projectConfig = File.ReadAllText(OculusProjectConfigPath);
+
+            StringAssert.Contains("focusAware: 1", projectConfig);
+            StringAssert.Contains("requiresSystemKeyboard: 1", projectConfig);
         }
 
         [Test]
@@ -280,6 +336,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(
                 supportedDevicesNode.Attributes["android:value"]?.Value,
                 Is.EqualTo("quest3|quest3s"));
+
+            XmlNode keyboardFeatureNode = manifest.SelectSingleNode(
+                "/manifest/uses-feature[@android:name='oculus.software.overlay_keyboard']",
+                namespaceManager);
+            Assert.That(keyboardFeatureNode, Is.Not.Null,
+                "Quest system keyboard support must be declared in the Android manifest.");
+            Assert.That(keyboardFeatureNode.Attributes["android:required"]?.Value, Is.EqualTo("false"));
         }
 
         [Test]

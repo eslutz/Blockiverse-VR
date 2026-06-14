@@ -16,7 +16,7 @@ fi
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 
-"$UNITY_EDITOR" \
+unity_args=(
   -batchmode \
   -nographics \
   -quit \
@@ -25,3 +25,14 @@ mkdir -p "$(dirname "$OUTPUT_PATH")"
   -executeMethod Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid \
   -blockiverseBuildOutput "$OUTPUT_PATH" \
   -logFile -
+)
+
+if [ -n "${UNITY_ANDROID_VERSION_NAME:-}" ]; then
+  unity_args+=(-blockiverseBuildVersionName "$UNITY_ANDROID_VERSION_NAME")
+fi
+
+if [ -n "${UNITY_ANDROID_VERSION_CODE:-}" ]; then
+  unity_args+=(-blockiverseBuildVersionCode "$UNITY_ANDROID_VERSION_CODE")
+fi
+
+"$UNITY_EDITOR" "${unity_args[@]}"

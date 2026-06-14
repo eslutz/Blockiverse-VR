@@ -60,7 +60,13 @@ namespace Blockiverse.Editor
             if (existingAsset != null)
             {
                 EnsureInputActionSchema(existingAsset);
-                return existingAsset;
+                File.WriteAllText(BlockiverseProject.InputActionsAssetPath, existingAsset.ToJson());
+                AssetDatabase.ImportAsset(
+                    BlockiverseProject.InputActionsAssetPath,
+                    ImportAssetOptions.ForceSynchronousImport);
+
+                return AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                    BlockiverseProject.InputActionsAssetPath) ?? existingAsset;
             }
 
             var asset = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -86,50 +92,63 @@ namespace Blockiverse.Editor
 
         static void EnsureInputActionSchema(InputActionAsset asset)
         {
-            InputActionMap gameplayMap = asset.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
-            InputActionMap leftHandMap = asset.FindActionMap(BlockiverseInputActionNames.LeftHandMap, throwIfNotFound: false);
-            InputActionMap rightHandMap = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
+            InputActionMap[] enabledMaps = asset.actionMaps
+                .Where(actionMap => actionMap.enabled)
+                .ToArray();
 
-            if (leftHandMap == null)
-                AddControllerMap(asset, BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}");
-            else
-                EnsureControllerMapSchema(leftHandMap, "<XRController>{LeftHand}");
+            foreach (InputActionMap enabledMap in enabledMaps)
+                enabledMap.Disable();
 
-            if (rightHandMap == null)
-                AddControllerMap(asset, BlockiverseInputActionNames.RightHandMap, "<XRController>{RightHand}");
-            else
-                EnsureControllerMapSchema(rightHandMap, "<XRController>{RightHand}");
-
-            if (gameplayMap == null)
+            try
             {
-                AddGameplayMap(asset);
-                EditorUtility.SetDirty(asset);
-                return;
-            }
+                InputActionMap gameplayMap = asset.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
+                InputActionMap leftHandMap = asset.FindActionMap(BlockiverseInputActionNames.LeftHandMap, throwIfNotFound: false);
+                InputActionMap rightHandMap = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
 
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.Menu,
-                "<XRController>{LeftHand}/menuButton");
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.Jump,
-                "<XRController>{RightHand}/primaryButton");
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.Jump,
-                "<XRController>{LeftHand}/primaryButton");
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.BlockEditingToggle,
-                "<XRController>{RightHand}/secondaryButton");
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.BlockEditingToggle,
-                "<XRController>{LeftHand}/secondaryButton");
-            RemoveAction(gameplayMap, BlockiverseInputActionNames.Undo);
-            RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
-            EditorUtility.SetDirty(asset);
+                if (leftHandMap == null)
+                    AddControllerMap(asset, BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}");
+                else
+                    EnsureControllerMapSchema(leftHandMap, "<XRController>{LeftHand}");
+
+                if (rightHandMap == null)
+                    AddControllerMap(asset, BlockiverseInputActionNames.RightHandMap, "<XRController>{RightHand}");
+                else
+                    EnsureControllerMapSchema(rightHandMap, "<XRController>{RightHand}");
+
+                if (gameplayMap == null)
+                {
+                    AddGameplayMap(asset);
+                    EditorUtility.SetDirty(asset);
+                    return;
+                }
+
+                EnsureButtonAction(
+                    gameplayMap,
+                    BlockiverseInputActionNames.Menu,
+                    "<XRController>{LeftHand}/menuButton");
+                RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
+                EnsureButtonAction(
+                    gameplayMap,
+                    BlockiverseInputActionNames.Jump,
+                    "<XRController>{RightHand}/primaryButton");
+                EnsureButtonAction(
+                    gameplayMap,
+                    BlockiverseInputActionNames.BlockEditingToggle,
+                    "<XRController>{RightHand}/secondaryButton");
+                EnsureButtonAction(
+                    gameplayMap,
+                    BlockiverseInputActionNames.Sprint,
+                    "<XRController>{LeftHand}/thumbstickClicked");
+                RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
+                RemoveAction(gameplayMap, BlockiverseInputActionNames.Undo);
+                RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
+                EditorUtility.SetDirty(asset);
+            }
+            finally
+            {
+                foreach (InputActionMap enabledMap in enabledMaps)
+                    enabledMap.Enable();
+            }
         }
 
         static void RemoveAction(InputActionMap map, string actionName)
@@ -154,8 +173,17 @@ namespace Blockiverse.Editor
         static void EnsureControllerMapSchema(InputActionMap map, string controllerPath)
         {
             RemoveAction(map, BlockiverseInputActionNames.Jump);
-            EnsureButtonAction(map, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
-            EnsureButtonAction(map, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
+            if (controllerPath.Contains("{LeftHand}", StringComparison.Ordinal))
+            {
+                RemoveAction(map, BlockiverseInputActionNames.PrimaryButton);
+                RemoveAction(map, BlockiverseInputActionNames.SecondaryButton);
+            }
+            else
+            {
+                EnsureButtonAction(map, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
+                EnsureButtonAction(map, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
+            }
+
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Move, controllerPath);
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Turn, controllerPath);
             EnsureThumbstickYAction(map, BlockiverseInputActionNames.TeleportMode, controllerPath);

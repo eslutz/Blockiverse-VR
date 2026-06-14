@@ -61,6 +61,11 @@ namespace Blockiverse.Editor
             if (settings == null)
                 settings = rig.AddComponent<BlockiverseComfortSettings>();
 
+            // Regenerated rigs should always start with a readable title/menu view. Players can
+            // opt into motion tunneling from the comfort menu after startup.
+            settings.VignetteEnabled = false;
+            settings.VignetteStrength = 0.0f;
+
             if (origin != null)
                 origin.CameraYOffset = settings.StandingEyeHeight;
 

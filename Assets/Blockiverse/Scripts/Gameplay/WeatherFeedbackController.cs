@@ -21,6 +21,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseVfxCuePlayer vfxCuePlayer;
         [SerializeField] EnvironmentDynamicsController environmentDynamics;
+        [SerializeField] bool enableAmbientWeatherLoops;
 
         float nextPollTime;
         float nextPrecipitationVfxTime;
@@ -101,6 +102,13 @@ namespace Blockiverse.Gameplay
         {
             DiscoverDependencies();
 
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+            {
+                StopLoops();
+                lastWeatherState = WeatherState.Clear;
+                return;
+            }
+
             if (worldManager == null || audioCuePlayer == null ||
                 !worldManager.TryEvaluateEnvironment(AltitudeAtPlayer(), out EnvironmentState environment))
             {
@@ -145,6 +153,15 @@ namespace Blockiverse.Gameplay
 
         void UpdateAmbienceLoop()
         {
+            if (!enableAmbientWeatherLoops)
+            {
+                if (activeAmbienceLoop.HasValue)
+                    audioCuePlayer.StopLoop(activeAmbienceLoop.Value);
+
+                activeAmbienceLoop = null;
+                return;
+            }
+
             BlockiverseAudioCue desired = ResolveAmbienceCue();
 
             if (activeAmbienceLoop == desired)
@@ -265,6 +282,9 @@ namespace Blockiverse.Gameplay
 
         void TickPrecipitationVfx()
         {
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return;
+
             if (vfxCuePlayer == null || worldManager == null)
                 return;
 

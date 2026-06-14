@@ -107,6 +107,7 @@ namespace Blockiverse.Gameplay
         public string GameModeString => GameMode == WorldGameMode.Creative ? "creative" : "survival";
 
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
+        public int CurrentWeatherTicksInState => weatherService?.TicksInCurrentState ?? 0;
         public WorldTimeClock WorldTimeClock => worldTimeClock;
 
         // Evaluates the current environment (weather-derived temperature, fog, precipitation, storm,

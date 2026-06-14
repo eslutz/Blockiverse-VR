@@ -14,6 +14,7 @@ namespace Blockiverse.UI
         Coroutine hideRoutine;
 
         public bool IsVisible => targetCanvas != null && targetCanvas.enabled;
+        public bool HideAutomatically => hideAutomatically;
 
         public void Configure(Canvas canvas, float delaySeconds = 2.25f, bool automaticHide = true)
         {
@@ -35,11 +36,19 @@ namespace Blockiverse.UI
         public void Hide()
         {
             EnsureCanvas();
+            CancelHideTimer();
 
             if (presenter != null)
                 presenter.Hide();
             else if (targetCanvas != null)
                 targetCanvas.enabled = false;
+        }
+
+        public void SetAutomaticHide(bool automaticHide)
+        {
+            hideAutomatically = automaticHide;
+            if (!hideAutomatically)
+                CancelHideTimer();
         }
 
         void Awake()
@@ -69,17 +78,22 @@ namespace Blockiverse.UI
 
         void OnDisable()
         {
-            if (hideRoutine == null)
-                return;
-
-            StopCoroutine(hideRoutine);
-            hideRoutine = null;
+            CancelHideTimer();
         }
 
         IEnumerator HideAfterDelay()
         {
             yield return new WaitForSeconds(hideAfterSeconds);
+            hideRoutine = null;
             Hide();
+        }
+
+        void CancelHideTimer()
+        {
+            if (hideRoutine == null)
+                return;
+
+            StopCoroutine(hideRoutine);
             hideRoutine = null;
         }
 

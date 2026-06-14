@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -21,6 +22,7 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseControllerRole hand = BlockiverseControllerRole.Right;
 
         InputAction teleportModeAction;
+        Coroutine releaseFrameRoutine;
         bool teleportActive;
 
         public bool TeleportActive => teleportActive;
@@ -46,12 +48,14 @@ namespace Blockiverse.VR
 
         void OnEnable()
         {
-            SetTeleportActive(false);
+            CancelReleaseFrameRoutine();
+            SetTeleportActiveImmediate(false, enableInteractionRay: true);
         }
 
         void OnDisable()
         {
-            SetTeleportActive(false);
+            CancelReleaseFrameRoutine();
+            SetTeleportActiveImmediate(false, enableInteractionRay: true);
         }
 
         void Update()
@@ -62,7 +66,9 @@ namespace Blockiverse.VR
 
         bool IsInTeleportMode()
         {
-            return comfortSettings != null &&
+            return inputRig != null &&
+                !inputRig.LocomotionSuppressed &&
+                comfortSettings != null &&
                 comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Teleport;
         }
 
@@ -89,14 +95,54 @@ namespace Blockiverse.VR
         {
             teleportActive = active;
 
+            if (active)
+            {
+                CancelReleaseFrameRoutine();
+                SetTeleportActiveImmediate(true, enableInteractionRay: false);
+                return;
+            }
+
+            if (!Application.isPlaying ||
+                teleportRay == null ||
+                !teleportRay.gameObject.activeSelf)
+            {
+                CancelReleaseFrameRoutine();
+                SetTeleportActiveImmediate(false, enableInteractionRay: true);
+                return;
+            }
+
+            if (releaseFrameRoutine == null)
+                releaseFrameRoutine = StartCoroutine(DisableTeleportAfterReleaseFrame());
+        }
+
+        IEnumerator DisableTeleportAfterReleaseFrame()
+        {
+            yield return null;
+
+            releaseFrameRoutine = null;
+            if (!teleportActive)
+                SetTeleportActiveImmediate(false, enableInteractionRay: true);
+        }
+
+        void SetTeleportActiveImmediate(bool active, bool enableInteractionRay)
+        {
             // Toggle whole GameObjects so each ray's interactor and its line visual show/hide
-            // together. While the teleport arc is showing, the interaction ray is disabled so the
-            // trigger does not also break blocks or click UI (bridge guards on isActiveAndEnabled).
+            // together. On release, keep the teleport ray alive for one frame so XRI can deliver
+            // SelectExited to the TeleportationArea before regular UI/block interaction resumes.
             if (teleportRay != null && teleportRay.gameObject.activeSelf != active)
                 teleportRay.gameObject.SetActive(active);
 
-            if (interactionRay != null && interactionRay.gameObject.activeSelf == active)
-                interactionRay.gameObject.SetActive(!active);
+            if (interactionRay != null && interactionRay.gameObject.activeSelf != enableInteractionRay)
+                interactionRay.gameObject.SetActive(enableInteractionRay);
+        }
+
+        void CancelReleaseFrameRoutine()
+        {
+            if (releaseFrameRoutine == null)
+                return;
+
+            StopCoroutine(releaseFrameRoutine);
+            releaseFrameRoutine = null;
         }
     }
 }

@@ -9,6 +9,7 @@ using Blockiverse.Gameplay;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
+using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using UnityEngine;
 
@@ -27,6 +28,7 @@ namespace Blockiverse.UI
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
+        [SerializeField] BlockiverseInputRig inputRig;
 
         string currentSavePath;
         string currentWorldName;
@@ -91,6 +93,9 @@ namespace Blockiverse.UI
 
             if (vitalsRuntime == null)
                 vitalsRuntime = BlockiverseSceneLookup.Find<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+
+            if (inputRig == null)
+                inputRig = BlockiverseSceneLookup.Find<BlockiverseInputRig>(FindObjectsInactive.Include);
         }
 
         // Autosave: while a session is active, save on the WorldSaveService cadence (§6.7).
@@ -413,6 +418,10 @@ namespace Blockiverse.UI
         IEnumerator CreateNewWorldRoutine(NewWorldConfig config)
         {
             worldTransitionInProgress = true;
+            SetTransitionLocomotionBlocked(true);
+            menuController?.ShowWorldLoadingScreen();
+            yield return null;
+
             menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreatingWorld));
 
             string name = config.Name.Trim();
@@ -439,7 +448,7 @@ namespace Blockiverse.UI
                     difficulty,
                     worldPreset,
                     generationTask.Result,
-                    deferRendererRebuild: true);
+                    deferRendererRebuild: false);
             }
             catch (Exception exception)
             {
@@ -447,10 +456,12 @@ namespace Blockiverse.UI
                     BlockiverseLogCategory.Persistence,
                     $"Failed to create new world name={name} exception={exception.GetType().Name}",
                     context: this);
+                menuController?.ShowTitleScreen();
                 menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreateWorldFailed));
             }
             finally
             {
+                SetTransitionLocomotionBlocked(false);
                 worldTransitionInProgress = false;
             }
         }
@@ -697,6 +708,7 @@ namespace Blockiverse.UI
         IEnumerator LoadSaveRoutine(string path)
         {
             worldTransitionInProgress = true;
+            SetTransitionLocomotionBlocked(true);
             ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadingWorld), isFailure: false);
 
             WorldLoadResult result = new WorldSaveService().Load(path);
@@ -706,9 +718,13 @@ namespace Blockiverse.UI
                 ReportLoadStatus(
                     BlockiverseLocalization.Format(BlockiverseLocalization.Keys.StatusLoadFailed, result.Error),
                     isFailure: true);
+                SetTransitionLocomotionBlocked(false);
                 worldTransitionInProgress = false;
                 yield break;
             }
+
+            menuController?.ShowWorldLoadingScreen();
+            yield return null;
 
             Task<GeneratedCreativeWorld> regenerationTask = Task.Run(() => WorldSaveGeneration.Regenerate(result.Data));
             while (!regenerationTask.IsCompleted)
@@ -719,7 +735,7 @@ namespace Blockiverse.UI
                 if (regenerationTask.IsFaulted)
                     throw regenerationTask.Exception?.GetBaseException() ?? new InvalidOperationException("World regeneration failed.");
 
-                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: true);
+                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: false);
             }
             catch (Exception exception)
             {
@@ -727,12 +743,21 @@ namespace Blockiverse.UI
                     BlockiverseLogCategory.Persistence,
                     $"Failed to enter loaded world file={Path.GetFileName(path)} exception={exception.GetType().Name}",
                     context: this);
+                menuController?.ShowTitleScreen();
                 ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadWorldFailed), isFailure: true);
             }
             finally
             {
+                SetTransitionLocomotionBlocked(false);
                 worldTransitionInProgress = false;
             }
+        }
+
+        void SetTransitionLocomotionBlocked(bool blocked)
+        {
+            ResolveReferences();
+            if (inputRig != null)
+                inputRig.LocomotionSuppressed = blocked;
         }
 
         public bool LoadSave(string path)

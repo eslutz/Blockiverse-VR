@@ -388,8 +388,9 @@ namespace Blockiverse.VR
         {
             DiscoverInteractionRayVisuals();
 
-            bool shouldShow = BlockiverseRuntimeState.AllowWorldInput &&
-                (interactionController == null || interactionController.BlockEditingEnabled);
+            bool worldInputAllowed = BlockiverseRuntimeState.AllowWorldInput;
+            bool blockEditingVisible = interactionController == null || interactionController.BlockEditingEnabled;
+            bool shouldShow = !worldInputAllowed || blockEditingVisible;
 
             if (interactionLineRenderer != null)
                 interactionLineRenderer.enabled = shouldShow && (!capturedLineRendererDefault || lineRendererDefaultEnabled);
@@ -397,7 +398,7 @@ namespace Blockiverse.VR
             if (interactionLineVisual != null)
                 interactionLineVisual.enabled = shouldShow && (!capturedLineVisualDefault || lineVisualDefaultEnabled);
 
-            if (!shouldShow)
+            if (!worldInputAllowed || !blockEditingVisible)
                 interactionController?.HidePreview();
         }
 

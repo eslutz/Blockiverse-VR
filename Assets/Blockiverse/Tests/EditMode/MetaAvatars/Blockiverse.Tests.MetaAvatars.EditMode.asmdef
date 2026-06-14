@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.Tests.MetaAvatars.EditMode",
   "references": [
     "Blockiverse.MetaAvatars",
+    "Blockiverse.MetaPlatform",
     "Blockiverse.Networking",
     "Oculus.AvatarSDK2",
     "Unity.Netcode.Runtime",

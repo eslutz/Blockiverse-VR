@@ -1,5 +1,7 @@
 using Blockiverse.Gameplay;
 using NUnit.Framework;
+using System.Reflection;
+using UnityEngine;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -93,6 +95,33 @@ namespace Blockiverse.Tests.EditMode
             {
                 UnityEngine.Object.DestroyImmediate(settingsObject);
             }
+        }
+
+        [Test]
+        public void MusicControllerRaisesContextChangedWhenResolvedContextChanges()
+        {
+            var musicObject = new GameObject("Music Controller");
+            try
+            {
+                BlockiverseMusicController controller = musicObject.AddComponent<BlockiverseMusicController>();
+                BlockiverseMusicContext? observed = null;
+                controller.ContextChanged += context => observed = context;
+
+                InvokePrivate(controller, "UpdateContext");
+
+                Assert.That(observed, Is.EqualTo(BlockiverseMusicContext.Menu));
+            }
+            finally
+            {
+                Object.DestroyImmediate(musicObject);
+            }
+        }
+
+        static void InvokePrivate(object target, string methodName)
+        {
+            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"Missing private method {methodName}.");
+            method.Invoke(target, null);
         }
     }
 }

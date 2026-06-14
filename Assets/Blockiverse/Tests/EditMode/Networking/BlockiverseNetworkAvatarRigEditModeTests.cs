@@ -19,7 +19,7 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
-        public void MissingMetaAvatarUsesFallbackProxy()
+        public void MissingMetaAvatarUsesFallbackProxyAnchorsWithoutRenderingFirstPersonGeometry()
         {
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
 
@@ -31,7 +31,30 @@ namespace Blockiverse.Tests.Networking.EditMode
             Assert.That(avatarRig.HeadAnchor, Is.Not.Null);
             Assert.That(avatarRig.LeftHandAnchor, Is.Not.Null);
             Assert.That(avatarRig.RightHandAnchor, Is.Not.Null);
-            Assert.That(avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(), Has.Length.GreaterThanOrEqualTo(4));
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            Assert.That(renderers, Has.Length.GreaterThanOrEqualTo(4));
+            Assert.That(renderers, Has.All.Matches<Renderer>(renderer => !renderer.enabled));
+        }
+
+        [Test]
+        public void FirstPersonFallbackProxyRendersHandsOnly()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            Assert.That(avatarRig.IsUsingFallbackProxy, Is.True);
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Head" && renderer.enabled));
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Body" && renderer.enabled));
         }
 
         [Test]

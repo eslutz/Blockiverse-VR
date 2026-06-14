@@ -1085,6 +1085,7 @@ can never drift apart.
 | Controls                                                   |
 +------------------------------------------------------------+
 | Left stick: move                                           |
+| Left stick click: sprint toggle / hold sprint              |
 | Right stick: snap turn                                     |
 | Right stick hold up: teleport aim, release to land         |
 | Right trigger: press UI or break blocks                    |

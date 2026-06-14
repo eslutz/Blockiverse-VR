@@ -147,7 +147,8 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 - Name branches so the linked issue is obvious when an issue exists, for example `feature/53-block-registry`.
 - Keep GitHub repository settings configured to automatically delete head branches after pull requests merge.
 - All production releases must be cut from `main`.
-- Release tags must match `v*` and point to commits reachable from `origin/main`.
+- Production release tags must match `vX.Y.Z` and point to commits reachable from `origin/main`.
+- Channel prerelease tags must use the release workflow convention: `vX.Y.Z-alpha.prN.RUN.ATTEMPT` for alpha, `vX.Y.Z-beta.runN.ATTEMPT` for beta, and `vX.Y.Z-rc.N` for release candidates. Alpha tags may point to same-repository pull request commits; beta, release-candidate, and production tags must point to commits reachable from `origin/main`.
 - Prefer pull requests into `main` after CI passes. Direct pushes to `main` should be rare and explicit.
 - When a pull request is opened:
   - Link the associated issue if one exists, or link the relevant execution-plan section or ruleset.
@@ -196,13 +197,14 @@ hzdb device list
 
 ## Local Unity Validation
 
-- Run local Unity EditMode and PlayMode tests with:
+- Follow the tiered validation contract in [docs/testing/README.md](docs/testing/README.md). Use targeted `scripts/unity/run-tests.sh --platform ... --filter ... --results-name ...` runs while iterating, but do not treat them as a replacement for the full gate when Unity-impacting work moves to review or merge.
+- Run the full local Unity EditMode and PlayMode gate with:
 
 ```sh
 scripts/unity/run-tests.sh
 ```
 
-- The test script writes NUnit XML results to `TestResults/Unity/EditMode.xml` and `TestResults/Unity/PlayMode.xml`.
+- With no arguments, the test script writes NUnit XML results to `TestResults/Unity/EditMode.xml` and `TestResults/Unity/PlayMode.xml`. Named targeted runs write separate XML files under `TestResults/Unity/`.
 - If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`, or waits on `LicenseClient-ericslutz-6000.3.16`, the Unity Hub licensing client is likely stale or protocol-incompatible with the editor batchmode client. Reset the local Unity/Hub process state, then rerun the test script:
 
 ```sh
