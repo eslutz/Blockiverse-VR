@@ -32,7 +32,7 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 - Pull requests use `.github/workflows/quest-ci.yml` for validation only. PR workflows must not receive Meta credentials or publish to Meta release channels.
 - Meta channel CD is split across:
   - `.github/workflows/quest-alpha.yml`, which builds a release-signed Quest APK from `main` pushes or manual trusted refs and uploads it to Meta `alpha`;
-  - `.github/workflows/quest-promote.yml`, which manually promotes an existing tested Meta build through `alpha -> beta`, `beta -> rc`, or `rc -> store` without rebuilding.
+  - `.github/workflows/quest-promote.yml`, which manually promotes a selected tested Meta build ID through `alpha -> beta`, `beta -> rc`, or `rc -> store` without rebuilding.
 - Promotion to `beta`, `rc`, and `store` must preserve the exact tested Meta build artifact. Store promotion requires the `meta-store` environment approval gate.
 - Known-good engineering checkpoint tags use the `kg/...` family and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). They are recovery checkpoints, not release tags.
 

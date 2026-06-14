@@ -18,13 +18,13 @@ Release channels use SemVer-derived Android `versionName` values. The root
 |---|---|---|---|
 | `quest-ci.yml` | Pull requests and manual dispatch | Validate Unity tests and an Android smoke APK | No |
 | `quest-alpha.yml` | Pushes to `main` and manual trusted dispatch | Build a release-signed Quest APK and upload it to Meta `alpha` | Yes, `meta-alpha` |
-| `quest-promote.yml` | Manual dispatch only | Promote an existing Meta build through `alpha -> beta`, `beta -> rc`, or `rc -> store` | Yes, destination environment |
+| `quest-promote.yml` | Manual dispatch only | Promote a selected Meta build ID through `alpha -> beta`, `beta -> rc`, or `rc -> store` | Yes, destination environment |
 
 `quest-ci.yml` must not publish to Meta or receive Meta secrets. `quest-alpha.yml`
 is the only workflow that builds and uploads a new Meta channel APK. It uses
 Unity Personal activation through GameCI and release signs with the stable
 Android package name and release keystore. `quest-promote.yml` must not rebuild:
-it moves a previously uploaded Meta build to the next channel.
+it moves the explicitly provided Meta build ID to the next channel.
 
 Meta channel progression is:
 

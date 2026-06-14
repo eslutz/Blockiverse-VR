@@ -40,7 +40,7 @@ bash -n scripts/store/*.sh scripts/unity/*.sh
 
 `quest-alpha.yml` runs on pushes to `main` and manual dispatch of a trusted branch, tag, or commit. It pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, computes Android version metadata, release signs the APK, uploads the artifact bundle to GitHub Actions, and publishes the APK directly to Meta `alpha`.
 
-`quest-promote.yml` runs by manual dispatch only. It promotes an existing Meta build through `alpha -> beta`, `beta -> rc`, or `rc -> store` and uploads a promotion record artifact. It does not rebuild APKs.
+`quest-promote.yml` runs by manual dispatch only. It requires the tested Meta build ID, promotes that selected build through `alpha -> beta`, `beta -> rc`, or `rc -> store`, and uploads a promotion record artifact. It does not rebuild APKs.
 
 ## Required GitHub Configuration
 

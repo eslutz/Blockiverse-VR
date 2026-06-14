@@ -20,8 +20,8 @@ on:
           - rc
           - store
       build_id:
-        description: Optional Meta build ID to promote from the source channel
-        required: false
+        description: Tested Meta build ID to promote from the source channel
+        required: true
         type: string
 
 permissions:
@@ -78,6 +78,10 @@ jobs:
               exit 65
               ;;
           esac
+          if [ -z "$BUILD_ID" ]; then
+            echo "build_id is required so promotion preserves the selected tested Meta build." >&2
+            exit 64
+          fi
 
           mkdir -p .ci-artifacts/promotion
           output_path=".ci-artifacts/promotion/meta-promotion-output.txt"
@@ -90,27 +94,14 @@ jobs:
             --app-secret "$META_APP_SECRET"
             --source-channel "$SOURCE_CHANNEL"
             --destination-channel "$DESTINATION_CHANNEL"
+            --build-id "$BUILD_ID"
             --disable-progress-bar true
           )
 
-          if [ -n "$BUILD_ID" ]; then
-            args+=(--build-id "$BUILD_ID")
-          fi
-
-          echo "Running ovr-platform-util set-release-channel-build --source-channel ${SOURCE_CHANNEL} --destination-channel ${DESTINATION_CHANNEL}"
+          echo "Running ovr-platform-util set-release-channel-build --source-channel ${SOURCE_CHANNEL} --destination-channel ${DESTINATION_CHANNEL} --build-id ${BUILD_ID}"
           "$RUNNER_TEMP/ovr-platform-util" "${args[@]}" 2>&1 | tee "$output_path"
 
           promoted_build_id="$BUILD_ID"
-          if [ -z "$promoted_build_id" ]; then
-            promoted_build_id="$(
-              sed -nE 's/.*[Bb]uild[ _-]?[Ii][Dd][^0-9A-Za-z_-]*([0-9A-Za-z_-]+).*/\1/p' "$output_path" | head -n 1
-            )"
-          fi
-          if [ -z "$promoted_build_id" ]; then
-            promoted_build_id="$(
-              sed -nE 's/.*"build[_-]?id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/ip' "$output_path" | head -n 1
-            )"
-          fi
 
           export DESTINATION_CHANNEL SOURCE_CHANNEL promoted_build_id summary_path
           python3 - <<'PY'
