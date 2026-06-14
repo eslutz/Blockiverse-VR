@@ -17,7 +17,7 @@ namespace Blockiverse.Survival
         }
 
         public IReadOnlyCollection<CraftingRecipe> All => orderedRecipes;
-        public static CraftingRecipeBook Default { get; } = CreateDefault(ItemRegistry.Default);
+        public static CraftingRecipeBook Default => DefaultRecipeBook.Instance;
 
         // Seconds → ticks for timed (kiln/forge) recipes (§9.3/§9.4).
         static int Seconds(int seconds) => seconds * SmeltingModel.TicksPerSecond;
@@ -204,6 +204,11 @@ namespace Blockiverse.Survival
         {
             "delver", "spade", "feller", "sickle", "mallet", "tiller", "carver",
         };
+
+        static class DefaultRecipeBook
+        {
+            internal static readonly CraftingRecipeBook Instance = CreateDefault(ItemRegistry.Default);
+        }
 
         void RegisterTool(string toolId, CraftingStation station, params ItemStack[] ingredients)
         {

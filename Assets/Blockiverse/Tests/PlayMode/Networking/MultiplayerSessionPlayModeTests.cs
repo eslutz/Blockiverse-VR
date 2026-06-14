@@ -18,6 +18,9 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using Unity.Networking.Transport;
 using Unity.Networking.Transport.Utilities;
+#if UNITY_EDITOR
+using UnityEditor.SceneManagement;
+#endif
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -2706,8 +2709,14 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
         IEnumerator LoadMultiplayerTestScene()
         {
+#if UNITY_EDITOR
+            AsyncOperation operation = EditorSceneManager.LoadSceneAsyncInPlayMode(
+                BlockiverseProject.MultiplayerTestScenePath,
+                new LoadSceneParameters(LoadSceneMode.Single));
+#else
             string sceneName = Path.GetFileNameWithoutExtension(BlockiverseProject.MultiplayerTestScenePath);
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+#endif
 
             Assert.That(operation, Is.Not.Null);
 
