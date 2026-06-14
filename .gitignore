@@ -480,6 +480,10 @@ worktrees/
 coverage/
 TestResults/
 
+# Full-resolution AI texture generation cache. Normalized 32x32 texture-set
+# assets under Assets/Blockiverse/Art/Textures/Blocks/TextureSets are tracked.
+/docs/art/block-texture-set-generation/raw/
+
 # Local agent planning artifacts.
 docs/superpowers/
 
