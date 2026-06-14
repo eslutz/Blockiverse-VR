@@ -18,8 +18,6 @@ namespace Blockiverse.VR
         [SerializeField] bool flightEnabledDefault = true;
         [SerializeField] Transform rightHandAimSource;
 
-        InputActionAsset cachedInputActions;
-        InputAction cachedJumpAction;
         bool hasExplicitFlightState;
         bool requestedFlightActive;
         bool providerStateInitialized;
@@ -179,17 +177,7 @@ namespace Blockiverse.VR
 
         InputAction ResolveJumpAction()
         {
-            InputActionAsset actions = inputRig != null ? inputRig.InputActions : null;
-            if (actions == null)
-                return null;
-
-            if (cachedInputActions == actions && cachedJumpAction != null)
-                return cachedJumpAction;
-
-            cachedInputActions = actions;
-            InputActionMap gameplayMap = actions.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
-            cachedJumpAction = gameplayMap?.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
-            return cachedJumpAction;
+            return inputRig != null ? inputRig.ResolveJumpActionForCurrentControls() : null;
         }
 
         Vector3 ResolveFlightForward()

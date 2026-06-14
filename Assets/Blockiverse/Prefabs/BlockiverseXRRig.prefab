@@ -6517,143 +6517,6 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
---- !u!1 &1085075386723806739
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 3882672920366892870}
-  - component: {fileID: 6718114795067237837}
-  - component: {fileID: 5022417555313728687}
-  m_Layer: 8
-  m_Name: Label
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &3882672920366892870
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1085075386723806739}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 2208989087974786683}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 60, y: -4}
-  m_SizeDelta: {x: 380, y: 56}
-  m_Pivot: {x: 0, y: 1}
---- !u!222 &6718114795067237837
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1085075386723806739}
-  m_CullTransparentMesh: 1
---- !u!114 &5022417555313728687
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1085075386723806739}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
-  m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_text: One-Handed Controls
-  m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_fontSharedMaterials: []
-  m_fontMaterial: {fileID: 0}
-  m_fontMaterials: []
-  m_fontColor32:
-    serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 0.95, g: 0.97, b: 1, a: 1}
-  m_enableVertexGradient: 0
-  m_colorMode: 3
-  m_fontColorGradient:
-    topLeft: {r: 1, g: 1, b: 1, a: 1}
-    topRight: {r: 1, g: 1, b: 1, a: 1}
-    bottomLeft: {r: 1, g: 1, b: 1, a: 1}
-    bottomRight: {r: 1, g: 1, b: 1, a: 1}
-  m_fontColorGradientPreset: {fileID: 0}
-  m_spriteAsset: {fileID: 0}
-  m_tintAllSprites: 0
-  m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
-  m_overrideHtmlColors: 0
-  m_faceColor:
-    serializedVersion: 2
-    rgba: 4294967295
-  m_fontSize: 30
-  m_fontSizeBase: 36
-  m_fontWeight: 400
-  m_enableAutoSizing: 1
-  m_fontSizeMin: 18
-  m_fontSizeMax: 30
-  m_fontStyle: 0
-  m_HorizontalAlignment: 1
-  m_VerticalAlignment: 4096
-  m_textAlignment: 65535
-  m_characterSpacing: 0
-  m_characterHorizontalScale: 1
-  m_wordSpacing: 0
-  m_lineSpacing: 0
-  m_lineSpacingMax: 0
-  m_paragraphSpacing: 0
-  m_charWidthMaxAdj: 0
-  m_TextWrappingMode: 1
-  m_wordWrappingRatios: 0.4
-  m_overflowMode: 1
-  m_linkedTextComponent: {fileID: 0}
-  parentLinkedComponent: {fileID: 0}
-  m_enableKerning: 0
-  m_ActiveFontFeatures: 6e72656b
-  m_enableExtraPadding: 0
-  checkPaddingRequired: 0
-  m_isRichText: 1
-  m_EmojiFallbackSupport: 1
-  m_parseCtrlCharacters: 1
-  m_isOrthographic: 1
-  m_isCullingEnabled: 0
-  m_horizontalMapping: 0
-  m_verticalMapping: 0
-  m_uvLineOffset: 0
-  m_geometrySortingOrder: 0
-  m_IsTextObjectScaleStatic: 0
-  m_VertexBufferAutoSizeReduction: 0
-  m_useMaxVisibleDescender: 1
-  m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: 0}
-  m_isUsingLegacyAnimationComponent: 0
-  m_isVolumetricText: 0
-  m_hasFontAssetChanged: 0
-  m_baseMaterial: {fileID: 0}
-  m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
 --- !u!1 &1104319960267446401
 GameObject:
   m_ObjectHideFlags: 0
@@ -7139,81 +7002,6 @@ MonoBehaviour:
   m_Sprite: {fileID: 0}
   m_Type: 0
   m_PreserveAspect: 1
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
---- !u!1 &1167837781506088045
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 4510670443615461184}
-  - component: {fileID: 395333362617660783}
-  - component: {fileID: 3510059526980096579}
-  m_Layer: 8
-  m_Name: Checkmark
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &4510670443615461184
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1167837781506088045}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 8948633914486311772}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: -14, y: -14}
-  m_Pivot: {x: 0.5, y: 0.5}
---- !u!222 &395333362617660783
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1167837781506088045}
-  m_CullTransparentMesh: 1
---- !u!114 &3510059526980096579
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1167837781506088045}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
-  m_Color: {r: 0.18, g: 0.75, b: 0.56, a: 1}
-  m_RaycastTarget: 0
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
   m_FillAmount: 1
@@ -8819,7 +8607,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -11037,7 +10825,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -13826,7 +13614,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 32, y: -516}
+  m_AnchoredPosition: {x: 32, y: -468}
   m_SizeDelta: {x: 456, y: 64}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &4133049140033127707
@@ -14553,7 +14341,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -16101,7 +15889,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -16813,7 +16601,6 @@ RectTransform:
   - {fileID: 722867724349922513}
   - {fileID: 1101565212915804598}
   - {fileID: 1347042954609756974}
-  - {fileID: 2208989087974786683}
   - {fileID: 2067592294771403617}
   - {fileID: 7719156709806738012}
   - {fileID: 8221161813109312849}
@@ -17371,7 +17158,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -24948,26 +24735,27 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Left stick: move
+  m_text: 'Support stick: move
 
-    Left stick click: sprint toggle / hold sprint
+    Support stick click: sprint
 
-    Right stick: snap turn
+    Dominant stick:
+    snap turn
 
-    Either stick hold up:
-    teleport aim, release to land
+    Either stick hold up: teleport aim, release to land
 
-    Right trigger: press UI or break blocks
+    Dominant
+    trigger: press UI / break
 
-    Right
-    grip: place or use
+    Dominant grip: place / use
 
-    Left grip: blocks menu
+    Support grip:
+    blocks menu
 
-    Right A: jump
+    Dominant primary button: jump
 
-    Right
-    B: toggle block editing
+    Dominant secondary button:
+    toggle block editing
 
     Menu: pause'
   m_isRightToLeft: 0
@@ -25326,7 +25114,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -32320,7 +32108,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -33955,7 +33743,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -36586,7 +36374,7 @@ MonoBehaviour:
       m_Name: UI Press
       m_Type: 1
       m_ExpectedControlType:
-      m_Id: 38d97b34-d15a-42ab-b897-5440e8427f0a
+      m_Id: 0d143dfe-d975-4a13-a1b9-395a9eeb40cc
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -36595,7 +36383,7 @@ MonoBehaviour:
       m_Name: UI Press Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: ae963ab9-f8c4-401f-bd46-9b3866ff5286
+      m_Id: 1e058a98-5ffe-4f4b-886e-a49cb5b20cd9
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -36616,7 +36404,7 @@ MonoBehaviour:
       m_Name: UI Scroll
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 5fb9889f-4553-44b5-8dc0-e1f86a342593
+      m_Id: dc38fb75-2fa4-43ff-af91-0ebbfa4523f2
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -52251,6 +52039,7 @@ GameObject:
   - component: {fileID: 931052944227954367}
   - component: {fileID: 4278475610284816617}
   - component: {fileID: 6995791393052605887}
+  - component: {fileID: 9154700309049800205}
   m_Layer: 0
   m_Name: BlockiverseXRRig
   m_TagString: Untagged
@@ -52387,7 +52176,6 @@ MonoBehaviour:
   vignetteEnabled: 0
   vignetteStrength: 0
   dominantHand: 1
-  dominantHandOnlyControls: 0
   toggleToMineEnabled: 0
 --- !u!114 &5789210142833391915
 MonoBehaviour:
@@ -52704,7 +52492,7 @@ MonoBehaviour:
       m_Name: Left Hand Move
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 49dd2b95-4031-4aac-9fe8-c2e387fa2ba3
+      m_Id: 3af9beaf-9d6a-449d-9650-bc2f5b0da690
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -52766,7 +52554,7 @@ MonoBehaviour:
       m_Name: Right Hand Snap Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 12f9d910-bbec-4309-949c-064ff969cd60
+      m_Id: 40227b24-87df-496e-a497-71954a054ee1
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -52811,7 +52599,7 @@ MonoBehaviour:
       m_Name: Right Hand Smooth Turn
       m_Type: 0
       m_ExpectedControlType: Vector2
-      m_Id: 51276816-2a96-4e4c-bc98-38e6122c4416
+      m_Id: 95c5a556-62a5-4bcd-a38c-4630ffb0db1d
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -52904,7 +52692,7 @@ MonoBehaviour:
       m_Name: Jump
       m_Type: 1
       m_ExpectedControlType:
-      m_Id: 2f53a4b4-b0a8-4d56-8b12-96c8db5ce3ec
+      m_Id: 4602fe6a-19ba-453d-9abe-ceea9cf0b029
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -52913,7 +52701,7 @@ MonoBehaviour:
       m_Name: Jump Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: 26e0083b-d458-4445-9b92-7f4872393e15
+      m_Id: 88f8b773-47b5-4acb-87be-87247b435a70
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -53515,6 +53303,29 @@ MonoBehaviour:
   survivalSync: {fileID: 0}
   flightEnabledDefault: 1
   rightHandAimSource: {fileID: 0}
+--- !u!114 &9154700309049800205
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a48a46e5c254215a79dcf350da3250e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseVerboseTraceController
+  sampleIntervalSeconds: 0.2
+  inputRig: {fileID: 6464803785323197589}
+  worldManager: {fileID: 0}
+  interactionController: {fileID: 0}
+  survivalSync: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}
+  environmentDynamics: {fileID: 0}
+  audioCuePlayer: {fileID: 8273465101139274317}
+  vfxCuePlayer: {fileID: 9184814749599219660}
+  musicController: {fileID: 269932231281484825}
+  interactionHaptics: {fileID: 1299769022157528344}
 --- !u!1 &6793584940646728679
 GameObject:
   m_ObjectHideFlags: 0
@@ -54119,7 +53930,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -55317,7 +55128,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -56744,111 +56555,6 @@ MonoBehaviour:
   pageLabel: {fileID: 1838659742811948579}
   audioCuePlayer: {fileID: 0}
   interactionHaptics: {fileID: 0}
---- !u!1 &7206429472255312991
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2208989087974786683}
-  - component: {fileID: 6525025061177450826}
-  - component: {fileID: 4493523384244310626}
-  m_Layer: 8
-  m_Name: Dominant Hand Only Toggle
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &2208989087974786683
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7206429472255312991}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 8948633914486311772}
-  - {fileID: 3882672920366892870}
-  m_Father: {fileID: 4027276087503650836}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 32, y: -468}
-  m_SizeDelta: {x: 456, y: 64}
-  m_Pivot: {x: 0, y: 1}
---- !u!114 &6525025061177450826
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7206429472255312991}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9085046f02f69544eb97fd06b6048fe2, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Toggle
-  m_Navigation:
-    m_Mode: 3
-    m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
-  m_Transition: 1
-  m_Colors:
-    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
-    m_HighlightedColor: {r: 0.26, g: 0.34, b: 0.4, a: 1}
-    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
-    m_SelectedColor: {r: 0.2, g: 0.29, b: 0.36, a: 1}
-    m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1
-    m_FadeDuration: 0.08
-  m_SpriteState:
-    m_HighlightedSprite: {fileID: 0}
-    m_PressedSprite: {fileID: 0}
-    m_SelectedSprite: {fileID: 0}
-    m_DisabledSprite: {fileID: 0}
-  m_AnimationTriggers:
-    m_NormalTrigger: Normal
-    m_HighlightedTrigger: Highlighted
-    m_PressedTrigger: Pressed
-    m_SelectedTrigger: Selected
-    m_DisabledTrigger: Disabled
-  m_Interactable: 1
-  m_TargetGraphic: {fileID: 2012981805643110083}
-  toggleTransition: 1
-  graphic: {fileID: 3510059526980096579}
-  m_Group: {fileID: 0}
-  onValueChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_IsOn: 0
---- !u!114 &4493523384244310626
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7206429472255312991}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8e6d2d5f39db4f49b801f622a3db2f11, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseUiSelectableFeedback
-  hoverHaptic: 1
-  pressHaptic: 1
-  hoverAudio: 0
-  pressAudio: 0
-  hoverCue: 2
-  pressCue: 3
 --- !u!1 &7240274513129813954
 GameObject:
   m_ObjectHideFlags: 0
@@ -60021,7 +59727,7 @@ MonoBehaviour:
       m_Name: Teleport Select
       m_Type: 1
       m_ExpectedControlType:
-      m_Id: 9a085abd-c704-4730-861e-f246cb4bc3e1
+      m_Id: 803050ee-c8ba-4bc0-b01f-e16b9c72e899
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -60030,7 +59736,7 @@ MonoBehaviour:
       m_Name: Teleport Select Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: c9dbe89b-4e3a-4de6-9246-5d6540aa2db3
+      m_Id: d1fc5a9d-bdaf-4b35-a639-05728f64ab8a
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -60954,7 +60660,7 @@ MonoBehaviour:
       m_Name: Teleport Select
       m_Type: 1
       m_ExpectedControlType:
-      m_Id: 71dacad0-d6d3-4811-82df-e71e8aa8553e
+      m_Id: 59e54f4c-ad5e-4fe0-a6a6-9c42b2d6d2ab
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -60963,7 +60669,7 @@ MonoBehaviour:
       m_Name: Teleport Select Value
       m_Type: 0
       m_ExpectedControlType: Axis
-      m_Id: b5464bb5-5392-42c0-a4d3-bfd469c7334d
+      m_Id: 9888c96c-bdcf-4d4d-ad37-b574d414c8fe
       m_Processors:
       m_Interactions:
       m_SingletonActionBindings: []
@@ -62668,26 +62374,27 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'Left stick: move
+  m_text: 'Support stick: move
 
-    Left stick click: sprint toggle / hold sprint
+    Support stick click: sprint
 
-    Right stick: snap turn
+    Dominant stick:
+    snap turn
 
-    Either stick hold up:
-    teleport aim, release to land
+    Either stick hold up: teleport aim, release to land
 
-    Right trigger: press UI or break blocks
+    Dominant
+    trigger: press UI / break
 
-    Right
-    grip: place or use
+    Dominant grip: place / use
 
-    Left grip: blocks menu
+    Support grip:
+    blocks menu
 
-    Right A: jump
+    Dominant primary button: jump
 
-    Right
-    B: toggle block editing
+    Dominant secondary button:
+    toggle block editing
 
     Menu: pause'
   m_isRightToLeft: 0
@@ -62945,7 +62652,6 @@ MonoBehaviour:
   moveSpeedSlider: {fileID: 9162916029559500435}
   smoothTurnSpeedSlider: {fileID: 6573369934746475492}
   leftHandToggle: {fileID: 6136729185133532958}
-  dominantHandOnlyToggle: {fileID: 6525025061177450826}
   toggleToMineToggle: {fileID: 4133049140033127707}
   vignetteToggle: {fileID: 5334371679025926815}
   vignetteStrengthSlider: {fileID: 1702873859174096028}
@@ -70552,82 +70258,6 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
---- !u!1 &8915012670651465112
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 8948633914486311772}
-  - component: {fileID: 1845980539114890899}
-  - component: {fileID: 2012981805643110083}
-  m_Layer: 8
-  m_Name: Background
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &8948633914486311772
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8915012670651465112}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 4510670443615461184}
-  m_Father: {fileID: 2208989087974786683}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 0, y: -10}
-  m_SizeDelta: {x: 44, y: 44}
-  m_Pivot: {x: 0, y: 1}
---- !u!222 &1845980539114890899
-CanvasRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8915012670651465112}
-  m_CullTransparentMesh: 1
---- !u!114 &2012981805643110083
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8915012670651465112}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
-  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
-  m_RaycastTarget: 1
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
 --- !u!1 &8945218782785976105
 GameObject:
   m_ObjectHideFlags: 0

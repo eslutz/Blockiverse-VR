@@ -454,6 +454,7 @@ namespace Blockiverse.Editor
             panelRect.anchorMax = Vector2.one;
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
+            RemoveStaleChild(panelObject.transform, "Dominant Hand Only Toggle");
             Image panelImage = EnsureComponent<Image>(panelObject);
             Sprite comfortPanelSprite = GetRoundedSprite();
             if (comfortPanelSprite != null)
@@ -558,19 +559,12 @@ namespace Blockiverse.Editor
                 settings != null && settings.DominantHand == BlockiverseControllerRole.Left,
                 new Vector2(32.0f, -420.0f));
 
-            Toggle dominantHandOnlyToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Dominant Hand Only Toggle",
-                "One-Handed Controls",
-                settings != null && settings.DominantHandOnlyControls,
-                new Vector2(32.0f, -468.0f));
-
             Toggle toggleToMineToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Toggle To Mine Toggle",
                 "Toggle To Mine",
                 settings != null && settings.ToggleToMineEnabled,
-                new Vector2(32.0f, -516.0f));
+                new Vector2(32.0f, -468.0f));
 
             // --- Vignette ---
             EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
@@ -641,7 +635,6 @@ namespace Blockiverse.Editor
                 vignetteToggle,
                 vignetteSlider,
                 leftHandToggle,
-                dominantHandOnlyToggle,
                 toggleToMineToggle,
                 eyeHeightSlider,
                 moveSpeedSlider,
@@ -772,6 +765,13 @@ namespace Blockiverse.Editor
 
             foreach (Transform child in rig.GetComponentsInChildren<Transform>(true))
                 GameObjectUtility.RemoveMonoBehavioursWithMissingScript(child.gameObject);
+        }
+
+        static void RemoveStaleChild(Transform parent, string childName)
+        {
+            Transform stale = parent != null ? parent.Find(childName) : null;
+            if (stale != null)
+                UnityEngine.Object.DestroyImmediate(stale.gameObject);
         }
 
         static XRRayInteractor FindInteractionRay(GameObject rig)

@@ -126,20 +126,9 @@ namespace Blockiverse.Editor
                     gameplayMap,
                     BlockiverseInputActionNames.Menu,
                     "<XRController>{LeftHand}/menuButton");
-                RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
-                EnsureButtonAction(
-                    gameplayMap,
-                    BlockiverseInputActionNames.Jump,
-                    "<XRController>{RightHand}/primaryButton");
-                EnsureButtonAction(
-                    gameplayMap,
-                    BlockiverseInputActionNames.BlockEditingToggle,
-                    "<XRController>{RightHand}/secondaryButton");
-                EnsureButtonAction(
-                    gameplayMap,
-                    BlockiverseInputActionNames.Sprint,
-                    "<XRController>{LeftHand}/thumbstickClicked");
-                RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
+                RemoveAction(gameplayMap, BlockiverseInputActionNames.Jump);
+                RemoveAction(gameplayMap, BlockiverseInputActionNames.BlockEditingToggle);
+                RemoveAction(gameplayMap, BlockiverseInputActionNames.Sprint);
                 RemoveAction(gameplayMap, BlockiverseInputActionNames.Undo);
                 RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
                 EditorUtility.SetDirty(asset);
@@ -173,16 +162,9 @@ namespace Blockiverse.Editor
         static void EnsureControllerMapSchema(InputActionMap map, string controllerPath)
         {
             RemoveAction(map, BlockiverseInputActionNames.Jump);
-            if (controllerPath.Contains("{LeftHand}", StringComparison.Ordinal))
-            {
-                RemoveAction(map, BlockiverseInputActionNames.PrimaryButton);
-                RemoveAction(map, BlockiverseInputActionNames.SecondaryButton);
-            }
-            else
-            {
-                EnsureButtonAction(map, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
-                EnsureButtonAction(map, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
-            }
+            EnsureButtonAction(map, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
+            EnsureButtonAction(map, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
+            EnsureButtonAction(map, BlockiverseInputActionNames.Sprint, $"{controllerPath}/thumbstickClicked");
 
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Move, controllerPath);
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Turn, controllerPath);

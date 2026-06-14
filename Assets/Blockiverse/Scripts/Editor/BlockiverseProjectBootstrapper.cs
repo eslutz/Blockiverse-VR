@@ -742,11 +742,8 @@ namespace Blockiverse.Editor
             map.AddAction(BlockiverseInputActionNames.TrackingState, InputActionType.PassThrough, $"{controllerPath}/trackingState", expectedControlLayout: "Integer");
             map.AddAction(BlockiverseInputActionNames.Select, InputActionType.Button, $"{controllerPath}/triggerPressed");
             map.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, $"{controllerPath}/gripPressed");
-            if (!controllerPath.Contains("{LeftHand}", StringComparison.Ordinal))
-            {
-                map.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, $"{controllerPath}/primaryButton");
-                map.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, $"{controllerPath}/secondaryButton");
-            }
+            map.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, $"{controllerPath}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, $"{controllerPath}/secondaryButton");
 
             map.AddAction(BlockiverseInputActionNames.UiPress, InputActionType.Button, $"{controllerPath}/triggerPressed");
             map.AddAction(BlockiverseInputActionNames.UiScroll, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
@@ -755,6 +752,7 @@ namespace Blockiverse.Editor
             move.AddBinding($"{controllerPath}/thumbstick", processors: StickDeadzoneProcessor);
             InputAction turn = map.AddAction(BlockiverseInputActionNames.Turn, InputActionType.PassThrough, expectedControlLayout: "Vector2");
             turn.AddBinding($"{controllerPath}/thumbstick", processors: StickDeadzoneProcessor);
+            map.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, $"{controllerPath}/thumbstickClicked");
             AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button), controllerPath);
             AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button), controllerPath);
         }
@@ -763,9 +761,6 @@ namespace Blockiverse.Editor
         {
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
-            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
-            map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
-            map.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<XRController>{LeftHand}/thumbstickClicked");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)

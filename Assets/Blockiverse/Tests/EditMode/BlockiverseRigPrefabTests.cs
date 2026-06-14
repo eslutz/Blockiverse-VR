@@ -132,7 +132,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(jumpProvider.mediator, Is.SameAs(mediator));
                 Assert.That(jumpProvider.disableGravityDuringJump, Is.False);
                 Assert.That(jumpProvider.inAirJumpCount, Is.EqualTo(0));
-                AssertJumpProviderUsesGameplayJump(inputRig, jumpProvider);
+                AssertJumpProviderUsesDominantPrimary(inputRig, jumpProvider);
                 Assert.That(poseDriver, Is.Not.Null);
                 Assert.That(poseDriver.enabled, Is.True);
                 Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
@@ -374,40 +374,24 @@ namespace Blockiverse.Tests.EditMode
             InputActionMap gameplayMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
             Assert.That(gameplayMap, Is.Not.Null);
 
-            InputAction jumpAction = gameplayMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
-            Assert.That(jumpAction, Is.Not.Null, "Jump action must exist in the gameplay map.");
-            Assert.That(jumpAction.bindings, Has.Some.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/primaryButton"),
-                "Jump should be bound to Right A.");
-            Assert.That(jumpAction.bindings, Has.None.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/primaryButton"),
-                "Jump must no longer be bound to Left X.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
+                "Jump should be resolved from the dominant controller map.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false), Is.Null,
+                "Block editing toggle should be resolved from the dominant controller map.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false), Is.Null,
+                "Sprint should be resolved from the support controller map.");
             Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Undo, throwIfNotFound: false), Is.Null,
                 "Undo must not have a controller button.");
-            InputAction blockEditingToggle = gameplayMap.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false);
-            Assert.That(blockEditingToggle, Is.Not.Null, "Right B should toggle block editing through the gameplay map.");
-            Assert.That(blockEditingToggle.bindings, Has.Some.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/secondaryButton"),
-                "Block editing toggle should be bound to Right B.");
-            InputAction sprintAction = gameplayMap.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false);
-            Assert.That(sprintAction, Is.Not.Null, "Left stick click should drive sprint through the gameplay map.");
-            Assert.That(sprintAction.bindings, Has.Some.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/thumbstickClicked"),
-                "Sprint should be bound to left stick click.");
-            Assert.That(inputRig.InputActions.actionMaps.SelectMany(map => map.bindings), Has.None.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/primaryButton" ||
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/secondaryButton"),
-                "Left X and Left Y are intentionally unassigned.");
-
-            InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
-            Assert.That(rightHandMap?.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
-                "RightHand/Jump is stale; JumpProvider should read Blockiverse Gameplay/Jump.");
 
             // Teleport Mode on both hands must be thumbstick-based, not a hardware button.
             foreach (string mapName in new[] { BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.RightHandMap })
             {
                 InputActionMap map = inputRig.InputActions.FindActionMap(mapName, throwIfNotFound: false);
                 Assert.That(map, Is.Not.Null, $"{mapName} must exist.");
+                string handUsage = mapName == BlockiverseInputActionNames.LeftHandMap ? "LeftHand" : "RightHand";
+                AssertControllerRoleActions(map, handUsage);
+                Assert.That(map.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
+                    $"{mapName}/Jump is stale; JumpProvider should read the dominant controller primary button.");
                 InputAction teleportMode = map.FindAction(BlockiverseInputActionNames.TeleportMode, throwIfNotFound: false);
                 InputAction teleportSelect = map.FindAction(BlockiverseInputActionNames.TeleportSelect, throwIfNotFound: false);
                 Assert.That(teleportMode, Is.Not.Null, $"Teleport Mode must exist in {mapName}.");
@@ -521,7 +505,7 @@ namespace Blockiverse.Tests.EditMode
                 flight.ApplyFlightState();
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding Right A toward the right-hand aim pose, not by stick locomotion.");
+                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding the dominant primary button toward the right-hand aim pose, not by stick locomotion.");
                 Assert.That(continuousMove.enableFly, Is.False);
                 Assert.That(gravity.useGravity, Is.False);
                 Assert.That(jump.enabled, Is.False);
@@ -807,15 +791,16 @@ namespace Blockiverse.Tests.EditMode
                 .Select(label => label.text));
 
             // Canonical controller mapping (shared with the Settings → Controls screen).
-            Assert.That(popupText, Does.Contain("Right trigger: press UI or break blocks"));
-            Assert.That(popupText, Does.Contain("Right grip: place or use"));
-            Assert.That(popupText, Does.Contain("Left grip: blocks menu"));
+            Assert.That(popupText, Does.Contain("Dominant trigger: press UI / break"));
+            Assert.That(popupText, Does.Contain("Dominant grip: place / use"));
+            Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
             Assert.That(popupText, Does.Contain("Menu: pause"));
-            Assert.That(popupText, Does.Contain("Right stick: snap turn"));
-            Assert.That(popupText, Does.Contain("Right A: jump"));
-            Assert.That(popupText, Does.Contain("Right B: toggle block editing"));
-            Assert.That(popupText, Does.Contain("Left stick: move"));
-            Assert.That(popupText, Does.Contain("Left stick click: sprint toggle / hold sprint"));
+            Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
+            Assert.That(popupText, Does.Contain("Dominant primary button: jump"));
+            Assert.That(popupText, Does.Contain("Dominant secondary button: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Support stick: move"));
+            Assert.That(popupText, Does.Contain("Support stick click: sprint"));
+            Assert.That(popupText, Does.Contain("Either stick hold up: teleport aim, release to land"));
             Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
             Assert.That(popupText, Does.Not.Contain("Left X: jump"));
             Assert.That(popupText, Does.Not.Contain("Left Y: undo"));
@@ -909,16 +894,35 @@ namespace Blockiverse.Tests.EditMode
                 binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
         }
 
-        static void AssertJumpProviderUsesGameplayJump(BlockiverseInputRig inputRig, JumpProvider jumpProvider)
+        static void AssertJumpProviderUsesDominantPrimary(BlockiverseInputRig inputRig, JumpProvider jumpProvider)
         {
-            InputAction jumpAction = inputRig.InputActions
-                .FindActionMap(BlockiverseInputActionNames.GameplayMap)
-                .FindAction(BlockiverseInputActionNames.Jump);
+            InputAction jumpAction = inputRig.ResolveJumpActionForCurrentControls();
 
             Assert.That(jumpProvider.jumpInput.inputSourceMode,
                 Is.EqualTo(XRInputButtonReader.InputSourceMode.InputActionReference));
             Assert.That(jumpProvider.jumpInput.inputActionReferencePerformed?.action,
                 Is.SameAs(jumpAction));
+        }
+
+        static void AssertControllerRoleActions(InputActionMap map, string handUsage)
+        {
+            string controllerPath = $"<XRController>{{{handUsage}}}";
+            InputAction primary = map.FindAction(BlockiverseInputActionNames.PrimaryButton, throwIfNotFound: false);
+            InputAction secondary = map.FindAction(BlockiverseInputActionNames.SecondaryButton, throwIfNotFound: false);
+            InputAction sprint = map.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false);
+
+            Assert.That(primary, Is.Not.Null, $"{map.name}/Primary Button should exist.");
+            Assert.That(primary.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/primaryButton"),
+                $"{map.name}/Primary Button should be bound to {controllerPath}/primaryButton.");
+            Assert.That(secondary, Is.Not.Null, $"{map.name}/Secondary Button should exist.");
+            Assert.That(secondary.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/secondaryButton"),
+                $"{map.name}/Secondary Button should be bound to {controllerPath}/secondaryButton.");
+            Assert.That(sprint, Is.Not.Null, $"{map.name}/Sprint should exist.");
+            Assert.That(sprint.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
+                $"{map.name}/Sprint should be bound to {controllerPath}/thumbstickClicked.");
         }
 
         static void AssertButtonReaderReferencesAction(XRInputButtonReader reader, InputAction action, string message)

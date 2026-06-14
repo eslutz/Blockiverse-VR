@@ -29,34 +29,31 @@ namespace Blockiverse.Tests.EditMode
             InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
                 BlockiverseProject.InputActionsAssetPath);
 
-            AssertControllerActions(asset, BlockiverseInputActionNames.LeftHandMap, "LeftHand", expectFaceButtons: false);
-            AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand", expectFaceButtons: true);
+            AssertControllerActions(asset, BlockiverseInputActionNames.LeftHandMap, "LeftHand");
+            AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
-            AssertActionDoesNotContainPath(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{RightHand}/secondaryButton");
-            AssertActionDoesNotContainPath(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint, "<XRController>{LeftHand}/thumbstickClicked");
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo);
         }
 
         [Test]
-        public void JumpUsesGameplayMapAndHasNoLegacyControllerBindings()
+        public void SwappableControlsUseControllerMaps()
         {
             InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
                 BlockiverseProject.InputActionsAssetPath);
 
-            InputAction rightHandJump = asset.FindActionMap(BlockiverseInputActionNames.RightHandMap)
-                .FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
-
-            Assert.That(rightHandJump, Is.Null, "RightHand/Jump is stale; JumpProvider reads Blockiverse Gameplay/Jump.");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
-                BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
-            AssertActionDoesNotContainPath(asset, BlockiverseInputActionNames.GameplayMap,
-                BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
+            AssertControllerRoleActions(asset, BlockiverseInputActionNames.LeftHandMap, "LeftHand");
+            AssertControllerRoleActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
+            AssertNoAction(asset, BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Jump);
+            AssertNoAction(asset, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Jump);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint);
         }
 
-        static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage, bool expectFaceButtons)
+        static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)
         {
             string controllerPath = $"<XRController>{{{handUsage}}}";
 
@@ -66,16 +63,7 @@ namespace Blockiverse.Tests.EditMode
             AssertAction(asset, mapName, BlockiverseInputActionNames.TrackingState, $"{controllerPath}/trackingState");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Select, $"{controllerPath}/triggerPressed");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Activate, $"{controllerPath}/gripPressed");
-            if (expectFaceButtons)
-            {
-                AssertAction(asset, mapName, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
-                AssertAction(asset, mapName, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
-            }
-            else
-            {
-                AssertNoAction(asset, mapName, BlockiverseInputActionNames.PrimaryButton);
-                AssertNoAction(asset, mapName, BlockiverseInputActionNames.SecondaryButton);
-            }
+            AssertControllerRoleActions(asset, mapName, handUsage);
 
             AssertAction(asset, mapName, BlockiverseInputActionNames.UiPress, $"{controllerPath}/triggerPressed");
             AssertAction(asset, mapName, BlockiverseInputActionNames.UiScroll, $"{controllerPath}/thumbstick");
@@ -88,6 +76,15 @@ namespace Blockiverse.Tests.EditMode
             AssertActionContainsPath(asset, mapName, BlockiverseInputActionNames.TeleportSelect, "thumbstick");
             AssertActionDoesNotContainPath(asset, mapName, BlockiverseInputActionNames.TeleportMode, "primaryButton");
             AssertActionDoesNotContainPath(asset, mapName, BlockiverseInputActionNames.TeleportSelect, "triggerPressed");
+        }
+
+        static void AssertControllerRoleActions(InputActionAsset asset, string mapName, string handUsage)
+        {
+            string controllerPath = $"<XRController>{{{handUsage}}}";
+
+            AssertAction(asset, mapName, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
+            AssertAction(asset, mapName, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
+            AssertAction(asset, mapName, BlockiverseInputActionNames.Sprint, $"{controllerPath}/thumbstickClicked");
         }
 
         static void AssertAction(InputActionAsset asset, string mapName, string actionName, string expectedPath)

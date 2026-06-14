@@ -30,7 +30,6 @@ namespace Blockiverse.VR
         // Normalized 0–1: 1 = strongest vignette (narrowest aperture), 0 = open.
         [SerializeField] float vignetteStrength;
         [SerializeField] BlockiverseControllerRole dominantHand = BlockiverseControllerRole.Right;
-        [SerializeField] bool dominantHandOnlyControls;
         [SerializeField] bool toggleToMineEnabled;
 
         public BlockiverseLocomotionMode LocomotionMode
@@ -91,12 +90,6 @@ namespace Blockiverse.VR
         {
             get => dominantHand;
             set => dominantHand = value;
-        }
-
-        public bool DominantHandOnlyControls
-        {
-            get => dominantHandOnlyControls;
-            set => dominantHandOnlyControls = value;
         }
 
         public bool ToggleToMineEnabled

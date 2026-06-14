@@ -80,7 +80,6 @@ namespace Blockiverse.VR
         InputAction cachedBlockEditingToggleAction;
         InputAction cachedSprintAction;
         BlockiverseControllerRole cachedDominantHand;
-        bool cachedDominantHandOnlyControls;
 
         // Last comfort values pushed to the XRI providers. Provider fields — and especially the
         // jump reader, whose InputActionReference is a ScriptableObject instance — must only be
@@ -93,7 +92,6 @@ namespace Blockiverse.VR
         float lastSnapTurnDegrees;
         bool lastSnapTurnAroundEnabled;
         BlockiverseControllerRole lastDominantHand;
-        bool lastDominantHandOnlyControls;
         bool lastTurnWithBothHands;
         bool lastSprintActive;
         bool locomotionSuppressed;
@@ -253,6 +251,16 @@ namespace Blockiverse.VR
             return map.FindAction(actionName, throwIfNotFound: true);
         }
 
+        public InputAction ResolveJumpActionForCurrentControls()
+        {
+            return TryFindAction(
+                GetControllerMapName(GetDominantHand()),
+                BlockiverseInputActionNames.PrimaryButton,
+                out InputAction jumpAction)
+                    ? jumpAction
+                    : null;
+        }
+
         public static void ConfigureHeadPoseDriverActions(TrackedPoseDriver driver)
         {
             ConfigurePoseDriverActions(driver, HeadPositionPath, HeadRotationPath, HeadTrackingStatePath);
@@ -386,35 +394,25 @@ namespace Blockiverse.VR
         void RefreshCachedActions()
         {
             BlockiverseControllerRole dominantHand = GetDominantHand();
-            bool dominantHandOnly = UseDominantHandOnlyControls();
 
             if (cachedActionAsset == inputActions &&
-                cachedDominantHand == dominantHand &&
-                cachedDominantHandOnlyControls == dominantHandOnly)
+                cachedDominantHand == dominantHand)
             {
                 return;
             }
 
             cachedActionAsset = inputActions;
             cachedDominantHand = dominantHand;
-            cachedDominantHandOnlyControls = dominantHandOnly;
 
             string dominantMap = GetControllerMapName(dominantHand);
             string supportMap = GetControllerMapName(OppositeHand(dominantHand));
-            string quickMenuMap = dominantHandOnly ? dominantMap : supportMap;
-            string quickMenuAction = dominantHandOnly
-                ? BlockiverseInputActionNames.SecondaryButton
-                : BlockiverseInputActionNames.Activate;
 
             TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, out cachedMenuAction);
-            TryFindAction(quickMenuMap, quickMenuAction, out cachedQuickMenuAction);
+            TryFindAction(supportMap, BlockiverseInputActionNames.Activate, out cachedQuickMenuAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Select, out cachedBreakAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Activate, out cachedPlaceAction);
-            if (dominantHandOnly)
-                cachedBlockEditingToggleAction = null;
-            else
-                TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, out cachedBlockEditingToggleAction);
-            TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
+            TryFindAction(dominantMap, BlockiverseInputActionNames.SecondaryButton, out cachedBlockEditingToggleAction);
+            TryFindAction(supportMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
         }
 
         void UpdateSprintInput(float now)
@@ -800,9 +798,7 @@ namespace Blockiverse.VR
                 jumpProvider.jumpInput = CreateButtonActionReader(
                     jumpProvider.jumpInput,
                     "Jump",
-                    TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, out InputAction jumpAction)
-                        ? jumpAction
-                        : null);
+                    ResolveJumpActionForCurrentControls());
             }
         }
 
@@ -880,13 +876,10 @@ namespace Blockiverse.VR
         BlockiverseControllerRole GetDominantHand() =>
             comfortSettings != null ? comfortSettings.DominantHand : BlockiverseControllerRole.Right;
 
-        bool UseDominantHandOnlyControls() =>
-            comfortSettings != null && comfortSettings.DominantHandOnlyControls;
-
         BlockiverseControllerRole GetMoveHand()
         {
             BlockiverseControllerRole dominantHand = GetDominantHand();
-            return UseDominantHandOnlyControls() ? dominantHand : OppositeHand(dominantHand);
+            return OppositeHand(dominantHand);
         }
 
         BlockiverseControllerRole GetTurnHand() => GetDominantHand();
@@ -954,11 +947,9 @@ namespace Blockiverse.VR
                 : DefaultSnapTurnDegrees;
             bool snapTurnAroundEnabled = comfortSettings == null || comfortSettings.SnapTurnAroundEnabled;
             BlockiverseControllerRole dominantHand = GetDominantHand();
-            bool dominantHandOnly = UseDominantHandOnlyControls();
             bool controlHandChanged =
                 !comfortApplied ||
                 dominantHand != lastDominantHand ||
-                dominantHandOnly != lastDominantHandOnlyControls ||
                 turnWithBothHands != lastTurnWithBothHands;
 
             // Update runs hot; only push to the providers when a comfort value actually changed
@@ -984,7 +975,6 @@ namespace Blockiverse.VR
             lastSnapTurnDegrees = snapTurnDegrees;
             lastSnapTurnAroundEnabled = snapTurnAroundEnabled;
             lastDominantHand = dominantHand;
-            lastDominantHandOnlyControls = dominantHandOnly;
             lastTurnWithBothHands = turnWithBothHands;
             lastSprintActive = sprintActive;
 

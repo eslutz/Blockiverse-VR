@@ -7,10 +7,11 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 ## Unreleased
 
 - Fixed the day/night sun path so manual creative time changes move the sun in one continuous arc, rising from one horizon and setting on the opposite horizon.
-- Fixed Quest sprint controls so left stick click toggles sprint, holding left stick click temporarily sprints, and creative flight uses the canonical sprint flight speed while held or toggled.
+- Reworked dominant-hand controls into a full two-controller role swap, with dominant tools/turn/jump/block-edit controls and support movement/sprint/quick-menu controls, and removed the accidental one-handed controls toggle pending a dedicated accessibility design pass.
+- Fixed Quest sprint controls so the support stick click toggles sprint, holding the support stick click temporarily sprints, and creative flight uses the canonical sprint flight speed while held or toggled.
 - Added Meta channel release automation: alpha prereleases build and upload same-repository PR commits to Meta `alpha`, beta prereleases build signed main merges and upload to Meta `beta`, RC prereleases promote a selected Beta Meta build to `rc`, and production releases promote a selected RC Meta build to `store` after Store review approval.
 - Added a development-only verbose gameplay diagnostics trace layer: opt-in PlayerPrefs or marker-file enablement, rolling local JSONL trace files, timed player/world snapshots, interaction/audio/VFX/haptic/environment event capture, generated XR rig wiring, and updated local privacy/testing documentation.
-- Rebuilt the authored block texture set at higher source resolution with richer tileable pixel patterns and refreshed the block atlas; fixed creative flight so double-tapping Right A toggles flight, holding Right A flies along the right-hand aim pose, and both sticks can turn while flying; added real point lights for emissive placed blocks; and expanded Creative Tools environment controls with an explicit day/night cycle pause/resume action alongside time-of-day and weather controls.
+- Rebuilt the authored block texture set at higher source resolution with richer tileable pixel patterns and refreshed the block atlas; fixed creative flight so double-tapping the dominant primary button toggles flight, holding the dominant primary button flies along the right-hand aim pose, and both sticks can turn while flying; added real point lights for emissive placed blocks; and expanded Creative Tools environment controls with an explicit day/night cycle pause/resume action alongside time-of-day and weather controls.
 - Implemented Mixed Ages User Age Group API compliance: session-level Meta age category retrieval, local fallback cache, child-safe Meta profile/social/avatar feature gates, generated Boot scene wiring, validation coverage, and store/privacy document updates.
 - Fixed New World settings input so custom numeric seeds open the Quest number pad and selector arrow buttons respond across the full button hit area.
 - Fixed New World text fields so Quest XR press and submit events open the system keyboard instead of only showing hover and haptic feedback.
@@ -54,7 +55,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
   the flame end.
 - Fixed Quest menu interaction and creative safety controls by wiring menus through
   the native XRI UI input stack, adding a void safety floor below world bounds, and
-  binding Right B to toggle block editing without affecting locomotion or UI input.
+  binding the dominant secondary button to toggle block editing without affecting locomotion or UI input.
 - Fixed Quest movement tracking by migrating the rig to Unity Input System/XRI pose
   and locomotion providers for before-render HMD tracking, continuous movement,
   snap turn, and teleport.

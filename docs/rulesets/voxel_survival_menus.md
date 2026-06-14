@@ -1084,15 +1084,15 @@ can never drift apart.
 +------------------------------------------------------------+
 | Controls                                                   |
 +------------------------------------------------------------+
-| Left stick: move                                           |
-| Left stick click: sprint toggle / hold sprint              |
-| Right stick: snap turn                                     |
-| Right stick hold up: teleport aim, release to land         |
-| Right trigger: press UI or break blocks                    |
-| Right grip: place or use                                   |
-| Left grip: blocks menu                                     |
-| Right A: jump                                              |
-| Right B: toggle block editing                              |
+| Support stick: move                                        |
+| Support stick click: sprint                                |
+| Dominant stick: snap turn                                  |
+| Either stick hold up: teleport aim, release to land        |
+| Dominant trigger: press UI / break                         |
+| Dominant grip: place / use                                 |
+| Support grip: blocks menu                                  |
+| Dominant primary button: jump                              |
+| Dominant secondary button: toggle block editing            |
 | Menu: pause                                                |
 |                                                            |
 | [ Close ]                                                  |

@@ -2,7 +2,7 @@ namespace Blockiverse.VR
 {
     public enum BlockiverseLocomotionMode
     {
-        /// <summary>Left thumbstick glides/walks; right thumbstick turns; right primary button jumps.</summary>
+        /// <summary>Support thumbstick glides/walks; dominant thumbstick turns; dominant primary button jumps.</summary>
         Glide,
 
         /// <summary>

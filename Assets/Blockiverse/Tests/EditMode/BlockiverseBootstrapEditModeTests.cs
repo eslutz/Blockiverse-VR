@@ -168,7 +168,10 @@ namespace Blockiverse.Tests.EditMode
             string gameMenuBootstrapper = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.GameMenus.cs");
 
             StringAssert.Contains("Either stick hold up: teleport aim, release to land", gameMenuBootstrapper);
+            StringAssert.Contains("Support stick: move", gameMenuBootstrapper);
+            StringAssert.Contains("Dominant primary button: jump", gameMenuBootstrapper);
             Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right stick hold up: teleport aim"));
+            Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right A: jump"));
         }
 
         [Test]

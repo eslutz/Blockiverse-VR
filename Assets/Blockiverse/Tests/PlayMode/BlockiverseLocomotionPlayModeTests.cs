@@ -577,7 +577,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator LeftHandedModeSwapsMoveAndTurnHands()
+        public IEnumerator LeftHandedModeSwapsControllerRoles()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
             InputActionAsset actions = CreateTestActions();
@@ -603,9 +603,27 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
 
+                int breakPresses = 0;
+                int placePresses = 0;
+                int quickMenuPresses = 0;
+                int blockTogglePresses = 0;
+                inputRig.BreakPressed.AddListener(() => breakPresses++);
+                inputRig.PlacePressed.AddListener(() => placePresses++);
+                inputRig.QuickMenuPressed.AddListener(() => quickMenuPresses++);
+                inputRig.BlockEditingTogglePressed.AddListener(() => blockTogglePresses++);
+
                 yield return null;
                 Assert.That(inputRig.ActiveMoveHand, Is.EqualTo(BlockiverseControllerRole.Right));
                 Assert.That(inputRig.ActiveTurnHand, Is.EqualTo(BlockiverseControllerRole.Left));
+                Assert.That(inputRig.ActiveToolHand, Is.EqualTo(BlockiverseControllerRole.Left));
+
+                InputAction leftPrimary = actions
+                    .FindActionMap(BlockiverseInputActionNames.LeftHandMap)
+                    .FindAction(BlockiverseInputActionNames.PrimaryButton);
+                Assert.That(inputRig.ResolveJumpActionForCurrentControls(), Is.SameAs(leftPrimary));
+                Assert.That(inputRig.JumpProvider?.jumpInput.inputActionReferencePerformed?.action,
+                    Is.SameAs(leftPrimary),
+                    "JumpProvider should follow the dominant controller primary button.");
 
                 Vector3 startPosition = origin.transform.position;
                 Set(gamepad.rightStick, new Vector2(0.0f, 1.0f));
@@ -616,6 +634,13 @@ namespace Blockiverse.Tests.PlayMode
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
 
+                Press(gamepad.rightStickButton);
+                yield return null;
+                Assert.That(inputRig.SprintActive, Is.True);
+                Release(gamepad.rightStickButton);
+                yield return null;
+                Assert.That(inputRig.SprintActive, Is.True);
+
                 Set(gamepad.leftStick, Vector2.right);
                 yield return null;
                 yield return null;
@@ -624,75 +649,35 @@ namespace Blockiverse.Tests.PlayMode
 
                 Set(gamepad.leftStick, Vector2.zero);
                 yield return null;
-            }
-            finally
-            {
-                DestroyRigImmediate(rigObject);
-                Object.DestroyImmediate(actions);
-            }
-        }
-
-        [UnityTest]
-        public IEnumerator DominantHandOnlyModeMovesAndInteractsFromDominantHand()
-        {
-            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
-            InputActionAsset actions = CreateTestActions();
-            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
-
-            try
-            {
-                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                settings.DominantHand = BlockiverseControllerRole.Right;
-                settings.DominantHandOnlyControls = true;
-                settings.ContinuousMoveSpeed = 2.0f;
-
-                ConfigureXriLocomotionStack(
-                    rigObject,
-                    origin,
-                    out XRBodyTransformer bodyTransformer,
-                    out LocomotionMediator mediator,
-                    out TeleportationProvider teleport,
-                    out ContinuousMoveProvider continuousMove,
-                    out SnapTurnProvider snapTurn);
-
-                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
-                inputRig.Configure(actions);
-                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
-
-                int breakPresses = 0;
-                int placePresses = 0;
-                int quickMenuPresses = 0;
-                inputRig.BreakPressed.AddListener(() => breakPresses++);
-                inputRig.PlacePressed.AddListener(() => placePresses++);
-                inputRig.QuickMenuPressed.AddListener(() => quickMenuPresses++);
-
-                yield return null;
-                Assert.That(inputRig.ActiveMoveHand, Is.EqualTo(BlockiverseControllerRole.Right));
-                Assert.That(inputRig.ActiveTurnHand, Is.EqualTo(BlockiverseControllerRole.Right));
-                Assert.That(inputRig.ActiveToolHand, Is.EqualTo(BlockiverseControllerRole.Right));
-
-                Vector3 startPosition = origin.transform.position;
-                Set(gamepad.rightStick, new Vector2(0.0f, 1.0f));
-                yield return null;
-
-                Assert.That((origin.transform.position - startPosition).magnitude, Is.GreaterThan(0.0f));
 
                 Press(gamepad.rightTrigger);
                 yield return null;
-                Assert.That(breakPresses, Is.EqualTo(1));
+                Assert.That(breakPresses, Is.EqualTo(0), "Support trigger should not break blocks.");
                 Release(gamepad.rightTrigger);
+                yield return null;
+
+                Press(gamepad.leftTrigger);
+                yield return null;
+                Assert.That(breakPresses, Is.EqualTo(1));
+                Release(gamepad.leftTrigger);
+                yield return null;
+
+                Press(gamepad.leftShoulder);
+                yield return null;
+                Assert.That(placePresses, Is.EqualTo(1));
+                Release(gamepad.leftShoulder);
                 yield return null;
 
                 Press(gamepad.rightShoulder);
                 yield return null;
-                Assert.That(placePresses, Is.EqualTo(1));
+                Assert.That(quickMenuPresses, Is.EqualTo(1));
                 Release(gamepad.rightShoulder);
                 yield return null;
 
-                Press(gamepad.buttonEast);
+                Press(gamepad.selectButton);
                 yield return null;
-                Assert.That(quickMenuPresses, Is.EqualTo(1));
-                Release(gamepad.buttonEast);
+                Assert.That(blockTogglePresses, Is.EqualTo(1));
+                Release(gamepad.selectButton);
                 yield return null;
             }
             finally
@@ -953,6 +938,7 @@ namespace Blockiverse.Tests.PlayMode
             leftHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/leftShoulder");
             leftHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonWest");
             leftHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/select");
+            leftHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/leftStickPress");
 
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
             rightHand.AddAction(
@@ -969,11 +955,11 @@ namespace Blockiverse.Tests.PlayMode
             rightHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/rightShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonNorth");
             rightHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/buttonEast");
+            rightHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/rightStickPress");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
             InputActionMap gameplay = actions.AddActionMap(BlockiverseInputActionNames.GameplayMap);
-            gameplay.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<Gamepad>/buttonNorth");
             gameplay.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<Gamepad>/start");
 
             return actions;

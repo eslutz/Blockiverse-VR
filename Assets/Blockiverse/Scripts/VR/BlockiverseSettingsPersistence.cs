@@ -72,8 +72,6 @@ namespace Blockiverse.VR
                     KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
                 if (!System.Enum.IsDefined(typeof(BlockiverseControllerRole), comfortSettings.DominantHand))
                     comfortSettings.DominantHand = BlockiverseControllerRole.Right;
-                comfortSettings.DominantHandOnlyControls = PlayerPrefs.GetInt(
-                    KeyPrefix + "DominantHandOnlyControls", comfortSettings.DominantHandOnlyControls ? 1 : 0) != 0;
                 comfortSettings.ToggleToMineEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0) != 0;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
@@ -132,7 +130,6 @@ namespace Blockiverse.VR
             {
                 PlayerPrefs.SetInt(KeyPrefix + "LocomotionMode", (int)comfortSettings.LocomotionMode);
                 PlayerPrefs.SetInt(KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
-                PlayerPrefs.SetInt(KeyPrefix + "DominantHandOnlyControls", comfortSettings.DominantHandOnlyControls ? 1 : 0);
                 PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);
@@ -171,7 +168,6 @@ namespace Blockiverse.VR
                 {
                     hash = hash * 31 + (int)comfortSettings.LocomotionMode;
                     hash = hash * 31 + (int)comfortSettings.DominantHand;
-                    hash = hash * 31 + (comfortSettings.DominantHandOnlyControls ? 1 : 0);
                     hash = hash * 31 + (comfortSettings.ToggleToMineEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
                     hash = hash * 31 + (comfortSettings.SmoothTurnEnabled ? 1 : 0);

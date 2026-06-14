@@ -686,15 +686,15 @@ namespace Blockiverse.Editor
         // Canonical controller mapping description, shared by the first-launch mapping popup and
         // the Settings → Controls reference screen so the two can never drift apart.
         const string ControllerMappingText =
-            "Left stick: move\n" +
-            "Left stick click: sprint toggle / hold sprint\n" +
-            "Right stick: snap turn\n" +
+            "Support stick: move\n" +
+            "Support stick click: sprint\n" +
+            "Dominant stick: snap turn\n" +
             "Either stick hold up: teleport aim, release to land\n" +
-            "Right trigger: press UI or break blocks\n" +
-            "Right grip: place or use\n" +
-            "Left grip: blocks menu\n" +
-            "Right A: jump\n" +
-            "Right B: toggle block editing\n" +
+            "Dominant trigger: press UI / break\n" +
+            "Dominant grip: place / use\n" +
+            "Support grip: blocks menu\n" +
+            "Dominant primary button: jump\n" +
+            "Dominant secondary button: toggle block editing\n" +
             "Menu: pause";
 
         // Builds the audio/feedback settings screen: volume sliders, feedback toggles, and a

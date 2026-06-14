@@ -17,7 +17,6 @@ namespace Blockiverse.UI
         [SerializeField] Slider moveSpeedSlider;
         [SerializeField] Slider smoothTurnSpeedSlider;
         [SerializeField] Toggle leftHandToggle;
-        [SerializeField] Toggle dominantHandOnlyToggle;
         [SerializeField] Toggle toggleToMineToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
@@ -40,7 +39,6 @@ namespace Blockiverse.UI
         Toggle registeredSmoothTurnToggle;
         Toggle registeredTurnAroundToggle;
         Toggle registeredLeftHandToggle;
-        Toggle registeredDominantHandOnlyToggle;
         Toggle registeredToggleToMineToggle;
         Toggle registeredVignetteToggle;
         Slider registeredSnapTurnSlider;
@@ -72,7 +70,6 @@ namespace Blockiverse.UI
             Toggle targetVignetteToggle = null,
             Slider targetVignetteStrengthSlider = null,
             Toggle targetLeftHandToggle = null,
-            Toggle targetDominantHandOnlyToggle = null,
             Toggle targetToggleToMineToggle = null,
             Slider targetEyeHeightSlider = null,
             Slider targetMoveSpeedSlider = null,
@@ -89,7 +86,6 @@ namespace Blockiverse.UI
             vignetteToggle = targetVignetteToggle;
             vignetteStrengthSlider = targetVignetteStrengthSlider;
             leftHandToggle = targetLeftHandToggle;
-            dominantHandOnlyToggle = targetDominantHandOnlyToggle;
             toggleToMineToggle = targetToggleToMineToggle;
             eyeHeightSlider = targetEyeHeightSlider;
             uiScaleSlider = targetUiScaleSlider;
@@ -161,7 +157,6 @@ namespace Blockiverse.UI
             RegisterToggleCallback(smoothTurnToggle, ref registeredSmoothTurnToggle);
             RegisterToggleCallback(turnAroundToggle, ref registeredTurnAroundToggle);
             RegisterToggleCallback(leftHandToggle, ref registeredLeftHandToggle);
-            RegisterToggleCallback(dominantHandOnlyToggle, ref registeredDominantHandOnlyToggle);
             RegisterToggleCallback(toggleToMineToggle, ref registeredToggleToMineToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
@@ -231,9 +226,6 @@ namespace Blockiverse.UI
                     ? BlockiverseControllerRole.Left
                     : BlockiverseControllerRole.Right;
 
-            if (dominantHandOnlyToggle != null)
-                settings.DominantHandOnlyControls = dominantHandOnlyToggle.isOn;
-
             if (toggleToMineToggle != null)
                 settings.ToggleToMineEnabled = toggleToMineToggle.isOn;
 
@@ -267,7 +259,6 @@ namespace Blockiverse.UI
             smoothTurnToggle?.SetIsOnWithoutNotify(settings.SmoothTurnEnabled);
             turnAroundToggle?.SetIsOnWithoutNotify(settings.SnapTurnAroundEnabled);
             leftHandToggle?.SetIsOnWithoutNotify(settings.DominantHand == BlockiverseControllerRole.Left);
-            dominantHandOnlyToggle?.SetIsOnWithoutNotify(settings.DominantHandOnlyControls);
             toggleToMineToggle?.SetIsOnWithoutNotify(settings.ToggleToMineEnabled);
 
             if (snapTurnSlider != null)
@@ -324,7 +315,6 @@ namespace Blockiverse.UI
             registeredSmoothTurnToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredTurnAroundToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredLeftHandToggle?.onValueChanged.RemoveListener(toggleChanged);
-            registeredDominantHandOnlyToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredVignetteToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredSnapTurnSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredMoveSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
@@ -338,7 +328,6 @@ namespace Blockiverse.UI
             registeredSmoothTurnToggle = null;
             registeredTurnAroundToggle = null;
             registeredLeftHandToggle = null;
-            registeredDominantHandOnlyToggle = null;
             registeredVignetteToggle = null;
             registeredSnapTurnSlider = null;
             registeredMoveSpeedSlider = null;
