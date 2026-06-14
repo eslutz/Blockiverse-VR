@@ -242,13 +242,14 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void PlaceStructuresWithBiomeResolverPlacesStorageCrateForLootStructures()
         {
-            // Seed 455 deterministically places loot-bearing structures (forager_lean_to) in an
-            // all-Meadow world; the canonical DeterministicHash keeps this stable across platforms.
-            var settings = MakeSettings(seed: 455);
+            // Seed 5 deterministically places a loot-bearing cave shrine in an all-Meadow world;
+            // the canonical DeterministicHash keeps this stable across platforms.
+            const int seed = 5;
+            var settings = MakeSettings(seed);
             var world = FlatWorld(settings);
 
-            // Force everything to Meadow (0), which allows forager_lean_to and others with loot.
-            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 455,
+            // Force everything to Meadow (0), which allows loot-bearing surface and cave structures.
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, seed,
                 biomeAt: (x, z) => 0);
 
             // Count StorageCrate blocks placed by structures.
@@ -304,12 +305,13 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void PlaceStructuresEmitsContainerLootForLootCrates()
         {
-            // Seed 455 deterministically places loot-bearing structures in an all-Meadow world.
-            var settings = MakeSettings(seed: 455);
+            // Seed 5 deterministically places loot-bearing structures in an all-Meadow world.
+            const int seed = 5;
+            var settings = MakeSettings(seed);
             var world = FlatWorld(settings);
             var loot = new List<StructureContainerLoot>();
 
-            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, 455,
+            StructureService.PlaceStructures(world, BlockRegistry.CreateDefault(), settings, seed,
                 biomeAt: (x, z) => 0, lootSink: loot);
 
             // Every emitted loot record must sit exactly on a StorageCrate block and carry items.
@@ -325,15 +327,16 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ContainerLootIsDeterministicForSameSeed()
         {
-            // Seed 13 deterministically places one loot crate, so the comparison is non-vacuous.
-            var settings = MakeSettings(seed: 13);
+            // Seed 5 deterministically places at least one loot crate, so the comparison is non-vacuous.
+            const int seed = 5;
+            var settings = MakeSettings(seed);
             var a = new List<StructureContainerLoot>();
             var b = new List<StructureContainerLoot>();
 
             var worldA = FlatWorld(settings);
             var worldB = FlatWorld(settings);
-            StructureService.PlaceStructures(worldA, BlockRegistry.CreateDefault(), settings, 13, (x, z) => 0, a);
-            StructureService.PlaceStructures(worldB, BlockRegistry.CreateDefault(), settings, 13, (x, z) => 0, b);
+            StructureService.PlaceStructures(worldA, BlockRegistry.CreateDefault(), settings, seed, (x, z) => 0, a);
+            StructureService.PlaceStructures(worldB, BlockRegistry.CreateDefault(), settings, seed, (x, z) => 0, b);
 
             Assert.That(a, Is.Not.Empty, "Expected at least one loot crate for seed 13.");
             Assert.That(a.Count, Is.EqualTo(b.Count));

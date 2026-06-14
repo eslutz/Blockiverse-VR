@@ -33,9 +33,9 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
+            AssertActionDoesNotContainPath(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{RightHand}/secondaryButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
+            AssertActionDoesNotContainPath(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo);
         }
 
@@ -51,7 +51,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(rightHandJump, Is.Null, "RightHand/Jump is stale; JumpProvider reads Blockiverse Gameplay/Jump.");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
                 BlockiverseInputActionNames.Jump, "<XRController>{RightHand}/primaryButton");
-            AssertAction(asset, BlockiverseInputActionNames.GameplayMap,
+            AssertActionDoesNotContainPath(asset, BlockiverseInputActionNames.GameplayMap,
                 BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
         }
 

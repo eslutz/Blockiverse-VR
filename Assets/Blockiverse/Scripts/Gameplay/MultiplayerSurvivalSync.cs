@@ -2130,7 +2130,7 @@ namespace Blockiverse.Gameplay
 
             // Host-side proximity check (§8): repair requires standing at a Mend Bench; see
             // ResolveValidatedStationClaim for the trust rules.
-            CraftingStation station = ResolveValidatedStationClaim(clientId, CraftingStation.MendBench);
+            CraftingStation station = ResolveValidatedStationClaim(clientId, CraftingStation.MendBench, validateProximity: true);
 
             Inventory inventory = GetInventory(clientId);
             if (!IsHotbarSlot(inventory, toolSlotIndex))
@@ -2432,7 +2432,7 @@ namespace Blockiverse.Gameplay
             // Host-side proximity check (§8): a client cannot claim a crafting station it is not
             // standing near. Invalid claims downgrade to None so CraftingService rejects with
             // MissingStation.
-            availableStation = ResolveValidatedStationClaim(clientId, availableStation);
+            availableStation = ResolveValidatedStationClaim(clientId, availableStation, sendResponse);
 
             Inventory inventory = GetInventory(clientId);
             CraftingResult crafting = CraftingService.TryCraft(inventory, recipe, availableStation);
@@ -2646,7 +2646,7 @@ namespace Blockiverse.Gameplay
 
             // Proximity check: the requester must be near the station block, same trust rules as
             // the crafting/repair paths (§8).
-            if (ResolveValidatedStationClaim(clientId, stationType) != stationType)
+            if (ResolveValidatedStationClaim(clientId, stationType, sendResponse) != stationType)
             {
                 var tooFarResult = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.NotAStation, requestId);
                 SendCommandFailure(clientId, tooFarResult, sendResponse);
@@ -2831,9 +2831,9 @@ namespace Blockiverse.Gameplay
         // matching station block is within reach. When the position cannot be resolved
         // (offline/tests with no spawned player object), the claim is trusted — the local UI
         // already gates by an actual proximity scan, and remote clients always have a player object.
-        CraftingStation ResolveValidatedStationClaim(ulong clientId, CraftingStation claimed)
+        CraftingStation ResolveValidatedStationClaim(ulong clientId, CraftingStation claimed, bool validateProximity)
         {
-            if (claimed == CraftingStation.None)
+            if (claimed == CraftingStation.None || !validateProximity)
                 return claimed;
 
             VoxelWorld world = ResolveWorldOrNull();
@@ -2891,6 +2891,9 @@ namespace Blockiverse.Gameplay
             out SurvivalCommandResult result)
         {
             result = default;
+
+            if (!sendResponse)
+                return false;
 
             // Offline/edit-mode callers may not have a spawned player object or camera. Runtime
             // remote clients do, so unresolved positions are trusted only for those local paths.

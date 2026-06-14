@@ -10,6 +10,7 @@ using Blockiverse.WorldGen;
 using NUnit.Framework;
 using TMPro;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -87,7 +88,7 @@ namespace Blockiverse.Tests.EditMode
             var editedPosition = new BlockPosition(2, 2, 2);
             worldManager.World.SetBlock(editedPosition, BlockRegistry.LumenQuartzCluster);
 
-            controller.SendMessage("OnApplicationPause", true);
+            InvokeUnityMessage(controller, "OnApplicationPause", true);
 
             WorldLoadResult result = new WorldSaveService().Load(savePath);
             Assert.That(result.Success, Is.True, result.Error);
@@ -128,6 +129,7 @@ namespace Blockiverse.Tests.EditMode
 
             SetPrivateField(controller, "autoSaveTask", Task.FromException(new IOException("autosave failed")));
             SetPrivateField(controller, "autoSaveWorldName", "Autosave Failure");
+            LogAssert.Expect(LogType.Error, "[Blockiverse][Persistence] Failed to autosave world session name=Autosave Failure exception=IOException");
             InvokePrivateMethod(controller, "CompleteAutoSaveIfReady");
             Assert.That(pauseStatus.text, Is.EqualTo("Autosave failed."));
         }
@@ -315,7 +317,7 @@ namespace Blockiverse.Tests.EditMode
         {
             menuObject = new GameObject("Menu Controller");
             BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             return controller;
         }
 
@@ -346,7 +348,7 @@ namespace Blockiverse.Tests.EditMode
 
             BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
             controller.Configure(null, null, null, null, null, null, loadWorldPanel);
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             return controller;
         }
 
@@ -388,6 +390,27 @@ namespace Blockiverse.Tests.EditMode
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, $"Missing private method {methodName}.");
             method.Invoke(controller, args);
+        }
+
+        static void InvokeUnityMessage(MonoBehaviour target, string methodName, params object[] args)
+        {
+            MethodInfo method = FindInstanceMethod(target.GetType(), methodName);
+            Assert.That(method, Is.Not.Null, $"Missing Unity message {methodName} on {target.GetType().Name}");
+            method.Invoke(target, args);
+        }
+
+        static MethodInfo FindInstanceMethod(System.Type type, string methodName)
+        {
+            for (System.Type current = type; current != null; current = current.BaseType)
+            {
+                MethodInfo method = current.GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (method != null)
+                    return method;
+            }
+
+            return null;
         }
 
         static void SetPrivateField<T>(BlockiverseWorldSessionController controller, string fieldName, T value)

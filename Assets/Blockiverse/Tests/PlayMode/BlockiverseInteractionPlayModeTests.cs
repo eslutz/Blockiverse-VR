@@ -15,6 +15,20 @@ namespace Blockiverse.Tests.PlayMode
 {
     public sealed class BlockiverseInteractionPlayModeTests : InputTestFixture
     {
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public override void TearDown()
+        {
+            BlockiverseRuntimeState.Reset();
+            base.TearDown();
+        }
+
         [UnityTest]
         public IEnumerator BlockEditingToggleHidesAndRestoresTheInteractionRayVisual()
         {
@@ -98,6 +112,20 @@ namespace Blockiverse.Tests.PlayMode
 
     public sealed class BlockiverseInteractionInputPlayModeTests : InputTestFixture
     {
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public override void TearDown()
+        {
+            BlockiverseRuntimeState.Reset();
+            base.TearDown();
+        }
+
         [UnityTest]
         public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
         {

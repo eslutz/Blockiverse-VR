@@ -736,10 +736,8 @@ namespace Blockiverse.Editor
         {
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
-            InputAction jump = map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
-            jump.AddBinding("<XRController>{LeftHand}/primaryButton");
-            InputAction blockEditingToggle = map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
-            blockEditingToggle.AddBinding("<XRController>{LeftHand}/secondaryButton");
+            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
+            map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)

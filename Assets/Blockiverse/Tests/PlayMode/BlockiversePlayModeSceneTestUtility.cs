@@ -1,4 +1,5 @@
 using System.Collections;
+using Blockiverse.Core;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem.XR;
@@ -10,6 +11,7 @@ namespace Blockiverse.Tests.PlayMode
     {
         public static IEnumerator LoadSceneSingle(string sceneName)
         {
+            BlockiverseRuntimeState.Reset();
             yield return CleanupTrackedPoseDrivers();
 
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
@@ -22,6 +24,7 @@ namespace Blockiverse.Tests.PlayMode
 
         public static IEnumerator CleanupTrackedPoseDrivers()
         {
+            BlockiverseRuntimeState.Reset();
             DisableTrackedPoseDrivers();
             yield return null;
             DisableTrackedPoseDrivers();

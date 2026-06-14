@@ -49,7 +49,7 @@ namespace Blockiverse.Tests.PlayMode
 
             Canvas canvas = inventoryPanel.GetComponentInParent<Canvas>();
             Assert.That(canvas, Is.Not.Null);
-            Assert.That(canvas.enabled, Is.True);
+            Assert.That(canvas.enabled, Is.False, "The gameplay HUD starts hidden while the title/menu route is active.");
             Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
             Assert.That(craftingPanel.GetComponentInParent<Canvas>(), Is.SameAs(canvas));
             Assert.That(healthPanel.GetComponentInParent<Canvas>(), Is.SameAs(canvas));

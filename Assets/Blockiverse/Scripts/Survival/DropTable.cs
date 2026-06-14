@@ -28,7 +28,8 @@ namespace Blockiverse.Survival
                 if (rng % 1000 >= (uint)(Chance * 1000)) return ItemStack.Empty;
             }
             Advance(ref rng);
-            int count = Min + (Max > Min ? (int)(rng % (uint)(Max - Min + 1)) : 0);
+            uint countRoll = Mix(rng);
+            int count = Min + (Max > Min ? (int)(countRoll % (uint)(Max - Min + 1)) : 0);
             return new ItemStack(ItemId, count);
         }
 
@@ -37,6 +38,16 @@ namespace Blockiverse.Survival
             rng ^= rng << 13;
             rng ^= rng >> 17;
             rng ^= rng << 5;
+        }
+
+        static uint Mix(uint value)
+        {
+            value ^= value >> 16;
+            value *= 0x7feb352d;
+            value ^= value >> 15;
+            value *= 0x846ca68b;
+            value ^= value >> 16;
+            return value;
         }
     }
 

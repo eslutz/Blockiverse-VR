@@ -9,6 +9,9 @@ namespace Blockiverse.Gameplay
             if (registry == null || !registry.TryGet(block, out BlockDefinition definition))
                 return BlockiverseAudioCue.ToolHitSoft;
 
+            if (definition.Category == BlockCategory.Organic)
+                return BlockiverseAudioCue.ToolHitSoft;
+
             return definition.Category == BlockCategory.Terrain ||
                    definition.Category == BlockCategory.Resource ||
                    definition.HardnessClass >= BlockHardnessClass.Medium

@@ -68,7 +68,14 @@ namespace Blockiverse.Tests.EditMode
 
             object instance = settingsType.GetProperty("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
             object value = settingsType.GetProperty("GenerateDefaultNetworkPrefabs", BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance);
-            Assert.That(value, Is.EqualTo(false));
+            if (value is bool generatedDefaultPrefabs)
+            {
+                Assert.That(generatedDefaultPrefabs, Is.False);
+                return;
+            }
+
+            string settingsYaml = File.ReadAllText("ProjectSettings/NetcodeForGameObjects.asset");
+            StringAssert.Contains("GenerateDefaultNetworkPrefabs: 0", settingsYaml);
         }
 
         [Test]

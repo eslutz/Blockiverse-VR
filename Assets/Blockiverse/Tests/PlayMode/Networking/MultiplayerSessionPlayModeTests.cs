@@ -58,6 +58,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockiverseMenuController hostMenuController =
                 UnityEngine.Object.FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
+            hostMenuController ??= CreateMenuController("Host Menu Controller");
             Assert.That(hostMenuController, Is.Not.Null);
             hostMenu.ConfigureMenuController(hostMenuController);
 
@@ -66,10 +67,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             BlockiverseMenuController clientMenuController = CreateMenuController("Client Menu Controller");
             clientMenu.ConfigureMenuController(clientMenuController);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -116,10 +114,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -168,10 +163,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -291,10 +283,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -367,10 +356,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             clientSession.Configure(testConfig);
             clientSession.UnityTransport.ConnectTimeoutMS = 50;
@@ -405,10 +391,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -457,10 +440,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             var editPosition = new BlockPosition(2, 2, 2);
             var restartEditPosition = new BlockPosition(3, 2, 2);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
             bool clientWasListeningDuringShutdownPreparation = false;
 
             bool CaptureShutdownPreparation(out string failureReason)
@@ -606,10 +586,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             survivalSync.SharedCrateInventory.SetSlot(0, new ItemStack(ItemId.Embercoal, 1));
             MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             try
             {
@@ -654,10 +631,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             VoxelWorld savedWorld = new VoxelWorld(new WorldBounds(16, 64, 16), chunkSize: 16, seed: 2026);
             savedWorld.SetBlock(savedBlockPosition, BlockRegistry.LumenQuartzCluster);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             try
             {
@@ -703,10 +677,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             string savePath = CreateTempSavePath();
             MultiplayerWorldPersistence persistence = ConfigurePersistence(hostSession, worldManager, savePath);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -795,10 +766,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             var stalePosition = new BlockPosition(3, 2, 2);
             var postLateJoinPosition = new BlockPosition(4, 2, 2);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -1024,10 +992,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerChunkAuthoritySync competingClientSync = ConfigureChunkSync(competingClientSession, competingClientWorldManager);
             var conflictPosition = new BlockPosition(2, 2, 2);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             firstClientSession.Configure(testConfig);
@@ -1118,10 +1083,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
             var editPosition = new BlockPosition(2, 2, 2);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -1200,10 +1162,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 new BlockPosition(4, 2, 2)
             };
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
@@ -1282,19 +1241,18 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             BlockiverseNetworkSession firstClientSession = CreateClientSession(hostSession);
             BlockiverseNetworkSession secondClientSession = CreateClientSession(hostSession);
-            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Survival Sync World");
-            CreativeWorldManager firstClientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Host Survival Sync World");
+            CreativeWorldManager firstClientWorldManager = CreateSurvivalWorldManager(
                 "First Client Survival Sync World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 3112, groundHeight: 2));
-            CreativeWorldManager secondClientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager secondClientWorldManager = CreateSurvivalWorldManager(
                 "Second Client Survival Sync World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 4112, groundHeight: 2));
             var timberPosition = new BlockPosition(2, 2, 2);
             var coalstonePosition = new BlockPosition(3, 2, 2);
-            var crateTimberPosition = new BlockPosition(4, 2, 2);
+            var crateTimberPosition = timberPosition;
             hostWorldManager.World.SetBlock(timberPosition, BlockRegistry.BranchwoodLog);
             hostWorldManager.World.SetBlock(coalstonePosition, BlockRegistry.EmbercoalSeam);
-            hostWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.BranchwoodLog);
 
             MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
             MultiplayerChunkAuthoritySync firstClientChunkSync = ConfigureChunkSync(firstClientSession, firstClientWorldManager);
@@ -1303,14 +1261,14 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync firstClientSurvivalSync = ConfigureSurvivalSync(firstClientSession, firstClientChunkSync, firstClientWorldManager);
             MultiplayerSurvivalSync secondClientSurvivalSync = ConfigureSurvivalSync(secondClientSession, secondClientChunkSync, secondClientWorldManager);
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             firstClientSession.Configure(testConfig);
             secondClientSession.Configure(testConfig);
+
+            double hostCommandTime = 10.0d;
+            SetHostCommandTimeProvider(hostSurvivalSync, () => hostCommandTime);
 
             Assert.That(hostSession.StartHost(), Is.True);
             yield return WaitFor(
@@ -1354,6 +1312,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       secondClientWorldManager.World.GetBlock(timberPosition) == BlockRegistry.Air,
                 "Host did not grant harvested timber only to the requesting client.");
 
+            hostCommandTime += 100.0d;
+
             // Embercoal Seam requires a tier-2 Delver (Flint); a tier-1 Reedwood tool cannot mine
             // ores per the survival ruleset (§3, §7.1). Harvest validation is server-authoritative:
             // the host reads the equipped tool from its own copy of the client's inventory at the
@@ -1377,6 +1337,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.Embercoal) == 1,
                 "Host did not grant harvested coalstone to the requesting client.");
 
+            hostCommandTime += 100.0d;
+
             // Craft is server-authoritative: Work Plank is the canonical handcraft recipe
             // (branchwood_log ×1 → work_plank ×6, §9.1) and is achievable from the harvested log.
             SurvivalCommandResult craftPlanks = firstClientSurvivalSync.TrySubmitCraft(
@@ -1393,6 +1355,11 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       hostSurvivalSync.GetInventory(firstClientChunkSync.CurrentBoundary.LocalClientId).CountOf(ItemId.WorkPlank) == 6,
                 "Host did not validate crafting consistently for the requesting client.");
 
+            hostCommandTime += 100.0d;
+            hostWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.BranchwoodLog);
+            firstClientWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.BranchwoodLog);
+            secondClientWorldManager.World.SetBlock(crateTimberPosition, BlockRegistry.BranchwoodLog);
+
             SurvivalCommandResult crateTimberHarvest = firstClientSurvivalSync.TrySubmitHarvest(
                 crateTimberPosition,
                 ItemStack.Empty,
@@ -1400,6 +1367,15 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             Assert.That(crateTimberHarvestSentToHost, Is.True);
             Assert.That(crateTimberHarvest.PendingHostValidation, Is.True);
+
+            yield return WaitFor(
+                () => firstClientSurvivalSync.LastCommandResult.RequestId == crateTimberHarvest.RequestId &&
+                      !firstClientSurvivalSync.LastCommandResult.PendingHostValidation,
+                "Host did not answer the crate timber harvest command.");
+            Assert.That(
+                firstClientSurvivalSync.LastCommandResult.Accepted,
+                Is.True,
+                $"Crate timber harvest was rejected: {firstClientSurvivalSync.LastCommandResult.FailureReason} / {firstClientSurvivalSync.LastCommandResult.HarvestFailureReason}");
 
             yield return WaitFor(
                 () => firstClientSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog) == 1,
@@ -1449,8 +1425,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Place World");
-            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Host Place World");
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager(
                 "Client Place World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 5112, groundHeight: 2));
 
@@ -1463,10 +1439,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
 
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress,
-                BlockiverseNetworkConfig.DefaultAddress,
-                port);
+            var testConfig = CreateTestNetworkConfig(port);
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
@@ -1519,8 +1492,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Strip World");
-            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Host Strip World");
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager(
                 "Client Strip World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6112, groundHeight: 2));
 
@@ -1533,8 +1506,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
 
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            var testConfig = CreateTestNetworkConfig(port);
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
@@ -1586,8 +1558,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Station World");
-            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Host Station World");
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager(
                 "Client Station World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6113, groundHeight: 2));
 
@@ -1600,8 +1572,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
 
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            var testConfig = CreateTestNetworkConfig(port);
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
@@ -1672,8 +1643,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Consumable World");
-            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Host Consumable World");
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager(
                 "Client Consumable World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6114, groundHeight: 2));
 
@@ -1683,8 +1654,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
 
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            var testConfig = CreateTestNetworkConfig(port);
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
@@ -1738,20 +1708,19 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Host Farming World");
-            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager(
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Host Farming World");
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager(
                 "Client Farming World",
                 new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 6115, groundHeight: 2));
 
             var soilPosition = new BlockPosition(2, 4, 2);
             var cropPosition = new BlockPosition(2, 5, 2);
             var waterPosition = new BlockPosition(3, 4, 2);
-            var pourPosition = new BlockPosition(4, 4, 2);
+            var pourPosition = waterPosition;
             hostWorldManager.World.SetBlock(soilPosition, BlockRegistry.LooseLoam);
             // §11.1: tilling requires freshwater within reach (or a clean water flask). Place a
             // source beside the soil on the host (the till is validated against the host world).
             hostWorldManager.World.SetBlock(waterPosition, BlockRegistry.Freshwater);
-            hostWorldManager.World.SetBlock(pourPosition, BlockRegistry.Air);
 
             MultiplayerChunkAuthoritySync hostChunkSync = ConfigureChunkSync(hostSession, hostWorldManager);
             MultiplayerChunkAuthoritySync clientChunkSync = ConfigureChunkSync(clientSession, clientWorldManager);
@@ -1759,8 +1728,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
 
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            var testConfig = CreateTestNetworkConfig(port);
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
@@ -1822,8 +1790,16 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSurvivalSync.Diagnostics.AcceptedBucketCount, Is.EqualTo(1));
 
             // Pour: freshwater_bucket -> freshwater source block, bucket returned empty (§631/§731).
-            clientSurvivalSync.TrySubmitPourBucket(pourPosition, out bool pourSent, equippedSlotIndex: 4);
+            SurvivalCommandResult pourBucket = clientSurvivalSync.TrySubmitPourBucket(pourPosition, out bool pourSent, equippedSlotIndex: 4);
             Assert.That(pourSent, Is.True);
+            yield return WaitFor(
+                () => clientSurvivalSync.LastCommandResult.RequestId == pourBucket.RequestId &&
+                      !clientSurvivalSync.LastCommandResult.PendingHostValidation,
+                "Host did not answer the pour bucket command.");
+            Assert.That(
+                clientSurvivalSync.LastCommandResult.Accepted,
+                Is.True,
+                $"PourBucket was rejected: {clientSurvivalSync.LastCommandResult.FailureReason}");
             yield return WaitFor(
                 () => hostWorldManager.World.GetBlock(pourPosition) == BlockRegistry.Freshwater &&
                       clientWorldManager.World.GetBlock(pourPosition) == BlockRegistry.Freshwater &&
@@ -1876,8 +1852,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync clientSurvivalSync = ConfigureSurvivalSync(clientSession, clientChunkSync, clientWorldManager);
 
             ushort port = NextPort();
-            var testConfig = new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port);
+            var testConfig = CreateTestNetworkConfig(port);
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
@@ -2476,7 +2451,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             try
             {
-                worldManager = CreateCreativeWorldManager(
+                worldManager = CreateSurvivalWorldManager(
                     "Rate Limited Harvest World",
                     new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 9815, groundHeight: 2));
                 var firstPosition = new BlockPosition(2, 4, 2);
@@ -2548,8 +2523,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             MultiplayerSurvivalSync hostSurvivalSync = ConfigureSurvivalSync(hostSession, hostChunkSync, hostWorldManager);
 
             ushort port = NextPort();
-            hostSession.Configure(new BlockiverseNetworkConfig(
-                BlockiverseNetworkConfig.DefaultAddress, BlockiverseNetworkConfig.DefaultAddress, port));
+            hostSession.Configure(CreateTestNetworkConfig(port));
 
             Assert.That(hostSession.StartHost(), Is.True);
             yield return WaitFor(
@@ -2871,6 +2845,13 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return manager;
         }
 
+        static CreativeWorldManager CreateSurvivalWorldManager(string name, WorldGenerationSettings settings = null)
+        {
+            CreativeWorldManager manager = CreateCreativeWorldManager(name, settings);
+            manager.SetGameMode(WorldGameMode.Survival);
+            return manager;
+        }
+
         static Material CreateBlockAtlasMaterial()
         {
             var atlasTexture = new Texture2D(
@@ -2948,6 +2929,12 @@ namespace Blockiverse.Tests.Networking.PlayMode
         {
             return (ushort)Interlocked.Increment(ref nextPort);
         }
+
+        static BlockiverseNetworkConfig CreateTestNetworkConfig(ushort port) =>
+            new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultAddress,
+                port).WithMaxPlayers(BlockiverseNetworkConfig.MaxSupportedPlayers);
 
         string CreateTempSavePath()
         {

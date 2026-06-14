@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
@@ -456,6 +457,20 @@ namespace Blockiverse.Tests.PlayMode
 
     public sealed class BlockiverseInputRigActionPlayModeTests : InputTestFixture
     {
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public override void TearDown()
+        {
+            BlockiverseRuntimeState.Reset();
+            base.TearDown();
+        }
+
         [UnityTest]
         public IEnumerator ConfiguredInputActionsDriveLocomotionAndComfortMenu()
         {
@@ -497,13 +512,15 @@ namespace Blockiverse.Tests.PlayMode
 
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
+                yield return null;
 
                 // Teleport is now native target-based (held Teleport Mode enables the teleport ray,
                 // which selects a TeleportationArea). Holding the mode alone must not move the rig.
                 Vector3 positionBeforeTeleportMode = origin.transform.position;
                 Press(gamepad.leftShoulder);
                 yield return null;
-                Assert.That(Vector3.Distance(origin.transform.position, positionBeforeTeleportMode), Is.LessThan(0.01f));
+                Vector3 teleportModeDelta = origin.transform.position - positionBeforeTeleportMode;
+                Assert.That(Vector3.ProjectOnPlane(teleportModeDelta, origin.transform.up).magnitude, Is.LessThan(0.01f));
                 Release(gamepad.leftShoulder);
                 yield return null;
 

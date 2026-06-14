@@ -444,6 +444,8 @@ MonoBehaviour:
   fallbackProxyEnabled: 1
   metaAvatarAvailable: 0
   poseSendRateHz: 30
+  remotePoseInterpolationSpeed: 18
+  rootTrackingSource: {fileID: 0}
   headTrackingSource: {fileID: 0}
   leftHandTrackingSource: {fileID: 0}
   rightHandTrackingSource: {fileID: 0}

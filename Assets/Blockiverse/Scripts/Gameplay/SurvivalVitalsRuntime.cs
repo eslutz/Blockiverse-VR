@@ -43,6 +43,7 @@ namespace Blockiverse.Gameplay
         float airbornePeakY;
         bool deathDropSubmitted;
         bool hasLastDeathDropPosition;
+        bool vitalsEventsWired;
         BlockPosition lastDeathDropPosition;
         readonly Dictionary<string, float> nextHazardApplyTimes = new();
         readonly List<BlockPosition> bedrollPositions = new();
@@ -77,8 +78,7 @@ namespace Blockiverse.Gameplay
 
         void OnEnable()
         {
-            Vitals.HealthChanged += OnVitalsHealthChanged;
-            Vitals.Died += OnVitalsDied;
+            WireVitalsEvents();
             cachedHeadTransform = Camera.main != null ? Camera.main.transform : null;
             ResolveReferences();
             WireSurvivalSync();
@@ -86,8 +86,7 @@ namespace Blockiverse.Gameplay
 
         void OnDisable()
         {
-            Vitals.HealthChanged -= OnVitalsHealthChanged;
-            Vitals.Died -= OnVitalsDied;
+            UnwireVitalsEvents();
             cachedRigTransform = null;
             cachedHeadTransform = null;
             characterController = null;
@@ -98,6 +97,26 @@ namespace Blockiverse.Gameplay
                 worldTimeClock.Ticked -= OnWorldTick;
                 worldTimeClock = null;
             }
+        }
+
+        void WireVitalsEvents()
+        {
+            if (vitalsEventsWired)
+                return;
+
+            Vitals.HealthChanged += OnVitalsHealthChanged;
+            Vitals.Died += OnVitalsDied;
+            vitalsEventsWired = true;
+        }
+
+        void UnwireVitalsEvents()
+        {
+            if (!vitalsEventsWired)
+                return;
+
+            Vitals.HealthChanged -= OnVitalsHealthChanged;
+            Vitals.Died -= OnVitalsDied;
+            vitalsEventsWired = false;
         }
 
         void Update()

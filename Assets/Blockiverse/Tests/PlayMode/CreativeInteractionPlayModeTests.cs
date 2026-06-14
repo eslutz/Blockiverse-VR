@@ -10,6 +10,18 @@ namespace Blockiverse.Tests.PlayMode
 {
     public sealed class CreativeInteractionPlayModeTests
     {
+        [SetUp]
+        public void SetUp()
+        {
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            BlockiverseRuntimeState.Reset();
+        }
+
         [Test]
         public void FaceNormalPlacementChoosesAdjacentCoordinate()
         {

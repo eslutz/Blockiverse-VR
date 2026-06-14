@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Blockiverse.Gameplay
 {
@@ -216,6 +219,7 @@ namespace Blockiverse.Gameplay
 
         static Material CreateBaseMaterial(Material sourceMaterial)
         {
+            sourceMaterial = ResolveSourceMaterial(sourceMaterial);
             Shader voxelShader = Shader.Find(VoxelLitShaderName);
             Shader shader = voxelShader != null
                 ? voxelShader
@@ -240,6 +244,18 @@ namespace Blockiverse.Gameplay
             }
 
             return material;
+        }
+
+        static Material ResolveSourceMaterial(Material sourceMaterial)
+        {
+            if (sourceMaterial != null)
+                return sourceMaterial;
+
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
+#else
+            return null;
+#endif
         }
 
         static void SetBaseColor(Material material, Color color)
