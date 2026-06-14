@@ -2,7 +2,8 @@
 set -eu
 
 forbidden_regex='^(Library|Temp|Logs|UserSettings)/|(^|/)UserSettings/|(^|/)(\.utmp|\.ci-artifacts)/|\.env(\.|$)|\.(jks|keystore|p12)$'
-tracked_forbidden="$(git ls-files | grep -E "$forbidden_regex" || true)"
+allowed_regex='^Assets/CompositionLayers/UserSettings/Resources(\.meta|/CompositionLayersRuntimeSettings\.asset(\.meta)?)$'
+tracked_forbidden="$(git ls-files | grep -E "$forbidden_regex" | grep -Ev "$allowed_regex" || true)"
 existing_forbidden=""
 
 if [ -n "$tracked_forbidden" ]; then
