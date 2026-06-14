@@ -275,6 +275,7 @@ jobs:
 
       - name: Create GitHub prerelease
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
           artifact_dir=".ci-artifacts/${CHANNEL}"

@@ -23,6 +23,7 @@ namespace Blockiverse.Editor
                 Directory.CreateDirectory(outputDirectory);
 
             BlockiverseProjectBootstrapper.Run();
+            ConfigureAndroidVersion();
 
             var options = new BuildPlayerOptions
             {
@@ -53,7 +54,7 @@ namespace Blockiverse.Editor
 
             BlockiverseProjectBootstrapper.Run();
             ConfigureReleaseSigning();
-            ConfigureReleaseVersion();
+            ConfigureAndroidVersion();
 
             var options = new BuildPlayerOptions
             {
@@ -91,7 +92,7 @@ namespace Blockiverse.Editor
             PlayerSettings.Android.keyaliasPass = keyPassword;
         }
 
-        static void ConfigureReleaseVersion()
+        static void ConfigureAndroidVersion()
         {
             string versionName = GetArgumentValue(BuildVersionNameArgument)
                 ?? Environment.GetEnvironmentVariable("UNITY_ANDROID_VERSION_NAME");
