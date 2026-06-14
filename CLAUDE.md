@@ -29,13 +29,11 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 
 - Production releases are cut from `main`.
 - Release versioning follows [ADR 0005](docs/adr/0005-release-versioning.md), with the root `VERSION` file as the SemVer base version source.
-- Alpha tags may point to same-repository pull request commits.
-- Beta, RC, and production tags must point to commits reachable from `origin/main`.
-- Meta channel releases use `.github/workflows/meta-release.yml`:
-  - pull request updates build and upload Alpha to Meta `alpha`;
-  - pushes to `main` build and upload signed Beta to Meta `beta`;
-  - manual RC promotion promotes a selected Beta GitHub release to Meta `rc`;
-  - manual Production promotion promotes a selected RC GitHub release to Meta `store` only after the `meta-production` environment approval gate is approved.
+- Pull requests use `.github/workflows/quest-ci.yml` for validation only. PR workflows must not receive Meta credentials or publish to Meta release channels.
+- Meta channel CD is split across:
+  - `.github/workflows/quest-alpha.yml`, which builds a release-signed Quest APK from `main` pushes or manual trusted refs and uploads it to Meta `alpha`;
+  - `.github/workflows/quest-promote.yml`, which manually promotes an existing tested Meta build through `alpha -> beta`, `beta -> rc`, or `rc -> store` without rebuilding.
+- Promotion to `beta`, `rc`, and `store` must preserve the exact tested Meta build artifact. Production/Store promotion requires the `meta-production` environment approval gate.
 - Known-good engineering checkpoint tags use the `kg/...` family and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). They are recovery checkpoints, not release tags.
 
 ### Project Guardrails
@@ -90,14 +88,14 @@ scripts/unity/run-tests.sh
 
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
-scripts/unity/build-release-apk.sh                # signed; needs ANDROID_KEYSTORE_PATH/PASSWORD, ANDROID_KEY_ALIAS/PASSWORD
+scripts/unity/build-release-apk.sh                # signed; needs ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASS, ANDROID_KEYALIAS_NAME, ANDROID_KEYALIAS_PASS
 
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
 python3 scripts/audio/generate-audio.py           # all SFX
 ```
 
-**PR CI does not compile or test Unity code** (it only checks shell syntax and release version conventions). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. `.github/workflows/meta-release.yml` builds and uploads Alpha/Beta APKs, then promotes Beta to RC and RC to Meta `store` without rebuilding.
+`.github/workflows/quest-ci.yml` validates pull requests with repository checks, Unity Personal activation through GameCI, Unity tests, and an Android smoke APK. `.github/workflows/quest-alpha.yml` builds the release-signed APK that goes to Meta `alpha`. `.github/workflows/quest-promote.yml` promotes already-uploaded Meta build IDs to `beta`, `rc`, and eventually `store` without rebuilding.
 
 ## Architecture
 

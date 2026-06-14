@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Blockiverse.Core;
 using UnityEditor;
@@ -11,6 +12,12 @@ namespace Blockiverse.Editor
         const string BuildOutputArgument = "-blockiverseBuildOutput";
         const string BuildVersionNameArgument = "-blockiverseBuildVersionName";
         const string BuildVersionCodeArgument = "-blockiverseBuildVersionCode";
+        const string AndroidPackageNameArgument = "-blockiverseAndroidPackageName";
+        const string SigningConfigPathArgument = "-blockiverseSigningConfigPath";
+        const string KeystorePathArgument = "-blockiverseKeystorePath";
+        const string KeystorePasswordArgument = "-blockiverseKeystorePassword";
+        const string KeyAliasArgument = "-blockiverseKeyAlias";
+        const string KeyPasswordArgument = "-blockiverseKeyPassword";
         const string DefaultBuildOutputPath = "Builds/Android/BlockiverseVR-development.apk";
         const string DefaultReleaseBuildOutputPath = "Builds/Android/BlockiverseVR-release.apk";
 
@@ -23,6 +30,7 @@ namespace Blockiverse.Editor
                 Directory.CreateDirectory(outputDirectory);
 
             BlockiverseProjectBootstrapper.Run();
+            ConfigureAndroidPackageName();
             ConfigureAndroidVersion();
 
             var options = new BuildPlayerOptions
@@ -53,6 +61,7 @@ namespace Blockiverse.Editor
                 Directory.CreateDirectory(outputDirectory);
 
             BlockiverseProjectBootstrapper.Run();
+            ConfigureAndroidPackageName();
             ConfigureReleaseSigning();
             ConfigureAndroidVersion();
 
@@ -77,10 +86,23 @@ namespace Blockiverse.Editor
 
         static void ConfigureReleaseSigning()
         {
-            string keystorePath = RequireEnvironmentVariable("ANDROID_KEYSTORE_PATH");
-            string keystorePassword = RequireEnvironmentVariable("ANDROID_KEYSTORE_PASSWORD");
-            string keyAlias = RequireEnvironmentVariable("ANDROID_KEY_ALIAS");
-            string keyPassword = RequireEnvironmentVariable("ANDROID_KEY_PASSWORD");
+            Dictionary<string, string> signingConfig = ReadSigningConfig();
+            string keystorePath = RequireValue(signingConfig, KeystorePathArgument, "ANDROID_KEYSTORE_PATH");
+            string keystorePassword = RequireValue(
+                signingConfig,
+                KeystorePasswordArgument,
+                "ANDROID_KEYSTORE_PASS",
+                "ANDROID_KEYSTORE_PASSWORD");
+            string keyAlias = RequireValue(
+                signingConfig,
+                KeyAliasArgument,
+                "ANDROID_KEYALIAS_NAME",
+                "ANDROID_KEY_ALIAS");
+            string keyPassword = RequireValue(
+                signingConfig,
+                KeyPasswordArgument,
+                "ANDROID_KEYALIAS_PASS",
+                "ANDROID_KEY_PASSWORD");
 
             if (!File.Exists(keystorePath))
                 throw new FileNotFoundException($"Android keystore was not found: {keystorePath}", keystorePath);
@@ -90,6 +112,17 @@ namespace Blockiverse.Editor
             PlayerSettings.Android.keystorePass = keystorePassword;
             PlayerSettings.Android.keyaliasName = keyAlias;
             PlayerSettings.Android.keyaliasPass = keyPassword;
+        }
+
+        static void ConfigureAndroidPackageName()
+        {
+            string packageName = GetArgumentValue(AndroidPackageNameArgument)
+                ?? Environment.GetEnvironmentVariable("ANDROID_PACKAGE_NAME");
+
+            if (string.IsNullOrWhiteSpace(packageName))
+                return;
+
+            PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, packageName.Trim());
         }
 
         static void ConfigureAndroidVersion()
@@ -111,14 +144,56 @@ namespace Blockiverse.Editor
             }
         }
 
-        static string RequireEnvironmentVariable(string variableName)
+        static Dictionary<string, string> ReadSigningConfig()
         {
-            string value = Environment.GetEnvironmentVariable(variableName);
+            string configPath = GetArgumentValue(SigningConfigPathArgument);
 
-            if (string.IsNullOrWhiteSpace(value))
-                throw new InvalidOperationException($"{variableName} must be set for Android release signing.");
+            if (string.IsNullOrWhiteSpace(configPath))
+                return new Dictionary<string, string>(StringComparer.Ordinal);
 
-            return value;
+            if (!File.Exists(configPath))
+                throw new FileNotFoundException($"Android signing config was not found: {configPath}", configPath);
+
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (string line in File.ReadAllLines(configPath))
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+                    continue;
+
+                int separatorIndex = line.IndexOf('=');
+                if (separatorIndex < 1)
+                    throw new InvalidOperationException($"Invalid Android signing config line: {line}");
+
+                values[line.Substring(0, separatorIndex)] = line.Substring(separatorIndex + 1);
+            }
+
+            return values;
+        }
+
+        static string RequireValue(
+            Dictionary<string, string> configValues,
+            string argumentName,
+            params string[] environmentVariableNames)
+        {
+            string value = GetArgumentValue(argumentName);
+
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+
+            foreach (string variableName in environmentVariableNames)
+            {
+                if (configValues.TryGetValue(variableName, out value) && !string.IsNullOrWhiteSpace(value))
+                    return value;
+
+                value = Environment.GetEnvironmentVariable(variableName);
+
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
+            }
+
+            throw new InvalidOperationException(
+                $"{environmentVariableNames[0]} must be set for Android release signing.");
         }
 
         static string GetArgumentValue(string argumentName)

@@ -35,4 +35,8 @@ if [ -n "${UNITY_ANDROID_VERSION_CODE:-}" ]; then
   unity_args+=(-blockiverseBuildVersionCode "$UNITY_ANDROID_VERSION_CODE")
 fi
 
+if [ -n "${ANDROID_PACKAGE_NAME:-}" ]; then
+  unity_args+=(-blockiverseAndroidPackageName "$ANDROID_PACKAGE_NAME")
+fi
+
 "$UNITY_EDITOR" "${unity_args[@]}"

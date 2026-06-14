@@ -1,0 +1,127 @@
+name: Quest CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  checks: write
+  contents: read
+
+env:
+  UNITY_VERSION: ${{ vars.UNITY_VERSION || '6000.3.16f1' }}
+  ANDROID_PACKAGE_NAME: ${{ vars.ANDROID_PACKAGE_NAME || 'dev.ericslutz.blockiversevr' }}
+
+jobs:
+  repository-checks:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Pull Git LFS assets
+        run: git lfs pull
+
+      - name: Check shell script syntax
+        run: bash -n scripts/store/*.sh scripts/unity/*.sh
+
+      - name: Check release workflow conventions
+        run: |
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' VERSION
+          grep -q '0.1.0-alpha.run318.4.663f074' docs/adr/0005-release-versioning.md
+          grep -q 'alpha -> beta' docs/architecture/branching-and-release.md
+          grep -q 'beta -> rc' docs/architecture/branching-and-release.md
+          grep -q 'rc -> store' docs/architecture/branching-and-release.md
+          test -f .github/workflows/quest-ci.yml
+          test -f .github/workflows/quest-alpha.yml
+          test -f .github/workflows/quest-promote.yml
+          test ! -f .github/workflows/meta-release.yml
+
+  unity-validation:
+    name: Unity validation
+    needs: repository-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Pull Git LFS assets
+        run: git lfs pull
+
+      - name: Restore Unity Library cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: unity-library-ci-${{ runner.os }}-${{ env.UNITY_VERSION }}-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          restore-keys: |
+            unity-library-ci-${{ runner.os }}-${{ env.UNITY_VERSION }}-
+            unity-library-ci-${{ runner.os }}-
+
+      - name: Run Unity tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Unity Test Results
+          artifactsPath: TestResults/Unity
+
+      - name: Compute smoke build settings
+        id: settings
+        run: |
+          base_version="$(tr -d '[:space:]' < VERSION)"
+          if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "VERSION must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            exit 64
+          fi
+
+          short_sha="$(git rev-parse --short=7 HEAD)"
+          version_name="${base_version}-ci.run${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}.${short_sha}"
+          version_code="$(( $(date -u +%s) - 1577836800 ))"
+          apk_filename="BlockiverseVR-${version_name}-ci.apk"
+          output_path="Builds/CI/${apk_filename}"
+
+          echo "apk_filename=$apk_filename" >> "$GITHUB_OUTPUT"
+          echo "output_path=$output_path" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Build Android smoke APK
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: Android
+          buildMethod: Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid
+          versioning: None
+          customParameters: >
+            -blockiverseBuildOutput ${{ steps.settings.outputs.output_path }}
+            -blockiverseBuildVersionName ${{ steps.settings.outputs.version_name }}
+            -blockiverseBuildVersionCode ${{ steps.settings.outputs.version_code }}
+            -blockiverseAndroidPackageName ${{ env.ANDROID_PACKAGE_NAME }}
+
+      - name: Upload CI APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: blockiverse-ci-${{ steps.settings.outputs.version_name }}
+          path: ${{ steps.settings.outputs.output_path }}
+          if-no-files-found: error
+
+      - name: Upload Unity test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unity-test-results
+          path: TestResults/Unity/
+          if-no-files-found: ignore

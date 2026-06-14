@@ -1,0 +1,137 @@
+name: Quest Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_channel:
+        description: Existing Meta channel that contains the tested build
+        required: true
+        type: choice
+        options:
+          - alpha
+          - beta
+          - rc
+      destination_channel:
+        description: Meta channel to receive the tested build
+        required: true
+        type: choice
+        options:
+          - beta
+          - rc
+          - store
+      build_id:
+        description: Optional Meta build ID to promote from the source channel
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quest-promote-${{ inputs.destination_channel }}
+  cancel-in-progress: false
+
+env:
+  META_AGE_GROUP: ${{ vars.META_AGE_GROUP || 'TEENS_AND_ADULTS' }}
+
+jobs:
+  promote:
+    name: Promote Meta build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.destination_channel == 'store' && 'meta-production' || format('meta-{0}', inputs.destination_channel) }}
+    steps:
+      - name: Validate promotion path
+        run: |
+          case "${{ inputs.source_channel }}:${{ inputs.destination_channel }}" in
+            alpha:beta|beta:rc|rc:store) ;;
+            *)
+              echo "Promotions must follow alpha -> beta, beta -> rc, or rc -> store." >&2
+              exit 64
+              ;;
+          esac
+
+      - name: Install Meta platform utility
+        env:
+          OVR_PLATFORM_UTIL_SHA256: ${{ vars.OVR_PLATFORM_UTIL_SHA256 }}
+          OVR_PLATFORM_UTIL_URL: ${{ vars.OVR_PLATFORM_UTIL_URL }}
+        run: |
+          curl -fsSL "$OVR_PLATFORM_UTIL_URL" -o "$RUNNER_TEMP/ovr-platform-util"
+          if [ -n "$OVR_PLATFORM_UTIL_SHA256" ]; then
+            echo "${OVR_PLATFORM_UTIL_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
+          fi
+          chmod +x "$RUNNER_TEMP/ovr-platform-util"
+          "$RUNNER_TEMP/ovr-platform-util" version
+
+      - name: Promote Meta build
+        env:
+          BUILD_ID: ${{ inputs.build_id }}
+          DESTINATION_CHANNEL: ${{ inputs.destination_channel }}
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_USER_TOKEN: ${{ secrets.META_USER_TOKEN }}
+          SOURCE_CHANNEL: ${{ inputs.source_channel }}
+        run: |
+          case "$META_AGE_GROUP" in
+            TEENS_AND_ADULTS|MIXED_AGES|CHILDREN) ;;
+            *)
+              echo "META_AGE_GROUP must be TEENS_AND_ADULTS, MIXED_AGES, or CHILDREN." >&2
+              exit 65
+              ;;
+          esac
+
+          mkdir -p .ci-artifacts/promotion
+          output_path=".ci-artifacts/promotion/meta-promotion-output.txt"
+          summary_path=".ci-artifacts/promotion/meta-promotion-summary.json"
+
+          args=(
+            set-release-channel-build
+            --age-group "$META_AGE_GROUP"
+            --app-id "$META_APP_ID"
+            --token "$META_USER_TOKEN"
+            --source-channel "$SOURCE_CHANNEL"
+            --destination-channel "$DESTINATION_CHANNEL"
+            --disable-progress-bar true
+          )
+
+          if [ -n "$BUILD_ID" ]; then
+            args+=(--build-id "$BUILD_ID")
+          fi
+
+          echo "Running ovr-platform-util set-release-channel-build --source-channel ${SOURCE_CHANNEL} --destination-channel ${DESTINATION_CHANNEL}"
+          "$RUNNER_TEMP/ovr-platform-util" "${args[@]}" 2>&1 | tee "$output_path"
+
+          promoted_build_id="$BUILD_ID"
+          if [ -z "$promoted_build_id" ]; then
+            promoted_build_id="$(
+              sed -nE 's/.*[Bb]uild[ _-]?[Ii][Dd][^0-9A-Za-z_-]*([0-9A-Za-z_-]+).*/\1/p' "$output_path" | head -n 1
+            )"
+          fi
+          if [ -z "$promoted_build_id" ]; then
+            promoted_build_id="$(
+              sed -nE 's/.*"build[_-]?id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/ip' "$output_path" | head -n 1
+            )"
+          fi
+
+          export DESTINATION_CHANNEL SOURCE_CHANNEL promoted_build_id summary_path
+          python3 - <<'PY'
+          import json
+          import os
+
+          summary = {
+              "action": "promote",
+              "source_channel": os.environ["SOURCE_CHANNEL"],
+              "destination_channel": os.environ["DESTINATION_CHANNEL"],
+              "meta_build_id": os.environ.get("promoted_build_id", ""),
+              "workflow_run": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          with open(os.environ["summary_path"], "w", encoding="utf-8") as handle:
+              json.dump(summary, handle, separators=(",", ":"))
+              handle.write("\n")
+          PY
+
+      - name: Upload promotion record
+        uses: actions/upload-artifact@v7
+        with:
+          name: blockiverse-promotion-${{ inputs.source_channel }}-to-${{ inputs.destination_channel }}-${{ github.run_number }}.${{ github.run_attempt }}
+          path: .ci-artifacts/promotion/
+          if-no-files-found: error
