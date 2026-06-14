@@ -39,7 +39,7 @@ jobs:
     name: Promote Meta build
     runs-on: ubuntu-latest
     environment:
-      name: ${{ inputs.destination_channel == 'store' && 'meta-production' || format('meta-{0}', inputs.destination_channel) }}
+      name: ${{ inputs.destination_channel == 'store' && 'meta-store' || format('meta-{0}', inputs.destination_channel) }}
     steps:
       - name: Validate promotion path
         run: |

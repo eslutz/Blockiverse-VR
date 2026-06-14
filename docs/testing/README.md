@@ -54,7 +54,7 @@ Repository secrets:
 - `ANDROID_KEY_ALIAS` — Android key alias.
 - `ANDROID_KEY_PASSWORD` — Android key password.
 
-Environment secrets for `meta-alpha`, `meta-beta`, `meta-rc`, and `meta-production`:
+Environment secrets for `meta-alpha`, `meta-beta`, `meta-rc`, and `meta-store`:
 
 - `META_APP_ID` — Meta Horizon app ID for Blockiverse VR.
 - `META_APP_SECRET` — Meta app secret used by OVR Platform Utility for upload and promotion.

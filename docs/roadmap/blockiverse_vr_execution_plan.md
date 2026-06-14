@@ -1348,7 +1348,7 @@ Pull requests run Quest CI without Meta credentials.
 Merging to main uploads a release-signed APK to Meta `alpha`.
 Manual Alpha dispatch can publish a trusted ref or candidate versionName to Meta `alpha`.
 Manual promotion records the exact Meta build moved from `alpha -> beta`, `beta -> rc`, or `rc -> store`.
-Production promotion requires the `meta-production` environment approval gate.
+Store promotion requires the `meta-store` environment approval gate.
 APK can be sideloaded.
 Version appears correctly in game.
 Release notes include known issues.

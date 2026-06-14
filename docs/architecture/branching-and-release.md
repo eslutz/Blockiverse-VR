@@ -36,7 +36,7 @@ rc -> store
 
 The `meta-alpha` environment may be automatic. `meta-beta` should require
 manual approval once external testers are involved. `meta-rc` and
-`meta-production` should require manual approval; `meta-production` should also
+`meta-store` should require manual approval; `meta-store` should also
 be restricted to trusted refs such as `main`, release branches, or version tags.
 
 Alpha uses workflow-level GitHub Actions concurrency with

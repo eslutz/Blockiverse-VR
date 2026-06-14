@@ -25,5 +25,5 @@ submission, or Submit for Review action is performed by this repository checklis
 - Signed release APK from `main` — `.github/workflows/quest-alpha.yml` builds and
   uploads a release-signed APK to Meta `alpha`; `.github/workflows/quest-promote.yml`
   promotes the tested Meta build through `alpha -> beta`, `beta -> rc`, and
-  eventually `rc -> store` only after the `meta-production` environment approval
+  eventually `rc -> store` only after the `meta-store` environment approval
   gate is approved
