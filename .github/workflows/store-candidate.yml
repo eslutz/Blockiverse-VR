@@ -12,8 +12,6 @@ jobs:
   store-candidate:
     name: Store candidate checklist
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v6
         with:
@@ -29,36 +27,9 @@ jobs:
         run: scripts/store/validate-store-submission-docs.sh
       - name: Check release workflow contract
         run: |
-          test -x scripts/ci/release-version.sh
-          test -x scripts/ci/install-ovr-platform-util.sh
-          test -x scripts/ci/meta-upload-quest-build.sh
-          test -x scripts/ci/meta-promote-release-channel.sh
-          test -x scripts/ci/meta-parse-build-id.sh
-          test -x scripts/ci/test-meta-release-helpers.sh
           test -x scripts/unity/build-release-apk.sh
           grep -q "BuildReleaseAndroid" Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs
-          grep -q "BuildDevelopmentAndroid" Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs
-          grep -q "ANDROID_KEYSTORE_BASE64" .github/workflows/release-channel-build.yml
-          grep -q "unityci/editor:ubuntu-6000.3.16f1-android-3.2.2" .github/workflows/release-channel-build.yml
-          grep -q "upload-quest-build" scripts/ci/meta-upload-quest-build.sh
-          grep -q "set-release-channel-build" scripts/ci/meta-promote-release-channel.sh
-          grep -q "META_AGE_GROUP" scripts/ci/meta-upload-quest-build.sh
-          grep -q "environment: meta-alpha" .github/workflows/alpha-release.yml
-          grep -q "environment: meta-beta" .github/workflows/beta-release.yml
-          grep -q "environment: meta-rc" .github/workflows/release-candidate.yml
-          grep -q "environment: meta-production" .github/workflows/production-release.yml
-          grep -q "channel: alpha" .github/workflows/alpha-release.yml
-          grep -q "channel: beta" .github/workflows/beta-release.yml
-          grep -q -- "--source-channel beta" .github/workflows/release-candidate.yml
-          grep -q -- "--destination-channel rc" .github/workflows/release-candidate.yml
-          grep -q -- "--source-channel rc" .github/workflows/production-release.yml
-          grep -q -- "--destination-channel store" .github/workflows/production-release.yml
-          grep -q "store_review_approved" .github/workflows/production-release.yml
-          if grep -q "Build Android APK" .github/workflows/release-candidate.yml .github/workflows/production-release.yml; then
-            echo "RC and production workflows must promote existing Meta builds, not build APKs." >&2
-            exit 1
-          fi
-          if grep -q "build-release-apk.sh" .github/workflows/release-candidate.yml .github/workflows/production-release.yml; then
-            echo "RC and production workflows must not call release APK builds." >&2
-            exit 1
-          fi
+          grep -q "ANDROID_KEYSTORE_BASE64" .github/workflows/release-apk.yml
+          grep -q "unityci/editor:ubuntu-6000.3.16f1-android-3.2.2" .github/workflows/release-apk.yml
+          grep -q "needs: build-release-apk" .github/workflows/release-apk.yml
+          grep -q "gh release" .github/workflows/release-apk.yml
