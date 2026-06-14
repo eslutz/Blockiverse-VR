@@ -22,7 +22,7 @@
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.core": {
-      "version": "201.0.0",
+      "version": "203.0.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
@@ -37,7 +37,7 @@
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.interaction": {
-      "version": "201.0.0",
+      "version": "203.0.0",
       "depth": 1,
       "source": "registry",
       "dependencies": {
@@ -47,21 +47,22 @@
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.interaction.ovr": {
-      "version": "201.0.0",
+      "version": "203.0.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.meta.xr.sdk.interaction": "201.0.0",
-        "com.meta.xr.sdk.core": "201.0.0"
+        "com.meta.xr.sdk.interaction": "203.0.0",
+        "com.meta.xr.sdk.core": "203.0.0"
       },
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.platform": {
-      "version": "201.0.0",
+      "version": "203.0.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.ugui": "1.0.0",
+        "com.unity.nuget.newtonsoft-json": "3.2.1",
         "com.unity.inputsystem": "1.7.0"
       },
       "url": "https://npm.developer.oculus.com"
@@ -138,6 +139,13 @@
     },
     "com.unity.nuget.mono-cecil": {
       "version": "1.11.6",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.nuget.newtonsoft-json": {
+      "version": "3.2.1",
       "depth": 1,
       "source": "registry",
       "dependencies": {},

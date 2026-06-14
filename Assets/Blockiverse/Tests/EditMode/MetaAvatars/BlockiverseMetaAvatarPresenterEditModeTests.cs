@@ -209,6 +209,8 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
 
         static void DisableMetaProjectSetupBackgroundChecks()
         {
+            // Linux batchmode marks OVRPlugin as unsupported, which leaves Meta Core's
+            // project-setup updater with a 0.0.0 wrapper version and crashes in OVRProjectConfig.
             Type updaterType = Type.GetType("OVRProjectSetupUpdater, Oculus.VR.Editor")
                 ?? AppDomain.CurrentDomain.GetAssemblies()
                     .Select(assembly => assembly.GetType("OVRProjectSetupUpdater"))
