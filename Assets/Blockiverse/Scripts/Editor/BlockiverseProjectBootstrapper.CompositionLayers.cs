@@ -127,15 +127,15 @@ namespace Blockiverse.Editor
                 "Left Camera",
                 layerIndex,
                 mainCamera,
-                "<XRHMD>/leftEyePosition",
-                "<XRHMD>/leftEyeRotation");
+                BlockiverseInputActionNames.LeftEyePosition,
+                BlockiverseInputActionNames.LeftEyeRotation);
             EnsureProjectionEyeCamera(
                 projectionObject.transform,
                 "Right Camera",
                 layerIndex,
                 mainCamera,
-                "<XRHMD>/rightEyePosition",
-                "<XRHMD>/rightEyeRotation");
+                BlockiverseInputActionNames.RightEyePosition,
+                BlockiverseInputActionNames.RightEyeRotation);
             texturesExtension.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
 
             AssignPointerProjectionLayer(cameraOffset.Find("Left Controller"), layerIndex);
@@ -156,8 +156,8 @@ namespace Blockiverse.Editor
             string name,
             int layerIndex,
             Camera mainCamera,
-            string positionBinding,
-            string rotationBinding)
+            string positionActionName,
+            string rotationActionName)
         {
             GameObject cameraObject = EnsureChild(parent, name);
             cameraObject.layer = layerIndex;
@@ -175,10 +175,11 @@ namespace Blockiverse.Editor
             ClearCameraTargetTexture(camera);
 
             TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(cameraObject);
-            poseDriver.positionAction = CreateProjectionEyeAction($"{name} Position", positionBinding, "Vector3");
-            poseDriver.rotationAction = CreateProjectionEyeAction($"{name} Rotation", rotationBinding, "Quaternion");
-            poseDriver.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
-            poseDriver.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
+            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
+                poseDriver,
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, positionActionName),
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, rotationActionName),
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState));
 
             EditorUtility.SetDirty(camera);
             EditorUtility.SetDirty(poseDriver);
@@ -279,12 +280,6 @@ namespace Blockiverse.Editor
             UnityEngine.Object.DestroyImmediate(legacy.gameObject);
         }
 
-        static InputAction CreateProjectionEyeAction(string name, string bindingPath, string expectedControlType)
-        {
-            InputAction action = new(name, InputActionType.PassThrough, bindingPath, expectedControlType: expectedControlType);
-            return action;
-        }
-
         static void AssignPointerProjectionLayer(Transform root, int layerIndex)
         {
             if (root == null)
@@ -298,6 +293,12 @@ namespace Blockiverse.Editor
 
         static int EnsureUnityLayer(string layerName)
         {
+            if (layerName == BlockiverseProject.InteractionLayerName)
+                return EnsureUnityLayer(layerName, BlockiverseProject.InteractionLayerIndex);
+
+            if (layerName == CompositionPointerProjectionLayerName)
+                return EnsureUnityLayer(layerName, BlockiverseProject.CompositionPointerProjectionLayerIndex);
+
             const string tagManagerPath = "ProjectSettings/TagManager.asset";
             UnityEngine.Object[] tagManagerAssets = AssetDatabase.LoadAllAssetsAtPath(tagManagerPath);
             if (tagManagerAssets == null || tagManagerAssets.Length == 0)
@@ -329,6 +330,55 @@ namespace Blockiverse.Editor
             }
 
             throw new InvalidOperationException($"No free Unity layer slot is available for {layerName}.");
+        }
+
+        static int EnsureUnityLayer(string layerName, int layerIndex)
+        {
+            const string tagManagerPath = "ProjectSettings/TagManager.asset";
+            UnityEngine.Object[] tagManagerAssets = AssetDatabase.LoadAllAssetsAtPath(tagManagerPath);
+            if (tagManagerAssets == null || tagManagerAssets.Length == 0)
+                throw new InvalidOperationException("Unity TagManager settings asset could not be loaded.");
+
+            var tagManager = new SerializedObject(tagManagerAssets[0]);
+            tagManager.UpdateIfRequiredOrScript();
+            SerializedProperty layers = tagManager.FindProperty("layers");
+            if (layerIndex < 0 || layerIndex >= layers.arraySize)
+                throw new InvalidOperationException($"Unity layer index {layerIndex} is outside the TagManager layer array.");
+
+            SerializedProperty targetLayer = layers.GetArrayElementAtIndex(layerIndex);
+            if (!string.IsNullOrEmpty(targetLayer.stringValue) && targetLayer.stringValue != layerName)
+                throw new InvalidOperationException(
+                    $"Unity layer {layerIndex} is already assigned to {targetLayer.stringValue}; expected {layerName}.");
+
+            bool changed = false;
+            for (int index = 8; index < layers.arraySize; index++)
+            {
+                if (index == layerIndex)
+                    continue;
+
+                SerializedProperty layer = layers.GetArrayElementAtIndex(index);
+                if (layer.stringValue != layerName)
+                    continue;
+
+                layer.stringValue = string.Empty;
+                changed = true;
+            }
+
+            if (targetLayer.stringValue != layerName)
+            {
+                targetLayer.stringValue = layerName;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                tagManager.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(tagManager.targetObject);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(tagManagerPath, ImportAssetOptions.ForceUpdate);
+            }
+
+            return layerIndex;
         }
 
         static void SetCompositionLayerOrder(CompositionLayer compositionLayer, int layerOrder)

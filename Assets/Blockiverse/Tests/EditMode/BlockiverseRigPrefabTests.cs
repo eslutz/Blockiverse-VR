@@ -9,10 +9,12 @@ using Blockiverse.VR;
 using NUnit.Framework;
 using Unity.XR.CoreUtils;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
@@ -654,6 +656,81 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PersistedXriInputsUseGeneratedAssetOwnedReferences()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            foreach (TrackedPoseDriver poseDriver in prefab.GetComponentsInChildren<TrackedPoseDriver>(true))
+            {
+                AssertActionPropertyUsesGeneratedReference(poseDriver.positionInput, $"{poseDriver.name} position");
+                AssertActionPropertyUsesGeneratedReference(poseDriver.rotationInput, $"{poseDriver.name} rotation");
+                AssertActionPropertyUsesGeneratedReference(poseDriver.trackingStateInput, $"{poseDriver.name} tracking state");
+            }
+
+            foreach (XRRayInteractor ray in prefab.GetComponentsInChildren<XRRayInteractor>(true))
+            {
+                AssertButtonReaderUsesGeneratedReference(ray.uiPressInput, $"{ray.name} UI press", allowUnused: true);
+                AssertValueReaderUsesGeneratedReference(ray.uiScrollInput, $"{ray.name} UI scroll", allowUnused: true);
+                AssertButtonReaderUsesGeneratedReference(ray.selectInput, $"{ray.name} select", allowUnused: true);
+            }
+
+            BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
+            Assert.That(inputRig, Is.Not.Null);
+            AssertButtonReaderUsesGeneratedReference(inputRig.JumpProvider.jumpInput, "Jump", allowUnused: false);
+
+            ContinuousMoveProvider continuousMove = prefab.GetComponent<ContinuousMoveProvider>();
+            SnapTurnProvider snapTurn = prefab.GetComponent<SnapTurnProvider>();
+            ContinuousTurnProvider continuousTurn = prefab.GetComponent<ContinuousTurnProvider>();
+
+            Assert.That(continuousMove, Is.Not.Null);
+            Assert.That(snapTurn, Is.Not.Null);
+            Assert.That(continuousTurn, Is.Not.Null);
+            AssertValueReaderUsesGeneratedReference(continuousMove.leftHandMoveInput, "Left hand move", allowUnused: false);
+            AssertValueReaderUsesGeneratedReference(continuousMove.rightHandMoveInput, "Right hand move", allowUnused: true);
+            AssertValueReaderUsesGeneratedReference(snapTurn.leftHandTurnInput, "Left hand snap turn", allowUnused: true);
+            AssertValueReaderUsesGeneratedReference(snapTurn.rightHandTurnInput, "Right hand snap turn", allowUnused: false);
+            AssertValueReaderUsesGeneratedReference(continuousTurn.leftHandTurnInput, "Left hand smooth turn", allowUnused: true);
+            AssertValueReaderUsesGeneratedReference(continuousTurn.rightHandTurnInput, "Right hand smooth turn", allowUnused: false);
+
+            try
+            {
+                Scene scene = EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single);
+                XRUIInputModule inputModule = scene.GetRootGameObjects()
+                    .SelectMany(root => root.GetComponentsInChildren<XRUIInputModule>(true))
+                    .SingleOrDefault();
+
+                Assert.That(inputModule, Is.Not.Null);
+                AssertGeneratedReference(inputModule.leftClickAction, "Boot XRUIInputModule left click");
+                AssertGeneratedReference(inputModule.scrollWheelAction, "Boot XRUIInputModule scroll");
+                AssertGeneratedReference(inputModule.navigateAction, "Boot XRUIInputModule navigate");
+                AssertGeneratedReference(inputModule.submitAction, "Boot XRUIInputModule submit");
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        [Test]
+        public void GeneratedScenesDoNotStoreSceneLocalInputActionReferences()
+        {
+            foreach (string scenePath in new[]
+                     {
+                         BlockiverseProject.BootScenePath,
+                         BlockiverseProject.MultiplayerTestScenePath,
+                     })
+            {
+                string yaml = File.ReadAllText(scenePath);
+                Assert.That(
+                    yaml,
+                    Does.Not.Contain("m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference"),
+                    $"{scenePath} should reference generated InputActionReference assets instead of storing scene-local reference objects.");
+            }
+        }
+
+        [Test]
         public void XrRigPrefabIsWiredForNativeInteractorsAndBlockMenu()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
@@ -935,6 +1012,45 @@ namespace Blockiverse.Tests.EditMode
                 message);
         }
 
+        static void AssertActionPropertyUsesGeneratedReference(InputActionProperty property, string context)
+        {
+            AssertGeneratedReference(property.reference, context);
+            Assert.That(property.action, Is.Not.Null, $"{context} should resolve a generated action.");
+        }
+
+        static void AssertButtonReaderUsesGeneratedReference(XRInputButtonReader reader, string context, bool allowUnused)
+        {
+            if (allowUnused && reader.inputSourceMode == XRInputButtonReader.InputSourceMode.Unused)
+                return;
+
+            Assert.That(reader.inputSourceMode,
+                Is.EqualTo(XRInputButtonReader.InputSourceMode.InputActionReference),
+                $"{context} should use InputActionReference mode.");
+            AssertGeneratedReference(reader.inputActionReferencePerformed, context);
+        }
+
+        static void AssertValueReaderUsesGeneratedReference(XRInputValueReader<Vector2> reader, string context, bool allowUnused)
+        {
+            if (allowUnused && reader.inputSourceMode == XRInputValueReader.InputSourceMode.Unused)
+                return;
+
+            Assert.That(reader.inputSourceMode,
+                Is.EqualTo(XRInputValueReader.InputSourceMode.InputActionReference),
+                $"{context} should use InputActionReference mode.");
+            AssertGeneratedReference(reader.inputActionReference, context);
+        }
+
+        static void AssertGeneratedReference(InputActionReference reference, string context)
+        {
+            Assert.That(reference, Is.Not.Null, $"{context} should use a generated InputActionReference asset.");
+            Assert.That(reference.action, Is.Not.Null, $"{context} reference should resolve an action.");
+
+            string path = AssetDatabase.GetAssetPath(reference);
+
+            Assert.That(path, Does.StartWith(BlockiverseProject.InputActionReferencesFolderPath + "/"),
+                $"{context} should reference an asset-owned InputActionReference, not a scene-local object.");
+        }
+
         static void AssertControllerPoseDriver(GameObject instance, string controllerName, string positionPath, string rotationPath)
         {
             Transform controller = instance.transform.Find($"Camera Offset/{controllerName}");
@@ -969,10 +1085,7 @@ namespace Blockiverse.Tests.EditMode
 
         static void AssertGravityUsesVoxelTerrainMask(GravityProvider gravityProvider)
         {
-            int terrainLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-
-            Assert.That(terrainLayer, Is.GreaterThanOrEqualTo(0), "Blockiverse terrain interaction layer must exist.");
-            Assert.That(gravityProvider.sphereCastLayerMask.value, Is.EqualTo(1 << terrainLayer),
+            Assert.That(gravityProvider.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.InteractionLayerMask),
                 "Gravity grounding must ignore the player CharacterController and only test voxel terrain.");
             Assert.That(gravityProvider.sphereCastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Ignore));
         }

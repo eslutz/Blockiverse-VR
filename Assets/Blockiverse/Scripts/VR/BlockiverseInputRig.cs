@@ -306,6 +306,30 @@ namespace Blockiverse.VR
             }
         }
 
+        public static void ConfigurePoseDriverActionReferences(
+            TrackedPoseDriver driver,
+            InputActionReference positionReference,
+            InputActionReference rotationReference,
+            InputActionReference trackingStateReference)
+        {
+            if (driver == null)
+                return;
+
+            if (positionReference != null && driver.positionInput.reference != positionReference)
+                driver.positionInput = new InputActionProperty(positionReference);
+
+            if (rotationReference != null && driver.rotationInput.reference != rotationReference)
+                driver.rotationInput = new InputActionProperty(rotationReference);
+
+            if (trackingStateReference != null && driver.trackingStateInput.reference != trackingStateReference)
+                driver.trackingStateInput = new InputActionProperty(trackingStateReference);
+
+            driver.ignoreTrackingState = false;
+            driver.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
+            driver.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
+            BlockiverseTrackedPoseDriverLifecycle.Ensure(driver);
+        }
+
         public static bool ShouldToggleSprint(float pressDurationSeconds) =>
             pressDurationSeconds >= 0.0f && pressDurationSeconds <= SprintClickToggleMaxSeconds;
 
@@ -908,7 +932,9 @@ namespace Blockiverse.VR
                 return cachedTerrainLayerMask.Value;
 
             int terrainLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-            cachedTerrainLayerMask = terrainLayer >= 0 ? (LayerMask)(1 << terrainLayer) : Physics.DefaultRaycastLayers;
+            cachedTerrainLayerMask = terrainLayer >= 0
+                ? (LayerMask)(1 << terrainLayer)
+                : (LayerMask)BlockiverseProject.InteractionLayerMask;
             return cachedTerrainLayerMask.Value;
         }
 

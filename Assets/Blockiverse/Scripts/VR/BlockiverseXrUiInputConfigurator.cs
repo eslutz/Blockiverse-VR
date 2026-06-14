@@ -20,11 +20,7 @@ namespace Blockiverse.VR
             if (inputModule == null || inputActions == null)
                 return;
 
-            inputModule.enableXRInput = true;
-            inputModule.enableMouseInput = false;
-            inputModule.enableTouchInput = false;
-            inputModule.enableGamepadInput = false;
-            inputModule.enableJoystickInput = false;
+            ConfigureInputModuleFlags(inputModule);
 
             InputAction rightUiPress = FindAction(inputActions, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress);
             InputAction rightUiScroll = FindAction(inputActions, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll);
@@ -33,6 +29,31 @@ namespace Blockiverse.VR
             inputModule.scrollWheelAction = GetOrCreateReference(inputModule.scrollWheelAction, rightUiScroll);
             inputModule.navigateAction = GetOrCreateReference(inputModule.navigateAction, rightUiScroll);
             inputModule.submitAction = GetOrCreateReference(inputModule.submitAction, rightUiPress);
+        }
+
+        public static void Configure(
+            XRUIInputModule inputModule,
+            InputActionReference rightUiPressReference,
+            InputActionReference rightUiScrollReference)
+        {
+            if (inputModule == null)
+                return;
+
+            ConfigureInputModuleFlags(inputModule);
+
+            inputModule.leftClickAction = rightUiPressReference;
+            inputModule.scrollWheelAction = rightUiScrollReference;
+            inputModule.navigateAction = rightUiScrollReference;
+            inputModule.submitAction = rightUiPressReference;
+        }
+
+        static void ConfigureInputModuleFlags(XRUIInputModule inputModule)
+        {
+            inputModule.enableXRInput = true;
+            inputModule.enableMouseInput = false;
+            inputModule.enableTouchInput = false;
+            inputModule.enableGamepadInput = false;
+            inputModule.enableJoystickInput = false;
         }
 
         static InputAction FindAction(InputActionAsset inputActions, string mapName, string actionName)

@@ -3,13 +3,13 @@
     "name": "BlockiverseInputActions",
     "maps": [
         {
-            "name": "XRI LeftHand",
-            "id": "00000000-0000-0000-0000-000000000001",
+            "name": "XRI Head",
+            "id": "811de2c2-b7de-e13c-b7d3-757512bbabde",
             "actions": [
                 {
                     "name": "Position",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000002",
+                    "id": "fa712a31-7254-f131-8e97-813326a909e9",
                     "expectedControlType": "Vector3",
                     "processors": "",
                     "interactions": "",
@@ -18,7 +18,155 @@
                 {
                     "name": "Rotation",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000003",
+                    "id": "d98ede49-beb4-ee39-8592-dffd4f4a28a1",
+                    "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Left Eye Position",
+                    "type": "PassThrough",
+                    "id": "57741e02-a4f8-b436-a030-01eb7cffaea4",
+                    "expectedControlType": "Vector3",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Left Eye Rotation",
+                    "type": "PassThrough",
+                    "id": "4cfcf1ef-097d-3438-8c0a-10ffd0dbe04e",
+                    "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Right Eye Position",
+                    "type": "PassThrough",
+                    "id": "3c24bec2-f9a2-413b-9123-0a6176399da2",
+                    "expectedControlType": "Vector3",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Right Eye Rotation",
+                    "type": "PassThrough",
+                    "id": "e796f5f4-e20a-9b36-b0bb-4304fda489ea",
+                    "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Tracking State",
+                    "type": "PassThrough",
+                    "id": "536cbc25-f756-423d-b021-bc68924870fd",
+                    "expectedControlType": "Integer",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "6539b1c7-5c1f-4e36-bd50-1cadbb7f7808",
+                    "path": "<XRHMD>/centerEyePosition",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Position",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "ee512f67-1690-013b-9ff9-cc9f9b53f3b1",
+                    "path": "<XRHMD>/centerEyeRotation",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Rotation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "2d85365b-bf1f-fd34-8e29-59f2aa7d3dfd",
+                    "path": "<XRHMD>/leftEyePosition",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Left Eye Position",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "166a3d0c-dcf9-033d-a5bb-4412a02e34ba",
+                    "path": "<XRHMD>/leftEyeRotation",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Left Eye Rotation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b1ba31df-606c-2a30-b484-1377313f98ee",
+                    "path": "<XRHMD>/rightEyePosition",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Right Eye Position",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "12d885e8-8be8-d634-92ea-335015a871d0",
+                    "path": "<XRHMD>/rightEyeRotation",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Right Eye Rotation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "33e0820e-a41d-1233-b3b7-950cd8726375",
+                    "path": "<XRHMD>/trackingState",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Tracking State",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "XRI LeftHand",
+            "id": "9f29cc4c-bd1d-d23e-8843-d58b4b25a498",
+            "actions": [
+                {
+                    "name": "Position",
+                    "type": "PassThrough",
+                    "id": "5dabf957-4825-8531-af2b-2e6d3a279afc",
+                    "expectedControlType": "Vector3",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Rotation",
+                    "type": "PassThrough",
+                    "id": "36280efc-3cf9-a537-8ed4-3a076e843f03",
                     "expectedControlType": "Quaternion",
                     "processors": "",
                     "interactions": "",
@@ -27,7 +175,7 @@
                 {
                     "name": "Is Tracked",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000004",
+                    "id": "cd5caa5c-4353-e53e-be20-6646edf5c51b",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -36,7 +184,7 @@
                 {
                     "name": "Tracking State",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000005",
+                    "id": "dacd3663-6997-913d-b478-7a3b42698665",
                     "expectedControlType": "Integer",
                     "processors": "",
                     "interactions": "",
@@ -45,7 +193,7 @@
                 {
                     "name": "Select",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000006",
+                    "id": "e2c44194-6a8b-f234-821b-2538fd6c0e58",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -54,70 +202,7 @@
                 {
                     "name": "Activate",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000007",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "UI Press",
-                    "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000008",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "UI Scroll",
-                    "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000009",
-                    "expectedControlType": "Vector2",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": true
-                },
-                {
-                    "name": "Haptic Device",
-                    "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000010",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": true
-                },
-                {
-                    "name": "Move",
-                    "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000011",
-                    "expectedControlType": "Vector2",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": true
-                },
-                {
-                    "name": "Turn",
-                    "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000012",
-                    "expectedControlType": "Vector2",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": true
-                },
-                {
-                    "name": "Teleport Mode",
-                    "type": "Button",
-                    "id": "{26BB17C0-3DA6-44C8-AF61-45F4C541BF67}",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "Teleport Select",
-                    "type": "Button",
-                    "id": "{DD0E0C94-C7D4-446A-A4AF-5EB7658566D2}",
+                    "id": "c3c443c9-509c-ed37-a025-1dd0457f82f1",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -126,8 +211,8 @@
                 {
                     "name": "Primary Button",
                     "type": "Button",
-                    "id": "0da0c6ba-ba9b-418d-ac1a-2ceb23b268ab",
-                    "expectedControlType": "",
+                    "id": "6ab3b8be-db8e-923d-b9ab-77c29eb69232",
+                    "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
@@ -135,26 +220,107 @@
                 {
                     "name": "Secondary Button",
                     "type": "Button",
-                    "id": "1b759740-c4d2-41bd-a225-663ea3840be4",
-                    "expectedControlType": "",
+                    "id": "378e49ff-ce75-dc38-bcd9-4084df3f7cf9",
+                    "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Sprint",
+                    "name": "UI Press",
                     "type": "Button",
-                    "id": "49cb2846-5317-4ab3-bb8f-b7df7abc409c",
-                    "expectedControlType": "",
+                    "id": "3b2aa28b-5f72-dc37-9e0e-afc4689764e3",
+                    "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "UI Scroll",
+                    "type": "PassThrough",
+                    "id": "efe9b64d-053f-1332-b61d-8451d6a1cb35",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Haptic Device",
+                    "type": "PassThrough",
+                    "id": "8f8787e0-edb2-7c38-9271-77a81e29c07c",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Move",
+                    "type": "PassThrough",
+                    "id": "42a82468-b188-e531-8cf0-3dcd0e2bd938",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Turn",
+                    "type": "PassThrough",
+                    "id": "cd1b0d50-c168-0535-8d67-d1d58b0c5636",
+                    "expectedControlType": "Vector2",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Sprint",
+                    "type": "Button",
+                    "id": "4ea03e36-e961-ff38-9011-6ea320b59bc6",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Teleport Mode",
+                    "type": "Button",
+                    "id": "76998c04-913d-0734-9650-be09376e63f2",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Teleport Select",
+                    "type": "Button",
+                    "id": "5d065af7-ce28-a134-bbf7-baf8b9aa3942",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Aim Position",
+                    "type": "PassThrough",
+                    "id": "079fe8de-6830-6736-96f0-93803e2bd2cd",
+                    "expectedControlType": "Vector3",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Aim Rotation",
+                    "type": "PassThrough",
+                    "id": "2a16604a-6154-8536-aff8-b31432110eec",
+                    "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
                 }
             ],
             "bindings": [
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000015",
+                    "id": "3f666016-b32c-ed34-8ae5-71b46dc448ff",
                     "path": "<XRController>{LeftHand}/devicePosition",
                     "interactions": "",
                     "processors": "",
@@ -165,7 +331,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000016",
+                    "id": "6c8ddcc9-0ef0-3734-b3b1-f2c76643cf3c",
                     "path": "<XRController>{LeftHand}/deviceRotation",
                     "interactions": "",
                     "processors": "",
@@ -176,7 +342,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000017",
+                    "id": "1ac226bc-bd31-d930-b0d6-cf534f845b35",
                     "path": "<XRController>{LeftHand}/isTracked",
                     "interactions": "",
                     "processors": "",
@@ -187,7 +353,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000018",
+                    "id": "d4150e53-0ed7-d035-a9e0-c05a5c2f0a0e",
                     "path": "<XRController>{LeftHand}/trackingState",
                     "interactions": "",
                     "processors": "",
@@ -198,7 +364,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000019",
+                    "id": "549357cc-4d90-7c3d-b7bd-01bbc4fb8c6f",
                     "path": "<XRController>{LeftHand}/triggerPressed",
                     "interactions": "",
                     "processors": "",
@@ -209,7 +375,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000020",
+                    "id": "3296c2e4-7adf-7f36-be45-61fd191f8261",
                     "path": "<XRController>{LeftHand}/gripPressed",
                     "interactions": "",
                     "processors": "",
@@ -220,106 +386,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000021",
-                    "path": "<XRController>{LeftHand}/triggerPressed",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "UI Press",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000022",
-                    "path": "<XRController>{LeftHand}/thumbstick",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "UI Scroll",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000023",
-                    "path": "<XRController>{LeftHand}/*",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Haptic Device",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000024",
-                    "path": "<XRController>{LeftHand}/thumbstick",
-                    "interactions": "",
-                    "processors": "stickDeadzone(min=0.2,max=0.95)",
-                    "groups": "",
-                    "action": "Move",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "00000000-0000-0000-0000-000000000025",
-                    "path": "<XRController>{LeftHand}/thumbstick",
-                    "interactions": "",
-                    "processors": "stickDeadzone(min=0.2,max=0.95)",
-                    "groups": "",
-                    "action": "Turn",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "1D Axis",
-                    "id": "{9CD4726D-DE7D-46B5-B5CA-37DBFDC2D62E}",
-                    "path": "1DAxis",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Mode",
-                    "isComposite": true,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "positive",
-                    "id": "{7D9D67CA-F5E9-412B-8DB2-0F374C38A104}",
-                    "path": "<XRController>{LeftHand}/thumbstick/y",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Mode",
-                    "isComposite": false,
-                    "isPartOfComposite": true
-                },
-                {
-                    "name": "1D Axis",
-                    "id": "{82F09146-F8E9-4D38-979E-50A2266A485F}",
-                    "path": "1DAxis",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Select",
-                    "isComposite": true,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "positive",
-                    "id": "{41408077-8183-4D69-9251-F277AF97A535}",
-                    "path": "<XRController>{LeftHand}/thumbstick/y",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Select",
-                    "isComposite": false,
-                    "isPartOfComposite": true
-                },
-                {
-                    "name": "",
-                    "id": "fcabb037-fd89-4205-b506-d30520a5633e",
+                    "id": "05a21c99-d0d2-b93f-85cc-b7f01f3ca688",
                     "path": "<XRController>{LeftHand}/primaryButton",
                     "interactions": "",
                     "processors": "",
@@ -330,7 +397,7 @@
                 },
                 {
                     "name": "",
-                    "id": "79f2896c-7458-44d4-9e36-c732d70e6e48",
+                    "id": "04dd14c2-c389-1f38-a2b2-88bb3beed85e",
                     "path": "<XRController>{LeftHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
@@ -341,7 +408,62 @@
                 },
                 {
                     "name": "",
-                    "id": "bdaa2032-2a6c-4a4f-99ae-30cd4ea11a6a",
+                    "id": "322472e1-fcdd-5b33-8972-5e2e063af1af",
+                    "path": "<XRController>{LeftHand}/triggerPressed",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "UI Press",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "ec7b68f1-ff2d-eb39-8132-ea126a3303ca",
+                    "path": "<XRController>{LeftHand}/thumbstick",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "UI Scroll",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "65212dd9-4aed-f83a-9390-423ac4b9d328",
+                    "path": "<XRController>{LeftHand}/*",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Haptic Device",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "b7cfb823-cbba-693c-b0ea-10d580dced94",
+                    "path": "<XRController>{LeftHand}/thumbstick",
+                    "interactions": "",
+                    "processors": "stickDeadzone(min=0.2,max=0.95)",
+                    "groups": "",
+                    "action": "Move",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "06bf04fa-c95f-2432-8b0c-2861086993d1",
+                    "path": "<XRController>{LeftHand}/thumbstick",
+                    "interactions": "",
+                    "processors": "stickDeadzone(min=0.2,max=0.95)",
+                    "groups": "",
+                    "action": "Turn",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "d46c3ceb-ed27-ad3d-8ffd-0998c2429cbb",
                     "path": "<XRController>{LeftHand}/thumbstickClicked",
                     "interactions": "",
                     "processors": "",
@@ -349,17 +471,83 @@
                     "action": "Sprint",
                     "isComposite": false,
                     "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "7789a63d-34ef-cd30-b625-37d5560a55ba",
+                    "path": "<XRController>{LeftHand}/pointerPosition",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Aim Position",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "441bed15-1a74-103a-b127-465a7d31bb42",
+                    "path": "<XRController>{LeftHand}/pointerRotation",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Aim Rotation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "1DAxis",
+                    "id": "1ca1b2c0-3659-d03a-9083-a377f334195d",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Mode",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Positive",
+                    "id": "718edd68-02e0-e835-8710-6707004aac44",
+                    "path": "<XRController>{LeftHand}/thumbstick/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Mode",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "1DAxis",
+                    "id": "c7dd4c60-62de-1636-9b58-53e8ed9ab5b6",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Select",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Positive",
+                    "id": "7e135954-94ca-7932-8a01-c2f40d51997a",
+                    "path": "<XRController>{LeftHand}/thumbstick/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Select",
+                    "isComposite": false,
+                    "isPartOfComposite": true
                 }
             ]
         },
         {
             "name": "XRI RightHand",
-            "id": "00000000-0000-0000-0000-000000000028",
+            "id": "e0a4fa8f-03d3-cd3d-a131-4b94e404be6b",
             "actions": [
                 {
                     "name": "Position",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000029",
+                    "id": "4438af2d-c06d-7c39-911c-9333b597a796",
                     "expectedControlType": "Vector3",
                     "processors": "",
                     "interactions": "",
@@ -368,7 +556,7 @@
                 {
                     "name": "Rotation",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000030",
+                    "id": "26df9970-9ca4-3c3c-918d-5013f249a665",
                     "expectedControlType": "Quaternion",
                     "processors": "",
                     "interactions": "",
@@ -377,7 +565,7 @@
                 {
                     "name": "Is Tracked",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000031",
+                    "id": "10d86f03-7d70-bb32-a76d-90d619822837",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -386,7 +574,7 @@
                 {
                     "name": "Tracking State",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000032",
+                    "id": "e0fc6039-8b08-d23f-94fb-5365bad86c7c",
                     "expectedControlType": "Integer",
                     "processors": "",
                     "interactions": "",
@@ -395,7 +583,7 @@
                 {
                     "name": "Select",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000033",
+                    "id": "05fba774-114a-b436-aca0-f00f1981a97a",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -404,7 +592,7 @@
                 {
                     "name": "Activate",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000034",
+                    "id": "253ba548-1f50-a838-ae87-6dcbb1869b90",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -413,7 +601,7 @@
                 {
                     "name": "Primary Button",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000040",
+                    "id": "0837db3e-9b2b-ce32-a263-0bce5cd8deba",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -422,7 +610,7 @@
                 {
                     "name": "Secondary Button",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000041",
+                    "id": "7c629e4c-8492-1a33-afdf-1a49234eb3a6",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -431,7 +619,7 @@
                 {
                     "name": "UI Press",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000035",
+                    "id": "e01de27f-25d1-b93d-8a4f-194bb557737e",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -440,7 +628,7 @@
                 {
                     "name": "UI Scroll",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000036",
+                    "id": "2a78a93f-ccbf-6d3f-b998-e9b58cf75549",
                     "expectedControlType": "Vector2",
                     "processors": "",
                     "interactions": "",
@@ -449,7 +637,7 @@
                 {
                     "name": "Haptic Device",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000037",
+                    "id": "40e4b195-e981-b932-a63f-f14d84bf9e3d",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -458,7 +646,7 @@
                 {
                     "name": "Move",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000038",
+                    "id": "d20c8dd1-cf35-6738-af5c-68e5ac15275a",
                     "expectedControlType": "Vector2",
                     "processors": "",
                     "interactions": "",
@@ -467,16 +655,25 @@
                 {
                     "name": "Turn",
                     "type": "PassThrough",
-                    "id": "00000000-0000-0000-0000-000000000039",
+                    "id": "1cfcb471-c8ca-f83f-b7d9-f689b793e922",
                     "expectedControlType": "Vector2",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": true
                 },
                 {
+                    "name": "Sprint",
+                    "type": "Button",
+                    "id": "56531e58-947e-0937-ac40-9580e36ec816",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Teleport Mode",
                     "type": "Button",
-                    "id": "{E946299A-6EFE-4D98-BDCF-38C8CBFB7BD4}",
+                    "id": "5b3136c2-d1d0-c138-99ae-715caec84174",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -485,26 +682,35 @@
                 {
                     "name": "Teleport Select",
                     "type": "Button",
-                    "id": "{71C3AD55-B234-42C9-B10C-3367F6288E8A}",
+                    "id": "684e3b6d-9fc0-3030-9997-3f9dacfc6934",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Sprint",
-                    "type": "Button",
-                    "id": "3bcabc5d-32c2-442c-ad40-c4ba091335c7",
-                    "expectedControlType": "",
+                    "name": "Aim Position",
+                    "type": "PassThrough",
+                    "id": "3e55d7a2-2f10-3e34-aadd-5e1e34c24a6e",
+                    "expectedControlType": "Vector3",
                     "processors": "",
                     "interactions": "",
-                    "initialStateCheck": false
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "Aim Rotation",
+                    "type": "PassThrough",
+                    "id": "d35ebafe-23cd-5237-9a20-7c551ac251c4",
+                    "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
                 }
             ],
             "bindings": [
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000042",
+                    "id": "7a3ddad1-8fb7-4d3a-ab0a-04c3c502b2cf",
                     "path": "<XRController>{RightHand}/devicePosition",
                     "interactions": "",
                     "processors": "",
@@ -515,7 +721,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000043",
+                    "id": "57b63079-c3af-553b-9f98-1fb7e408078d",
                     "path": "<XRController>{RightHand}/deviceRotation",
                     "interactions": "",
                     "processors": "",
@@ -526,7 +732,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000044",
+                    "id": "cabb2bee-ad5e-9834-8263-e38dfde103d5",
                     "path": "<XRController>{RightHand}/isTracked",
                     "interactions": "",
                     "processors": "",
@@ -537,7 +743,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000045",
+                    "id": "fc5f8608-653b-b931-abd1-de31ebca5f47",
                     "path": "<XRController>{RightHand}/trackingState",
                     "interactions": "",
                     "processors": "",
@@ -548,7 +754,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000046",
+                    "id": "d26c956f-d398-a43f-95c0-669fd885db5c",
                     "path": "<XRController>{RightHand}/triggerPressed",
                     "interactions": "",
                     "processors": "",
@@ -559,7 +765,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000047",
+                    "id": "9f0f4177-ce82-4832-bbce-6f23f8917d35",
                     "path": "<XRController>{RightHand}/gripPressed",
                     "interactions": "",
                     "processors": "",
@@ -570,7 +776,7 @@
                 },
                 {
                     "name": "",
-                    "id": "{36965D3C-A906-4D76-AD3A-81601F335285}",
+                    "id": "7789bb83-203a-ce37-94ab-707982a72db8",
                     "path": "<XRController>{RightHand}/primaryButton",
                     "interactions": "",
                     "processors": "",
@@ -581,7 +787,7 @@
                 },
                 {
                     "name": "",
-                    "id": "{E760F736-FC19-4A3A-94D3-1F73557E8926}",
+                    "id": "80eaf078-d134-b63b-b152-cea6f69f1a37",
                     "path": "<XRController>{RightHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
@@ -592,7 +798,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000048",
+                    "id": "fc8a1ef1-1e4c-7b31-b1ad-5cef2898ea25",
                     "path": "<XRController>{RightHand}/triggerPressed",
                     "interactions": "",
                     "processors": "",
@@ -603,7 +809,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000049",
+                    "id": "ce6855a6-c919-1d32-9298-3e46d8262780",
                     "path": "<XRController>{RightHand}/thumbstick",
                     "interactions": "",
                     "processors": "",
@@ -614,7 +820,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000050",
+                    "id": "29088ac9-f753-2435-adad-ce5ce7919a61",
                     "path": "<XRController>{RightHand}/*",
                     "interactions": "",
                     "processors": "",
@@ -625,7 +831,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000051",
+                    "id": "b5fd06e7-7a01-323e-8a9d-a4c82f7a54f5",
                     "path": "<XRController>{RightHand}/thumbstick",
                     "interactions": "",
                     "processors": "stickDeadzone(min=0.2,max=0.95)",
@@ -636,7 +842,7 @@
                 },
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000052",
+                    "id": "30eb2ec8-5a38-e73b-9545-b97866f77963",
                     "path": "<XRController>{RightHand}/thumbstick",
                     "interactions": "",
                     "processors": "stickDeadzone(min=0.2,max=0.95)",
@@ -646,52 +852,8 @@
                     "isPartOfComposite": false
                 },
                 {
-                    "name": "1D Axis",
-                    "id": "{0246ED54-56D0-470D-A1B4-1FBE304BBD34}",
-                    "path": "1DAxis",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Mode",
-                    "isComposite": true,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "positive",
-                    "id": "{4C3A8D0A-23AD-4F14-95D5-41AEAF155A3A}",
-                    "path": "<XRController>{RightHand}/thumbstick/y",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Mode",
-                    "isComposite": false,
-                    "isPartOfComposite": true
-                },
-                {
-                    "name": "1D Axis",
-                    "id": "{691AFFA8-7872-4213-BEDA-E2E04C5AE16E}",
-                    "path": "1DAxis",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Select",
-                    "isComposite": true,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "positive",
-                    "id": "{461807D0-7984-4D73-8504-64210D6D6074}",
-                    "path": "<XRController>{RightHand}/thumbstick/y",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Teleport Select",
-                    "isComposite": false,
-                    "isPartOfComposite": true
-                },
-                {
                     "name": "",
-                    "id": "c5f10a2a-a78b-4502-a725-1591bcbdd70e",
+                    "id": "afdccdae-e25b-853e-8447-de60256a5564",
                     "path": "<XRController>{RightHand}/thumbstickClicked",
                     "interactions": "",
                     "processors": "",
@@ -699,17 +861,83 @@
                     "action": "Sprint",
                     "isComposite": false,
                     "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "78fb6cb9-2cff-8e3e-9496-af81004a3030",
+                    "path": "<XRController>{RightHand}/pointerPosition",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Aim Position",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "67556b77-1fc3-923e-adc8-4dc2f0c531db",
+                    "path": "<XRController>{RightHand}/pointerRotation",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Aim Rotation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "1DAxis",
+                    "id": "e6b28406-69e1-7633-9aaa-78ac61100923",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Mode",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Positive",
+                    "id": "c66f1bd8-6bbc-2536-bbf6-d028793653c8",
+                    "path": "<XRController>{RightHand}/thumbstick/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Mode",
+                    "isComposite": false,
+                    "isPartOfComposite": true
+                },
+                {
+                    "name": "1DAxis",
+                    "id": "00d2dbc0-b5b9-3639-880b-468952cd28b3",
+                    "path": "1DAxis",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Select",
+                    "isComposite": true,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "Positive",
+                    "id": "454b724d-bc05-2c38-9bcd-0d102af645b9",
+                    "path": "<XRController>{RightHand}/thumbstick/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Teleport Select",
+                    "isComposite": false,
+                    "isPartOfComposite": true
                 }
             ]
         },
         {
             "name": "Blockiverse Gameplay",
-            "id": "00000000-0000-0000-0000-000000000055",
+            "id": "447363e6-0e20-fc3f-83c4-90eb89e4a54b",
             "actions": [
                 {
                     "name": "Menu",
                     "type": "Button",
-                    "id": "00000000-0000-0000-0000-000000000056",
+                    "id": "5d4e94eb-69b7-b735-b963-161de71d0c91",
                     "expectedControlType": "Button",
                     "processors": "",
                     "interactions": "",
@@ -719,7 +947,7 @@
             "bindings": [
                 {
                     "name": "",
-                    "id": "00000000-0000-0000-0000-000000000058",
+                    "id": "073babce-8bfb-2a3b-aebd-269b8586e89c",
                     "path": "<XRController>{LeftHand}/menuButton",
                     "interactions": "",
                     "processors": "",

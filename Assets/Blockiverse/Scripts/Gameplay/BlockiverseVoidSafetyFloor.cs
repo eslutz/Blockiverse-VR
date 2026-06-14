@@ -39,6 +39,8 @@ namespace Blockiverse.Gameplay
             int layer = !string.IsNullOrWhiteSpace(layerName)
                 ? LayerMask.NameToLayer(layerName)
                 : -1;
+            if (layer < 0 && layerName == BlockiverseProject.InteractionLayerName)
+                layer = BlockiverseProject.InteractionLayerIndex;
 
             Configure(bounds, fallAllowanceMeters, thicknessMeters, horizontalMarginMeters, layer, recoverySpawnPosition);
         }

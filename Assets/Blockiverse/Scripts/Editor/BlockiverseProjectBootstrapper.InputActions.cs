@@ -54,28 +54,15 @@ namespace Blockiverse.Editor
     {
         static InputActionAsset EnsureInputActions()
         {
-            var existingAsset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
-                BlockiverseProject.InputActionsAssetPath);
+            EnsureFolder(BlockiverseProject.InputActionReferencesFolderPath);
 
-            if (existingAsset != null)
+            string json = BuildDeterministicInputActionsJson();
+
+            if (!File.Exists(BlockiverseProject.InputActionsAssetPath) ||
+                File.ReadAllText(BlockiverseProject.InputActionsAssetPath) != json)
             {
-                EnsureInputActionSchema(existingAsset);
-                File.WriteAllText(BlockiverseProject.InputActionsAssetPath, existingAsset.ToJson());
-                AssetDatabase.ImportAsset(
-                    BlockiverseProject.InputActionsAssetPath,
-                    ImportAssetOptions.ForceSynchronousImport);
-
-                return AssetDatabase.LoadAssetAtPath<InputActionAsset>(
-                    BlockiverseProject.InputActionsAssetPath) ?? existingAsset;
+                File.WriteAllText(BlockiverseProject.InputActionsAssetPath, json);
             }
-
-            var asset = ScriptableObject.CreateInstance<InputActionAsset>();
-            AddControllerMap(asset, BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}");
-            AddControllerMap(asset, BlockiverseInputActionNames.RightHandMap, "<XRController>{RightHand}");
-            AddGameplayMap(asset);
-
-            File.WriteAllText(BlockiverseProject.InputActionsAssetPath, asset.ToJson());
-            UnityEngine.Object.DestroyImmediate(asset);
 
             AssetDatabase.ImportAsset(
                 BlockiverseProject.InputActionsAssetPath,
@@ -87,7 +74,235 @@ namespace Blockiverse.Editor
             if (importedAsset == null)
                 throw new InvalidOperationException("Unable to create Blockiverse input actions asset.");
 
+            EnsureInputActionReferences(importedAsset);
             return importedAsset;
+        }
+
+        static string BuildDeterministicInputActionsJson()
+        {
+            var assetJson = new InputActionAssetJson
+            {
+                version = 1,
+                name = "BlockiverseInputActions",
+                maps = new[]
+                {
+                    CreateHeadMap(),
+                    CreateControllerMapJson(BlockiverseInputActionNames.LeftHandMap, "<XRController>{LeftHand}"),
+                    CreateControllerMapJson(BlockiverseInputActionNames.RightHandMap, "<XRController>{RightHand}"),
+                    CreateGameplayMapJson(),
+                },
+                controlSchemes = Array.Empty<InputControlSchemeJson>(),
+            };
+
+            return JsonUtility.ToJson(assetJson, true) + "\n";
+        }
+
+        static InputActionMapJson CreateHeadMap()
+        {
+            var actions = new[]
+            {
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Position, InputActionType.PassThrough, "Vector3"),
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Rotation, InputActionType.PassThrough, "Quaternion"),
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.LeftEyePosition, InputActionType.PassThrough, "Vector3"),
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.LeftEyeRotation, InputActionType.PassThrough, "Quaternion"),
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.RightEyePosition, InputActionType.PassThrough, "Vector3"),
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.RightEyeRotation, InputActionType.PassThrough, "Quaternion"),
+                CreateAction(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState, InputActionType.PassThrough, "Integer"),
+            };
+
+            var bindings = new[]
+            {
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Position, "center-eye-position", "<XRHMD>/centerEyePosition"),
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Rotation, "center-eye-rotation", "<XRHMD>/centerEyeRotation"),
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.LeftEyePosition, "left-eye-position", "<XRHMD>/leftEyePosition"),
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.LeftEyeRotation, "left-eye-rotation", "<XRHMD>/leftEyeRotation"),
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.RightEyePosition, "right-eye-position", "<XRHMD>/rightEyePosition"),
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.RightEyeRotation, "right-eye-rotation", "<XRHMD>/rightEyeRotation"),
+                CreateBinding(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState, "tracking-state", "<XRHMD>/trackingState"),
+            };
+
+            return CreateMap(BlockiverseInputActionNames.HeadMap, actions, bindings);
+        }
+
+        static InputActionMapJson CreateControllerMapJson(string mapName, string controllerPath)
+        {
+            var actions = new[]
+            {
+                CreateAction(mapName, BlockiverseInputActionNames.Position, InputActionType.PassThrough, "Vector3"),
+                CreateAction(mapName, BlockiverseInputActionNames.Rotation, InputActionType.PassThrough, "Quaternion"),
+                CreateAction(mapName, BlockiverseInputActionNames.IsTracked, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.TrackingState, InputActionType.PassThrough, "Integer"),
+                CreateAction(mapName, BlockiverseInputActionNames.Select, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.Activate, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.UiPress, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.UiScroll, InputActionType.PassThrough, "Vector2"),
+                CreateAction(mapName, BlockiverseInputActionNames.HapticDevice, InputActionType.PassThrough, string.Empty),
+                CreateAction(mapName, BlockiverseInputActionNames.Move, InputActionType.PassThrough, "Vector2"),
+                CreateAction(mapName, BlockiverseInputActionNames.Turn, InputActionType.PassThrough, "Vector2"),
+                CreateAction(mapName, BlockiverseInputActionNames.Sprint, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.AimPosition, InputActionType.PassThrough, "Vector3"),
+                CreateAction(mapName, BlockiverseInputActionNames.AimRotation, InputActionType.PassThrough, "Quaternion"),
+            };
+
+            var bindings = new List<InputBindingJson>
+            {
+                CreateBinding(mapName, BlockiverseInputActionNames.Position, "device-position", $"{controllerPath}/devicePosition"),
+                CreateBinding(mapName, BlockiverseInputActionNames.Rotation, "device-rotation", $"{controllerPath}/deviceRotation"),
+                CreateBinding(mapName, BlockiverseInputActionNames.IsTracked, "is-tracked", $"{controllerPath}/isTracked"),
+                CreateBinding(mapName, BlockiverseInputActionNames.TrackingState, "tracking-state", $"{controllerPath}/trackingState"),
+                CreateBinding(mapName, BlockiverseInputActionNames.Select, "trigger-pressed", $"{controllerPath}/triggerPressed"),
+                CreateBinding(mapName, BlockiverseInputActionNames.Activate, "grip-pressed", $"{controllerPath}/gripPressed"),
+                CreateBinding(mapName, BlockiverseInputActionNames.PrimaryButton, "primary-button", $"{controllerPath}/primaryButton"),
+                CreateBinding(mapName, BlockiverseInputActionNames.SecondaryButton, "secondary-button", $"{controllerPath}/secondaryButton"),
+                CreateBinding(mapName, BlockiverseInputActionNames.UiPress, "ui-trigger-pressed", $"{controllerPath}/triggerPressed"),
+                CreateBinding(mapName, BlockiverseInputActionNames.UiScroll, "ui-thumbstick", $"{controllerPath}/thumbstick"),
+                CreateBinding(mapName, BlockiverseInputActionNames.HapticDevice, "haptic-device", $"{controllerPath}/*"),
+                CreateBinding(mapName, BlockiverseInputActionNames.Move, "move-thumbstick", $"{controllerPath}/thumbstick", StickDeadzoneProcessor),
+                CreateBinding(mapName, BlockiverseInputActionNames.Turn, "turn-thumbstick", $"{controllerPath}/thumbstick", StickDeadzoneProcessor),
+                CreateBinding(mapName, BlockiverseInputActionNames.Sprint, "thumbstick-clicked", $"{controllerPath}/thumbstickClicked"),
+                CreateBinding(mapName, BlockiverseInputActionNames.AimPosition, "pointer-position", $"{controllerPath}/pointerPosition"),
+                CreateBinding(mapName, BlockiverseInputActionNames.AimRotation, "pointer-rotation", $"{controllerPath}/pointerRotation"),
+            };
+
+            AddThumbstickYCompositeBindings(bindings, mapName, BlockiverseInputActionNames.TeleportMode, controllerPath);
+            AddThumbstickYCompositeBindings(bindings, mapName, BlockiverseInputActionNames.TeleportSelect, controllerPath);
+
+            return CreateMap(mapName, actions, bindings.ToArray());
+        }
+
+        static InputActionMapJson CreateGameplayMapJson()
+        {
+            var actions = new[]
+            {
+                CreateAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, InputActionType.Button, "Button"),
+            };
+
+            var bindings = new[]
+            {
+                CreateBinding(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "left-menu-button", "<XRController>{LeftHand}/menuButton"),
+            };
+
+            return CreateMap(BlockiverseInputActionNames.GameplayMap, actions, bindings);
+        }
+
+        static InputActionMapJson CreateMap(string mapName, InputActionJson[] actions, InputBindingJson[] bindings)
+        {
+            return new InputActionMapJson
+            {
+                name = mapName,
+                id = BlockiverseDeterministicInputIds.ForMap(mapName).ToString(),
+                actions = actions,
+                bindings = bindings,
+            };
+        }
+
+        static InputActionJson CreateAction(string mapName, string actionName, InputActionType actionType, string expectedControlType)
+        {
+            return new InputActionJson
+            {
+                name = actionName,
+                type = actionType.ToString(),
+                id = BlockiverseDeterministicInputIds.ForAction(mapName, actionName).ToString(),
+                expectedControlType = expectedControlType,
+                processors = string.Empty,
+                interactions = string.Empty,
+                initialStateCheck = actionType == InputActionType.PassThrough,
+            };
+        }
+
+        static InputBindingJson CreateBinding(
+            string mapName,
+            string actionName,
+            string bindingKey,
+            string path,
+            string processors = "")
+        {
+            return new InputBindingJson
+            {
+                name = string.Empty,
+                id = BlockiverseDeterministicInputIds.ForBinding(mapName, actionName, bindingKey).ToString(),
+                path = path,
+                interactions = string.Empty,
+                processors = processors,
+                groups = string.Empty,
+                action = actionName,
+                isComposite = false,
+                isPartOfComposite = false,
+            };
+        }
+
+        static void AddThumbstickYCompositeBindings(
+            List<InputBindingJson> bindings,
+            string mapName,
+            string actionName,
+            string controllerPath)
+        {
+            bindings.Add(new InputBindingJson
+            {
+                name = "1DAxis",
+                id = BlockiverseDeterministicInputIds.ForBinding(mapName, actionName, "thumbstick-y-composite").ToString(),
+                path = "1DAxis",
+                interactions = string.Empty,
+                processors = string.Empty,
+                groups = string.Empty,
+                action = actionName,
+                isComposite = true,
+                isPartOfComposite = false,
+            });
+            bindings.Add(new InputBindingJson
+            {
+                name = "Positive",
+                id = BlockiverseDeterministicInputIds.ForBinding(mapName, actionName, "thumbstick-y-positive").ToString(),
+                path = $"{controllerPath}/thumbstick/y",
+                interactions = string.Empty,
+                processors = string.Empty,
+                groups = string.Empty,
+                action = actionName,
+                isComposite = false,
+                isPartOfComposite = true,
+            });
+        }
+
+        static void EnsureInputActionReferences(InputActionAsset asset)
+        {
+            foreach (InputActionMap map in asset.actionMaps)
+            {
+                foreach (InputAction action in map.actions)
+                    EnsureInputActionReference(asset, map.name, action.name);
+            }
+
+            AssetDatabase.SaveAssets();
+        }
+
+        static InputActionReference EnsureInputActionReference(InputActionAsset asset, string mapName, string actionName)
+        {
+            string path = BlockiverseInputActionReferencePaths.GetReferencePath(mapName, actionName);
+            InputActionReference reference = AssetDatabase.LoadAssetAtPath<InputActionReference>(path);
+
+            if (reference == null)
+            {
+                reference = ScriptableObject.CreateInstance<InputActionReference>();
+                AssetDatabase.CreateAsset(reference, path);
+            }
+
+            if (reference.action != asset.FindActionMap(mapName).FindAction(actionName))
+            {
+                reference.Set(asset, mapName, actionName);
+                reference.name = $"{mapName}/{actionName}";
+                EditorUtility.SetDirty(reference);
+            }
+
+            return reference;
+        }
+
+        static InputActionReference LoadInputActionReference(string mapName, string actionName)
+        {
+            return AssetDatabase.LoadAssetAtPath<InputActionReference>(
+                BlockiverseInputActionReferencePaths.GetReferencePath(mapName, actionName));
         }
 
         static void EnsureInputActionSchema(InputActionAsset asset)
@@ -221,6 +436,58 @@ namespace Blockiverse.Editor
         {
             action.AddCompositeBinding("1DAxis")
                 .With("Positive", $"{controllerPath}/thumbstick/y");
+        }
+
+        [Serializable]
+        sealed class InputActionAssetJson
+        {
+            public int version;
+            public string name;
+            public InputActionMapJson[] maps;
+            public InputControlSchemeJson[] controlSchemes;
+        }
+
+        [Serializable]
+        sealed class InputActionMapJson
+        {
+            public string name;
+            public string id;
+            public InputActionJson[] actions;
+            public InputBindingJson[] bindings;
+        }
+
+        [Serializable]
+        sealed class InputActionJson
+        {
+            public string name;
+            public string type;
+            public string id;
+            public string expectedControlType;
+            public string processors;
+            public string interactions;
+            public bool initialStateCheck;
+        }
+
+        [Serializable]
+        sealed class InputBindingJson
+        {
+            public string name;
+            public string id;
+            public string path;
+            public string interactions;
+            public string processors;
+            public string groups;
+            public string action;
+            public bool isComposite;
+            public bool isPartOfComposite;
+        }
+
+        [Serializable]
+        sealed class InputControlSchemeJson
+        {
+            public string name;
+            public string bindingGroup;
+            public string[] devices;
         }
 
         // Import TextMeshPro Essential Resources once so the default font asset is available for

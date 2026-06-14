@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 206503895}
   - component: {fileID: 206503897}
   - component: {fileID: 206503898}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Text
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -228,7 +228,7 @@ MonoBehaviour:
   m_lineSpacingMax: 0
   m_paragraphSpacing: 0
   m_charWidthMaxAdj: 0
-  m_TextWrappingMode: 3
+  m_TextWrappingMode: 1
   m_wordWrappingRatios: 0.4
   m_overflowMode: 1
   m_linkedTextComponent: {fileID: 0}
@@ -237,7 +237,7 @@ MonoBehaviour:
   m_ActiveFontFeatures:
   m_enableExtraPadding: 0
   checkPaddingRequired: 0
-  m_isRichText: 1
+  m_isRichText: 0
   m_EmojiFallbackSupport: 1
   m_parseCtrlCharacters: 1
   m_isOrthographic: 1
@@ -269,7 +269,7 @@ GameObject:
   - component: {fileID: 220185976}
   - component: {fileID: 220185975}
   - component: {fileID: 220185979}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Creative World
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -300,7 +300,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: ae56d699ae56d699ae56d699ae56d699, type: 3}
   - {fileID: 2800000, guid: af0a82beaf0a82beaf0a82beaf0a82be, type: 3}
   - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
-  interactionLayer: -1
+  interactionLayer: 10
   interactionController: {fileID: 220185976}
   hotbar: {fileID: 0}
   placementPreview: {fileID: 0}
@@ -419,7 +419,7 @@ GameObject:
   - component: {fileID: 270811746}
   - component: {fileID: 270811748}
   - component: {fileID: 270811749}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Status
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -571,7 +571,7 @@ GameObject:
   - component: {fileID: 308501972}
   - component: {fileID: 308501974}
   - component: {fileID: 308501975}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -710,7 +710,7 @@ GameObject:
   - component: {fileID: 367609777}
   - component: {fileID: 367609779}
   - component: {fileID: 367609780}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Host Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -919,7 +919,7 @@ GameObject:
   - component: {fileID: 477340632}
   - component: {fileID: 477340633}
   - component: {fileID: 477340634}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Address Input
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1130,7 +1130,7 @@ GameObject:
   - component: {fileID: 493624583}
   - component: {fileID: 493624584}
   - component: {fileID: 493624585}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Placeholder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1284,7 +1284,7 @@ GameObject:
   - component: {fileID: 543566527}
   - component: {fileID: 543566529}
   - component: {fileID: 543566530}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Join Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1424,7 +1424,7 @@ GameObject:
   - component: {fileID: 681260477}
   - component: {fileID: 681260479}
   - component: {fileID: 681260480}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Stop Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1626,12 +1626,12 @@ MonoBehaviour:
   m_EnableGamepadInput: 0
   m_EnableJoystickInput: 0
   m_PointAction: {fileID: 0}
-  m_LeftClickAction: {fileID: 1532996070}
+  m_LeftClickAction: {fileID: 11400000, guid: 6c3010da7a31044f2b3087a694aa9c5a, type: 2}
   m_MiddleClickAction: {fileID: 0}
   m_RightClickAction: {fileID: 0}
-  m_ScrollWheelAction: {fileID: 2012316156}
-  m_NavigateAction: {fileID: 1440435769}
-  m_SubmitAction: {fileID: 1378207858}
+  m_ScrollWheelAction: {fileID: 11400000, guid: 2eb8f5a703de4419a962bbfabe645425, type: 2}
+  m_NavigateAction: {fileID: 11400000, guid: 2eb8f5a703de4419a962bbfabe645425, type: 2}
+  m_SubmitAction: {fileID: 11400000, guid: 6c3010da7a31044f2b3087a694aa9c5a, type: 2}
   m_CancelAction: {fileID: 0}
   m_EnableBuiltinActionsAsFallback: 1
   m_HorizontalAxis: Horizontal
@@ -1649,7 +1649,7 @@ GameObject:
   - component: {fileID: 1040312988}
   - component: {fileID: 1040312990}
   - component: {fileID: 1040312989}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1730,7 +1730,7 @@ GameObject:
   - component: {fileID: 1054825088}
   - component: {fileID: 1054825090}
   - component: {fileID: 1054825091}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1867,7 +1867,7 @@ GameObject:
   - component: {fileID: 1131957198}
   - component: {fileID: 1131957200}
   - component: {fileID: 1131957201}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Title
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2076,48 +2076,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1378207858
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/UI Press
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
-  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000035
---- !u!114 &1440435769
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/UI Scroll
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
-  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000036
---- !u!114 &1532996070
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/UI Press
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
-  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000035
 --- !u!1 &1689157740
 GameObject:
   m_ObjectHideFlags: 0
@@ -2129,7 +2087,7 @@ GameObject:
   - component: {fileID: 1689157741}
   - component: {fileID: 1689157743}
   - component: {fileID: 1689157744}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2476,20 +2434,6 @@ MonoBehaviour:
   dayLengthSeconds: 1200
   normalizedTime: 0.22
   timeScale: 1
---- !u!114 &2012316156
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc1515ab76e54f068e2f2207940fab32, type: 3}
-  m_Name: XRI RightHand/UI Scroll
-  m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
-  m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 00000000-0000-0000-0000-000000000036
 --- !u!1 &2058886980
 GameObject:
   m_ObjectHideFlags: 0
@@ -2504,7 +2448,7 @@ GameObject:
   - component: {fileID: 2058886981}
   - component: {fileID: 2058886986}
   - component: {fileID: 2058886987}
-  m_Layer: 8
+  m_Layer: 10
   m_Name: Multiplayer Session Menu
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -431,7 +431,11 @@ namespace Blockiverse.Editor
                 UnityEngine.Object.DestroyImmediate(legacyUiModule);
 
             XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
-            BlockiverseXrUiInputConfigurator.Configure(inputModule, EnsureInputActions());
+            EnsureInputActions();
+            BlockiverseXrUiInputConfigurator.Configure(
+                inputModule,
+                LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress),
+                LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
 
             EnsureXrInteractionManager(scene);
 
@@ -576,10 +580,8 @@ namespace Blockiverse.Editor
             worldObject.transform.rotation = Quaternion.identity;
             worldObject.transform.localScale = Vector3.one;
 
-            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-
-            if (interactionLayer >= 0)
-                worldObject.layer = interactionLayer;
+            int interactionLayer = GetInteractionLayerIndex();
+            worldObject.layer = interactionLayer;
 
             Material worldMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
             VoxelWorldRenderer renderer = EnsureComponent<VoxelWorldRenderer>(worldObject);

@@ -67,6 +67,7 @@ namespace Blockiverse.Editor
             "Assets/Blockiverse/Scenes",
             "Assets/Blockiverse/Scripts",
             "Assets/Blockiverse/Settings",
+            BlockiverseProject.InputActionReferencesFolderPath,
             "Assets/Blockiverse/Tests/EditMode",
             "Assets/Blockiverse/Tests/PlayMode"
         };
@@ -759,8 +760,13 @@ namespace Blockiverse.Editor
 
         static LayerMask GetInteractionLayerMask()
         {
+            return (LayerMask)BlockiverseProject.InteractionLayerMask;
+        }
+
+        static int GetInteractionLayerIndex()
+        {
             int layer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-            return layer >= 0 ? (LayerMask)(1 << layer) : Physics.DefaultRaycastLayers;
+            return layer >= 0 ? layer : BlockiverseProject.InteractionLayerIndex;
         }
 
         static void AddControllerMap(InputActionAsset asset, string mapName, string controllerPath)

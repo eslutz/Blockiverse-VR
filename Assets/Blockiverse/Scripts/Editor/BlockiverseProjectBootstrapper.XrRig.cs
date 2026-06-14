@@ -74,7 +74,7 @@ namespace Blockiverse.Editor
             camera.farClipPlane = 500.0f;
             cameraObject.AddComponent<AudioListener>();
             TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
-            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            ConfigureHeadPoseDriverReferenceActions(poseDriver);
 
             XROrigin origin = rig.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
@@ -152,7 +152,7 @@ namespace Blockiverse.Editor
             if (poseDriver == null && xrCamera != null)
                 poseDriver = xrCamera.gameObject.AddComponent<TrackedPoseDriver>();
 
-            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            ConfigureHeadPoseDriverReferenceActions(poseDriver);
             inputRig.ConfigureHeadPoseDriver(poseDriver);
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
             EnsureXrRigLocomotion(rig, inputRig, origin);
@@ -225,7 +225,7 @@ namespace Blockiverse.Editor
             // Native controller tracking: a TrackedPoseDriver drives the controller transform in
             // Update + BeforeRender, matching the head and removing the old hand-written pose.
             TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(controller);
-            BlockiverseInputRig.ConfigureControllerPoseDriverActions(poseDriver, role);
+            ConfigureControllerPoseDriverReferenceActions(poseDriver, role);
             poseDriver.enabled = true;
 
             BlockiverseControllerAnchor anchor = EnsureComponent<BlockiverseControllerAnchor>(controller);
@@ -277,8 +277,14 @@ namespace Blockiverse.Editor
                 // TryGetCurrent3DRaycastHit on this raycast mask.
                 interactionRay.interactionLayers = 0;
                 interactionRay.raycastMask = GetInteractionLayerMask();
-                interactionRay.uiPressInput = MakeButtonReader("UI Press", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.UiPress));
-                interactionRay.uiScrollInput = MakeVector2Reader("UI Scroll", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.UiScroll));
+                interactionRay.selectInput = MakeUnusedButtonReader("Select");
+                interactionRay.activateInput = MakeUnusedButtonReader("Activate");
+                interactionRay.uiPressInput = MakeButtonReader(
+                    "UI Press",
+                    LoadInputActionReference(mapName, BlockiverseInputActionNames.UiPress));
+                interactionRay.uiScrollInput = MakeVector2Reader(
+                    "UI Scroll",
+                    LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
                 ConfigureLineVisual(interactionRayObject, pointerMaterial);
                 EditorUtility.SetDirty(interactionRay);
             }
@@ -294,7 +300,12 @@ namespace Blockiverse.Editor
             teleportRay.rayOriginTransform = aimPose;
             teleportRay.raycastMask = GetInteractionLayerMask();
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
-            teleportRay.selectInput = MakeButtonReader("Teleport Select", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.TeleportSelect));
+            teleportRay.selectInput = MakeButtonReader(
+                "Teleport Select",
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.TeleportSelect));
+            teleportRay.activateInput = MakeUnusedButtonReader("Activate");
+            teleportRay.uiPressInput = MakeUnusedButtonReader("UI Press");
+            teleportRay.uiScrollInput = MakeVector2Reader("UI Scroll", null);
             ConfigureLineVisual(teleportRayObject, pointerMaterial);
             teleportRayObject.SetActive(false);
             EditorUtility.SetDirty(teleportRay);
@@ -320,7 +331,7 @@ namespace Blockiverse.Editor
             aimPose.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
             TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(aimPose.gameObject);
-            BlockiverseInputRig.ConfigureControllerAimPoseDriverActions(poseDriver, role);
+            ConfigureControllerAimPoseDriverReferenceActions(poseDriver, role);
             poseDriver.enabled = true;
             EditorUtility.SetDirty(poseDriver);
             EditorUtility.SetDirty(aimPose.gameObject);
@@ -352,26 +363,68 @@ namespace Blockiverse.Editor
         // Use InputActionReference mode so the bootstrapper-assigned reader does not take ownership
         // of the action's enable/disable lifecycle. The rig enables/disables the whole
         // InputActionAsset, and InputAction mode would fight that.
-        static XRInputButtonReader MakeButtonReader(string name, InputAction action)
+        static void ConfigureHeadPoseDriverReferenceActions(TrackedPoseDriver poseDriver)
         {
+            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
+                poseDriver,
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Position),
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Rotation),
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState));
+        }
+
+        static void ConfigureControllerPoseDriverReferenceActions(TrackedPoseDriver poseDriver, BlockiverseControllerRole role)
+        {
+            string mapName = role == BlockiverseControllerRole.Left
+                ? BlockiverseInputActionNames.LeftHandMap
+                : BlockiverseInputActionNames.RightHandMap;
+
+            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
+                poseDriver,
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.Position),
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.Rotation),
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
+        }
+
+        static void ConfigureControllerAimPoseDriverReferenceActions(TrackedPoseDriver poseDriver, BlockiverseControllerRole role)
+        {
+            string mapName = role == BlockiverseControllerRole.Left
+                ? BlockiverseInputActionNames.LeftHandMap
+                : BlockiverseInputActionNames.RightHandMap;
+
+            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
+                poseDriver,
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.AimPosition),
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.AimRotation),
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
+        }
+
+        static XRInputButtonReader MakeButtonReader(string name, InputActionReference reference)
+        {
+            if (reference == null)
+                return MakeUnusedButtonReader(name);
+
             var reader = new XRInputButtonReader(name,
                 inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference);
 
-            if (action != null)
-                reader.inputActionReferencePerformed = InputActionReference.Create(action);
-
+            reader.inputActionReferencePerformed = reference;
             return reader;
         }
 
-        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputAction action)
+        static XRInputButtonReader MakeUnusedButtonReader(string name)
         {
-            if (action == null)
+            return new XRInputButtonReader(name,
+                inputSourceMode: XRInputButtonReader.InputSourceMode.Unused);
+        }
+
+        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputActionReference reference)
+        {
+            if (reference == null)
                 return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
 
             return new XRInputValueReader<Vector2>(name,
                 XRInputValueReader.InputSourceMode.InputActionReference)
             {
-                inputActionReference = InputActionReference.Create(action)
+                inputActionReference = reference
             };
         }
 

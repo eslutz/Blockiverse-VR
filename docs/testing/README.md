@@ -65,6 +65,26 @@ scripts/unity/run-tests.sh \
 
 `scripts/unity/run-tests.sh` supports `--platform EditMode|PlayMode|all`, `--filter <test-filter>`, `--results-name <slug>`, and `--results-dir <path>`. Named single-platform runs write `TestResults/Unity/<slug>.xml`; named `--platform all` runs write `TestResults/Unity/<slug>-EditMode.xml` and `TestResults/Unity/<slug>-PlayMode.xml`.
 
+#### Generated Input Wiring
+
+The bootstrapper owns the Unity Input System action catalog and generated XR wiring. `Assets/Blockiverse/Settings/BlockiverseInputActions.inputactions` uses deterministic map, action, and binding IDs, and every action has a tracked `InputActionReference` asset under `Assets/Blockiverse/Settings/InputActionReferences/`.
+
+When adding or changing input actions, update the bootstrapper catalog, run `Blockiverse.Editor.BlockiverseProjectBootstrapper.Run`, and keep the regenerated input-action asset plus generated reference assets. Generated scenes and prefabs should reference those assets; they should not store scene-local `InputActionReference` objects or serialized inline `InputAction` instances for project-owned XRI actions.
+
+Use the focused input guards while iterating:
+
+```sh
+scripts/unity/run-tests.sh \
+  --platform EditMode \
+  --filter Blockiverse.Tests.EditMode.BlockiverseInputActionAssetTests \
+  --results-name input-action-determinism
+
+scripts/unity/run-tests.sh \
+  --platform EditMode \
+  --filter Blockiverse.Tests.EditMode.BlockiverseRigPrefabTests \
+  --results-name input-reference-wiring
+```
+
 ### Unity Full Gate
 
 Run the full local Unity gate before moving any Unity-impacting pull request to review or merge, before creating a known-good `kg/...` checkpoint for Unity work, and before release-candidate validation:

@@ -1549,9 +1549,7 @@ namespace Blockiverse.Editor
             if (legacyRaycaster != null)
                 UnityEngine.Object.DestroyImmediate(legacyRaycaster);
 
-            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-            if (interactionLayer >= 0)
-                SetLayerRecursively(canvasObject, interactionLayer);
+            SetLayerRecursively(canvasObject, GetInteractionLayerIndex());
 
             CanvasGroup inputGate = EnsureComponent<CanvasGroup>(canvasObject);
             inputGate.interactable = true;

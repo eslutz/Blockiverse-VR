@@ -29,6 +29,7 @@ namespace Blockiverse.Tests.EditMode
             InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
                 BlockiverseProject.InputActionsAssetPath);
 
+            AssertPoseActions(asset);
             AssertControllerActions(asset, BlockiverseInputActionNames.LeftHandMap, "LeftHand");
             AssertControllerActions(asset, BlockiverseInputActionNames.RightHandMap, "RightHand");
             AssertAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, "<XRController>{LeftHand}/menuButton");
@@ -51,6 +52,53 @@ namespace Blockiverse.Tests.EditMode
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint);
+        }
+
+        [Test]
+        public void InputActionIdsAreDeterministicAndReferencesAreGenerated()
+        {
+            InputActionAsset asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                BlockiverseProject.InputActionsAssetPath);
+
+            Assert.That(asset, Is.Not.Null);
+
+            foreach (InputActionMap map in asset.actionMaps)
+            {
+                Assert.That(map.id, Is.EqualTo(BlockiverseDeterministicInputIds.ForMap(map.name)),
+                    $"{map.name} map id should be generated from the deterministic catalog.");
+
+                foreach (InputAction action in map.actions)
+                {
+                    Assert.That(action.id, Is.EqualTo(BlockiverseDeterministicInputIds.ForAction(map.name, action.name)),
+                        $"{map.name}/{action.name} action id should be generated from the deterministic catalog.");
+                    AssertReferenceAsset(asset, map.name, action.name);
+                }
+            }
+        }
+
+        static void AssertPoseActions(InputActionAsset asset)
+        {
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Position, "<XRHMD>/centerEyePosition");
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Rotation, "<XRHMD>/centerEyeRotation");
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.LeftEyePosition, "<XRHMD>/leftEyePosition");
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.LeftEyeRotation, "<XRHMD>/leftEyeRotation");
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.RightEyePosition, "<XRHMD>/rightEyePosition");
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.RightEyeRotation, "<XRHMD>/rightEyeRotation");
+            AssertAction(asset, BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState, "<XRHMD>/trackingState");
+            AssertAction(asset, BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.AimPosition, "<XRController>{LeftHand}/pointerPosition");
+            AssertAction(asset, BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.AimRotation, "<XRController>{LeftHand}/pointerRotation");
+            AssertAction(asset, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.AimPosition, "<XRController>{RightHand}/pointerPosition");
+            AssertAction(asset, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.AimRotation, "<XRController>{RightHand}/pointerRotation");
+        }
+
+        static void AssertReferenceAsset(InputActionAsset asset, string mapName, string actionName)
+        {
+            InputAction action = asset.FindActionMap(mapName).FindAction(actionName);
+            string referencePath = BlockiverseInputActionReferencePaths.GetReferencePath(mapName, actionName);
+            InputActionReference reference = AssetDatabase.LoadAssetAtPath<InputActionReference>(referencePath);
+
+            Assert.That(reference, Is.Not.Null, $"Missing generated InputActionReference asset: {referencePath}");
+            Assert.That(reference.action, Is.SameAs(action), $"{referencePath} should target {mapName}/{actionName}.");
         }
 
         static void AssertControllerActions(InputActionAsset asset, string mapName, string handUsage)

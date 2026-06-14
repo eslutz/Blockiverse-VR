@@ -16,6 +16,7 @@ namespace Blockiverse.Core
         public const string AndroidUrpAssetPath = "Assets/Blockiverse/Settings/BlockiverseAndroidURPAsset.asset";
         public const string AndroidUrpRendererPath = "Assets/Blockiverse/Settings/BlockiverseAndroidUniversalRenderer.asset";
         public const string InputActionsAssetPath = "Assets/Blockiverse/Settings/BlockiverseInputActions.inputactions";
+        public const string InputActionReferencesFolderPath = "Assets/Blockiverse/Settings/InputActionReferences";
         public const string BrandingArtFolderPath = "Assets/Blockiverse/Art/Sprites/Branding";
         public const string AppIconPath = BrandingArtFolderPath + "/blockiverse_app_icon.png";
         public const string LaunchArtworkPath = BrandingArtFolderPath + "/blockiverse_launch_landscape.png";
@@ -25,5 +26,8 @@ namespace Blockiverse.Core
         public const string VfxParticleMaterialPath = "Assets/Blockiverse/Materials/BlockiverseVfxParticle.mat";
         public const string ChunkAtlasMaterialPath = "Assets/Blockiverse/Materials/BlockiverseChunkAtlas.mat";
         public const string InteractionLayerName = "BlockiverseInteractable";
+        public const int CompositionPointerProjectionLayerIndex = 9;
+        public const int InteractionLayerIndex = 10;
+        public const int InteractionLayerMask = 1 << InteractionLayerIndex;
     }
 }

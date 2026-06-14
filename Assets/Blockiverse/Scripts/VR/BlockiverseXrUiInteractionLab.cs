@@ -252,7 +252,7 @@ namespace Blockiverse.VR
         {
             int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
             if (interactionLayer < 0)
-                return;
+                interactionLayer = BlockiverseProject.InteractionLayerIndex;
 
             foreach (Canvas canvas in labCanvases)
             {
