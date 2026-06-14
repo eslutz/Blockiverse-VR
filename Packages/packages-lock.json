@@ -22,14 +22,14 @@
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.core": {
-      "version": "85.0.0",
+      "version": "81.0.1",
       "depth": 0,
       "source": "registry",
       "dependencies": {},
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.interaction": {
-      "version": "85.0.0",
+      "version": "81.0.1",
       "depth": 1,
       "source": "registry",
       "dependencies": {
@@ -39,17 +39,17 @@
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.interaction.ovr": {
-      "version": "85.0.0",
+      "version": "81.0.1",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.meta.xr.sdk.interaction": "85.0.0",
-        "com.meta.xr.sdk.core": "85.0.0"
+        "com.meta.xr.sdk.interaction": "81.0.1",
+        "com.meta.xr.sdk.core": "81.0.1"
       },
       "url": "https://npm.developer.oculus.com"
     },
     "com.meta.xr.sdk.platform": {
-      "version": "85.0.0",
+      "version": "81.0.1",
       "depth": 0,
       "source": "registry",
       "dependencies": {
