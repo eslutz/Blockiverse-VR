@@ -184,12 +184,18 @@ Do not use a long-lived `develop` branch.
 ### Release tags
 
 ```text
+Production:
 v0.1.0
 v0.2.0
 v1.0.0
+
+Prerelease channels:
+v0.1.0-alpha.pr315.42.1
+v0.1.0-beta.run12.1
+v0.1.0-rc.1
 ```
 
-Release tags are player-facing. They must point to commits reachable from `origin/main`.
+Production release tags are player-facing and must point to commits reachable from `origin/main`. Prerelease channel tags are also player-facing GitHub Releases; alpha tags may point to same-repository pull request commits, while beta and RC tags must point to commits reachable from `origin/main`.
 
 ### Known-good checkpoint tags
 
@@ -1278,7 +1284,7 @@ Performance reports are saved under docs/testing/performance/.
 
 ### Deliverable
 
-Signed APKs are produced from `main`, attached to GitHub Releases, and installable on Quest.
+Alpha and beta APKs are versioned, attached to GitHub Releases, uploaded to Meta release channels, and installable on Quest. Release-candidate and production releases promote already-uploaded Meta build IDs so the RC and Store builds preserve exact artifact identity.
 
 ### Scope
 
@@ -1286,7 +1292,10 @@ Signed APKs are produced from `main`, attached to GitHub Releases, and installab
 Production Android keystore outside repo
 GitHub Actions secret-based signing
 Version code/version name automation
-Release tags from main only
+Alpha builds from same-repository pull request commits
+Beta builds from main merges
+RC promotion from selected Beta Meta build ID by manual dispatch
+Production promotion from selected RC Meta build ID after Store submission/review
 APK checksum
 Symbols/log artifacts
 Release notes template
@@ -1297,8 +1306,10 @@ ADB/hzdb sideload validation path
 ### Release artifacts
 
 ```text
-BlockiverseVR-v0.1.0-dev.apk
-BlockiverseVR-v0.1.0-release.apk
+BlockiverseVR-v0.1.0-alpha.pr315.42.1-alpha.apk
+BlockiverseVR-v0.1.0-beta.run12.1-beta.apk
+meta-upload-summary.json
+meta-upload-output.txt
 BlockiverseVR-v0.1.0-symbols.zip
 checksums.txt
 CHANGELOG.md excerpt
@@ -1309,9 +1320,12 @@ performance-summary.md
 ### Tests
 
 ```text
-CI: release tag must be on main.
-CI: signed release artifact exists.
+CI: alpha prerelease tags may point to same-repository PR commits.
+CI: beta, RC, and production tags must be on main.
+CI: APK artifact exists.
 CI: checksum is generated.
+CI: RC and production workflows do not build APKs.
+CI: promoted RC and production releases preserve the selected Meta build ID.
 Smoke: APK installs on Quest.
 Smoke: app launches to main menu.
 Smoke: boot scene reaches playable state.
@@ -1320,7 +1334,10 @@ Smoke: boot scene reaches playable state.
 ### Validation
 
 ```text
-Tagging v0.x from main creates a GitHub Release.
+The alpha PR workflow creates a `vX.Y.Z-alpha.*` GitHub pre-release for same-repository PR commits.
+Merging to main creates a `vX.Y.Z-beta.*` GitHub pre-release and uploads the signed APK to Meta `beta`.
+Manual RC dispatch creates a `vX.Y.Z-rc.*` GitHub pre-release and promotes the selected Beta build to Meta `rc` when the promotion toggle is set.
+Manual production dispatch creates a `vX.Y.Z` GitHub Release and promotes the selected RC build to Meta `store` only after the Store review approval toggle is set.
 APK can be sideloaded.
 Version appears correctly in game.
 Release notes include known issues.
@@ -1353,7 +1370,9 @@ Bug feedback flow
 ### Tests
 
 ```text
-Store upload accepts APK.
+Store upload accepts the Beta APK.
+Selected Beta build can be promoted to RC.
+Selected RC build can be promoted to Store.
 Release channel install works.
 Entitlement behavior is understood.
 Avatar/platform requirements are documented.

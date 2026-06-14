@@ -29,7 +29,7 @@ python3 scripts/audio/generate-audio.py           # all SFX
 scripts/ci/forbidden-files.sh                     # what PR CI actually runs
 ```
 
-**PR CI does not compile or test Unity code** (it only checks forbidden files and shell syntax). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. Releases build from `v*` tags via `release-apk.yml`.
+**PR CI does not compile or test Unity code** (it only checks forbidden files and shell syntax). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. Release channel workflows build and upload alpha/beta APKs, then promote Beta to RC and RC to Meta `store` without rebuilding.
 
 ## Architecture
 

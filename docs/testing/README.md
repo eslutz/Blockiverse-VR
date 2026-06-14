@@ -5,7 +5,7 @@ Testing is split into:
 - Repository safety checks for shell syntax, release policy docs, and forbidden tracked files
 - Local Unity validation for tests and development APK build smoke checks
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
-- Release APK workflow checks that publish CI artifacts
+- Release channel workflow checks that upload alpha/beta builds and promote beta-to-RC and RC-to-store builds
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
 - Multiplayer Play Mode tests for local multi-client behavior
@@ -31,7 +31,7 @@ Attach relevant excerpts to issues or pull requests when they are needed as vali
 Run the repository checks locally with:
 
 ```sh
-bash -n scripts/ci/forbidden-files.sh scripts/unity/*.sh
+bash -n scripts/ci/*.sh scripts/store/*.sh scripts/unity/*.sh
 scripts/ci/forbidden-files.sh
 test -f docs/architecture/branching-and-release.md
 ```
@@ -52,8 +52,8 @@ Local Unity validation requires globally installed tools on the developer machin
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
 - `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity`.
 
-Current GitHub Actions workflows do not require UNITY_LICENSE, UNITY_EMAIL, or UNITY_PASSWORD secrets. Unity Personal activation is handled by Unity Hub on the local developer machine, and the local license file is not committed, copied into CI, or uploaded as an artifact.
+Current GitHub Actions release workflows use the UnityCI editor container for alpha and beta APK builds and do not require UNITY_LICENSE, UNITY_EMAIL, or UNITY_PASSWORD secrets. RC and production workflows promote already-uploaded Meta build IDs and do not rebuild APKs. Unity Personal activation remains local for developer-run validation, and the local license file is not committed, copied into CI, or uploaded as an artifact.
 
-Record the local Unity validation commands, result summary, output APK path, and any residual risk in the pull request or linked issue. The current development APK build artifact is local only, usually `/tmp/blockiverse-vr-development.apk`, and is not uploaded by GitHub Actions.
+Record the local Unity validation commands, result summary, output APK path when applicable, promoted Meta build ID when applicable, and any residual risk in the pull request or linked issue. Local development APKs usually use `/tmp/blockiverse-vr-development.apk`; alpha channel development APKs are uploaded by the alpha release workflow for same-repository pull request commits.
 
 If the project later adopts a CI-compatible Unity license, Unity Build Automation, or a self-hosted runner with an accepted local license, reintroduce hosted Unity test and build jobs in a separate issue and update this document with the new validation contract.

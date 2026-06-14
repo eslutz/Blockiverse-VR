@@ -147,7 +147,8 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 - Name branches so the linked issue is obvious when an issue exists, for example `feature/53-block-registry`.
 - Keep GitHub repository settings configured to automatically delete head branches after pull requests merge.
 - All production releases must be cut from `main`.
-- Release tags must match `v*` and point to commits reachable from `origin/main`.
+- Production release tags must match `vX.Y.Z` and point to commits reachable from `origin/main`.
+- Channel prerelease tags must use the release workflow convention: `vX.Y.Z-alpha.prN.RUN.ATTEMPT` for alpha, `vX.Y.Z-beta.runN.ATTEMPT` for beta, and `vX.Y.Z-rc.N` for release candidates. Alpha tags may point to same-repository pull request commits; beta, release-candidate, and production tags must point to commits reachable from `origin/main`.
 - Prefer pull requests into `main` after CI passes. Direct pushes to `main` should be rare and explicit.
 - When a pull request is opened:
   - Link the associated issue if one exists, or link the relevant execution-plan section or ruleset.

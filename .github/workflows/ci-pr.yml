@@ -15,7 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check shell script syntax
-        run: bash -n scripts/ci/forbidden-files.sh scripts/unity/*.sh
+        run: bash -n scripts/ci/*.sh scripts/store/*.sh scripts/unity/*.sh
+      - name: Check release version conventions
+        run: |
+          test "$(scripts/ci/release-version.sh production 1.2.3)" = "v1.2.3"
+          test "$(scripts/ci/release-version.sh rc 1.2.3 1)" = "v1.2.3-rc.1"
+          test "$(scripts/ci/release-version.sh beta 1.2.3 run42.1)" = "v1.2.3-beta.run42.1"
+          test "$(scripts/ci/release-version.sh alpha 1.2.3 pr17.42.1)" = "v1.2.3-alpha.pr17.42.1"
       - name: Check forbidden files
         run: scripts/ci/forbidden-files.sh
       - name: Check release policy docs
