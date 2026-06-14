@@ -95,11 +95,9 @@ scripts/unity/build-release-apk.sh                # signed; needs ANDROID_KEYSTO
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
 python3 scripts/audio/generate-audio.py           # all SFX
-
-scripts/ci/forbidden-files.sh                     # what PR CI actually runs
 ```
 
-**PR CI does not compile or test Unity code** (it only checks forbidden files and shell syntax). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. `.github/workflows/meta-release.yml` builds and uploads Alpha/Beta APKs, then promotes Beta to RC and RC to Meta `store` without rebuilding.
+**PR CI does not compile or test Unity code** (it only checks shell syntax and release version conventions). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. `.github/workflows/meta-release.yml` builds and uploads Alpha/Beta APKs, then promotes Beta to RC and RC to Meta `store` without rebuilding.
 
 ## Architecture
 

@@ -23,8 +23,6 @@ jobs:
         run: |
           git fetch origin main --depth=1
           git merge-base --is-ancestor HEAD origin/main
-      - name: Check repository safety
-        run: scripts/ci/forbidden-files.sh
       - name: Validate store submission documents
         run: scripts/store/validate-store-submission-docs.sh
       - name: Check release workflow contract

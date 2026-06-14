@@ -1592,7 +1592,7 @@ FEATURE: Trunk-based workflow
   STORY: Protect main
   STORY: Document release-from-main-only policy
   STORY: Document short-lived branch policy
-  STORY: Add forbidden-files checks
+  STORY: Ignore generated, local, and secret files
 
 FEATURE: Local Unity validation
   STORY: Keep scripts/unity/run-tests.sh as required local validation

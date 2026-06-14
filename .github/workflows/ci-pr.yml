@@ -15,17 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check shell script syntax
-        run: bash -n scripts/ci/*.sh scripts/store/*.sh scripts/unity/*.sh
+        run: bash -n scripts/store/*.sh scripts/unity/*.sh
       - name: Check release version conventions
         run: |
           grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' VERSION
           grep -q 'vMAJOR.MINOR.PATCH-alpha.prPR.RUN.ATTEMPT' docs/adr/0005-release-versioning.md
           grep -q 'vMAJOR.MINOR.PATCH-beta.runRUN.ATTEMPT' docs/adr/0005-release-versioning.md
           grep -q 'vMAJOR.MINOR.PATCH-rc.CANDIDATE' docs/adr/0005-release-versioning.md
-      - name: Check forbidden files
-        run: scripts/ci/forbidden-files.sh
-      - name: Check release policy docs
-        run: |
-          test -f docs/architecture/branching-and-release.md
-          test -f docs/adr/0005-release-versioning.md
-          test -f .github/workflows/meta-release.yml

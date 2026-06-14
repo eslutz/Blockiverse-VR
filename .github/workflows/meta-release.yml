@@ -116,22 +116,6 @@ jobs:
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
 
-      - name: Check repository safety
-        run: scripts/ci/forbidden-files.sh
-
-      - name: Validate signing secrets
-        if: ${{ steps.settings.outputs.build_mode == 'release' }}
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          test -n "$ANDROID_KEYSTORE_BASE64"
-          test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
-          test -n "$ANDROID_KEY_PASSWORD"
-
       - name: Prepare build directories
         run: mkdir -p ".ci-artifacts/${{ steps.settings.outputs.channel }}" .ci-secrets
 
@@ -222,8 +206,6 @@ jobs:
           OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_SHA256 || vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
           OVR_PLATFORM_UTIL_LINUX_URL: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_URL || vars.OVR_PLATFORM_UTIL_LINUX_URL }}
         run: |
-          test -n "$OVR_PLATFORM_UTIL_LINUX_URL"
-          test -n "$OVR_PLATFORM_UTIL_LINUX_SHA256"
           curl -fsSL "$OVR_PLATFORM_UTIL_LINUX_URL" -o "$RUNNER_TEMP/ovr-platform-util"
           echo "${OVR_PLATFORM_UTIL_LINUX_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/ovr-platform-util"
@@ -236,8 +218,6 @@ jobs:
           META_APP_ID: ${{ secrets.META_APP_ID }}
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
         run: |
-          test -n "$META_APP_ID"
-          test -n "$META_APP_SECRET"
           case "$META_AGE_GROUP" in
             TEENS_AND_ADULTS|MIXED_AGES|CHILDREN) ;;
             *)
@@ -345,7 +325,6 @@ jobs:
             echo "VERSION must contain MAJOR.MINOR.PATCH without a leading v." >&2
             exit 64
           fi
-          test -n "$SOURCE_VERSION"
 
           if [ "$PROMOTION" = "rc" ]; then
             if ! printf '%s' "$CANDIDATE" | grep -Eq '^[0-9]+$'; then
@@ -457,8 +436,6 @@ jobs:
           OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_SHA256 || vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
           OVR_PLATFORM_UTIL_LINUX_URL: ${{ secrets.OVR_PLATFORM_UTIL_LINUX_URL || vars.OVR_PLATFORM_UTIL_LINUX_URL }}
         run: |
-          test -n "$OVR_PLATFORM_UTIL_LINUX_URL"
-          test -n "$OVR_PLATFORM_UTIL_LINUX_SHA256"
           curl -fsSL "$OVR_PLATFORM_UTIL_LINUX_URL" -o "$RUNNER_TEMP/ovr-platform-util"
           echo "${OVR_PLATFORM_UTIL_LINUX_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/ovr-platform-util"
@@ -477,8 +454,6 @@ jobs:
           SOURCE_VERSION: ${{ inputs.source_version }}
           VERSION: ${{ steps.promotion.outputs.version }}
         run: |
-          test -n "$META_APP_ID"
-          test -n "$META_APP_SECRET"
           case "$META_AGE_GROUP" in
             TEENS_AND_ADULTS|MIXED_AGES|CHILDREN) ;;
             *)

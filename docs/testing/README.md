@@ -2,7 +2,7 @@
 
 Testing is split into:
 
-- Repository safety checks for shell syntax, release policy docs, and forbidden tracked files
+- Repository checks for shell syntax and release version conventions
 - Local Unity validation for tests and development APK build smoke checks
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
 - Release channel workflow checks that upload alpha/beta builds and promote beta-to-RC and RC-to-store builds
@@ -31,9 +31,7 @@ Attach relevant excerpts to issues or pull requests when they are needed as vali
 Run the repository checks locally with:
 
 ```sh
-bash -n scripts/ci/*.sh scripts/store/*.sh scripts/unity/*.sh
-scripts/ci/forbidden-files.sh
-test -f docs/architecture/branching-and-release.md
+bash -n scripts/store/*.sh scripts/unity/*.sh
 ```
 
 GitHub-hosted CI validates repository checks only. Unity validation is manual and local with Unity Hub Personal.
