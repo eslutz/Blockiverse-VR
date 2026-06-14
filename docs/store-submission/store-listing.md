@@ -64,5 +64,5 @@ These items require capture on real hardware or design work and are tracked as f
 - [ ] Cover / hero image
 - [ ] Screenshots (minimum count per Meta spec, captured on Quest 3)
 - [ ] Trailer or gameplay capture (optional but recommended)
-- [ ] Final privacy policy URL (see `privacy-policy.md`)
+- [ ] Final privacy policy URL: `https://blockiversevr.com/privacy/`
 - [ ] Support contact email / site

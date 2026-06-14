@@ -23,7 +23,7 @@ done
 grep -q "Meta Quest 3" docs/store-submission/store-listing.md
 grep -q "Meta Quest 3S" docs/store-submission/store-listing.md
 grep -q "local LAN multiplayer" docs/store-submission/store-listing.md
-grep -q "Meta Quest party chat" docs/store-submission/privacy-policy.md
+grep -q "https://blockiversevr.com/privacy/" docs/store-submission/privacy-policy.md
 grep -q "No in-app voice chat" docs/store-submission/data-and-safety.md
 grep -q "PerformanceStatsOverlay" docs/testing/performance/report-template.md
 grep -q "No Meta Developer Dashboard action" docs/store-submission/checklist.md

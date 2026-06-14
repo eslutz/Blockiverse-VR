@@ -42,7 +42,7 @@
 ## Content & legal
 
 - [ ] All art, characters, and audio are original (no third-party IP).
-- [ ] Privacy policy published and linked (see `privacy-policy.md`).
+- [ ] Privacy policy published and linked at `https://blockiversevr.com/privacy/` (see local pointer `privacy-policy.md`).
 - [ ] Data-use declarations match actual behavior (see `data-and-safety.md`).
 - [ ] Age rating questionnaire (IARC) completed.
 

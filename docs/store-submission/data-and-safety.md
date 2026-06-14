@@ -1,8 +1,9 @@
 # Data Use & Safety Declarations
 
 > Store-facing source for Meta "Data Use" / privacy questionnaire answers. Keep this in sync
-> with `privacy-policy.md`, the rulesets under `../rulesets/`, and the actual shipped behavior.
-> Update whenever a new data flow or third-party integration is added.
+> with the public privacy policy at `https://blockiversevr.com/privacy/`, the rulesets under
+> `../rulesets/`, and the actual shipped behavior. Update whenever a new data flow or
+> third-party integration is added.
 
 ## Data collection summary
 

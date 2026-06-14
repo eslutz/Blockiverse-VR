@@ -11,7 +11,7 @@ submission, or Submit for Review action is performed by this repository checklis
 - Screenshots — `screenshots.md`; final assets are **(external)** capture on Quest 3
 - Trailer or capture, if available — **(external)**
 - Comfort rating notes — `store-listing.md`
-- Privacy policy — `privacy-policy.md` (publish at a public URL)
+- Privacy policy — `https://blockiversevr.com/privacy/` (`privacy-policy.md` is the local pointer)
 - Data usage declarations — `data-and-safety.md`
 - Age and child-safety review — `data-and-safety.md` + IARC questionnaire **(external)**
 - VRC checklist — `vrc-checklist.md`
