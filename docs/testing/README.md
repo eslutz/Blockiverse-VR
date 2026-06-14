@@ -81,11 +81,13 @@ Add this tier when the change affects VR comfort, Android or Quest behavior, hea
 
 ```sh
 scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk
+node --version
+npm list -g --depth=0 @meta-quest/hzdb
 hzdb --version
 hzdb device list
 ```
 
-Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
+`hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 
 ## Test selection rules
 
