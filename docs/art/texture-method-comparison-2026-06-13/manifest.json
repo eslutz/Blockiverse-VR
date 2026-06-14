@@ -1,0 +1,98 @@
+[
+  {
+    "legacy": "meadow_turf",
+    "canonical": "meadow_turf",
+    "label": "Meadow Turf",
+    "prompt": "lush green meadow turf grass block top texture, lively speckled grass blades, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/meadow_turf.png",
+    "production_hybrid": "production_hybrid/meadow_turf.png"
+  },
+  {
+    "legacy": "loam",
+    "canonical": "loose_loam",
+    "label": "Loose Loam",
+    "prompt": "rich brown loose loam soil block top texture, small roots and soil crumbs, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/loose_loam.png",
+    "production_hybrid": "production_hybrid/loose_loam.png"
+  },
+  {
+    "legacy": "slate",
+    "canonical": "graystone",
+    "label": "Graystone",
+    "prompt": "cool gray stone block texture, fractured stone flecks and subtle strata, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/graystone.png",
+    "production_hybrid": "production_hybrid/graystone.png"
+  },
+  {
+    "legacy": "timber",
+    "canonical": "branchwood_log",
+    "label": "Branchwood Log",
+    "prompt": "warm branchwood log bark block texture, vertical bark ridges and cut knots, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/branchwood_log.png",
+    "production_hybrid": "production_hybrid/branchwood_log.png"
+  },
+  {
+    "legacy": "leafmass",
+    "canonical": "leafmoss",
+    "label": "Leafmoss",
+    "prompt": "dense leafy green leafmoss block texture, clustered leaves and mossy variation, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/leafmoss.png",
+    "production_hybrid": "production_hybrid/leafmoss.png"
+  },
+  {
+    "legacy": "clearstone",
+    "canonical": "lumen_quartz_cluster",
+    "label": "Lumen Quartz Cluster",
+    "prompt": "cyan glowing quartz crystal cluster embedded in stone, luminous facets, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/lumen_quartz_cluster.png",
+    "production_hybrid": "production_hybrid/lumen_quartz_cluster.png"
+  },
+  {
+    "legacy": "coalstone",
+    "canonical": "embercoal_seam",
+    "label": "Embercoal Seam",
+    "prompt": "dark stone with warm embercoal vein flecks, smoky black rock with orange glow details, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/embercoal_seam.png",
+    "production_hybrid": "production_hybrid/embercoal_seam.png"
+  },
+  {
+    "legacy": "copperstone",
+    "canonical": "rosycopper_bloom",
+    "label": "Rosycopper Bloom",
+    "prompt": "stone with rose copper mineral blooms and green oxidation specks, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/rosycopper_bloom.png",
+    "production_hybrid": "production_hybrid/rosycopper_bloom.png"
+  },
+  {
+    "legacy": "ironstone",
+    "canonical": "rustcore_ore",
+    "label": "Rustcore Ore",
+    "prompt": "dark stone with rusty iron ore chunks and red brown mineral veins, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/rustcore_ore.png",
+    "production_hybrid": "production_hybrid/rustcore_ore.png"
+  },
+  {
+    "legacy": "workbench",
+    "canonical": "build_table",
+    "label": "Build Table",
+    "prompt": "crafted wooden build table top texture, planks, tool marks, small pegs, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/build_table.png",
+    "production_hybrid": "production_hybrid/build_table.png"
+  },
+  {
+    "legacy": "torchbud",
+    "canonical": "glowwick",
+    "label": "Glowwick",
+    "prompt": "small warm glowing plant lamp texture, amber wick glow in mossy casing, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/glowwick.png",
+    "production_hybrid": "production_hybrid/glowwick.png"
+  },
+  {
+    "legacy": "storage_crate",
+    "canonical": "storage_crate",
+    "label": "Storage Crate",
+    "prompt": "wooden storage crate block texture, plank seams, reinforced corners, voxel game pixel art tile",
+    "ai_simplified": "ai_simplified/storage_crate.png",
+    "production_hybrid": "production_hybrid/storage_crate.png"
+  }
+]
