@@ -180,6 +180,7 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(inputRig);
             }
 
+            EnsureGeneratedCompositionLayerPanels(cameraOffset, head);
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(rig);
         }
@@ -382,8 +383,8 @@ namespace Blockiverse.Editor
             return (actionMenu, presenter);
         }
 
-        // Builds the New World config panel: name/seed text inputs + 5 cycle-selector rows
-        // (GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome) + Create/Cancel buttons.
+        // Builds the New World config panel: name/seed text inputs + cycle-selector rows
+        // (GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome, TextureSet) + actions.
         static (BlockiverseNewWorldPanel panel, BlockiverseWorldSpacePanelPresenter presenter) EnsureNewWorldMenuPanel(
             Transform parent,
             Transform head)
@@ -453,9 +454,17 @@ namespace Blockiverse.Editor
                 new Vector2(186, -158),
                 new Vector2(W - 214, 48));
 
-            // 5 cycle rows: GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome
-            string[] rowLabels = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome" };
-            string[] defaultValues = { "survival", "normal", "small", WorldPresetIds.SurvivalTerrain, "balanced" };
+            // Cycle rows: GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome, TextureSet
+            string[] rowLabels = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome", "Texture Set" };
+            string[] defaultValues =
+            {
+                "survival",
+                "normal",
+                "small",
+                WorldPresetIds.SurvivalTerrain,
+                "balanced",
+                BlockiverseLocalization.DisplayNameForCanonicalId(BlockTextureSetIds.Default),
+            };
             const float rowStartY = -230;
             const float rowH = 56;
             var backButtons = new Button[rowLabels.Length];

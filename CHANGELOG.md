@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Added Quest XR Composition Layer presentation for the launch splash/loading overlay, generated menu panels, pointer projection, and the survival HUD surface so splash art, menus, inventory, crafting, and HUD text render through flat Quad composition layers without changing layout or interaction flow.
+- Added selectable world texture sets on the New World screen, generated one block atlas per texture set, and persisted the selected texture set so loaded worlds restore the correct atlas.
 - Fixed the day/night sun path so manual creative time changes move the sun in one continuous arc, rising from one horizon and setting on the opposite horizon.
 - Reworked dominant-hand controls into a full two-controller role swap, with dominant tools/turn/jump/block-edit controls and support movement/sprint/quick-menu controls, and removed the accidental one-handed controls toggle pending a dedicated accessibility design pass.
 - Fixed Quest sprint controls so the support stick click toggles sprint, holding the support stick click temporarily sprints, and creative flight uses the canonical sprint flight speed while held or toggled.

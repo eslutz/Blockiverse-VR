@@ -45,7 +45,10 @@ The historical committed block atlas covered temporary validation names:
 Committed authored texture assets now live under:
 
 - `Assets/Blockiverse/Art/Textures/Blocks/Source/`
-- `Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png`
+- `Assets/Blockiverse/Art/Textures/Blocks/TextureSets/original/blockiverse_block_atlas.png`
+- `Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png`
+- `Assets/Blockiverse/Art/Textures/Blocks/TextureSets/ai_simplified/blockiverse_block_atlas.png`
+- `Assets/Blockiverse/Art/Textures/Blocks/TextureSets/ai/blockiverse_block_atlas.png`
 - `Assets/Blockiverse/Art/Textures/Items/`
 - `Assets/Blockiverse/Art/Sprites/UI/`
 - `Assets/Blockiverse/Art/Sprites/VFX/`
@@ -98,7 +101,7 @@ Quest import policy:
 
 ## Atlas Validation Policy
 
-Runtime rendering must use the committed authored block atlas. `BlockVisualAtlas` validates that the material texture is the expected atlas name and dimensions before rendering chunks. Missing, unrelated, or incorrectly sized textures should fail fast in development and release-candidate validation.
+Runtime rendering must use the committed authored block atlas for the world-selected texture set. `BlockVisualAtlas` validates that the material texture is the expected atlas name and dimensions before rendering chunks. Missing, unrelated, or incorrectly sized textures should fail fast in development and release-candidate validation.
 
 ## Prohibited References
 

@@ -15,6 +15,7 @@ namespace Blockiverse.UI
         static readonly string[] DifficultyOptions = { "easy", "normal", "hard" };
         static readonly string[] WorldSizeOptions = { "small", "medium", "large", "infinite" };
         static readonly string[] WorldPresetOptions = WorldPresetIds.MenuOptions;
+        static readonly string[] TextureSetOptions = BlockTextureSetIds.MenuOptions;
         static readonly string[] StartingBiomeOptions =
         {
             "balanced", "meadow", "pinewild", "wetland", "drybrush", "dunes", "tundra", "highlands",
@@ -25,6 +26,7 @@ namespace Blockiverse.UI
         int worldSizeIndex = 0;    // small
         int worldPresetIndex = 0;  // WorldPresetIds.SurvivalTerrain
         int startingBiomeIndex = 0; // balanced
+        int textureSetIndex = 0;   // BlockTextureSetIds.Enhanced
 
         public NewWorldConfig(string seedText = null)
         {
@@ -39,6 +41,7 @@ namespace Blockiverse.UI
         public string WorldSize => WorldSizeOptions[worldSizeIndex];
         public string WorldPreset => WorldPresetOptions[worldPresetIndex];
         public string StartingBiome => StartingBiomeOptions[startingBiomeIndex];
+        public string TextureSet => TextureSetOptions[textureSetIndex];
 
         // Numeric seed used by generation. A purely numeric seed is taken as-is; any other text is
         // hashed deterministically so text seeds are reproducible (§6.3 hashSeed).
@@ -58,6 +61,7 @@ namespace Blockiverse.UI
         public void CycleWorldSize(bool forward = true) => worldSizeIndex = Step(worldSizeIndex, WorldSizeOptions.Length, forward);
         public void CycleWorldPreset(bool forward = true) => worldPresetIndex = Step(worldPresetIndex, WorldPresetOptions.Length, forward);
         public void CycleStartingBiome(bool forward = true) => startingBiomeIndex = Step(startingBiomeIndex, StartingBiomeOptions.Length, forward);
+        public void CycleTextureSet(bool forward = true) => textureSetIndex = Step(textureSetIndex, TextureSetOptions.Length, forward);
 
         // Validates settings before world creation (§6.3): the name must be non-empty after trimming.
         public bool IsValid(out string error)

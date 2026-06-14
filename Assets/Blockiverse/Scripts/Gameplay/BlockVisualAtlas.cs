@@ -16,7 +16,7 @@ namespace Blockiverse.Gameplay
         public const int AtlasWidthPixels = Columns * TileStridePixels;
         public const int AtlasHeightPixels = Rows * TileStridePixels;
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
-        public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png";
+        public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png";
         public const string VoxelLitShaderName = "Blockiverse/Voxel Lit";
 
         const float UvInsetPixels = 0.5f;
@@ -125,12 +125,20 @@ namespace Blockiverse.Gameplay
 
         public static Material CreateMaterial(Material sourceMaterial)
         {
+            return CreateMaterial(sourceMaterial, selectedAtlas: null, textureSetId: BlockTextureSetIds.Default);
+        }
+
+        public static Material CreateMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
             Material material = CreateBaseMaterial(sourceMaterial);
+
+            if (selectedAtlas != null)
+                SetBaseTexture(material, selectedAtlas);
 
             if (!TryGetBaseTexture(material, out Texture texture))
             {
                 string message =
-                    $"Authored block atlas is missing from the source material. Assign {AuthoredAtlasPath} to the block material.";
+                    $"Authored block atlas is missing from the source material. Assign {AtlasPathForTextureSet(textureSetId)} to the block material.";
                 BlockiverseLog.Warning(BlockiverseLogCategory.Assets, message);
                 throw new InvalidOperationException(message);
             }
@@ -138,7 +146,7 @@ namespace Blockiverse.Gameplay
             if (!IsAuthoredAtlasTexture(texture))
             {
                 string message =
-                    $"Block material texture '{texture.name}' is not the expected authored atlas. Assign {AuthoredAtlasPath} ({AtlasWidthPixels}x{AtlasHeightPixels}).";
+                    $"Block material texture '{texture.name}' is not the expected authored atlas. Assign {AtlasPathForTextureSet(textureSetId)} ({AtlasWidthPixels}x{AtlasHeightPixels}).";
                 BlockiverseLog.Warning(BlockiverseLogCategory.Assets, message);
                 throw new InvalidOperationException(message);
             }
@@ -147,6 +155,9 @@ namespace Blockiverse.Gameplay
             material.name = "Blockiverse Authored Block Atlas Material";
             return material;
         }
+
+        public static string AtlasPathForTextureSet(string textureSetId) =>
+            $"Assets/Blockiverse/Art/Textures/Blocks/TextureSets/{BlockTextureSetIds.Normalize(textureSetId)}/blockiverse_block_atlas.png";
 
         static int GetTileIndex(BlockId blockId)
         {
@@ -232,14 +243,17 @@ namespace Blockiverse.Gameplay
                 material.shader = voxelShader;
 
             if (sourceTexture != null)
-            {
-                if (material.HasProperty("_BaseMap"))
-                    material.SetTexture("_BaseMap", sourceTexture);
-                if (material.HasProperty("_MainTex"))
-                    material.SetTexture("_MainTex", sourceTexture);
-            }
+                SetBaseTexture(material, sourceTexture);
 
             return material;
+        }
+
+        static void SetBaseTexture(Material material, Texture texture)
+        {
+            if (material.HasProperty("_BaseMap"))
+                material.SetTexture("_BaseMap", texture);
+            if (material.HasProperty("_MainTex"))
+                material.SetTexture("_MainTex", texture);
         }
 
         static void SetBaseColor(Material material, Color color)

@@ -25,7 +25,7 @@ Each generated asset entry should include:
 ## 2026-05-26 — M4 committed block, item, and UI asset pass
 
 - Asset path: `Assets/Blockiverse/Art/Textures/Blocks/Source/*.png`
-- Asset path: `Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png`
+- Asset path: `Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png`
 - Asset path: `Assets/Blockiverse/Art/Textures/Items/*.png`
 - Asset path: `Assets/Blockiverse/Art/Sprites/UI/*.png`
 - Generation date: 2026-05-26
@@ -51,7 +51,7 @@ Each generated asset entry should include:
 
 - Asset path: `Assets/Blockiverse/Audio/*.wav`
 - Asset path: `Assets/Blockiverse/Art/Textures/Blocks/Source/*.png`
-- Asset path: `Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png`
+- Asset path: `Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png`
 - Asset path: `Assets/Blockiverse/Art/Textures/Items/*.png`
 - Asset path: `Assets/Blockiverse/Art/Sprites/UI/*.png`
 - Asset path: `Assets/Blockiverse/Art/Sprites/VFX/*.png`

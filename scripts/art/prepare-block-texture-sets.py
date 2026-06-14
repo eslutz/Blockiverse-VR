@@ -403,6 +403,8 @@ def main() -> None:
     prepare_original_set(names, lookup)
     missing_ai_simplified = prepare_existing_ai_set("ai_simplified", "ai_simplified", names)
     missing_ai = prepare_existing_ai_set("ai", "ai", names)
+    for set_id in SET_IDS:
+        ART.write_texture_set_atlas(set_id)
     write_missing_prompt_manifest("ai_simplified", missing_ai_simplified, lookup)
     write_missing_prompt_manifest("ai", missing_ai, lookup)
     write_summary(

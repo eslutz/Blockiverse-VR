@@ -590,6 +590,7 @@ namespace Blockiverse.Editor
             performanceOverlay.Configure(renderer);
             manager.InitializeDefaultWorldOnAwake = false;
             manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
+            manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
 
             BlockiverseCreativeInputBridge staleWorldBridge = worldObject.GetComponent<BlockiverseCreativeInputBridge>();
 

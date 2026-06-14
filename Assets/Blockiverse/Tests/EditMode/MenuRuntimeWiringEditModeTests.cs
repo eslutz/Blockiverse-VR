@@ -541,10 +541,16 @@ namespace Blockiverse.Tests.EditMode
             panel.ResetForNewWorld();
 
             TMP_Text gameModeLabel = GetChildComponent<TMP_Text>(panel.transform, "Panel/Row Game Mode/Value");
-            Assert.That(gameModeLabel.text, Is.EqualTo("survival"));
+            Assert.That(gameModeLabel.text, Is.EqualTo("Survival"));
 
             GetChildComponent<Button>(panel.transform, "Panel/Row Game Mode/Next").onClick.Invoke();
-            Assert.That(gameModeLabel.text, Is.EqualTo("creative"));
+            Assert.That(gameModeLabel.text, Is.EqualTo("Creative"));
+
+            TMP_Text textureSetLabel = GetChildComponent<TMP_Text>(panel.transform, "Panel/Row Texture Set/Value");
+            Assert.That(textureSetLabel.text, Is.EqualTo("Enhanced"));
+
+            GetChildComponent<Button>(panel.transform, "Panel/Row Texture Set/Next").onClick.Invoke();
+            Assert.That(textureSetLabel.text, Is.EqualTo("AI Simplified"));
 
             string invoked = null;
             panel.ActionRequested += id => invoked = id;
@@ -891,7 +897,7 @@ namespace Blockiverse.Tests.EditMode
             AddInput(bg.transform, "Name Input");
             AddInput(bg.transform, "Seed Input");
 
-            string[] rows = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome" };
+            string[] rows = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome", "Texture Set" };
             foreach (string row in rows)
             {
                 GameObject rowRoot = CreateChild(bg.transform, $"Row {row}");

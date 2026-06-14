@@ -65,6 +65,7 @@ namespace Blockiverse.UI
             public const string NewWorldSize = "ui.generated.new_world.size";
             public const string NewWorldPreset = "ui.generated.new_world.preset";
             public const string NewWorldStartingBiome = "ui.generated.new_world.starting_biome";
+            public const string NewWorldTextureSet = "ui.generated.new_world.texture_set";
             public const string NewWorldCreate = "ui.generated.new_world.create";
             public const string LoadWorldTitle = "ui.generated.load_world.title";
             public const string LoadWorldNoSaveSelected = "ui.generated.load_world.no_save_selected";
@@ -299,11 +300,16 @@ namespace Blockiverse.UI
             [Keys.NewWorldSize] = "World Size",
             [Keys.NewWorldPreset] = "World Preset",
             [Keys.NewWorldStartingBiome] = "Starting Biome",
+            [Keys.NewWorldTextureSet] = "Texture Set",
             [Keys.NewWorldCreate] = "Create World",
             ["ui.value.canonical.small"] = "Small (128x128)",
             ["ui.value.canonical.medium"] = "Medium (192x192)",
             ["ui.value.canonical.large"] = "Large (256x256)",
             ["ui.value.canonical.infinite"] = "Infinite Preview (256x256)",
+            ["ui.value.canonical.original"] = "Original",
+            ["ui.value.canonical.enhanced"] = "Enhanced",
+            ["ui.value.canonical.ai_simplified"] = "AI Simplified",
+            ["ui.value.canonical.ai"] = "AI",
             [Keys.LoadWorldTitle] = "Load World",
             [Keys.LoadWorldNoSaveSelected] = "No save selected",
             [Keys.LoadWorldEntry] = "{0}  ·  Day {1}",

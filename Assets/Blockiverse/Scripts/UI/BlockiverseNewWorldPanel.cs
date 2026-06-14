@@ -27,6 +27,7 @@ namespace Blockiverse.UI
             c => c.CycleWorldSize(),
             c => c.CycleWorldPreset(),
             c => c.CycleStartingBiome(),
+            c => c.CycleTextureSet(),
         };
 
         static readonly Action<NewWorldConfig>[] BackActions =
@@ -36,6 +37,7 @@ namespace Blockiverse.UI
             c => c.CycleWorldSize(false),
             c => c.CycleWorldPreset(false),
             c => c.CycleStartingBiome(false),
+            c => c.CycleTextureSet(false),
         };
 
         static readonly Func<NewWorldConfig, string>[] ValueGetters =
@@ -45,6 +47,7 @@ namespace Blockiverse.UI
             c => BlockiverseLocalization.DisplayNameForCanonicalId(c.WorldSize),
             c => BlockiverseLocalization.DisplayNameForCanonicalId(c.WorldPreset),
             c => BlockiverseLocalization.DisplayNameForCanonicalId(c.StartingBiome),
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.TextureSet),
         };
 
         static readonly string[] CycleRowNames =
@@ -54,6 +57,7 @@ namespace Blockiverse.UI
             "World Size",
             "World Preset",
             "Starting Biome",
+            "Texture Set",
         };
 
         bool controlsWired;

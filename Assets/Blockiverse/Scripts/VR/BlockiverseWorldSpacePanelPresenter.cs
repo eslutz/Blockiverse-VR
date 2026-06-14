@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Gameplay;
+using Unity.XR.CompositionLayers;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -28,6 +29,7 @@ namespace Blockiverse.VR
         [SerializeField] string showOnStartPlayerPrefsKey;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        [SerializeField] CompositionLayer compositionLayer;
 
         CreativeHotbar hotbar;
         bool subscribedToHotbarSelection;
@@ -41,6 +43,7 @@ namespace Blockiverse.VR
         public BlockiverseAudioCue ShowFeedbackCue => showFeedbackCue;
         public BlockiverseAudioCue HideFeedbackCue => hideFeedbackCue;
         public string ShowOnStartPlayerPrefsKey => showOnStartPlayerPrefsKey;
+        public CompositionLayer CompositionLayer => compositionLayer;
 
         public void Configure(
             Canvas canvas,
@@ -71,6 +74,11 @@ namespace Blockiverse.VR
         public void ConfigureComfortSettings(BlockiverseComfortSettings settings)
         {
             comfortSettings = settings;
+        }
+
+        public void ConfigureCompositionLayer(CompositionLayer layer)
+        {
+            compositionLayer = layer;
         }
 
         public void ConfigureFeedback(
@@ -109,6 +117,7 @@ namespace Blockiverse.VR
             if (targetCanvas != null)
             {
                 targetCanvas.enabled = true;
+                SetCompositionLayerEnabled(true);
                 if (!wasVisible)
                     PlayFeedback(showFeedbackCue, playShowFeedback, hapticOnShow);
             }
@@ -122,6 +131,7 @@ namespace Blockiverse.VR
             if (targetCanvas != null)
             {
                 targetCanvas.enabled = false;
+                SetCompositionLayerEnabled(false);
                 if (wasVisible)
                     MarkShowOnStartSeen();
                 if (wasVisible)
@@ -173,6 +183,7 @@ namespace Blockiverse.VR
         {
             ApplyDefaultStartGateKey();
             EnsureCanvas();
+            EnsureCompositionLayer();
             DiscoverHotbarSelection();
             DiscoverComfortSettings();
         }
@@ -199,7 +210,10 @@ namespace Blockiverse.VR
             }
 
             if (showOnStart && targetCanvas != null)
+            {
                 targetCanvas.enabled = false;
+                SetCompositionLayerEnabled(false);
+            }
         }
 
         void Update()
@@ -218,6 +232,20 @@ namespace Blockiverse.VR
         {
             if (targetCanvas == null)
                 targetCanvas = GetComponent<Canvas>();
+        }
+
+        void EnsureCompositionLayer()
+        {
+            if (compositionLayer == null)
+                compositionLayer = GetComponent<CompositionLayer>();
+        }
+
+        void SetCompositionLayerEnabled(bool isEnabled)
+        {
+            EnsureCompositionLayer();
+
+            if (compositionLayer != null)
+                compositionLayer.enabled = isEnabled;
         }
 
         void DiscoverHotbarSelection()

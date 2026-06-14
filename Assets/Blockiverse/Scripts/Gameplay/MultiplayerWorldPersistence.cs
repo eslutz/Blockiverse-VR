@@ -36,6 +36,7 @@ namespace Blockiverse.Gameplay
         // multiplayer worlds save the same difficulty/preset metadata.
         string worldDifficulty = string.Empty;
         string worldPreset = DefaultWorldPreset;
+        string worldTextureSet = BlockTextureSetIds.Default;
 
         public bool LastHostLoadAttempted { get; private set; }
         public bool LastHostLoadSucceeded { get; private set; }
@@ -154,6 +155,8 @@ namespace Blockiverse.Gameplay
             try
             {
                 GeneratedCreativeWorld generated = WorldSaveGeneration.Regenerate(result.Data);
+                worldTextureSet = BlockTextureSetIds.Normalize(result.Data.TextureSet);
+                worldManager.SetTextureSet(worldTextureSet);
                 worldManager.InitializeGeneratedWorld(
                     generated,
                     chunkAuthoritySync,
@@ -203,6 +206,7 @@ namespace Blockiverse.Gameplay
             worldDifficulty = result.Data.Difficulty ?? string.Empty;
             vitalsRuntime?.ConfigureDifficulty(worldDifficulty);
             worldPreset = string.IsNullOrWhiteSpace(result.Data.WorldPreset) ? DefaultWorldPreset : result.Data.WorldPreset;
+            worldTextureSet = BlockTextureSetIds.Normalize(result.Data.TextureSet);
             if (!Application.isPlaying)
                 worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
@@ -235,6 +239,8 @@ namespace Blockiverse.Gameplay
             try
             {
                 GeneratedCreativeWorld generated = CreativeWorldManager.CreateDefaultGeneratedWorld();
+                worldTextureSet = BlockTextureSetIds.Default;
+                worldManager.SetTextureSet(worldTextureSet);
                 worldManager.InitializeGeneratedWorld(
                     generated,
                     chunkAuthoritySync,
@@ -257,6 +263,7 @@ namespace Blockiverse.Gameplay
             vitalsRuntime?.ConfigureDifficulty(worldDifficulty);
             vitalsRuntime?.ResetVitalsToFull();
             worldPreset = DefaultWorldPreset;
+            worldTextureSet = BlockTextureSetIds.Default;
             if (!Application.isPlaying)
                 worldManager.Renderer?.RebuildAll();
             BlockiverseLog.Info(
@@ -464,6 +471,7 @@ namespace Blockiverse.Gameplay
                 containers: WorldSaveContainerMapper.BuildSavedContainers(worldManager.ContainerStore),
                 difficulty: worldDifficulty,
                 worldPreset: worldPreset,
+                textureSet: worldTextureSet,
                 extras: BuildSaveExtras(),
                 additionalPlayerInventories: survivalSync?.BuildPersistedPlayerInventories());
         }

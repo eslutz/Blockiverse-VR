@@ -20,7 +20,10 @@
     "Unity.TextMeshPro",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
-    "Unity.XR.OpenXR"
+    "Unity.XR.CompositionLayers",
+    "Unity.XR.CompositionLayers.UIInteraction",
+    "Unity.XR.OpenXR",
+    "Unity.XR.OpenXR.Editor"
   ],
   "includePlatforms": [
     "Editor"

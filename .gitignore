@@ -499,8 +499,9 @@ docs/superpowers/
 /scripts/github/roadmap.tsv
 /scripts/github/verify-subissues.sh
 
-# Unity package project settings under Assets should stay trackable if generated.
-![Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/
-![Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/**
+# Unity XR Composition Layers runtime settings are project assets; editor
+# preferences are local machine state.
+/[Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/CompositionLayersPreferences.asset
+/[Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/CompositionLayersPreferences.asset.meta
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,csharp,unity

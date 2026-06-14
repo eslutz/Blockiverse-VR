@@ -46,6 +46,10 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
+using Unity.XR.CompositionLayers;
+using Unity.XR.CompositionLayers.Extensions;
+using Unity.XR.CompositionLayers.Layers;
+using Unity.XR.CompositionLayers.UIInteraction;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -73,6 +77,7 @@ namespace Blockiverse.Editor
             "com.unity.openxr.feature.input.oculustouch",
             "com.unity.openxr.feature.input.metaquestplus",
             "com.unity.openxr.feature.input.metaquestpro",
+            "com.unity.openxr.feature.compositionlayers",
             "com.meta.openxr.feature.metaxr",
             "com.meta.openxr.feature.foveation"
         };
@@ -114,6 +119,7 @@ namespace Blockiverse.Editor
         const string MultiplayerTestCameraName = "Multiplayer Test Camera";
         const string NetworkManagerRootName = "Blockiverse Network Manager";
         const string NetworkPlayerPrefabName = "Blockiverse Network Player";
+        const string CompositionPointerProjectionLayerName = "Blockiverse UI Pointer Projection";
         const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionRayName = "Interaction Ray";
@@ -125,6 +131,11 @@ namespace Blockiverse.Editor
         const string StickDeadzoneProcessor = "stickDeadzone(min=0.2,max=0.95)";
         const string InteractionTestBlockName = "Interaction Test Block";
         const float JumpHeightMeters = 1.3f;
+        const int CompositionLayerOrderHud = 5;
+        const int CompositionLayerOrderMenu = 10;
+        const int CompositionLayerOrderModal = 20;
+        const int CompositionLayerOrderPointerProjection = 30;
+        const float CompositionUiRenderScale = 2.0f;
         const float MenuPanelInset = 28.0f;
         static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
         static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
@@ -207,6 +218,7 @@ namespace Blockiverse.Editor
             ConfigureEditorSerialization();
             ConfigureAndroidPlayer();
             ConfigureAppBranding();
+            ConfigureCompositionLayerSplash();
             ConfigureMetaProjectSettings();
             ConfigureAndroidManifest();
             ConfigureMetaRuntimeSettings();
@@ -608,6 +620,55 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(openXrSettings);
         }
 
+        static void ConfigureCompositionLayerSplash()
+        {
+            PlayerSettings.SplashScreen.show = false;
+            PlayerSettings.virtualRealitySplashScreen = null;
+
+            Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            CompositionLayersRuntimeSettings settings = CompositionLayersRuntimeSettings.Instance;
+            var serializedSettings = new SerializedObject(settings);
+
+            SetSerializedBool(serializedSettings, "m_EmulationInStandalone", false);
+            SetSerializedBool(serializedSettings, "m_EnableSplashScreen", true);
+            SetSerializedObject(serializedSettings, "m_SplashImage", launchArtwork);
+            SetSerializedEnum(serializedSettings, "m_BackgroundType", (int)CompositionLayersRuntimeSettings.SplashBackgroundType.SolidColor);
+            SetSerializedColor(serializedSettings, "m_BackgroundColor", new Color(0.02f, 0.03f, 0.04f, 1.0f));
+            SetSerializedFloat(serializedSettings, "m_SplashDuration", 1.4f);
+            SetSerializedFloat(serializedSettings, "m_FadeInDuration", 0.2f);
+            SetSerializedFloat(serializedSettings, "m_FadeOutDuration", 0.25f);
+            SetSerializedFloat(serializedSettings, "m_FollowSpeed", 2.0f);
+            SetSerializedFloat(serializedSettings, "m_FollowDistance", 2.0f);
+            SetSerializedBool(serializedSettings, "m_LockToHorizon", true);
+            SetSerializedEnum(serializedSettings, "m_LayerType", (int)CompositionLayersRuntimeSettings.Layer.Quad);
+            serializedSettings.ApplyModifiedPropertiesWithoutUndo();
+
+            settings.QuadLayerData.Size = new Vector2(1.6f, 0.9f);
+            settings.QuadLayerData.ApplyTransformScale = true;
+            EditorUtility.SetDirty(settings);
+        }
+
+        static void SetSerializedEnum(SerializedObject serializedObject, string propertyName, int value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.enumValueIndex = value;
+        }
+
+        static void SetSerializedColor(SerializedObject serializedObject, string propertyName, Color value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.colorValue = value;
+        }
+
+        static void SetSerializedObject(SerializedObject serializedObject, string propertyName, UnityEngine.Object value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.objectReferenceValue = value;
+        }
+
         static void EnsureTmpEssentialResources()
         {
             const string projectSettingsPath = "Assets/TextMesh Pro/Resources/TMP Settings.asset";
@@ -693,38 +754,7 @@ namespace Blockiverse.Editor
 
         static int EnsureInteractionLayer()
         {
-            int existingLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-
-            if (existingLayer >= 0)
-                return existingLayer;
-
-            UnityEngine.Object tagManagerAsset = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")
-                .FirstOrDefault();
-
-            if (tagManagerAsset == null)
-                return -1;
-
-            var tagManager = new SerializedObject(tagManagerAsset);
-            SerializedProperty layers = tagManager.FindProperty("layers");
-
-            if (layers == null)
-                return -1;
-
-            for (int layer = 8; layer < layers.arraySize; layer++)
-            {
-                SerializedProperty layerName = layers.GetArrayElementAtIndex(layer);
-
-                if (!string.IsNullOrEmpty(layerName.stringValue))
-                    continue;
-
-                layerName.stringValue = BlockiverseProject.InteractionLayerName;
-                tagManager.ApplyModifiedProperties();
-                EditorUtility.SetDirty(tagManagerAsset);
-                return layer;
-            }
-
-            BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"No available Unity layer slot for {BlockiverseProject.InteractionLayerName}; interaction objects will stay on their current layer.");
-            return -1;
+            return EnsureUnityLayer(BlockiverseProject.InteractionLayerName);
         }
 
         static LayerMask GetInteractionLayerMask()

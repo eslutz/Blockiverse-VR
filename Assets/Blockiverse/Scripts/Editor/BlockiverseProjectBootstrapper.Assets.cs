@@ -109,7 +109,12 @@ namespace Blockiverse.Editor
             EnsureFluidSourceTile("brine_flow", BrineTilePixel);
             EnsureFluidSourceTile("emberflow_flow", EmberflowTilePixel);
 
-            string path = BlockVisualAtlas.AuthoredAtlasPath;
+            foreach (string textureSetId in BlockTextureSetIds.All)
+                EnsureFluidAtlasTiles(BlockVisualAtlas.AtlasPathForTextureSet(textureSetId));
+        }
+
+        static void EnsureFluidAtlasTiles(string path)
+        {
             if (!File.Exists(path))
                 return;
 
@@ -284,6 +289,15 @@ namespace Blockiverse.Editor
             }
 
             EditorUtility.SetDirty(material);
+        }
+
+        static Texture2D[] LoadBlockTextureSetAtlases()
+        {
+            string[] setIds = BlockTextureSetIds.All;
+            var atlases = new Texture2D[setIds.Length];
+            for (int i = 0; i < setIds.Length; i++)
+                atlases[i] = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockVisualAtlas.AtlasPathForTextureSet(setIds[i]));
+            return atlases;
         }
 
         static Material EnsureMaterial(string path, Color color, bool preferUnlit)

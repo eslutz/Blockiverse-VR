@@ -178,7 +178,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -289,7 +289,18 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeWorldManager
   chunkMaterial: {fileID: 2100000, guid: 4d5cd674d4ec742bfa27f01c9b1f16fe, type: 2}
-  interactionLayer: 8
+  textureSet: enhanced
+  blockTextureSetIds:
+  - original
+  - enhanced
+  - ai_simplified
+  - ai
+  blockTextureSetAtlases:
+  - {fileID: 2800000, guid: 15631b2615631b2615631b2615631b26, type: 3}
+  - {fileID: 2800000, guid: ae56d699ae56d699ae56d699ae56d699, type: 3}
+  - {fileID: 2800000, guid: af0a82beaf0a82beaf0a82beaf0a82be, type: 3}
+  - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
+  interactionLayer: -1
   interactionController: {fileID: 220185976}
   hotbar: {fileID: 0}
   placementPreview: {fileID: 0}
@@ -1167,7 +1178,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -2428,7 +2439,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1797789706}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.6072917, y: -0.20126703, z: 0.16272332, w: 0.7511388}
+  m_LocalRotation: {x: 0.6157043, y: -0.19942349, z: 0.16497746, w: 0.74425864}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0

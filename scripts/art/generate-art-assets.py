@@ -7,10 +7,11 @@ import zlib
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BLOCK_SOURCE_DIR = "Assets/Blockiverse/Art/Textures/Blocks/Source"
+BLOCK_TEXTURE_SET_ROOT = "Assets/Blockiverse/Art/Textures/Blocks/TextureSets"
+BLOCK_TEXTURE_SET_IDS = ("original", "enhanced", "ai_simplified", "ai")
 ITEM_DIR = "Assets/Blockiverse/Art/Textures/Items"
 UI_DIR = "Assets/Blockiverse/Art/Sprites/UI"
 VFX_DIR = "Assets/Blockiverse/Art/Sprites/VFX"
-ATLAS_PATH = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png"
 ATLAS_COLUMNS = 8
 ATLAS_ROWS = 10
 TILE_PIXELS = 32
@@ -202,9 +203,9 @@ VFX_SPRITES = [
 
 
 META_GUIDS = {
-    ATLAS_PATH: "90a6fc9b496045d7ad07d8e02954ce10",
     "Assets/Blockiverse/Art/Textures/Blocks": "f6658262dc8e4ddfb830252033f0a3c4",
     BLOCK_SOURCE_DIR: "5a7112ded78d4dcdb752cab899a42bd0",
+    BLOCK_TEXTURE_SET_ROOT: "cc62f93e8c5d405b90b1a18f9bd0667e",
     ITEM_DIR: "5ffb1d25fb834582a8f9dfe90a1e8f9c",
     "Assets/Blockiverse/Art/Sprites": "6df33f05aaad4bd3842acb84f6e3b257",
     UI_DIR: "8d31bf8a0efa46d0a3f33813b3353db2",
@@ -634,6 +635,94 @@ def png_bytes(image):
     return signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(raw), 9)) + chunk(b"IEND", b"")
 
 
+def paeth(a, b, c):
+    p = a + b - c
+    pa = abs(p - a)
+    pb = abs(p - b)
+    pc = abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    if pb <= pc:
+        return b
+    return c
+
+
+def read_rgba_png(relative_path):
+    path = os.path.join(ROOT, relative_path)
+    data = open(path, "rb").read()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError(f"Not a PNG: {relative_path}")
+
+    offset = 8
+    width = height = bit_depth = color_type = None
+    idat = bytearray()
+    while offset < len(data):
+        length = int.from_bytes(data[offset : offset + 4], "big")
+        tag = data[offset + 4 : offset + 8]
+        payload = data[offset + 8 : offset + 8 + length]
+        offset += 12 + length
+
+        if tag == b"IHDR":
+            width = int.from_bytes(payload[0:4], "big")
+            height = int.from_bytes(payload[4:8], "big")
+            bit_depth = payload[8]
+            color_type = payload[9]
+            if payload[12] != 0:
+                raise ValueError(f"Interlaced PNG is not supported: {relative_path}")
+        elif tag == b"IDAT":
+            idat.extend(payload)
+        elif tag == b"IEND":
+            break
+
+    if width is None or height is None or bit_depth != 8 or color_type not in (2, 6):
+        raise ValueError(f"Unsupported PNG format: {relative_path}")
+
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    raw = zlib.decompress(bytes(idat))
+    rows = []
+    cursor = 0
+    previous = bytearray(stride)
+
+    for _ in range(height):
+        filter_type = raw[cursor]
+        cursor += 1
+        row = bytearray(raw[cursor : cursor + stride])
+        cursor += stride
+
+        for i in range(stride):
+            left = row[i - channels] if i >= channels else 0
+            up = previous[i]
+            up_left = previous[i - channels] if i >= channels else 0
+
+            if filter_type == 1:
+                row[i] = (row[i] + left) & 0xFF
+            elif filter_type == 2:
+                row[i] = (row[i] + up) & 0xFF
+            elif filter_type == 3:
+                row[i] = (row[i] + ((left + up) >> 1)) & 0xFF
+            elif filter_type == 4:
+                row[i] = (row[i] + paeth(left, up, up_left)) & 0xFF
+            elif filter_type != 0:
+                raise ValueError(f"Unsupported PNG filter {filter_type}: {relative_path}")
+
+        rows.append(bytes(row))
+        previous = row
+
+    pixels = []
+    for row in rows:
+        out_row = []
+        for x in range(width):
+            base = x * channels
+            r = row[base]
+            g = row[base + 1]
+            b = row[base + 2]
+            a = row[base + 3] if channels == 4 else 255
+            out_row.append((r, g, b, a))
+        pixels.append(out_row)
+    return pixels
+
+
 def write_png(relative_path, image):
     path = os.path.join(ROOT, relative_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -810,11 +899,46 @@ def blit_padded_tile(atlas, tile, origin_x, origin_y):
             atlas[origin_y + y][origin_x + x] = tile[source_y][source_x]
 
 
+def texture_set_atlas_path(set_id):
+    return f"{BLOCK_TEXTURE_SET_ROOT}/{set_id}/blockiverse_block_atlas.png"
+
+
+def write_texture_set_atlas(set_id):
+    source_dir = f"{BLOCK_TEXTURE_SET_ROOT}/{set_id}/Source"
+    atlas = empty_image(atlas_width(), atlas_height(), (58, 60, 65, 255))
+
+    for name, tile_index, *_ in BLOCKS:
+        tile_path = f"{source_dir}/{name}.png"
+        tile = read_rgba_png(tile_path)
+        if len(tile) != TILE_PIXELS or len(tile[0]) != TILE_PIXELS:
+            raise ValueError(f"{tile_path} must be {TILE_PIXELS}x{TILE_PIXELS}")
+
+        tile_x = tile_index % ATLAS_COLUMNS
+        tile_y = tile_index // ATLAS_COLUMNS
+        origin_x = tile_x * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
+        origin_y = tile_y * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
+        blit_padded_tile(atlas, tile, origin_x, origin_y)
+
+    atlas_path = texture_set_atlas_path(set_id)
+    write_png(atlas_path, atlas)
+    write_texture_meta(
+        atlas_path,
+        sprite=False,
+        max_size=atlas_max_texture_size(),
+        enable_mipmaps=True,
+        filter_mode=2,
+        aniso=4,
+        android_texture_compression=1,
+    )
+
+
 def write_assets():
     for folder in [
         "Assets/Blockiverse/Art/Textures",
         "Assets/Blockiverse/Art/Textures/Blocks",
         BLOCK_SOURCE_DIR,
+        BLOCK_TEXTURE_SET_ROOT,
+        *[f"{BLOCK_TEXTURE_SET_ROOT}/{set_id}" for set_id in BLOCK_TEXTURE_SET_IDS],
         ITEM_DIR,
         "Assets/Blockiverse/Art/Sprites",
         UI_DIR,
@@ -823,34 +947,19 @@ def write_assets():
         os.makedirs(os.path.join(ROOT, folder), exist_ok=True)
         write_folder_meta(folder)
 
-    atlas = empty_image(atlas_width(), atlas_height(), (58, 60, 65, 255))
-
     for block in BLOCKS:
         name, tile_index, *_ = block
         tile = make_block_tile(block)
         write_png(f"{BLOCK_SOURCE_DIR}/{name}.png", tile)
         write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=TILE_PIXELS)
-        tile_x = tile_index % ATLAS_COLUMNS
-        tile_y = tile_index // ATLAS_COLUMNS
-        origin_x = tile_x * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
-        origin_y = tile_y * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
-        blit_padded_tile(atlas, tile, origin_x, origin_y)
 
     for name, _, base, accent, pattern, seed in BLOCK_SOURCE_ALIASES:
         tile = make_block_tile((name, -1, base, accent, pattern, seed))
         write_png(f"{BLOCK_SOURCE_DIR}/{name}.png", tile)
         write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=TILE_PIXELS)
 
-    write_png(ATLAS_PATH, atlas)
-    write_texture_meta(
-        ATLAS_PATH,
-        sprite=False,
-        max_size=atlas_max_texture_size(),
-        enable_mipmaps=True,
-        filter_mode=2,
-        aniso=4,
-        android_texture_compression=1,
-    )
+    for set_id in BLOCK_TEXTURE_SET_IDS:
+        write_texture_set_atlas(set_id)
 
     for item in ITEMS:
         name = item[0]

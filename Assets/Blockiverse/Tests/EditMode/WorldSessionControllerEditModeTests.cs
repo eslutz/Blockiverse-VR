@@ -9,7 +9,9 @@ using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -163,9 +165,11 @@ namespace Blockiverse.Tests.EditMode
                 "Loaded World",
                 savedWorld,
                 gameMode: "creative",
-                worldPreset: "flat_builder");
+                worldPreset: "flat_builder",
+                textureSet: "ai_simplified");
 
             CreativeWorldManager worldManager = CreateWorldManager();
+            LogAssert.Expect(LogType.Assert, "Assertion failed on expression: 'ShouldRunBehaviour()'");
             BlockiverseMenuController menuController = CreateMenuController();
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
 
@@ -176,6 +180,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller.CurrentSavePath, Is.EqualTo(savePath));
             Assert.That(worldManager.World.GetBlock(editedPosition), Is.EqualTo(BlockRegistry.LumenQuartzCluster));
             Assert.That(worldManager.GameMode, Is.EqualTo(WorldGameMode.Creative));
+            Assert.That(worldManager.TextureSet, Is.EqualTo("ai_simplified"));
             Assert.That(menuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
         }
 
@@ -297,8 +302,23 @@ namespace Blockiverse.Tests.EditMode
             worldObject = new GameObject("World Manager");
             worldObject.SetActive(false);
             CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
+            manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
             manager.InitializeDefaultWorld();
             return manager;
+        }
+
+        static Texture2D[] LoadBlockTextureSetAtlases()
+        {
+            string[] textureSetIds = BlockTextureSetIds.All;
+            var atlases = new Texture2D[textureSetIds.Length];
+            for (int i = 0; i < textureSetIds.Length; i++)
+            {
+                string path = BlockVisualAtlas.AtlasPathForTextureSet(textureSetIds[i]);
+                atlases[i] = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                Assert.That(atlases[i], Is.Not.Null, $"Missing block atlas for texture set {textureSetIds[i]} at {path}.");
+            }
+
+            return atlases;
         }
 
         BlockiverseWorldSessionController CreateSessionController(
