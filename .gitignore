@@ -481,6 +481,7 @@ coverage/
 TestResults/
 
 # Local agent planning artifacts.
+.playwright-mcp/
 docs/superpowers/
 
 # Local one-off setup scripts kept out of the repository.
