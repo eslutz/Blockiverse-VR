@@ -153,8 +153,9 @@ namespace Blockiverse.Gameplay
                     return GenerateWorld(CreativeWorldGenerationPreset.VoidBuilder, registry, voidSettings);
             }
 
+            int survivalGroundHeight = Math.Min(WorldConstants.SeaLevel, data.Height - 2);
             var settings = new WorldGenerationSettings(
-                data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed, WorldConstants.SeaLevel, spawnPosition);
+                data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed, survivalGroundHeight, spawnPosition);
             return GenerateWorld(CreativeWorldGenerationPreset.SurvivalLite, registry, settings);
         }
 

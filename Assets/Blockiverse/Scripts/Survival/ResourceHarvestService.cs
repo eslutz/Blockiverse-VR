@@ -358,7 +358,7 @@ namespace Blockiverse.Survival
                 return true;
             }
 
-            return usedTool == rule.EffectiveTool && toolTier >= rule.HarvestTierMin;
+            return rule.HarvestTierMin <= 0 || toolTier >= rule.HarvestTierMin;
         }
 
         bool CanAddStacks(Inventory inventory, IReadOnlyList<ItemStack> stacks)

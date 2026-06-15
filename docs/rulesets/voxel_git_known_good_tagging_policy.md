@@ -194,7 +194,7 @@ docs/architecture/known-good-tags.md
 Then reference it from:
 
 ```txt
-AGENTS.md
+CLAUDE.md
 docs/architecture/branching-and-release.md
 README.md, if desired
 ```

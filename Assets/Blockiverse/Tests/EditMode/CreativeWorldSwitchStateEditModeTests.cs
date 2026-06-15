@@ -61,7 +61,7 @@ namespace Blockiverse.Tests.EditMode
             firstWorld.World.SetBlock(target, BlockRegistry.Graystone);
             manager.InitializeGeneratedWorld(firstWorld);
             controller.UpdatePreview(target, Vector3.up);
-            panel.SendMessage("Update");
+            InvokeUnityMessage(panel, "Update");
             panel.SetCornerA();
             panel.SetCornerB();
 
@@ -72,7 +72,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(panel.WorldEditUndoCount, Is.EqualTo(1));
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 22));
-            panel.SendMessage("Update");
+            InvokeUnityMessage(panel, "Update");
 
             Assert.That(panel.HasWorldEditClipboard, Is.False);
             Assert.That(panel.WorldEditUndoCount, Is.EqualTo(0));
@@ -97,14 +97,18 @@ namespace Blockiverse.Tests.EditMode
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 23));
             panel.RefreshEnvironmentControls();
+            float initialTimeOfDay = clock.NormalizedTime;
+            float initialTimeScale = clock.TimeScale;
+            float initialTimeOfDaySlider = timeOfDay.value;
+            float initialTimeScaleSlider = timeScale.value;
 
             timeOfDay.value = 0.75f;
             timeScale.value = 3.0f;
 
-            Assert.That(clock.NormalizedTime, Is.EqualTo(0.25f).Within(0.0001f));
-            Assert.That(clock.TimeScale, Is.EqualTo(1.0f).Within(0.0001f));
-            Assert.That(timeOfDay.value, Is.EqualTo(0.25f).Within(0.0001f));
-            Assert.That(timeScale.value, Is.EqualTo(1.0f).Within(0.0001f));
+            Assert.That(clock.NormalizedTime, Is.EqualTo(initialTimeOfDay).Within(0.0001f));
+            Assert.That(clock.TimeScale, Is.EqualTo(initialTimeScale).Within(0.0001f));
+            Assert.That(timeOfDay.value, Is.EqualTo(initialTimeOfDaySlider).Within(0.0001f));
+            Assert.That(timeScale.value, Is.EqualTo(initialTimeScaleSlider).Within(0.0001f));
             Assert.That(status.text, Is.EqualTo("Time controls are host/offline only."));
         }
 
@@ -247,6 +251,27 @@ namespace Blockiverse.Tests.EditMode
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{fieldName} should exist.");
             return (T)field.GetValue(target);
+        }
+
+        static void InvokeUnityMessage(MonoBehaviour target, string methodName)
+        {
+            MethodInfo method = FindInstanceMethod(target.GetType(), methodName);
+            Assert.That(method, Is.Not.Null, $"Missing Unity message {methodName} on {target.GetType().Name}");
+            method.Invoke(target, null);
+        }
+
+        static MethodInfo FindInstanceMethod(System.Type type, string methodName)
+        {
+            for (System.Type current = type; current != null; current = current.BaseType)
+            {
+                MethodInfo method = current.GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (method != null)
+                    return method;
+            }
+
+            return null;
         }
     }
 }

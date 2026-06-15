@@ -302,10 +302,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(blockEditingToggle.bindings, Has.Some.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/secondaryButton"),
                 "Block editing toggle should be bound to Right B.");
-            Assert.That(inputRig.InputActions.actionMaps.SelectMany(map => map.bindings), Has.None.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/primaryButton" ||
+            Assert.That(blockEditingToggle.bindings, Has.None.Matches<InputBinding>(b =>
                 (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/secondaryButton"),
-                "Left X and Left Y are intentionally unassigned.");
+                "Block editing toggle must no longer be bound to Left Y.");
 
             InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
             Assert.That(rightHandMap?.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,

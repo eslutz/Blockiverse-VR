@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
@@ -37,7 +38,7 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
             BlockiverseNewWorldPanel newWorldPanel = CreateGeneratedNewWorldPanel(rig.transform);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
 
             Assert.That(titleMenu.ActionIds[0], Is.EqualTo(MenuActions.TitleNewWorld));
 
@@ -53,12 +54,13 @@ namespace Blockiverse.Tests.EditMode
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             SurvivalVitalsRuntime vitals = rig.AddComponent<SurvivalVitalsRuntime>();
+            InvokeUnityMessage(vitals, "OnEnable");
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
             CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
             CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
             CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
             controller.OnMenuPressed();
 
@@ -79,7 +81,7 @@ namespace Blockiverse.Tests.EditMode
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
             CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
 
             Assert.That(BlockiverseRuntimeState.IsGamePaused, Is.True);
             Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
@@ -107,7 +109,7 @@ namespace Blockiverse.Tests.EditMode
             Canvas hudCanvas = hud.AddComponent<Canvas>();
             hudCanvas.enabled = true;
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
 
             Assert.That(hud.GetComponent<BlockiverseWorldSpacePanelPresenter>(), Is.Not.Null);
             Assert.That(hudCanvas.enabled, Is.False, "Title routing must hide the gameplay HUD.");
@@ -135,7 +137,7 @@ namespace Blockiverse.Tests.EditMode
                     key,
                     out Canvas firstCanvas);
 
-                firstPresenter.SendMessage("Start");
+                InvokeUnityMessage(firstPresenter, "Start");
 
                 Assert.That(firstCanvas.enabled, Is.True);
 
@@ -149,7 +151,7 @@ namespace Blockiverse.Tests.EditMode
                     key,
                     out Canvas secondCanvas);
 
-                secondPresenter.SendMessage("Start");
+                InvokeUnityMessage(secondPresenter, "Start");
 
                 Assert.That(secondCanvas.enabled, Is.False);
             }
@@ -169,7 +171,7 @@ namespace Blockiverse.Tests.EditMode
             AddPresenter(lanPanel);
             lanPanel.AddComponent<BlockiverseMultiplayerSessionMenu>();
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
 
             controller.ShowLanMultiplayerScreen();
@@ -207,7 +209,7 @@ namespace Blockiverse.Tests.EditMode
                 pitch: 0.0f,
                 showWhenStarted: false);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
 
             Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.True);
@@ -234,12 +236,13 @@ namespace Blockiverse.Tests.EditMode
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             SurvivalVitalsRuntime vitals = rig.AddComponent<SurvivalVitalsRuntime>();
+            InvokeUnityMessage(vitals, "OnEnable");
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
             CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
             CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
             CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
             controller.RequestConfirm("Quit?", "Quit", "Cancel", _ => { });
 
@@ -263,7 +266,7 @@ namespace Blockiverse.Tests.EditMode
             AddPresenter(pauseMenu.gameObject);
             AddPresenter(confirmMenu.gameObject);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
             controller.OnMenuPressed();
             controller.RequestConfirm("Quit?", "Quit", "Cancel", _ => { });
@@ -289,7 +292,7 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             controller.SetSaveAvailability(latestSaveExists: true, anySaveExists: true);
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
 
             var requestedActions = new List<string>();
             controller.ActionRequested += requestedActions.Add;
@@ -320,7 +323,7 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseActionMenu pauseMenu = CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
             BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
             controller.OnMenuPressed();
 
@@ -353,7 +356,7 @@ namespace Blockiverse.Tests.EditMode
             CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
             BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
 
             bool accepted = false;
             controller.RequestConfirm("Quit?", "Quit", "Cancel", value => accepted = value);
@@ -371,12 +374,13 @@ namespace Blockiverse.Tests.EditMode
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             SurvivalVitalsRuntime vitals = rig.AddComponent<SurvivalVitalsRuntime>();
+            InvokeUnityMessage(vitals, "OnEnable");
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
             CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
             BlockiverseActionMenu deathMenu = CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
             CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
             vitals.Vitals.ApplyDamage(vitals.Vitals.MaxHealth);
 
@@ -408,10 +412,10 @@ namespace Blockiverse.Tests.EditMode
             panel.ResetForNewWorld();
 
             TMP_Text gameModeLabel = GetChildComponent<TMP_Text>(panel.transform, "Panel/Row Game Mode/Value");
-            Assert.That(gameModeLabel.text, Is.EqualTo("survival"));
+            Assert.That(gameModeLabel.text, Is.EqualTo("Survival"));
 
             GetChildComponent<Button>(panel.transform, "Panel/Row Game Mode/Next").onClick.Invoke();
-            Assert.That(gameModeLabel.text, Is.EqualTo("creative"));
+            Assert.That(gameModeLabel.text, Is.EqualTo("Creative"));
 
             string invoked = null;
             panel.ActionRequested += id => invoked = id;
@@ -563,7 +567,7 @@ namespace Blockiverse.Tests.EditMode
             worldManager.SetGameMode(WorldGameMode.Survival);
             survivalSync.Configure(null, null, worldManager);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
             controller.EnterGameplay();
             panel.Open(survivalSync.GetOrCreateStationModel(stationPosition, CraftingStation.ClayKiln), stationPosition);
 
@@ -585,7 +589,7 @@ namespace Blockiverse.Tests.EditMode
             (BlockiverseWorldDetailsPanel detailsPanel, BlockiverseActionMenu detailsMenu) =
                 CreateGeneratedWorldDetailsPanel(rig.transform);
 
-            controller.SendMessage("Start");
+            InvokeUnityMessage(controller, "Start");
 
             detailsPanel.ShowSave(new WorldSaveSummary(
                 "Meadow Home",
@@ -838,6 +842,27 @@ namespace Blockiverse.Tests.EditMode
                 if (string.Equals(actionIds[i], actionId, StringComparison.Ordinal))
                     return i;
             return -1;
+        }
+
+        static void InvokeUnityMessage(MonoBehaviour target, string methodName)
+        {
+            MethodInfo method = FindInstanceMethod(target.GetType(), methodName);
+            Assert.That(method, Is.Not.Null, $"Missing Unity message {methodName} on {target.GetType().Name}");
+            method.Invoke(target, null);
+        }
+
+        static MethodInfo FindInstanceMethod(Type type, string methodName)
+        {
+            for (Type current = type; current != null; current = current.BaseType)
+            {
+                MethodInfo method = current.GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (method != null)
+                    return method;
+            }
+
+            return null;
         }
     }
 }

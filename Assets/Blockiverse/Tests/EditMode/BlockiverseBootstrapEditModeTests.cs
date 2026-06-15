@@ -28,6 +28,7 @@ namespace Blockiverse.Tests.EditMode
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
+        const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
         const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
         const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
         const string XrRigBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs";
@@ -68,7 +69,14 @@ namespace Blockiverse.Tests.EditMode
 
             object instance = settingsType.GetProperty("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
             object value = settingsType.GetProperty("GenerateDefaultNetworkPrefabs", BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance);
-            Assert.That(value, Is.EqualTo(false));
+            if (value is bool generatedDefaultPrefabs)
+            {
+                Assert.That(generatedDefaultPrefabs, Is.False);
+                return;
+            }
+
+            string settingsYaml = File.ReadAllText("ProjectSettings/NetcodeForGameObjects.asset");
+            StringAssert.Contains("GenerateDefaultNetworkPrefabs: 0", settingsYaml);
         }
 
         [Test]
@@ -320,11 +328,41 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(GetBool(serializedSettings, "enableFaceTrackingVisemesOutput"), Is.False);
         }
 
+        [Test]
+        public void AndroidBuildTreatsUnusedMetaAvatarSamplePresetsAsOptional()
+        {
+            string buildSmokeSource = File.ReadAllText(BuildSmokePath);
+
+            StringAssert.Contains("PrepareOptionalMetaAvatarSamplePresets()", buildSmokeSource);
+            StringAssert.Contains(".blockiverse-no-sample-presets", buildSmokeSource);
+            StringAssert.Contains("loadFallbackPreset: 1", buildSmokeSource);
+
+            foreach (string assetPath in EnumerateBlockiverseSerializedAssets())
+            {
+                Assert.That(
+                    File.ReadAllText(assetPath),
+                    Does.Not.Contain("loadFallbackPreset: 1"),
+                    $"{assetPath} enables Meta sample preset avatars; either disable it or intentionally add packaged Quest preset assets.");
+            }
+        }
+
         static bool GetBool(SerializedObject serializedObject, string propertyName)
         {
             SerializedProperty property = serializedObject.FindProperty(propertyName);
             Assert.That(property, Is.Not.Null);
             return property.boolValue;
+        }
+
+        static string[] EnumerateBlockiverseSerializedAssets()
+        {
+            return Directory
+                .GetFiles("Assets/Blockiverse", "*.*", SearchOption.AllDirectories)
+                .Where(path =>
+                {
+                    string extension = Path.GetExtension(path);
+                    return extension == ".asset" || extension == ".prefab" || extension == ".unity";
+                })
+                .ToArray();
         }
     }
 }

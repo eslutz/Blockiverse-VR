@@ -194,7 +194,7 @@ namespace Blockiverse.Tests.EditMode
             try
             {
                 var service = new WorldSaveService();
-                service.Save(path, "spawn-test", world, extras: new WorldSaveExtras
+                service.Save(path, "spawn-test", world, worldPreset: WorldPresetIds.FlatBuilder, extras: new WorldSaveExtras
                 {
                     HasSpawnPosition = true,
                     SpawnPosition = spawn

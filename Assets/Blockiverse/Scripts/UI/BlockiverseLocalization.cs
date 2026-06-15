@@ -601,11 +601,22 @@ namespace Blockiverse.UI
         {
             var builder = new StringBuilder(value.Length);
             bool lastWasSeparator = false;
+            char previous = '\0';
 
-            foreach (char character in value)
+            for (int i = 0; i < value.Length; i++)
             {
+                char character = value[i];
                 if (char.IsLetterOrDigit(character))
                 {
+                    bool nextIsLower = i + 1 < value.Length && char.IsLower(value[i + 1]);
+                    if (builder.Length > 0 &&
+                        !lastWasSeparator &&
+                        char.IsUpper(character) &&
+                        (char.IsLower(previous) || char.IsDigit(previous) || (char.IsUpper(previous) && nextIsLower)))
+                    {
+                        builder.Append('_');
+                    }
+
                     builder.Append(char.ToLowerInvariant(character));
                     lastWasSeparator = false;
                 }
@@ -614,6 +625,8 @@ namespace Blockiverse.UI
                     builder.Append('_');
                     lastWasSeparator = true;
                 }
+
+                previous = character;
             }
 
             while (builder.Length > 0 && builder[builder.Length - 1] == '_')

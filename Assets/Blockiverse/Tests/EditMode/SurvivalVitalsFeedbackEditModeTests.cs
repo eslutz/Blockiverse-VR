@@ -184,6 +184,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(runtime.Vitals.CurrentHealth, Is.EqualTo(95),
                 "The scan interval/hazard cadence should prevent immediate double damage.");
 
+            worldManager.SetGameMode(WorldGameMode.Creative);
             survivalSync.SetMode(PlayerModeState.Creative);
             runtime.Vitals.RestoreHealth(runtime.Vitals.MaxHealth);
             runtime.SurvivalVitals.Restore(hunger: 0, thirst: 0, stamina: 100);
@@ -219,6 +220,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(environmentDamage, Is.EqualTo(SurvivalVitals.EnvironmentExposureDamagePerInterval * 3));
             Assert.That(runtime.Vitals.CurrentHealth, Is.EqualTo(85));
 
+            worldManager.SetGameMode(WorldGameMode.Creative);
             survivalSync.SetMode(PlayerModeState.Creative);
 
             Assert.That(runtime.ApplyFallImpact(20.0f), Is.EqualTo(0));
@@ -331,6 +333,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(runtime.SurvivalVitals.Stamina, Is.EqualTo(10 - SurvivalVitalsRuntime.HarvestStaminaCost));
 
+            worldManager.SetGameMode(WorldGameMode.Creative);
             survivalSync.SetMode(PlayerModeState.Creative);
             InvokePrivate(
                 survivalSync,
@@ -399,7 +402,9 @@ namespace Blockiverse.Tests.EditMode
         {
             var gameObject = new GameObject("Survival Vitals Runtime");
             objectsToDestroy.Add(gameObject);
-            return gameObject.AddComponent<SurvivalVitalsRuntime>();
+            SurvivalVitalsRuntime runtime = gameObject.AddComponent<SurvivalVitalsRuntime>();
+            InvokePrivate(runtime, "OnEnable");
+            return runtime;
         }
 
         MultiplayerSurvivalSync CreateSurvivalSync(CreativeWorldManager worldManager)
@@ -414,7 +419,8 @@ namespace Blockiverse.Tests.EditMode
         GameObject CreateRig()
         {
             var rig = new GameObject(BlockiverseProject.XrRigRootName);
-            rig.AddComponent<BlockiversePlayerRigAnchor>();
+            BlockiversePlayerRigAnchor anchor = rig.AddComponent<BlockiversePlayerRigAnchor>();
+            InvokePrivate(anchor, "OnEnable");
             objectsToDestroy.Add(rig);
             return rig;
         }

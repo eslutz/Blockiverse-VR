@@ -60,6 +60,17 @@ namespace Blockiverse.Editor
             if (existingAsset != null)
             {
                 EnsureInputActionSchema(existingAsset);
+                string updatedJson = existingAsset.ToJson();
+                if (File.ReadAllText(BlockiverseProject.InputActionsAssetPath) != updatedJson)
+                {
+                    File.WriteAllText(BlockiverseProject.InputActionsAssetPath, updatedJson);
+                    AssetDatabase.ImportAsset(
+                        BlockiverseProject.InputActionsAssetPath,
+                        ImportAssetOptions.ForceSynchronousImport);
+                    existingAsset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(
+                        BlockiverseProject.InputActionsAssetPath);
+                }
+
                 return existingAsset;
             }
 
@@ -117,17 +128,11 @@ namespace Blockiverse.Editor
                 "<XRController>{RightHand}/primaryButton");
             EnsureButtonAction(
                 gameplayMap,
-                BlockiverseInputActionNames.Jump,
-                "<XRController>{LeftHand}/primaryButton");
-            EnsureButtonAction(
-                gameplayMap,
                 BlockiverseInputActionNames.BlockEditingToggle,
                 "<XRController>{RightHand}/secondaryButton");
-            EnsureButtonAction(
-                gameplayMap,
-                BlockiverseInputActionNames.BlockEditingToggle,
-                "<XRController>{LeftHand}/secondaryButton");
             RemoveAction(gameplayMap, BlockiverseInputActionNames.Undo);
+            RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.Jump, "<XRController>{LeftHand}/primaryButton");
+            RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.BlockEditingToggle, "<XRController>{LeftHand}/secondaryButton");
             RemoveActionBinding(gameplayMap, BlockiverseInputActionNames.HeightReset, "<XRController>{LeftHand}/primaryButton");
             EditorUtility.SetDirty(asset);
         }

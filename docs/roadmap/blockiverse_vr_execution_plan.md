@@ -181,15 +181,24 @@ hotfix/*      short-lived urgent fixes
 
 Do not use a long-lived `develop` branch.
 
-### Release tags
+### Release version names
 
 ```text
-v0.1.0
-v0.2.0
-v1.0.0
+Production:
+0.1.0
+0.2.0
+1.0.0
+
+Pre-release and validation builds:
+0.1.0-ci.run318.4.663f074
+0.1.0-alpha.run318.4.663f074
+0.1.0-beta.1
+0.1.0-rc.1
 ```
 
-Release tags are player-facing. They must point to commits reachable from `origin/main`.
+Production-facing builds originate from trusted `main` history. Pull requests validate
+only and do not publish to Meta. Meta `beta`, `rc`, and `store` receive promoted
+builds so tested artifact identity is preserved.
 
 ### Known-good checkpoint tags
 
@@ -237,7 +246,7 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 SECURITY.md
 CHANGELOG.md
-AGENTS.md
+CLAUDE.md
 docs/
   architecture/
   adr/
@@ -357,7 +366,7 @@ Keep roadmap in docs/roadmap/blockiverse_vr_execution_plan.md
 Add ruleset docs under docs/rulesets/ or equivalent
 Document canonical world replacement strategy
 Document temporary ID migration strategy
-Keep AGENTS.md aligned with roadmap
+Keep CLAUDE.md aligned with roadmap
 Keep CHANGELOG.md updated for material changes
 Use source-available / All Rights Reserved until licensing posture changes
 ```
@@ -1278,7 +1287,11 @@ Performance reports are saved under docs/testing/performance/.
 
 ### Deliverable
 
-Signed APKs are produced from `main`, attached to GitHub Releases, and installable on Quest.
+Pull requests validate Unity tests and Android smoke builds. Trusted `main` pushes
+and manual trusted dispatches build release-signed APKs, upload artifacts to GitHub
+Actions, publish to Meta `alpha`, and keep the same artifact available for later
+promotion. Beta, release-candidate, and production releases promote already-uploaded
+Meta build IDs so the tested build preserves exact artifact identity.
 
 ### Scope
 
@@ -1286,7 +1299,11 @@ Signed APKs are produced from `main`, attached to GitHub Releases, and installab
 Production Android keystore outside repo
 GitHub Actions secret-based signing
 Version code/version name automation
-Release tags from main only
+Quest CI validation for pull requests
+Alpha release-signed builds from main merges or manual trusted refs
+Beta promotion from selected Alpha Meta build by manual dispatch
+RC promotion from selected Beta Meta build by manual dispatch
+Production promotion from selected RC Meta build after Store submission/review
 APK checksum
 Symbols/log artifacts
 Release notes template
@@ -1297,8 +1314,11 @@ ADB/hzdb sideload validation path
 ### Release artifacts
 
 ```text
-BlockiverseVR-v0.1.0-dev.apk
-BlockiverseVR-v0.1.0-release.apk
+BlockiverseVR-0.1.0-alpha.run318.4.663f074-alpha.apk
+meta-upload-summary.json
+meta-upload-output.txt
+meta-promotion-summary.json
+meta-promotion-output.txt
 BlockiverseVR-v0.1.0-symbols.zip
 checksums.txt
 CHANGELOG.md excerpt
@@ -1309,9 +1329,13 @@ performance-summary.md
 ### Tests
 
 ```text
-CI: release tag must be on main.
-CI: signed release artifact exists.
+CI: pull requests do not receive Meta credentials or publish to Meta.
+CI: Unity Personal activation succeeds.
+CI: Android smoke APK artifact exists.
 CI: checksum is generated.
+CI: release-signed Alpha APK artifact exists.
+CI: Beta, RC, and production promotion jobs do not build APKs.
+CI: promoted Beta, RC, and production releases preserve the selected Meta build ID.
 Smoke: APK installs on Quest.
 Smoke: app launches to main menu.
 Smoke: boot scene reaches playable state.
@@ -1320,7 +1344,11 @@ Smoke: boot scene reaches playable state.
 ### Validation
 
 ```text
-Tagging v0.x from main creates a GitHub Release.
+Pull requests run Quest CI without Meta credentials.
+Merging to main uploads a release-signed APK to Meta `alpha`.
+Manual Alpha dispatch can publish a trusted ref or candidate versionName to Meta `alpha`.
+Manual promotion records the exact Meta build moved from `alpha -> beta`, `beta -> rc`, or `rc -> store`.
+Store promotion requires the `meta-store` environment approval gate.
 APK can be sideloaded.
 Version appears correctly in game.
 Release notes include known issues.
@@ -1353,7 +1381,9 @@ Bug feedback flow
 ### Tests
 
 ```text
-Store upload accepts APK.
+Store upload accepts the Beta APK.
+Selected Beta build can be promoted to RC.
+Selected RC build can be promoted to Store.
 Release channel install works.
 Entitlement behavior is understood.
 Avatar/platform requirements are documented.
@@ -1573,7 +1603,7 @@ FEATURE: Trunk-based workflow
   STORY: Protect main
   STORY: Document release-from-main-only policy
   STORY: Document short-lived branch policy
-  STORY: Add forbidden-files checks
+  STORY: Ignore generated, local, and secret files
 
 FEATURE: Local Unity validation
   STORY: Keep scripts/unity/run-tests.sh as required local validation

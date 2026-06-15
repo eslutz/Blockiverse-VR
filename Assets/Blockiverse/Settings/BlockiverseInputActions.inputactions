@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "BlockiverseInputActions",
     "maps": [
         {
@@ -718,30 +719,8 @@
                 },
                 {
                     "name": "",
-                    "id": "{EC012C97-D6CE-496C-A566-F02C28613690}",
-                    "path": "<XRController>{LeftHand}/primaryButton",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Jump",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
                     "id": "00000000-0000-0000-0000-00000000005B",
                     "path": "<XRController>{RightHand}/secondaryButton",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Block Editing Toggle",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "{A62087CE-14F6-4BD0-92DB-B6F24430E886}",
-                    "path": "<XRController>{LeftHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
                     "groups": "",

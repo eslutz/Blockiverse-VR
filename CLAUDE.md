@@ -1,8 +1,76 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file is the single source of truth for agent instructions in this repository.
+`AGENTS.md` intentionally points here.
 
-Read and follow AGENTS.md. It owns all workflow policy: issues, PRs, branching, approval rules, project guardrails, tooling (Unity MCP, `hzdb` for Quest devices), and the Unity licensing-stall recovery recipe. Canonical game design lives in [docs/rulesets/](docs/rulesets/) and the roadmap in [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md); decisions go in [docs/adr/](docs/adr/); the testing contract is [docs/testing/README.md](docs/testing/README.md). This file only adds what those do not cover: commands and the code architecture map.
+Canonical game design lives in [docs/rulesets/](docs/rulesets/) and the roadmap in
+[docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md).
+Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
+[docs/testing/README.md](docs/testing/README.md).
+
+## Agent Workflow Policy
+
+- The project owner is Eric Slutz; the GitHub username for assignment and review is `eslutz`.
+- Eric must provide final approval for complex, high-risk, product-facing, or PR-backed work before merge.
+- Eric is currently the only human on the project. Do not configure required approving reviews or required CODEOWNERS review unless another human reviewer is added; otherwise Eric cannot approve his own PR.
+- Keep `main` protected with a repository ruleset requiring status checks, linear history, conversation resolution, and force-push protection.
+- Use trunk-based development. Do not create a long-lived `develop` branch or long-lived release branches.
+- Use short-lived `feature/*`, `fix/*`, `chore/*`, `spike/*`, and `hotfix/*` branches.
+- Prefer pull requests into `main` after CI passes. Direct pushes to `main` should be rare and explicit.
+- Link pull requests to an issue when active issue tracking exists. Otherwise link the relevant execution-plan section, ruleset, or ADR.
+- Use GitHub issues and the `Blockiverse VR Roadmap` project only for active workflow state: bugs, blockers, review work, multi-PR initiatives, and durable follow-ups. The roadmap and rulesets remain the canonical product sources.
+- When work begins on an existing issue, assign it to `eslutz` unless Eric explicitly says otherwise.
+- Keep PR descriptions useful: scope, linked issue or source doc, validation commands, manual validation, risk notes, and known follow-ups.
+- Do not merge a PR, close a PR-backed issue, or move it to Done until Eric has approved the work or explicitly asked for completion.
+- Before adding or changing GitHub Actions, packages, SDKs, CLIs, Unity packages, build images, or other third-party dependencies, verify the current stable version from official upstream sources. Prefer latest stable majors unless the repo has a documented compatibility constraint.
+- Update documentation when behavior, workflow, architecture, project policy, release process, store submission, or user-visible scope changes.
+
+### Release Policy
+
+- Production releases are cut from `main`.
+- Release versioning follows [ADR 0005](docs/adr/0005-release-versioning.md), with the root `VERSION` file as the SemVer base version source.
+- Pull requests use `.github/workflows/quest-ci.yml` for validation only. PR workflows must not receive Meta credentials or publish to Meta release channels.
+- Meta channel CD is split across:
+  - `.github/workflows/quest-alpha.yml`, which builds a release-signed Quest APK from `main` pushes or manual trusted refs and uploads it to Meta `alpha`;
+  - `.github/workflows/quest-promote.yml`, which manually promotes a selected tested Meta build ID through `alpha -> beta`, `beta -> rc`, or `rc -> store` without rebuilding.
+- Promotion to `beta`, `rc`, and `store` must preserve the exact tested Meta build artifact. Store promotion requires the `meta-store` environment approval gate.
+- Known-good engineering checkpoint tags use the `kg/...` family and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). They are recovery checkpoints, not release tags.
+
+### Project Guardrails
+
+- Treat Meta Quest 3 and Meta Quest 3S as the primary target platforms.
+- Initial multiplayer uses Meta Quest party chat for voice. Do not add in-app voice chat unless the rulesets and roadmap explicitly change.
+- Use original names and original assets; do not copy protected third-party identity.
+- Gameplay code, UI labels, registries, save data, and tests should use canonical IDs from the rulesets. Legacy IDs must be handled through explicit migration code or marked as historical validation artifacts.
+- Never commit secrets, keystores, signing credentials, API keys, `.env` files, Unity `Library`, `Temp`, `Logs`, local generated folders, device logs, screenshots, recordings, Perfetto traces, APKs, or other generated validation artifacts unless a tracked artifact is explicitly required.
+- Keystores and production signing material stay outside the repo and in GitHub Actions secrets.
+- Current licensing state is source-available / All Rights Reserved. Keep `LICENSE.md`, `NOTICE.md`, and related docs aligned with that posture.
+
+### Tooling Policy
+
+- Prefer reproducible command-line tooling over GUI-only actions when command output is useful validation evidence.
+- Use the Unity MCP server for interactive Unity Editor inspection, simulator-oriented editor workflows, scene/object checks, and Unity-specific automation exposed through MCP.
+- Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
+- Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
+- Verify Quest-device tooling before device work with `hzdb --version` and `hzdb device list`.
+- Use `adb` directly only when `hzdb` does not expose the needed operation or when comparing behavior against lower-level Android tooling; document why the fallback was needed.
+- Use GitHub CLI for best-effort GitHub Project updates and cleanup because connector tools may not expose all project mutations.
+
+### Unity Licensing Recovery
+
+If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
+or waits on `LicenseClient-ericslutz-6000.3.16`, reset the local Unity/Hub process state:
+
+```sh
+osascript -e 'tell application "Unity Hub" to quit'
+pkill -f 'Unity.Licensing.Client|Unity Hub Helper|Unity Hub.app' || true
+pgrep -afil 'Unity|Licensing|UnityPackageManager'
+scripts/unity/run-tests.sh
+```
+
+The `pgrep` command should return no Unity editor, Unity Hub, UnityPackageManager,
+or Unity licensing processes before the retry. Do not leave stuck Unity batchmode
+processes running.
 
 ## Commands
 
@@ -20,16 +88,14 @@ scripts/unity/run-tests.sh
 
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
-scripts/unity/build-release-apk.sh                # signed; needs ANDROID_KEYSTORE_PATH/PASSWORD, ANDROID_KEY_ALIAS/PASSWORD
+# Release-signed APKs are built by .github/workflows/quest-alpha.yml only.
 
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
 python3 scripts/audio/generate-audio.py           # all SFX
-
-scripts/ci/forbidden-files.sh                     # what PR CI actually runs
 ```
 
-**PR CI does not compile or test Unity code** (it only checks forbidden files and shell syntax). `scripts/unity/run-tests.sh` is the sole compile/test gate — run it locally before any PR. Releases build from `v*` tags via `release-apk.yml`.
+`.github/workflows/quest-ci.yml` validates pull requests with repository checks, Unity Personal activation through GameCI, Unity tests, and an Android smoke APK. `.github/workflows/quest-alpha.yml` builds the release-signed APK that goes to Meta `alpha`. `.github/workflows/quest-promote.yml` promotes already-uploaded Meta build IDs to `beta`, `rc`, and eventually `store` without rebuilding.
 
 ## Architecture
 

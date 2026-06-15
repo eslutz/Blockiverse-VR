@@ -52,7 +52,14 @@
 - [ ] Required artwork and screenshots uploaded.
 - [ ] Support contact provided.
 
-## Release packaging
+## Release Packaging
 
-- [ ] Signed release APK built from a `main` tag using `.github/workflows/release-apk.yml`
-      after production signing secrets are configured.
+- [ ] Release-signed APK built from trusted `main` history and uploaded to Meta `alpha`
+      using `.github/workflows/quest-alpha.yml` after Unity Personal, Android signing,
+      and Meta alpha secrets are configured.
+- [ ] Beta release promotes the tested Meta `alpha` build to Meta `beta` using
+      `.github/workflows/quest-promote.yml`.
+- [ ] RC release promotes the tested Meta `beta` build to Meta `rc` using
+      `.github/workflows/quest-promote.yml`.
+- [ ] Production release promotes the tested Meta `rc` build to Meta `store` using
+      `.github/workflows/quest-promote.yml` only after Store submission/review approval.

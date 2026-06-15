@@ -36,7 +36,9 @@ namespace Blockiverse.WorldGen
 
         public WorldGenerationSettings(int width, int height, int depth, int chunkSize, int seed, int groundHeight, BlockPosition? spawnPosition = null)
         {
-            if (groundHeight < 1 || groundHeight >= height)
+            if (groundHeight < 0 || groundHeight >= height)
+                throw new ArgumentOutOfRangeException(nameof(groundHeight), "Ground height must leave air above the surface.");
+            if (!spawnPosition.HasValue && groundHeight + 1 >= height)
                 throw new ArgumentOutOfRangeException(nameof(groundHeight), "Ground height must leave air above the surface.");
 
             Bounds = new WorldBounds(width, height, depth);
