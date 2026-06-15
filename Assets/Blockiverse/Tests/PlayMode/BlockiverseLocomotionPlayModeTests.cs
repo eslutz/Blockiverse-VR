@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
@@ -19,6 +20,7 @@ using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using InputTrackingState = UnityEngine.XR.InputTrackingState;
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -688,6 +690,71 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator DominantHandOwnsTheOnlyActiveInteractionRay()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+            InputActionAsset actions = CreateTestActions();
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.DominantHand = BlockiverseControllerRole.Right;
+
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
+
+                BlockiverseLocomotionRayMediator leftMediator = CreateRayMediator(
+                    rigObject,
+                    "Left Controller",
+                    BlockiverseControllerRole.Left,
+                    inputRig,
+                    settings,
+                    out GameObject leftInteractionObject,
+                    out _);
+                BlockiverseLocomotionRayMediator rightMediator = CreateRayMediator(
+                    rigObject,
+                    "Right Controller",
+                    BlockiverseControllerRole.Right,
+                    inputRig,
+                    settings,
+                    out GameObject rightInteractionObject,
+                    out _);
+
+                yield return null;
+
+                InvokePrivate(leftMediator, "Update");
+                InvokePrivate(rightMediator, "Update");
+
+                Assert.That(leftInteractionObject.activeSelf, Is.False);
+                Assert.That(rightInteractionObject.activeSelf, Is.True);
+
+                settings.DominantHand = BlockiverseControllerRole.Left;
+                yield return null;
+
+                InvokePrivate(leftMediator, "Update");
+                InvokePrivate(rightMediator, "Update");
+
+                Assert.That(leftInteractionObject.activeSelf, Is.True);
+                Assert.That(rightInteractionObject.activeSelf, Is.False);
+            }
+            finally
+            {
+                DestroyRigImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ConfiguredHeadPoseDriverAppliesTrackedHmdPoseDuringBeforeRenderInputUpdate()
         {
             GameObject cameraObject = new("Head Camera");
@@ -761,6 +828,67 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(anchor.IsTracked, Is.True);
                 Assert.That(Vector3.Distance(controllerObject.transform.localPosition, trackedPosition), Is.LessThan(0.001f));
                 Assert.That(Quaternion.Dot(controllerObject.transform.localRotation, trackedRotation), Is.GreaterThan(0.999f));
+            }
+            finally
+            {
+                if (controller != null)
+                InputSystem.RemoveDevice(controller);
+
+                Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator InteractionRayStaysHiddenUntilControllerHasPositionAndRotationTracking()
+        {
+            GameObject controllerObject = new("Right Controller");
+            controllerObject.SetActive(false);
+            XRController controller = InputSystem.AddDevice<XRController>();
+
+            try
+            {
+                InputSystem.SetDeviceUsage(controller, CommonUsages.RightHand);
+
+                TrackedPoseDriver poseDriver = controllerObject.AddComponent<TrackedPoseDriver>();
+                BlockiverseInputRig.ConfigureControllerPoseDriverActions(poseDriver, BlockiverseControllerRole.Right);
+
+                BlockiverseControllerAnchor anchor = controllerObject.AddComponent<BlockiverseControllerAnchor>();
+                anchor.Configure(BlockiverseControllerRole.Right, poseDriver);
+
+                GameObject interactionObject = new("Interaction Ray");
+                GameObject teleportObject = new("Teleport Ray");
+                interactionObject.transform.SetParent(controllerObject.transform, false);
+                teleportObject.transform.SetParent(controllerObject.transform, false);
+
+                XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+                XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+                controllerObject.SetActive(true);
+
+                BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+                mediator.Configure(
+                    rig: null,
+                    settings: null,
+                    interaction: interactionRay,
+                    teleport: teleportRay,
+                    controllerRole: BlockiverseControllerRole.Right);
+
+                Press(controller.isTracked);
+                Set(controller.trackingState, (int)InputTrackingState.Rotation);
+                Set(controller.deviceRotation, Quaternion.Euler(10.0f, 20.0f, 30.0f));
+                yield return null;
+
+                Assert.That(anchor.IsTracked, Is.False,
+                    "Rotation-only tracking should not count as a usable pointer pose because the ray origin position is stale.");
+                Assert.That(interactionObject.activeSelf, Is.False,
+                    "The interaction ray should stay hidden while the controller has no tracked position.");
+
+                Set(controller.trackingState, (int)(InputTrackingState.Position | InputTrackingState.Rotation));
+                Set(controller.devicePosition, new Vector3(0.25f, 1.1f, 0.4f));
+                Set(controller.deviceRotation, Quaternion.Euler(10.0f, 20.0f, 30.0f));
+                yield return null;
+
+                Assert.That(anchor.IsTracked, Is.True);
+                Assert.That(interactionObject.activeSelf, Is.True);
             }
             finally
             {
@@ -859,6 +987,76 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        [UnityTest]
+        public IEnumerator TeleportRayStaysHiddenWhileWorldInputIsSuppressed()
+        {
+            GameObject rigObject = new("Menu-Suppressed Teleport Rig");
+            GameObject controllerObject = new("Right Controller");
+            GameObject interactionObject = new("Interaction Ray");
+            GameObject teleportObject = new("Teleport Ray");
+            InputActionAsset actions = CreateTestActions();
+            InputAction teleportModeAction = new("Held Teleport Mode", InputActionType.Button, "<Gamepad>/leftShoulder");
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                controllerObject.transform.SetParent(rigObject.transform, false);
+                interactionObject.transform.SetParent(controllerObject.transform, false);
+                teleportObject.transform.SetParent(controllerObject.transform, false);
+
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.LocomotionMode = BlockiverseLocomotionMode.Teleport;
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+
+                XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+                XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+                teleportObject.SetActive(false);
+                BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+                mediator.Configure(
+                    inputRig,
+                    settings,
+                    interactionRay,
+                    teleportRay,
+                    BlockiverseControllerRole.Right);
+                SetPrivateField(mediator, "teleportModeAction", teleportModeAction);
+
+                actions.Enable();
+                teleportModeAction.Enable();
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+                Press(gamepad.leftShoulder);
+                InputSystem.Update();
+                Assert.That(teleportModeAction.IsPressed(), Is.True,
+                    "The test must hold teleport mode so a hidden teleport ray proves menu suppression, not missing input.");
+                InvokePrivate(mediator, "Update");
+
+                Assert.That(teleportObject.activeSelf, Is.False,
+                    "The teleport arc should not appear while title/menu routing suppresses world input.");
+                Assert.That(interactionObject.activeSelf, Is.True,
+                    "The UI interaction ray should remain available for menu selection.");
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+                InvokePrivate(mediator, "Update");
+
+                Assert.That(teleportObject.activeSelf, Is.True,
+                    "Teleport mode should resume once world input is enabled.");
+                Assert.That(interactionObject.activeSelf, Is.False);
+
+                yield return null;
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
+                Release(gamepad.leftShoulder);
+                InputSystem.RemoveDevice(gamepad);
+                teleportModeAction.Dispose();
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
         static void ConfigureXriLocomotionStack(
             GameObject rigObject,
             XROrigin origin,
@@ -919,6 +1117,31 @@ namespace Blockiverse.Tests.PlayMode
             return rigObject;
         }
 
+        static BlockiverseLocomotionRayMediator CreateRayMediator(
+            GameObject rigObject,
+            string controllerName,
+            BlockiverseControllerRole hand,
+            BlockiverseInputRig inputRig,
+            BlockiverseComfortSettings settings,
+            out GameObject interactionObject,
+            out GameObject teleportObject)
+        {
+            GameObject controllerObject = new(controllerName);
+            controllerObject.transform.SetParent(rigObject.transform, false);
+
+            interactionObject = new("Interaction Ray");
+            interactionObject.transform.SetParent(controllerObject.transform, false);
+            XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+
+            teleportObject = new("Teleport Ray");
+            teleportObject.transform.SetParent(controllerObject.transform, false);
+            XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+
+            BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+            mediator.Configure(inputRig, settings, interactionRay, teleportRay, hand);
+            return mediator;
+        }
+
         static InputActionAsset CreateTestActions()
         {
             var actions = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -939,6 +1162,8 @@ namespace Blockiverse.Tests.PlayMode
             leftHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonWest");
             leftHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/select");
             leftHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/leftStickPress");
+            leftHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
+            leftHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
             rightHand.AddAction(
@@ -1002,6 +1227,15 @@ namespace Blockiverse.Tests.PlayMode
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, $"{methodName} should exist.");
             return method.Invoke(target, args);
+        }
+
+        static void SetPrivateField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{fieldName} should exist.");
+            field.SetValue(target, value);
         }
     }
 }

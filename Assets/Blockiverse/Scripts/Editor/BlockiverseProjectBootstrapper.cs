@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
@@ -120,13 +121,15 @@ namespace Blockiverse.Editor
         const string MultiplayerTestCameraName = "Multiplayer Test Camera";
         const string NetworkManagerRootName = "Blockiverse Network Manager";
         const string NetworkPlayerPrefabName = "Blockiverse Network Player";
-        const string CompositionPointerProjectionLayerName = "Blockiverse UI Pointer Projection";
         const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionRayName = "Interaction Ray";
         const string TeleportRayName = "Teleport Ray";
+        const string ControllerRayOriginName = "Ray Origin";
         const string LeftAimPoseName = "Left Aim Pose";
         const string RightAimPoseName = "Right Aim Pose";
+        const string LeftRayOriginName = "Left Ray Origin";
+        const string RightRayOriginName = "Right Ray Origin";
         const string TunnelingVignetteName = "Tunneling Vignette";
         const string TunnelingVignettePrefabPath = "Assets/Blockiverse/VR/TunnelingVignette/TunnelingVignette.prefab";
         const string StickDeadzoneProcessor = "stickDeadzone(min=0.2,max=0.95)";
@@ -135,7 +138,6 @@ namespace Blockiverse.Editor
         const int CompositionLayerOrderHud = 5;
         const int CompositionLayerOrderMenu = 10;
         const int CompositionLayerOrderModal = 20;
-        const int CompositionLayerOrderPointerProjection = 30;
         const float CompositionUiRenderScale = 2.0f;
         const float MenuPanelInset = 28.0f;
         static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
@@ -438,6 +440,39 @@ namespace Blockiverse.Editor
         static void ConfigureAndroidManifest()
         {
             global::OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest(silentMode: true);
+            EnsureAndroidGameActivityLabel("Assets/Plugins/Android/AndroidManifest.xml");
+        }
+
+        static void EnsureAndroidGameActivityLabel(string manifestPath)
+        {
+            if (!File.Exists(manifestPath))
+                throw new FileNotFoundException("Android manifest was not generated.", manifestPath);
+
+            var manifest = new XmlDocument();
+            manifest.Load(manifestPath);
+
+            var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
+            namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
+
+            XmlNode activityNode = manifest.SelectSingleNode(
+                "/manifest/application/activity[@android:name='com.unity3d.player.UnityPlayerGameActivity']",
+                namespaceManager);
+
+            if (activityNode == null)
+                throw new InvalidOperationException("Android manifest is missing UnityPlayerGameActivity.");
+
+            const string androidNamespace = "http://schemas.android.com/apk/res/android";
+            XmlAttribute labelAttribute = activityNode.Attributes["label", androidNamespace];
+
+            if (labelAttribute == null)
+            {
+                labelAttribute = manifest.CreateAttribute("android", "label", androidNamespace);
+                activityNode.Attributes.Append(labelAttribute);
+            }
+
+            labelAttribute.Value = "@string/app_name";
+            manifest.Save(manifestPath);
+            AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
         }
 
         static void ConfigureMetaProjectSettings()

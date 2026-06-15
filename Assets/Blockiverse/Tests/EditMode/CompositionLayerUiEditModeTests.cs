@@ -10,6 +10,8 @@ using Unity.XR.CompositionLayers.UIInteraction;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.OpenXR;
 
 namespace Blockiverse.Tests.EditMode
@@ -63,7 +65,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void GeneratedRigPanelsUseCompositionLayerMirrors()
+        public void GeneratedRigPanelsUseCompositionLayerVisualsWithDirectTrackedDeviceInput()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
             Assert.That(prefab, Is.Not.Null);
@@ -82,6 +84,8 @@ namespace Blockiverse.Tests.EditMode
                 InteractableUIMirror mirror = panel.GetComponent<InteractableUIMirror>();
                 BlockiverseCompositionLayerRenderScale renderScale =
                     panel.GetComponent<BlockiverseCompositionLayerRenderScale>();
+                GraphicRaycaster legacyRaycaster = panel.GetComponent<GraphicRaycaster>();
+                TrackedDeviceGraphicRaycaster trackedRaycaster = panel.GetComponent<TrackedDeviceGraphicRaycaster>();
                 BlockiverseWorldSpacePanelPresenter presenter =
                     panel.GetComponent<BlockiverseWorldSpacePanelPresenter>();
 
@@ -91,12 +95,23 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(compositionLayer.Order, Is.EqualTo(order), $"{name} should use the planned compositor order.");
                 Assert.That(compositionLayer.enabled, Is.EqualTo(canvas.enabled), $"{name} layer visibility should match canvas visibility in the prefab.");
                 Assert.That(texturesExtension, Is.Not.Null, $"{name} should have a source texture extension.");
-                Assert.That(mirror, Is.Not.Null, $"{name} should use the interactive UI mirror.");
+                Assert.That(mirror == null || !mirror.enabled, Is.True,
+                    $"{name} should not run InteractableUIMirror's proxy interactor path; direct tracked-device input owns interaction.");
+                Assert.That(legacyRaycaster, Is.Null, $"{name} should not use screen-space GraphicRaycaster input.");
+                if (ReceivesDirectTrackedDeviceInput(name))
+                    Assert.That(trackedRaycaster, Is.Not.Null, $"{name} should receive the real XR ray directly.");
+                else
+                    Assert.That(trackedRaycaster, Is.Null, $"{name} should remain decorative and not receive UI rays.");
                 Assert.That(renderScale, Is.Not.Null, $"{name} should supersample the mirror render target.");
                 Assert.That(renderScale.RenderScale, Is.EqualTo(2.0f).Within(0.001f));
                 Assert.That(presenter, Is.Not.Null, $"{name} should keep presenter-based routing.");
                 Assert.That(presenter.CompositionLayer, Is.SameAs(compositionLayer));
             }
+        }
+
+        static bool ReceivesDirectTrackedDeviceInput(string panelName)
+        {
+            return panelName != "Startup Loading Overlay";
         }
 
         [Test]
@@ -114,70 +129,81 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void PointerProjectionLayerRendersControllerAndRayVisualsAboveMenus()
+        public void ControllerAndRayVisualsRenderThroughMainSceneCamera()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
             Transform cameraOffset = prefab?.transform.Find("Camera Offset");
             Assert.That(cameraOffset, Is.Not.Null);
 
             Transform projection = cameraOffset.Find("Blockiverse UI Pointer Projection");
-            Assert.That(projection, Is.Not.Null);
-
-            CompositionLayer projectionLayer = projection.GetComponent<CompositionLayer>();
-            TexturesExtension texturesExtension = projection.GetComponent<TexturesExtension>();
-            int projectionUnityLayer = projection.gameObject.layer;
-
-            Assert.That(projectionLayer, Is.Not.Null);
-            Assert.That(projectionLayer.LayerData, Is.TypeOf<ProjectionLayerRigData>());
-            Assert.That(projectionLayer.Order, Is.EqualTo(30));
-            Assert.That(texturesExtension, Is.Not.Null);
-            Assert.That(LayerMask.LayerToName(projectionUnityLayer), Is.EqualTo("Blockiverse UI Pointer Projection"));
-            AssertProjectionEyeCamera(projection, "Left Camera", projectionUnityLayer, "<XRHMD>/leftEyePosition", "<XRHMD>/leftEyeRotation");
-            AssertProjectionEyeCamera(projection, "Right Camera", projectionUnityLayer, "<XRHMD>/rightEyePosition", "<XRHMD>/rightEyeRotation");
+            Assert.That(projection, Is.Null, "Controller/ray visuals must not be routed through a projection composition layer.");
 
             Camera mainCamera = cameraOffset.Find("Main Camera")?.GetComponent<Camera>();
             Assert.That(mainCamera, Is.Not.Null);
-            Assert.That((mainCamera.cullingMask & (1 << projectionUnityLayer)), Is.EqualTo(0),
-                "Main scene rendering should cull pointer projection objects so they are only composited above UI layers.");
 
             foreach (string path in new[]
             {
                 "Left Controller",
                 "Right Controller",
+                "Left Controller/Interaction Ray",
                 "Right Controller/Interaction Ray",
                 "Left Controller/Teleport Ray",
                 "Right Controller/Teleport Ray",
-                "Left Aim Pose",
-                "Right Aim Pose",
             })
             {
                 Transform target = cameraOffset.Find(path);
                 Assert.That(target, Is.Not.Null, path);
-                Assert.That(target.gameObject.layer, Is.EqualTo(projectionUnityLayer), path);
+                Assert.That((mainCamera.cullingMask & (1 << target.gameObject.layer)), Is.Not.EqualTo(0),
+                    $"{path} should render through the normal scene camera.");
             }
         }
 
-        static void AssertProjectionEyeCamera(
-            Transform projection,
-            string cameraName,
-            int projectionUnityLayer,
-            string expectedPositionBinding,
-            string expectedRotationBinding)
+        [Test]
+        public void CompositionLayerRenderScaleFramesTheCanvasCameraAtRuntime()
         {
-            Transform cameraTransform = projection.Find(cameraName);
-            Assert.That(cameraTransform, Is.Not.Null, cameraName);
+            GameObject panel = new("Composition Render Scale Test", typeof(RectTransform));
+            GameObject cameraObject = new("CanvasCamera");
 
-            Camera camera = cameraTransform.GetComponent<Camera>();
-            TrackedPoseDriver poseDriver = cameraTransform.GetComponent<TrackedPoseDriver>();
+            try
+            {
+                RectTransform rectTransform = panel.GetComponent<RectTransform>();
+                rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 600.0f);
+                rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 360.0f);
+                panel.transform.localScale = Vector3.one * 0.002f;
 
-            Assert.That(camera, Is.Not.Null, cameraName);
-            Assert.That(camera.cullingMask, Is.EqualTo(1 << projectionUnityLayer), cameraName);
-            Assert.That(camera.clearFlags, Is.EqualTo(CameraClearFlags.SolidColor), cameraName);
-            Assert.That(camera.backgroundColor, Is.EqualTo(Color.clear), cameraName);
-            Assert.That(camera.targetTexture, Is.Null, "Projection eye rigs generate textures at runtime.");
-            Assert.That(poseDriver, Is.Not.Null, cameraName);
-            Assert.That(poseDriver.positionAction.bindings[0].path, Is.EqualTo(expectedPositionBinding));
-            Assert.That(poseDriver.rotationAction.bindings[0].path, Is.EqualTo(expectedRotationBinding));
+                Canvas canvas = panel.AddComponent<Canvas>();
+                canvas.renderMode = RenderMode.WorldSpace;
+                canvas.enabled = true;
+                panel.AddComponent<GraphicRaycaster>();
+
+                TexturesExtension texturesExtension = panel.AddComponent<TexturesExtension>();
+                Camera canvasCamera = cameraObject.AddComponent<Camera>();
+                cameraObject.transform.SetParent(panel.transform, false);
+
+                BlockiverseCompositionLayerRenderScale renderScale =
+                    panel.AddComponent<BlockiverseCompositionLayerRenderScale>();
+                renderScale.Configure(canvas, null, texturesExtension, canvasCamera, 2.0f);
+
+                renderScale.ApplyRenderScale();
+
+                Assert.That(panel.GetComponent<GraphicRaycaster>(), Is.Null);
+                Assert.That(panel.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
+                Assert.That(panel.GetComponent<CanvasGroup>()?.blocksRaycasts, Is.True);
+                Assert.That(canvasCamera.enabled, Is.True);
+                Assert.That(canvasCamera.orthographic, Is.True);
+                Assert.That(canvasCamera.orthographicSize, Is.EqualTo(0.36f).Within(0.001f));
+                Assert.That(canvasCamera.aspect, Is.EqualTo(600.0f / 360.0f).Within(0.001f));
+                Assert.That(canvasCamera.cullingMask, Is.EqualTo(1 << panel.layer));
+                Assert.That(canvasCamera.targetTexture, Is.Not.Null);
+                Assert.That(canvasCamera.targetTexture.width, Is.EqualTo(1200));
+                Assert.That(canvasCamera.targetTexture.height, Is.EqualTo(720));
+                Assert.That(texturesExtension.LeftTexture, Is.SameAs(canvasCamera.targetTexture));
+                Assert.That(texturesExtension.RightTexture, Is.SameAs(canvasCamera.targetTexture));
+            }
+            finally
+            {
+                Object.DestroyImmediate(panel);
+            }
         }
 
         [Test]

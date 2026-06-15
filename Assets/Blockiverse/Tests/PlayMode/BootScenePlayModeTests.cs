@@ -145,14 +145,17 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(hudCanvas.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
             Assert.That(hudCanvas.GetComponent<GraphicRaycaster>(), Is.Null);
 
-            // The right controller drives UI + block targeting with a UI-enabled native ray interactor.
+            // Both controllers carry UI/block rays; the active dominant/tool hand owns visibility.
             GameObject rig = GameObject.Find(BlockiverseProject.XrRigRootName);
-            Transform interactionRay = rig.transform.Find("Camera Offset/Right Controller/Interaction Ray");
-            Assert.That(interactionRay, Is.Not.Null);
-            XRRayInteractor rayInteractor = interactionRay.GetComponent<XRRayInteractor>();
-            Assert.That(rayInteractor, Is.Not.Null);
-            Assert.That(rayInteractor.enableUIInteraction, Is.True);
-            Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False);
+            foreach (string controllerName in new[] { "Left Controller", "Right Controller" })
+            {
+                Transform interactionRay = rig.transform.Find($"Camera Offset/{controllerName}/Interaction Ray");
+                Assert.That(interactionRay, Is.Not.Null, controllerName);
+                XRRayInteractor rayInteractor = interactionRay.GetComponent<XRRayInteractor>();
+                Assert.That(rayInteractor, Is.Not.Null, controllerName);
+                Assert.That(rayInteractor.enableUIInteraction, Is.True, controllerName);
+                Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False, controllerName);
+            }
 
             CreativeWorldManager worldManager = UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             Assert.That(worldManager, Is.Not.Null);

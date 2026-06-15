@@ -1,4 +1,5 @@
 using System.Collections;
+using Blockiverse.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -19,6 +20,7 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] XRRayInteractor interactionRay;
         [SerializeField] XRRayInteractor teleportRay;
+        [SerializeField] BlockiverseControllerAnchor controllerAnchor;
         [SerializeField] BlockiverseControllerRole hand = BlockiverseControllerRole.Right;
 
         InputAction teleportModeAction;
@@ -28,6 +30,7 @@ namespace Blockiverse.VR
         public bool TeleportActive => teleportActive;
         public XRRayInteractor InteractionRay => interactionRay;
         public XRRayInteractor TeleportRay => teleportRay;
+        public BlockiverseControllerAnchor ControllerAnchor => controllerAnchor;
         public BlockiverseControllerRole Hand => hand;
 
         public void Configure(
@@ -35,12 +38,14 @@ namespace Blockiverse.VR
             BlockiverseComfortSettings settings,
             XRRayInteractor interaction,
             XRRayInteractor teleport,
-            BlockiverseControllerRole controllerRole)
+            BlockiverseControllerRole controllerRole,
+            BlockiverseControllerAnchor anchor = null)
         {
             inputRig = rig;
             comfortSettings = settings;
             interactionRay = interaction;
             teleportRay = teleport;
+            controllerAnchor = anchor != null ? anchor : controllerAnchor != null ? controllerAnchor : GetComponent<BlockiverseControllerAnchor>();
             hand = controllerRole;
             teleportModeAction = null;
             SetTeleportActive(false);
@@ -60,13 +65,21 @@ namespace Blockiverse.VR
 
         void Update()
         {
+            ResolveControllerAnchor();
             bool shouldAim = IsInTeleportMode() && IsTeleportModeHeld();
             SetTeleportActive(shouldAim);
+        }
+
+        void ResolveControllerAnchor()
+        {
+            if (controllerAnchor == null)
+                controllerAnchor = GetComponent<BlockiverseControllerAnchor>();
         }
 
         bool IsInTeleportMode()
         {
             return inputRig != null &&
+                BlockiverseRuntimeState.AllowWorldInput &&
                 !inputRig.LocomotionSuppressed &&
                 comfortSettings != null &&
                 comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Teleport;
@@ -129,11 +142,29 @@ namespace Blockiverse.VR
             // Toggle whole GameObjects so each ray's interactor and its line visual show/hide
             // together. On release, keep the teleport ray alive for one frame so XRI can deliver
             // SelectExited to the TeleportationArea before regular UI/block interaction resumes.
-            if (teleportRay != null && teleportRay.gameObject.activeSelf != active)
-                teleportRay.gameObject.SetActive(active);
+            bool hasTrackedPose = HasUsableRayPose();
+            bool showTeleportRay = active && hasTrackedPose;
+            bool showInteractionRay = enableInteractionRay && hasTrackedPose && IsActiveInteractionHand();
 
-            if (interactionRay != null && interactionRay.gameObject.activeSelf != enableInteractionRay)
-                interactionRay.gameObject.SetActive(enableInteractionRay);
+            if (teleportRay != null && teleportRay.gameObject.activeSelf != showTeleportRay)
+                teleportRay.gameObject.SetActive(showTeleportRay);
+
+            if (interactionRay != null && interactionRay.gameObject.activeSelf != showInteractionRay)
+                interactionRay.gameObject.SetActive(showInteractionRay);
+        }
+
+        bool HasUsableRayPose()
+        {
+            if (!Application.isPlaying)
+                return true;
+
+            ResolveControllerAnchor();
+            return controllerAnchor == null || controllerAnchor.IsTracked;
+        }
+
+        bool IsActiveInteractionHand()
+        {
+            return inputRig == null || inputRig.ActiveToolHand == hand;
         }
 
         void CancelReleaseFrameRoutine()

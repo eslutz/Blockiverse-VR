@@ -16,8 +16,8 @@ These behaviors are implementation requirements for Creative mode because they a
 | Area | Required behavior |
 |---|---|
 | Movement | Use local XR locomotion that never waits on network round trips: continuous movement, snap or continuous turn, height reset, and target-based teleport where enabled. |
-| Block targeting | Use native XR ray interaction for block highlight, placement preview, place, and remove actions. |
-| UI safety | Suppress block placement/removal while the controller ray is interacting with UI. |
+| Block targeting | Use the active dominant/tool-hand native XR ray interaction for block highlight, placement preview, place, and remove actions. |
+| UI safety | Suppress block placement/removal while whichever hand owns the active interaction ray is interacting with UI. |
 | Edit toggle | Provide a local block-editing toggle so builders can move and use menus without accidental edits. |
 | Player collision | Prevent placement inside the local player collision/head space. |
 | Multiplayer | Clients send edit commands to the host; only accepted host deltas apply final world changes. |

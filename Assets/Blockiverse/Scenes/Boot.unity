@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8cfa68dcc6134fb7b7ed4184e1542c77, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeWorldManager
   chunkMaterial: {fileID: 2100000, guid: 4d5cd674d4ec742bfa27f01c9b1f16fe, type: 2}
   textureSet: enhanced
@@ -179,7 +179,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5226686041b249e1b3cea8295edab68d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeInteractionController
 --- !u!114 &597296393
 MonoBehaviour:
@@ -191,7 +191,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 41c4cf1aef1d8e774d101b4493bfc1cb, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.PerformanceStatsOverlay
   worldRenderer: {fileID: 597296394}
   visible: 1
@@ -207,7 +207,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: df0c8c8e05f54c27995b3631d01d2508, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.VoxelWorldRenderer
 --- !u!4 &597296395
 Transform:
@@ -251,7 +251,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 83e4e6cca11330d4088d729ab4fc9d9f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.XRInteractionManager
   m_StartingHoverFilters: []
   m_StartingSelectFilters: []
@@ -298,7 +298,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
   m_FirstSelected: {fileID: 0}
   m_sendNavigationEvents: 1
@@ -328,7 +328,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ab68ce6587aab0146b8dabefbd806791, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.XRUIInputModule
   m_SendPointerHoverToParent: 1
   m_ClickSpeed: 0.3
@@ -441,7 +441,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3200a915c7a454a4b92619f5ecfab448, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.MetaPlatform::Blockiverse.MetaPlatform.BlockiverseUserAgeCategoryService
 --- !u!4 &1411919007
 Transform:
@@ -644,35 +644,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIScrollInput.m_InputAction.m_Id
-      value: fc0c77f7-1b1a-49b4-a038-594db14f5c1f
+      value: c02a8b58-f9e4-4fa6-afc7-775952a6a0b2
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionValue.m_Id
-      value: ec21d083-da44-418f-bac8-df4bd58cccc8
+      value: 2f628e13-1aed-4ce1-b113-00e377b5a0d2
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionValue.m_Id
-      value: ddddbbc8-6b4b-4579-990d-ca176fefd57a
+      value: 23a3142a-caef-495f-8909-fdca705b5c10
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_ActivateInput.m_InputActionValue.m_Id
-      value: bfbe4d32-0b43-40e9-b6ae-03544cf8960c
+      value: b4de6a1c-add8-48a7-a9b9-31caec25db2b
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionPerformed.m_Id
-      value: bba89204-6da0-4fd0-9205-e50eed0ab09d
+      value: 69845909-1f69-438a-a3d5-0165c36cbd16
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionPerformed.m_Id
-      value: 836fac38-bacf-4ae9-acbb-2cfe02d68430
+      value: eb04f766-f05c-4fcf-afcd-58f7ca728629
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_ActivateInput.m_InputActionPerformed.m_Id
-      value: 28a4f3b0-9544-42dd-b0e3-b29813af59b5
+      value: 2b84da9f-9705-4126-af5f-53a77431fe69
       objectReference: {fileID: 0}
     - target: {fileID: 746186301990953483, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionReferencePerformed
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: d02bc6aa31d3b470881403effa87638a, type: 2}
     - target: {fileID: 755006980021980888, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -836,7 +836,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1299769022157528344, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
-      value:
+      value: 
       objectReference: {fileID: 597296392}
     - target: {fileID: 1304236064946658406, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -1084,11 +1084,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2080850676230912890, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_LeftHandTurnInput.m_InputAction.m_Id
-      value: eda206a0-3166-470e-8e3b-7e3eb8b7bda7
+      value: 6380fc55-949f-498d-9110-09aef42732bf
       objectReference: {fileID: 0}
     - target: {fileID: 2080850676230912890, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_RightHandTurnInput.m_InputAction.m_Id
-      value: 2f6a5f2d-8127-42e6-97af-965f15aea397
+      value: 6732ad32-0402-43c1-8851-28ec9268950e
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_RaycastMask.m_Bits
@@ -1096,35 +1096,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIScrollInput.m_InputAction.m_Id
-      value: 1335ca99-0d08-4954-9c6a-780f90650974
+      value: 644d63f8-6e43-45d3-a3a8-1fbd410626bc
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionValue.m_Id
-      value: 87c45802-0517-4aa6-8da5-9377670cd391
+      value: 8b36505d-7d0f-4e35-846c-759e68780cc5
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionValue.m_Id
-      value: cc79da0e-80e3-4290-96d2-2e0dc1977468
+      value: 3b6b5d1b-e873-46a6-beb7-309df095f32a
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_ActivateInput.m_InputActionValue.m_Id
-      value: 55cec16d-4851-4598-8223-b4de66cbf9d4
+      value: 83f7edc6-c0ea-44de-9dae-92fce0e5cb26
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionPerformed.m_Id
-      value: 1c64605d-11ed-4c78-ac13-ae6d4058b9fa
+      value: f2dd9ade-8c10-4a57-a971-632dfb88f2a3
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionPerformed.m_Id
-      value: 67cef0a3-05ea-415c-a478-d7cb1f0002d5
+      value: 8da89331-f925-4180-804f-c00d28068c1b
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_ActivateInput.m_InputActionPerformed.m_Id
-      value: c4215702-94a6-4f4d-83c7-7d962c69e851
+      value: dba93399-3964-425e-83f5-9201daedf950
       objectReference: {fileID: 0}
     - target: {fileID: 2090990655403325318, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionReferencePerformed
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: 7ac78ed7ecf8f4d819c3175620d7846a, type: 2}
     - target: {fileID: 2096233381470287714, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -1596,7 +1596,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3695208377462190846, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
-      value:
+      value: 
       objectReference: {fileID: 597296392}
     - target: {fileID: 3697849082640048523, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -1829,6 +1829,34 @@ PrefabInstance:
     - target: {fileID: 4460085163543048326, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
       value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_UIScrollInput.m_InputAction.m_Id
+      value: 4c4322c5-d585-4d59-b02a-af3b85463696
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_SelectInput.m_InputActionValue.m_Id
+      value: e635d7e3-b780-40a4-ad12-07ae289cb07a
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_UIPressInput.m_InputActionValue.m_Id
+      value: aaf35779-f5ba-4122-96c6-818b70f79d48
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_ActivateInput.m_InputActionValue.m_Id
+      value: fd5b8d4e-4ec1-44c1-b361-aac0d70fd841
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_SelectInput.m_InputActionPerformed.m_Id
+      value: e098d9bd-9110-4412-9cda-77b0b2ac3ee5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_UIPressInput.m_InputActionPerformed.m_Id
+      value: ca82724d-a18c-44a2-93ba-47f5266c61ea
+      objectReference: {fileID: 0}
+    - target: {fileID: 4470226320184012231, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_ActivateInput.m_InputActionPerformed.m_Id
+      value: 7bdbf3f8-7df4-489f-bf81-6d48d022e283
       objectReference: {fileID: 0}
     - target: {fileID: 4470805815322448395, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -2228,11 +2256,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6090993841984651869, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_LeftHandMoveInput.m_InputAction.m_Id
-      value: 95fe400f-c1d9-4a60-89d9-c6f0278a857e
+      value: ce6a04a6-0e98-49c4-9992-f46a9d023870
       objectReference: {fileID: 0}
     - target: {fileID: 6090993841984651869, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_RightHandMoveInput.m_InputAction.m_Id
-      value: 839cccdd-285b-48cc-9f7e-de1f8bc3176b
+      value: e7d57cd0-92ff-4e24-85ca-b079bef73997
       objectReference: {fileID: 0}
     - target: {fileID: 6091960444635584133, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -2528,11 +2556,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7163944132346642221, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_LeftHandTurnInput.m_InputAction.m_Id
-      value: 8a598fa9-a974-47cb-987f-97e03c3b37bb
+      value: 1a5569c1-768b-432d-9f8a-bcd6673a49b2
       objectReference: {fileID: 0}
     - target: {fileID: 7163944132346642221, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_RightHandTurnInput.m_InputAction.m_Id
-      value: 206f2ab3-0082-4761-9034-e3eefa1b4aec
+      value: 3678ec6d-e150-46ba-9dbb-8bbb290c6bf4
       objectReference: {fileID: 0}
     - target: {fileID: 7174591103864808600, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -2728,39 +2756,39 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIScrollInput.m_InputAction.m_Id
-      value: 0f95cabf-7591-48d8-9919-a3468ca4a1a6
+      value: 53be06d5-5a49-41af-8dab-213a606c057d
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionValue.m_Id
-      value: bf7e55e5-d616-4454-aa0b-d1904e20dff6
+      value: 51334aca-36ba-4813-b593-3496ebe5eed3
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionValue.m_Id
-      value: ee83115e-66e7-42c5-bd99-41b887c42109
+      value: 6cd027bc-f9af-421d-8e7e-c608ad7881c8
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIScrollInput.m_InputActionReference
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: 2eb8f5a703de4419a962bbfabe645425, type: 2}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_ActivateInput.m_InputActionValue.m_Id
-      value: 5021eb36-2983-417e-a6dc-4bcc1b5636a3
+      value: ae6658df-7b68-4b1b-8ab3-f7a39a993216
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_SelectInput.m_InputActionPerformed.m_Id
-      value: 099d6bb9-8d36-4c67-a2ee-1fceb6063b4f
+      value: 10b633a5-1b11-4396-906b-50ee6f7b3cee
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionPerformed.m_Id
-      value: 661b3e4e-83cb-40c3-bab6-8a0ca279780a
+      value: 980d5ed1-37fa-4070-aa42-ad99b3156d7a
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_ActivateInput.m_InputActionPerformed.m_Id
-      value: 4bd96531-0563-4398-86d0-4efd8f7d5328
+      value: d704a74f-be25-4d86-b2c8-2533630173c0
       objectReference: {fileID: 0}
     - target: {fileID: 8050299502613259568, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_UIPressInput.m_InputActionReferencePerformed
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: 6c3010da7a31044f2b3087a694aa9c5a, type: 2}
     - target: {fileID: 8050621715996789174, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -2848,7 +2876,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8273465101139274317, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
-      value:
+      value: 
       objectReference: {fileID: 597296392}
     - target: {fileID: 8274067584522132180, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -3084,11 +3112,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9154700309049800205, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
-      value:
+      value: 
       objectReference: {fileID: 597296392}
     - target: {fileID: 9184814749599219660, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
-      value:
+      value: 
       objectReference: {fileID: 597296392}
     - target: {fileID: 9192080814463644850, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Layer
@@ -3124,7 +3152,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 917fc1f9e1f244dab3d301e086932df2, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
 --- !u!1 &1590357433
 GameObject:
@@ -3235,7 +3263,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 534ab3f30ade94c94b13931f1bd0b4cc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.BlockiverseLightingCycleController
   worldTimeClock: {fileID: 1590357437}
   sunLight: {fileID: 1590357434}
@@ -3250,7 +3278,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9406921a9e6ff4e63b355ebb1cfb4aad, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.WorldTimeClock
   dayLengthSeconds: 1200
   normalizedTime: 0.22

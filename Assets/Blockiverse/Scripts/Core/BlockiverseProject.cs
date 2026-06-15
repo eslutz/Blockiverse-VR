@@ -4,7 +4,6 @@ namespace Blockiverse.Core
     {
         public const string ProductName = "Blockiverse VR";
         public const string CompanyName = "Eric Slutz";
-        public const bool UseXrUiInteractionLabStartupOverride = false;
         public const string AndroidApplicationIdentifier = "dev.ericslutz.blockiversevr";
         public const string XrRigRootName = "BlockiverseXRRig";
         public const string CreativeWorldRootName = "Creative World";
@@ -26,7 +25,6 @@ namespace Blockiverse.Core
         public const string VfxParticleMaterialPath = "Assets/Blockiverse/Materials/BlockiverseVfxParticle.mat";
         public const string ChunkAtlasMaterialPath = "Assets/Blockiverse/Materials/BlockiverseChunkAtlas.mat";
         public const string InteractionLayerName = "BlockiverseInteractable";
-        public const int CompositionPointerProjectionLayerIndex = 9;
         public const int InteractionLayerIndex = 10;
         public const int InteractionLayerMask = 1 << InteractionLayerIndex;
     }

@@ -111,6 +111,14 @@ hzdb device list
 
 `hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`; the expected current executable path is `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`. Prefer `hzdb` for Quest device discovery, APK install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 
+For Quest pointer/ray changes, validate the normal development APK in the real game title-menu and New World flow, not a stub diagnostic scene or diagnostic APK. Confirm both Comfort dominant-hand settings:
+
+- Right-handed mode shows one stable interaction ray from the right controller/tool hand; the support-hand interaction ray remains hidden except while teleport owns a locomotion ray.
+- Left-handed mode shows one stable interaction ray from the left controller/tool hand; the support-hand interaction ray remains hidden except while teleport owns a locomotion ray.
+- Menu hover suppresses block editing for the active ray, missed menu rays remain short, world targeting restores normal reach after the menu is left, and controller/ray visuals render through the normal scene camera while menu/HUD surfaces may use Quad composition layers.
+
+Remove any temporary ray diagnostic scenes or build scripts once the issue is reproduced in the real game path. Stub ray worlds are not part of the validation gate.
+
 ## Test selection rules
 
 - Docs, governance, PR templates, issue templates, and markdown-only policy changes: run the Docs/Repo tier only.

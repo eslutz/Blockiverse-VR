@@ -66,20 +66,9 @@ namespace Blockiverse.Editor
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
             EnsureMetaPlatformCompliance(scene);
-            if (BlockiverseProject.UseXrUiInteractionLabStartupOverride)
-            {
-                RemoveRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
-                RemoveRootGameObject(scene, NetworkManagerRootName);
-                RemoveRootGameObject(scene, InteractionTestBlockName);
-                EnsureXrUiInteractionLab(scene);
-            }
-            else
-            {
-                RemoveRootGameObject(scene, XrUiInteractionLabName);
-                EnsureBootSceneCreativeWorld(scene);
-                EnsureBootSceneNetworkStack(scene);
-                RemoveRootGameObject(scene, InteractionTestBlockName);
-            }
+            EnsureBootSceneCreativeWorld(scene);
+            EnsureBootSceneNetworkStack(scene);
+            RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
@@ -261,6 +250,7 @@ namespace Blockiverse.Editor
                 .Where(scene => !string.IsNullOrWhiteSpace(scene.path))
                 .Where(scene => requiredScenes.All(requiredScene => requiredScene.path != scene.path))
                 .Where(scene => scene.path != BlockiverseProject.MultiplayerTestScenePath)
+                .Where(scene => !scene.path.StartsWith("Assets/Blockiverse/Scenes/Ray", StringComparison.Ordinal))
                 .GroupBy(scene => scene.path)
                 .Select(group => group.First())
                 .ToList();

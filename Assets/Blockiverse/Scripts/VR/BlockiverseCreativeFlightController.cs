@@ -195,11 +195,9 @@ namespace Blockiverse.VR
             Transform root = inputRig != null ? inputRig.transform : transform;
             Transform cameraOffset = root.Find("Camera Offset");
             rightHandAimSource =
-                cameraOffset != null ? cameraOffset.Find("Right Aim Pose") : null;
+                cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
             if (rightHandAimSource == null)
-                rightHandAimSource = root.Find("Right Aim Pose");
-            if (rightHandAimSource == null && cameraOffset != null)
-                rightHandAimSource = cameraOffset.Find("Right Controller");
+                rightHandAimSource = root.Find("Right Controller");
             if (rightHandAimSource == null)
                 rightHandAimSource = root;
 

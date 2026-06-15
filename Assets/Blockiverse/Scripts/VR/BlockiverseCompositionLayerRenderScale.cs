@@ -1,6 +1,8 @@
 using Unity.XR.CompositionLayers.Extensions;
 using Unity.XR.CompositionLayers;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 
 namespace Blockiverse.VR
 {
@@ -8,6 +10,7 @@ namespace Blockiverse.VR
     public sealed class BlockiverseCompositionLayerRenderScale : MonoBehaviour
     {
         const float MinimumRenderScale = 1.0f;
+        const string InteractableUIMirrorTypeName = "Unity.XR.CompositionLayers.UIInteraction.InteractableUIMirror";
 
         [SerializeField] float renderScale = 2.0f;
         [SerializeField] Canvas sourceCanvas;
@@ -35,6 +38,11 @@ namespace Blockiverse.VR
             renderScale = Mathf.Max(MinimumRenderScale, scale);
         }
 
+        void Awake()
+        {
+            DisableCompositionLayerProxyInput();
+        }
+
         void Start()
         {
             ApplyRenderScale();
@@ -55,8 +63,9 @@ namespace Blockiverse.VR
             ReleaseOwnedRenderTexture();
         }
 
-        void ApplyRenderScale()
+        public void ApplyRenderScale()
         {
+            DisableCompositionLayerProxyInput();
             ResolveReferences();
 
             if (sourceCanvas == null || texturesExtension == null || mirrorCamera == null)
@@ -70,6 +79,8 @@ namespace Blockiverse.VR
             RectTransform rectTransform = sourceCanvas.GetComponent<RectTransform>();
             if (rectTransform == null)
                 return;
+
+            ConfigureMirrorCamera(rectTransform);
 
             int width = Mathf.Max(1, Mathf.CeilToInt(rectTransform.rect.width * renderScale));
             int height = Mathf.Max(1, Mathf.CeilToInt(rectTransform.rect.height * renderScale));
@@ -93,6 +104,28 @@ namespace Blockiverse.VR
             mirrorCamera.targetTexture = renderTexture;
             texturesExtension.LeftTexture = renderTexture;
             texturesExtension.RightTexture = renderTexture;
+        }
+
+        void ConfigureMirrorCamera(RectTransform rectTransform)
+        {
+            if (mirrorCamera.transform.parent != sourceCanvas.transform)
+                mirrorCamera.transform.SetParent(sourceCanvas.transform, false);
+
+            mirrorCamera.transform.localScale = Vector3.one;
+            mirrorCamera.transform.localPosition = new Vector3(0.0f, 0.0f, -100.0f);
+            mirrorCamera.transform.localRotation = Quaternion.identity;
+            mirrorCamera.gameObject.layer = sourceCanvas.gameObject.layer;
+            mirrorCamera.orthographic = true;
+            mirrorCamera.nearClipPlane = 0.0f;
+            mirrorCamera.clearFlags = CameraClearFlags.SolidColor;
+            mirrorCamera.backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.001f);
+            mirrorCamera.cullingMask = 1 << sourceCanvas.gameObject.layer;
+
+            Rect rect = rectTransform.rect;
+            float canvasWidth = Mathf.Max(0.001f, Mathf.Abs(rect.width * rectTransform.lossyScale.x));
+            float canvasHeight = Mathf.Max(0.001f, Mathf.Abs(rect.height * rectTransform.lossyScale.y));
+            mirrorCamera.orthographicSize = canvasHeight * 0.5f;
+            mirrorCamera.aspect = canvasWidth / canvasHeight;
         }
 
         void ResolveReferences()
@@ -130,6 +163,55 @@ namespace Blockiverse.VR
                     }
                 }
             }
+        }
+
+        void DisableCompositionLayerProxyInput()
+        {
+            DisableComponentByTypeName(gameObject, InteractableUIMirrorTypeName);
+
+            ResolveReferences();
+            if (sourceCanvas == null)
+                return;
+
+            GraphicRaycaster legacyRaycaster = sourceCanvas.GetComponent<GraphicRaycaster>();
+            if (legacyRaycaster != null)
+                DestroyComponent(legacyRaycaster);
+
+            if (sourceCanvas.GetComponent<TrackedDeviceGraphicRaycaster>() == null)
+                sourceCanvas.gameObject.AddComponent<TrackedDeviceGraphicRaycaster>();
+
+            CanvasGroup inputGate = sourceCanvas.GetComponent<CanvasGroup>();
+            if (inputGate == null)
+                inputGate = sourceCanvas.gameObject.AddComponent<CanvasGroup>();
+
+            inputGate.interactable = true;
+            inputGate.blocksRaycasts = true;
+            inputGate.ignoreParentGroups = false;
+        }
+
+        static void DisableComponentByTypeName(GameObject root, string typeName)
+        {
+            if (root == null)
+                return;
+
+            foreach (MonoBehaviour behaviour in root.GetComponents<MonoBehaviour>())
+            {
+                if (behaviour == null || behaviour.GetType().FullName != typeName)
+                    continue;
+
+                behaviour.enabled = false;
+            }
+        }
+
+        static void DestroyComponent(Component component)
+        {
+            if (component == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(component);
+            else
+                DestroyImmediate(component);
         }
 
         void ReleaseOwnedRenderTexture()

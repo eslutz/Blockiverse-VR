@@ -25,14 +25,17 @@ namespace Blockiverse.Tests.EditMode
         const string PerformanceStatsOverlayPath = "Assets/Blockiverse/Scripts/Gameplay/PerformanceStatsOverlay.cs";
         const string BlockiverseInputRigPath = "Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs";
         const string BlockiverseControllerHapticsPath = "Assets/Blockiverse/Scripts/VR/BlockiverseControllerHaptics.cs";
+        const string AndroidActivityTitleRuntimePath = "Assets/Blockiverse/Scripts/Core/BlockiverseAndroidActivityTitle.cs";
         const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         const string OculusProjectConfigPath = "Assets/Oculus/OculusProjectConfig.asset";
         const string LegacyAndroidResourcePath = "Assets/Plugins/Android/res";
         const string OculusRuntimeSettingsPath = "Assets/Resources/OculusRuntimeSettings.asset";
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
+        const string NetcodeProjectSettingsPath = "ProjectSettings/NetcodeForGameObjects.asset";
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
+        const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
         const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
         const string XrRigBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs";
         static readonly string[] EngineFreeAsmdefPaths =
@@ -66,13 +69,10 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void NetcodeDefaultNetworkPrefabGenerationIsDisabled()
         {
-            Type settingsType = Type.GetType(
-                "Unity.Netcode.Editor.Configuration.NetcodeForGameObjectsProjectSettings, Unity.Netcode.Editor");
-            Assert.That(settingsType, Is.Not.Null);
+            Assert.That(File.Exists(NetcodeProjectSettingsPath), Is.True);
+            string settings = File.ReadAllText(NetcodeProjectSettingsPath);
 
-            object instance = settingsType.GetProperty("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            object value = settingsType.GetProperty("GenerateDefaultNetworkPrefabs", BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance);
-            Assert.That(value, Is.EqualTo(false));
+            StringAssert.Contains("GenerateDefaultNetworkPrefabs: 0", settings);
         }
 
         [Test]
@@ -131,6 +131,28 @@ namespace Blockiverse.Tests.EditMode
                 EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path),
                 Is.EqualTo(new[] { BootScenePath }),
                 "Player builds must enable only the generated Boot scene; test scenes stay editor-only.");
+        }
+
+        [Test]
+        public void RayDiagnosticWorldsAndBuildEntrypointsAreRemoved()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+            string buildSmoke = File.ReadAllText(BuildSmokePath);
+            string project = File.ReadAllText("Assets/Blockiverse/Scripts/Core/BlockiverseProject.cs");
+
+            Assert.That(AssetDatabase.FindAssets("RayDiagnostic t:Scene", new[] { "Assets/Blockiverse/Scenes" }), Is.Empty);
+            Assert.That(AssetDatabase.FindAssets("BlockiverseXrUiInteractionLab t:Script", new[] { "Assets/Blockiverse/Scripts/VR" }), Is.Empty);
+            Assert.That(AssetDatabase.FindAssets("BlockiverseMenuDiagnosticStartup t:Script", new[] { "Assets/Blockiverse/Scripts/VR" }), Is.Empty);
+            Assert.That(project, Does.Not.Contain("RayDiagnostic"));
+            Assert.That(project, Does.Not.Contain("UseXrUiInteractionLabStartupOverride"));
+            Assert.That(sceneBootstrapper, Does.Not.Contain("RayDiagnostic"));
+            Assert.That(sceneBootstrapper, Does.Not.Contain("XrUiInteractionLab"));
+            Assert.That(sceneBootstrapper, Does.Not.Contain("MenuDiagnosticStartup"));
+            Assert.That(buildSmoke, Does.Not.Contain("BuildRayDiagnostic"));
+            Assert.That(
+                EditorBuildSettings.scenes.Select(scene => scene.path),
+                Has.None.Matches<string>(path => path.Contains("RayDiagnostic")),
+                "Diagnostic stub scenes must not be part of the generated build scene list.");
         }
 
         [Test]
@@ -217,7 +239,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigTurnProvidersAreSuppressedWhileTurnHandHoversUi()
+        public void XrRigTurnProvidersAreSuppressedWhileToolHandHoversUi()
         {
             string inputRig = File.ReadAllText(BlockiverseInputRigPath);
 
@@ -225,6 +247,7 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("rightInteractionRay", inputRig);
             StringAssert.Contains("UpdateTurnProviderEnabledState()", inputRig);
             StringAssert.Contains("IsActiveTurnRayOverUi()", inputRig);
+            StringAssert.Contains("GetToolHand()", inputRig);
             StringAssert.Contains("interactionRay.IsOverUIGameObject()", inputRig);
             StringAssert.Contains("!smoothTurn && !suppressTurnForUi", inputRig);
             StringAssert.Contains("smoothTurn && !suppressTurnForUi", inputRig);
@@ -331,6 +354,10 @@ namespace Blockiverse.Tests.EditMode
 
             string activityName = activityNodes[0].Attributes["android:name"]?.Value;
             Assert.That(activityName, Is.EqualTo("com.unity3d.player.UnityPlayerGameActivity"));
+            Assert.That(
+                activityNodes[0].Attributes["android:label"]?.Value,
+                Is.EqualTo("@string/app_name"),
+                "Quest shell quit and unknown-source surfaces should resolve the activity title to Blockiverse VR.");
 
             XmlNode supportedDevicesNode = manifest.SelectSingleNode(
                 "/manifest/application/meta-data[@android:name='com.oculus.supportedDevices']",
@@ -375,6 +402,26 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void AndroidRuntimeTaskTitleUsesProductName()
+        {
+            Assert.That(File.Exists(AndroidActivityTitleRuntimePath), Is.True,
+                "The Quest quit panel can read the live Android activity/task title even when the launcher manifest label is correct.");
+
+            Type titleType = Type.GetType("Blockiverse.Core.BlockiverseAndroidActivityTitle, Blockiverse.Core");
+            Assert.That(titleType, Is.Not.Null);
+
+            FieldInfo titleField = titleType.GetField("Title", BindingFlags.Public | BindingFlags.Static);
+            Assert.That(titleField, Is.Not.Null);
+            Assert.That(titleField.GetRawConstantValue(), Is.EqualTo(BlockiverseProject.ProductName));
+
+            string source = File.ReadAllText(AndroidActivityTitleRuntimePath);
+            StringAssert.Contains("RuntimeInitializeOnLoadMethod", source);
+            StringAssert.Contains("setTitle", source);
+            StringAssert.Contains("ActivityManager$TaskDescription", source);
+            StringAssert.Contains("setTaskDescription", source);
+        }
+
+        [Test]
         public void MetaRuntimeSettingsDoNotRequestUnusedFaceTracking()
         {
             var runtimeSettings = AssetDatabase.LoadAssetAtPath<ScriptableObject>(OculusRuntimeSettingsPath);
@@ -384,6 +431,30 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(GetBool(serializedSettings, "requestsVisualFaceTracking"), Is.False);
             Assert.That(GetBool(serializedSettings, "requestsAudioFaceTracking"), Is.False);
             Assert.That(GetBool(serializedSettings, "enableFaceTrackingVisemesOutput"), Is.False);
+        }
+
+        static string ExtractMethodSource(string source, string signature)
+        {
+            int start = source.IndexOf(signature, StringComparison.Ordinal);
+            Assert.That(start, Is.GreaterThanOrEqualTo(0), $"Missing method signature: {signature}");
+
+            int bodyStart = source.IndexOf('{', start);
+            Assert.That(bodyStart, Is.GreaterThanOrEqualTo(0), $"Missing method body: {signature}");
+
+            int depth = 0;
+            for (int index = bodyStart; index < source.Length; index++)
+            {
+                if (source[index] == '{')
+                    depth++;
+                else if (source[index] == '}')
+                    depth--;
+
+                if (depth == 0)
+                    return source.Substring(start, index - start + 1);
+            }
+
+            Assert.Fail($"Unterminated method body: {signature}");
+            return string.Empty;
         }
 
         static bool GetBool(SerializedObject serializedObject, string propertyName)

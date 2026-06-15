@@ -11,6 +11,7 @@ namespace Blockiverse.VR
     public sealed class BlockiverseSettingsPersistence : MonoBehaviour
     {
         const string KeyPrefix = "Blockiverse.Settings.";
+        public const string DominantHandPrefsKey = KeyPrefix + "DominantHand";
         const int VignettePrefsVersion = 2;
         const float PollIntervalSeconds = 5.0f;
 
@@ -69,7 +70,7 @@ namespace Blockiverse.VR
                 if (!System.Enum.IsDefined(typeof(BlockiverseLocomotionMode), comfortSettings.LocomotionMode))
                     comfortSettings.LocomotionMode = BlockiverseLocomotionMode.Glide;
                 comfortSettings.DominantHand = (BlockiverseControllerRole)PlayerPrefs.GetInt(
-                    KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
+                    DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 if (!System.Enum.IsDefined(typeof(BlockiverseControllerRole), comfortSettings.DominantHand))
                     comfortSettings.DominantHand = BlockiverseControllerRole.Right;
                 comfortSettings.ToggleToMineEnabled = PlayerPrefs.GetInt(
@@ -129,7 +130,7 @@ namespace Blockiverse.VR
             if (comfortSettings != null)
             {
                 PlayerPrefs.SetInt(KeyPrefix + "LocomotionMode", (int)comfortSettings.LocomotionMode);
-                PlayerPrefs.SetInt(KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
+                PlayerPrefs.SetInt(DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);

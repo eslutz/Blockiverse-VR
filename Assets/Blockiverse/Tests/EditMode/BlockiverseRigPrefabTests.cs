@@ -33,6 +33,9 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class BlockiverseRigPrefabTests
     {
+        const string ControllerRayOriginName = "Ray Origin";
+        static readonly Quaternion ControllerRayOriginLocalRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
+
         [Test]
         public void XrRigPrefabIsWiredForQuestControllerAnchorsAndHaptics()
         {
@@ -145,8 +148,6 @@ namespace Blockiverse.Tests.EditMode
 
                 AssertControllerPoseDriver(instance, "Left Controller", "<XRController>{LeftHand}/devicePosition", "<XRController>{LeftHand}/deviceRotation");
                 AssertControllerPoseDriver(instance, "Right Controller", "<XRController>{RightHand}/devicePosition", "<XRController>{RightHand}/deviceRotation");
-                AssertAimPoseDriver(instance, "Left Aim Pose", "<XRController>{LeftHand}/pointerPosition", "<XRController>{LeftHand}/pointerRotation");
-                AssertAimPoseDriver(instance, "Right Aim Pose", "<XRController>{RightHand}/pointerPosition", "<XRController>{RightHand}/pointerRotation");
             }
             finally
             {
@@ -164,12 +165,14 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
+            BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
             Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
             BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
             Assert.That(settings, Is.Not.Null);
+            Assert.That(dominantHandResolver, Is.Not.Null);
             Assert.That(settings.VignetteEnabled, Is.False, "Generated rig should not start with the motion vignette enabled over the title/menu.");
             Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f), "Generated rig should start with a fully open vignette strength.");
             Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f), "Generated rig should leave the title/menu view unobscured.");
@@ -328,12 +331,13 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void InputRigSuppressesTurnWhileTurnHandRayHoversUi()
+        public void InputRigSuppressesTurnWhileToolHandRayHoversUi()
         {
             string source = File.ReadAllText("Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs");
 
             StringAssert.Contains("UpdateTurnProviderEnabledState()", source);
             StringAssert.Contains("IsActiveTurnRayOverUi()", source);
+            StringAssert.Contains("GetToolHand()", source);
             StringAssert.Contains("IsOverUIGameObject()", source);
             StringAssert.Contains("!smoothTurn && !suppressTurnForUi", source);
             StringAssert.Contains("smoothTurn && !suppressTurnForUi", source);
@@ -434,6 +438,9 @@ namespace Blockiverse.Tests.EditMode
                 InputAction rightUiPress = inputRig.InputActions
                     .FindActionMap(BlockiverseInputActionNames.RightHandMap)
                     .FindAction(BlockiverseInputActionNames.UiPress);
+                InputAction leftUiPress = inputRig.InputActions
+                    .FindActionMap(BlockiverseInputActionNames.LeftHandMap)
+                    .FindAction(BlockiverseInputActionNames.UiPress);
                 InputAction rightTeleportSelect = inputRig.InputActions
                     .FindActionMap(BlockiverseInputActionNames.RightHandMap)
                     .FindAction(BlockiverseInputActionNames.TeleportSelect);
@@ -447,25 +454,72 @@ namespace Blockiverse.Tests.EditMode
                 XRRayInteractor rightTeleportRay = instance.transform
                     .Find("Camera Offset/Right Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
+                XRRayInteractor leftInteractionRay = instance.transform
+                    .Find("Camera Offset/Left Controller/Interaction Ray")
+                    ?.GetComponent<XRRayInteractor>();
                 XRRayInteractor leftTeleportRay = instance.transform
                     .Find("Camera Offset/Left Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
+                Transform rightController = instance.transform.Find("Camera Offset/Right Controller");
+                Transform leftController = instance.transform.Find("Camera Offset/Left Controller");
+                Transform rightRayOrigin = instance.transform.Find("Camera Offset/Right Ray Origin");
+                Transform leftRayOrigin = instance.transform.Find("Camera Offset/Left Ray Origin");
+
+                XRInteractorLineVisual rightInteractionLineVisual = rightInteractionRay?.GetComponent<XRInteractorLineVisual>();
+                XRInteractorLineVisual rightTeleportLineVisual = rightTeleportRay?.GetComponent<XRInteractorLineVisual>();
+                XRInteractorLineVisual leftInteractionLineVisual = leftInteractionRay?.GetComponent<XRInteractorLineVisual>();
+                XRInteractorLineVisual leftTeleportLineVisual = leftTeleportRay?.GetComponent<XRInteractorLineVisual>();
 
                 Assert.That(rightInteractionRay, Is.Not.Null);
                 Assert.That(rightTeleportRay, Is.Not.Null);
+                Assert.That(leftInteractionRay, Is.Not.Null);
                 Assert.That(leftTeleportRay, Is.Not.Null);
+                Assert.That(rightInteractionLineVisual, Is.Not.Null);
+                Assert.That(rightTeleportLineVisual, Is.Not.Null);
+                Assert.That(leftInteractionLineVisual, Is.Not.Null);
+                Assert.That(leftTeleportLineVisual, Is.Not.Null);
+                Assert.That(rightController, Is.Not.Null);
+                Assert.That(leftController, Is.Not.Null);
+                Assert.That(rightRayOrigin, Is.Null,
+                    "Runtime repair must remove stale pointer-pose ray origins that can diverge from the visible controller.");
+                Assert.That(leftRayOrigin, Is.Null,
+                    "Runtime repair must remove stale pointer-pose ray origins that can diverge from the visible controller.");
+
+                rightInteractionLineVisual.overrideInteractorLineOrigin = true;
+                rightInteractionLineVisual.lineOriginTransform = null;
+                rightTeleportLineVisual.overrideInteractorLineOrigin = true;
+                rightTeleportLineVisual.lineOriginTransform = null;
+                leftInteractionLineVisual.overrideInteractorLineOrigin = true;
+                leftInteractionLineVisual.lineOriginTransform = null;
+                leftTeleportLineVisual.overrideInteractorLineOrigin = true;
+                leftTeleportLineVisual.lineOriginTransform = null;
+
+                inputRig.RepairRuntimeTracking();
+
+                Transform rightControllerRayOrigin = rightController.Find(ControllerRayOriginName);
+                Transform leftControllerRayOrigin = leftController.Find(ControllerRayOriginName);
+
+                AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
+                AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
                 AssertButtonReaderReferencesAction(rightInteractionRay.uiPressInput, rightUiPress, "Right trigger must click UI through the right UI Press action.");
-                Assert.That(rightInteractionRay.enableUIInteraction, Is.True);
-                Assert.That(rightInteractionRay.blockUIOnInteractableSelection, Is.False,
-                    "Selecting block interactables must not suppress UI clicks while a menu is visible.");
-                Assert.That(rightInteractionRay.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+                AssertButtonReaderReferencesAction(leftInteractionRay.uiPressInput, leftUiPress, "Left trigger must click UI through the left UI Press action.");
+                AssertInteractionRayDefaults(rightInteractionRay);
+                AssertInteractionRayDefaults(leftInteractionRay);
                 AssertButtonReaderReferencesAction(rightTeleportRay.selectInput, rightTeleportSelect, "Right teleport ray must use right thumbstick select.");
                 AssertButtonReaderReferencesAction(leftTeleportRay.selectInput, leftTeleportSelect, "Left teleport ray must use left thumbstick select.");
-                Assert.That(rightInteractionRay.rayOriginTransform, Is.Not.Null, "UI/block ray should use the OpenXR aim pose, not the controller grip pose.");
-                Assert.That(rightInteractionRay.rayOriginTransform.name, Is.EqualTo("Right Aim Pose"));
-                Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightInteractionRay.rayOriginTransform));
-                Assert.That(leftTeleportRay.rayOriginTransform, Is.Not.Null);
-                Assert.That(leftTeleportRay.rayOriginTransform.name, Is.EqualTo("Left Aim Pose"));
+                Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+                Assert.That(leftInteractionRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+                Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+                Assert.That(leftTeleportRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+                Assert.That(rightInteractionLineVisual.overrideInteractorLineOrigin, Is.False,
+                    "Runtime repair should leave the ray interactor as the single visual origin source.");
+                Assert.That(rightInteractionLineVisual.lineOriginTransform, Is.Null);
+                Assert.That(rightTeleportLineVisual.overrideInteractorLineOrigin, Is.False);
+                Assert.That(rightTeleportLineVisual.lineOriginTransform, Is.Null);
+                Assert.That(leftInteractionLineVisual.overrideInteractorLineOrigin, Is.False);
+                Assert.That(leftInteractionLineVisual.lineOriginTransform, Is.Null);
+                Assert.That(leftTeleportLineVisual.overrideInteractorLineOrigin, Is.False);
+                Assert.That(leftTeleportLineVisual.lineOriginTransform, Is.Null);
             }
             finally
             {
@@ -624,10 +678,19 @@ namespace Blockiverse.Tests.EditMode
                 XRRayInteractor rightTeleportRay = instance.transform
                     .Find("Camera Offset/Right Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
+                Transform rightController = instance.transform.Find("Camera Offset/Right Controller");
+                Transform rightRayOrigin = instance.transform.Find("Camera Offset/Right Ray Origin");
+                Transform rightControllerRayOrigin = rightController?.Find(ControllerRayOriginName);
 
                 Assert.That(inputRig.JumpProvider, Is.Not.Null);
+                Assert.That(rightController, Is.Not.Null);
+                Assert.That(rightRayOrigin, Is.Null,
+                    "Runtime repair must remove stale pointer-pose ray origins that can diverge from the visible controller.");
+                AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
                 Assert.That(rightInteractionRay, Is.Not.Null);
                 Assert.That(rightTeleportRay, Is.Not.Null);
+                Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+                Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
 
                 InputActionReference jumpReference = inputRig.JumpProvider.jumpInput.inputActionReferencePerformed;
                 InputActionReference uiPressReference = rightInteractionRay.uiPressInput.inputActionReferencePerformed;
@@ -738,47 +801,72 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefab, Is.Not.Null);
 
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
-            Transform interactionRayTransform = rightController?.Find("Interaction Ray");
+            Transform rightInteractionRayTransform = rightController?.Find("Interaction Ray");
             Transform teleportRayTransform = rightController?.Find("Teleport Ray");
-            // Left controller now also carries a teleport ray for Teleport mode.
+            Transform rightControllerRayOrigin = rightController?.Find(ControllerRayOriginName);
             Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
-            Transform rightAimPose = prefab.transform.Find("Camera Offset/Right Aim Pose");
-            Transform leftAimPose = prefab.transform.Find("Camera Offset/Left Aim Pose");
+            Transform leftInteractionRayTransform = leftController?.Find("Interaction Ray");
+            Transform leftControllerRayOrigin = leftController?.Find(ControllerRayOriginName);
+            Transform rightRayOrigin = prefab.transform.Find("Camera Offset/Right Ray Origin");
+            Transform leftRayOrigin = prefab.transform.Find("Camera Offset/Left Ray Origin");
             Transform leftTeleportRayTransform = leftController?.Find("Teleport Ray");
             Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
-            XRRayInteractor interactionRay = interactionRayTransform?.GetComponent<XRRayInteractor>();
-            XRInteractorLineVisual interactionLineVisual = interactionRayTransform?.GetComponent<XRInteractorLineVisual>();
+            XRRayInteractor rightInteractionRay = rightInteractionRayTransform?.GetComponent<XRRayInteractor>();
+            XRRayInteractor leftInteractionRay = leftInteractionRayTransform?.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual rightInteractionLineVisual = rightInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
+            XRInteractorLineVisual leftInteractionLineVisual = leftInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
             XRRayInteractor teleportRay = teleportRayTransform?.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual teleportLineVisual = teleportRayTransform?.GetComponent<XRInteractorLineVisual>();
             BlockiverseLocomotionRayMediator mediator = rightController?.GetComponent<BlockiverseLocomotionRayMediator>();
             BlockiverseCreativeInputBridge creativeInputBridge = prefab.GetComponent<BlockiverseCreativeInputBridge>();
+            BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
+                prefab.GetComponent<BlockiverseKeyboardHandVisibilityController>();
             CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
             Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
             BlockiverseWorldSpacePanelPresenter blockMenuPresenter = blockMenu?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
 
             Assert.That(rightController, Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
-            Assert.That(interactionRay, Is.Not.Null);
-            Assert.That(interactionRay.enableUIInteraction, Is.True);
-            Assert.That(interactionRay.blockUIOnInteractableSelection, Is.False);
-            Assert.That(interactionRay.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
-            Assert.That(interactionRay.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
-            Assert.That(rightAimPose, Is.Not.Null, "Right app pointer should be driven by the OpenXR aim pose.");
-            Assert.That(leftAimPose, Is.Not.Null, "Left teleport pointer should be driven by the OpenXR aim pose.");
-            Assert.That(interactionRay.rayOriginTransform, Is.SameAs(rightAimPose));
-            Assert.That(interactionLineVisual, Is.Not.Null);
-            Assert.That(interactionLineVisual.lineWidth, Is.EqualTo(0.01f).Within(0.0001f));
+            Assert.That(rightInteractionRay, Is.Not.Null);
+            Assert.That(leftInteractionRay, Is.Not.Null);
+            AssertInteractionRayDefaults(rightInteractionRay);
+            AssertInteractionRayDefaults(leftInteractionRay);
+            Assert.That(prefab.transform.Find("Camera Offset/Right Aim Pose"), Is.Null,
+                "The interaction ray should not use a separately tracked aim pose that can diverge from the visible controller.");
+            Assert.That(prefab.transform.Find("Camera Offset/Left Aim Pose"), Is.Null,
+                "The teleport ray should not use a separately tracked aim pose that can diverge from the visible controller.");
+            Assert.That(rightRayOrigin, Is.Null,
+                "The interaction ray must not use a separately tracked pointer-pose ray origin that can diverge from the visible controller.");
+            Assert.That(leftRayOrigin, Is.Null,
+                "The teleport ray must not use a separately tracked pointer-pose ray origin that can diverge from the visible controller.");
+            AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
+            AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
+            Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+            Assert.That(leftInteractionRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+            Assert.That(rightInteractionLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(rightInteractionLineVisual);
+            Assert.That(leftInteractionLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(leftInteractionLineVisual);
             Assert.That(teleportRay, Is.Not.Null);
-            Assert.That(teleportRay.lineType, Is.EqualTo(XRRayInteractor.LineType.ProjectileCurve));
-            Assert.That(teleportRay.rayOriginTransform, Is.SameAs(rightAimPose));
+            AssertTeleportRayDefaults(teleportRay);
+            Assert.That(teleportRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+            Assert.That(teleportLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(teleportLineVisual);
             Assert.That(teleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(mediator, Is.Not.Null);
             // Left controller also carries a teleport ray (either thumbstick can aim in Teleport mode).
             Assert.That(leftTeleportRayTransform, Is.Not.Null, "Left controller must have a Teleport Ray.");
             XRRayInteractor leftTeleportRay = leftTeleportRayTransform.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual leftTeleportLineVisual = leftTeleportRayTransform.GetComponent<XRInteractorLineVisual>();
             Assert.That(leftTeleportRay, Is.Not.Null);
-            Assert.That(leftTeleportRay.rayOriginTransform, Is.SameAs(leftAimPose));
+            AssertTeleportRayDefaults(leftTeleportRay);
+            Assert.That(leftTeleportRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+            Assert.That(leftTeleportLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(leftTeleportLineVisual);
             Assert.That(leftTeleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(creativeInputBridge, Is.Not.Null);
+            Assert.That(keyboardHandVisibility, Is.Not.Null,
+                "The local XR rig must hide first-person fallback hands while the Quest system keyboard is visible.");
             Assert.That(prefab.transform.Find("Camera Offset/Right Controller/Ray Pointer Line"), Is.Null);
             Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
@@ -964,6 +1052,55 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller.GetComponent<BlockiverseControllerHaptics>()?.Role, Is.EqualTo(expectedRole));
         }
 
+        static void AssertControllerRayOrigin(Transform controller, Transform rayOrigin)
+        {
+            Assert.That(rayOrigin, Is.Not.Null, $"{controller?.name} should carry a controller-local ray origin.");
+            Assert.That(rayOrigin.parent, Is.SameAs(controller));
+            Assert.That(Vector3.Distance(rayOrigin.localPosition, Vector3.zero), Is.LessThan(0.0001f),
+                "The ray should originate at the tracked controller, not a separate pointer-pose transform.");
+            Assert.That(Quaternion.Angle(rayOrigin.localRotation, ControllerRayOriginLocalRotation), Is.LessThan(0.001f),
+                "Quest grip-pose forward points up like a stick; the child origin flips XRI forward onto the physical pointing axis.");
+        }
+
+        static void AssertInteractionRayDefaults(XRRayInteractor ray)
+        {
+            Assert.That(ray, Is.Not.Null);
+            Assert.That(ray.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
+            Assert.That(ray.hitDetectionType, Is.EqualTo(XRRayInteractor.HitDetectionType.Raycast));
+            Assert.That(ray.hitClosestOnly, Is.True);
+            Assert.That(ray.blendVisualLinePoints, Is.True);
+            Assert.That(ray.raycastSnapVolumeInteraction, Is.EqualTo(XRRayInteractor.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(ray.enableUIInteraction, Is.True);
+            Assert.That(ray.blockUIOnInteractableSelection, Is.False,
+                "Block targeting must not suppress UI clicks while a menu is visible.");
+            Assert.That(ray.interactionLayers.value, Is.EqualTo(0),
+                "Block targeting reads the raycast hit; it must not select 3D interactables.");
+            Assert.That(ray.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+        }
+
+        static void AssertTeleportRayDefaults(XRRayInteractor ray)
+        {
+            Assert.That(ray, Is.Not.Null);
+            Assert.That(ray.lineType, Is.EqualTo(XRRayInteractor.LineType.ProjectileCurve));
+            Assert.That(ray.hitDetectionType, Is.EqualTo(XRRayInteractor.HitDetectionType.Raycast));
+            Assert.That(ray.hitClosestOnly, Is.True);
+            Assert.That(ray.blendVisualLinePoints, Is.True);
+            Assert.That(ray.raycastSnapVolumeInteraction, Is.EqualTo(XRRayInteractor.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(ray.enableUIInteraction, Is.False);
+        }
+
+        static void AssertLineVisualDefaults(XRInteractorLineVisual lineVisual)
+        {
+            Assert.That(lineVisual.lineWidth, Is.EqualTo(0.01f).Within(0.0001f));
+            Assert.That(lineVisual.overrideInteractorLineOrigin, Is.False);
+            Assert.That(lineVisual.lineOriginTransform, Is.Null);
+            Assert.That(lineVisual.overrideInteractorLineLength, Is.False);
+            Assert.That(lineVisual.autoAdjustLineLength, Is.True);
+            Assert.That(lineVisual.minLineLength, Is.EqualTo(0.75f).Within(0.001f));
+            Assert.That(lineVisual.stopLineAtFirstRaycastHit, Is.True);
+            Assert.That(lineVisual.smoothMovement, Is.True);
+        }
+
         static void AssertBinding(InputActionProperty property, string expectedPath)
         {
             Assert.That(property.action, Is.Not.Null);
@@ -1058,22 +1195,6 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller, Is.Not.Null);
 
             TrackedPoseDriver driver = controller.GetComponent<TrackedPoseDriver>();
-
-            Assert.That(driver, Is.Not.Null);
-            Assert.That(driver.enabled, Is.True);
-            Assert.That(driver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
-            Assert.That(driver.trackingType, Is.EqualTo(TrackedPoseDriver.TrackingType.RotationAndPosition));
-            AssertBinding(driver.positionInput, positionPath);
-            AssertBinding(driver.rotationInput, rotationPath);
-        }
-
-        static void AssertAimPoseDriver(GameObject instance, string aimPoseName, string positionPath, string rotationPath)
-        {
-            Transform aimPose = instance.transform.Find($"Camera Offset/{aimPoseName}");
-
-            Assert.That(aimPose, Is.Not.Null);
-
-            TrackedPoseDriver driver = aimPose.GetComponent<TrackedPoseDriver>();
 
             Assert.That(driver, Is.Not.Null);
             Assert.That(driver.enabled, Is.True);

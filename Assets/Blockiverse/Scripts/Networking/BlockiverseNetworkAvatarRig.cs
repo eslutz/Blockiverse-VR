@@ -31,6 +31,7 @@ namespace Blockiverse.Networking
 
         [SerializeField] bool fallbackProxyEnabled = true;
         [SerializeField] bool firstPersonFallbackVisualsEnabled;
+        [SerializeField] bool firstPersonFallbackVisualsSuppressed;
         [SerializeField] bool metaAvatarAvailable;
         [SerializeField] float poseSendRateHz = 30.0f;
         [SerializeField] float remotePoseInterpolationSpeed = 18.0f;
@@ -56,6 +57,7 @@ namespace Blockiverse.Networking
 
         public bool FallbackProxyEnabled => fallbackProxyEnabled;
         public bool FirstPersonFallbackVisualsEnabled => firstPersonFallbackVisualsEnabled;
+        public bool FirstPersonFallbackVisualsSuppressed => firstPersonFallbackVisualsSuppressed;
         public bool MetaAvatarAvailable => metaAvatarAvailable;
         public bool IsUsingFallbackProxy { get; private set; }
         public bool FallbackRenderersVisible { get; private set; }
@@ -139,6 +141,15 @@ namespace Blockiverse.Networking
 
             firstPersonFallbackVisualsEnabled = enabled;
             RefreshAvatarMode();
+        }
+
+        public void SetFirstPersonFallbackVisualsSuppressed(bool suppressed)
+        {
+            if (firstPersonFallbackVisualsSuppressed == suppressed && fallbackRoot != null)
+                return;
+
+            firstPersonFallbackVisualsSuppressed = suppressed;
+            ApplyFallbackRendererVisibility();
         }
 
         public void SetMetaAvatarAvailable(bool available)
@@ -377,7 +388,9 @@ namespace Blockiverse.Networking
         void ApplyFallbackRendererVisibility()
         {
             bool showThirdPersonProxy = IsUsingFallbackProxy && ShouldRenderThirdPersonFallbackVisuals();
-            bool showFirstPersonHands = IsUsingFallbackProxy && firstPersonFallbackVisualsEnabled;
+            bool showFirstPersonHands = IsUsingFallbackProxy &&
+                firstPersonFallbackVisualsEnabled &&
+                !firstPersonFallbackVisualsSuppressed;
             bool anyVisible = false;
 
             if (fallbackRenderers == null)

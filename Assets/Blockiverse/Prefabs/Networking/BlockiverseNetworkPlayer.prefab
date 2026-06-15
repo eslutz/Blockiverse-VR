@@ -443,6 +443,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   fallbackProxyEnabled: 1
   firstPersonFallbackVisualsEnabled: 0
+  firstPersonFallbackVisualsSuppressed: 0
   metaAvatarAvailable: 0
   poseSendRateHz: 30
   remotePoseInterpolationSpeed: 18

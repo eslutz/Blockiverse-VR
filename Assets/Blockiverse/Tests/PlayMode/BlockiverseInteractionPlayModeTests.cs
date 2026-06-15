@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.UI;
@@ -15,6 +16,9 @@ namespace Blockiverse.Tests.PlayMode
 {
     public sealed class BlockiverseInteractionPlayModeTests : InputTestFixture
     {
+        static readonly MethodInfo CreativeInputBridgeUpdateMethod =
+            typeof(BlockiverseCreativeInputBridge).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic);
+
         [UnityTest]
         public IEnumerator BlockEditingToggleHidesAndRestoresTheInteractionRayVisual()
         {
@@ -51,6 +55,50 @@ namespace Blockiverse.Tests.PlayMode
             {
                 Object.DestroyImmediate(bridgeObject);
                 Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator MenuModeClampsInteractionRayVisualWhenUiIsMissed()
+        {
+            var bridgeObject = new GameObject("Creative Input Bridge");
+            var rayObject = new GameObject("Interaction Ray");
+
+            try
+            {
+                rayObject.transform.SetParent(bridgeObject.transform);
+                XRRayInteractor ray = rayObject.AddComponent<XRRayInteractor>();
+                LineRenderer lineRenderer = rayObject.AddComponent<LineRenderer>();
+                XRInteractorLineVisual lineVisual = rayObject.AddComponent<XRInteractorLineVisual>();
+                BlockiverseInputRig rig = bridgeObject.AddComponent<BlockiverseInputRig>();
+                BlockiverseCreativeInputBridge bridge = bridgeObject.AddComponent<BlockiverseCreativeInputBridge>();
+
+                lineRenderer.enabled = true;
+                lineVisual.enabled = true;
+                lineVisual.overrideInteractorLineLength = false;
+                lineVisual.lineLength = 10.0f;
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+                bridge.Configure(rig, ray, null);
+                yield return null;
+
+                Assert.That(lineRenderer.enabled, Is.True);
+                Assert.That(lineVisual.enabled, Is.True);
+                Assert.That(lineVisual.overrideInteractorLineLength, Is.True,
+                    "A menu-mode ray with no UI hit should draw only a short aim guide instead of the full XRI line behind the menu.");
+                Assert.That(lineVisual.lineLength, Is.LessThan(1.5f));
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+                CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
+
+                Assert.That(lineVisual.overrideInteractorLineLength, Is.False,
+                    "World/block interaction mode should restore the normal XRI line visual length behavior.");
+                Assert.That(lineVisual.lineLength, Is.EqualTo(10.0f).Within(0.001f));
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
+                Object.DestroyImmediate(bridgeObject);
             }
         }
 
@@ -92,6 +140,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTearDown]
         public IEnumerator CleanupTrackedPoseDriversAfterTest()
         {
+            BlockiverseRuntimeState.Reset();
             yield return BlockiversePlayModeSceneTestUtility.CleanupTrackedPoseDrivers();
         }
     }

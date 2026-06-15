@@ -5,46 +5,54 @@ namespace Blockiverse.VR
 {
     public static class BlockiverseXrUiInputConfigurator
     {
-        public static void ConfigureAll(InputActionAsset inputActions)
+        public static void ConfigureAll(
+            InputActionAsset inputActions,
+            BlockiverseControllerRole activeToolHand = BlockiverseControllerRole.Right)
         {
             foreach (XRUIInputModule inputModule in UnityEngine.Object.FindObjectsByType<XRUIInputModule>(
                          UnityEngine.FindObjectsInactive.Include,
                          UnityEngine.FindObjectsSortMode.None))
             {
-                Configure(inputModule, inputActions);
+                Configure(inputModule, inputActions, activeToolHand);
             }
         }
 
-        public static void Configure(XRUIInputModule inputModule, InputActionAsset inputActions)
+        public static void Configure(
+            XRUIInputModule inputModule,
+            InputActionAsset inputActions,
+            BlockiverseControllerRole activeToolHand = BlockiverseControllerRole.Right)
         {
             if (inputModule == null || inputActions == null)
                 return;
 
             ConfigureInputModuleFlags(inputModule);
 
-            InputAction rightUiPress = FindAction(inputActions, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress);
-            InputAction rightUiScroll = FindAction(inputActions, BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll);
+            string mapName = activeToolHand == BlockiverseControllerRole.Left
+                ? BlockiverseInputActionNames.LeftHandMap
+                : BlockiverseInputActionNames.RightHandMap;
+            InputAction uiPress = FindAction(inputActions, mapName, BlockiverseInputActionNames.UiPress);
+            InputAction uiScroll = FindAction(inputActions, mapName, BlockiverseInputActionNames.UiScroll);
 
-            inputModule.leftClickAction = GetOrCreateReference(inputModule.leftClickAction, rightUiPress);
-            inputModule.scrollWheelAction = GetOrCreateReference(inputModule.scrollWheelAction, rightUiScroll);
-            inputModule.navigateAction = GetOrCreateReference(inputModule.navigateAction, rightUiScroll);
-            inputModule.submitAction = GetOrCreateReference(inputModule.submitAction, rightUiPress);
+            inputModule.leftClickAction = GetOrCreateReference(inputModule.leftClickAction, uiPress);
+            inputModule.scrollWheelAction = GetOrCreateReference(inputModule.scrollWheelAction, uiScroll);
+            inputModule.navigateAction = GetOrCreateReference(inputModule.navigateAction, uiScroll);
+            inputModule.submitAction = GetOrCreateReference(inputModule.submitAction, uiPress);
         }
 
         public static void Configure(
             XRUIInputModule inputModule,
-            InputActionReference rightUiPressReference,
-            InputActionReference rightUiScrollReference)
+            InputActionReference uiPressReference,
+            InputActionReference uiScrollReference)
         {
             if (inputModule == null)
                 return;
 
             ConfigureInputModuleFlags(inputModule);
 
-            inputModule.leftClickAction = rightUiPressReference;
-            inputModule.scrollWheelAction = rightUiScrollReference;
-            inputModule.navigateAction = rightUiScrollReference;
-            inputModule.submitAction = rightUiPressReference;
+            inputModule.leftClickAction = uiPressReference;
+            inputModule.scrollWheelAction = uiScrollReference;
+            inputModule.navigateAction = uiScrollReference;
+            inputModule.submitAction = uiPressReference;
         }
 
         static void ConfigureInputModuleFlags(XRUIInputModule inputModule)

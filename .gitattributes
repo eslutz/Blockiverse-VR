@@ -9,11 +9,13 @@
 *.cs text eol=lf
 *.asmdef text eol=lf
 *.shader text eol=lf
-*.mat text eol=lf
-*.prefab text eol=lf
-*.unity text eol=lf
-*.asset text eol=lf
-*.meta text eol=lf
+# Unity serializes empty YAML scalars and list entries with significant
+# trailing spaces, for example "m_Name: " and "- ".
+*.mat text eol=lf whitespace=-blank-at-eol
+*.prefab text eol=lf whitespace=-blank-at-eol
+*.unity text eol=lf whitespace=-blank-at-eol
+*.asset text eol=lf whitespace=-blank-at-eol
+*.meta text eol=lf whitespace=-blank-at-eol
 *.md text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

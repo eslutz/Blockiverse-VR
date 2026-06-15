@@ -144,6 +144,11 @@ namespace Blockiverse.Editor
             if (origin.Camera == null)
                 origin.Camera = cameraOffset.GetComponentInChildren<Camera>(true);
 
+            RemoveStaleChild(cameraOffset, LeftAimPoseName);
+            RemoveStaleChild(cameraOffset, RightAimPoseName);
+            RemoveStaleChild(cameraOffset, LeftRayOriginName);
+            RemoveStaleChild(cameraOffset, RightRayOriginName);
+
             Camera xrCamera = origin.Camera;
             TrackedPoseDriver poseDriver = xrCamera != null
                 ? xrCamera.GetComponent<TrackedPoseDriver>()
@@ -222,6 +227,8 @@ namespace Blockiverse.Editor
             BlockiverseInputRig inputRig,
             BlockiverseControllerRole role)
         {
+            controller.layer = 0;
+
             // Native controller tracking: a TrackedPoseDriver drives the controller transform in
             // Update + BeforeRender, matching the head and removing the old hand-written pose.
             TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(controller);
@@ -234,71 +241,66 @@ namespace Blockiverse.Editor
             BlockiverseControllerHaptics haptics = EnsureComponent<BlockiverseControllerHaptics>(controller);
             haptics.Configure(role);
 
-            EnsureControllerInteractors(controller, inputRig, role);
+            Transform rayOrigin = EnsureControllerRayOrigin(controller.transform);
+            EnsureControllerInteractors(controller, inputRig, role, rayOrigin);
 
             EditorUtility.SetDirty(poseDriver);
             EditorUtility.SetDirty(anchor);
             EditorUtility.SetDirty(haptics);
         }
 
-        // Builds the native interaction (UI + block targeting, right hand only) and teleport rays
-        // on each controller, plus the mediator that switches between them while the locomotion
-        // mode is Teleport and thumbstick-forward is pushed.
+        static Transform EnsureControllerRayOrigin(Transform controller)
+        {
+            GameObject rayOrigin = EnsureChild(controller, ControllerRayOriginName);
+            rayOrigin.layer = controller != null ? controller.gameObject.layer : 0;
+            rayOrigin.transform.SetLocalPositionAndRotation(
+                Vector3.zero,
+                Quaternion.Euler(90.0f, 0.0f, 0.0f));
+            EditorUtility.SetDirty(rayOrigin);
+            return rayOrigin.transform;
+        }
+
+        // Builds native interaction (UI + block targeting) and teleport rays on each controller.
+        // The mediator enables only the active tool-hand interaction ray, while either controller
+        // can own teleport when Teleport mode and thumbstick-forward are active.
         static XRRayInteractor EnsureControllerInteractors(
             GameObject controller,
             BlockiverseInputRig inputRig,
-            BlockiverseControllerRole role)
+            BlockiverseControllerRole role,
+            Transform rayOrigin)
         {
             Material pointerMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.PointerLineMaterialPath);
             BlockiverseComfortSettings settings = inputRig != null ? inputRig.GetComponent<BlockiverseComfortSettings>() : null;
             string mapName = role == BlockiverseControllerRole.Left
                 ? BlockiverseInputActionNames.LeftHandMap
                 : BlockiverseInputActionNames.RightHandMap;
-            Transform aimPose = EnsureControllerAimPose(controller.transform.parent, role);
+            rayOrigin ??= controller.transform;
 
-            XRRayInteractor interactionRay = null;
+            GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
+            interactionRayObject.layer = controller.layer;
+            interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            interactionRayObject.SetActive(true);
 
-            // Only the right controller carries the UI/block interaction ray.
-            if (role == BlockiverseControllerRole.Right)
-            {
-                GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
-                interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-                interactionRayObject.SetActive(true);
-
-                interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
-                interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
-                interactionRay.enableUIInteraction = true;
-                interactionRay.blockUIOnInteractableSelection = false;
-                interactionRay.maxRaycastDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;
-                interactionRay.manipulateAttachTransform = false;
-                interactionRay.rayOriginTransform = aimPose;
-                // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk
-                // TeleportationArea). UI still works (separate path) and block targeting uses
-                // TryGetCurrent3DRaycastHit on this raycast mask.
-                interactionRay.interactionLayers = 0;
-                interactionRay.raycastMask = GetInteractionLayerMask();
-                interactionRay.selectInput = MakeUnusedButtonReader("Select");
-                interactionRay.activateInput = MakeUnusedButtonReader("Activate");
-                interactionRay.uiPressInput = MakeButtonReader(
-                    "UI Press",
-                    LoadInputActionReference(mapName, BlockiverseInputActionNames.UiPress));
-                interactionRay.uiScrollInput = MakeVector2Reader(
-                    "UI Scroll",
-                    LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
-                ConfigureLineVisual(interactionRayObject, pointerMaterial);
-                EditorUtility.SetDirty(interactionRay);
-            }
+            XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
+            BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetInteractionLayerMask());
+            interactionRay.selectInput = MakeUnusedButtonReader("Select");
+            interactionRay.activateInput = MakeUnusedButtonReader("Activate");
+            interactionRay.uiPressInput = MakeButtonReader(
+                "UI Press",
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.UiPress));
+            interactionRay.uiScrollInput = MakeVector2Reader(
+                "UI Scroll",
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
+            ConfigureLineVisual(interactionRayObject, pointerMaterial);
+            EditorUtility.SetDirty(interactionRay);
 
             // Both controllers get a teleport ray; the mediator activates it only in Teleport mode.
             GameObject teleportRayObject = EnsureChild(controller.transform, TeleportRayName);
+            teleportRayObject.layer = controller.layer;
             teleportRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
             XRRayInteractor teleportRay = EnsureComponent<XRRayInteractor>(teleportRayObject);
-            teleportRay.lineType = XRRayInteractor.LineType.ProjectileCurve;
-            teleportRay.enableUIInteraction = false;
-            teleportRay.manipulateAttachTransform = false;
-            teleportRay.rayOriginTransform = aimPose;
-            teleportRay.raycastMask = GetInteractionLayerMask();
+            BlockiverseRayDefaults.ConfigureTeleportRay(teleportRay, rayOrigin, GetInteractionLayerMask());
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
             teleportRay.selectInput = MakeButtonReader(
                 "Teleport Select",
@@ -311,50 +313,17 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(teleportRay);
 
             BlockiverseLocomotionRayMediator mediator = EnsureComponent<BlockiverseLocomotionRayMediator>(controller);
-            mediator.Configure(inputRig, settings, interactionRay, teleportRay, role);
+            mediator.Configure(inputRig, settings, interactionRay, teleportRay, role, controller.GetComponent<BlockiverseControllerAnchor>());
             EditorUtility.SetDirty(mediator);
 
             return interactionRay;
         }
 
-        static Transform EnsureControllerAimPose(Transform cameraOffset, BlockiverseControllerRole role)
-        {
-            string aimPoseName = role == BlockiverseControllerRole.Left ? LeftAimPoseName : RightAimPoseName;
-            Transform aimPose = cameraOffset != null ? cameraOffset.Find(aimPoseName) : null;
-
-            if (aimPose == null)
-            {
-                GameObject aimPoseObject = EnsureChild(cameraOffset, aimPoseName);
-                aimPose = aimPoseObject.transform;
-            }
-
-            aimPose.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-
-            TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(aimPose.gameObject);
-            ConfigureControllerAimPoseDriverReferenceActions(poseDriver, role);
-            poseDriver.enabled = true;
-            EditorUtility.SetDirty(poseDriver);
-            EditorUtility.SetDirty(aimPose.gameObject);
-            return aimPose;
-        }
-
         static void ConfigureLineVisual(GameObject rayObject, Material pointerMaterial)
         {
             LineRenderer lineRenderer = EnsureComponent<LineRenderer>(rayObject);
-            lineRenderer.useWorldSpace = true;
-            lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            lineRenderer.receiveShadows = false;
-
-            if (pointerMaterial != null)
-                lineRenderer.sharedMaterial = pointerMaterial;
-
-            lineRenderer.startColor = PointerLineColor;
-            lineRenderer.endColor = PointerLineColor;
-
             XRInteractorLineVisual lineVisual = EnsureComponent<XRInteractorLineVisual>(rayObject);
-            lineVisual.lineWidth = 0.01f;
-            lineVisual.overrideInteractorLineLength = false;
-            lineVisual.stopLineAtFirstRaycastHit = true;
+            BlockiverseRayDefaults.ConfigureLineVisual(lineRenderer, lineVisual, pointerMaterial, PointerLineColor);
 
             EditorUtility.SetDirty(lineRenderer);
             EditorUtility.SetDirty(lineVisual);
@@ -382,19 +351,6 @@ namespace Blockiverse.Editor
                 poseDriver,
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.Position),
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.Rotation),
-                LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
-        }
-
-        static void ConfigureControllerAimPoseDriverReferenceActions(TrackedPoseDriver poseDriver, BlockiverseControllerRole role)
-        {
-            string mapName = role == BlockiverseControllerRole.Left
-                ? BlockiverseInputActionNames.LeftHandMap
-                : BlockiverseInputActionNames.RightHandMap;
-
-            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
-                poseDriver,
-                LoadInputActionReference(mapName, BlockiverseInputActionNames.AimPosition),
-                LoadInputActionReference(mapName, BlockiverseInputActionNames.AimRotation),
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
         }
 
@@ -445,6 +401,9 @@ namespace Blockiverse.Editor
             // This component is intentionally unspawned on the local XR rig; the spawned network
             // player prefab owns the NetworkObject used for multiplayer avatar relay.
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
+            BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
+                EnsureComponent<BlockiverseKeyboardHandVisibilityController>(rig);
+            keyboardHandVisibility.Configure(avatarRig);
             MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(rig);
             BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(rig);
             Transform cameraOffset = rig.transform.Find("Camera Offset");
@@ -464,6 +423,7 @@ namespace Blockiverse.Editor
                 rightHand,
                 MetaAvatarPresentationMode.LocalFirstPerson);
             EditorUtility.SetDirty(avatarRig);
+            EditorUtility.SetDirty(keyboardHandVisibility);
             EditorUtility.SetDirty(avatarProvider);
             EditorUtility.SetDirty(avatarPresenter);
         }
@@ -829,8 +789,15 @@ namespace Blockiverse.Editor
 
         static XRRayInteractor FindInteractionRay(GameObject rig)
         {
-            Transform rayTransform = rig.transform.Find("Camera Offset/Right Controller/" + InteractionRayName);
-            return rayTransform != null ? rayTransform.GetComponent<XRRayInteractor>() : null;
+            foreach (string controllerName in new[] { "Right Controller", "Left Controller" })
+            {
+                Transform rayTransform = rig.transform.Find($"Camera Offset/{controllerName}/{InteractionRayName}");
+                XRRayInteractor ray = rayTransform != null ? rayTransform.GetComponent<XRRayInteractor>() : null;
+                if (ray != null)
+                    return ray;
+            }
+
+            return null;
         }
 
         static void EnsureXrRigCreativeInputBridge(GameObject rig, BlockiverseInputRig inputRig)
@@ -902,6 +869,9 @@ namespace Blockiverse.Editor
             // Comfort + feedback settings persist across launches (PlayerPrefs).
             BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
             EditorUtility.SetDirty(settingsPersistence);
+            BlockiverseDominantHandResolver dominantHandResolver = EnsureComponent<BlockiverseDominantHandResolver>(rig);
+            dominantHandResolver.Configure(rig.GetComponent<BlockiverseComfortSettings>());
+            EditorUtility.SetDirty(dominantHandResolver);
 
             BlockiverseVerboseTraceController verboseTrace = EnsureComponent<BlockiverseVerboseTraceController>(rig);
             verboseTrace.Configure(inputRig, null, controller, audioCuePlayer, vfxCuePlayer, musicController, interactionHaptics);

@@ -58,6 +58,38 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void FirstPersonFallbackHandsCanBeSuppressedWhileSystemKeyboardIsVisible()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            MethodInfo suppressMethod = typeof(BlockiverseNetworkAvatarRig).GetMethod(
+                "SetFirstPersonFallbackVisualsSuppressed",
+                BindingFlags.Instance | BindingFlags.Public);
+
+            Assert.That(suppressMethod, Is.Not.Null,
+                "The local fallback hand proxy needs an explicit suppression switch for system keyboard entry.");
+
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            suppressMethod.Invoke(avatarRig, new object[] { true });
+
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.True,
+                "Keyboard suppression should hide local hand renderers without disabling the fallback proxy object.");
+
+            suppressMethod.Invoke(avatarRig, new object[] { false });
+
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+        }
+
+        [Test]
         public void AvailableMetaAvatarHidesFallbackProxy()
         {
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
