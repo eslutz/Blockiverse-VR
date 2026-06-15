@@ -36,7 +36,7 @@ bash -n scripts/store/*.sh scripts/unity/*.sh
 
 ## GitHub Workflows
 
-`quest-ci.yml` runs on pull requests and manual dispatch. It checks repository conventions, pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, runs Unity tests, builds an Android smoke APK, and uploads validation artifacts. It does not receive Meta credentials and must not publish to Meta.
+`quest-ci.yml` runs on pull requests and manual dispatch. It checks repository conventions, pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, runs Unity tests in the UnityCI Android editor image with `-buildTarget Android`, builds an Android smoke APK, and uploads validation artifacts. It does not receive Meta credentials and must not publish to Meta. The Android test target is intentional: Quest CI must compile package editor code with the same target symbols used by the Quest build instead of the runner host's default Linux standalone target.
 
 `quest-alpha.yml` runs on pushes to `main` and manual dispatch of a trusted branch, tag, or commit. It pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, computes Android version metadata, release signs the APK, uploads the artifact bundle to GitHub Actions, and publishes the APK directly to Meta `alpha`.
 

@@ -53,10 +53,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: unity-library-ci-${{ runner.os }}-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          key: unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
-            unity-library-ci-${{ runner.os }}-6000.3.16f1-
-            unity-library-ci-${{ runner.os }}-
+            unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-
+            unity-library-ci-${{ runner.os }}-Android-
 
       - name: Run Unity tests
         uses: game-ci/unity-test-runner@v4
@@ -66,6 +66,8 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: 6000.3.16f1
+          customImage: unityci/editor:ubuntu-6000.3.16f1-android-3.2.2
+          customParameters: -buildTarget Android
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           checkName: Unity Test Results
           artifactsPath: TestResults/Unity
