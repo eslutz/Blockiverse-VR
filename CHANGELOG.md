@@ -6,6 +6,7 @@ The format is based on Keep a Changelog, and releases use tags cut from `main`.
 
 ## Unreleased
 
+- Documented the current `hzdb` executable path, `command -v hzdb` verification step, and preference for Horizon Debug Bridge over direct `adb` for Quest-device validation work.
 - Made generated XRI input wiring deterministic: the bootstrapper now writes stable input-action IDs, creates tracked asset-owned `InputActionReference` assets, wires generated prefabs/scenes through those references instead of scene-local action objects, and adds EditMode guards against reintroducing local serialized action references.
 - Added Quest XR Composition Layer presentation for the launch splash/loading overlay, generated menu panels, pointer projection, and the survival HUD surface so splash art, menus, inventory, crafting, and HUD text render through flat Quad composition layers without changing layout or interaction flow.
 - Added selectable world texture sets on the New World screen, generated one block atlas per texture set, and persisted the selected texture set so loaded worlds restore the correct atlas.

@@ -21,7 +21,7 @@ Meta XR Simulator setup, MCP configuration, and historical smoke-script notes ar
 
 Historical multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md). New multiplayer validation should follow [Voxel Multiplayer and Networking Ruleset](../rulesets/voxel_multiplayer_networking_ruleset.md).
 
-Runtime diagnostics use local Unity and player logs only. Capture recent Quest player logs with:
+Runtime diagnostics use local Unity and player logs only. Use `hzdb` for Quest player logs and other Quest-device operations whenever it exposes the needed command; use `adb` directly only as a documented fallback. On Eric's current development machine, `hzdb` resolves to `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`, but agents should verify the live path with `command -v hzdb` because the active `nvm` Node can change. If `node` or `npm` resolves outside the `hzdb` Node prefix, put the `hzdb` prefix first on `PATH` for package-manager verification. Capture recent Quest player logs with:
 
 ```sh
 hzdb log --tag Unity --level I --lines 200
@@ -101,13 +101,15 @@ Add this tier when the change affects VR comfort, Android or Quest behavior, hea
 
 ```sh
 scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk
-node --version
-npm list -g --depth=0 @meta-quest/hzdb
+HZDB_BIN="$(command -v hzdb)"
+HZDB_NODE_PREFIX="$(cd "$(dirname "$HZDB_BIN")/.." && pwd)"
+"$HZDB_NODE_PREFIX/bin/node" --version
+PATH="$HZDB_NODE_PREFIX/bin:$PATH" npm list -g --depth=0 @meta-quest/hzdb
 hzdb --version
 hzdb device list
 ```
 
-`hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
+`hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`; the expected current executable path is `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`. Prefer `hzdb` for Quest device discovery, APK install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 
 ## Test selection rules
 

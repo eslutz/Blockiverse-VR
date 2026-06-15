@@ -179,7 +179,7 @@ gh project item-list <PROJECT_NUMBER> --owner eslutz --limit 200 --format json
 - Prefer reproducible command-line tooling over GUI-only actions whenever the command output is useful validation evidence.
 - Use the Unity MCP server for interactive Unity Editor inspection, simulator-oriented editor workflows, scene or object checks, and Unity-specific automation that is exposed through MCP.
 - Use the committed local scripts as the source of truth for repeatable Unity validation. In particular, `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command even when Unity MCP is available.
-- Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config while the MCP server advertises schemas that can trigger `invalid_function_parameters` errors.
+- Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config while the MCP server advertises schemas that can trigger `invalid_function_parameters` errors. On Eric's current development machine, `hzdb` resolves to `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`; verify with `command -v hzdb` because the path can change when the default `nvm` Node changes. If the shell's default `node` or `npm` points somewhere else, derive the Node prefix from `hzdb` and put that prefix first on `PATH` for package-manager checks.
 - Install `hzdb` from the npm package `@meta-quest/hzdb` under the current default `nvm` Node version. If the default Node changes and `hzdb` is no longer on `PATH`, reinstall it with:
 
 ```sh
@@ -189,8 +189,10 @@ npm install -g @meta-quest/hzdb@1.2.1
 - Verify hzdb availability before device work with:
 
 ```sh
-node --version
-npm list -g --depth=0 @meta-quest/hzdb
+HZDB_BIN="$(command -v hzdb)"
+HZDB_NODE_PREFIX="$(cd "$(dirname "$HZDB_BIN")/.." && pwd)"
+"$HZDB_NODE_PREFIX/bin/node" --version
+PATH="$HZDB_NODE_PREFIX/bin:$PATH" npm list -g --depth=0 @meta-quest/hzdb
 hzdb --version
 hzdb device list
 ```
