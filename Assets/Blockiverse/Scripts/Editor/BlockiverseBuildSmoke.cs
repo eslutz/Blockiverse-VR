@@ -15,6 +15,8 @@ namespace Blockiverse.Editor
         const string SigningConfigPathArgument = "-blockiverseSigningConfigPath";
         const string DefaultBuildOutputPath = "Builds/Android/BlockiverseVR-development.apk";
         const string DefaultReleaseBuildOutputPath = "Builds/Android/BlockiverseVR-release.apk";
+        const string MetaAvatarSamplePresetDirectory = "Assets/Oculus/Avatar2_SampleAssets/SampleAssets/SampleAssets";
+        const string MetaAvatarSamplePresetMarkerFile = ".blockiverse-no-sample-presets";
 
         public static void BuildDevelopmentAndroid()
         {
@@ -36,13 +38,16 @@ namespace Blockiverse.Editor
                 options = BuildOptions.Development | BuildOptions.CompressWithLz4
             };
 
-            BuildReport report = BuildPipeline.BuildPlayer(options);
-            BuildSummary summary = report.summary;
-
-            if (summary.result != BuildResult.Succeeded)
+            using (PrepareOptionalMetaAvatarSamplePresets())
             {
-                throw new InvalidOperationException(
-                    $"Android development build failed with {summary.result}. Errors: {summary.totalErrors}");
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                BuildSummary summary = report.summary;
+
+                if (summary.result != BuildResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Android development build failed with {summary.result}. Errors: {summary.totalErrors}");
+                }
             }
         }
 
@@ -67,14 +72,114 @@ namespace Blockiverse.Editor
                 options = BuildOptions.None
             };
 
-            BuildReport report = BuildPipeline.BuildPlayer(options);
-            BuildSummary summary = report.summary;
+            using (PrepareOptionalMetaAvatarSamplePresets())
+            {
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                BuildSummary summary = report.summary;
 
-            if (summary.result != BuildResult.Succeeded)
+                if (summary.result != BuildResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Android release build failed with {summary.result}. Errors: {summary.totalErrors}");
+                }
+            }
+        }
+
+        static IDisposable PrepareOptionalMetaAvatarSamplePresets()
+        {
+            if (DirectoryHasFiles(MetaAvatarSamplePresetDirectory))
+                return DisposableAction.None;
+
+            if (ProjectEnablesMetaAvatarFallbackPresets())
             {
                 throw new InvalidOperationException(
-                    $"Android release build failed with {summary.result}. Errors: {summary.totalErrors}");
+                    "Meta Avatar fallback presets are enabled, but packaged sample preset assets are missing. " +
+                    "Either disable loadFallbackPreset on Blockiverse avatar prefabs or intentionally add the packaged Quest preset assets.");
             }
+
+            Directory.CreateDirectory(MetaAvatarSamplePresetDirectory);
+            string markerPath = Path.Combine(MetaAvatarSamplePresetDirectory, MetaAvatarSamplePresetMarkerFile);
+            File.WriteAllText(markerPath,
+                "Blockiverse does not ship Meta Avatars sample preset zips. " +
+                "This marker only prevents the Meta SDK sample-assets build hook from requiring unused local sample assets.\n");
+
+            return new DisposableAction(() => CleanupOptionalMetaAvatarSamplePresetMarker(markerPath));
+        }
+
+        static bool ProjectEnablesMetaAvatarFallbackPresets()
+        {
+            foreach (string assetPath in EnumerateUnityTextAssets("Assets/Blockiverse"))
+            {
+                foreach (string line in File.ReadLines(assetPath))
+                {
+                    if (line.Trim() == "loadFallbackPreset: 1")
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        static IEnumerable<string> EnumerateUnityTextAssets(string directory)
+        {
+            if (!Directory.Exists(directory))
+                yield break;
+
+            foreach (string path in Directory.EnumerateFiles(directory, "*.*", SearchOption.AllDirectories))
+            {
+                string extension = Path.GetExtension(path);
+                if (extension == ".asset" || extension == ".prefab" || extension == ".unity")
+                    yield return path;
+            }
+        }
+
+        static bool DirectoryHasFiles(string directory)
+        {
+            if (!Directory.Exists(directory))
+                return false;
+
+            using (IEnumerator<string> enumerator = Directory.EnumerateFiles(directory).GetEnumerator())
+                return enumerator.MoveNext();
+        }
+
+        static void CleanupOptionalMetaAvatarSamplePresetMarker(string markerPath)
+        {
+            DeleteFileIfExists(markerPath);
+            DeleteFileIfExists(markerPath + ".meta");
+            CleanupEmptyDirectoryTree(MetaAvatarSamplePresetDirectory, "Assets");
+        }
+
+        static void CleanupEmptyDirectoryTree(string directory, string stopDirectory)
+        {
+            string currentDirectory = Path.GetFullPath(directory);
+            string fullStopDirectory = Path.GetFullPath(stopDirectory);
+
+            while (!string.Equals(currentDirectory, fullStopDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!Directory.Exists(currentDirectory) || !DirectoryIsEmpty(currentDirectory))
+                    return;
+
+                Directory.Delete(currentDirectory);
+                DeleteFileIfExists(currentDirectory + ".meta");
+
+                string parentDirectory = Path.GetDirectoryName(currentDirectory);
+                if (string.IsNullOrEmpty(parentDirectory))
+                    return;
+
+                currentDirectory = parentDirectory;
+            }
+        }
+
+        static bool DirectoryIsEmpty(string directory)
+        {
+            using (IEnumerator<string> enumerator = Directory.EnumerateFileSystemEntries(directory).GetEnumerator())
+                return !enumerator.MoveNext();
+        }
+
+        static void DeleteFileIfExists(string path)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
         }
 
         static void ConfigureReleaseSigning()
@@ -165,6 +270,28 @@ namespace Blockiverse.Editor
             }
 
             return null;
+        }
+
+        sealed class DisposableAction : IDisposable
+        {
+            public static readonly IDisposable None = new DisposableAction(null);
+
+            readonly Action action;
+            bool disposed;
+
+            public DisposableAction(Action action)
+            {
+                this.action = action;
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                    return;
+
+                disposed = true;
+                action?.Invoke();
+            }
         }
     }
 }
