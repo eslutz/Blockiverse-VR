@@ -1,3 +1,6 @@
+# Purpose: promote an already-tested Meta build ID through release channels
+# without rebuilding the APK. This preserves the exact artifact that was tested
+# while adding environment approval gates for beta, rc, and store promotion.
 name: Quest Promote
 
 on:

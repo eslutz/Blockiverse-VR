@@ -88,7 +88,7 @@ scripts/unity/run-tests.sh
 
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
-scripts/unity/build-release-apk.sh                # signed; needs ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# Release-signed APKs are built by .github/workflows/quest-alpha.yml only.
 
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas

@@ -2,7 +2,14 @@
 
 ## Linked Issues
 
-## Test Evidence
+## Automated Validation
+
+- [ ] Quest CI passed
+
+## Local Validation
+
+- Commands run:
+- Deferred local validation, if any:
 
 ## Manual Validation
 

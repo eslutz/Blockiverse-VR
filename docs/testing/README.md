@@ -3,7 +3,7 @@
 Testing is split into:
 
 - Repository checks for shell syntax and release workflow conventions
-- GitHub-hosted Quest CI for Unity Personal activation, Unity tests, and Android smoke APK validation
+- GitHub-hosted Quest CI for Unity Personal activation and Android smoke APK validation
 - Local Unity validation for focused developer checks before review
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
 - EditMode tests for pure C# logic
@@ -31,16 +31,31 @@ Attach relevant excerpts to issues or pull requests when they are needed as vali
 Run the repository checks locally with:
 
 ```sh
-bash -n scripts/store/*.sh scripts/unity/*.sh
+bash -n scripts/unity/*.sh
 ```
 
 ## GitHub Workflows
 
-`quest-ci.yml` runs on pull requests and manual dispatch. It checks repository conventions, pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, runs Unity tests in the UnityCI Android editor image with `-buildTarget Android`, builds an Android smoke APK, and uploads validation artifacts. It does not receive Meta credentials and must not publish to Meta. The Android test target is intentional: Quest CI must compile package editor code with the same target symbols used by the Quest build instead of the runner host's default Linux standalone target.
+`quest-ci.yml` runs on pull requests and manual dispatch. It checks repository conventions, pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal through GameCI, builds an Android smoke APK, and uploads that APK as a validation artifact. It does not receive Meta credentials and must not publish to Meta. The Android smoke build is the GitHub-hosted Unity validation gate: it catches package import, compile, Android target, and APK packaging failures. Full EditMode and PlayMode tests are intentionally local-only because GitHub-hosted UnityCI Android test containers are not reliable for the local LAN multiplayer PlayMode suite.
 
 `quest-alpha.yml` runs on pushes to `main` and manual dispatch of a trusted branch, tag, or commit. It pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, computes Android version metadata, release signs the APK, uploads the artifact bundle to GitHub Actions, and publishes the APK directly to Meta `alpha`.
 
 `quest-promote.yml` runs by manual dispatch only. It requires the tested Meta build ID, promotes that selected build through `alpha -> beta`, `beta -> rc`, or `rc -> store`, and uploads a promotion record artifact. It does not rebuild APKs.
+
+## Automated Versus Local Validation
+
+Automated GitHub Actions validation is optimized for deterministic signals on GitHub-hosted runners:
+
+- `quest-ci.yml` verifies repository checks and Android smoke APK packaging for pull requests.
+- `quest-alpha.yml` builds and uploads a release-signed APK to Meta `alpha` after merge or manual trusted dispatch.
+- `quest-promote.yml` promotes an existing tested Meta build ID without rebuilding.
+
+Local validation is optimized for behavior:
+
+- `scripts/unity/run-tests.sh` runs the full local EditMode and PlayMode test gate.
+- `scripts/unity/run-local-validation.sh` runs shell syntax checks, full local Unity tests, and a development APK build.
+- `scripts/unity/build-development-apk.sh` produces a development APK for smoke installation.
+- Release-signed APKs are produced by `.github/workflows/quest-alpha.yml` only, using GitHub Actions secrets and the `meta-alpha` environment.
 
 ## Required GitHub Configuration
 
@@ -66,11 +81,16 @@ Unity Personal activation follows the GameCI model: activate Unity Personal once
 
 ## Local Unity Validation
 
-Run Unity validation locally before moving a Unity-impacting pull request to review or merge:
+Run the combined local validation wrapper before moving a Unity-impacting pull request to review or merge:
+
+```sh
+scripts/unity/run-local-validation.sh /tmp/blockiverse-vr-development.apk
+```
+
+Run only the Unity test gate when an APK build is not needed:
 
 ```sh
 scripts/unity/run-tests.sh
-scripts/unity/build-development-apk.sh /tmp/blockiverse-vr-development.apk
 ```
 
 Local Unity validation requires globally installed tools on the developer machine:
@@ -80,14 +100,9 @@ Local Unity validation requires globally installed tools on the developer machin
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
 - `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity`.
 
-For local release signing, use:
-
-```sh
-export ANDROID_KEYSTORE_PATH=/path/to/blockiverse-release.keystore
-export ANDROID_KEYSTORE_PASSWORD=...
-export ANDROID_KEY_ALIAS=...
-export ANDROID_KEY_PASSWORD=...
-scripts/unity/build-release-apk.sh /tmp/blockiverse-vr-release.apk
-```
+Release-signed builds are intentionally not produced by local scripts. Use
+`.github/workflows/quest-alpha.yml` to build and upload release-signed APKs from
+`main` or a trusted manual ref so signing material stays centralized in GitHub
+Actions secrets.
 
 Record the local Unity validation commands, result summary, output APK path when applicable, promoted Meta build ID when applicable, and any residual risk in the pull request or linked issue.

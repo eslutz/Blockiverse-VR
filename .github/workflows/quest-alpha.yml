@@ -1,3 +1,7 @@
+# Purpose: build a release-signed Quest APK from main or a trusted manual ref
+# and upload it to the Meta alpha channel. This workflow is a deployment lane,
+# not a pull request validation lane, and it requires signing and Meta upload
+# credentials through the meta-alpha environment.
 name: Quest Alpha
 
 on:

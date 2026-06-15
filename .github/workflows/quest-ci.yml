@@ -1,3 +1,9 @@
+# Purpose: pull request validation that is reliable on GitHub-hosted runners.
+# This workflow checks repository conventions and builds a Quest Android smoke APK
+# to prove the project imports, compiles, and packages for the target platform.
+# Full EditMode and PlayMode tests are intentionally local-only because the
+# UnityCI Linux Android test runner is not reliable for local LAN PlayMode tests
+# and has produced post-test Docker exit 139 failures after valid XML output.
 name: Quest CI
 
 on:
@@ -7,7 +13,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  checks: write
   contents: read
 
 jobs:
@@ -23,7 +28,7 @@ jobs:
         run: git lfs pull
 
       - name: Check shell script syntax
-        run: bash -n scripts/store/*.sh scripts/unity/*.sh
+        run: bash -n scripts/unity/*.sh
 
       - name: Check release workflow conventions
         run: |
@@ -58,20 +63,6 @@ jobs:
             unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-
             unity-library-ci-${{ runner.os }}-Android-
 
-      - name: Run Unity tests
-        uses: game-ci/unity-test-runner@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          unityVersion: 6000.3.16f1
-          customImage: unityci/editor:ubuntu-6000.3.16f1-android-3.2.2
-          customParameters: -buildTarget Android
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-          checkName: Unity Test Results
-          artifactsPath: TestResults/Unity
-
       - name: Compute smoke build settings
         id: settings
         run: |
@@ -92,6 +83,8 @@ jobs:
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
 
+      # This smoke build is the GitHub-hosted Unity validation gate. It catches
+      # package import, compile, Android target, and APK packaging failures.
       - name: Build Android smoke APK
         uses: game-ci/unity-builder@v4
         env:
@@ -114,11 +107,3 @@ jobs:
           name: blockiverse-ci-${{ steps.settings.outputs.version_name }}
           path: ${{ steps.settings.outputs.output_path }}
           if-no-files-found: error
-
-      - name: Upload Unity test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: unity-test-results
-          path: TestResults/Unity/
-          if-no-files-found: ignore
