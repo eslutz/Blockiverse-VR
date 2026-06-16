@@ -252,6 +252,7 @@ namespace Blockiverse.Gameplay
         const string InventorySnapshotMessage = "Blockiverse.Survival.InventorySnapshot";
         const string SharedCrateSnapshotMessage = "Blockiverse.Survival.SharedCrateSnapshot";
         const string PlayerHelloMessage = "Blockiverse.Survival.PlayerHello";
+        const string PlayerCrouchStateMessage = "Blockiverse.Survival.PlayerCrouchState";
         const string PlayerGuidPrefKey = "Blockiverse.PlayerGuid";
         const string PlayerSecretPrefKey = "Blockiverse.PlayerSecret";
         // Sized for the worst-case command payload, a station deposit at ~66 bytes: the 8-byte
@@ -265,6 +266,7 @@ namespace Blockiverse.Gameplay
         const int StationRemovedSnapshotType = -1;
         const int InventorySnapshotMessageBytes = 4096;
         const int PlayerHelloMessageBytes = 192;
+        const int PlayerCrouchStateMessageBytes = 1;
         static readonly NetworkDelivery InventorySnapshotDelivery = NetworkDelivery.ReliableFragmentedSequenced;
         const int SharedCrateSlotCount = 12;
         const int MaxNetworkPlayerGuidChars = 64;
@@ -272,6 +274,7 @@ namespace Blockiverse.Gameplay
         const double HostHarvestRateGraceSeconds = 0.15d;
         const int HostCommandRateLimitMaxRequests = 30;
         const double HostCommandRateLimitWindowSeconds = 1.0d;
+        const float CrouchStateHeartbeatSeconds = 0.25f;
 
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
@@ -288,6 +291,7 @@ namespace Blockiverse.Gameplay
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
         readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position)> pendingCommandRequests = new();
         readonly Dictionary<ulong, double> lastAcceptedHarvestTimeByClientId = new();
+        readonly Dictionary<ulong, bool> lastKnownCrouchStateByClientId = new();
 
         // Smelting stations keyed by their block position. On the host these are the authoritative
         // models, ticked from WorldTimeClock; on remote clients they are display mirrors fed by snapshots.
@@ -308,8 +312,12 @@ namespace Blockiverse.Gameplay
         Inventory localInventory;
         Inventory sharedCrateInventory;
         Func<double> hostCommandTimeProvider;
+        Func<bool> localCrouchStateProvider;
         uint nextCommandRequestId = 1;
         bool messagesRegistered;
+        bool hasSentLocalCrouchState;
+        bool lastSentLocalCrouchState;
+        float nextCrouchStateHeartbeatTime;
 
         public Inventory LocalInventory => GetInventory(ResolveLocalClientId());
         public Inventory SharedCrateInventory => sharedCrateInventory ??= CreateSharedCrateInventory();
@@ -373,6 +381,11 @@ namespace Blockiverse.Gameplay
             CreativePermissionPolicy.CanUseCreativeMode(worldManager.GameMode, IsActiveClientOnly());
         public bool CanToggleMode => worldManager != null &&
             CreativePermissionPolicy.CanTogglePlayerMode(worldManager.GameMode, modeSwitch.CurrentMode, IsActiveClientOnly());
+
+        public void ConfigureLocalCrouchStateProvider(Func<bool> crouchStateProvider)
+        {
+            localCrouchStateProvider = crouchStateProvider;
+        }
 
         // Flips between survival and creative interaction, snapshotting/restoring the survival
         // inventory. Host/offline only: a remote client's inventory is a host-owned mirror, so a
@@ -630,6 +643,7 @@ namespace Blockiverse.Gameplay
             hostCommandRateLimiter.Clear();
             pendingCommandRequests.Clear();
             lastAcceptedHarvestTimeByClientId.Clear();
+            ClearKnownCrouchState();
             stationModels.Clear();
             nextCommandRequestId = 1;
             localInventory = CreatePlayerInventory();
@@ -672,6 +686,7 @@ namespace Blockiverse.Gameplay
             // World loads and host snapshots can replace the clock after this component was
             // configured, so keep station simulation attached to the current world clock.
             RefreshStationClockSubscription();
+            RefreshCrouchStateReplication();
         }
 
         void OnDestroy()
@@ -778,14 +793,20 @@ namespace Blockiverse.Gameplay
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendBlockCommandRequest(SurvivalCommandKind.PlaceBlock, requestId, position, equippedSlotIndex);
+                SendPlaceCommandRequest(requestId, position, equippedSlotIndex, ResolveLocalCrouchActive());
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PlaceBlock, requestId);
                 return LastCommandResult;
             }
 
             return CompleteLocalCommand(
-                ProcessHostPlace(ResolveLocalClientId(), requestId: 0, position, equippedSlotIndex, sendResponse: false),
+                ProcessHostPlace(
+                    ResolveLocalClientId(),
+                    requestId: 0,
+                    position,
+                    equippedSlotIndex,
+                    sendResponse: false,
+                    requesterCrouching: ResolveLocalCrouchActive()),
                 position);
         }
 
@@ -1677,9 +1698,11 @@ namespace Blockiverse.Gameplay
             uint requestId,
             BlockPosition position,
             int equippedSlotIndex,
-            bool sendResponse)
+            bool sendResponse,
+            bool requesterCrouching)
         {
             ReceivedPlaceRequestCount++;
+            lastKnownCrouchStateByClientId[clientId] = requesterCrouching;
 
             if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.PlaceBlock, sendResponse, out SurvivalCommandResult duplicate))
                 return duplicate;
@@ -1708,7 +1731,7 @@ namespace Blockiverse.Gameplay
                 return result;
             }
 
-            if (TryRejectPlacementOverlappingPlayer(clientId, requestId, position, sendResponse, out SurvivalCommandResult overlapFailure))
+            if (TryRejectPlacementOverlappingPlayer(clientId, requestId, position, requesterCrouching, sendResponse, out SurvivalCommandResult overlapFailure))
                 return overlapFailure;
 
             BlockId block = def.BlockId.Value;
@@ -2912,12 +2935,13 @@ namespace Blockiverse.Gameplay
             ulong clientId,
             uint requestId,
             BlockPosition targetPosition,
+            bool requesterCrouching,
             bool sendResponse,
             out SurvivalCommandResult result)
         {
             result = default;
 
-            if (!IsBlockOccupiedByPlayer(targetPosition, clientId))
+            if (!IsBlockOccupiedByPlayer(targetPosition, clientId, requesterCrouching))
                 return false;
 
             result = SurvivalCommandResult.Reject(
@@ -2928,15 +2952,19 @@ namespace Blockiverse.Gameplay
             return true;
         }
 
-        bool IsBlockOccupiedByPlayer(BlockPosition targetPosition, ulong fallbackClientId)
+        bool IsBlockOccupiedByPlayer(BlockPosition targetPosition, ulong fallbackClientId, bool fallbackCrouching)
         {
             NetworkManager networkManager = ResolveNetworkManagerOrNull();
             if (networkManager != null && networkManager.IsListening)
             {
                 foreach (ulong clientId in networkManager.ConnectedClientsIds)
                 {
+                    bool crouching = clientId == fallbackClientId
+                        ? fallbackCrouching
+                        : TryResolveKnownClientCrouch(clientId, out bool knownCrouching) && knownCrouching;
+
                     if (TryResolveClientBlockPosition(clientId, out BlockPosition playerPosition) &&
-                        IsInPlayerHeadOrFeetColumn(targetPosition, playerPosition))
+                        CreativeInteractionController.IsPlayerOccupyingBlock(targetPosition, playerPosition, crouching))
                     {
                         return true;
                     }
@@ -2946,14 +2974,54 @@ namespace Blockiverse.Gameplay
             }
 
             return TryResolveClientBlockPosition(fallbackClientId, out BlockPosition fallbackPosition) &&
-                   IsInPlayerHeadOrFeetColumn(targetPosition, fallbackPosition);
+                   CreativeInteractionController.IsPlayerOccupyingBlock(targetPosition, fallbackPosition, fallbackCrouching);
         }
 
-        static bool IsInPlayerHeadOrFeetColumn(BlockPosition targetPosition, BlockPosition playerHeadPosition) =>
-            targetPosition.X == playerHeadPosition.X &&
-            targetPosition.Z == playerHeadPosition.Z &&
-            targetPosition.Y >= playerHeadPosition.Y - 1 &&
-            targetPosition.Y <= playerHeadPosition.Y;
+        bool TryResolveKnownClientCrouch(ulong clientId, out bool crouching)
+        {
+            if (clientId == ResolveLocalClientId())
+            {
+                crouching = ResolveLocalCrouchActive();
+                return true;
+            }
+
+            return lastKnownCrouchStateByClientId.TryGetValue(clientId, out crouching);
+        }
+
+        bool ResolveLocalCrouchActive() => localCrouchStateProvider != null && localCrouchStateProvider();
+
+        void ClearKnownCrouchState()
+        {
+            lastKnownCrouchStateByClientId.Clear();
+            hasSentLocalCrouchState = false;
+            lastSentLocalCrouchState = false;
+            nextCrouchStateHeartbeatTime = 0.0f;
+        }
+
+        void RefreshCrouchStateReplication()
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsListening)
+                return;
+
+            bool crouching = ResolveLocalCrouchActive();
+            lastKnownCrouchStateByClientId[ResolveLocalClientId()] = crouching;
+
+            if (!IsActiveClientOnly())
+                return;
+
+            if (hasSentLocalCrouchState &&
+                lastSentLocalCrouchState == crouching &&
+                Time.unscaledTime < nextCrouchStateHeartbeatTime)
+            {
+                return;
+            }
+
+            SendPlayerCrouchState(crouching);
+            hasSentLocalCrouchState = true;
+            lastSentLocalCrouchState = crouching;
+            nextCrouchStateHeartbeatTime = Time.unscaledTime + CrouchStateHeartbeatSeconds;
+        }
 
         bool TryRejectSurvivalCommandForWorldMode(
             ulong clientId,
@@ -3046,7 +3114,10 @@ namespace Blockiverse.Gameplay
                     reader.ReadValueSafe(out int equippedSlotIndex);
 
                     if (commandKind == SurvivalCommandKind.PlaceBlock)
-                        ProcessHostPlace(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
+                    {
+                        reader.ReadValueSafe(out bool requesterCrouching);
+                        ProcessHostPlace(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true, requesterCrouching: requesterCrouching);
+                    }
                     else if (commandKind == SurvivalCommandKind.StripLog)
                         ProcessHostStripLog(senderClientId, requestId, position, equippedSlotIndex, sendResponse: true);
                     else if (commandKind == SurvivalCommandKind.TillSoil)
@@ -3151,6 +3222,14 @@ namespace Blockiverse.Gameplay
             {
                 SurvivalSyncWireCodec.WriteBlockPosition(ref writer, position);
                 writer.WriteValueSafe(slotIndex);
+            }, position);
+
+        void SendPlaceCommandRequest(uint requestId, BlockPosition position, int slotIndex, bool requesterCrouching) =>
+            SendCommandRequest(SurvivalCommandKind.PlaceBlock, requestId, (ref FastBufferWriter writer) =>
+            {
+                SurvivalSyncWireCodec.WriteBlockPosition(ref writer, position);
+                writer.WriteValueSafe(slotIndex);
+                writer.WriteValueSafe(requesterCrouching);
             }, position);
 
         // Repair and consumable requests carry only a slot index.
@@ -3604,6 +3683,7 @@ namespace Blockiverse.Gameplay
             processedRequestsByClientId.Clear();
             hostCommandRateLimiter.Clear();
             lastAcceptedHarvestTimeByClientId.Clear();
+            ClearKnownCrouchState();
             groundItems = new GroundItemStore(itemRegistry);
             stationModels.Clear();
             ResetPendingCommands();
@@ -3648,9 +3728,7 @@ namespace Blockiverse.Gameplay
             if (!CanProcessHostRequests() || clientId == ResolveLocalClientId())
                 return;
 
-            processedRequestsByClientId.Remove(clientId);
-            hostCommandRateLimiter.RemoveClient(clientId);
-            lastAcceptedHarvestTimeByClientId.Remove(clientId);
+            ClearClientConnectionState(clientId);
 
             // Reconnect identity: stash the departing player's inventory under their hardened
             // identity key so the same player rejoining this session reclaims it (new client id).
@@ -3659,6 +3737,14 @@ namespace Blockiverse.Gameplay
             {
                 stashedInventoriesByIdentityKey[identityKey] = inventory;
             }
+        }
+
+        void ClearClientConnectionState(ulong clientId)
+        {
+            processedRequestsByClientId.Remove(clientId);
+            hostCommandRateLimiter.RemoveClient(clientId);
+            lastAcceptedHarvestTimeByClientId.Remove(clientId);
+            lastKnownCrouchStateByClientId.Remove(clientId);
         }
 
         // The local player's persistent identity parts, created once and reused across sessions.
@@ -3706,6 +3792,26 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        void SendPlayerCrouchState(bool crouching)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || networkManager.CustomMessagingManager == null)
+                return;
+
+            RegisterMessageHandlers();
+            var writer = new FastBufferWriter(PlayerCrouchStateMessageBytes, Allocator.Temp);
+
+            try
+            {
+                writer.WriteValueSafe(crouching);
+                networkManager.CustomMessagingManager.SendNamedMessage(PlayerCrouchStateMessage, NetworkManager.ServerClientId, writer);
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
         // Host: binds the sender to its persistent identity key and hands back any inventory stashed
         // for that key by an earlier disconnect, then pushes the authoritative snapshot.
         void HandlePlayerHelloMessage(ulong senderClientId, FastBufferReader reader)
@@ -3730,6 +3836,15 @@ namespace Blockiverse.Gameplay
                 inventoriesByClientId[senderClientId] = stashed;
                 SendInventorySnapshot(senderClientId);
             }
+        }
+
+        void HandlePlayerCrouchStateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            if (!CanProcessHostRequests())
+                return;
+
+            reader.ReadValueSafe(out bool crouching);
+            lastKnownCrouchStateByClientId[senderClientId] = crouching;
         }
 
         bool IsPlayerIdentityBoundToDifferentClient(ulong clientId, string identityKey)
@@ -3794,6 +3909,7 @@ namespace Blockiverse.Gameplay
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(InventorySnapshotMessage, HandleInventorySnapshotMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(SharedCrateSnapshotMessage, HandleSharedCrateSnapshotMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlayerHelloMessage, HandlePlayerHelloMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(PlayerCrouchStateMessage, HandlePlayerCrouchStateMessage);
             messagesRegistered = true;
         }
 
@@ -3813,6 +3929,7 @@ namespace Blockiverse.Gameplay
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(InventorySnapshotMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(SharedCrateSnapshotMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlayerHelloMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(PlayerCrouchStateMessage);
             messagesRegistered = false;
         }
 

@@ -2051,6 +2051,96 @@ namespace Blockiverse.Tests.Networking.PlayMode
         }
 
         [Test]
+        public void HostPlaceValidationUsesCrouchAwarePlayerOccupancy()
+        {
+            GameObject syncObject = new("Crouch Place Survival Sync");
+            GameObject cameraObject = null;
+            CreativeWorldManager worldManager = null;
+            var feetPosition = new BlockPosition(3, 4, 3);
+            var headPosition = new BlockPosition(3, 5, 3);
+
+            try
+            {
+                worldManager = CreateCreativeWorldManager(
+                    "Crouch Place World",
+                    new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 7913, groundHeight: 2));
+                worldManager.World.SetBlock(feetPosition, BlockRegistry.Air);
+                worldManager.World.SetBlock(headPosition, BlockRegistry.Air);
+                cameraObject = CreateMainCamera("Crouch Place Camera", new Vector3(3.5f, 5.5f, 3.5f));
+
+                MultiplayerSurvivalSync survivalSync = ConfigureOfflineSurvivalSync(syncObject, worldManager);
+                Inventory hostInventory = survivalSync.GetInventory(NetworkManager.ServerClientId);
+                hostInventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 3));
+                survivalSync.ConfigureLocalCrouchStateProvider(() => false);
+
+                SurvivalCommandResult standingHead = survivalSync.TrySubmitPlace(headPosition, out bool standingSent, equippedSlotIndex: 0);
+
+                AssertRejectedLocalCommand(standingHead, standingSent, SurvivalCommandFailureReason.PlacementRejected);
+                Assert.That(worldManager.World.GetBlock(headPosition), Is.EqualTo(BlockRegistry.Air));
+                Assert.That(hostInventory.GetSlot(0).Count, Is.EqualTo(3));
+
+                survivalSync.ConfigureLocalCrouchStateProvider(() => true);
+                SurvivalCommandResult crouchingHead = survivalSync.TrySubmitPlace(headPosition, out bool crouchingHeadSent, equippedSlotIndex: 0);
+
+                AssertAcceptedLocalCommand(crouchingHead, crouchingHeadSent);
+                Assert.That(worldManager.World.GetBlock(headPosition), Is.EqualTo(BlockRegistry.BranchwoodLog));
+                Assert.That(hostInventory.GetSlot(0).Count, Is.EqualTo(2));
+
+                SurvivalCommandResult crouchingFeet = survivalSync.TrySubmitPlace(feetPosition, out bool crouchingFeetSent, equippedSlotIndex: 0);
+
+                AssertRejectedLocalCommand(crouchingFeet, crouchingFeetSent, SurvivalCommandFailureReason.PlacementRejected);
+                Assert.That(worldManager.World.GetBlock(feetPosition), Is.EqualTo(BlockRegistry.Air));
+                Assert.That(hostInventory.GetSlot(0).Count, Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(syncObject);
+                if (cameraObject != null)
+                    UnityEngine.Object.DestroyImmediate(cameraObject);
+                if (worldManager != null)
+                    UnityEngine.Object.DestroyImmediate(worldManager.gameObject);
+            }
+        }
+
+        [Test]
+        public void CrouchStateCacheClearsWithSessionAndClientLifecycle()
+        {
+            GameObject syncObject = new("Crouch Lifecycle Survival Sync");
+            MultiplayerSurvivalSync survivalSync = syncObject.AddComponent<MultiplayerSurvivalSync>();
+            survivalSync.Configure(null, null, null);
+
+            try
+            {
+                SeedKnownCrouchState(survivalSync, 42UL, crouching: true);
+                SeedKnownCrouchState(survivalSync, 43UL, crouching: false);
+                Assert.That(KnownCrouchStates(survivalSync), Has.Count.EqualTo(2));
+
+                survivalSync.Configure(null, null, null);
+                Assert.That(KnownCrouchStates(survivalSync), Is.Empty,
+                    "Configure should clear cached per-client crouch state from earlier sessions.");
+
+                SeedKnownCrouchState(survivalSync, 42UL, crouching: true);
+                InvokeClearSessionState(survivalSync);
+                Assert.That(KnownCrouchStates(survivalSync), Is.Empty,
+                    "Session shutdown should clear cached per-client crouch state.");
+
+                SeedKnownCrouchState(survivalSync, 42UL, crouching: true);
+                SeedKnownCrouchState(survivalSync, 43UL, crouching: true);
+                InvokeClearClientConnectionState(survivalSync, 42UL);
+
+                Dictionary<ulong, bool> knownCrouchStates = KnownCrouchStates(survivalSync);
+                Assert.That(knownCrouchStates.ContainsKey(42UL), Is.False,
+                    "Disconnect cleanup should remove the departing client's crouch state.");
+                Assert.That(knownCrouchStates.ContainsKey(43UL), Is.True,
+                    "Disconnect cleanup should not clear unrelated clients still in the session.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(syncObject);
+            }
+        }
+
+        [Test]
         public void HostRejectsSharedCrateWithdrawExceedingCountWithoutMutation()
         {
             GameObject syncObject = new("Crate Overdraw Survival Sync");
@@ -2585,6 +2675,12 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(result.FailureReason, Is.EqualTo(expectedReason));
         }
 
+        static void AssertAcceptedLocalCommand(SurvivalCommandResult result, bool requestSentToHost)
+        {
+            Assert.That(requestSentToHost, Is.False);
+            Assert.That(result.Accepted, Is.True);
+        }
+
         [Test]
         public void HostRejectsUnknownCrateTransferItemWithoutThrowing()
         {
@@ -2820,6 +2916,41 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return (SurvivalCommandResult)method.Invoke(
                 sync,
                 new object[] { clientId, 0u, commandKind, position, itemId, count, false });
+        }
+
+        static Dictionary<ulong, bool> KnownCrouchStates(MultiplayerSurvivalSync sync)
+        {
+            var field = typeof(MultiplayerSurvivalSync).GetField(
+                "lastKnownCrouchStateByClientId",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            Assert.That(field, Is.Not.Null);
+            return (Dictionary<ulong, bool>)field.GetValue(sync);
+        }
+
+        static void SeedKnownCrouchState(MultiplayerSurvivalSync sync, ulong clientId, bool crouching)
+        {
+            KnownCrouchStates(sync)[clientId] = crouching;
+        }
+
+        static void InvokeClearSessionState(MultiplayerSurvivalSync sync)
+        {
+            var method = typeof(MultiplayerSurvivalSync).GetMethod(
+                "ClearSessionState",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            Assert.That(method, Is.Not.Null);
+            method.Invoke(sync, null);
+        }
+
+        static void InvokeClearClientConnectionState(MultiplayerSurvivalSync sync, ulong clientId)
+        {
+            var method = typeof(MultiplayerSurvivalSync).GetMethod(
+                "ClearClientConnectionState",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            Assert.That(method, Is.Not.Null);
+            method.Invoke(sync, new object[] { clientId });
         }
 
         static CreativeWorldManager CreateCreativeWorldManager(string name, WorldGenerationSettings settings = null)

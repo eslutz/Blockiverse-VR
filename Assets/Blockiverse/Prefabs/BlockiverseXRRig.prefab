@@ -25209,6 +25209,8 @@ MonoBehaviour:
     Dominant stick:
     snap turn
 
+    Dominant stick click: crouch
+
     Either stick hold up: teleport aim, release to land
 
     Dominant
@@ -53653,8 +53655,8 @@ MonoBehaviour:
   inputRig: {fileID: 6464803785323197589}
   worldManager: {fileID: 0}
   survivalSync: {fileID: 0}
-  flightEnabledDefault: 1
-  rightHandAimSource: {fileID: 0}
+  flightEnabledDefault: 0
+  dominantHandAimSource: {fileID: 0}
 --- !u!114 &9154700309049800205
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -63576,6 +63578,8 @@ MonoBehaviour:
 
     Dominant stick:
     snap turn
+
+    Dominant stick click: crouch
 
     Either stick hold up: teleport aim, release to land
 

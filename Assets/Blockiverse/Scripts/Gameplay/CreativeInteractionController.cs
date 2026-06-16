@@ -21,7 +21,7 @@ namespace Blockiverse.Gameplay
         VoxelWorldRenderer worldRenderer;
         BlockMutationAuthority mutationAuthority;
         MultiplayerChunkAuthoritySync chunkAuthoritySync;
-        Bounds? playerBounds;
+        Func<BlockPosition, bool> playerOccupancyPredicate;
         bool blockEditingEnabled = true;
 
         public BlockMutationAuthority MutationAuthority => mutationAuthority;
@@ -49,13 +49,17 @@ namespace Blockiverse.Gameplay
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             hotbar = creativeHotbar;
             placementPreview = preview;
-            playerBounds = playerCollisionBounds;
             worldRenderer = renderer;
             mutationAuthority = authority ?? BlockMutationAuthority.CreateHost(world, registry);
             chunkAuthoritySync = authoritySync;
 
             if (worldChanged)
                 ResetEditHistory();
+        }
+
+        public void ConfigurePlayerOccupancy(Func<BlockPosition, bool> occupancyPredicate)
+        {
+            playerOccupancyPredicate = occupancyPredicate;
         }
 
         public void ResetEditHistory()
@@ -170,10 +174,19 @@ namespace Blockiverse.Gameplay
             if (world.GetBlock(position) != BlockRegistry.Air)
                 return false;
 
-            if (playerBounds.HasValue && GetBlockBounds(position).Intersects(playerBounds.Value))
+            if (playerOccupancyPredicate != null && playerOccupancyPredicate(position))
                 return false;
 
             return true;
+        }
+
+        public static bool IsPlayerOccupyingBlock(BlockPosition targetPosition, BlockPosition playerHeadPosition, bool crouching)
+        {
+            if (targetPosition.X != playerHeadPosition.X || targetPosition.Z != playerHeadPosition.Z)
+                return false;
+
+            int feetY = playerHeadPosition.Y - 1;
+            return targetPosition.Y == feetY || (!crouching && targetPosition.Y == playerHeadPosition.Y);
         }
 
         public bool UndoLast()
@@ -447,11 +460,5 @@ namespace Blockiverse.Gameplay
             worldRenderer?.RebuildDirty();
         }
 
-        static Bounds GetBlockBounds(BlockPosition position)
-        {
-            return new Bounds(
-                new Vector3(position.X + 0.5f, position.Y + 0.5f, position.Z + 0.5f),
-                Vector3.one);
-        }
     }
 }

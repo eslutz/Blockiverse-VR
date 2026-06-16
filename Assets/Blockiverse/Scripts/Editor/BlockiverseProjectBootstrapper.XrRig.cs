@@ -823,6 +823,7 @@ namespace Blockiverse.Editor
         {
             BlockiverseCreativeFlightController flight = EnsureComponent<BlockiverseCreativeFlightController>(rig);
             flight.Configure(inputRig);
+            flight.FlightEnabledDefault = false;
             EditorUtility.SetDirty(flight);
         }
 

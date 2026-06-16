@@ -142,6 +142,7 @@ namespace Blockiverse.Editor
                 CreateAction(mapName, BlockiverseInputActionNames.Move, InputActionType.PassThrough, "Vector2"),
                 CreateAction(mapName, BlockiverseInputActionNames.Turn, InputActionType.PassThrough, "Vector2"),
                 CreateAction(mapName, BlockiverseInputActionNames.Sprint, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.Crouch, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.AimPosition, InputActionType.PassThrough, "Vector3"),
@@ -164,6 +165,7 @@ namespace Blockiverse.Editor
                 CreateBinding(mapName, BlockiverseInputActionNames.Move, "move-thumbstick", $"{controllerPath}/thumbstick", StickDeadzoneProcessor),
                 CreateBinding(mapName, BlockiverseInputActionNames.Turn, "turn-thumbstick", $"{controllerPath}/thumbstick", StickDeadzoneProcessor),
                 CreateBinding(mapName, BlockiverseInputActionNames.Sprint, "thumbstick-clicked", $"{controllerPath}/thumbstickClicked"),
+                CreateBinding(mapName, BlockiverseInputActionNames.Crouch, "crouch-thumbstick-clicked", $"{controllerPath}/thumbstickClicked"),
                 CreateBinding(mapName, BlockiverseInputActionNames.AimPosition, "pointer-position", $"{controllerPath}/pointerPosition"),
                 CreateBinding(mapName, BlockiverseInputActionNames.AimRotation, "pointer-rotation", $"{controllerPath}/pointerRotation"),
             };
@@ -380,6 +382,7 @@ namespace Blockiverse.Editor
             EnsureButtonAction(map, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
             EnsureButtonAction(map, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
             EnsureButtonAction(map, BlockiverseInputActionNames.Sprint, $"{controllerPath}/thumbstickClicked");
+            EnsureButtonAction(map, BlockiverseInputActionNames.Crouch, $"{controllerPath}/thumbstickClicked");
 
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Move, controllerPath);
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Turn, controllerPath);

@@ -58,14 +58,14 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(atlas.width, Is.EqualTo(BlockVisualAtlas.AtlasWidthPixels), path);
                 Assert.That(atlas.height, Is.EqualTo(BlockVisualAtlas.AtlasHeightPixels), path);
                 Assert.That(importer, Is.Not.Null, path);
-                Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Trilinear), path);
+                Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Point), path);
                 Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp), path);
-                Assert.That(importer.mipmapEnabled, Is.True, path);
-                Assert.That(importer.anisoLevel, Is.GreaterThanOrEqualTo(4), path);
+                Assert.That(importer.mipmapEnabled, Is.False, path);
+                Assert.That(importer.anisoLevel, Is.EqualTo(1), path);
 
                 TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
                 Assert.That(androidSettings.overridden, Is.True, path);
-                Assert.That(androidSettings.textureCompression, Is.Not.EqualTo(TextureImporterCompression.Uncompressed), path);
+                Assert.That(androidSettings.textureCompression, Is.EqualTo(TextureImporterCompression.Uncompressed), path);
                 // The atlas is non-square; Android max texture size must be large enough to hold
                 // the larger dimension without downscaling (which would misalign tiles), and no
                 // larger than the next power of two above it to keep the Quest texture budget tight.

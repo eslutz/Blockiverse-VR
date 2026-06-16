@@ -698,6 +698,7 @@ namespace Blockiverse.Editor
             "Support stick: move\n" +
             "Support stick click: sprint\n" +
             "Dominant stick: snap turn\n" +
+            "Dominant stick click: crouch\n" +
             "Either stick hold up: teleport aim, release to land\n" +
             "Dominant trigger: press UI / break\n" +
             "Dominant grip: place / use\n" +

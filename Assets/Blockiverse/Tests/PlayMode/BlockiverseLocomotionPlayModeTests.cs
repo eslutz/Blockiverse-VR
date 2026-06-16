@@ -659,6 +659,13 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
                 Assert.That(inputRig.SprintActive, Is.True);
 
+                Press(gamepad.leftStickButton);
+                yield return null;
+                Assert.That(inputRig.CrouchActive, Is.True);
+                Release(gamepad.leftStickButton);
+                yield return null;
+                Assert.That(inputRig.CrouchActive, Is.True);
+
                 Set(gamepad.leftStick, Vector2.right);
                 yield return null;
                 yield return null;
@@ -697,6 +704,54 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(blockTogglePresses, Is.EqualTo(1));
                 Release(gamepad.selectButton);
                 yield return null;
+            }
+            finally
+            {
+                DestroyRigImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RightHandedModeUsesSupportSprintAndDominantCrouch()
+        {
+            GameObject rigObject = CreateXrOrigin(out XROrigin origin);
+            InputActionAsset actions = CreateTestActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.DominantHand = BlockiverseControllerRole.Right;
+
+                ConfigureXriLocomotionStack(
+                    rigObject,
+                    origin,
+                    out XRBodyTransformer bodyTransformer,
+                    out LocomotionMediator mediator,
+                    out TeleportationProvider teleport,
+                    out ContinuousMoveProvider continuousMove,
+                    out SnapTurnProvider snapTurn);
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
+
+                yield return null;
+
+                Press(gamepad.leftStickButton);
+                yield return null;
+                Assert.That(inputRig.SprintActive, Is.True);
+                Assert.That(inputRig.CrouchActive, Is.False);
+                Release(gamepad.leftStickButton);
+                yield return null;
+
+                Press(gamepad.rightStickButton);
+                yield return null;
+                Assert.That(inputRig.CrouchActive, Is.True);
+                Release(gamepad.rightStickButton);
+                yield return null;
+                Assert.That(inputRig.CrouchActive, Is.True);
             }
             finally
             {
@@ -1178,6 +1233,7 @@ namespace Blockiverse.Tests.PlayMode
             leftHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonWest");
             leftHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/select");
             leftHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/leftStickPress");
+            leftHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/leftStickPress");
             leftHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             leftHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
@@ -1197,6 +1253,7 @@ namespace Blockiverse.Tests.PlayMode
             rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonNorth");
             rightHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/buttonEast");
             rightHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/rightStickPress");
+            rightHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/rightStickPress");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 

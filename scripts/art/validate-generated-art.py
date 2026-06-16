@@ -38,7 +38,7 @@ class GeneratedArtAssetTests(unittest.TestCase):
         ui_names = [sprite[0] for sprite in self.generator.UI_SPRITES]
         vfx_names = [sprite[0] for sprite in self.generator.VFX_SPRITES]
 
-        self.assertEqual(len(block_names), 51)
+        self.assertEqual(len(block_names), 77)
         self.assertEqual(len(set(block_names)), len(block_names))
         self.assertIn("worldroot", block_names)
         self.assertIn("mend_bench", block_names)
@@ -96,21 +96,43 @@ class GeneratedArtAssetTests(unittest.TestCase):
         icon = self.generator.make_item_icon(self.generator.ITEMS[0])
         vfx = self.generator.make_vfx_sprite(self.generator.VFX_SPRITES[0])
 
-        self.assertEqual((len(tile[0]), len(tile)), (16, 16))
+        self.assertEqual((len(tile[0]), len(tile)), (32, 32))
         self.assertEqual((len(icon[0]), len(icon)), (64, 64))
         self.assertEqual((len(vfx[0]), len(vfx)), (32, 32))
 
         self.assertEqual(self.generator.ATLAS_COLUMNS, 8)
         self.assertEqual(self.generator.ATLAS_ROWS, 10)
-        self.assertEqual(self.generator.TILE_PIXELS, 16)
-        self.assertEqual(self.generator.ATLAS_TILE_PADDING_PIXELS, 4)
-        self.assertEqual(self.generator.atlas_width(), 192)
-        self.assertEqual(self.generator.atlas_height(), 240)
+        self.assertEqual(self.generator.TILE_PIXELS, 32)
+        self.assertEqual(self.generator.ATLAS_TILE_PADDING_PIXELS, 8)
+        self.assertEqual(self.generator.atlas_width(), 384)
+        self.assertEqual(self.generator.atlas_height(), 480)
         self.assertLess(
             max(block[1] for block in self.generator.BLOCKS),
             self.generator.ATLAS_COLUMNS * self.generator.ATLAS_ROWS,
         )
-        self.assertEqual(self.generator.atlas_max_texture_size(), 256)
+        self.assertEqual(self.generator.atlas_max_texture_size(), 512)
+
+    def test_generated_block_atlases_use_crisp_sampling_importers(self):
+        for texture_set in self.generator.BLOCK_TEXTURE_SET_IDS:
+            with self.subTest(texture_set=texture_set):
+                meta_path = (
+                    ROOT
+                    / "Assets"
+                    / "Blockiverse"
+                    / "Art"
+                    / "Textures"
+                    / "Blocks"
+                    / "TextureSets"
+                    / texture_set
+                    / "blockiverse_block_atlas.png.meta"
+                )
+                self.assertTrue(meta_path.exists(), f"Missing block atlas meta for {texture_set}")
+                meta = meta_path.read_text(encoding="utf-8")
+                self.assertIn("  mipmaps:\n", meta)
+                self.assertIn("    enableMipMap: 0\n", meta)
+                self.assertIn("  filterMode: 0\n", meta)
+                self.assertIn("  aniso: 1\n", meta)
+                self.assertIn("    textureCompression: 0\n", meta)
 
     def test_resource_and_crop_blocks_use_shape_cues(self):
         patterns = {block[0]: block[4] for block in self.generator.BLOCKS}
