@@ -15,8 +15,11 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
-        [SerializeField] bool flightEnabledDefault = true;
-        [SerializeField] Transform rightHandAimSource;
+        [SerializeField] bool flightEnabledDefault;
+        [SerializeField] Transform dominantHandAimSource;
+
+        Transform cachedLeftHandAimSource;
+        Transform cachedRightHandAimSource;
 
         bool hasExplicitFlightState;
         bool requestedFlightActive;
@@ -40,7 +43,12 @@ namespace Blockiverse.VR
             CreativeWorldManager manager = null,
             MultiplayerSurvivalSync sync = null)
         {
-            inputRig = rig;
+            if (inputRig != rig)
+            {
+                inputRig = rig;
+                ClearCachedAimSources();
+            }
+
             worldManager = manager != null ? manager : worldManager;
             survivalSync = sync != null ? sync : survivalSync;
             if (Application.isPlaying)
@@ -114,7 +122,14 @@ namespace Blockiverse.VR
         void DiscoverDependencies()
         {
             if (inputRig == null)
-                inputRig = GetComponent<BlockiverseInputRig>() ?? GetComponentInParent<BlockiverseInputRig>();
+            {
+                BlockiverseInputRig discoveredRig = GetComponent<BlockiverseInputRig>() ?? GetComponentInParent<BlockiverseInputRig>();
+                if (discoveredRig != null)
+                {
+                    inputRig = discoveredRig;
+                    ClearCachedAimSources();
+                }
+            }
 
             if (!Application.isPlaying)
                 return;
@@ -182,26 +197,58 @@ namespace Blockiverse.VR
 
         Vector3 ResolveFlightForward()
         {
-            Transform aim = ResolveRightHandAimSource();
+            Transform aim = ResolveDominantHandAimSource();
             Vector3 forward = aim != null ? aim.forward : transform.forward;
             return forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector3.forward;
         }
 
+        Transform ResolveDominantHandAimSource()
+        {
+            if (dominantHandAimSource != null)
+                return dominantHandAimSource;
+
+            BlockiverseControllerRole hand = inputRig != null
+                ? inputRig.ActiveToolHand
+                : BlockiverseControllerRole.Right;
+
+            return hand == BlockiverseControllerRole.Left
+                ? ResolveLeftHandAimSource()
+                : ResolveRightHandAimSource();
+        }
+
+        Transform ResolveLeftHandAimSource()
+        {
+            if (cachedLeftHandAimSource == null)
+                cachedLeftHandAimSource = ResolveControllerAimSource("Left Controller");
+
+            return cachedLeftHandAimSource;
+        }
+
         Transform ResolveRightHandAimSource()
         {
-            if (rightHandAimSource != null)
-                return rightHandAimSource;
+            if (cachedRightHandAimSource == null)
+                cachedRightHandAimSource = ResolveControllerAimSource("Right Controller");
 
+            return cachedRightHandAimSource;
+        }
+
+        Transform ResolveControllerAimSource(string controllerName)
+        {
             Transform root = inputRig != null ? inputRig.transform : transform;
             Transform cameraOffset = root.Find("Camera Offset");
-            rightHandAimSource =
-                cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
-            if (rightHandAimSource == null)
-                rightHandAimSource = root.Find("Right Controller");
-            if (rightHandAimSource == null)
-                rightHandAimSource = root;
+            Transform aimSource = cameraOffset != null ? cameraOffset.Find(controllerName) : null;
+            if (aimSource == null)
+                aimSource = root.Find(controllerName);
+            if (aimSource == null)
+                aimSource = root;
 
-            return rightHandAimSource;
+            return aimSource;
+        }
+
+        void ClearCachedAimSources()
+        {
+            cachedLeftHandAimSource = null;
+            cachedRightHandAimSource = null;
         }
 
         void ApplyProviderState(bool active)

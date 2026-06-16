@@ -535,7 +535,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CreativeFlightControllerTogglesXriFlightForCreativeWorlds()
+        public void CreativeFlightControllerStartsGroundedAndTogglesFlightForCreativeWorlds()
         {
             var rigObject = new GameObject("Creative Flight Rig");
             var worldObject = new GameObject("Creative Flight World");
@@ -567,8 +567,17 @@ namespace Blockiverse.Tests.EditMode
 
                 flight.ApplyFlightState();
 
+                Assert.That(flight.IsFlightActive, Is.False, "Entering creative mode should not automatically enter flight mode.");
+                Assert.That(continuousMove.enableFly, Is.False);
+                Assert.That(continuousMove.enabled, Is.True);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+                Assert.That(inputRig.TurnWithBothHands, Is.False);
+
+                flight.SetFlightActive(true);
+
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding the dominant primary button toward the right-hand aim pose, not by stick locomotion.");
+                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding the dominant primary button toward the dominant-hand aim pose, not by stick locomotion.");
                 Assert.That(continuousMove.enableFly, Is.False);
                 Assert.That(gravity.useGravity, Is.False);
                 Assert.That(jump.enabled, Is.False);
@@ -606,6 +615,19 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void XrRigPrefabDoesNotDefaultCreativeFlightOn()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseCreativeFlightController flight = prefab.GetComponent<BlockiverseCreativeFlightController>();
+
+            Assert.That(flight, Is.Not.Null);
+            Assert.That(flight.FlightEnabledDefault, Is.False, "Creative players should enter grounded locomotion until they explicitly toggle flight.");
+        }
+
+        [Test]
         public void SprintClickTogglesAndHoldTemporarilyRaisesMoveSpeed()
         {
             MethodInfo toggleMethod = typeof(BlockiverseInputRig).GetMethod(
@@ -624,7 +646,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CreativeFlightMovementUsesRightHandAimOnlyWhileJumpHeld()
+        public void CreativeFlightMovementUsesAimOnlyWhileJumpHeld()
         {
             Vector3 displacement = BlockiverseCreativeFlightController.ComputeFlightDisplacement(
                 new Vector3(0.0f, 0.25f, 1.0f),
@@ -640,6 +662,57 @@ namespace Blockiverse.Tests.EditMode
             Vector3 idle = BlockiverseCreativeFlightController.ComputeFlightDisplacement(Vector3.forward, moveHeld: false, deltaSeconds: 1.0f);
 
             Assert.That(idle, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void CreativeFlightMovementUsesDominantHandAim()
+        {
+            var rigObject = new GameObject("Creative Flight Dominant Rig");
+            var settingsObject = new GameObject("Creative Flight Comfort Settings");
+
+            try
+            {
+                Transform cameraOffset = new GameObject("Camera Offset").transform;
+                cameraOffset.SetParent(rigObject.transform, false);
+
+                Transform leftController = new GameObject("Left Controller").transform;
+                leftController.SetParent(cameraOffset, false);
+                leftController.rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+
+                Transform rightController = new GameObject("Right Controller").transform;
+                rightController.SetParent(cameraOffset, false);
+                rightController.rotation = Quaternion.LookRotation(Vector3.right, Vector3.up);
+
+                var comfortSettings = settingsObject.AddComponent<BlockiverseComfortSettings>();
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.ConfigureLocomotion(
+                    teleport: null,
+                    snapTurn: null,
+                    reset: null,
+                    settings: comfortSettings);
+
+                var flight = rigObject.AddComponent<BlockiverseCreativeFlightController>();
+                flight.Configure(inputRig);
+
+                MethodInfo resolveForward = typeof(BlockiverseCreativeFlightController).GetMethod(
+                    "ResolveFlightForward",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(resolveForward, Is.Not.Null, "Creative flight should resolve travel direction from the current dominant controller.");
+
+                comfortSettings.DominantHand = BlockiverseControllerRole.Left;
+                Vector3 leftForward = (Vector3)resolveForward.Invoke(flight, null);
+
+                comfortSettings.DominantHand = BlockiverseControllerRole.Right;
+                Vector3 rightForward = (Vector3)resolveForward.Invoke(flight, null);
+
+                Assert.That(leftForward.x, Is.EqualTo(-1.0f).Within(0.001f));
+                Assert.That(rightForward.x, Is.EqualTo(1.0f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(settingsObject);
+            }
         }
 
         [Test]
