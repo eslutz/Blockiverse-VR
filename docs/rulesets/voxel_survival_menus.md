@@ -1092,6 +1092,7 @@ can never drift apart.
 | Support stick: move                                        |
 | Support stick click: sprint                                |
 | Dominant stick: snap turn                                  |
+| Dominant stick click: crouch                               |
 | Either stick hold up: teleport aim, release to land        |
 | Dominant trigger: press UI / break                         |
 | Dominant grip: place / use                                 |

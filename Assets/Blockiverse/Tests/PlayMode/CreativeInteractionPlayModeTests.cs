@@ -298,10 +298,48 @@ namespace Blockiverse.Tests.PlayMode
                     BlockRegistry.CreateDefault(),
                     hotbar,
                     null,
-                    new Bounds(new Vector3(1.5f, 1.5f, 1.5f), Vector3.one));
+                    null);
+                controller.ConfigurePlayerOccupancy(position =>
+                    CreativeInteractionController.IsPlayerOccupyingBlock(position, new BlockPosition(1, 2, 1), crouching: false));
 
                 Assert.That(controller.TryPlaceBlock(new BlockPosition(3, 1, 1), Vector3.right), Is.False);
                 Assert.That(controller.TryPlaceBlock(new BlockPosition(1, 0, 1), Vector3.up), Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+                Object.DestroyImmediate(hotbarObject);
+            }
+        }
+
+        [Test]
+        public void PlacementRejectsOnlyCurrentPlayerOccupiedCells()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
+            var controllerObject = new GameObject("Creative Controller");
+            var hotbarObject = new GameObject("Hotbar");
+
+            try
+            {
+                CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
+                hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam }, null);
+
+                CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                controller.Configure(world, BlockRegistry.CreateDefault(), hotbar, null, null);
+
+                BlockPosition playerHead = new(1, 2, 1);
+                controller.ConfigurePlayerOccupancy(position =>
+                    CreativeInteractionController.IsPlayerOccupyingBlock(position, playerHead, crouching: false));
+
+                Assert.That(controller.CanPlaceBlock(new BlockPosition(1, 1, 1)), Is.False);
+                Assert.That(controller.CanPlaceBlock(new BlockPosition(1, 2, 1)), Is.False);
+                Assert.That(controller.CanPlaceBlock(new BlockPosition(2, 1, 1)), Is.True);
+
+                controller.ConfigurePlayerOccupancy(position =>
+                    CreativeInteractionController.IsPlayerOccupyingBlock(position, playerHead, crouching: true));
+
+                Assert.That(controller.CanPlaceBlock(new BlockPosition(1, 1, 1)), Is.False);
+                Assert.That(controller.CanPlaceBlock(new BlockPosition(1, 2, 1)), Is.True);
             }
             finally
             {

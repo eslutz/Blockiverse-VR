@@ -26821,6 +26821,8 @@ MonoBehaviour:
     Dominant stick:
     snap turn
 
+    Dominant stick click: crouch
+
     Either stick hold up: teleport aim, release to land
 
     Dominant
@@ -67357,6 +67359,8 @@ MonoBehaviour:
 
     Dominant stick:
     snap turn
+
+    Dominant stick click: crouch
 
     Either stick hold up: teleport aim, release to land
 

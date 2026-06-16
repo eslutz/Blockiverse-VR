@@ -925,10 +925,10 @@ def write_texture_set_atlas(set_id):
         atlas_path,
         sprite=False,
         max_size=atlas_max_texture_size(),
-        enable_mipmaps=True,
-        filter_mode=2,
-        aniso=4,
-        android_texture_compression=1,
+        enable_mipmaps=False,
+        filter_mode=0,
+        aniso=1,
+        android_texture_compression=0,
     )
 
 

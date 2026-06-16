@@ -36,6 +36,7 @@ namespace Blockiverse.Tests.EditMode
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Crouch);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Undo);
         }
 
@@ -52,6 +53,7 @@ namespace Blockiverse.Tests.EditMode
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Jump);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.BlockEditingToggle);
             AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Sprint);
+            AssertNoAction(asset, BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Crouch);
         }
 
         [Test]
@@ -133,6 +135,7 @@ namespace Blockiverse.Tests.EditMode
             AssertAction(asset, mapName, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
             AssertAction(asset, mapName, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Sprint, $"{controllerPath}/thumbstickClicked");
+            AssertAction(asset, mapName, BlockiverseInputActionNames.Crouch, $"{controllerPath}/thumbstickClicked");
         }
 
         static void AssertAction(InputActionAsset asset, string mapName, string actionName, string expectedPath)

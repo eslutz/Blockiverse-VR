@@ -75,6 +75,7 @@ namespace Blockiverse.VR
             interactionController = controller;
             DiscoverInteractionRayVisuals();
             ApplyInteractionRayVisualState();
+            ApplyPlayerOccupancyPredicate();
             Bind();
         }
 
@@ -232,6 +233,35 @@ namespace Blockiverse.VR
             if (comfortSettings == null)
                 comfortSettings = GetComponentInParent<BlockiverseComfortSettings>() ??
                     FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+
+            ApplyPlayerOccupancyPredicate();
+        }
+
+        void ApplyPlayerOccupancyPredicate()
+        {
+            if (interactionController != null)
+                interactionController.ConfigurePlayerOccupancy(IsLocalPlayerOccupyingBlock);
+
+            if (survivalSync != null)
+                survivalSync.ConfigureLocalCrouchStateProvider(() => inputRig != null && inputRig.CrouchActive);
+        }
+
+        bool IsLocalPlayerOccupyingBlock(BlockPosition targetPosition)
+        {
+            Transform head = inputRig != null && inputRig.HeadPoseDriver != null
+                ? inputRig.HeadPoseDriver.transform
+                : inputRig != null
+                    ? inputRig.transform
+                    : null;
+
+            if (head == null)
+                return false;
+
+            BlockPosition headPosition = CreativeInteractionController.ToBlockPosition(head.position);
+            return CreativeInteractionController.IsPlayerOccupyingBlock(
+                targetPosition,
+                headPosition,
+                inputRig != null && inputRig.CrouchActive);
         }
 
         // The current interaction mode for this player (resolved from the survival sync).

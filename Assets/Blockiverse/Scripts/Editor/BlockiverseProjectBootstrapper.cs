@@ -824,6 +824,7 @@ namespace Blockiverse.Editor
             InputAction turn = map.AddAction(BlockiverseInputActionNames.Turn, InputActionType.PassThrough, expectedControlLayout: "Vector2");
             turn.AddBinding($"{controllerPath}/thumbstick", processors: StickDeadzoneProcessor);
             map.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, $"{controllerPath}/thumbstickClicked");
+            map.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, $"{controllerPath}/thumbstickClicked");
             AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button), controllerPath);
             AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button), controllerPath);
         }

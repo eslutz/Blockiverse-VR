@@ -386,6 +386,8 @@ namespace Blockiverse.Tests.EditMode
                 "Block editing toggle should be resolved from the dominant controller map.");
             Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false), Is.Null,
                 "Sprint should be resolved from the support controller map.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Crouch, throwIfNotFound: false), Is.Null,
+                "Crouch should be resolved from the dominant controller map.");
             Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Undo, throwIfNotFound: false), Is.Null,
                 "Undo must not have a controller button.");
 
@@ -961,6 +963,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
             Assert.That(popupText, Does.Contain("Menu: pause"));
             Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
+            Assert.That(popupText, Does.Contain("Dominant stick click: crouch"));
             Assert.That(popupText, Does.Contain("Dominant primary button: jump"));
             Assert.That(popupText, Does.Contain("Dominant secondary button: toggle block editing"));
             Assert.That(popupText, Does.Contain("Support stick: move"));
@@ -1124,6 +1127,7 @@ namespace Blockiverse.Tests.EditMode
             InputAction primary = map.FindAction(BlockiverseInputActionNames.PrimaryButton, throwIfNotFound: false);
             InputAction secondary = map.FindAction(BlockiverseInputActionNames.SecondaryButton, throwIfNotFound: false);
             InputAction sprint = map.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false);
+            InputAction crouch = map.FindAction(BlockiverseInputActionNames.Crouch, throwIfNotFound: false);
 
             Assert.That(primary, Is.Not.Null, $"{map.name}/Primary Button should exist.");
             Assert.That(primary.bindings,
@@ -1137,6 +1141,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(sprint.bindings,
                 Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
                 $"{map.name}/Sprint should be bound to {controllerPath}/thumbstickClicked.");
+            Assert.That(crouch, Is.Not.Null, $"{map.name}/Crouch should exist.");
+            Assert.That(crouch.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
+                $"{map.name}/Crouch should be bound to {controllerPath}/thumbstickClicked.");
         }
 
         static void AssertButtonReaderReferencesAction(XRInputButtonReader reader, InputAction action, string message)

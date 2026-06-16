@@ -32,6 +32,7 @@ namespace Blockiverse.VR
         public const string Jump = "Jump";
         public const string BlockEditingToggle = "Block Editing Toggle";
         public const string Sprint = "Sprint";
+        public const string Crouch = "Crouch";
         public const string HeightReset = "Height Reset";
         public const string Undo = "Undo";
     }

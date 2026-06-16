@@ -25,6 +25,7 @@ namespace Blockiverse.VR
         const float DefaultContinuousMoveSpeed = 1.8f;
         const float SprintMoveMultiplier = 2.2f;
         const float SprintClickToggleMaxSeconds = 0.25f;
+        const float CrouchClickToggleMaxSeconds = 0.25f;
         const float DefaultSnapTurnDegrees = 45.0f;
         const float DefaultContinuousTurnSpeed = 60.0f;
         const float DefaultJumpHeightMeters = 1.3f;
@@ -80,6 +81,7 @@ namespace Blockiverse.VR
         InputAction cachedPlaceAction;
         InputAction cachedBlockEditingToggleAction;
         InputAction cachedSprintAction;
+        InputAction cachedCrouchAction;
         BlockiverseControllerRole cachedDominantHand;
 
         // Last comfort values pushed to the XRI providers. Provider fields — and especially the
@@ -101,6 +103,9 @@ namespace Blockiverse.VR
         bool sprintToggled;
         bool sprintHeld;
         float sprintPressStartedAt = -1.0f;
+        bool crouchToggled;
+        bool crouchHeld;
+        float crouchPressStartedAt = -1.0f;
         XRRayInteractor leftInteractionRay;
         XRRayInteractor rightInteractionRay;
 
@@ -116,6 +121,7 @@ namespace Blockiverse.VR
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
         public bool SprintActive => sprintToggled || sprintHeld;
+        public bool CrouchActive => crouchToggled || crouchHeld;
         public TrackedPoseDriver HeadPoseDriver => headPoseDriver;
         public XRBodyTransformer BodyTransformer => bodyTransformer;
         public LocomotionMediator LocomotionMediator => locomotionMediator;
@@ -316,6 +322,9 @@ namespace Blockiverse.VR
         public static bool ShouldToggleSprint(float pressDurationSeconds) =>
             pressDurationSeconds >= 0.0f && pressDurationSeconds <= SprintClickToggleMaxSeconds;
 
+        public static bool ShouldToggleCrouch(float pressDurationSeconds) =>
+            pressDurationSeconds >= 0.0f && pressDurationSeconds <= CrouchClickToggleMaxSeconds;
+
         public static float ResolveSprintMoveSpeed(float baseMoveSpeed, bool sprintActive) =>
             sprintActive ? baseMoveSpeed * SprintMoveMultiplier : baseMoveSpeed;
 
@@ -374,6 +383,7 @@ namespace Blockiverse.VR
         void OnDisable()
         {
             ClearTransientSprintState();
+            ClearTransientCrouchState();
             UnsubscribeLocomotionFeedback();
             inputActions?.Disable();
             DisableTrackedPoseDrivers();
@@ -382,6 +392,7 @@ namespace Blockiverse.VR
         void OnDestroy()
         {
             ClearTransientSprintState();
+            ClearTransientCrouchState();
             UnsubscribeLocomotionFeedback();
             inputActions?.Disable();
             DisableTrackedPoseDrivers();
@@ -391,6 +402,7 @@ namespace Blockiverse.VR
         {
             RefreshCachedActions();
             UpdateSprintInput(Time.unscaledTime);
+            UpdateCrouchInput(Time.unscaledTime);
             ApplyComfortSettingsToProviders();
             UpdateTurnProviderEnabledState();
             UpdateMenu();
@@ -419,6 +431,7 @@ namespace Blockiverse.VR
             TryFindAction(dominantMap, BlockiverseInputActionNames.Select, out cachedBreakAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Activate, out cachedPlaceAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.SecondaryButton, out cachedBlockEditingToggleAction);
+            TryFindAction(dominantMap, BlockiverseInputActionNames.Crouch, out cachedCrouchAction);
             TryFindAction(supportMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
         }
 
@@ -455,6 +468,41 @@ namespace Blockiverse.VR
         {
             sprintHeld = false;
             sprintPressStartedAt = -1.0f;
+        }
+
+        void UpdateCrouchInput(float now)
+        {
+            if (!BlockiverseRuntimeState.AllowWorldInput || cachedCrouchAction == null)
+            {
+                ClearTransientCrouchState();
+                return;
+            }
+
+            if (cachedCrouchAction.WasPressedThisFrame())
+            {
+                crouchHeld = true;
+                crouchPressStartedAt = now;
+            }
+
+            if (cachedCrouchAction.IsPressed())
+                crouchHeld = true;
+
+            if (cachedCrouchAction.WasReleasedThisFrame())
+            {
+                float pressDuration = crouchPressStartedAt >= 0.0f
+                    ? now - crouchPressStartedAt
+                    : float.PositiveInfinity;
+
+                ClearTransientCrouchState();
+                if (ShouldToggleCrouch(pressDuration))
+                    crouchToggled = !crouchToggled;
+            }
+        }
+
+        void ClearTransientCrouchState()
+        {
+            crouchHeld = false;
+            crouchPressStartedAt = -1.0f;
         }
 
         void UpdateMenu()

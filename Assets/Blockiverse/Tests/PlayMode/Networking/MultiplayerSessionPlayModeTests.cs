@@ -2051,6 +2051,58 @@ namespace Blockiverse.Tests.Networking.PlayMode
         }
 
         [Test]
+        public void HostPlaceValidationUsesCrouchAwarePlayerOccupancy()
+        {
+            GameObject syncObject = new("Crouch Place Survival Sync");
+            GameObject cameraObject = null;
+            CreativeWorldManager worldManager = null;
+            var feetPosition = new BlockPosition(3, 4, 3);
+            var headPosition = new BlockPosition(3, 5, 3);
+
+            try
+            {
+                worldManager = CreateCreativeWorldManager(
+                    "Crouch Place World",
+                    new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 7913, groundHeight: 2));
+                worldManager.World.SetBlock(feetPosition, BlockRegistry.Air);
+                worldManager.World.SetBlock(headPosition, BlockRegistry.Air);
+                cameraObject = CreateMainCamera("Crouch Place Camera", new Vector3(3.5f, 5.5f, 3.5f));
+
+                MultiplayerSurvivalSync survivalSync = ConfigureOfflineSurvivalSync(syncObject, worldManager);
+                Inventory hostInventory = survivalSync.GetInventory(NetworkManager.ServerClientId);
+                hostInventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 3));
+                survivalSync.ConfigureLocalCrouchStateProvider(() => false);
+
+                SurvivalCommandResult standingHead = survivalSync.TrySubmitPlace(headPosition, out bool standingSent, equippedSlotIndex: 0);
+
+                AssertRejectedLocalCommand(standingHead, standingSent, SurvivalCommandFailureReason.PlacementRejected);
+                Assert.That(worldManager.World.GetBlock(headPosition), Is.EqualTo(BlockRegistry.Air));
+                Assert.That(hostInventory.GetSlot(0).Count, Is.EqualTo(3));
+
+                survivalSync.ConfigureLocalCrouchStateProvider(() => true);
+                SurvivalCommandResult crouchingHead = survivalSync.TrySubmitPlace(headPosition, out bool crouchingHeadSent, equippedSlotIndex: 0);
+
+                AssertAcceptedLocalCommand(crouchingHead, crouchingHeadSent);
+                Assert.That(worldManager.World.GetBlock(headPosition), Is.EqualTo(BlockRegistry.BranchwoodLog));
+                Assert.That(hostInventory.GetSlot(0).Count, Is.EqualTo(2));
+
+                SurvivalCommandResult crouchingFeet = survivalSync.TrySubmitPlace(feetPosition, out bool crouchingFeetSent, equippedSlotIndex: 0);
+
+                AssertRejectedLocalCommand(crouchingFeet, crouchingFeetSent, SurvivalCommandFailureReason.PlacementRejected);
+                Assert.That(worldManager.World.GetBlock(feetPosition), Is.EqualTo(BlockRegistry.Air));
+                Assert.That(hostInventory.GetSlot(0).Count, Is.EqualTo(2));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(syncObject);
+                if (cameraObject != null)
+                    UnityEngine.Object.DestroyImmediate(cameraObject);
+                if (worldManager != null)
+                    UnityEngine.Object.DestroyImmediate(worldManager.gameObject);
+            }
+        }
+
+        [Test]
         public void HostRejectsSharedCrateWithdrawExceedingCountWithoutMutation()
         {
             GameObject syncObject = new("Crate Overdraw Survival Sync");
@@ -2583,6 +2635,12 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(requestSentToHost, Is.False);
             Assert.That(result.Accepted, Is.False);
             Assert.That(result.FailureReason, Is.EqualTo(expectedReason));
+        }
+
+        static void AssertAcceptedLocalCommand(SurvivalCommandResult result, bool requestSentToHost)
+        {
+            Assert.That(requestSentToHost, Is.False);
+            Assert.That(result.Accepted, Is.True);
         }
 
         [Test]
