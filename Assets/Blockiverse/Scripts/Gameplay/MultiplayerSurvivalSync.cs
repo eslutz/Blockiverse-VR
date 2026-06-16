@@ -643,6 +643,7 @@ namespace Blockiverse.Gameplay
             hostCommandRateLimiter.Clear();
             pendingCommandRequests.Clear();
             lastAcceptedHarvestTimeByClientId.Clear();
+            ClearKnownCrouchState();
             stationModels.Clear();
             nextCommandRequestId = 1;
             localInventory = CreatePlayerInventory();
@@ -2989,6 +2990,14 @@ namespace Blockiverse.Gameplay
 
         bool ResolveLocalCrouchActive() => localCrouchStateProvider != null && localCrouchStateProvider();
 
+        void ClearKnownCrouchState()
+        {
+            lastKnownCrouchStateByClientId.Clear();
+            hasSentLocalCrouchState = false;
+            lastSentLocalCrouchState = false;
+            nextCrouchStateHeartbeatTime = 0.0f;
+        }
+
         void RefreshCrouchStateReplication()
         {
             NetworkManager networkManager = ResolveNetworkManagerOrNull();
@@ -3674,6 +3683,7 @@ namespace Blockiverse.Gameplay
             processedRequestsByClientId.Clear();
             hostCommandRateLimiter.Clear();
             lastAcceptedHarvestTimeByClientId.Clear();
+            ClearKnownCrouchState();
             groundItems = new GroundItemStore(itemRegistry);
             stationModels.Clear();
             ResetPendingCommands();
@@ -3718,9 +3728,7 @@ namespace Blockiverse.Gameplay
             if (!CanProcessHostRequests() || clientId == ResolveLocalClientId())
                 return;
 
-            processedRequestsByClientId.Remove(clientId);
-            hostCommandRateLimiter.RemoveClient(clientId);
-            lastAcceptedHarvestTimeByClientId.Remove(clientId);
+            ClearClientConnectionState(clientId);
 
             // Reconnect identity: stash the departing player's inventory under their hardened
             // identity key so the same player rejoining this session reclaims it (new client id).
@@ -3729,6 +3737,14 @@ namespace Blockiverse.Gameplay
             {
                 stashedInventoriesByIdentityKey[identityKey] = inventory;
             }
+        }
+
+        void ClearClientConnectionState(ulong clientId)
+        {
+            processedRequestsByClientId.Remove(clientId);
+            hostCommandRateLimiter.RemoveClient(clientId);
+            lastAcceptedHarvestTimeByClientId.Remove(clientId);
+            lastKnownCrouchStateByClientId.Remove(clientId);
         }
 
         // The local player's persistent identity parts, created once and reused across sessions.
