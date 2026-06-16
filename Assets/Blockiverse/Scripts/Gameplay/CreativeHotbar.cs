@@ -16,12 +16,13 @@ namespace Blockiverse.Gameplay
         BlockRegistry registry;
         [SerializeField] TMP_Text selectedBlockLabel;
         [SerializeField] Canvas targetCanvas;
+        [SerializeField] GameObject visibilityRoot;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         int selectedIndex;
 
         public BlockId SelectedBlockId => blockIds.Count == 0 ? BlockRegistry.Air : blockIds[selectedIndex];
         public IReadOnlyList<BlockId> BlockIds => blockIds;
-        public bool IsVisible => targetCanvas != null && targetCanvas.enabled;
+        public bool IsVisible => targetCanvas != null ? targetCanvas.enabled : visibilityRoot != null && visibilityRoot.activeSelf;
         public UnityEvent SelectionChanged { get; } = new();
 
         public void Configure(BlockRegistry blockRegistry, IEnumerable<BlockId> selectableBlocks, TMP_Text selectedLabel)
@@ -45,6 +46,14 @@ namespace Blockiverse.Gameplay
         public void ConfigureCanvas(Canvas canvas)
         {
             targetCanvas = canvas;
+            visibilityRoot = canvas != null ? canvas.gameObject : null;
+            Hide(playFeedback: false);
+        }
+
+        public void ConfigureVisibilityRoot(GameObject root)
+        {
+            targetCanvas = null;
+            visibilityRoot = root;
             Hide(playFeedback: false);
         }
 
@@ -130,6 +139,11 @@ namespace Blockiverse.Gameplay
                 targetCanvas.enabled = true;
                 PlayFeedback(BlockiverseAudioCue.InventoryOpen);
             }
+            else if (visibilityRoot != null)
+            {
+                visibilityRoot.SetActive(true);
+                PlayFeedback(BlockiverseAudioCue.InventoryOpen);
+            }
         }
 
         public void Hide()
@@ -142,6 +156,12 @@ namespace Blockiverse.Gameplay
             if (targetCanvas != null)
             {
                 targetCanvas.enabled = false;
+                if (playFeedback)
+                    PlayFeedback(BlockiverseAudioCue.InventoryClose);
+            }
+            else if (visibilityRoot != null)
+            {
+                visibilityRoot.SetActive(false);
                 if (playFeedback)
                     PlayFeedback(BlockiverseAudioCue.InventoryClose);
             }
@@ -159,8 +179,11 @@ namespace Blockiverse.Gameplay
 
         void Awake()
         {
-            if (targetCanvas == null)
+            if (targetCanvas == null && visibilityRoot == null)
                 targetCanvas = GetComponent<Canvas>();
+
+            if (visibilityRoot == null && targetCanvas != null)
+                visibilityRoot = targetCanvas.gameObject;
 
             if (registry == null)
                 ConfigureDefault(selectedBlockLabel);

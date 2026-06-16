@@ -10,6 +10,8 @@ namespace Blockiverse.VR
         public const string ControllerMappingPopupSeenPrefKey = "Blockiverse.ControllerMappingPopupSeen";
 
         [SerializeField] Canvas targetCanvas;
+        [SerializeField] GameObject targetRoot;
+        [SerializeField] Transform placementRoot;
         [SerializeField] Transform headset;
         [SerializeField] float distanceMeters = 1.2f;
         [SerializeField] float horizontalOffsetMeters;
@@ -31,10 +33,23 @@ namespace Blockiverse.VR
 
         CreativeHotbar hotbar;
         bool subscribedToHotbarSelection;
+        bool hasVisibilityCommand;
         float lastAppliedPanelScale = -1.0f;
 
         public Canvas TargetCanvas => targetCanvas;
-        public bool IsVisible => targetCanvas != null && targetCanvas.enabled;
+        public GameObject TargetRoot => ResolveTargetRoot();
+        public Transform PlacementRoot => placementRoot != null ? placementRoot : transform;
+        public bool IsVisible
+        {
+            get
+            {
+                if (targetCanvas != null)
+                    return targetCanvas.enabled;
+
+                GameObject root = ResolveTargetRoot();
+                return root != null && root.activeSelf;
+            }
+        }
         public bool ShowOnStart => showOnStart;
         public bool PlaysShowFeedback => playShowFeedback;
         public bool PlaysHideFeedback => playHideFeedback;
@@ -55,6 +70,8 @@ namespace Blockiverse.VR
             string showWhenStartedPlayerPrefsKey = null)
         {
             targetCanvas = canvas;
+            targetRoot = canvas != null ? canvas.gameObject : gameObject;
+            placementRoot = transform;
             headset = targetHeadset;
             distanceMeters = distance;
             horizontalOffsetMeters = horizontalOffset;
@@ -64,6 +81,16 @@ namespace Blockiverse.VR
             recenterOnShow = recenterWhenShown;
             showOnStart = showWhenStarted;
             showOnStartPlayerPrefsKey = showWhenStartedPlayerPrefsKey;
+            DiscoverHotbarSelection();
+            SubscribeHotbarSelectionFeedback();
+        }
+
+
+        public void ConfigureSharedCompositionTarget(GameObject root, Transform sharedPlacementRoot)
+        {
+            targetCanvas = null;
+            targetRoot = root != null ? root : gameObject;
+            placementRoot = sharedPlacementRoot != null ? sharedPlacementRoot : transform;
             DiscoverHotbarSelection();
             SubscribeHotbarSelectionFeedback();
         }
@@ -101,31 +128,38 @@ namespace Blockiverse.VR
         public void Show()
         {
             EnsureCanvas();
+            hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
             if (recenterOnShow)
                 Recenter();
 
+            GameObject root = ResolveTargetRoot();
             if (targetCanvas != null)
-            {
                 targetCanvas.enabled = true;
-                if (!wasVisible)
-                    PlayFeedback(showFeedbackCue, playShowFeedback, hapticOnShow);
-            }
+            else if (root != null)
+                root.SetActive(true);
+
+            if (!wasVisible && IsVisible)
+                PlayFeedback(showFeedbackCue, playShowFeedback, hapticOnShow);
         }
 
         public void Hide()
         {
             EnsureCanvas();
+            hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
+            GameObject root = ResolveTargetRoot();
             if (targetCanvas != null)
-            {
                 targetCanvas.enabled = false;
-                if (wasVisible)
-                    MarkShowOnStartSeen();
-                if (wasVisible)
-                    PlayFeedback(hideFeedbackCue, playHideFeedback, hapticOnHide);
+            else if (root != null)
+                root.SetActive(false);
+
+            if (wasVisible)
+            {
+                MarkShowOnStartSeen();
+                PlayFeedback(hideFeedbackCue, playHideFeedback, hapticOnHide);
             }
         }
 
@@ -133,7 +167,7 @@ namespace Blockiverse.VR
         {
             EnsureCanvas();
 
-            if (targetCanvas != null && targetCanvas.enabled)
+            if (IsVisible)
                 Hide();
             else
                 Show();
@@ -161,11 +195,12 @@ namespace Blockiverse.VR
                 + right * horizontalOffsetMeters
                 + Vector3.up * verticalOffsetMeters;
 
-            transform.SetPositionAndRotation(
+            Transform root = PlacementRoot;
+            root.SetPositionAndRotation(
                 position,
                 Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(pitchDegrees, 0.0f, 0.0f));
             float resolvedScale = ResolvePanelScale();
-            transform.localScale = Vector3.one * resolvedScale;
+            root.localScale = Vector3.one * resolvedScale;
             lastAppliedPanelScale = resolvedScale;
         }
 
@@ -198,10 +233,8 @@ namespace Blockiverse.VR
                 return;
             }
 
-            if (showOnStart && targetCanvas != null)
-            {
-                targetCanvas.enabled = false;
-            }
+            if (!hasVisibilityCommand)
+                HideTargetWithoutFeedback();
         }
 
         void Update()
@@ -218,8 +251,34 @@ namespace Blockiverse.VR
 
         void EnsureCanvas()
         {
-            if (targetCanvas == null)
+            if (targetCanvas == null && targetRoot == null)
                 targetCanvas = GetComponent<Canvas>();
+
+            if (targetRoot == null)
+                targetRoot = targetCanvas != null ? targetCanvas.gameObject : gameObject;
+
+            if (placementRoot == null)
+                placementRoot = transform;
+        }
+
+        GameObject ResolveTargetRoot()
+        {
+            if (targetRoot != null)
+                return targetRoot;
+
+            return targetCanvas != null ? targetCanvas.gameObject : gameObject;
+        }
+
+        void HideTargetWithoutFeedback()
+        {
+            if (targetCanvas != null)
+                targetCanvas.enabled = false;
+            else
+            {
+                GameObject root = ResolveTargetRoot();
+                if (root != null)
+                    root.SetActive(false);
+            }
         }
 
         void DiscoverHotbarSelection()

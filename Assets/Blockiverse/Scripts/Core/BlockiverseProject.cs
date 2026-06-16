@@ -30,6 +30,9 @@ namespace Blockiverse.Core
         public const string CompositionUiLayerName = "BlockiverseCompositionUI";
         public const int CompositionUiLayerIndex = 11;
         public const int CompositionUiLayerMask = 1 << CompositionUiLayerIndex;
+        public const string XrVisualProjectionLayerName = "BlockiverseXrVisuals";
+        public const int XrVisualProjectionLayerIndex = 12;
+        public const int XrVisualProjectionLayerMask = 1 << XrVisualProjectionLayerIndex;
         public const int VrUiRaycastLayerMask = InteractionLayerMask | CompositionUiLayerMask;
     }
 }

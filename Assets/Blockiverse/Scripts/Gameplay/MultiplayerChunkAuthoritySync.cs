@@ -8,6 +8,7 @@ using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using Unity.Collections;
 using Unity.Netcode;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -87,6 +88,21 @@ namespace Blockiverse.Gameplay
         const int SnapshotBlockBytes = 32;
         const int HostMutationRateLimitMaxRequests = 30;
         const double HostMutationRateLimitWindowSeconds = 1.0d;
+
+        static readonly ProfilerMarker TrySubmitMutationMarker = new("Blockiverse.ChunkAuthority.TrySubmitMutation");
+        static readonly ProfilerMarker HandleMutationRequestMarker = new("Blockiverse.ChunkAuthority.HandleMutationRequest");
+        static readonly ProfilerMarker HandleMutationDeltaMarker = new("Blockiverse.ChunkAuthority.HandleMutationDelta");
+        static readonly ProfilerMarker HandleSnapshotMarker = new("Blockiverse.ChunkAuthority.HandleSnapshot");
+        static readonly ProfilerMarker GenerateSnapshotWorldMarker = new("Blockiverse.ChunkAuthority.GenerateSnapshotWorld");
+        static readonly ProfilerMarker FinalizeSnapshotMarker = new("Blockiverse.ChunkAuthority.FinalizeSnapshot");
+        static readonly ProfilerMarker SendMutationRequestMarker = new("Blockiverse.ChunkAuthority.SendMutationRequest");
+        static readonly ProfilerMarker BroadcastDeltaMarker = new("Blockiverse.ChunkAuthority.BroadcastDelta");
+        static readonly ProfilerMarker SendLateJoinSnapshotMarker = new("Blockiverse.ChunkAuthority.SendLateJoinSnapshot");
+        static readonly ProfilerMarker SendEnvironmentSnapshotMarker = new("Blockiverse.ChunkAuthority.SendEnvironmentSnapshot");
+        static readonly ProfilerMarker BroadcastEnvironmentSnapshotMarker = new("Blockiverse.ChunkAuthority.BroadcastEnvironmentSnapshot");
+        static readonly ProfilerMarker TryApplyChunkDeltaMarker = new("Blockiverse.ChunkAuthority.TryApplyChunkDelta");
+        static readonly ProfilerMarker ApplyBufferedChunkDeltasMarker = new("Blockiverse.ChunkAuthority.ApplyBufferedChunkDeltas");
+
         // WeatherState (int) + ticksInCurrentState (int) + weatherRng (uint) + totalElapsedTicks (long) = 20 bytes
         const int EnvironmentSnapshotMessageBytes = EnvironmentSnapshotBytes;
 
@@ -281,6 +297,8 @@ namespace Blockiverse.Gameplay
             out bool requestSentToHost,
             BlockMutationSubmissionKind submissionKind = BlockMutationSubmissionKind.CreativeDirect)
         {
+            using ProfilerMarker.AutoScope scope = TrySubmitMutationMarker.Auto();
+
             appliedCommand = null;
             requestSentToHost = false;
             RefreshAuthorityBoundary();
@@ -420,6 +438,8 @@ namespace Blockiverse.Gameplay
 
         void HandleMutationRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
+            using ProfilerMarker.AutoScope scope = HandleMutationRequestMarker.Auto();
+
             RefreshAuthorityBoundary();
 
             if (!CurrentBoundary.OwnsMutationValidation)
@@ -478,6 +498,8 @@ namespace Blockiverse.Gameplay
 
         void HandleMutationDeltaMessage(ulong senderClientId, FastBufferReader reader)
         {
+            using ProfilerMarker.AutoScope scope = HandleMutationDeltaMarker.Auto();
+
             RefreshAuthorityBoundary();
 
             if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
@@ -497,6 +519,8 @@ namespace Blockiverse.Gameplay
 
         void HandleChunkSnapshotMessage(ulong senderClientId, FastBufferReader reader)
         {
+            using ProfilerMarker.AutoScope scope = HandleSnapshotMarker.Auto();
+
             RefreshAuthorityBoundary();
 
             if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
@@ -589,6 +613,8 @@ namespace Blockiverse.Gameplay
             CreativeWorldGenerationPreset preset,
             WorldGenerationSettings settings)
         {
+            using ProfilerMarker.AutoScope scope = GenerateSnapshotWorldMarker.Auto();
+
             BlockRegistry registry = BlockRegistry.Default;
             GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateWorld(preset, registry, settings);
             return new GeneratedSnapshotWorld
@@ -625,6 +651,8 @@ namespace Blockiverse.Gameplay
 
         void FinalizeSnapshot(PendingWorldSnapshot snapshot)
         {
+            using ProfilerMarker.AutoScope scope = FinalizeSnapshotMarker.Auto();
+
             if (snapshot.GenerationTask.IsFaulted)
             {
                 BlockiverseLog.Error(
@@ -689,6 +717,8 @@ namespace Blockiverse.Gameplay
 
         void SendMutationRequest(uint requestId, BlockMutationRequest request)
         {
+            using ProfilerMarker.AutoScope scope = SendMutationRequestMarker.Auto();
+
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
             pendingMutationRequests[requestId] = request;
@@ -717,6 +747,8 @@ namespace Blockiverse.Gameplay
 
         void BroadcastDelta(BlockChange change, ulong requestingClientId = 0, uint requestId = 0)
         {
+            using ProfilerMarker.AutoScope scope = BroadcastDeltaMarker.Auto();
+
             RefreshAuthorityBoundary();
 
             if (!CurrentBoundary.CanBroadcastDeltas)
@@ -824,6 +856,8 @@ namespace Blockiverse.Gameplay
 
         void SendLateJoinSnapshot(ulong clientId)
         {
+            using ProfilerMarker.AutoScope scope = SendLateJoinSnapshotMarker.Auto();
+
             IReadOnlyCollection<BlockChange> changedBlocks = ResolveWorld().GetChangedBlocks();
             int writerSize = SnapshotHeaderBytes + changedBlocks.Count * SnapshotBlockBytes;
 
@@ -855,6 +889,8 @@ namespace Blockiverse.Gameplay
         {
             if (worldManager == null) return;
 
+            using ProfilerMarker.AutoScope scope = SendEnvironmentSnapshotMarker.Auto();
+
             var writer = new FastBufferWriter(EnvironmentSnapshotMessageBytes, Allocator.Temp);
             try
             {
@@ -874,6 +910,8 @@ namespace Blockiverse.Gameplay
 
         void BroadcastEnvironmentSnapshot()
         {
+            using ProfilerMarker.AutoScope scope = BroadcastEnvironmentSnapshotMarker.Auto();
+
             NetworkManager networkManager = ResolveNetworkManagerOrNull();
             if (networkManager == null || !networkManager.IsServer)
                 return;
@@ -938,6 +976,8 @@ namespace Blockiverse.Gameplay
 
         ChunkDeltaApplyState TryApplyChunkDelta(ChunkDelta delta)
         {
+            using ProfilerMarker.AutoScope scope = TryApplyChunkDeltaMarker.Auto();
+
             if (delta.SequenceId == NextChunkDeltaSequence(LastAppliedChunkDeltaSequence))
             {
                 ApplyAuthoritativeBlock(delta.Change.Position, delta.Change.NewBlock, trackChange: false);
@@ -990,6 +1030,8 @@ namespace Blockiverse.Gameplay
         {
             if (bufferedChunkDeltas.Count == 0)
                 return;
+
+            using ProfilerMarker.AutoScope scope = ApplyBufferedChunkDeltasMarker.Auto();
 
             bool madeProgress;
 

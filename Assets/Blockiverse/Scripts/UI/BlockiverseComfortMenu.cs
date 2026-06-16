@@ -9,6 +9,7 @@ namespace Blockiverse.UI
     public sealed class BlockiverseComfortMenu : MonoBehaviour
     {
         [SerializeField] Canvas canvas;
+        [SerializeField] GameObject visibilityRoot;
         [SerializeField] Toggle glideToggle;
         [SerializeField] Toggle teleportToggle;
         [SerializeField] Toggle smoothTurnToggle;
@@ -48,7 +49,7 @@ namespace Blockiverse.UI
         Slider registeredEyeHeightSlider;
         Slider registeredUiScaleSlider;
 
-        public bool IsVisible => canvas != null && canvas.enabled;
+        public bool IsVisible => canvas != null ? canvas.enabled : visibilityRoot != null && visibilityRoot.activeSelf;
 
         public void Configure(
             Canvas targetCanvas,
@@ -56,8 +57,16 @@ namespace Blockiverse.UI
             BlockiverseHeightReset targetHeightReset = null)
         {
             canvas = targetCanvas;
+            visibilityRoot = targetCanvas != null ? targetCanvas.gameObject : null;
             settings = comfortSettings;
             heightReset = targetHeightReset;
+            Hide(playFeedback: false);
+        }
+
+        public void ConfigureVisibilityRoot(GameObject root)
+        {
+            canvas = null;
+            visibilityRoot = root;
             Hide(playFeedback: false);
         }
 
@@ -108,6 +117,11 @@ namespace Blockiverse.UI
                 canvas.enabled = true;
                 PlayFeedback(BlockiverseAudioCue.UiConfirm);
             }
+            else if (visibilityRoot != null)
+            {
+                visibilityRoot.SetActive(true);
+                PlayFeedback(BlockiverseAudioCue.UiConfirm);
+            }
         }
 
         public void Hide()
@@ -123,6 +137,12 @@ namespace Blockiverse.UI
                 if (playFeedback)
                     PlayFeedback(BlockiverseAudioCue.UiCancel);
             }
+            else if (visibilityRoot != null)
+            {
+                visibilityRoot.SetActive(false);
+                if (playFeedback)
+                    PlayFeedback(BlockiverseAudioCue.UiCancel);
+            }
         }
 
         public void ToggleVisible()
@@ -135,6 +155,12 @@ namespace Blockiverse.UI
 
         void Awake()
         {
+            if (canvas == null && visibilityRoot == null)
+                canvas = GetComponent<Canvas>();
+
+            if (visibilityRoot == null && canvas != null)
+                visibilityRoot = canvas.gameObject;
+
             RegisterControlCallbacks();
             SyncTogglesToSettings();
         }

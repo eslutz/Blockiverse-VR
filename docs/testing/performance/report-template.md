@@ -27,6 +27,12 @@ Copy this file to `report-YYYY-MM-DD.md` and fill in each section from a headset
   - `Blockiverse.VoxelWorldRenderer.RebuildDirty`
   - `Blockiverse.VoxelWorldRenderer.RebuildChunk`
   - `Blockiverse.ChunkMeshBuilder.Build`
+  - `Blockiverse.WorldSaveService.Save`
+  - `Blockiverse.WorldSaveService.Load`
+  - `Blockiverse.WorldSession.ApplyLoadedWorld`
+  - `Blockiverse.UiScreenRouter.PushScreen` / `Blockiverse.UiScreenRouter.PopScreen`
+  - `Blockiverse.ChunkAuthority.HandleMutationRequest`
+  - `Blockiverse.ChunkAuthority.ApplyBufferedChunkDeltas`
 - EditMode proxy: run `WorldGenerationStressEditModeTests` for the CPU-side generation/meshing budget before each capture.
 
 ## Scenarios

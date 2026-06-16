@@ -12,6 +12,7 @@ using Blockiverse.Voxel;
 using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using UnityEngine;
+using Unity.Profiling;
 
 namespace Blockiverse.UI
 {
@@ -50,6 +51,13 @@ namespace Blockiverse.UI
 
         // Application.persistentDataPath is fixed for the life of the process — compute once.
         static string SavesRoot => savesRoot ??= Path.Combine(Application.persistentDataPath, "Saves");
+
+        static readonly ProfilerMarker SaveCurrentWorldMarker = new("Blockiverse.WorldSession.SaveCurrentWorld");
+        static readonly ProfilerMarker StartAutoSaveMarker = new("Blockiverse.WorldSession.StartAutoSave");
+        static readonly ProfilerMarker CompleteAutoSaveMarker = new("Blockiverse.WorldSession.CompleteAutoSave");
+        static readonly ProfilerMarker EnterGeneratedWorldMarker = new("Blockiverse.WorldSession.EnterGeneratedWorld");
+        static readonly ProfilerMarker LoadSaveMarker = new("Blockiverse.WorldSession.LoadSave");
+        static readonly ProfilerMarker ApplyLoadedWorldMarker = new("Blockiverse.WorldSession.ApplyLoadedWorld");
 
         public void Configure(
             BlockiverseMenuController controller,
@@ -211,6 +219,8 @@ namespace Blockiverse.UI
 
         public bool SaveCurrentWorld(bool respawnDeadPlayer = false)
         {
+            using ProfilerMarker.AutoScope scope = SaveCurrentWorldMarker.Auto();
+
             ResolveReferences();
             WaitForAutoSave();
 
@@ -244,6 +254,8 @@ namespace Blockiverse.UI
             if (autoSaveTask != null)
                 return;
 
+            using ProfilerMarker.AutoScope scope = StartAutoSaveMarker.Auto();
+
             // Stamp when the snapshot is captured so repeated background failures still wait for
             // the normal autosave cadence instead of retrying every frame.
             lastSaveTime = Time.unscaledTime;
@@ -268,6 +280,8 @@ namespace Blockiverse.UI
         {
             if (autoSaveTask == null || !autoSaveTask.IsCompleted)
                 return;
+
+            using ProfilerMarker.AutoScope scope = CompleteAutoSaveMarker.Auto();
 
             try
             {
@@ -492,6 +506,8 @@ namespace Blockiverse.UI
             GeneratedCreativeWorld generated,
             bool deferRendererRebuild)
         {
+            using ProfilerMarker.AutoScope scope = EnterGeneratedWorldMarker.Auto();
+
             currentTextureSet = BlockTextureSetIds.Normalize(textureSet);
             worldManager.SetTextureSet(currentTextureSet);
             worldManager.InitializeGeneratedWorld(
@@ -771,6 +787,8 @@ namespace Blockiverse.UI
 
         public bool LoadSave(string path)
         {
+            using ProfilerMarker.AutoScope scope = LoadSaveMarker.Auto();
+
             ResolveReferences();
 
             if (worldManager == null)
@@ -831,6 +849,8 @@ namespace Blockiverse.UI
             GeneratedCreativeWorld generated,
             bool deferRendererRebuild)
         {
+            using ProfilerMarker.AutoScope scope = ApplyLoadedWorldMarker.Auto();
+
             WorldSaveData data = result.Data;
             currentTextureSet = BlockTextureSetIds.Normalize(data.TextureSet);
             worldManager.SetTextureSet(currentTextureSet);

@@ -828,9 +828,9 @@ namespace Blockiverse.UI
                 if (string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal))
                     presenter.GetComponent<BlockiverseStartupOverlay>()?.SetAutomaticHide(!visible);
 
-                if (visible && !presenter.IsVisible)
+                if (visible)
                     presenter.Show();
-                else if (!visible && presenter.IsVisible)
+                else if (presenter.IsVisible)
                     presenter.Hide();
 
                 bool acceptsInput = visible &&

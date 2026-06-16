@@ -115,6 +115,9 @@ namespace Blockiverse.Editor
         const string ControllerMappingPopupName = "Controller Mapping Popup";
         const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
+        const string MenuCompositionSurfaceName = "Blockiverse Menu Composition Surface";
+        const string MenuCompositionCanvasName = "Blockiverse Menu Canvas";
+        const string XrVisualProjectionRigName = "Blockiverse XR Visual Projection Rig";
         const string BootEventSystemName = "Boot Event System";
         const string MultiplayerEventSystemName = "Multiplayer Event System";
         const string XrInteractionManagerName = "XR Interaction Manager";
@@ -228,12 +231,15 @@ namespace Blockiverse.Editor
             ConfigureUniversalRenderPipeline();
             ConfigureOpenXrForAndroid();
             EnsureInteractionLayer();
+            EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
             EnsureInteractionMaterials();
             EnsureInputActions();
             EnsureXrRigPrefab();
             EnsureNetworkFoundationAssets();
             EnsureBootScene();
+            EnsureXrVisualProjectionLayer();
+            EnsureCompositionUiLayer();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -340,6 +346,7 @@ namespace Blockiverse.Editor
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.Android.androidTVCompatibility = false;
             PlayerSettings.Android.preferredInstallLocation = AndroidPreferredInstallLocation.Auto;
+            EditorUserBuildSettings.androidBuildSubtarget = MobileTextureSubtarget.ASTC;
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan });
             SetActiveInputHandlerToInputSystemOnly();
@@ -567,11 +574,17 @@ namespace Blockiverse.Editor
         static void ConfigureQuestUrpShadowPolicy(UniversalRenderPipelineAsset pipelineAsset)
         {
             var serializedAsset = new SerializedObject(pipelineAsset);
+            SetSerializedBool(serializedAsset, "m_RequireDepthTexture", false);
+            SetSerializedBool(serializedAsset, "m_RequireOpaqueTexture", false);
+            SetSerializedBool(serializedAsset, "m_SupportsHDR", false);
+            SetSerializedInt(serializedAsset, "m_MSAA", 2);
+            SetSerializedFloat(serializedAsset, "m_RenderScale", 1f);
             SetSerializedBool(serializedAsset, "m_MainLightShadowsSupported", false);
             SetSerializedInt(serializedAsset, "m_MainLightShadowmapResolution", 512);
             SetSerializedFloat(serializedAsset, "m_ShadowDistance", 0f);
             SetSerializedInt(serializedAsset, "m_AdditionalLightsRenderingMode", 0);
             SetSerializedInt(serializedAsset, "m_AdditionalLightsPerObjectLimit", 0);
+            SetSerializedBool(serializedAsset, "m_UseAdaptivePerformance", true);
             serializedAsset.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -800,6 +813,11 @@ namespace Blockiverse.Editor
             return EnsureUnityLayer(BlockiverseProject.CompositionUiLayerName, BlockiverseProject.CompositionUiLayerIndex);
         }
 
+        static int EnsureXrVisualProjectionLayer()
+        {
+            return EnsureUnityLayer(BlockiverseProject.XrVisualProjectionLayerName, BlockiverseProject.XrVisualProjectionLayerIndex);
+        }
+
         static LayerMask GetInteractionLayerMask()
         {
             return (LayerMask)BlockiverseProject.InteractionLayerMask;
@@ -820,6 +838,12 @@ namespace Blockiverse.Editor
         {
             int layer = LayerMask.NameToLayer(BlockiverseProject.CompositionUiLayerName);
             return layer >= 0 ? layer : BlockiverseProject.CompositionUiLayerIndex;
+        }
+
+        static int GetXrVisualProjectionLayerIndex()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.XrVisualProjectionLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.XrVisualProjectionLayerIndex;
         }
 
         static void AddControllerMap(InputActionAsset asset, string mapName, string controllerPath)

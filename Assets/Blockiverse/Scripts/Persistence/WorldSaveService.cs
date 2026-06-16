@@ -8,6 +8,7 @@ using Blockiverse.Core;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using UnityEngine;
+using Unity.Profiling;
 
 namespace Blockiverse.Persistence
 {
@@ -241,6 +242,11 @@ namespace Blockiverse.Persistence
         const int SectionSize = 16;
         const string SharedCrateFileName = "shared_crate.json";
 
+        static readonly ProfilerMarker CaptureSnapshotMarker = new("Blockiverse.WorldSaveService.CaptureSnapshot");
+        static readonly ProfilerMarker SaveMarker = new("Blockiverse.WorldSaveService.Save");
+        static readonly ProfilerMarker LoadMarker = new("Blockiverse.WorldSaveService.Load");
+        static readonly ProfilerMarker LoadDirectoryMarker = new("Blockiverse.WorldSaveService.LoadDirectory");
+
         public WorldSaveService(ItemRegistry items = null)
         {
             itemRegistry = items ?? ItemRegistry.Default;
@@ -402,6 +408,8 @@ namespace Blockiverse.Persistence
 
         public WorldSaveSnapshot CaptureSnapshot(WorldSaveRequest request)
         {
+            using ProfilerMarker.AutoScope scope = CaptureSnapshotMarker.Auto();
+
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
             string path = request.Path;
@@ -465,6 +473,8 @@ namespace Blockiverse.Persistence
 
         public void Save(WorldSaveSnapshot snapshot)
         {
+            using ProfilerMarker.AutoScope scope = SaveMarker.Auto();
+
             if (snapshot == null)
                 throw new ArgumentNullException(nameof(snapshot));
             if (string.IsNullOrWhiteSpace(snapshot.Path))
@@ -561,6 +571,8 @@ namespace Blockiverse.Persistence
 
         public WorldLoadResult Load(string path)
         {
+            using ProfilerMarker.AutoScope scope = LoadMarker.Auto();
+
             try
             {
                 if (Directory.Exists(path))
@@ -586,6 +598,8 @@ namespace Blockiverse.Persistence
 
         WorldLoadResult LoadDirectory(string path)
         {
+            using ProfilerMarker.AutoScope scope = LoadDirectoryMarker.Auto();
+
             string manifestPath = Path.Combine(path, "manifest.json");
             if (!File.Exists(manifestPath))
                 return FailedLoad(path, "World save is corrupt: missing manifest.json.");

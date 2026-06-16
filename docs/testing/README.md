@@ -161,7 +161,7 @@ For Quest pointer/ray changes, validate the normal development APK in the real g
 
 - Right-handed mode shows one stable interaction ray from the right controller/tool hand; the support-hand interaction ray remains hidden except while teleport owns a locomotion ray.
 - Left-handed mode shows one stable interaction ray from the left controller/tool hand; the support-hand interaction ray remains hidden except while teleport owns a locomotion ray.
-- Menu hover suppresses block editing for the active ray, missed menu rays keep the same line-length behavior as gameplay, world targeting remains stable after the menu is left, and controller/ray visuals render through the normal scene camera while menu/HUD surfaces may use Quad composition layers.
+- Menu hover suppresses block editing for the active ray, missed menu rays keep the same line-length behavior as gameplay, world targeting remains stable after the menu is left, routed game menus use the shared Quad composition surface, and controller/ray visuals render above that surface through the generated Projection Eye Rig layer.
 
 Remove any temporary ray diagnostic scenes or build scripts once the issue is reproduced in the real game path. Stub ray worlds are not part of the validation gate.
 

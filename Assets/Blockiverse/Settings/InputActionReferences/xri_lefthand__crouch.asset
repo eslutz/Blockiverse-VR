@@ -13,4 +13,4 @@ MonoBehaviour:
   m_Name: XRI LeftHand/Crouch
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference
   m_Asset: {fileID: -944628639613478452, guid: 5ecabeba2918c4388af5318893da56b4, type: 3}
-  m_ActionId: 14bb7b60-5d3c-3350-9768-111534a5caab
+  m_ActionId: 607bbb14-3c5d-5033-9768-111534a5caab

@@ -166,7 +166,7 @@ namespace Blockiverse.Tests.EditMode
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
             BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
-            Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
+            Transform menuTransform = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Comfort Settings Menu");
             BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
@@ -188,7 +188,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
             Assert.That(presenter.PlaysHideFeedback, Is.True);
             Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
-            Assert.That(menuTransform.localScale.x, Is.LessThanOrEqualTo(0.00135f), "Comfort menu should no longer fill the first-person view.");
+            Assert.That(presenter.PlacementRoot.localScale.x, Is.LessThanOrEqualTo(0.00135f), "Comfort menu should no longer fill the first-person view.");
 
             Image panelImage = menuTransform.Find("Panel")?.GetComponent<Image>();
             TMP_Text title = menuTransform.Find("Panel/Title")?.GetComponent<TMP_Text>();
@@ -1021,7 +1021,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(prefab, Is.Not.Null);
 
-            Transform popup = prefab.transform.Find("Camera Offset/Controller Mapping Popup");
+            Transform popup = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Controller Mapping Popup");
             Transform startupOverlay = prefab.transform.Find("Camera Offset/Startup Loading Overlay");
             Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
 
@@ -1030,7 +1030,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popupPresenter, Is.Not.Null);
             Assert.That(popupPresenter.ShowOnStart, Is.False,
                 "The title router must own first-frame menu visibility; controls stay available from Settings.");
-            Assert.That(popup.GetComponent<Canvas>()?.enabled, Is.False);
+            Assert.That(popup.GetComponent<Canvas>(), Is.Null, "The routed popup should use the shared composition menu canvas.");
+            Assert.That(popup.gameObject.activeSelf, Is.False);
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
             string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                 .Select(label => label.text));
@@ -1061,11 +1062,11 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
                 "Startup artwork is decorative and must not intercept tracked-device UI rays.");
 
-            Canvas popupCanvas = popup.GetComponent<Canvas>();
+            Canvas menuCanvas = popup.GetComponentInParent<Canvas>(includeInactive: true);
             Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
-            Assert.That(popupCanvas, Is.Not.Null);
+            Assert.That(menuCanvas, Is.Not.Null);
             Assert.That(startupCanvas, Is.Not.Null);
-            Assert.That(popupCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
+            Assert.That(menuCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
                 "The first-run controller map must render in front of any startup artwork.");
 
             CanvasGroup startupInputGate = startupOverlay.GetComponent<CanvasGroup>();

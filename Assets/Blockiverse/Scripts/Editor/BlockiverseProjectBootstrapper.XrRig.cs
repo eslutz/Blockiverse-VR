@@ -199,6 +199,7 @@ namespace Blockiverse.Editor
                 return;
 
             camera.cullingMask |= BlockiverseProject.VrUiRaycastLayerMask;
+            camera.cullingMask &= ~BlockiverseProject.XrVisualProjectionLayerMask;
             EditorUtility.SetDirty(camera);
         }
 
@@ -448,9 +449,10 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
+            Transform routedMenuParent = EnsureMenuCompositionSurface(cameraOffset, head).transform.Find(MenuCompositionCanvasName);
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
-            GameObject menuObject = EnsureRectChildMigrated(cameraOffset, leftController, ComfortMenuName);
+            GameObject menuObject = EnsureRoutedMenuRectChild(cameraOffset, routedMenuParent, leftController, ComfortMenuName);
             const float comfortMenuScale = 0.00105f;
             menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
             menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);

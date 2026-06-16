@@ -60,36 +60,41 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
-            var (titleMenu, titlePresenter) = EnsureActionMenuPanel(
-                cameraOffset, TitleMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
-            var (pauseMenu, pausePresenter) = EnsureActionMenuPanel(
-                cameraOffset, PauseMenuName, ActionMenuSize, head, buttonCount: 7, sortOrder: 25);
-            var (deathMenu, deathPresenter) = EnsureActionMenuPanel(
-                cameraOffset, DeathScreenName, ActionMenuSize, head, buttonCount: 3, sortOrder: 25);
-            var (confirmMenu, confirmPresenter) = EnsureActionMenuPanel(
-                cameraOffset, ConfirmDialogName, ConfirmDialogSize, head, buttonCount: 2, sortOrder: 30);
+            GameObject menuSurface = EnsureMenuCompositionSurface(cameraOffset, head);
+            Transform routedMenuParent = menuSurface.transform.Find(MenuCompositionCanvasName);
 
-            var (newWorldPanel, newWorldPresenter) = EnsureNewWorldMenuPanel(cameraOffset, head);
-            var (loadWorldPanel, loadWorldPresenter) = EnsureLoadWorldMenuPanel(cameraOffset, head);
-            var (settingsMenu, settingsPresenter) = EnsureSettingsMenuPanel(cameraOffset, head);
+            var (titleMenu, titlePresenter) = EnsureActionMenuPanel(
+                routedMenuParent, TitleMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
+            var (pauseMenu, pausePresenter) = EnsureActionMenuPanel(
+                routedMenuParent, PauseMenuName, ActionMenuSize, head, buttonCount: 7, sortOrder: 25);
+            var (deathMenu, deathPresenter) = EnsureActionMenuPanel(
+                routedMenuParent, DeathScreenName, ActionMenuSize, head, buttonCount: 3, sortOrder: 25);
+            var (confirmMenu, confirmPresenter) = EnsureActionMenuPanel(
+                routedMenuParent, ConfirmDialogName, ConfirmDialogSize, head, buttonCount: 2, sortOrder: 30);
+
+            var (newWorldPanel, newWorldPresenter) = EnsureNewWorldMenuPanel(routedMenuParent, head);
+            var (loadWorldPanel, loadWorldPresenter) = EnsureLoadWorldMenuPanel(routedMenuParent, head);
+            var (settingsMenu, settingsPresenter) = EnsureSettingsMenuPanel(routedMenuParent, head);
+            Transform comfortRoot = routedMenuParent.Find(ComfortMenuName) ?? cameraOffset.Find(ComfortMenuName);
             BlockiverseWorldSpacePanelPresenter comfortPresenter =
-                cameraOffset.Find(ComfortMenuName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+                comfortRoot?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Button comfortCloseButton =
-                cameraOffset.Find($"{ComfortMenuName}/Panel/Close Button")?.GetComponent<Button>();
-            var (stationPanel, stationPresenter) = EnsureStationMenuPanel(cameraOffset, head);
-            var (lanPresenter, lanCloseButton) = EnsureLanMultiplayerMenuPanel(cameraOffset, head);
-            var (audioPanel, audioPresenter, audioCloseButton) = EnsureAudioSettingsMenuPanel(cameraOffset, head);
-            var (controlsPresenter, controlsCloseButton) = EnsureControlsMenuPanel(cameraOffset, head);
-            var (worldDetailsPanel, worldDetailsMenu, worldDetailsPresenter) = EnsureWorldDetailsMenuPanel(cameraOffset, head);
-            var (creativeToolsPanel, creativeToolsPresenter, creativeToolsCloseButton) = EnsureCreativeToolsMenuPanel(cameraOffset, head);
+                comfortRoot?.Find("Panel/Close Button")?.GetComponent<Button>();
+            var (stationPanel, stationPresenter) = EnsureStationMenuPanel(routedMenuParent, head);
+            var (lanPresenter, lanCloseButton) = EnsureLanMultiplayerMenuPanel(routedMenuParent, head);
+            var (audioPanel, audioPresenter, audioCloseButton) = EnsureAudioSettingsMenuPanel(routedMenuParent, head);
+            var (controlsPresenter, controlsCloseButton) = EnsureControlsMenuPanel(routedMenuParent, head);
+            var (worldDetailsPanel, worldDetailsMenu, worldDetailsPresenter) = EnsureWorldDetailsMenuPanel(routedMenuParent, head);
+            var (creativeToolsPanel, creativeToolsPresenter, creativeToolsCloseButton) = EnsureCreativeToolsMenuPanel(routedMenuParent, head);
             BlockiverseWorldSpacePanelPresenter gameplayHudPresenter =
                 cameraOffset.Find(SurvivalHudName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Transform controllerMappingRoot = routedMenuParent.Find(ControllerMappingPopupName) ?? cameraOffset.Find(ControllerMappingPopupName);
             BlockiverseWorldSpacePanelPresenter controllerMappingPresenter =
-                cameraOffset.Find(ControllerMappingPopupName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+                controllerMappingRoot?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             BlockiverseWorldSpacePanelPresenter worldLoadingPresenter =
                 cameraOffset.Find(StartupLoadingOverlayName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Button controllerMappingCloseButton =
-                cameraOffset.Find($"{ControllerMappingPopupName}/Panel/Close Button")?.GetComponent<Button>();
+                controllerMappingRoot?.Find("Panel/Close Button")?.GetComponent<Button>();
 
             BlockiverseMenuController controller = EnsureComponent<BlockiverseMenuController>(rig);
             controller.Configure(inputRig, titleMenu, pauseMenu, deathMenu, confirmMenu,

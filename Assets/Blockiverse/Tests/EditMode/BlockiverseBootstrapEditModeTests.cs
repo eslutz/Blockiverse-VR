@@ -101,14 +101,20 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void AndroidUrpAssetDisablesRealtimeShadowsForQuest()
+        public void AndroidUrpAssetUsesQuestMobileRenderDefaults()
         {
             string asset = File.ReadAllText(AndroidUrpAssetPath);
 
+            StringAssert.Contains("m_RequireDepthTexture: 0", asset);
+            StringAssert.Contains("m_RequireOpaqueTexture: 0", asset);
+            StringAssert.Contains("m_SupportsHDR: 0", asset);
+            StringAssert.Contains("m_MSAA: 2", asset);
+            StringAssert.Contains("m_RenderScale: 1", asset);
             StringAssert.Contains("m_MainLightShadowsSupported: 0", asset);
             StringAssert.Contains("m_ShadowDistance: 0", asset);
             StringAssert.Contains("m_AdditionalLightsRenderingMode: 0", asset);
             StringAssert.Contains("m_AdditionalLightsPerObjectLimit: 0", asset);
+            StringAssert.Contains("m_UseAdaptivePerformance: 1", asset);
         }
 
         [Test]

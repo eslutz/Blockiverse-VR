@@ -235,6 +235,11 @@ namespace Blockiverse.Tests.EditMode
                 Canvas titleCanvas = titleMenu.GetComponent<Canvas>();
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen));
                 Assert.That(mappingCanvas.enabled, Is.True);
+
+                StartBehaviour(mappingPresenter);
+
+                Assert.That(mappingCanvas.enabled, Is.True,
+                    "Presenter Start must not hide a controller-mapping route already activated by the menu router.");
                 Assert.That(mappingPresenter.GetComponent<CanvasGroup>().interactable, Is.True);
                 Assert.That(mappingPresenter.GetComponent<CanvasGroup>().blocksRaycasts, Is.True);
                 Assert.That(titleCanvas.enabled, Is.False, "The title menu must not sit in front of first-run controls.");
@@ -263,7 +268,7 @@ namespace Blockiverse.Tests.EditMode
                 GameObject rig = CreateRoot("Rig");
                 BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
                 BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
-                AddPresenter(titleMenu.gameObject);
+                BlockiverseWorldSpacePanelPresenter titlePresenter = AddPresenter(titleMenu.gameObject);
                 GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
                 Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
                 mappingCanvas.enabled = false;
@@ -284,6 +289,11 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
                 Assert.That(mappingCanvas.enabled, Is.False);
                 Assert.That(titleMenu.GetComponent<Canvas>().enabled, Is.True);
+
+                StartBehaviour(titlePresenter);
+
+                Assert.That(titleMenu.GetComponent<Canvas>().enabled, Is.True,
+                    "Presenter Start must not hide a title route already activated by the menu router.");
             }
             finally
             {
