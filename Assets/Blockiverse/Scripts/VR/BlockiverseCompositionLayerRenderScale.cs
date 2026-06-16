@@ -1,3 +1,4 @@
+using Blockiverse.Core;
 using Unity.XR.CompositionLayers.Extensions;
 using Unity.XR.CompositionLayers;
 using UnityEngine;
@@ -67,6 +68,8 @@ namespace Blockiverse.VR
         {
             DisableCompositionLayerProxyInput();
             ResolveReferences();
+            EnsureCompositionUiLayerIsolation();
+            ExcludeCompositionUiLayerFromMainCamera();
 
             if (sourceCanvas == null || texturesExtension == null || mirrorCamera == null)
                 return;
@@ -165,6 +168,23 @@ namespace Blockiverse.VR
             }
         }
 
+        void EnsureCompositionUiLayerIsolation()
+        {
+            if (sourceCanvas == null)
+                return;
+
+            SetLayerRecursively(sourceCanvas.gameObject, BlockiverseProject.CompositionUiLayerIndex);
+        }
+
+        void ExcludeCompositionUiLayerFromMainCamera()
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null || mainCamera == mirrorCamera)
+                return;
+
+            mainCamera.cullingMask &= ~BlockiverseProject.CompositionUiLayerMask;
+        }
+
         void DisableCompositionLayerProxyInput()
         {
             DisableComponentByTypeName(gameObject, InteractableUIMirrorTypeName);
@@ -177,16 +197,26 @@ namespace Blockiverse.VR
             if (legacyRaycaster != null)
                 DestroyComponent(legacyRaycaster);
 
-            if (sourceCanvas.GetComponent<TrackedDeviceGraphicRaycaster>() == null)
-                sourceCanvas.gameObject.AddComponent<TrackedDeviceGraphicRaycaster>();
-
             CanvasGroup inputGate = sourceCanvas.GetComponent<CanvasGroup>();
             if (inputGate == null)
+            {
                 inputGate = sourceCanvas.gameObject.AddComponent<CanvasGroup>();
+                inputGate.interactable = true;
+                inputGate.blocksRaycasts = true;
+                inputGate.ignoreParentGroups = false;
+            }
 
-            inputGate.interactable = true;
-            inputGate.blocksRaycasts = true;
-            inputGate.ignoreParentGroups = false;
+            bool receivesTrackedDeviceInput = inputGate.interactable || inputGate.blocksRaycasts;
+            TrackedDeviceGraphicRaycaster trackedRaycaster = sourceCanvas.GetComponent<TrackedDeviceGraphicRaycaster>();
+            if (receivesTrackedDeviceInput)
+            {
+                if (trackedRaycaster == null)
+                    sourceCanvas.gameObject.AddComponent<TrackedDeviceGraphicRaycaster>();
+            }
+            else if (trackedRaycaster != null)
+            {
+                DestroyComponent(trackedRaycaster);
+            }
         }
 
         static void DisableComponentByTypeName(GameObject root, string typeName)
@@ -212,6 +242,15 @@ namespace Blockiverse.VR
                 Destroy(component);
             else
                 DestroyImmediate(component);
+        }
+
+        static void SetLayerRecursively(GameObject root, int layer)
+        {
+            if (root == null)
+                return;
+
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
+                child.gameObject.layer = layer;
         }
 
         void ReleaseOwnedRenderTexture()

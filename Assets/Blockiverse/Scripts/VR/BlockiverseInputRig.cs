@@ -900,7 +900,7 @@ namespace Blockiverse.VR
                     BlockiverseRayDefaults.ConfigureInteractionRay(
                         interactionRay,
                         rayOrigin,
-                        GetVoxelTerrainLayerMask());
+                        GetVrUiRaycastLayerMask());
                     ConfigureRayLineVisual(interactionRay);
                     interactionRay.uiPressInput = CreateButtonActionReader(
                         interactionRay.uiPressInput,
@@ -1003,6 +1003,15 @@ namespace Blockiverse.VR
                 ? (LayerMask)(1 << terrainLayer)
                 : (LayerMask)BlockiverseProject.InteractionLayerMask;
             return cachedTerrainLayerMask.Value;
+        }
+
+        static LayerMask GetVrUiRaycastLayerMask()
+        {
+            int compositionUiLayer = LayerMask.NameToLayer(BlockiverseProject.CompositionUiLayerName);
+            int compositionUiMask = compositionUiLayer >= 0
+                ? 1 << compositionUiLayer
+                : BlockiverseProject.CompositionUiLayerMask;
+            return (LayerMask)(GetVoxelTerrainLayerMask().value | compositionUiMask);
         }
 
         public static void ConfigureCharacterController(CharacterController controller)

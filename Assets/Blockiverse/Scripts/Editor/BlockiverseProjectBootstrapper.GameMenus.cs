@@ -180,7 +180,7 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(inputRig);
             }
 
-            EnsureGeneratedCompositionLayerPanels(cameraOffset, head);
+            EnsureGeneratedVrUiPanels(cameraOffset);
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(rig);
         }

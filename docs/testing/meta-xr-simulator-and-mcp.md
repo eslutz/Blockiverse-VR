@@ -15,7 +15,7 @@ The smoke script below is historical evidence from the earlier temporary validat
 - Meta XR Platform SDK package: `com.meta.xr.sdk.platform@81.0.1`
 - Unity MCP relay: `/Users/ericslutz/.unity/relay/relay_mac_arm64.app/Contents/MacOS/relay_mac_arm64`
 
-The stable validation package set does not commit `com.unity.ai.assistant` or `com.meta.xr.unity-mcp.extension`. Those editor tooling packages previously produced non-gameplay Unity warnings in batchmode validation: the Meta MCP extension referenced Interaction SDK assemblies when Interaction SDK was absent, and Unity AI Assistant bundled a duplicate `System.Runtime.CompilerServices.Unsafe.dll`. Keep Unity MCP/AI Assistant packages isolated to a local tooling profile or temporary branch when editor MCP work requires them, then re-run clean package validation before treating simulator/headset logs as stable signal.
+The stable validation package set does not commit local editor automation packages such as `com.besty.unity-skills`, `com.unity.ai.assistant`, or `com.meta.xr.unity-mcp.extension`. Those editor tooling packages previously produced non-gameplay Unity warnings in batchmode validation: the Meta MCP extension referenced Interaction SDK assemblies when Interaction SDK was absent, and Unity AI Assistant bundled a duplicate `System.Runtime.CompilerServices.Unsafe.dll`. Keep Unity MCP/AI Assistant packages isolated to a local tooling profile or temporary branch when editor MCP work requires them, then re-run clean package validation before treating simulator/headset logs as stable signal.
 
 ## Global Codex MCP Servers
 

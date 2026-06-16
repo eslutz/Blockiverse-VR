@@ -72,6 +72,7 @@ namespace Blockiverse.Editor
             camera.clearFlags = CameraClearFlags.Skybox;
             camera.nearClipPlane = 0.05f;
             camera.farClipPlane = 500.0f;
+            ConfigureXrMainCamera(camera);
             cameraObject.AddComponent<AudioListener>();
             TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
             ConfigureHeadPoseDriverReferenceActions(poseDriver);
@@ -150,6 +151,7 @@ namespace Blockiverse.Editor
             RemoveStaleChild(cameraOffset, RightRayOriginName);
 
             Camera xrCamera = origin.Camera;
+            ConfigureXrMainCamera(xrCamera);
             TrackedPoseDriver poseDriver = xrCamera != null
                 ? xrCamera.GetComponent<TrackedPoseDriver>()
                 : rig.GetComponentInChildren<TrackedPoseDriver>(true);
@@ -189,6 +191,15 @@ namespace Blockiverse.Editor
             EnsureXrRigCreativeFlight(rig, inputRig);
             EnsureXrRigFeedback(rig, inputRig);
             EnsureXrRigGameMenus(rig, inputRig);
+        }
+
+        static void ConfigureXrMainCamera(Camera camera)
+        {
+            if (camera == null)
+                return;
+
+            camera.cullingMask |= BlockiverseProject.VrUiRaycastLayerMask;
+            EditorUtility.SetDirty(camera);
         }
 
         static void EnsureControllerAnchor(
@@ -282,7 +293,7 @@ namespace Blockiverse.Editor
             interactionRayObject.SetActive(true);
 
             XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
-            BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetInteractionLayerMask());
+            BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetVrUiRaycastLayerMask());
             interactionRay.selectInput = MakeUnusedButtonReader("Select");
             interactionRay.activateInput = MakeUnusedButtonReader("Activate");
             interactionRay.uiPressInput = MakeButtonReader(

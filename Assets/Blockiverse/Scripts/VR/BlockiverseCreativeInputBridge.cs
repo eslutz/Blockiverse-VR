@@ -17,8 +17,6 @@ namespace Blockiverse.VR
     /// </summary>
     public sealed class BlockiverseCreativeInputBridge : MonoBehaviour
     {
-        const float MenuMissRayVisualLengthMeters = 1.1f;
-
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] XRRayInteractor interactionRay;
         [SerializeField] XRRayInteractor leftInteractionRay;
@@ -505,29 +503,19 @@ namespace Blockiverse.VR
             if (interactionLineVisual != null)
                 interactionLineVisual.enabled = shouldShow && (!capturedLineVisualDefault || lineVisualDefaultEnabled);
 
-            ApplyInteractionRayLengthState(worldInputAllowed);
+            RestoreInteractionRayLengthState();
 
             if (!worldInputAllowed || !blockEditingVisible)
                 interactionController?.HidePreview();
         }
 
-        void ApplyInteractionRayLengthState(bool worldInputAllowed)
+        void RestoreInteractionRayLengthState()
         {
             if (interactionLineVisual == null || !capturedLineVisualDefault)
                 return;
 
-            if (worldInputAllowed)
-            {
-                interactionLineVisual.overrideInteractorLineLength = lineVisualDefaultOverrideLineLength;
-                interactionLineVisual.lineLength = lineVisualDefaultLength;
-                return;
-            }
-
-            // In title/menu mode, a missed UI ray otherwise draws the full interaction line past
-            // the panel, which reads in-headset like a second ray starting above the player.
-            bool hasUiHit = interactionRay != null && interactionRay.TryGetCurrentUIRaycastResult(out _);
-            interactionLineVisual.overrideInteractorLineLength = !hasUiHit;
-            interactionLineVisual.lineLength = hasUiHit ? lineVisualDefaultLength : MenuMissRayVisualLengthMeters;
+            interactionLineVisual.overrideInteractorLineLength = lineVisualDefaultOverrideLineLength;
+            interactionLineVisual.lineLength = lineVisualDefaultLength;
         }
 
         bool CanInteract()

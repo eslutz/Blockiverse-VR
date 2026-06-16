@@ -27,5 +27,9 @@ namespace Blockiverse.Core
         public const string InteractionLayerName = "BlockiverseInteractable";
         public const int InteractionLayerIndex = 10;
         public const int InteractionLayerMask = 1 << InteractionLayerIndex;
+        public const string CompositionUiLayerName = "BlockiverseCompositionUI";
+        public const int CompositionUiLayerIndex = 11;
+        public const int CompositionUiLayerMask = 1 << CompositionUiLayerIndex;
+        public const int VrUiRaycastLayerMask = InteractionLayerMask | CompositionUiLayerMask;
     }
 }
