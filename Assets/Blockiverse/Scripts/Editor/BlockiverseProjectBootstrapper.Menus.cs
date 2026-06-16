@@ -1549,7 +1549,7 @@ namespace Blockiverse.Editor
             if (legacyRaycaster != null)
                 UnityEngine.Object.DestroyImmediate(legacyRaycaster);
 
-            SetLayerRecursively(canvasObject, GetInteractionLayerIndex());
+            SetLayerRecursively(canvasObject, GetCompositionUiLayerIndex());
 
             CanvasGroup inputGate = EnsureComponent<CanvasGroup>(canvasObject);
             inputGate.interactable = true;
@@ -1582,6 +1582,7 @@ namespace Blockiverse.Editor
 
             foreach (Graphic graphic in canvasObject.GetComponentsInChildren<Graphic>(true))
             {
+                graphic.gameObject.layer = GetCompositionUiLayerIndex();
                 graphic.raycastTarget = false;
                 EditorUtility.SetDirty(graphic);
             }

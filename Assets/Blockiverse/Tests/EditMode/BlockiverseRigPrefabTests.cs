@@ -283,7 +283,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CreativeInputBridgeKeepsRayVisibleForPausedMenus()
+        public void CreativeInputBridgeKeepsRayStableForPausedMenus()
         {
             GameObject root = new("Menu Ray Test");
 
@@ -302,11 +302,16 @@ namespace Blockiverse.Tests.EditMode
                 interactionController.SetBlockEditingEnabled(false);
                 lineRenderer.enabled = true;
                 lineVisual.enabled = true;
+                lineVisual.overrideInteractorLineLength = false;
+                lineVisual.lineLength = CreativeInteractionController.MaxBlockInteractionReachMeters;
 
                 bridge.Configure(null, ray, interactionController);
 
                 Assert.That(lineRenderer.enabled, Is.True, "Menus need the ray visual even while world input is blocked.");
                 Assert.That(lineVisual.enabled, Is.True, "Menus need the XRI line visual even while world input is blocked.");
+                Assert.That(lineVisual.overrideInteractorLineLength, Is.False,
+                    "Title/loading menus should use the same ray length behavior as gameplay instead of forcing a short miss ray.");
+                Assert.That(lineVisual.lineLength, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
             }
             finally
             {
@@ -1098,7 +1103,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(lineVisual.autoAdjustLineLength, Is.True);
             Assert.That(lineVisual.minLineLength, Is.EqualTo(0.75f).Within(0.001f));
             Assert.That(lineVisual.stopLineAtFirstRaycastHit, Is.True);
-            Assert.That(lineVisual.smoothMovement, Is.True);
+            Assert.That(lineVisual.smoothMovement, Is.False,
+                "Controller-tracked rays should not smooth visual points across startup pose changes.");
         }
 
         static void AssertBinding(InputActionProperty property, string expectedPath)

@@ -74,7 +74,10 @@ namespace Blockiverse.VR
             lineVisual.autoAdjustLineLength = true;
             lineVisual.minLineLength = PointerMinimumLineLengthMeters;
             lineVisual.stopLineAtFirstRaycastHit = true;
-            lineVisual.smoothMovement = true;
+            // Controller poses are already updated in Update + BeforeRender. XRI line smoothing
+            // can retain pre-tracking/menu-start points for a few frames on Quest, which looks
+            // like a drifting ribbon before gameplay starts.
+            lineVisual.smoothMovement = false;
             lineVisual.overrideInteractorLineOrigin = false;
             lineVisual.lineOriginTransform = null;
         }
