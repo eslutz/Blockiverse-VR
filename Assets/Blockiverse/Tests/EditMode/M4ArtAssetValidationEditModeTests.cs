@@ -47,29 +47,60 @@ namespace Blockiverse.Tests.EditMode
         };
 
         [Test]
-        public void AuthoredBlockAtlasExistsWithExpectedDimensionsAndImportSettings()
+        public void AuthoredBlockAtlasesExistWithExpectedDimensionsAndImportSettings()
         {
-            Texture2D atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockVisualAtlas.AuthoredAtlasPath);
-            TextureImporter importer = AssetImporter.GetAtPath(BlockVisualAtlas.AuthoredAtlasPath) as TextureImporter;
+            foreach (string path in ExpectedBlockAtlasPaths())
+            {
+                Texture2D atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
 
-            Assert.That(atlas, Is.Not.Null);
-            Assert.That(atlas.width, Is.EqualTo(BlockVisualAtlas.AtlasWidthPixels));
-            Assert.That(atlas.height, Is.EqualTo(BlockVisualAtlas.AtlasHeightPixels));
-            Assert.That(importer, Is.Not.Null);
-            Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Trilinear));
-            Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp));
-            Assert.That(importer.mipmapEnabled, Is.True);
-            Assert.That(importer.anisoLevel, Is.GreaterThanOrEqualTo(4));
+                Assert.That(atlas, Is.Not.Null, $"Missing block atlas: {path}");
+                Assert.That(atlas.width, Is.EqualTo(BlockVisualAtlas.AtlasWidthPixels), path);
+                Assert.That(atlas.height, Is.EqualTo(BlockVisualAtlas.AtlasHeightPixels), path);
+                Assert.That(importer, Is.Not.Null, path);
+                Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Trilinear), path);
+                Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp), path);
+                Assert.That(importer.mipmapEnabled, Is.True, path);
+                Assert.That(importer.anisoLevel, Is.GreaterThanOrEqualTo(4), path);
 
-            TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
-            Assert.That(androidSettings.overridden, Is.True);
-            Assert.That(androidSettings.textureCompression, Is.Not.EqualTo(TextureImporterCompression.Uncompressed));
-            // The atlas is non-square; Android max texture size must be large
-            // enough to hold the larger dimension without downscaling (which would misalign tiles), and
-            // no larger than the next power of two above it to keep the Quest texture budget tight.
-            int largestAtlasDimension = Math.Max(BlockVisualAtlas.AtlasWidthPixels, BlockVisualAtlas.AtlasHeightPixels);
-            Assert.That(androidSettings.maxTextureSize, Is.GreaterThanOrEqualTo(largestAtlasDimension));
-            Assert.That(androidSettings.maxTextureSize, Is.LessThanOrEqualTo(NextPowerOfTwo(largestAtlasDimension)));
+                TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
+                Assert.That(androidSettings.overridden, Is.True, path);
+                Assert.That(androidSettings.textureCompression, Is.Not.EqualTo(TextureImporterCompression.Uncompressed), path);
+                // The atlas is non-square; Android max texture size must be large enough to hold
+                // the larger dimension without downscaling (which would misalign tiles), and no
+                // larger than the next power of two above it to keep the Quest texture budget tight.
+                int largestAtlasDimension = Math.Max(BlockVisualAtlas.AtlasWidthPixels, BlockVisualAtlas.AtlasHeightPixels);
+                Assert.That(androidSettings.maxTextureSize, Is.GreaterThanOrEqualTo(largestAtlasDimension), path);
+                Assert.That(androidSettings.maxTextureSize, Is.LessThanOrEqualTo(NextPowerOfTwo(largestAtlasDimension)), path);
+            }
+        }
+
+        [Test]
+        public void AuthoredBlockSourceTilesUseProductionResolution()
+        {
+            Assert.That(BlockVisualAtlas.TilePixels, Is.EqualTo(32));
+
+            foreach (BlockDefinition block in BlockRegistry.CreateDefault().All.Where(block => block.Id != BlockRegistry.Air))
+            {
+                string path = $"Assets/Blockiverse/Art/Textures/Blocks/Source/{block.CanonicalId}.png";
+                Texture2D sourceTile = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+
+                Assert.That(sourceTile, Is.Not.Null, $"Missing block source tile: {path}");
+                Assert.That(sourceTile.width, Is.EqualTo(BlockVisualAtlas.TilePixels), $"{block.CanonicalId} source width should match atlas tile size.");
+                Assert.That(sourceTile.height, Is.EqualTo(BlockVisualAtlas.TilePixels), $"{block.CanonicalId} source height should match atlas tile size.");
+            }
+        }
+
+        [Test]
+        public void ArtGeneratorCoversEveryRegisteredBlockTexture()
+        {
+            string generatorSource = File.ReadAllText("scripts/art/generate-art-assets.py");
+
+            foreach (BlockDefinition block in BlockRegistry.CreateDefault().All.Where(block => block.Id != BlockRegistry.Air))
+                Assert.That(
+                    generatorSource,
+                    Does.Contain($"\"{block.CanonicalId}\""),
+                    $"Art generator must produce {block.CanonicalId}; committed source tiles are not enough.");
         }
 
         [Test]
@@ -126,7 +157,7 @@ namespace Blockiverse.Tests.EditMode
         public void RequiredPhase14ArtAssetsAreCommittedWithMetaFiles()
         {
             var expectedPaths = new List<string>();
-            expectedPaths.Add(BlockVisualAtlas.AuthoredAtlasPath);
+            expectedPaths.AddRange(ExpectedBlockAtlasPaths());
             expectedPaths.AddRange(BlockRegistry.CreateDefault().All
                 .Where(block => block.Id != BlockRegistry.Air)
                 .Select(block => $"Assets/Blockiverse/Art/Textures/Blocks/Source/{block.CanonicalId}.png"));
@@ -160,6 +191,14 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(orphanTextureIds, Is.Empty, $"Item icon textures without registered item IDs: {string.Join(", ", orphanTextureIds)}");
         }
+
+        static string[] ExpectedBlockAtlasPaths() => new[]
+        {
+            "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/original/blockiverse_block_atlas.png",
+            "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png",
+            "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/ai_simplified/blockiverse_block_atlas.png",
+            "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/ai/blockiverse_block_atlas.png",
+        };
 
         [Test]
         public void EveryRegisteredItemResolvesGeneratedIconSprite()

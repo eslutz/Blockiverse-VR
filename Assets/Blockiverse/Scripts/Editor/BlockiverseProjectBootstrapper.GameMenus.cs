@@ -84,6 +84,12 @@ namespace Blockiverse.Editor
             var (creativeToolsPanel, creativeToolsPresenter, creativeToolsCloseButton) = EnsureCreativeToolsMenuPanel(cameraOffset, head);
             BlockiverseWorldSpacePanelPresenter gameplayHudPresenter =
                 cameraOffset.Find(SurvivalHudName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            BlockiverseWorldSpacePanelPresenter controllerMappingPresenter =
+                cameraOffset.Find(ControllerMappingPopupName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            BlockiverseWorldSpacePanelPresenter worldLoadingPresenter =
+                cameraOffset.Find(StartupLoadingOverlayName)?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Button controllerMappingCloseButton =
+                cameraOffset.Find($"{ControllerMappingPopupName}/Panel/Close Button")?.GetComponent<Button>();
 
             BlockiverseMenuController controller = EnsureComponent<BlockiverseMenuController>(rig);
             controller.Configure(inputRig, titleMenu, pauseMenu, deathMenu, confirmMenu,
@@ -92,8 +98,26 @@ namespace Blockiverse.Editor
                 titlePresenter, pausePresenter, deathPresenter, confirmPresenter,
                 newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter,
                 lanPresenter, audioPresenter, controlsPresenter, worldDetailsPresenter,
-                creativeToolsPresenter, gameplayHudPresenter, comfortPresenter);
+                creativeToolsPresenter, gameplayHudPresenter, comfortPresenter, controllerMappingPresenter,
+                worldLoadingPresenter);
             controller.ConfigureStationPanel(stationPanel);
+
+            if (controllerMappingCloseButton != null)
+            {
+                if (controllerMappingPresenter != null)
+                    RemovePersistentListeners(
+                        controllerMappingCloseButton.onClick,
+                        controllerMappingPresenter,
+                        nameof(BlockiverseWorldSpacePanelPresenter.Hide));
+                RemovePersistentListeners(
+                    controllerMappingCloseButton.onClick,
+                    controller,
+                    nameof(BlockiverseMenuController.CloseControllerMappingScreen));
+                UnityEventTools.AddPersistentListener(
+                    controllerMappingCloseButton.onClick,
+                    controller.CloseControllerMappingScreen);
+                EditorUtility.SetDirty(controllerMappingCloseButton);
+            }
 
             if (comfortCloseButton != null)
             {
@@ -156,8 +180,19 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(inputRig);
             }
 
+            EnsureGeneratedCompositionLayerPanels(cameraOffset, head);
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(rig);
+        }
+
+        static Vector2 TopRightClosePosition(float panelWidth)
+        {
+            return new Vector2(panelWidth - MenuPanelInset - MenuCloseButtonSize.x, -MenuPanelInset);
+        }
+
+        static Vector2 TitleSizeWithClose(float panelWidth, float height = 52.0f)
+        {
+            return new Vector2(panelWidth - (MenuPanelInset * 3.0f) - MenuCloseButtonSize.x, height);
         }
 
         // Builds the LAN multiplayer panel on the rig: host/join/stop controls plus a close
@@ -204,7 +239,7 @@ namespace Blockiverse.Editor
             EnsureLabel(
                 bg.transform, "Title", "LAN Multiplayer", 30, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28.0f, -18.0f), new Vector2(width - 56.0f, 48.0f));
+                new Vector2(MenuPanelInset, -18.0f), TitleSizeWithClose(width, 48.0f));
 
             TMP_InputField addressInput = EnsureInputFieldControl(
                 bg.transform,
@@ -238,7 +273,7 @@ namespace Blockiverse.Editor
                 TextDimColor);
 
             Button closeButton = EnsureButtonControl(
-                bg.transform, "Close Button", "Close", new Vector2(28.0f, -(height - 80.0f)), new Vector2(width - 56.0f, 54.0f));
+                bg.transform, "Close Button", "Close", TopRightClosePosition(width), MenuCloseButtonSize);
 
             BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(panelRoot);
             menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
@@ -348,8 +383,8 @@ namespace Blockiverse.Editor
             return (actionMenu, presenter);
         }
 
-        // Builds the New World config panel: name/seed text inputs + 5 cycle-selector rows
-        // (GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome) + Create/Cancel buttons.
+        // Builds the New World config panel: name/seed text inputs + cycle-selector rows
+        // (GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome, TextureSet) + actions.
         static (BlockiverseNewWorldPanel panel, BlockiverseWorldSpacePanelPresenter presenter) EnsureNewWorldMenuPanel(
             Transform parent,
             Transform head)
@@ -416,11 +451,20 @@ namespace Blockiverse.Editor
                 new Vector2(28, -158), new Vector2(150, 44), TextDimColor);
             TMP_InputField seedInput = EnsureInputFieldControl(
                 bg.transform, "Seed Input", "0", "0",
-                new Vector2(186, -158), new Vector2(W - 214, 48));
+                new Vector2(186, -158),
+                new Vector2(W - 214, 48));
 
-            // 5 cycle rows: GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome
-            string[] rowLabels = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome" };
-            string[] defaultValues = { "survival", "normal", "small", WorldPresetIds.SurvivalTerrain, "balanced" };
+            // Cycle rows: GameMode, Difficulty, WorldSize, WorldPreset, StartingBiome, TextureSet
+            string[] rowLabels = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome", "Texture Set" };
+            string[] defaultValues =
+            {
+                "survival",
+                "normal",
+                "small",
+                WorldPresetIds.SurvivalTerrain,
+                "balanced",
+                BlockiverseLocalization.DisplayNameForCanonicalId(BlockTextureSetIds.Default),
+            };
             const float rowStartY = -230;
             const float rowH = 56;
             var backButtons = new Button[rowLabels.Length];
@@ -651,14 +695,15 @@ namespace Blockiverse.Editor
         // Canonical controller mapping description, shared by the first-launch mapping popup and
         // the Settings → Controls reference screen so the two can never drift apart.
         const string ControllerMappingText =
-            "Left stick: move\n" +
-            "Right stick: snap turn\n" +
+            "Support stick: move\n" +
+            "Support stick click: sprint\n" +
+            "Dominant stick: snap turn\n" +
             "Either stick hold up: teleport aim, release to land\n" +
-            "Right trigger: press UI or break blocks\n" +
-            "Right grip: place or use\n" +
-            "Left grip: blocks menu\n" +
-            "Right A: jump\n" +
-            "Right B: toggle block editing\n" +
+            "Dominant trigger: press UI / break\n" +
+            "Dominant grip: place / use\n" +
+            "Support grip: blocks menu\n" +
+            "Dominant primary button: jump\n" +
+            "Dominant secondary button: toggle block editing\n" +
             "Menu: pause";
 
         // Builds the audio/feedback settings screen: volume sliders, feedback toggles, and a
@@ -702,7 +747,7 @@ namespace Blockiverse.Editor
 
             EnsureLabel(bg.transform, "Title", "Audio & Feedback", 32, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28, -28), new Vector2(W - 56, 52));
+                new Vector2(MenuPanelInset, -MenuPanelInset), TitleSizeWithClose(W));
 
             Slider master = EnsureSettingsSlider(bg.transform, "Master Volume Slider", "Master Volume", 1.0f, new Vector2(28, -96));
             Slider effects = EnsureSettingsSlider(bg.transform, "Effects Volume Slider", "Effects Volume", 1.0f, new Vector2(28, -192));
@@ -717,7 +762,7 @@ namespace Blockiverse.Editor
             Toggle reducedParticles = EnsureToggleControl(bg.transform, "Reduced Particles Toggle", "Reduced Particles", false, new Vector2(28, -840));
 
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
-                new Vector2(28, -902), new Vector2(160, 48));
+                TopRightClosePosition(W), MenuCloseButtonSize);
 
             BlockiverseAudioSettingsPanel panel = EnsureComponent<BlockiverseAudioSettingsPanel>(panelRoot);
             panel.Configure(
@@ -737,7 +782,7 @@ namespace Blockiverse.Editor
 
         // Builds the Creative Tools screen (§12): corner A/B region selection, fill/replace/
         // delete/copy/paste with region undo/redo, tree/ruin spawners, pick-block, and the
-        // environment controls (time-of-day, day speed, weather cycle).
+        // environment controls (time-of-day, day/night cycle pause, day speed, weather cycle).
         static (BlockiverseCreativeToolsPanel panel, BlockiverseWorldSpacePanelPresenter presenter, Button closeButton)
             EnsureCreativeToolsMenuPanel(Transform parent, Transform head)
         {
@@ -778,7 +823,7 @@ namespace Blockiverse.Editor
 
             EnsureLabel(bg.transform, "Title", "Creative Tools", 32, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28, -28), new Vector2(W - 56, 52));
+                new Vector2(MenuPanelInset, -MenuPanelInset), TitleSizeWithClose(W));
 
             TMP_Text statusLabel = EnsureLabel(bg.transform, "Status", "Aim at blocks to select corners.", 20, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
@@ -807,13 +852,14 @@ namespace Blockiverse.Editor
 
             Slider timeSlider = EnsureSettingsSlider(bg.transform, "Time Of Day Slider", "Time of Day", 0.25f, new Vector2(28, -462));
             Slider speedSlider = EnsureSettingsSlider(bg.transform, "Day Speed Slider", "Day Speed", 1.0f, new Vector2(28, -558), minValue: 0.0f, maxValue: 4.0f);
+            Button toggleCycleButton = EnsureButtonControl(bg.transform, "Toggle Cycle Button", "Pause / Resume Cycle", new Vector2(28, -638), new Vector2(246, 48));
 
             TMP_Text weatherLabel = EnsureLabel(bg.transform, "Weather Label", "Weather: Clear", 22, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28, -660), new Vector2(300, 40));
-            Button weatherButton = EnsureButtonControl(bg.transform, "Cycle Weather Button", "Cycle Weather", new Vector2(346, -656), new Vector2(186, 48));
+                new Vector2(28, -714), new Vector2(300, 40));
+            Button weatherButton = EnsureButtonControl(bg.transform, "Cycle Weather Button", "Cycle Weather", new Vector2(346, -710), new Vector2(186, 48));
 
-            Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close", new Vector2(28, -730), new Vector2(150, 48));
+            Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close", TopRightClosePosition(W), MenuCloseButtonSize);
 
             BlockiverseCreativeToolsPanel panel = EnsureComponent<BlockiverseCreativeToolsPanel>(panelRoot);
             panel.Configure(null, null, null, cornersLabel, statusLabel, weatherLabel, timeSlider, speedSlider);
@@ -830,6 +876,7 @@ namespace Blockiverse.Editor
             WireButton(redoButton, panel, nameof(BlockiverseCreativeToolsPanel.RedoEdit), panel.RedoEdit);
             WireButton(treeButton, panel, nameof(BlockiverseCreativeToolsPanel.SpawnTree), panel.SpawnTree);
             WireButton(ruinButton, panel, nameof(BlockiverseCreativeToolsPanel.SpawnRuin), panel.SpawnRuin);
+            WireButton(toggleCycleButton, panel, nameof(BlockiverseCreativeToolsPanel.ToggleDayNightCycle), panel.ToggleDayNightCycle);
             WireButton(weatherButton, panel, nameof(BlockiverseCreativeToolsPanel.CycleWeather), panel.CycleWeather);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
@@ -890,14 +937,14 @@ namespace Blockiverse.Editor
 
             EnsureLabel(bg.transform, "Title", "Controls", 32, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28, -28), new Vector2(W - 56, 52));
+                new Vector2(MenuPanelInset, -MenuPanelInset), TitleSizeWithClose(W));
 
             EnsureLabel(bg.transform, "Mapping Text", ControllerMappingText, 22, TextAnchor.UpperLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
                 new Vector2(28, -96), new Vector2(W - 56, 290));
 
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
-                new Vector2(28, -404), new Vector2(160, 48));
+                TopRightClosePosition(W), MenuCloseButtonSize);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
@@ -1041,6 +1088,7 @@ namespace Blockiverse.Editor
                 background.type = Image.Type.Sliced;
             }
             background.color = ControlNormalColor;
+            ConfigureUiRaycastBlocker(background);
 
             GameObject fillAreaObject = EnsureRectChild(sliderObject.transform, "Fill Area");
             RectTransform fillAreaRect = fillAreaObject.GetComponent<RectTransform>();
@@ -1062,6 +1110,7 @@ namespace Blockiverse.Editor
                 fill.type = Image.Type.Sliced;
             }
             fill.color = AccentColor;
+            fill.raycastTarget = false;
 
             GameObject handleAreaObject = EnsureRectChild(sliderObject.transform, "Handle Slide Area");
             RectTransform handleAreaRect = handleAreaObject.GetComponent<RectTransform>();
@@ -1080,6 +1129,7 @@ namespace Blockiverse.Editor
             if (knobSprite != null)
                 handle.sprite = knobSprite;
             handle.color = TextPrimaryColor;
+            ConfigureUiRaycastBlocker(handle);
 
             slider.fillRect = fillRect;
             slider.handleRect = handleRect;
@@ -1095,6 +1145,7 @@ namespace Blockiverse.Editor
                 fadeDuration     = 0.08f
             };
             slider.value = value;
+            ConfigureSelectableFeedback(slider);
             return slider;
         }
 
@@ -1151,7 +1202,7 @@ namespace Blockiverse.Editor
 
             TMP_Text titleLabel = EnsureLabel(bg.transform, "Title", "Station", 30, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28, -18), new Vector2(W - 56, 48));
+                new Vector2(MenuPanelInset, -18), TitleSizeWithClose(W, 48.0f));
 
             // Input slots (forge maximum; unused ones stay empty when model has fewer)
             var inputLabels = new TMP_Text[SmeltingStationModel.MaxInputSlots];
@@ -1205,7 +1256,7 @@ namespace Blockiverse.Editor
 
             // Close button
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close",
-                new Vector2(348, -504), new Vector2(150, 52));
+                TopRightClosePosition(W), MenuCloseButtonSize);
 
             BlockiverseStationPanel stationPanel = EnsureComponent<BlockiverseStationPanel>(panelRoot);
             stationPanel.Configure(titleLabel, inputLabels, fuelLabel, outputLabel, statusLabel,

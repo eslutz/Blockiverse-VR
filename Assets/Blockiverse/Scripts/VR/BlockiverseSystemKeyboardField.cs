@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -11,19 +12,39 @@ namespace Blockiverse.VR
     /// UI input fields cannot be typed into without a hardware keyboard otherwise.
     /// </summary>
     [RequireComponent(typeof(TMP_InputField))]
-    public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, ISelectHandler
+    public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, IPointerDownHandler, ISelectHandler, ISubmitHandler, IDeselectHandler
     {
         [SerializeField] TMP_InputField inputField;
+        [SerializeField] TouchScreenKeyboardType keyboardType = TouchScreenKeyboardType.Default;
+
+        static BlockiverseSystemKeyboardField activeField;
 
         TouchScreenKeyboard keyboard;
         string textBeforeEdit;
 
+        public static BlockiverseSystemKeyboardField ActiveField => activeField;
+        public static bool AnyKeyboardVisible => activeField != null;
+        public static event Action<bool> KeyboardVisibilityChanged;
+
+        public TouchScreenKeyboardType KeyboardType => keyboardType;
+
         public void Configure(TMP_InputField field)
         {
+            Configure(field, field != null ? field.keyboardType : TouchScreenKeyboardType.Default);
+        }
+
+        public void Configure(TMP_InputField field, TouchScreenKeyboardType keyboardType)
+        {
             inputField = field;
+            this.keyboardType = SupportedKeyboardType(keyboardType);
         }
 
         public void OnPointerClick(PointerEventData eventData)
+        {
+            OpenKeyboard();
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
         {
             OpenKeyboard();
         }
@@ -33,10 +54,22 @@ namespace Blockiverse.VR
             OpenKeyboard();
         }
 
+        public void OnSubmit(BaseEventData eventData)
+        {
+            OpenKeyboard();
+        }
+
+        public void OnDeselect(BaseEventData eventData)
+        {
+            if (activeField == this && (keyboard == null || !keyboard.active))
+                SetActiveField(null);
+        }
+
         void Awake()
         {
             if (inputField == null)
                 inputField = GetComponent<TMP_InputField>();
+            keyboardType = SupportedKeyboardType(inputField != null ? inputField.keyboardType : keyboardType);
         }
 
         void OpenKeyboard()
@@ -44,17 +77,37 @@ namespace Blockiverse.VR
             if (inputField == null || !TouchScreenKeyboard.isSupported)
                 return;
 
-            if (keyboard != null && keyboard.active)
+            if (activeField == this && keyboard != null && keyboard.active)
                 return;
 
+            if (activeField != null && activeField != this)
+                activeField.CloseKeyboard(commitCurrentText: true, invokeEndEdit: true);
+
             textBeforeEdit = inputField.text;
-            keyboard = TouchScreenKeyboard.Open(inputField.text, TouchScreenKeyboardType.Default);
+            keyboard = TouchScreenKeyboard.Open(inputField.text, keyboardType);
+            SetActiveField(this);
+            inputField.ActivateInputField();
+        }
+
+        static TouchScreenKeyboardType SupportedKeyboardType(TouchScreenKeyboardType requestedType)
+        {
+            // Meta Quest's system keyboard overlay only supports Default when opened from Unity.
+            return TouchScreenKeyboardType.Default;
         }
 
         void Update()
         {
-            if (keyboard == null || inputField == null)
+            if (activeField != this)
+            {
+                keyboard = null;
                 return;
+            }
+
+            if (keyboard == null || inputField == null)
+            {
+                SetActiveField(null);
+                return;
+            }
 
             if (keyboard.active)
             {
@@ -67,8 +120,7 @@ namespace Blockiverse.VR
             // partially streamed text behind.
             if (keyboard.status == TouchScreenKeyboard.Status.Done)
             {
-                inputField.text = keyboard.text;
-                inputField.onEndEdit.Invoke(inputField.text);
+                CommitKeyboardText(keyboard.text, invokeEndEdit: true);
             }
             else
             {
@@ -76,6 +128,47 @@ namespace Blockiverse.VR
             }
 
             keyboard = null;
+            SetActiveField(null);
+        }
+
+        void CloseKeyboard(bool commitCurrentText, bool invokeEndEdit)
+        {
+            if (keyboard != null)
+            {
+                if (commitCurrentText && inputField != null)
+                    CommitKeyboardText(keyboard.text, invokeEndEdit);
+                else if (inputField != null)
+                    inputField.text = textBeforeEdit;
+
+                if (keyboard.active)
+                    keyboard.active = false;
+            }
+
+            keyboard = null;
+
+            if (activeField == this)
+                SetActiveField(null);
+        }
+
+        void CommitKeyboardText(string text, bool invokeEndEdit)
+        {
+            if (inputField == null)
+                return;
+
+            inputField.text = text;
+
+            if (invokeEndEdit)
+                inputField.onEndEdit.Invoke(inputField.text);
+        }
+
+        static void SetActiveField(BlockiverseSystemKeyboardField field)
+        {
+            bool wasVisible = activeField != null;
+            activeField = field;
+            bool isVisible = activeField != null;
+
+            if (wasVisible != isVisible)
+                KeyboardVisibilityChanged?.Invoke(isVisible);
         }
     }
 }

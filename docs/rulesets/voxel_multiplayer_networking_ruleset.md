@@ -668,6 +668,7 @@ function ProcessCrateTransfer(clientId, itemId, count, direction): SurvivalComma
 | Local player | Meta Horizon avatar in first-person when available. |
 | Remote player | Meta Horizon avatar in third-person when available. |
 | Avatar unavailable | Use Blockiverse fallback proxy avatar. |
+| Child account or child-restricted Meta profile path | Use Blockiverse fallback proxy avatar; do not request Meta profile/avatar lookup from Blockiverse code unless current Meta policy review explicitly permits it. |
 | NPC/mob | Original Blockiverse voxel character; never Meta Horizon avatar. |
 
 ### Fallback proxy pose sync
@@ -769,6 +770,7 @@ worldSaveSchemaVersion
 | In-app voice moderation | Not implemented because the app does not transmit voice. |
 | Player invites | Use platform-level flow later; LAN join by IP for the initial LAN release. |
 | Player identity | Use Meta account/platform identity only when needed for avatars/platform features. |
+| Age group policy | Mixed Ages builds request Meta's user age category once per online session; `UNKNOWN`, offline, and failed responses do not block base LAN gameplay. Child accounts use fallback identity/avatar behavior for child-sensitive Meta social/profile features. |
 | Privacy | LAN devices exchange IP addresses and gameplay state only to maintain the active session. |
 
 If Blockiverse later adds in-app voice, this document must be updated before implementation. Required additions would include microphone permission flow, mute/block UI, moderation/reporting rules, voice privacy disclosures, parental controls, platform policy review, and packet-level voice transport rules.

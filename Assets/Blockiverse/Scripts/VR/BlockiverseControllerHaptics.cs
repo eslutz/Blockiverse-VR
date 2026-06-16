@@ -17,6 +17,7 @@ namespace Blockiverse.VR
         public static BlockiverseHapticPattern BlockBreak => new(0.6f, 0.05f);
         public static BlockiverseHapticPattern BlockPlace => new(0.4f, 0.04f);
         public static BlockiverseHapticPattern UiTick => new(0.25f, 0.02f);
+        public static BlockiverseHapticPattern UiClick => new(0.34f, 0.035f);
         public static BlockiverseHapticPattern CraftSuccess => new(0.28f, 0.04f);
         public static BlockiverseHapticPattern CraftFail => new(0.18f, 0.06f);
         public static BlockiverseHapticPattern PlayerDamage => new(0.35f, 0.08f);

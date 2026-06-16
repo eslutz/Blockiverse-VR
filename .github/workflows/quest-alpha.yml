@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: unity-library-alpha-${{ runner.os }}-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          key: unity-library-alpha-${{ runner.os }}-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
             unity-library-alpha-${{ runner.os }}-6000.3.16f1-
             unity-library-alpha-${{ runner.os }}-
@@ -66,9 +66,9 @@ jobs:
         env:
           VERSION_NAME_OVERRIDE: ${{ inputs.version_name }}
         run: |
-          base_version="$(tr -d '[:space:]' < VERSION)"
+          base_version="$(tr -d '[:space:]' < ProjectSettings/BlockiverseVersion.txt)"
           if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "VERSION must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            echo "ProjectSettings/BlockiverseVersion.txt must contain MAJOR.MINOR.PATCH without a leading v." >&2
             exit 64
           fi
 
@@ -109,6 +109,19 @@ jobs:
             printf 'ANDROID_KEY_ALIAS=%s\n' "$ANDROID_KEY_ALIAS"
             printf 'ANDROID_KEY_PASSWORD=%s\n' "$ANDROID_KEY_PASSWORD"
           } > .ci-secrets/release-signing.env
+
+      - name: Free runner disk space for Unity Android image
+        if: runner.os == 'Linux'
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android/sdk
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          docker system prune --all --force
+          df -h
 
       - name: Build release-signed Android APK
         uses: game-ci/unity-builder@v4

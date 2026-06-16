@@ -116,6 +116,7 @@ namespace Blockiverse.MetaAvatars
                 return;
 
             ownerNetworkFallbackRig.ConfigureFallbackProxy(true);
+            ownerNetworkFallbackRig.ConfigureFirstPersonFallbackVisuals(false);
             ownerNetworkFallbackRig.SetMetaAvatarAvailable(localFirstPersonPresenter.AvatarReady);
         }
 

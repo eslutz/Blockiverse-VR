@@ -15,33 +15,50 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseComfortSettings comfortSettings;
 
         TunnelingVignetteController vignetteController;
+        MeshRenderer vignetteRenderer;
         float lastAppliedAperture = -1.0f;
+        bool? lastRendererEnabled;
 
         public void Configure(BlockiverseComfortSettings settings)
         {
             comfortSettings = settings;
             lastAppliedAperture = -1.0f;
+            lastRendererEnabled = null;
         }
 
         void Awake()
         {
             vignetteController = GetComponent<TunnelingVignetteController>();
+            vignetteRenderer = GetComponent<MeshRenderer>();
+            ApplySettings(force: true);
         }
 
         void Update()
+        {
+            ApplySettings(force: false);
+        }
+
+        void ApplySettings(bool force)
         {
             if (comfortSettings == null || vignetteController == null)
                 return;
 
             float aperture = comfortSettings.VignetteAperture;
 
-            if (Mathf.Approximately(aperture, lastAppliedAperture))
-                return;
+            if (force || !Mathf.Approximately(aperture, lastAppliedAperture))
+            {
+                lastAppliedAperture = aperture;
+                VignetteParameters p = vignetteController.defaultParameters;
+                p.apertureSize = aperture;
+                vignetteController.defaultParameters = p;
+            }
 
-            lastAppliedAperture = aperture;
-            VignetteParameters p = vignetteController.defaultParameters;
-            p.apertureSize = aperture;
-            vignetteController.defaultParameters = p;
+            bool rendererEnabled = comfortSettings.VignetteEnabled;
+            if (vignetteRenderer != null && (force || lastRendererEnabled != rendererEnabled))
+            {
+                vignetteRenderer.enabled = rendererEnabled;
+                lastRendererEnabled = rendererEnabled;
+            }
         }
     }
 }

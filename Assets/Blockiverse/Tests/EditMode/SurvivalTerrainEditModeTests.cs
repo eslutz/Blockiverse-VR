@@ -10,6 +10,10 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class SurvivalTerrainEditModeTests
     {
+        const int EasterEggSeed = 8675309;
+        const int EasterEggWatchpostOffsetX = 8;
+        const int EasterEggWatchpostOffsetZ = -2;
+
         [Test]
         public void SurvivalTerrainSettingsUseExpectedBoundsChunkAndSeed()
         {
@@ -26,10 +30,46 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void SurvivalTerrainPresetIsDeterministicForSameSeed()
         {
-            VoxelWorld first = GenerateSurvivalWorld(seed: 8675309);
-            VoxelWorld second = GenerateSurvivalWorld(seed: 8675309);
+            VoxelWorld first = GenerateSurvivalWorld(seed: EasterEggSeed);
+            VoxelWorld second = GenerateSurvivalWorld(seed: EasterEggSeed);
 
             AssertWorldsEqual(first, second);
+        }
+
+        [Test]
+        public void EasterEggSeedPlacesGuaranteedWatchpostNearSpawn()
+        {
+            (VoxelWorld world, SurvivalTerrainPreset preset, WorldGenerationSettings settings) =
+                GenerateSurvivalPreset(EasterEggSeed);
+
+            BlockPosition stationPos = EasterEggWatchpostStationPosition(settings);
+            BlockPosition cratePos = EasterEggWatchpostCratePosition(settings);
+            BlockPosition lightPos = EasterEggWatchpostLightPosition(settings);
+
+            Assert.That(world.GetBlock(stationPos), Is.EqualTo(BlockRegistry.MendBench),
+                $"Expected the guaranteed weathered watchpost Mend Bench at {stationPos}.");
+            Assert.That(world.GetBlock(cratePos), Is.EqualTo(BlockRegistry.StorageCrate),
+                $"Expected the guaranteed weathered watchpost Storage Crate at {cratePos}.");
+            Assert.That(world.GetBlock(lightPos), Is.EqualTo(BlockRegistry.Glowwick),
+                $"Expected the guaranteed weathered watchpost Glowwick at {lightPos}.");
+
+            Assert.That(preset.ContainerLoot.Any(loot => loot.Position.Equals(cratePos) && loot.Items.Count > 0), Is.True,
+                "The guaranteed watchpost crate should emit deterministic loot through the preset container-loot sink.");
+        }
+
+        [Test]
+        public void AdjacentSeedDoesNotPlaceGuaranteedWatchpostAtEasterEggCoordinates()
+        {
+            (VoxelWorld world, _, WorldGenerationSettings settings) =
+                GenerateSurvivalPreset(EasterEggSeed + 1);
+
+            bool hasGuaranteedWatchpost =
+                world.GetBlock(EasterEggWatchpostStationPosition(settings)) == BlockRegistry.MendBench &&
+                world.GetBlock(EasterEggWatchpostCratePosition(settings)) == BlockRegistry.StorageCrate &&
+                world.GetBlock(EasterEggWatchpostLightPosition(settings)) == BlockRegistry.Glowwick;
+
+            Assert.That(hasGuaranteedWatchpost, Is.False,
+                "The guaranteed near-spawn watchpost must be gated to the explicit Easter egg seed.");
         }
 
         [Test]
@@ -340,6 +380,42 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ResourceRichTuningPreservesResourceIdentityAndDepthBands()
+        {
+            IReadOnlyList<ResourceVeinTuning> defaults = SurvivalResourceTuning.CreateDefault().ResourceVeins;
+            IReadOnlyList<ResourceVeinTuning> rich = SurvivalResourceTuning.CreateResourceRich().ResourceVeins;
+
+            Assert.That(rich.Count, Is.EqualTo(defaults.Count));
+
+            for (int i = 0; i < defaults.Count; i++)
+            {
+                ResourceVeinTuning expected = defaults[i];
+                ResourceVeinTuning actual = rich[i];
+
+                Assert.That(actual.ResourceBlock, Is.EqualTo(expected.ResourceBlock));
+                Assert.That(actual.Salt, Is.EqualTo(expected.Salt));
+                Assert.That(actual.MinY, Is.EqualTo(expected.MinY));
+                Assert.That(actual.MaxY, Is.EqualTo(expected.MaxY));
+                Assert.That(actual.VerticalRadius, Is.EqualTo(expected.VerticalRadius));
+                Assert.That(actual.ChancePermille, Is.EqualTo(Math.Min(1000, expected.ChancePermille * 2)));
+                Assert.That(actual.Radius, Is.EqualTo(expected.Radius + 1));
+            }
+        }
+
+        [Test]
+        public void EasterEggSeedUsesRicherImplicitResourceTuning()
+        {
+            (VoxelWorld richWorld, _, _) = GenerateSurvivalPreset(EasterEggSeed);
+            (VoxelWorld defaultWorld, _, _) = GenerateSurvivalPreset(EasterEggSeed, SurvivalResourceTuning.CreateDefault());
+
+            int richResourceBlocks = CountResourceBlocks(richWorld);
+            int defaultResourceBlocks = CountResourceBlocks(defaultWorld);
+
+            Assert.That(richResourceBlocks, Is.GreaterThan(defaultResourceBlocks * 2),
+                "The Easter egg seed should use the richer implicit resource profile unless explicit tuning is injected.");
+        }
+
+        [Test]
         public void SurvivalTerrainPresetSurfaceHeightsStayWithinCanonicalBounds()
         {
             VoxelWorld world = GenerateSurvivalWorld(seed: 7777);
@@ -497,9 +573,62 @@ namespace Blockiverse.Tests.EditMode
 
         static VoxelWorld GenerateSurvivalWorld(int seed)
         {
+            (VoxelWorld world, _, _) = GenerateSurvivalPreset(seed);
+            return world;
+        }
+
+        static (VoxelWorld world, SurvivalTerrainPreset preset, WorldGenerationSettings settings) GenerateSurvivalPreset(
+            int seed,
+            SurvivalResourceTuning resourceTuning = null)
+        {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed);
-            return new SurvivalTerrainPreset(registry, settings).Generate();
+            var preset = new SurvivalTerrainPreset(registry, settings, resourceTuning);
+            VoxelWorld world = preset.Generate();
+            return (world, preset, settings);
+        }
+
+        static int CountResourceBlocks(VoxelWorld world)
+        {
+            var resourceBlocks = new HashSet<BlockId>(
+                SurvivalResourceTuning.CreateDefault().ResourceVeins.Select(vein => vein.ResourceBlock));
+
+            int count = 0;
+            for (int y = 0; y < world.Bounds.Height; y++)
+            {
+                for (int x = 0; x < world.Bounds.Width; x++)
+                {
+                    for (int z = 0; z < world.Bounds.Depth; z++)
+                    {
+                        if (resourceBlocks.Contains(world.GetBlock(new BlockPosition(x, y, z))))
+                            count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        static BlockPosition EasterEggWatchpostStationPosition(WorldGenerationSettings settings)
+        {
+            int baseX = settings.SpawnPosition.X + EasterEggWatchpostOffsetX;
+            int baseY = settings.SpawnPosition.Y;
+            int baseZ = settings.SpawnPosition.Z + EasterEggWatchpostOffsetZ;
+            return new BlockPosition(baseX + 1, baseY, baseZ + 1);
+        }
+
+        static BlockPosition EasterEggWatchpostCratePosition(WorldGenerationSettings settings)
+        {
+            int baseX = settings.SpawnPosition.X + EasterEggWatchpostOffsetX;
+            int baseY = settings.SpawnPosition.Y;
+            int baseZ = settings.SpawnPosition.Z + EasterEggWatchpostOffsetZ;
+            return new BlockPosition(baseX + 2, baseY, baseZ + 2);
+        }
+
+        static BlockPosition EasterEggWatchpostLightPosition(WorldGenerationSettings settings)
+        {
+            BlockPosition crate = EasterEggWatchpostCratePosition(settings);
+            return new BlockPosition(crate.X, crate.Y + 1, crate.Z);
         }
 
         static int CountBlocks(VoxelWorld world, BlockId blockId)

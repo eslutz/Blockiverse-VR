@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
+    "Blockiverse.MetaPlatform",
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
     "Blockiverse.Survival.Health",

@@ -12,6 +12,8 @@ The goal is to keep menus data-driven and easy to convert into game logic.
 - Every menu element should map to one explicit action ID.
 - Game simulation pauses in full-screen menus unless the screen is explicitly marked `simulationContinues = true`.
 - Inventory, crafting, and station screens should be usable without leaving the game world.
+- On Quest, launch splash/loading, menu, modal, and gameplay HUD surfaces may be backed by flat XR Quad composition layers for sharp text and artwork while preserving the same world-space layout, routing, and ray interaction model; controller and ray visuals must render through the normal scene camera, not a controller/ray projection composition layer.
+- Quest pointer ownership follows the player's active tool hand, which is initialized from the user's dominant-hand preference when available and remains controlled by the in-game Comfort setting.
 - Menu screens should use a consistent layout model:
   - Header area
   - Main content area
@@ -304,6 +306,7 @@ difficulty = "normal";
 worldSize = "small";
 worldPreset = "survival_terrain";
 startingBiomePreference = "balanced";
+textureSet = "enhanced";
 ```
 
 **Mockup:**
@@ -319,6 +322,7 @@ startingBiomePreference = "balanced";
 | World Size              | < Small >                       |
 | World Preset            | < Survival Terrain >            |
 | Starting Biome          | < Balanced >                    |
+| Texture Set             | < Enhanced >                    |
 +--------------------------+---------------------------------+
 | [ Create World ]                         [ Back ]          |
 +------------------------------------------------------------+
@@ -335,6 +339,7 @@ startingBiomePreference = "balanced";
 | World Size selector | `new_world.cycle_world_size` | Cycles `small`, `medium`, `large`, `infinite`; current bounded implementation displays `infinite` as an Infinite Preview (256x256) until region-streamed worlds ship. |
 | World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain`, `flat_builder`, `void_builder`; advanced presets may unlock later |
 | Starting Biome selector | `new_world.cycle_starting_biome` | Changes spawn-biome preference |
+| Texture Set selector | `new_world.cycle_texture_set` | Cycles `enhanced`, `ai_simplified`, `ai`, `original`; the selected authored block atlas is saved with the world and restored on load |
 | Create World | `new_world.create` | Validates settings, creates save, starts generation |
 | Back | `new_world.back` | Returns to Title Menu |
 
@@ -1084,14 +1089,15 @@ can never drift apart.
 +------------------------------------------------------------+
 | Controls                                                   |
 +------------------------------------------------------------+
-| Left stick: move                                           |
-| Right stick: snap turn                                     |
-| Right stick hold up: teleport aim, release to land         |
-| Right trigger: press UI or break blocks                    |
-| Right grip: place or use                                   |
-| Left grip: blocks menu                                     |
-| Right A: jump                                              |
-| Right B: toggle block editing                              |
+| Support stick: move                                        |
+| Support stick click: sprint                                |
+| Dominant stick: snap turn                                  |
+| Either stick hold up: teleport aim, release to land        |
+| Dominant trigger: press UI / break                         |
+| Dominant grip: place / use                                 |
+| Support grip: blocks menu                                  |
+| Dominant primary button: jump                              |
+| Dominant secondary button: toggle block editing            |
 | Menu: pause                                                |
 |                                                            |
 | [ Close ]                                                  |

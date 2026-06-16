@@ -65,6 +65,7 @@ namespace Blockiverse.UI
             public const string NewWorldSize = "ui.generated.new_world.size";
             public const string NewWorldPreset = "ui.generated.new_world.preset";
             public const string NewWorldStartingBiome = "ui.generated.new_world.starting_biome";
+            public const string NewWorldTextureSet = "ui.generated.new_world.texture_set";
             public const string NewWorldCreate = "ui.generated.new_world.create";
             public const string LoadWorldTitle = "ui.generated.load_world.title";
             public const string LoadWorldNoSaveSelected = "ui.generated.load_world.no_save_selected";
@@ -96,7 +97,10 @@ namespace Blockiverse.UI
             public const string CreativeToolsSpawnRuin = "ui.generated.creative_tools.spawn_ruin";
             public const string CreativeToolsTimeOfDay = "ui.generated.creative_tools.time_of_day";
             public const string CreativeToolsDaySpeed = "ui.generated.creative_tools.day_speed";
+            public const string CreativeToolsToggleCycle = "ui.generated.creative_tools.toggle_cycle";
             public const string CreativeToolsCycleWeather = "ui.generated.creative_tools.cycle_weather";
+            public const string CreativeCyclePaused = "ui.generated.creative_tools.cycle_paused";
+            public const string CreativeCycleResumed = "ui.generated.creative_tools.cycle_resumed";
             public const string ControlsTitle = "ui.generated.controls.title";
             public const string WorldDetailsName = "ui.generated.world_details.name";
             public const string StationTitle = "ui.generated.station.title";
@@ -296,11 +300,16 @@ namespace Blockiverse.UI
             [Keys.NewWorldSize] = "World Size",
             [Keys.NewWorldPreset] = "World Preset",
             [Keys.NewWorldStartingBiome] = "Starting Biome",
+            [Keys.NewWorldTextureSet] = "Texture Set",
             [Keys.NewWorldCreate] = "Create World",
             ["ui.value.canonical.small"] = "Small (128x128)",
             ["ui.value.canonical.medium"] = "Medium (192x192)",
             ["ui.value.canonical.large"] = "Large (256x256)",
             ["ui.value.canonical.infinite"] = "Infinite Preview (256x256)",
+            ["ui.value.canonical.original"] = "Original",
+            ["ui.value.canonical.enhanced"] = "Enhanced",
+            ["ui.value.canonical.ai_simplified"] = "AI Simplified",
+            ["ui.value.canonical.ai"] = "AI",
             [Keys.LoadWorldTitle] = "Load World",
             [Keys.LoadWorldNoSaveSelected] = "No save selected",
             [Keys.LoadWorldEntry] = "{0}  ·  Day {1}",
@@ -331,7 +340,10 @@ namespace Blockiverse.UI
             [Keys.CreativeToolsSpawnRuin] = "Spawn Ruin",
             [Keys.CreativeToolsTimeOfDay] = "Time of Day",
             [Keys.CreativeToolsDaySpeed] = "Day Speed",
+            [Keys.CreativeToolsToggleCycle] = "Pause / Resume Cycle",
             [Keys.CreativeToolsCycleWeather] = "Cycle Weather",
+            [Keys.CreativeCyclePaused] = "Day/night cycle paused.",
+            [Keys.CreativeCycleResumed] = "Day/night cycle resumed.",
             [Keys.ControlsTitle] = "Controls",
             [Keys.WorldDetailsName] = "Name",
             [Keys.StationTitle] = "Station",

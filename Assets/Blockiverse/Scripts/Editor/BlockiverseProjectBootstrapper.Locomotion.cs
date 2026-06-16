@@ -61,6 +61,11 @@ namespace Blockiverse.Editor
             if (settings == null)
                 settings = rig.AddComponent<BlockiverseComfortSettings>();
 
+            // Regenerated rigs should always start with a readable title/menu view. Players can
+            // opt into motion tunneling from the comfort menu after startup.
+            settings.VignetteEnabled = false;
+            settings.VignetteStrength = 0.0f;
+
             if (origin != null)
                 origin.CameraYOffset = settings.StandingEyeHeight;
 
@@ -108,6 +113,9 @@ namespace Blockiverse.Editor
             jumpProvider.disableGravityDuringJump = false;
             jumpProvider.unlimitedInAirJumps = false;
             jumpProvider.inAirJumpCount = 0;
+            jumpProvider.jumpInput = MakeButtonReader(
+                "Jump",
+                LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.PrimaryButton));
 
             TeleportationProvider teleport = rig.GetComponent<TeleportationProvider>();
 
@@ -153,9 +161,43 @@ namespace Blockiverse.Editor
 
             heightReset.Configure(origin, settings);
             inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings, continuousTurn, gravityProvider, jumpProvider, characterController);
+            ConfigureDefaultLocomotionInputReferences(continuousMove, snapTurn, continuousTurn);
 
             BlockiverseAudioCuePlayer audioCuePlayer = rig.GetComponent<BlockiverseAudioCuePlayer>();
             inputRig.ConfigureTeleportFeedback(audioCuePlayer);
+        }
+
+        static void ConfigureDefaultLocomotionInputReferences(
+            ContinuousMoveProvider continuousMove,
+            SnapTurnProvider snapTurn,
+            ContinuousTurnProvider continuousTurn)
+        {
+            if (continuousMove != null)
+            {
+                continuousMove.leftHandMoveInput = MakeVector2Reader(
+                    "Left Hand Move",
+                    LoadInputActionReference(BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Move));
+                continuousMove.rightHandMoveInput = MakeVector2Reader("Right Hand Move", null);
+                EditorUtility.SetDirty(continuousMove);
+            }
+
+            if (snapTurn != null)
+            {
+                snapTurn.leftHandTurnInput = MakeVector2Reader("Left Hand Snap Turn", null);
+                snapTurn.rightHandTurnInput = MakeVector2Reader(
+                    "Right Hand Snap Turn",
+                    LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Turn));
+                EditorUtility.SetDirty(snapTurn);
+            }
+
+            if (continuousTurn != null)
+            {
+                continuousTurn.leftHandTurnInput = MakeVector2Reader("Left Hand Smooth Turn", null);
+                continuousTurn.rightHandTurnInput = MakeVector2Reader(
+                    "Right Hand Smooth Turn",
+                    LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Turn));
+                EditorUtility.SetDirty(continuousTurn);
+            }
         }
 
         // ── Game menu system ─────────────────────────────────────────────────────────────────────

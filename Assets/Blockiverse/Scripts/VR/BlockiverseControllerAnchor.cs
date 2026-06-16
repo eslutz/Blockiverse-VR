@@ -18,8 +18,9 @@ namespace Blockiverse.VR
         public BlockiverseControllerRole Role => role;
 
         /// <summary>
-        /// Whether the controller is currently tracked, read from the native pose driver's
-        /// tracking-state input (position or rotation reported as tracked).
+        /// Whether the controller currently has a complete tracked pose, read from the native
+        /// pose driver's tracking-state input. Rays require both position and rotation because a
+        /// rotation-only controller pose leaves the ray origin at a stale position.
         /// </summary>
         public bool IsTracked
         {
@@ -34,7 +35,8 @@ namespace Blockiverse.VR
                     return false;
 
                 var trackingState = (InputTrackingState)trackingStateAction.ReadValue<int>();
-                return (trackingState & (InputTrackingState.Position | InputTrackingState.Rotation)) != 0;
+                const InputTrackingState requiredTracking = InputTrackingState.Position | InputTrackingState.Rotation;
+                return (trackingState & requiredTracking) == requiredTracking;
             }
         }
 

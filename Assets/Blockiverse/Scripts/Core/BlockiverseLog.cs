@@ -11,7 +11,8 @@ namespace Blockiverse.Core
         Assets,
         Bootstrap,
         Performance,
-        Audio
+        Audio,
+        Trace
     }
 
     public readonly struct BlockiverseLogEntry

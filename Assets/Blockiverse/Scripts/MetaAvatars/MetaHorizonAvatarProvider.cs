@@ -1,4 +1,5 @@
 using System;
+using Blockiverse.MetaPlatform;
 using Oculus.Avatar2;
 using Oculus.Platform;
 using Oculus.Platform.Models;
@@ -209,8 +210,27 @@ namespace Blockiverse.MetaAvatars
             return true;
         }
 
+        public bool CanRequestLoggedInUserAvatarForCurrentAgeCategory(out string ageGateFallbackReason)
+        {
+            BlockiverseUserAgeCategoryState ageState = BlockiverseUserAgeCategoryService.Current;
+            if (!BlockiversePlatformFeaturePolicy.ShouldAvoidMetaProfileLookup(ageState.Category))
+            {
+                ageGateFallbackReason = string.Empty;
+                return true;
+            }
+
+            ageGateFallbackReason = BlockiversePlatformFeaturePolicy.AvatarFallbackReason(ageState);
+            return false;
+        }
+
         bool TryRequestLoggedInUserAvatar()
         {
+            if (!CanRequestLoggedInUserAvatarForCurrentAgeCategory(out string ageGateFallbackReason))
+            {
+                fallbackReason = ageGateFallbackReason;
+                return false;
+            }
+
 #if UNITY_ANDROID && !UNITY_EDITOR
             if (waitingForAccessToken || waitingForLoggedInUser)
                 return true;

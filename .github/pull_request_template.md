@@ -11,7 +11,16 @@
 - Commands run:
 - Deferred local validation, if any:
 
+- Validation tier:
+- Commands:
+- Result summary:
+- Deferred validation and reason:
+
 ## Manual Validation
+
+- Required risk-triggered checks:
+- Commands, device/simulator, or capture evidence:
+- Not run and reason:
 
 ## Risk Areas
 

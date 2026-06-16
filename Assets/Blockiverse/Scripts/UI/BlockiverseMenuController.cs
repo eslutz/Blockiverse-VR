@@ -28,7 +28,10 @@ namespace Blockiverse.UI
         const string CreativeToolsPanelName = "Creative Tools Panel";
         const string StationPanelName = "Station Panel";
         const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
+        const string ControllerMappingPopupName = "Controller Mapping Popup";
+        const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string SurvivalHudName = "Survival HUD";
+        const float GameplayHudScale = 0.00105f;
 
         [SerializeField] BlockiverseInputRig inputRig;
 
@@ -45,6 +48,8 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseStationPanel stationPanel;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
+        [SerializeField] BlockiverseWorldSpacePanelPresenter controllerMappingPresenter;
+        [SerializeField] BlockiverseWorldSpacePanelPresenter worldLoadingPresenter;
 
         readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
@@ -126,9 +131,15 @@ namespace Blockiverse.UI
             BlockiverseWorldSpacePanelPresenter worldDetails = null,
             BlockiverseWorldSpacePanelPresenter creativeTools = null,
             BlockiverseWorldSpacePanelPresenter gameplayHud = null,
-            BlockiverseWorldSpacePanelPresenter comfortSettings = null)
+            BlockiverseWorldSpacePanelPresenter comfortSettings = null,
+            BlockiverseWorldSpacePanelPresenter controllerMapping = null,
+            BlockiverseWorldSpacePanelPresenter worldLoading = null)
         {
+            controllerMappingPresenter = controllerMapping;
+            worldLoadingPresenter = worldLoading;
             screenPresenters.Clear();
+            AddPresenter(MenuActions.ControllerMappingScreen, controllerMappingPresenter);
+            AddPresenter(MenuActions.WorldLoadingScreen, worldLoadingPresenter);
             AddPresenter(MenuActions.GameplayHudScreen, gameplayHud);
             AddPresenter(MenuActions.TitleScreen, title);
             AddPresenter(MenuActions.PauseScreen, pause);
@@ -221,13 +232,18 @@ namespace Blockiverse.UI
             BlockiverseWorldSpacePanelPresenter gameplayHudPresenter =
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(SurvivalHudName)
                 ?? EnsureGameplayHudPresenter();
+            BlockiverseWorldSpacePanelPresenter controllerMapping =
+                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ControllerMappingPopupName);
+            BlockiverseWorldSpacePanelPresenter worldLoading =
+                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StartupLoadingOverlayName);
 
             if (screenPresenters.Count == 0 ||
                 titlePresenter != null || pausePresenter != null || deathPresenter != null ||
                 confirmPresenter != null || newWorldPresenter != null || loadWorldPresenter != null ||
                 settingsPresenter != null || comfortSettingsPresenter != null || stationPresenter != null || lanPresenter != null ||
                 audioPresenter != null || controlsPresenter != null || worldDetailsPresenter != null ||
-                creativeToolsPresenter != null || gameplayHudPresenter != null)
+                creativeToolsPresenter != null || gameplayHudPresenter != null || controllerMapping != null ||
+                worldLoading != null)
             {
                 ConfigurePresenters(
                     titlePresenter,
@@ -244,7 +260,9 @@ namespace Blockiverse.UI
                     worldDetailsPresenter,
                     creativeToolsPresenter,
                     gameplayHudPresenter,
-                    comfortSettingsPresenter);
+                    comfortSettingsPresenter,
+                    controllerMapping,
+                    worldLoading);
             }
         }
 
@@ -258,6 +276,8 @@ namespace Blockiverse.UI
                 RefreshPauseMenu();
                 router.PushScreen(new ScreenRoute(MenuActions.PauseScreen, pauseGame: true));
             }
+            else if (active == MenuActions.ControllerMappingScreen && !router.HasModal)
+                CloseControllerMappingScreen();
             else if (active == MenuActions.StationMenuScreen && !router.HasModal)
                 HandleStationCloseRequested();
             else if (active != MenuActions.TitleScreen && active != MenuActions.DeathScreen && !router.HasModal)
@@ -273,6 +293,19 @@ namespace Blockiverse.UI
         {
             EnsureRouter(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
             router.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
+        }
+
+        public void ShowWorldLoadingScreen()
+        {
+            EnsureRouter(new ScreenRoute(MenuActions.WorldLoadingScreen, pauseGame: true));
+            router.ClearToRoot(new ScreenRoute(MenuActions.WorldLoadingScreen, pauseGame: true));
+        }
+
+        public void ShowTitleScreen()
+        {
+            EnsureRouter(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            RefreshTitleMenu();
         }
 
         // Shows the death screen, updating the respawn options.
@@ -397,7 +430,7 @@ namespace Blockiverse.UI
         {
             ResolveRuntimeReferences();
 
-            EnsureRouter(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            EnsureRouter(ResolveInitialRoute());
 
             if (inputRig != null)
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
@@ -417,6 +450,31 @@ namespace Blockiverse.UI
                 comfortMenu = BlockiverseSceneLookup.Find<BlockiverseComfortMenu>(FindObjectsInactive.Include);
 
             ApplyRouterState();
+        }
+
+        ScreenRoute ResolveInitialRoute()
+        {
+            return controllerMappingPresenter != null && ShouldShowControllerMappingOnStart()
+                ? new ScreenRoute(MenuActions.ControllerMappingScreen, pauseGame: true)
+                : new ScreenRoute(MenuActions.TitleScreen, pauseGame: true);
+        }
+
+        static bool ShouldShowControllerMappingOnStart() =>
+            PlayerPrefs.GetInt(BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey, 0) == 0;
+
+        public void CloseControllerMappingScreen()
+        {
+            PlayerPrefs.SetInt(BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey, 1);
+            PlayerPrefs.Save();
+
+            if (router != null && router.ActiveScreen.ScreenId == MenuActions.ControllerMappingScreen)
+            {
+                router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+                RefreshTitleMenu();
+                return;
+            }
+
+            controllerMappingPresenter?.Hide();
         }
 
         // Close hook for the LAN multiplayer panel's button (wired by the bootstrapper).
@@ -767,12 +825,18 @@ namespace Blockiverse.UI
                     ? router.HasModal && inputTarget == screenId
                     : screenId == activeId;
 
+                if (string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal))
+                    presenter.GetComponent<BlockiverseStartupOverlay>()?.SetAutomaticHide(!visible);
+
                 if (visible && !presenter.IsVisible)
                     presenter.Show();
                 else if (!visible && presenter.IsVisible)
                     presenter.Hide();
 
-                SetPresenterInputEnabled(presenter, visible && string.Equals(screenId, inputTarget, StringComparison.Ordinal));
+                bool acceptsInput = visible &&
+                    !string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal) &&
+                    string.Equals(screenId, inputTarget, StringComparison.Ordinal);
+                SetPresenterInputEnabled(presenter, acceptsInput);
             }
         }
 
@@ -809,9 +873,9 @@ namespace Blockiverse.UI
                 Camera.main != null ? Camera.main.transform : null,
                 distance: 1.15f,
                 horizontalOffset: 0f,
-                verticalOffset: -0.04f,
-                pitch: 10f,
-                scale: 0.0016f,
+                verticalOffset: -0.30f,
+                pitch: 12f,
+                scale: GameplayHudScale,
                 recenterWhenShown: false);
             return presenter;
         }

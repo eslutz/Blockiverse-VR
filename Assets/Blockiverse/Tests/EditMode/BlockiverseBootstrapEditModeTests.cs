@@ -4,10 +4,13 @@ using System.Linq;
 using System.Reflection;
 using System.Xml;
 using Blockiverse.Core;
+using Blockiverse.MetaPlatform;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 using UnityEngine.XR.OpenXR;
 using Object = UnityEngine.Object;
 
@@ -22,10 +25,13 @@ namespace Blockiverse.Tests.EditMode
         const string PerformanceStatsOverlayPath = "Assets/Blockiverse/Scripts/Gameplay/PerformanceStatsOverlay.cs";
         const string BlockiverseInputRigPath = "Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs";
         const string BlockiverseControllerHapticsPath = "Assets/Blockiverse/Scripts/VR/BlockiverseControllerHaptics.cs";
+        const string AndroidActivityTitleRuntimePath = "Assets/Blockiverse/Scripts/Core/BlockiverseAndroidActivityTitle.cs";
         const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
+        const string OculusProjectConfigPath = "Assets/Oculus/OculusProjectConfig.asset";
         const string LegacyAndroidResourcePath = "Assets/Plugins/Android/res";
         const string OculusRuntimeSettingsPath = "Assets/Resources/OculusRuntimeSettings.asset";
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
+        const string NetcodeProjectSettingsPath = "ProjectSettings/NetcodeForGameObjects.asset";
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
@@ -63,20 +69,10 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void NetcodeDefaultNetworkPrefabGenerationIsDisabled()
         {
-            Type settingsType = Type.GetType(
-                "Unity.Netcode.Editor.Configuration.NetcodeForGameObjectsProjectSettings, Unity.Netcode.Editor");
-            Assert.That(settingsType, Is.Not.Null);
+            Assert.That(File.Exists(NetcodeProjectSettingsPath), Is.True);
+            string settings = File.ReadAllText(NetcodeProjectSettingsPath);
 
-            object instance = settingsType.GetProperty("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            object value = settingsType.GetProperty("GenerateDefaultNetworkPrefabs", BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance);
-            if (value is bool generatedDefaultPrefabs)
-            {
-                Assert.That(generatedDefaultPrefabs, Is.False);
-                return;
-            }
-
-            string settingsYaml = File.ReadAllText("ProjectSettings/NetcodeForGameObjects.asset");
-            StringAssert.Contains("GenerateDefaultNetworkPrefabs: 0", settingsYaml);
+            StringAssert.Contains("GenerateDefaultNetworkPrefabs: 0", settings);
         }
 
         [Test]
@@ -138,6 +134,46 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void RayDiagnosticWorldsAndBuildEntrypointsAreRemoved()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+            string buildSmoke = File.ReadAllText(BuildSmokePath);
+            string project = File.ReadAllText("Assets/Blockiverse/Scripts/Core/BlockiverseProject.cs");
+
+            Assert.That(AssetDatabase.FindAssets("RayDiagnostic t:Scene", new[] { "Assets/Blockiverse/Scenes" }), Is.Empty);
+            Assert.That(AssetDatabase.FindAssets("BlockiverseXrUiInteractionLab t:Script", new[] { "Assets/Blockiverse/Scripts/VR" }), Is.Empty);
+            Assert.That(AssetDatabase.FindAssets("BlockiverseMenuDiagnosticStartup t:Script", new[] { "Assets/Blockiverse/Scripts/VR" }), Is.Empty);
+            Assert.That(project, Does.Not.Contain("RayDiagnostic"));
+            Assert.That(project, Does.Not.Contain("UseXrUiInteractionLabStartupOverride"));
+            Assert.That(sceneBootstrapper, Does.Not.Contain("RayDiagnostic"));
+            Assert.That(sceneBootstrapper, Does.Not.Contain("XrUiInteractionLab"));
+            Assert.That(sceneBootstrapper, Does.Not.Contain("MenuDiagnosticStartup"));
+            Assert.That(buildSmoke, Does.Not.Contain("BuildRayDiagnostic"));
+            Assert.That(
+                EditorBuildSettings.scenes.Select(scene => scene.path),
+                Has.None.Matches<string>(path => path.Contains("RayDiagnostic")),
+                "Diagnostic stub scenes must not be part of the generated build scene list.");
+        }
+
+        [Test]
+        public void BootSceneContainsOneMetaUserAgeCategoryService()
+        {
+            try
+            {
+                Scene scene = EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
+                BlockiverseUserAgeCategoryService[] services = scene.GetRootGameObjects()
+                    .SelectMany(sceneRoot => sceneRoot.GetComponentsInChildren<BlockiverseUserAgeCategoryService>(true))
+                    .ToArray();
+
+                Assert.That(services, Has.Length.EqualTo(1));
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        [Test]
         public void GeneratedMenuLabelsAutoSizeForLocalizedText()
         {
             string menuBootstrapper = File.ReadAllText(MenuBootstrapperPath);
@@ -154,7 +190,10 @@ namespace Blockiverse.Tests.EditMode
             string gameMenuBootstrapper = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.GameMenus.cs");
 
             StringAssert.Contains("Either stick hold up: teleport aim, release to land", gameMenuBootstrapper);
+            StringAssert.Contains("Support stick: move", gameMenuBootstrapper);
+            StringAssert.Contains("Dominant primary button: jump", gameMenuBootstrapper);
             Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right stick hold up: teleport aim"));
+            Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right A: jump"));
         }
 
         [Test]
@@ -167,6 +206,15 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void GeneratedXrRigWiresVerboseTraceController()
+        {
+            string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);
+
+            StringAssert.Contains("EnsureComponent<BlockiverseVerboseTraceController>(rig)", xrRigBootstrapper);
+            StringAssert.Contains("verboseTrace.Configure(inputRig, null, controller, audioCuePlayer, vfxCuePlayer, musicController, interactionHaptics)", xrRigBootstrapper);
+        }
+
+        [Test]
         public void GeneratedWorldWiresPerformanceStatsOverlay()
         {
             string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
@@ -176,16 +224,22 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void GeneratedXrRigVignetteIncludesFallsAndJumps()
+        public void GeneratedXrRigVignetteExcludesStartupGravityAndJump()
         {
             string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);
 
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())", xrRigBootstrapper);
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())", xrRigBootstrapper);
+            Assert.That(
+                xrRigBootstrapper,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())"),
+                "Gravity can report active while the rig settles, so it must not close the startup/menu vignette.");
+            Assert.That(
+                xrRigBootstrapper,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())"),
+                "Jump arcs should not be wired as startup/menu vignette triggers.");
         }
 
         [Test]
-        public void XrRigTurnProvidersAreSuppressedWhileTurnHandHoversUi()
+        public void XrRigTurnProvidersAreSuppressedWhileToolHandHoversUi()
         {
             string inputRig = File.ReadAllText(BlockiverseInputRigPath);
 
@@ -193,6 +247,7 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("rightInteractionRay", inputRig);
             StringAssert.Contains("UpdateTurnProviderEnabledState()", inputRig);
             StringAssert.Contains("IsActiveTurnRayOverUi()", inputRig);
+            StringAssert.Contains("GetToolHand()", inputRig);
             StringAssert.Contains("interactionRay.IsOverUIGameObject()", inputRig);
             StringAssert.Contains("!smoothTurn && !suppressTurnForUi", inputRig);
             StringAssert.Contains("smoothTurn && !suppressTurnForUi", inputRig);
@@ -233,6 +288,25 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(androidSettings.renderMode, Is.EqualTo(OpenXRSettings.RenderMode.SinglePassInstanced));
             Assert.That(androidSettings.GetFeatures(), Has.Some.Matches<UnityEngine.XR.OpenXR.Features.OpenXRFeature>(
                 feature => feature.enabled && feature.GetType().Name == "MetaQuestFeature"));
+
+            UnityEngine.XR.OpenXR.Features.OpenXRFeature metaQuestFeature = androidSettings.GetFeatures()
+                .FirstOrDefault(feature => feature.GetType().Name == "MetaQuestFeature");
+            Assert.That(metaQuestFeature, Is.Not.Null);
+
+            var serializedFeature = new SerializedObject(metaQuestFeature);
+            SerializedProperty keyboardProperty = serializedFeature.FindProperty("enableSystemKeyboard");
+            Assert.That(keyboardProperty, Is.Not.Null, "Meta Quest OpenXR feature must expose the system keyboard setting.");
+            Assert.That(keyboardProperty.boolValue, Is.True,
+                "Quest builds must enable the OpenXR system keyboard overlay for TouchScreenKeyboard.");
+        }
+
+        [Test]
+        public void MetaProjectConfigRequiresSystemKeyboard()
+        {
+            string projectConfig = File.ReadAllText(OculusProjectConfigPath);
+
+            StringAssert.Contains("focusAware: 1", projectConfig);
+            StringAssert.Contains("requiresSystemKeyboard: 1", projectConfig);
         }
 
         [Test]
@@ -280,6 +354,10 @@ namespace Blockiverse.Tests.EditMode
 
             string activityName = activityNodes[0].Attributes["android:name"]?.Value;
             Assert.That(activityName, Is.EqualTo("com.unity3d.player.UnityPlayerGameActivity"));
+            Assert.That(
+                activityNodes[0].Attributes["android:label"]?.Value,
+                Is.EqualTo("@string/app_name"),
+                "Quest shell quit and unknown-source surfaces should resolve the activity title to Blockiverse VR.");
 
             XmlNode supportedDevicesNode = manifest.SelectSingleNode(
                 "/manifest/application/meta-data[@android:name='com.oculus.supportedDevices']",
@@ -288,6 +366,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(
                 supportedDevicesNode.Attributes["android:value"]?.Value,
                 Is.EqualTo("quest3|quest3s"));
+
+            XmlNode keyboardFeatureNode = manifest.SelectSingleNode(
+                "/manifest/uses-feature[@android:name='oculus.software.overlay_keyboard']",
+                namespaceManager);
+            Assert.That(keyboardFeatureNode, Is.Not.Null,
+                "Quest system keyboard support must be declared in the Android manifest.");
+            Assert.That(keyboardFeatureNode.Attributes["android:required"]?.Value, Is.EqualTo("false"));
         }
 
         [Test]
@@ -314,6 +399,26 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(texture, Is.Not.Null, $"Missing branding texture: {assetPath}");
                 Assert.That(File.Exists($"{assetPath}.meta"), Is.True, $"Missing branding texture meta: {assetPath}.meta");
             }
+        }
+
+        [Test]
+        public void AndroidRuntimeTaskTitleUsesProductName()
+        {
+            Assert.That(File.Exists(AndroidActivityTitleRuntimePath), Is.True,
+                "The Quest quit panel can read the live Android activity/task title even when the launcher manifest label is correct.");
+
+            Type titleType = Type.GetType("Blockiverse.Core.BlockiverseAndroidActivityTitle, Blockiverse.Core");
+            Assert.That(titleType, Is.Not.Null);
+
+            FieldInfo titleField = titleType.GetField("Title", BindingFlags.Public | BindingFlags.Static);
+            Assert.That(titleField, Is.Not.Null);
+            Assert.That(titleField.GetRawConstantValue(), Is.EqualTo(BlockiverseProject.ProductName));
+
+            string source = File.ReadAllText(AndroidActivityTitleRuntimePath);
+            StringAssert.Contains("RuntimeInitializeOnLoadMethod", source);
+            StringAssert.Contains("setTitle", source);
+            StringAssert.Contains("ActivityManager$TaskDescription", source);
+            StringAssert.Contains("setTaskDescription", source);
         }
 
         [Test]

@@ -1,4 +1,5 @@
 using Blockiverse.Gameplay;
+using Blockiverse.MetaPlatform;
 using Blockiverse.Networking;
 using Blockiverse.VR;
 using TMPro;
@@ -440,7 +441,16 @@ namespace Blockiverse.UI
         void SetStatus(string message)
         {
             if (statusText != null)
-                statusText.text = message;
+                statusText.text = AppendAgePolicyNotice(message);
+        }
+
+        static string AppendAgePolicyNotice(string message)
+        {
+            BlockiverseUserAgeCategoryState ageState = BlockiverseUserAgeCategoryService.Current;
+            if (BlockiversePlatformFeaturePolicy.CanUseMetaSocialFeature(ageState.Category))
+                return message;
+
+            return $"{message}\nMeta social features use fallback identity and avatar behavior for this account.";
         }
 
         void ComputeControlState(out bool canStart, out bool canStop)

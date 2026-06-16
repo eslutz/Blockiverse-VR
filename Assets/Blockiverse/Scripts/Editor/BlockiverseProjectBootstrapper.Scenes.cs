@@ -6,6 +6,7 @@ using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
+using Blockiverse.MetaPlatform;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
@@ -64,6 +65,7 @@ namespace Blockiverse.Editor
             EnsureBootSceneLight(scene);
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
+            EnsureMetaPlatformCompliance(scene);
             EnsureBootSceneCreativeWorld(scene);
             EnsureBootSceneNetworkStack(scene);
             RemoveRootGameObject(scene, InteractionTestBlockName);
@@ -134,6 +136,7 @@ namespace Blockiverse.Editor
                 null,
                 null,
                 MetaAvatarPresentationMode.RemoteThirdPerson);
+            avatarRig.ConfigureFirstPersonFallbackVisuals(false);
 
             EditorUtility.SetDirty(networkObject);
             EditorUtility.SetDirty(avatarRig);
@@ -247,6 +250,7 @@ namespace Blockiverse.Editor
                 .Where(scene => !string.IsNullOrWhiteSpace(scene.path))
                 .Where(scene => requiredScenes.All(requiredScene => requiredScene.path != scene.path))
                 .Where(scene => scene.path != BlockiverseProject.MultiplayerTestScenePath)
+                .Where(scene => !scene.path.StartsWith("Assets/Blockiverse/Scenes/Ray", StringComparison.Ordinal))
                 .GroupBy(scene => scene.path)
                 .Select(group => group.First())
                 .ToList();
@@ -333,6 +337,30 @@ namespace Blockiverse.Editor
             }
         }
 
+        static void EnsureMetaPlatformCompliance(Scene scene)
+        {
+            const string ComplianceRootName = "Meta Platform Compliance";
+
+            GameObject complianceObject = FindRootGameObject(scene, ComplianceRootName);
+            if (complianceObject == null)
+            {
+                complianceObject = new GameObject(ComplianceRootName);
+                SceneManager.MoveGameObjectToScene(complianceObject, scene);
+            }
+
+            BlockiverseUserAgeCategoryService service = EnsureComponent<BlockiverseUserAgeCategoryService>(complianceObject);
+            BlockiverseUserAgeCategoryService[] services = scene.GetRootGameObjects()
+                .SelectMany(sceneRoot => sceneRoot.GetComponentsInChildren<BlockiverseUserAgeCategoryService>(true))
+                .Where(existingService => existingService != service)
+                .ToArray();
+
+            foreach (BlockiverseUserAgeCategoryService duplicate in services)
+                UnityEngine.Object.DestroyImmediate(duplicate);
+
+            EditorUtility.SetDirty(service);
+            EditorUtility.SetDirty(complianceObject);
+        }
+
         static void EnsureMultiplayerTestCamera(Scene scene)
         {
             GameObject cameraObject = FindRootGameObject(scene, MultiplayerTestCameraName);
@@ -393,7 +421,11 @@ namespace Blockiverse.Editor
                 UnityEngine.Object.DestroyImmediate(legacyUiModule);
 
             XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
-            BlockiverseXrUiInputConfigurator.Configure(inputModule, EnsureInputActions());
+            EnsureInputActions();
+            BlockiverseXrUiInputConfigurator.Configure(
+                inputModule,
+                LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress),
+                LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
 
             EnsureXrInteractionManager(scene);
 
@@ -538,10 +570,8 @@ namespace Blockiverse.Editor
             worldObject.transform.rotation = Quaternion.identity;
             worldObject.transform.localScale = Vector3.one;
 
-            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-
-            if (interactionLayer >= 0)
-                worldObject.layer = interactionLayer;
+            int interactionLayer = GetInteractionLayerIndex();
+            worldObject.layer = interactionLayer;
 
             Material worldMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
             VoxelWorldRenderer renderer = EnsureComponent<VoxelWorldRenderer>(worldObject);
@@ -552,6 +582,7 @@ namespace Blockiverse.Editor
             performanceOverlay.Configure(renderer);
             manager.InitializeDefaultWorldOnAwake = false;
             manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
+            manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
 
             BlockiverseCreativeInputBridge staleWorldBridge = worldObject.GetComponent<BlockiverseCreativeInputBridge>();
 

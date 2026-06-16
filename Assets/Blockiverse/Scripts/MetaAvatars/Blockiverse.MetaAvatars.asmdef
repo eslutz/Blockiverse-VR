@@ -2,6 +2,7 @@
   "name": "Blockiverse.MetaAvatars",
   "rootNamespace": "Blockiverse.MetaAvatars",
   "references": [
+    "Blockiverse.MetaPlatform",
     "Blockiverse.Networking",
     "Meta.XR.MultiplayerBlocks.Shared",
     "Oculus.AvatarSDK2",

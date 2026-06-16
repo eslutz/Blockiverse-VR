@@ -134,9 +134,9 @@ MonoBehaviour:
   unityTransport: {fileID: 0}
   useEncryptedTransport: 0
   transportServerCommonName: blockiverse-lan
-  serverCertificatePem:
-  serverPrivateKeyPem:
-  clientCaCertificatePem:
+  serverCertificatePem: 
+  serverPrivateKeyPem: 
+  clientCaCertificatePem: 
 --- !u!114 &6213910669066858669
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -11,6 +11,8 @@ namespace Blockiverse.UI
         public const string NewWorldScreen = "new_world";
         public const string LoadWorldScreen = "load_world";
         public const string WorldDetailsScreen = "world_details";
+        public const string WorldLoadingScreen = "world_loading";
+        public const string ControllerMappingScreen = "controller_mapping";
         public const string GameplayHudScreen = "gameplay_hud";
         public const string PauseScreen = "pause_menu";
         public const string SettingsScreen = "settings";

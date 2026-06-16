@@ -24,6 +24,7 @@ namespace Blockiverse.VR
         bool subscribedToVitals;
 
         public event Action UiTickRequested;
+        public event Action UiClickRequested;
         public event Action<BlockiverseHapticPattern> PatternRequested;
         public CreativeInteractionController InteractionController => interactionController;
         public BlockiverseControllerHaptics DominantHandHaptics => dominantHandHaptics;
@@ -53,6 +54,12 @@ namespace Blockiverse.VR
         {
             UiTickRequested?.Invoke();
             SendPattern(BlockiverseHapticPattern.UiTick);
+        }
+
+        public void PlayUiClick()
+        {
+            UiClickRequested?.Invoke();
+            SendPattern(BlockiverseHapticPattern.UiClick);
         }
 
         void OnEnable()

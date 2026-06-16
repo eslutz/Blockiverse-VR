@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: fd380cc2c41b46879d768929e6e8845b
+guid: e89e3d78e89e3d78e89e3d78e89e3d78
 TextureImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -30,7 +30,7 @@ TextureImporter:
   cubemapConvolution: 0
   seamlessCubemap: 0
   textureFormat: 1
-  maxTextureSize: 16
+  maxTextureSize: 32
   textureSettings:
     serializedVersion: 2
     filterMode: 0
@@ -68,7 +68,7 @@ TextureImporter:
   platformSettings:
   - serializedVersion: 3
     buildTarget: DefaultTexturePlatform
-    maxTextureSize: 16
+    maxTextureSize: 32
     resizeAlgorithm: 0
     textureFormat: -1
     textureCompression: 0
@@ -80,7 +80,7 @@ TextureImporter:
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 3
     buildTarget: Android
-    maxTextureSize: 16
+    maxTextureSize: 32
     resizeAlgorithm: 0
     textureFormat: -1
     textureCompression: 0

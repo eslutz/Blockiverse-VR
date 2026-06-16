@@ -1,3 +1,5 @@
+using System.Collections;
+using Blockiverse.Core;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -18,14 +20,17 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] XRRayInteractor interactionRay;
         [SerializeField] XRRayInteractor teleportRay;
+        [SerializeField] BlockiverseControllerAnchor controllerAnchor;
         [SerializeField] BlockiverseControllerRole hand = BlockiverseControllerRole.Right;
 
         InputAction teleportModeAction;
+        Coroutine releaseFrameRoutine;
         bool teleportActive;
 
         public bool TeleportActive => teleportActive;
         public XRRayInteractor InteractionRay => interactionRay;
         public XRRayInteractor TeleportRay => teleportRay;
+        public BlockiverseControllerAnchor ControllerAnchor => controllerAnchor;
         public BlockiverseControllerRole Hand => hand;
 
         public void Configure(
@@ -33,12 +38,14 @@ namespace Blockiverse.VR
             BlockiverseComfortSettings settings,
             XRRayInteractor interaction,
             XRRayInteractor teleport,
-            BlockiverseControllerRole controllerRole)
+            BlockiverseControllerRole controllerRole,
+            BlockiverseControllerAnchor anchor = null)
         {
             inputRig = rig;
             comfortSettings = settings;
             interactionRay = interaction;
             teleportRay = teleport;
+            controllerAnchor = anchor != null ? anchor : controllerAnchor != null ? controllerAnchor : GetComponent<BlockiverseControllerAnchor>();
             hand = controllerRole;
             teleportModeAction = null;
             SetTeleportActive(false);
@@ -46,23 +53,35 @@ namespace Blockiverse.VR
 
         void OnEnable()
         {
-            SetTeleportActive(false);
+            CancelReleaseFrameRoutine();
+            SetTeleportActiveImmediate(false, enableInteractionRay: true);
         }
 
         void OnDisable()
         {
-            SetTeleportActive(false);
+            CancelReleaseFrameRoutine();
+            SetTeleportActiveImmediate(false, enableInteractionRay: true);
         }
 
         void Update()
         {
+            ResolveControllerAnchor();
             bool shouldAim = IsInTeleportMode() && IsTeleportModeHeld();
             SetTeleportActive(shouldAim);
         }
 
+        void ResolveControllerAnchor()
+        {
+            if (controllerAnchor == null)
+                controllerAnchor = GetComponent<BlockiverseControllerAnchor>();
+        }
+
         bool IsInTeleportMode()
         {
-            return comfortSettings != null &&
+            return inputRig != null &&
+                BlockiverseRuntimeState.AllowWorldInput &&
+                !inputRig.LocomotionSuppressed &&
+                comfortSettings != null &&
                 comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Teleport;
         }
 
@@ -89,14 +108,72 @@ namespace Blockiverse.VR
         {
             teleportActive = active;
 
-            // Toggle whole GameObjects so each ray's interactor and its line visual show/hide
-            // together. While the teleport arc is showing, the interaction ray is disabled so the
-            // trigger does not also break blocks or click UI (bridge guards on isActiveAndEnabled).
-            if (teleportRay != null && teleportRay.gameObject.activeSelf != active)
-                teleportRay.gameObject.SetActive(active);
+            if (active)
+            {
+                CancelReleaseFrameRoutine();
+                SetTeleportActiveImmediate(true, enableInteractionRay: false);
+                return;
+            }
 
-            if (interactionRay != null && interactionRay.gameObject.activeSelf == active)
-                interactionRay.gameObject.SetActive(!active);
+            if (!Application.isPlaying ||
+                teleportRay == null ||
+                !teleportRay.gameObject.activeSelf)
+            {
+                CancelReleaseFrameRoutine();
+                SetTeleportActiveImmediate(false, enableInteractionRay: true);
+                return;
+            }
+
+            if (releaseFrameRoutine == null)
+                releaseFrameRoutine = StartCoroutine(DisableTeleportAfterReleaseFrame());
+        }
+
+        IEnumerator DisableTeleportAfterReleaseFrame()
+        {
+            yield return null;
+
+            releaseFrameRoutine = null;
+            if (!teleportActive)
+                SetTeleportActiveImmediate(false, enableInteractionRay: true);
+        }
+
+        void SetTeleportActiveImmediate(bool active, bool enableInteractionRay)
+        {
+            // Toggle whole GameObjects so each ray's interactor and its line visual show/hide
+            // together. On release, keep the teleport ray alive for one frame so XRI can deliver
+            // SelectExited to the TeleportationArea before regular UI/block interaction resumes.
+            bool hasTrackedPose = HasUsableRayPose();
+            bool showTeleportRay = active && hasTrackedPose;
+            bool showInteractionRay = enableInteractionRay && hasTrackedPose && IsActiveInteractionHand();
+
+            if (teleportRay != null && teleportRay.gameObject.activeSelf != showTeleportRay)
+                teleportRay.gameObject.SetActive(showTeleportRay);
+
+            if (interactionRay != null && interactionRay.gameObject.activeSelf != showInteractionRay)
+                interactionRay.gameObject.SetActive(showInteractionRay);
+        }
+
+        bool HasUsableRayPose()
+        {
+            if (!Application.isPlaying)
+                return true;
+
+            ResolveControllerAnchor();
+            return controllerAnchor == null || controllerAnchor.IsTracked;
+        }
+
+        bool IsActiveInteractionHand()
+        {
+            return inputRig == null || inputRig.ActiveToolHand == hand;
+        }
+
+        void CancelReleaseFrameRoutine()
+        {
+            if (releaseFrameRoutine == null)
+                return;
+
+            StopCoroutine(releaseFrameRoutine);
+            releaseFrameRoutine = null;
         }
     }
 }

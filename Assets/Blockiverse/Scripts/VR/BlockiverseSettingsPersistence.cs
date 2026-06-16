@@ -11,6 +11,8 @@ namespace Blockiverse.VR
     public sealed class BlockiverseSettingsPersistence : MonoBehaviour
     {
         const string KeyPrefix = "Blockiverse.Settings.";
+        public const string DominantHandPrefsKey = KeyPrefix + "DominantHand";
+        const int VignettePrefsVersion = 2;
         const float PollIntervalSeconds = 5.0f;
 
         [SerializeField] BlockiverseComfortSettings comfortSettings;
@@ -68,11 +70,9 @@ namespace Blockiverse.VR
                 if (!System.Enum.IsDefined(typeof(BlockiverseLocomotionMode), comfortSettings.LocomotionMode))
                     comfortSettings.LocomotionMode = BlockiverseLocomotionMode.Glide;
                 comfortSettings.DominantHand = (BlockiverseControllerRole)PlayerPrefs.GetInt(
-                    KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
+                    DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 if (!System.Enum.IsDefined(typeof(BlockiverseControllerRole), comfortSettings.DominantHand))
                     comfortSettings.DominantHand = BlockiverseControllerRole.Right;
-                comfortSettings.DominantHandOnlyControls = PlayerPrefs.GetInt(
-                    KeyPrefix + "DominantHandOnlyControls", comfortSettings.DominantHandOnlyControls ? 1 : 0) != 0;
                 comfortSettings.ToggleToMineEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0) != 0;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
@@ -87,10 +87,18 @@ namespace Blockiverse.VR
                     KeyPrefix + "StandingEyeHeight", comfortSettings.StandingEyeHeight);
                 comfortSettings.UiScale = PlayerPrefs.GetFloat(
                     KeyPrefix + "UiScale", comfortSettings.UiScale);
-                comfortSettings.VignetteEnabled = PlayerPrefs.GetInt(
-                    KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0) != 0;
-                comfortSettings.VignetteStrength = PlayerPrefs.GetFloat(
-                    KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
+
+                if (HasCurrentVignettePrefs())
+                {
+                    comfortSettings.VignetteEnabled = PlayerPrefs.GetInt(
+                        KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0) != 0;
+                    comfortSettings.VignetteStrength = PlayerPrefs.GetFloat(
+                        KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
+                }
+                else
+                {
+                    ResetVignettePrefsForReadableStartup();
+                }
             }
 
             if (feedbackSettings != null)
@@ -122,8 +130,7 @@ namespace Blockiverse.VR
             if (comfortSettings != null)
             {
                 PlayerPrefs.SetInt(KeyPrefix + "LocomotionMode", (int)comfortSettings.LocomotionMode);
-                PlayerPrefs.SetInt(KeyPrefix + "DominantHand", (int)comfortSettings.DominantHand);
-                PlayerPrefs.SetInt(KeyPrefix + "DominantHandOnlyControls", comfortSettings.DominantHandOnlyControls ? 1 : 0);
+                PlayerPrefs.SetInt(DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);
@@ -133,6 +140,7 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetFloat(KeyPrefix + "UiScale", comfortSettings.UiScale);
                 PlayerPrefs.SetInt(KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
+                PlayerPrefs.SetInt(KeyPrefix + "VignettePrefsVersion", VignettePrefsVersion);
             }
 
             if (feedbackSettings != null)
@@ -161,7 +169,6 @@ namespace Blockiverse.VR
                 {
                     hash = hash * 31 + (int)comfortSettings.LocomotionMode;
                     hash = hash * 31 + (int)comfortSettings.DominantHand;
-                    hash = hash * 31 + (comfortSettings.DominantHandOnlyControls ? 1 : 0);
                     hash = hash * 31 + (comfortSettings.ToggleToMineEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
                     hash = hash * 31 + (comfortSettings.SmoothTurnEnabled ? 1 : 0);
@@ -189,6 +196,21 @@ namespace Blockiverse.VR
 
                 return hash;
             }
+        }
+
+        static bool HasCurrentVignettePrefs()
+        {
+            return PlayerPrefs.GetInt(KeyPrefix + "VignettePrefsVersion", 0) >= VignettePrefsVersion;
+        }
+
+        void ResetVignettePrefsForReadableStartup()
+        {
+            comfortSettings.VignetteEnabled = false;
+            comfortSettings.VignetteStrength = 0.0f;
+            PlayerPrefs.DeleteKey(KeyPrefix + "VignetteEnabled");
+            PlayerPrefs.DeleteKey(KeyPrefix + "VignetteStrength");
+            PlayerPrefs.SetInt(KeyPrefix + "VignettePrefsVersion", VignettePrefsVersion);
+            PlayerPrefs.Save();
         }
     }
 }

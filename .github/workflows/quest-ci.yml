@@ -32,7 +32,7 @@ jobs:
 
       - name: Check release workflow conventions
         run: |
-          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' VERSION
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ProjectSettings/BlockiverseVersion.txt
           grep -q '0.1.0-alpha.run318.4.663f074' docs/adr/0005-release-versioning.md
           grep -q 'alpha -> beta' docs/architecture/branching-and-release.md
           grep -q 'beta -> rc' docs/architecture/branching-and-release.md
@@ -58,7 +58,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          key: unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
             unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-
             unity-library-ci-${{ runner.os }}-Android-
@@ -66,9 +66,9 @@ jobs:
       - name: Compute smoke build settings
         id: settings
         run: |
-          base_version="$(tr -d '[:space:]' < VERSION)"
+          base_version="$(tr -d '[:space:]' < ProjectSettings/BlockiverseVersion.txt)"
           if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "VERSION must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            echo "ProjectSettings/BlockiverseVersion.txt must contain MAJOR.MINOR.PATCH without a leading v." >&2
             exit 64
           fi
 
@@ -82,6 +82,19 @@ jobs:
           echo "output_path=$output_path" >> "$GITHUB_OUTPUT"
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Free runner disk space for Unity Android image
+        if: runner.os == 'Linux'
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android/sdk
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          docker system prune --all --force
+          df -h
 
       # This smoke build is the GitHub-hosted Unity validation gate. It catches
       # package import, compile, Android target, and APK packaging failures.

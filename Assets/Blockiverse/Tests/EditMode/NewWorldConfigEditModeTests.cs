@@ -17,6 +17,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(config.WorldSize, Is.EqualTo("small"));
             Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain));
             Assert.That(config.StartingBiome, Is.EqualTo("balanced"));
+            Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("enhanced"));
             Assert.That(config.Seed, Is.EqualTo(918273645UL));
         }
 
@@ -47,6 +48,17 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain), "World preset should wrap after void_builder.");
             config.CycleStartingBiome();
             Assert.That(config.StartingBiome, Is.EqualTo("meadow"));
+
+            config.CycleTextureSet();
+            Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("ai_simplified"));
+            Assert.That(BlockiverseLocalization.DisplayNameForCanonicalId("ai_simplified"), Is.EqualTo("AI Simplified"));
+            config.CycleTextureSet();
+            Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("ai"));
+            config.CycleTextureSet();
+            Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("original"));
+            config.CycleTextureSet();
+            Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("enhanced"),
+                "Texture set should wrap after Original back to the default Enhanced set.");
         }
 
         [Test]
@@ -104,6 +116,13 @@ namespace Blockiverse.Tests.EditMode
             config.CycleGameMode();
             Assert.That(config.GameMode, Is.EqualTo("creative"));
             Assert.That(config.IsValid(out _), Is.True);
+        }
+
+        static string GetStringProperty(object target, string propertyName)
+        {
+            System.Reflection.PropertyInfo property = target.GetType().GetProperty(propertyName);
+            Assert.That(property, Is.Not.Null, $"Missing NewWorldConfig.{propertyName}.");
+            return (string)property.GetValue(target);
         }
 
     }

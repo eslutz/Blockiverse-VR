@@ -22,11 +22,14 @@ works with Meta release channels, Android upgrade ordering, and human review.
 
 ## Decision
 
-The repository root `VERSION` file is the single source of truth for the
+`ProjectSettings/BlockiverseVersion.txt` is the single source of truth for the
 SemVer base version. It contains only `MAJOR.MINOR.PATCH`, without a leading
-`v` and without prerelease metadata.
+`v` and without prerelease metadata. The version file intentionally does not
+live at the repository root because Android IL2CPP compilation on
+case-insensitive developer filesystems can resolve a root `VERSION` file as
+`./version`, shadowing the standard C++ `<version>` header.
 
-Android `versionName` values derive from `VERSION`:
+Android `versionName` values derive from `ProjectSettings/BlockiverseVersion.txt`:
 
 | Stage | Android versionName format | Example |
 |---|---|---|
@@ -36,11 +39,11 @@ Android `versionName` values derive from `VERSION`:
 | RC candidate | `MAJOR.MINOR.PATCH-rc.N` | `0.1.0-rc.1` |
 | Production | `MAJOR.MINOR.PATCH` | `0.1.0` |
 
-The `VERSION` file is advanced by a normal pull request before starting a new
-release train. `quest-alpha.yml` computes Alpha version names automatically for
-normal `main` pushes. Manual Alpha dispatch may supply a `version_name` override
-when a build should be tested in Alpha with a Beta, RC, or Production-facing
-name before promotion.
+`ProjectSettings/BlockiverseVersion.txt` is advanced by a normal pull request
+before starting a new release train. `quest-alpha.yml` computes Alpha version
+names automatically for normal `main` pushes. Manual Alpha dispatch may supply
+a `version_name` override when a build should be tested in Alpha with a Beta,
+RC, or Production-facing name before promotion.
 
 Android `versionCode` is generated as seconds since `2020-01-01T00:00:00Z`.
 It is monotonic across all newly uploaded builds and must not reset per channel.

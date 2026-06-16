@@ -1,7 +1,12 @@
 using System.IO;
+using System.Reflection;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.WorldGen;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -14,6 +19,7 @@ namespace Blockiverse.Tests.EditMode
         {
             if (root != null)
                 Object.DestroyImmediate(root);
+            BlockiverseRuntimeState.Reset();
         }
 
         [Test]
@@ -31,6 +37,21 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(pool.PrewarmedCount, Is.EqualTo(2));
             Assert.That(pool.PlayCount, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void VfxPoolPrewarmedSystemsDoNotEmitDefaultParticles()
+        {
+            root = new GameObject("VFX Root");
+            BlockiverseVfxPool pool = root.AddComponent<BlockiverseVfxPool>();
+            pool.ConfigureForTests(poolSize: 3);
+
+            ParticleSystem[] systems = root.GetComponentsInChildren<ParticleSystem>(includeInactive: true);
+
+            Assert.That(systems, Has.Length.EqualTo(3));
+            Assert.That(systems, Has.All.Matches<ParticleSystem>(system => !system.main.playOnAwake));
+            Assert.That(systems, Has.All.Matches<ParticleSystem>(system => !system.emission.enabled));
+            Assert.That(systems, Has.All.Matches<ParticleSystem>(system => !system.isPlaying));
         }
 
         [Test]
@@ -72,6 +93,58 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void WeatherFeedbackDoesNotScatterHeadsetVfxWhileMenusBlockWorldInput()
+        {
+            root = new GameObject("Weather Feedback Root");
+            GameObject cameraObject = new("Main Camera");
+            cameraObject.tag = "MainCamera";
+            cameraObject.transform.SetParent(root.transform, worldPositionStays: false);
+            cameraObject.AddComponent<Camera>();
+
+            CreativeWorldManager worldManager = root.AddComponent<CreativeWorldManager>();
+            BlockiverseVfxPool pool = root.AddComponent<BlockiverseVfxPool>();
+            BlockiverseVfxCuePlayer player = root.AddComponent<BlockiverseVfxCuePlayer>();
+            WeatherFeedbackController feedback = root.AddComponent<WeatherFeedbackController>();
+
+            pool.ConfigureForTests(poolSize: 1);
+            player.Configure(pool, settings: null);
+            SetPrivateField(feedback, "worldManager", worldManager);
+            SetPrivateField(feedback, "vfxCuePlayer", player);
+            SetPrivateField(feedback, "lastWeatherState", WeatherState.Fog);
+
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+            InvokePrivate(feedback, "TickPrecipitationVfx");
+
+            Assert.That(pool.PlayCount, Is.Zero,
+                "Weather fog/snow VFX must not spawn from the headset while the app is at menu input.");
+        }
+
+        [Test]
+        public void WeatherFeedbackDoesNotStartAmbientLoopByDefault()
+        {
+            root = new GameObject("Weather Feedback Root");
+            GameObject cameraObject = new("Main Camera");
+            cameraObject.tag = "MainCamera";
+            cameraObject.transform.SetParent(root.transform, worldPositionStays: false);
+            cameraObject.AddComponent<Camera>();
+
+            CreativeWorldManager worldManager = root.AddComponent<CreativeWorldManager>();
+            root.AddComponent<AudioSource>();
+            BlockiverseAudioCuePlayer audioCuePlayer = root.AddComponent<BlockiverseAudioCuePlayer>();
+            WeatherFeedbackController feedback = root.AddComponent<WeatherFeedbackController>();
+
+            audioCuePlayer.ConfigureClip(BlockiverseAudioCue.DayAmbienceLoop, CreateClip("day_ambience_loop"));
+            SetPrivateField(feedback, "worldManager", worldManager);
+            SetPrivateField(feedback, "audioCuePlayer", audioCuePlayer);
+
+            InvokePrivate(feedback, "UpdateAmbienceLoop");
+
+            Assert.That(audioCuePlayer.IsLoopActive(BlockiverseAudioCue.DayAmbienceLoop), Is.False,
+                "The weather controller must not auto-start a constant day/night/cave ambience loop in clear weather.");
+        }
+
+        [Test]
         public void VfxPoolMapsGeneratedSpritesToRuntimeCues()
         {
             root = new GameObject("VFX Root");
@@ -107,6 +180,21 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void GeneratedVfxParticleMaterialUsesTransparentAlphaBlending()
+        {
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.VfxParticleMaterialPath);
+
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material.GetTag("RenderType", searchFallbacks: false), Is.EqualTo("Transparent"));
+            Assert.That(material.renderQueue, Is.EqualTo((int)RenderQueue.Transparent));
+            AssertMaterialFloat(material, "_Surface", 1.0f);
+            AssertMaterialFloat(material, "_SrcBlend", (float)BlendMode.SrcAlpha);
+            AssertMaterialFloat(material, "_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            AssertMaterialFloat(material, "_ZWrite", 0.0f);
+            Assert.That(material.GetColor("_BaseColor").a, Is.LessThan(1.0f));
+        }
+
+        [Test]
         public void VfxPoolReusesPerPlayParticleConfigurationScratch()
         {
             string source = File.ReadAllText("Assets/Blockiverse/Scripts/Gameplay/BlockiverseVfxPool.cs");
@@ -122,6 +210,31 @@ namespace Blockiverse.Tests.EditMode
         {
             var texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
             return Sprite.Create(texture, new Rect(0.0f, 0.0f, 2.0f, 2.0f), new Vector2(0.5f, 0.5f));
+        }
+
+        static AudioClip CreateClip(string name)
+        {
+            return AudioClip.Create(name, 16, 1, 44100, false);
+        }
+
+        static void AssertMaterialFloat(Material material, string propertyName, float expected)
+        {
+            Assert.That(material.HasProperty(propertyName), Is.True, $"{material.name} must expose {propertyName}.");
+            Assert.That(material.GetFloat(propertyName), Is.EqualTo(expected).Within(0.001f));
+        }
+
+        static void SetPrivateField<TValue>(object target, string fieldName, TValue value)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
+            field.SetValue(target, value);
+        }
+
+        static void InvokePrivate(object target, string methodName)
+        {
+            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"Missing private method {methodName}.");
+            method.Invoke(target, null);
         }
     }
 }

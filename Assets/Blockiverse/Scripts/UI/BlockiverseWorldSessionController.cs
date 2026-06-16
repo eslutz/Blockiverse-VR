@@ -9,6 +9,7 @@ using Blockiverse.Gameplay;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
+using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using UnityEngine;
 
@@ -27,11 +28,13 @@ namespace Blockiverse.UI
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
+        [SerializeField] BlockiverseInputRig inputRig;
 
         string currentSavePath;
         string currentWorldName;
         string currentDifficulty = string.Empty;
         string currentWorldPreset = WorldPresetIds.SurvivalTerrain;
+        string currentTextureSet = BlockTextureSetIds.Default;
         // Save list rows keyed back to their on-disk paths so Load resolves the exact slot even
         // when two saves share a display name (rebuilt by RefreshSaveList).
         readonly Dictionary<string, string> savePathsBySummaryKey = new();
@@ -91,6 +94,9 @@ namespace Blockiverse.UI
 
             if (vitalsRuntime == null)
                 vitalsRuntime = BlockiverseSceneLookup.Find<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+
+            if (inputRig == null)
+                inputRig = BlockiverseSceneLookup.Find<BlockiverseInputRig>(FindObjectsInactive.Include);
         }
 
         // Autosave: while a session is active, save on the WorldSaveService cadence (§6.7).
@@ -197,6 +203,7 @@ namespace Blockiverse.UI
             currentWorldName = null;
             currentDifficulty = string.Empty;
             currentWorldPreset = WorldPresetIds.SurvivalTerrain;
+            currentTextureSet = BlockTextureSetIds.Default;
             lastSaveTime = 0.0f;
             RefreshSaveList();
             return true;
@@ -339,6 +346,7 @@ namespace Blockiverse.UI
                 containers: WorldSaveContainerMapper.BuildSavedContainers(worldManager.ContainerStore),
                 difficulty: currentDifficulty,
                 worldPreset: currentWorldPreset,
+                textureSet: currentTextureSet,
                 extras: BuildSaveExtras(respawnDeadPlayer));
         }
 
@@ -413,12 +421,17 @@ namespace Blockiverse.UI
         IEnumerator CreateNewWorldRoutine(NewWorldConfig config)
         {
             worldTransitionInProgress = true;
+            SetTransitionLocomotionBlocked(true);
+            menuController?.ShowWorldLoadingScreen();
+            yield return null;
+
             menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreatingWorld));
 
             string name = config.Name.Trim();
             string gameMode = config.GameMode;
             string difficulty = config.Difficulty;
             string worldPreset = config.WorldPreset;
+            string textureSet = config.TextureSet;
             string startingBiome = config.StartingBiome;
             string worldSize = config.WorldSize;
             ulong seed = config.Seed;
@@ -438,8 +451,9 @@ namespace Blockiverse.UI
                     gameMode,
                     difficulty,
                     worldPreset,
+                    textureSet,
                     generationTask.Result,
-                    deferRendererRebuild: true);
+                    deferRendererRebuild: false);
             }
             catch (Exception exception)
             {
@@ -447,10 +461,12 @@ namespace Blockiverse.UI
                     BlockiverseLogCategory.Persistence,
                     $"Failed to create new world name={name} exception={exception.GetType().Name}",
                     context: this);
+                menuController?.ShowTitleScreen();
                 menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreateWorldFailed));
             }
             finally
             {
+                SetTransitionLocomotionBlocked(false);
                 worldTransitionInProgress = false;
             }
         }
@@ -462,6 +478,7 @@ namespace Blockiverse.UI
                 config.GameMode,
                 config.Difficulty,
                 config.WorldPreset,
+                config.TextureSet,
                 generated,
                 deferRendererRebuild);
         }
@@ -471,9 +488,12 @@ namespace Blockiverse.UI
             string gameMode,
             string difficulty,
             string worldPreset,
+            string textureSet,
             GeneratedCreativeWorld generated,
             bool deferRendererRebuild)
         {
+            currentTextureSet = BlockTextureSetIds.Normalize(textureSet);
+            worldManager.SetTextureSet(currentTextureSet);
             worldManager.InitializeGeneratedWorld(
                 generated,
                 chunkAuthoritySync,
@@ -697,6 +717,7 @@ namespace Blockiverse.UI
         IEnumerator LoadSaveRoutine(string path)
         {
             worldTransitionInProgress = true;
+            SetTransitionLocomotionBlocked(true);
             ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadingWorld), isFailure: false);
 
             WorldLoadResult result = new WorldSaveService().Load(path);
@@ -706,9 +727,13 @@ namespace Blockiverse.UI
                 ReportLoadStatus(
                     BlockiverseLocalization.Format(BlockiverseLocalization.Keys.StatusLoadFailed, result.Error),
                     isFailure: true);
+                SetTransitionLocomotionBlocked(false);
                 worldTransitionInProgress = false;
                 yield break;
             }
+
+            menuController?.ShowWorldLoadingScreen();
+            yield return null;
 
             Task<GeneratedCreativeWorld> regenerationTask = Task.Run(() => WorldSaveGeneration.Regenerate(result.Data));
             while (!regenerationTask.IsCompleted)
@@ -719,7 +744,7 @@ namespace Blockiverse.UI
                 if (regenerationTask.IsFaulted)
                     throw regenerationTask.Exception?.GetBaseException() ?? new InvalidOperationException("World regeneration failed.");
 
-                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: true);
+                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: false);
             }
             catch (Exception exception)
             {
@@ -727,12 +752,21 @@ namespace Blockiverse.UI
                     BlockiverseLogCategory.Persistence,
                     $"Failed to enter loaded world file={Path.GetFileName(path)} exception={exception.GetType().Name}",
                     context: this);
+                menuController?.ShowTitleScreen();
                 ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadWorldFailed), isFailure: true);
             }
             finally
             {
+                SetTransitionLocomotionBlocked(false);
                 worldTransitionInProgress = false;
             }
+        }
+
+        void SetTransitionLocomotionBlocked(bool blocked)
+        {
+            ResolveReferences();
+            if (inputRig != null)
+                inputRig.LocomotionSuppressed = blocked;
         }
 
         public bool LoadSave(string path)
@@ -798,6 +832,8 @@ namespace Blockiverse.UI
             bool deferRendererRebuild)
         {
             WorldSaveData data = result.Data;
+            currentTextureSet = BlockTextureSetIds.Normalize(data.TextureSet);
+            worldManager.SetTextureSet(currentTextureSet);
             worldManager.InitializeGeneratedWorld(
                 generated,
                 chunkAuthoritySync,
@@ -832,6 +868,7 @@ namespace Blockiverse.UI
             currentDifficulty = data.Difficulty ?? string.Empty;
             vitalsRuntime?.ConfigureDifficulty(currentDifficulty);
             currentWorldPreset = data.WorldPreset;
+            currentTextureSet = BlockTextureSetIds.Normalize(data.TextureSet);
             lastSaveTime = Time.unscaledTime;
             menuController?.EnterGameplay();
             return true;

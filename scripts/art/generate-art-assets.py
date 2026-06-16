@@ -7,14 +7,15 @@ import zlib
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BLOCK_SOURCE_DIR = "Assets/Blockiverse/Art/Textures/Blocks/Source"
+BLOCK_TEXTURE_SET_ROOT = "Assets/Blockiverse/Art/Textures/Blocks/TextureSets"
+BLOCK_TEXTURE_SET_IDS = ("original", "enhanced", "ai_simplified", "ai")
 ITEM_DIR = "Assets/Blockiverse/Art/Textures/Items"
 UI_DIR = "Assets/Blockiverse/Art/Sprites/UI"
 VFX_DIR = "Assets/Blockiverse/Art/Sprites/VFX"
-ATLAS_PATH = "Assets/Blockiverse/Art/Textures/Blocks/blockiverse_block_atlas.png"
 ATLAS_COLUMNS = 8
 ATLAS_ROWS = 10
-TILE_PIXELS = 16
-ATLAS_TILE_PADDING_PIXELS = 4
+TILE_PIXELS = 32
+ATLAS_TILE_PADDING_PIXELS = 8
 ATLAS_TILE_STRIDE_PIXELS = TILE_PIXELS + ATLAS_TILE_PADDING_PIXELS * 2
 
 
@@ -69,7 +70,40 @@ BLOCKS = [
     ("bellows_forge", 47, (66, 68, 72), (235, 116, 57), "forge", 331),
     ("prep_board", 48, (143, 92, 50), (227, 178, 102), "grid", 337),
     ("mend_bench", 49, (104, 74, 52), (196, 165, 94), "tools", 347),
-    ("bedroll", 76, (70, 88, 98), (219, 92, 83), "planks", 353),
+    ("lumen_lamp", 50, (53, 73, 76), (245, 236, 146), "lamp", 349),
+    ("spark_flare", 51, (83, 52, 38), (255, 231, 97), "flare", 351),
+    ("tended_soil", 52, (86, 61, 41), (138, 102, 64), "tilled", 353),
+    ("grain_stalk_s1", 53, (106, 125, 57), (207, 181, 73), "crop_sprout", 359),
+    ("grain_stalk_s2", 54, (112, 133, 58), (219, 190, 78), "crop_mid", 367),
+    ("berrybush_s1", 55, (45, 99, 49), (135, 178, 74), "bush_sprout", 373),
+    ("berrybush_s2", 56, (48, 109, 52), (185, 54, 86), "bush_mid", 379),
+    ("reedgrass_s1", 57, (74, 116, 62), (151, 174, 82), "reed_sprout", 383),
+    ("sapling", 58, (93, 72, 44), (102, 175, 78), "sapling", 389),
+    ("sapling_s1", 59, (95, 74, 45), (113, 184, 82), "sapling_mid", 397),
+    ("sapling_s2", 60, (98, 77, 47), (122, 194, 88), "sapling_tall", 401),
+    ("grain_stalk_s3", 61, (119, 138, 58), (232, 200, 82), "crop_full", 409),
+    ("grain_stalk_s4", 62, (126, 143, 59), (244, 210, 89), "grain_heads", 419),
+    ("berrybush_s3", 63, (51, 118, 56), (205, 56, 91), "berries_cluster", 421),
+    ("berrybush_s4", 64, (52, 124, 58), (219, 63, 98), "berries_cluster", 431),
+    ("berrybush_s5", 65, (54, 132, 60), (236, 70, 107), "berries_cluster", 433),
+    ("reedgrass_s2", 66, (80, 126, 64), (168, 186, 86), "reeds", 439),
+    ("reedgrass_s3", 67, (84, 132, 66), (184, 198, 92), "reeds", 443),
+    ("smooth_branchwood", 68, (138, 88, 43), (214, 149, 75), "smooth_planks", 449),
+    ("reed_basket", 69, (126, 93, 48), (214, 178, 93), "basket", 457),
+    ("tool_rack", 70, (96, 69, 47), (207, 185, 123), "rack", 461),
+    ("pantry_jar", 71, (119, 81, 62), (224, 169, 111), "jar", 463),
+    ("deep_locker", 72, (38, 41, 49), (124, 132, 148), "locker", 467),
+    ("freshwater", 73, (38, 126, 182), (133, 218, 248), "fluid_water", 479),
+    ("brine", 74, (34, 111, 151), (164, 226, 226), "fluid_brine", 487),
+    ("emberflow", 75, (91, 38, 28), (255, 116, 44), "fluid_ember", 491),
+    ("bedroll", 76, (70, 88, 98), (219, 92, 83), "bedroll", 499),
+]
+
+
+BLOCK_SOURCE_ALIASES = [
+    ("freshwater_flow", "freshwater", (44, 144, 201), (154, 230, 255), "fluid_water", 503),
+    ("brine_flow", "brine", (40, 128, 169), (184, 235, 232), "fluid_brine", 509),
+    ("emberflow_flow", "emberflow", (110, 42, 29), (255, 142, 55), "fluid_ember", 521),
 ]
 
 
@@ -169,9 +203,9 @@ VFX_SPRITES = [
 
 
 META_GUIDS = {
-    ATLAS_PATH: "90a6fc9b496045d7ad07d8e02954ce10",
     "Assets/Blockiverse/Art/Textures/Blocks": "f6658262dc8e4ddfb830252033f0a3c4",
     BLOCK_SOURCE_DIR: "5a7112ded78d4dcdb752cab899a42bd0",
+    BLOCK_TEXTURE_SET_ROOT: "cc62f93e8c5d405b90b1a18f9bd0667e",
     ITEM_DIR: "5ffb1d25fb834582a8f9dfe90a1e8f9c",
     "Assets/Blockiverse/Art/Sprites": "6df33f05aaad4bd3842acb84f6e3b257",
     UI_DIR: "8d31bf8a0efa46d0a3f33813b3353db2",
@@ -204,88 +238,195 @@ def with_alpha(color, alpha=255):
     return color if len(color) == 4 else color + (alpha,)
 
 
+def clamp01(value):
+    return max(0.0, min(1.0, value))
+
+
 def block_pixel(base, accent, pattern, seed, x, y):
     h = hash_pixel(x, y, seed)
-    edge = 0.78 if x in (0, 15) or y in (0, 15) else 1.0
-    center = math.sqrt((x - 7.5) ** 2 + (y - 7.5) ** 2)
-    use_accent = False
+    last = TILE_PIXELS - 1
+    mid = last * 0.5
+    nx = x / last
+    ny = y / last
+    dx = x - mid
+    dy = y - mid
+    center = math.sqrt(dx * dx + dy * dy)
+    cell2 = hash_pixel(x // 2, y // 2, seed + 17)
+    cell4 = hash_pixel(x // 4, y // 4, seed + 29)
+    edge = 0.80 if x in (0, last) or y in (0, last) else 1.0
+    top_light = 1.06 - ny * 0.11
+    factor = 0.10 + (h & 31) / 310.0 + (cell4 & 7) / 120.0
+    dark = False
 
     if pattern == "grain":
-        use_accent = x % 5 == 0 or h % 9 == 0
+        factor += 0.28 if (x + (cell4 % 3)) % 7 <= 1 or h % 13 == 0 else 0.0
+        dark = h % 17 == 0
     elif pattern == "strata":
-        use_accent = y % 4 == 0 or h % 17 == 0
+        factor += 0.34 if (y + (cell4 % 3)) % 8 <= 1 or h % 19 == 0 else 0.0
+        dark = (y + cell2) % 11 == 0
     elif pattern == "rings":
-        use_accent = int(center) % 5 <= 1
+        factor += 0.34 if int(center / 2.0) % 4 <= 1 else 0.0
+        dark = abs(center - 10.0) < 1.0 or h % 31 == 0
     elif pattern == "leaves":
-        use_accent = h % 5 <= 1
+        factor += 0.42 if h % 5 <= 1 or cell2 % 11 <= 2 else 0.0
+        dark = h % 13 == 0
     elif pattern == "crystal":
-        use_accent = x == y or x + y == 15 or h % 13 == 0
+        factor += 0.48 if abs(x - y) <= 1 or abs((last - x) - y) <= 1 or h % 17 == 0 else 0.0
+        dark = h % 23 == 0
     elif pattern == "veins":
-        use_accent = x == (h + y) % 16 or h % 19 == 0
+        factor += 0.50 if abs(math.sin((x + y + seed) * 0.25) * 7 + (x - mid)) < 1.7 or h % 29 == 0 else 0.0
     elif pattern == "ore_bands":
-        use_accent = y in (3, 4, 9, 10, 14) or (h % 37 == 0)
+        factor += 0.42 if y % 9 in (2, 3, 4) or h % 37 == 0 else 0.0
+        dark = h % 11 == 0
     elif pattern == "ore_diagonal":
-        use_accent = (x + y) % 7 in (0, 1) or h % 31 == 0
+        factor += 0.46 if (x + y + cell4 % 4) % 11 <= 2 or h % 31 == 0 else 0.0
     elif pattern == "ore_cross":
-        use_accent = abs(x - y) <= 1 or abs((15 - x) - y) <= 1 or h % 41 == 0
+        factor += 0.48 if abs(x - y) <= 2 or abs((last - x) - y) <= 2 or h % 41 == 0 else 0.0
     elif pattern == "ore_threads":
-        use_accent = abs(math.sin((x + y) * 0.55) * 4 + (x - 8)) < 1.4 or h % 43 == 0
+        factor += 0.52 if abs(math.sin((x + y) * 0.33) * 7 + (x - mid)) < 1.8 or h % 43 == 0 else 0.0
     elif pattern == "grid":
-        use_accent = x % 7 == 0 or y % 7 == 0
+        factor += 0.35 if x % 10 <= 1 or y % 10 <= 1 else 0.0
+        dark = x % 10 == 0 or y % 10 == 0
     elif pattern == "glow":
-        use_accent = center < 5 or h % 23 == 0
+        factor += 0.62 if center < TILE_PIXELS * 0.28 or h % 23 == 0 else 0.0
+        top_light = 1.12
     elif pattern == "crate":
-        use_accent = x < 2 or y < 2 or x > 13 or y > 13 or x == y or x + y == 15
+        factor += 0.38 if x < 4 or y < 4 or x > last - 4 or y > last - 4 or abs(x - y) <= 1 or abs(x + y - last) <= 1 else 0.0
+        dark = x in (4, last - 4) or y in (4, last - 4)
     elif pattern == "deep":
-        use_accent = y > 11 or h % 29 == 0
+        factor += 0.25 if y > TILE_PIXELS * 0.66 or h % 29 == 0 else 0.0
+        dark = h % 7 == 0
     elif pattern == "speckles":
-        use_accent = h % 6 == 0
+        factor += 0.38 if h % 6 == 0 or cell2 % 17 == 0 else 0.0
+        dark = h % 10 == 0
     elif pattern == "sediment":
-        use_accent = y % 5 == 0 or h % 23 == 0
+        factor += 0.30 if (y + cell4 % 4) % 9 <= 1 or h % 23 == 0 else 0.0
     elif pattern == "column":
-        use_accent = x % 4 == 0 or (y + h) % 31 == 0
+        factor += 0.32 if x % 8 <= 1 or (y + h) % 31 == 0 else 0.0
+        dark = x % 8 == 0
     elif pattern == "snow":
-        use_accent = y < 4 or h % 11 <= 1
+        factor += 0.55 if y < TILE_PIXELS * 0.30 or h % 11 <= 1 else 0.0
+        dark = cell4 % 19 == 0
     elif pattern == "roots":
-        use_accent = (x + y + h) % 9 <= 1
+        factor += 0.42 if (x + y + h) % 13 <= 2 or abs(math.sin(y * 0.34 + seed) * 7 + dx) < 1.6 else 0.0
+        dark = h % 9 == 0
     elif pattern == "pebbles":
-        use_accent = (x // 3 + y // 3 + h) % 5 == 0
+        factor += 0.44 if (x // 4 + y // 3 + h) % 5 == 0 else 0.0
+        dark = h % 8 == 0
     elif pattern == "glass":
-        use_accent = x == y or x + y == 15 or x in (2, 13) or y in (2, 13)
+        factor += 0.50 if abs(x - y) <= 1 or abs(x + y - last) <= 1 or x in (4, last - 4) or y in (4, last - 4) else 0.0
+        edge = 0.92
     elif pattern == "thorn":
-        use_accent = x == (y + h) % 16 or x + y in (9, 18, 24)
+        factor += 0.40 if abs(math.sin(y * 0.42 + seed) * 9 + dx) < 1.7 or (x + y) % 13 <= 1 else 0.0
+        dark = h % 6 == 0
     elif pattern == "reeds":
-        use_accent = x % 4 == 1 or x % 7 == 0
+        factor += 0.42 if x % 6 <= 1 or abs(math.sin(y * 0.27 + x) * 5) < 1.1 else 0.0
+        dark = x % 6 == 0
     elif pattern == "planks":
-        use_accent = y in (4, 9, 14) or h % 19 == 0
+        factor += 0.32 if y % 10 <= 1 or h % 19 == 0 else 0.0
+        dark = y % 10 == 0 or x % 15 == 0
+    elif pattern == "smooth_planks":
+        factor += 0.26 if y % 12 <= 1 or h % 23 == 0 else 0.0
+        dark = y % 12 == 0
     elif pattern == "brick":
-        use_accent = y in (3, 8, 13) or (x in (7, 8) and y < 8) or (x in (3, 4, 12, 13) and y >= 8)
+        mortar = y % 10 <= 1 or (x % 16 <= 1 if (y // 10) % 2 == 0 else (x + 8) % 16 <= 1)
+        factor += 0.35 if mortar or h % 29 == 0 else 0.0
+        dark = mortar
     elif pattern == "chips":
-        use_accent = abs(x - y) < 2 or h % 10 == 0
+        factor += 0.42 if abs(x - y) < 2 or h % 10 == 0 else 0.0
+        dark = h % 12 == 0
     elif pattern == "sparkle":
-        use_accent = x == y or x + y == 15 or h % 17 == 0
+        factor += 0.62 if abs(x - y) <= 1 or abs(x + y - last) <= 1 or h % 17 == 0 else 0.0
     elif pattern == "crust":
-        use_accent = y < 3 or x < 2 or h % 13 <= 1
+        factor += 0.50 if y < 6 or x < 4 or h % 13 <= 1 else 0.0
+        dark = h % 17 == 0
     elif pattern == "berries":
-        use_accent = h % 8 <= 2
+        factor += 0.44 if h % 8 <= 2 else 0.0
     elif pattern == "berries_cluster":
-        berry_centers = ((4, 5), (10, 4), (7, 9), (12, 11), (3, 12))
-        use_accent = any((x - cx) * (x - cx) + (y - cy) * (y - cy) <= 4 for cx, cy in berry_centers)
+        berry_centers = ((8, 9), (20, 8), (14, 18), (24, 23), (6, 24), (17, 26))
+        factor += 0.58 if any((x - cx) * (x - cx) + (y - cy) * (y - cy) <= 8 for cx, cy in berry_centers) else (0.25 if h % 5 <= 1 else 0.0)
+        dark = h % 12 == 0
     elif pattern == "grain_heads":
-        use_accent = x in (4, 7, 10, 13) or ((x + y) % 5 == 0 and 3 <= y <= 10)
+        factor += 0.58 if x % 7 in (2, 3) or ((x + y) % 7 == 0 and 5 <= y <= 22) else 0.0
+    elif pattern in ("crop_sprout", "crop_mid", "crop_full"):
+        growth = {"crop_sprout": 0.45, "crop_mid": 0.65, "crop_full": 0.85}[pattern]
+        factor += 0.48 if y > TILE_PIXELS * (1.0 - growth) and (x % 7 <= 1 or h % 11 == 0) else 0.0
+        dark = y > TILE_PIXELS * 0.82 and h % 9 == 0
+    elif pattern in ("bush_sprout", "bush_mid"):
+        factor += 0.46 if center < TILE_PIXELS * (0.22 if pattern == "bush_sprout" else 0.34) or h % 7 <= 1 else 0.0
+        dark = h % 11 == 0
+    elif pattern == "reed_sprout":
+        factor += 0.42 if x % 9 <= 1 and y > TILE_PIXELS * 0.38 else 0.0
+    elif pattern in ("sapling", "sapling_mid", "sapling_tall"):
+        height = {"sapling": 0.55, "sapling_mid": 0.70, "sapling_tall": 0.86}[pattern]
+        trunk = abs(dx) < 2.2 and y > TILE_PIXELS * (1.0 - height)
+        leaves = center < TILE_PIXELS * (0.18 if pattern == "sapling" else 0.24) and y < TILE_PIXELS * 0.55
+        factor += 0.52 if trunk or leaves or h % 17 == 0 else 0.0
+        dark = trunk and h % 4 == 0
     elif pattern == "flame":
-        use_accent = center < 4 or y < 5 or h % 23 == 0
+        flame = abs(dx) < (12.0 * (1.0 - ny)) + 2.0 and y < TILE_PIXELS * 0.82
+        factor += 0.64 if flame or h % 23 == 0 else 0.0
+        top_light = 1.15
+        dark = y > TILE_PIXELS * 0.78
+    elif pattern == "lamp":
+        glass = center < TILE_PIXELS * 0.30 or (abs(dx) < 8 and abs(dy) < 12)
+        factor += 0.66 if glass or h % 31 == 0 else 0.0
+        top_light = 1.12
+        dark = x < 4 or x > last - 4 or y < 4 or y > last - 4
+    elif pattern == "flare":
+        factor += 0.70 if abs(dx) < 4 or abs(dy) < 4 or abs(x - y) <= 2 or abs(x + y - last) <= 2 else 0.0
+        top_light = 1.18
     elif pattern == "kiln":
-        use_accent = y in (4, 9, 14) or x in (2, 13) or center < 3
+        factor += 0.36 if y % 9 <= 1 or x in (4, last - 4) or center < 7 else 0.0
+        dark = center < 5 or h % 13 == 0
     elif pattern == "forge":
-        use_accent = center < 4 or x in (2, 13) or y in (3, 12)
+        factor += 0.48 if center < 8 or x in (4, last - 4) or y in (6, last - 6) else 0.0
+        dark = h % 7 == 0
     elif pattern == "tools":
-        use_accent = abs(x - y) < 2 or abs((15 - x) - y) < 2 or h % 29 == 0
+        factor += 0.44 if abs(x - y) < 2 or abs((last - x) - y) < 2 or h % 29 == 0 else 0.0
+        dark = h % 11 == 0
+    elif pattern == "tilled":
+        factor += 0.30 if x % 8 <= 2 or h % 17 == 0 else 0.0
+        dark = x % 8 == 0 or h % 10 == 0
+    elif pattern == "basket":
+        factor += 0.38 if (x + y) % 8 <= 2 or (x - y) % 8 <= 2 else 0.0
+        dark = x % 8 == 0 or y % 8 == 0
+    elif pattern == "rack":
+        factor += 0.42 if x in (5, 6, last - 6, last - 5) or y in (8, last - 8) or abs(x - y) <= 1 else 0.0
+        dark = h % 8 == 0
+    elif pattern == "jar":
+        jar = (dx * dx) / 130.0 + (dy * dy) / 180.0 < 1.0
+        factor += 0.50 if jar or abs(dx) < 2 else 0.0
+        dark = jar and (x < mid or y > mid) and h % 5 == 0
+    elif pattern == "locker":
+        factor += 0.38 if x < 4 or x > last - 4 or y < 4 or y > last - 4 or x == int(mid) or h % 23 == 0 else 0.0
+        dark = x in (4, int(mid), last - 4) or y in (4, last - 4)
+    elif pattern == "fluid_water":
+        wave = abs(math.sin((x + seed) * 0.34) * 4 + math.sin(y * 0.29) * 3) < 1.6
+        factor += 0.52 if wave or h % 17 == 0 else 0.0
+        edge = 0.94
+    elif pattern == "fluid_brine":
+        wave = abs(math.sin((x + y + seed) * 0.24) * 5) < 1.3
+        factor += 0.48 if wave or h % 19 == 0 else 0.0
+        dark = h % 9 == 0
+        edge = 0.94
+    elif pattern == "fluid_ember":
+        vein = abs(math.sin((x + seed) * 0.30) * 8 + math.cos(y * 0.37) * 5) < 2.0
+        factor += 0.68 if vein or h % 11 == 0 else 0.0
+        dark = not vein and h % 4 == 0
+        top_light = 1.20
+    elif pattern == "bedroll":
+        factor += 0.40 if x % 9 <= 1 or y % 12 <= 1 or h % 19 == 0 else 0.0
+        dark = x < 5 or x > last - 5 or y < 5 or y > last - 5
     else:
-        use_accent = h % 7 <= 1
+        factor += 0.28 if h % 7 <= 1 else 0.0
 
-    color = accent if use_accent else base
-    return with_alpha(shade(color, edge), 255)
+    color = mix(base, accent, clamp01(factor))
+    if dark:
+        color = shade(color, 0.76)
+    if h % 47 == 0:
+        color = mix(color, accent, 0.35)
+    return with_alpha(shade(color, edge * top_light), 255)
 
 
 def make_block_tile(block):
@@ -494,6 +635,94 @@ def png_bytes(image):
     return signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(raw), 9)) + chunk(b"IEND", b"")
 
 
+def paeth(a, b, c):
+    p = a + b - c
+    pa = abs(p - a)
+    pb = abs(p - b)
+    pc = abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    if pb <= pc:
+        return b
+    return c
+
+
+def read_rgba_png(relative_path):
+    path = os.path.join(ROOT, relative_path)
+    data = open(path, "rb").read()
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError(f"Not a PNG: {relative_path}")
+
+    offset = 8
+    width = height = bit_depth = color_type = None
+    idat = bytearray()
+    while offset < len(data):
+        length = int.from_bytes(data[offset : offset + 4], "big")
+        tag = data[offset + 4 : offset + 8]
+        payload = data[offset + 8 : offset + 8 + length]
+        offset += 12 + length
+
+        if tag == b"IHDR":
+            width = int.from_bytes(payload[0:4], "big")
+            height = int.from_bytes(payload[4:8], "big")
+            bit_depth = payload[8]
+            color_type = payload[9]
+            if payload[12] != 0:
+                raise ValueError(f"Interlaced PNG is not supported: {relative_path}")
+        elif tag == b"IDAT":
+            idat.extend(payload)
+        elif tag == b"IEND":
+            break
+
+    if width is None or height is None or bit_depth != 8 or color_type not in (2, 6):
+        raise ValueError(f"Unsupported PNG format: {relative_path}")
+
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    raw = zlib.decompress(bytes(idat))
+    rows = []
+    cursor = 0
+    previous = bytearray(stride)
+
+    for _ in range(height):
+        filter_type = raw[cursor]
+        cursor += 1
+        row = bytearray(raw[cursor : cursor + stride])
+        cursor += stride
+
+        for i in range(stride):
+            left = row[i - channels] if i >= channels else 0
+            up = previous[i]
+            up_left = previous[i - channels] if i >= channels else 0
+
+            if filter_type == 1:
+                row[i] = (row[i] + left) & 0xFF
+            elif filter_type == 2:
+                row[i] = (row[i] + up) & 0xFF
+            elif filter_type == 3:
+                row[i] = (row[i] + ((left + up) >> 1)) & 0xFF
+            elif filter_type == 4:
+                row[i] = (row[i] + paeth(left, up, up_left)) & 0xFF
+            elif filter_type != 0:
+                raise ValueError(f"Unsupported PNG filter {filter_type}: {relative_path}")
+
+        rows.append(bytes(row))
+        previous = row
+
+    pixels = []
+    for row in rows:
+        out_row = []
+        for x in range(width):
+            base = x * channels
+            r = row[base]
+            g = row[base + 1]
+            b = row[base + 2]
+            a = row[base + 3] if channels == 4 else 255
+            out_row.append((r, g, b, a))
+        pixels.append(out_row)
+    return pixels
+
+
 def write_png(relative_path, image):
     path = os.path.join(ROOT, relative_path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -670,11 +899,46 @@ def blit_padded_tile(atlas, tile, origin_x, origin_y):
             atlas[origin_y + y][origin_x + x] = tile[source_y][source_x]
 
 
+def texture_set_atlas_path(set_id):
+    return f"{BLOCK_TEXTURE_SET_ROOT}/{set_id}/blockiverse_block_atlas.png"
+
+
+def write_texture_set_atlas(set_id):
+    source_dir = f"{BLOCK_TEXTURE_SET_ROOT}/{set_id}/Source"
+    atlas = empty_image(atlas_width(), atlas_height(), (58, 60, 65, 255))
+
+    for name, tile_index, *_ in BLOCKS:
+        tile_path = f"{source_dir}/{name}.png"
+        tile = read_rgba_png(tile_path)
+        if len(tile) != TILE_PIXELS or len(tile[0]) != TILE_PIXELS:
+            raise ValueError(f"{tile_path} must be {TILE_PIXELS}x{TILE_PIXELS}")
+
+        tile_x = tile_index % ATLAS_COLUMNS
+        tile_y = tile_index // ATLAS_COLUMNS
+        origin_x = tile_x * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
+        origin_y = tile_y * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
+        blit_padded_tile(atlas, tile, origin_x, origin_y)
+
+    atlas_path = texture_set_atlas_path(set_id)
+    write_png(atlas_path, atlas)
+    write_texture_meta(
+        atlas_path,
+        sprite=False,
+        max_size=atlas_max_texture_size(),
+        enable_mipmaps=True,
+        filter_mode=2,
+        aniso=4,
+        android_texture_compression=1,
+    )
+
+
 def write_assets():
     for folder in [
         "Assets/Blockiverse/Art/Textures",
         "Assets/Blockiverse/Art/Textures/Blocks",
         BLOCK_SOURCE_DIR,
+        BLOCK_TEXTURE_SET_ROOT,
+        *[f"{BLOCK_TEXTURE_SET_ROOT}/{set_id}" for set_id in BLOCK_TEXTURE_SET_IDS],
         ITEM_DIR,
         "Assets/Blockiverse/Art/Sprites",
         UI_DIR,
@@ -683,29 +947,19 @@ def write_assets():
         os.makedirs(os.path.join(ROOT, folder), exist_ok=True)
         write_folder_meta(folder)
 
-    atlas = empty_image(atlas_width(), atlas_height(), (58, 60, 65, 255))
-
     for block in BLOCKS:
         name, tile_index, *_ = block
         tile = make_block_tile(block)
         write_png(f"{BLOCK_SOURCE_DIR}/{name}.png", tile)
-        write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=16)
-        tile_x = tile_index % ATLAS_COLUMNS
-        tile_y = tile_index // ATLAS_COLUMNS
-        origin_x = tile_x * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
-        origin_y = tile_y * ATLAS_TILE_STRIDE_PIXELS + ATLAS_TILE_PADDING_PIXELS
-        blit_padded_tile(atlas, tile, origin_x, origin_y)
+        write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=TILE_PIXELS)
 
-    write_png(ATLAS_PATH, atlas)
-    write_texture_meta(
-        ATLAS_PATH,
-        sprite=False,
-        max_size=atlas_max_texture_size(),
-        enable_mipmaps=True,
-        filter_mode=2,
-        aniso=4,
-        android_texture_compression=1,
-    )
+    for name, _, base, accent, pattern, seed in BLOCK_SOURCE_ALIASES:
+        tile = make_block_tile((name, -1, base, accent, pattern, seed))
+        write_png(f"{BLOCK_SOURCE_DIR}/{name}.png", tile)
+        write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=TILE_PIXELS)
+
+    for set_id in BLOCK_TEXTURE_SET_IDS:
+        write_texture_set_atlas(set_id)
 
     for item in ITEMS:
         name = item[0]

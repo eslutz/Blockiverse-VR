@@ -8,6 +8,8 @@ Accepted
 
 Use a small local-only `BlockiverseLog` facade for runtime and editor diagnostics. The facade lives in Core so every assembly can use it without taking a new dependency. Development information logs are enabled only in the Unity Editor and development builds unless tests override that behavior. Warnings and errors always write to the local Unity/player log.
 
+High-volume gameplay timelines use a separate local-only `BlockiverseTrace` facade instead of the normal Unity/player log. Verbose tracing is hard-gated to the Unity Editor and development builds, and is enabled only by the `Blockiverse.Diagnostics.VerboseTraceEnabled` PlayerPrefs flag or a marker file at `Application.persistentDataPath/Diagnostics/enable-verbose-trace`. When enabled, the trace writes rolling JSONL files under `Application.persistentDataPath/Diagnostics`; Unity/player logs receive only trace lifecycle summaries.
+
 Do not add remote analytics, crash upload, log upload, or a third-party logging service for the Alpha logging foundation.
 
 ## Context
@@ -16,6 +18,6 @@ Alpha validation needs useful local diagnostics before the full M6 performance i
 
 ## Consequences
 
-Systems should log sanitized summaries instead of raw state dumps. Logs must not include full save paths, device identifiers, player identifiers, join codes, voice or chat content, secrets, or inventory contents beyond counts.
+Systems should log sanitized summaries instead of raw state dumps. Logs and verbose trace payloads must not include full save paths, device identifiers, player identifiers, join codes, voice or chat content, secrets, or inventory contents beyond counts.
 
-Quest validation captures use local `hzdb log` commands. Profiler markers, in-game stats panels, OVR Metrics captures, and formal performance reports remain separate M6 work.
+Quest validation captures use local `hzdb log` commands for Unity/player logs and local diagnostics file pulls when a verbose trace is intentionally enabled. Profiler markers, in-game stats panels, OVR Metrics captures, and formal performance reports remain separate M6 work.

@@ -86,6 +86,27 @@ namespace Blockiverse.WorldGen
                 new ResourceVeinTuning(BlockRegistry.StaropalGeode,      salt: 1613, minY: 5,  maxY: 40,  chancePermille: 35,  radius: 1, verticalRadius: 1));
         }
 
+        public static SurvivalResourceTuning CreateResourceRich()
+        {
+            SurvivalResourceTuning defaults = CreateDefault();
+            var richVeins = new ResourceVeinTuning[defaults.resourceVeins.Length];
+
+            for (int i = 0; i < defaults.resourceVeins.Length; i++)
+            {
+                ResourceVeinTuning tuning = defaults.resourceVeins[i];
+                richVeins[i] = new ResourceVeinTuning(
+                    tuning.ResourceBlock,
+                    tuning.Salt,
+                    tuning.MinY,
+                    tuning.MaxY,
+                    Math.Min(1000, tuning.ChancePermille * 2),
+                    tuning.Radius + 1,
+                    tuning.VerticalRadius);
+            }
+
+            return new SurvivalResourceTuning(richVeins);
+        }
+
         public ResourceVeinTuning Get(BlockId resourceBlock)
         {
             if (!tuningByBlock.TryGetValue(resourceBlock, out ResourceVeinTuning tuning))

@@ -51,6 +51,9 @@ namespace Blockiverse.Gameplay
     public sealed class CreativeWorldManager : MonoBehaviour
     {
         [SerializeField] Material chunkMaterial;
+        [SerializeField] string textureSet = BlockTextureSetIds.Default;
+        [SerializeField] string[] blockTextureSetIds;
+        [SerializeField] Texture2D[] blockTextureSetAtlases;
         [SerializeField] int interactionLayer = -1;
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeHotbar hotbar;
@@ -86,6 +89,7 @@ namespace Blockiverse.Gameplay
         public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
+        public string TextureSet => BlockTextureSetIds.Normalize(textureSet);
 
         // The world's rules mode. Explicitly initialized sandbox worlds default to Creative; saves
         // and the new-world flow set it from their manifest/config (see SetGameMode/ParseGameMode).
@@ -97,6 +101,13 @@ namespace Blockiverse.Gameplay
         }
 
         public void SetGameMode(WorldGameMode mode) => GameMode = mode;
+        public void SetTextureSet(string textureSetId) => textureSet = BlockTextureSetIds.Normalize(textureSetId);
+
+        public void ConfigureBlockTextureAtlases(string[] textureSetIds, Texture2D[] atlasTextures)
+        {
+            blockTextureSetIds = textureSetIds ?? Array.Empty<string>();
+            blockTextureSetAtlases = atlasTextures ?? Array.Empty<Texture2D>();
+        }
 
         public static WorldGameMode ParseGameMode(string gameMode) =>
             string.Equals(gameMode, "creative", StringComparison.OrdinalIgnoreCase)
@@ -107,6 +118,7 @@ namespace Blockiverse.Gameplay
         public string GameModeString => GameMode == WorldGameMode.Creative ? "creative" : "survival";
 
         public string CurrentWeatherState => weatherService?.CurrentState.ToString();
+        public int CurrentWeatherTicksInState => weatherService?.TicksInCurrentState ?? 0;
         public WorldTimeClock WorldTimeClock => worldTimeClock;
 
         // Evaluates the current environment (weather-derived temperature, fog, precipitation, storm,
@@ -340,6 +352,19 @@ namespace Blockiverse.Gameplay
             placementPreview = preview;
         }
 
+        Texture2D ResolveSelectedBlockAtlas()
+        {
+            string selected = TextureSet;
+            int count = Math.Min(blockTextureSetIds?.Length ?? 0, blockTextureSetAtlases?.Length ?? 0);
+            for (int i = 0; i < count; i++)
+            {
+                if (string.Equals(BlockTextureSetIds.Normalize(blockTextureSetIds[i]), selected, StringComparison.OrdinalIgnoreCase))
+                    return blockTextureSetAtlases[i];
+            }
+
+            return null;
+        }
+
         public void InitializeDefaultWorld()
         {
             InitializeGeneratedWorld(CreateDefaultGeneratedWorld());
@@ -398,6 +423,8 @@ namespace Blockiverse.Gameplay
                 Registry,
                 chunkMaterial,
                 interactionLayer,
+                ResolveSelectedBlockAtlas(),
+                TextureSet,
                 deferInitialRendererRebuild);
 
             ConfigureTorchbudLights();

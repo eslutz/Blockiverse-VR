@@ -39,9 +39,12 @@ namespace Blockiverse.Tests.PlayMode
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-            SurvivalInventoryPanel inventoryPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>();
-            SurvivalCraftingPanel craftingPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>();
-            SurvivalHealthPanel healthPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalHealthPanel>();
+            SurvivalInventoryPanel inventoryPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
+            SurvivalCraftingPanel craftingPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>(FindObjectsInactive.Include);
+            SurvivalHealthPanel healthPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalHealthPanel>(FindObjectsInactive.Include);
 
             Assert.That(inventoryPanel, Is.Not.Null);
             Assert.That(craftingPanel, Is.Not.Null);
@@ -74,14 +77,21 @@ namespace Blockiverse.Tests.PlayMode
 
                 GameObject popup = GameObject.Find("Controller Mapping Popup");
                 Assert.That(popup, Is.Not.Null);
+                GameObject titleMenu = GameObject.Find("Title Menu");
+                Assert.That(titleMenu, Is.Not.Null);
 
                 Canvas canvas = popup.GetComponent<Canvas>();
                 Assert.That(canvas, Is.Not.Null);
                 Assert.That(canvas.enabled, Is.True);
+                Canvas titleCanvas = titleMenu.GetComponent<Canvas>();
+                Assert.That(titleCanvas, Is.Not.Null);
+                Assert.That(titleCanvas.enabled, Is.False,
+                    "The title menu must wait until the first-run controller map is dismissed.");
 
                 BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
                 Assert.That(presenter, Is.Not.Null);
                 Assert.That(presenter.IsVisible, Is.True);
+                Assert.That(presenter.ShowOnStart, Is.False);
 
                 Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
                 Assert.That(closeButton, Is.Not.Null);
@@ -90,6 +100,7 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
 
                 Assert.That(canvas.enabled, Is.False);
+                Assert.That(titleCanvas.enabled, Is.True);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally
@@ -131,20 +142,24 @@ namespace Blockiverse.Tests.PlayMode
                 BlockiverseInputActionNames.UiPress);
 
             // World-space menus are raycast by the tracked-device raycaster, not the screen raycaster.
-            SurvivalInventoryPanel inventoryPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>();
+            SurvivalInventoryPanel inventoryPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
             Assert.That(inventoryPanel, Is.Not.Null);
             Canvas hudCanvas = inventoryPanel.GetComponentInParent<Canvas>();
             Assert.That(hudCanvas.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
             Assert.That(hudCanvas.GetComponent<GraphicRaycaster>(), Is.Null);
 
-            // The right controller drives UI + block targeting with a UI-enabled native ray interactor.
+            // Both controllers carry UI/block rays; the active dominant/tool hand owns visibility.
             GameObject rig = GameObject.Find(BlockiverseProject.XrRigRootName);
-            Transform interactionRay = rig.transform.Find("Camera Offset/Right Controller/Interaction Ray");
-            Assert.That(interactionRay, Is.Not.Null);
-            XRRayInteractor rayInteractor = interactionRay.GetComponent<XRRayInteractor>();
-            Assert.That(rayInteractor, Is.Not.Null);
-            Assert.That(rayInteractor.enableUIInteraction, Is.True);
-            Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False);
+            foreach (string controllerName in new[] { "Left Controller", "Right Controller" })
+            {
+                Transform interactionRay = rig.transform.Find($"Camera Offset/{controllerName}/Interaction Ray");
+                Assert.That(interactionRay, Is.Not.Null, controllerName);
+                XRRayInteractor rayInteractor = interactionRay.GetComponent<XRRayInteractor>();
+                Assert.That(rayInteractor, Is.Not.Null, controllerName);
+                Assert.That(rayInteractor.enableUIInteraction, Is.True, controllerName);
+                Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False, controllerName);
+            }
 
             CreativeWorldManager worldManager = UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             Assert.That(worldManager, Is.Not.Null);

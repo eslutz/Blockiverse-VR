@@ -17,8 +17,12 @@ namespace Blockiverse.VR
     /// </summary>
     public sealed class BlockiverseCreativeInputBridge : MonoBehaviour
     {
+        const float MenuMissRayVisualLengthMeters = 1.1f;
+
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] XRRayInteractor interactionRay;
+        [SerializeField] XRRayInteractor leftInteractionRay;
+        [SerializeField] XRRayInteractor rightInteractionRay;
         [SerializeField] LineRenderer interactionLineRenderer;
         [SerializeField] XRInteractorLineVisual interactionLineVisual;
         [SerializeField] CreativeInteractionController interactionController;
@@ -33,6 +37,8 @@ namespace Blockiverse.VR
         bool lineRendererDefaultEnabled;
         bool capturedLineVisualDefault;
         bool lineVisualDefaultEnabled;
+        bool lineVisualDefaultOverrideLineLength;
+        float lineVisualDefaultLength;
 
         // Hold-to-mine (§7.3): survival break is a timed hold on a fixed target. ToolHit cues +
         // chip VFX play on a cadence while held; releasing or losing the target cancels; the
@@ -59,7 +65,9 @@ namespace Blockiverse.VR
         {
             Unbind();
             inputRig = rig;
-            interactionRay = ray;
+            SetInteractionRay(ray);
+            leftInteractionRay = null;
+            rightInteractionRay = null;
             interactionLineRenderer = null;
             interactionLineVisual = null;
             capturedLineRendererDefault = false;
@@ -83,6 +91,7 @@ namespace Blockiverse.VR
 
         void Update()
         {
+            RefreshActiveInteractionRay();
             ApplyInteractionRayVisualState();
 
             if (interactionController == null)
@@ -206,8 +215,11 @@ namespace Blockiverse.VR
             if (inputRig == null)
                 inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindFirstObjectByType<BlockiverseInputRig>();
 
+            DiscoverInteractionRays();
+            RefreshActiveInteractionRay();
+
             if (interactionRay == null)
-                interactionRay = GetComponentInChildren<XRRayInteractor>(true);
+                SetInteractionRay(GetComponentInChildren<XRRayInteractor>(true));
 
             DiscoverInteractionRayVisuals();
 
@@ -254,6 +266,69 @@ namespace Blockiverse.VR
             CaptureLineVisualDefault();
         }
 
+        void DiscoverInteractionRays()
+        {
+            if (inputRig != null)
+            {
+                leftInteractionRay ??= inputRig.LeftInteractionRay;
+                rightInteractionRay ??= inputRig.RightInteractionRay;
+
+                foreach (BlockiverseLocomotionRayMediator mediator in inputRig.GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
+                    AssignInteractionRay(mediator.Hand, mediator.InteractionRay);
+            }
+
+            foreach (BlockiverseLocomotionRayMediator mediator in GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
+                AssignInteractionRay(mediator.Hand, mediator.InteractionRay);
+        }
+
+        void AssignInteractionRay(BlockiverseControllerRole hand, XRRayInteractor ray)
+        {
+            if (ray == null)
+                return;
+
+            if (hand == BlockiverseControllerRole.Left)
+                leftInteractionRay ??= ray;
+            else
+                rightInteractionRay ??= ray;
+        }
+
+        void RefreshActiveInteractionRay()
+        {
+            XRRayInteractor resolved = ResolveActiveInteractionRay();
+
+            if (resolved != null && resolved != interactionRay)
+                SetInteractionRay(resolved);
+        }
+
+        XRRayInteractor ResolveActiveInteractionRay()
+        {
+            DiscoverInteractionRays();
+
+            if (inputRig != null)
+            {
+                XRRayInteractor dominantRay = inputRig.ActiveToolHand == BlockiverseControllerRole.Left
+                    ? leftInteractionRay
+                    : rightInteractionRay;
+
+                if (dominantRay != null)
+                    return dominantRay;
+            }
+
+            return interactionRay ?? rightInteractionRay ?? leftInteractionRay;
+        }
+
+        void SetInteractionRay(XRRayInteractor ray)
+        {
+            if (interactionRay == ray)
+                return;
+
+            interactionRay = ray;
+            interactionLineRenderer = null;
+            interactionLineVisual = null;
+            capturedLineRendererDefault = false;
+            capturedLineVisualDefault = false;
+        }
+
         void CaptureLineRendererDefault()
         {
             if (capturedLineRendererDefault || interactionLineRenderer == null)
@@ -269,6 +344,8 @@ namespace Blockiverse.VR
                 return;
 
             lineVisualDefaultEnabled = interactionLineVisual.enabled;
+            lineVisualDefaultOverrideLineLength = interactionLineVisual.overrideInteractorLineLength;
+            lineVisualDefaultLength = interactionLineVisual.lineLength;
             capturedLineVisualDefault = true;
         }
 
@@ -388,8 +465,9 @@ namespace Blockiverse.VR
         {
             DiscoverInteractionRayVisuals();
 
-            bool shouldShow = BlockiverseRuntimeState.AllowWorldInput &&
-                (interactionController == null || interactionController.BlockEditingEnabled);
+            bool worldInputAllowed = BlockiverseRuntimeState.AllowWorldInput;
+            bool blockEditingVisible = interactionController == null || interactionController.BlockEditingEnabled;
+            bool shouldShow = !worldInputAllowed || blockEditingVisible;
 
             if (interactionLineRenderer != null)
                 interactionLineRenderer.enabled = shouldShow && (!capturedLineRendererDefault || lineRendererDefaultEnabled);
@@ -397,8 +475,29 @@ namespace Blockiverse.VR
             if (interactionLineVisual != null)
                 interactionLineVisual.enabled = shouldShow && (!capturedLineVisualDefault || lineVisualDefaultEnabled);
 
-            if (!shouldShow)
+            ApplyInteractionRayLengthState(worldInputAllowed);
+
+            if (!worldInputAllowed || !blockEditingVisible)
                 interactionController?.HidePreview();
+        }
+
+        void ApplyInteractionRayLengthState(bool worldInputAllowed)
+        {
+            if (interactionLineVisual == null || !capturedLineVisualDefault)
+                return;
+
+            if (worldInputAllowed)
+            {
+                interactionLineVisual.overrideInteractorLineLength = lineVisualDefaultOverrideLineLength;
+                interactionLineVisual.lineLength = lineVisualDefaultLength;
+                return;
+            }
+
+            // In title/menu mode, a missed UI ray otherwise draws the full interaction line past
+            // the panel, which reads in-headset like a second ray starting above the player.
+            bool hasUiHit = interactionRay != null && interactionRay.TryGetCurrentUIRaycastResult(out _);
+            interactionLineVisual.overrideInteractorLineLength = !hasUiHit;
+            interactionLineVisual.lineLength = hasUiHit ? lineVisualDefaultLength : MenuMissRayVisualLengthMeters;
         }
 
         bool CanInteract()

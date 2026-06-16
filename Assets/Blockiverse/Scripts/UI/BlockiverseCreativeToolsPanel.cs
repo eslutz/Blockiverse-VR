@@ -17,6 +17,8 @@ namespace Blockiverse.UI
     [DisallowMultipleComponent]
     public sealed class BlockiverseCreativeToolsPanel : MonoBehaviour
     {
+        const float DefaultCycleTimeScale = 1.0f;
+
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] CreativeHotbar hotbar;
@@ -328,6 +330,27 @@ namespace Blockiverse.UI
             }
 
             worldManager?.WorldTimeClock?.SetTimeScale(value);
+        }
+
+        public void ToggleDayNightCycle()
+        {
+            WorldTimeClock clock = worldManager != null ? worldManager.WorldTimeClock : null;
+            if (clock == null)
+                return;
+
+            if (NetworkSessionActive())
+            {
+                RefreshEnvironmentControls();
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeTimeHostOnly));
+                return;
+            }
+
+            bool resume = Mathf.Approximately(clock.TimeScale, 0.0f);
+            clock.SetTimeScale(resume ? DefaultCycleTimeScale : 0.0f);
+            RefreshEnvironmentControls();
+            SetStatus(BlockiverseLocalization.Text(resume
+                ? BlockiverseLocalization.Keys.CreativeCycleResumed
+                : BlockiverseLocalization.Keys.CreativeCyclePaused));
         }
 
         // Steps the weather to the next state (wrapping through every WeatherState preset).

@@ -128,6 +128,34 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void LightingCycleEvaluatorMovesSunAcrossOppositeHorizons()
+        {
+            Vector3 sunriseDirection = SunDirection(LightingCycleEvaluator.Evaluate(0.0f).SunRotation);
+            Vector3 noonDirection = SunDirection(LightingCycleEvaluator.Evaluate(0.25f).SunRotation);
+            Vector3 sunsetDirection = SunDirection(LightingCycleEvaluator.Evaluate(0.5f).SunRotation);
+            Vector3 midnightDirection = SunDirection(LightingCycleEvaluator.Evaluate(0.75f).SunRotation);
+
+            Assert.That(Mathf.Abs(sunriseDirection.y), Is.LessThan(0.35f));
+            Assert.That(noonDirection.y, Is.GreaterThan(0.95f));
+            Assert.That(Mathf.Abs(sunsetDirection.y), Is.LessThan(0.35f));
+            Assert.That(midnightDirection.y, Is.LessThan(-0.95f));
+            Assert.That(
+                Vector3.Dot(HorizontalDirection(sunriseDirection), HorizontalDirection(sunsetDirection)),
+                Is.LessThan(-0.95f));
+        }
+
+        static Vector3 SunDirection(Quaternion sunRotation)
+        {
+            return -(sunRotation * Vector3.forward);
+        }
+
+        static Vector3 HorizontalDirection(Vector3 direction)
+        {
+            direction.y = 0.0f;
+            return direction.normalized;
+        }
+
+        [Test]
         public void LightingCycleAppliesNonShadowCastingSun()
         {
             var host = new GameObject("Lighting Cycle");
@@ -237,6 +265,41 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Campfire,   registry), Is.True);
             Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.LumenLamp,  registry), Is.True);
             Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.SparkFlare, registry), Is.True);
+        }
+
+        [Test]
+        public void TorchbudLightManagerCreatesPointLightsForPlacedEmissiveBlocks()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 19);
+            var host = new GameObject("Torchbud Light Manager");
+            var lightPosition = new BlockPosition(1, 1, 1);
+
+            try
+            {
+                world.SetBlock(lightPosition, BlockRegistry.LumenLamp, trackChange: false);
+
+                TorchbudLightManager manager = host.AddComponent<TorchbudLightManager>();
+                manager.Configure(world, registry);
+
+                Assert.That(manager.ActiveEmitterCount, Is.EqualTo(1));
+                Assert.That(manager.ActiveLightCount, Is.EqualTo(1));
+                Assert.That(manager.TryGetLight(lightPosition, out Light light), Is.True);
+                Assert.That(light, Is.Not.Null);
+                Assert.That(light.type, Is.EqualTo(LightType.Point));
+                Assert.That(light.intensity, Is.GreaterThan(0.0f));
+                Assert.That(light.range, Is.GreaterThanOrEqualTo(4.0f));
+
+                world.SetBlock(lightPosition, BlockRegistry.Air);
+
+                Assert.That(manager.ActiveEmitterCount, Is.EqualTo(0));
+                Assert.That(manager.ActiveLightCount, Is.EqualTo(0));
+                Assert.That(manager.TryGetLight(lightPosition, out _), Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
         }
     }
 }

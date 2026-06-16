@@ -102,6 +102,7 @@ namespace Blockiverse.Tests.EditMode
                     GameMode = "creative",
                     Difficulty = "hard",
                     WorldPreset = WorldPresetIds.FlatBuilder,
+                    TextureSet = "ai_simplified",
                 });
 
                 WorldLoadResult result = service.Load(path);
@@ -111,6 +112,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(result.Data.GameMode, Is.EqualTo("creative"));
                 Assert.That(result.Data.Difficulty, Is.EqualTo("hard"));
                 Assert.That(result.Data.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
+                Assert.That(result.Data.TextureSet, Is.EqualTo("ai_simplified"));
                 Assert.That(result.CreateInventory(itemRegistry).GetSlot(2), Is.EqualTo(new ItemStack(ItemId.Glowwick, 3)));
                 Assert.That(result.Data.PlayerInventory.SelectedHotbarSlotIndex, Is.EqualTo(2));
             }
@@ -121,7 +123,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SaveThenLoadPreservesDifficultyAndWorldPreset()
+        public void SaveThenLoadPreservesDifficultyWorldPresetAndTextureSet()
         {
             string path = CreateTempSavePath();
             VoxelWorld world = CreateDefaultWorld();
@@ -129,12 +131,19 @@ namespace Blockiverse.Tests.EditMode
             try
             {
                 var service = new WorldSaveService();
-                service.Save(path, "settings-test", world, difficulty: "hard", worldPreset: WorldPresetIds.FlatBuilder);
+                service.Save(
+                    path,
+                    "settings-test",
+                    world,
+                    difficulty: "hard",
+                    worldPreset: WorldPresetIds.FlatBuilder,
+                    textureSet: "ai");
 
                 WorldLoadResult result = service.Load(path);
                 Assert.That(result.Success, Is.True, result.Error);
                 Assert.That(result.Data.Difficulty, Is.EqualTo("hard"));
                 Assert.That(result.Data.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
+                Assert.That(result.Data.TextureSet, Is.EqualTo("ai"));
             }
             finally
             {

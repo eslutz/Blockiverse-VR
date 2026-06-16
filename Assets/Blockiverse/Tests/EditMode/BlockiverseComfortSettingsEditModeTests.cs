@@ -21,20 +21,21 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void DefaultVignetteStrengthProducesProtectiveAperture()
+        public void DefaultVignetteStartsOpenForReadableTitleMenu()
         {
             BlockiverseComfortSettings settings = CreateSettings();
 
-            Assert.That(settings.VignetteEnabled, Is.True);
-            Assert.That(settings.VignetteStrength, Is.EqualTo(1.0f));
+            Assert.That(settings.VignetteEnabled, Is.False);
+            Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f));
             Assert.That(settings.SnapTurnAroundEnabled, Is.True);
-            Assert.That(settings.VignetteAperture, Is.EqualTo(0.6f).Within(0.001f));
+            Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f));
         }
 
         [Test]
         public void VignetteStrengthNarrowsApertureAsSliderIncreases()
         {
             BlockiverseComfortSettings settings = CreateSettings();
+            settings.VignetteEnabled = true;
 
             settings.VignetteStrength = 0.0f;
             Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f));

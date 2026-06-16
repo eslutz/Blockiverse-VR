@@ -81,6 +81,7 @@ namespace Blockiverse.Persistence
         public IReadOnlyList<SavedContainer> Containers { get; set; }
         public string Difficulty { get; set; }
         public string WorldPreset { get; set; } = WorldPresetIds.SurvivalTerrain;
+        public string TextureSet { get; set; } = BlockTextureSetIds.Default;
         public WorldSaveExtras Extras { get; set; }
         public IReadOnlyList<WorldSavePlayerInventory> AdditionalPlayerInventories { get; set; }
     }
@@ -147,6 +148,7 @@ namespace Blockiverse.Persistence
         public long WorldTimeTicks;
         public string GameMode;
         public string WorldPreset;
+        public string TextureSet;
         public string Difficulty;
         public SavedContainer[] Containers;
         public SavedMultiplayerPlayerInventory[] MultiplayerPlayerInventories;
@@ -259,6 +261,7 @@ namespace Blockiverse.Persistence
                 long worldTimeTicks,
                 string difficulty,
                 string worldPreset,
+                string textureSet,
                 bool hasSpawnPosition,
                 BlockPosition spawnPosition,
                 SavedBlockDelta[] changedBlocks,
@@ -281,6 +284,7 @@ namespace Blockiverse.Persistence
                 WorldTimeTicks = worldTimeTicks;
                 Difficulty = difficulty;
                 WorldPreset = worldPreset;
+                TextureSet = textureSet;
                 HasSpawnPosition = hasSpawnPosition;
                 SpawnPosition = spawnPosition;
                 ChangedBlocks = changedBlocks ?? Array.Empty<SavedBlockDelta>();
@@ -304,6 +308,7 @@ namespace Blockiverse.Persistence
             public long WorldTimeTicks { get; }
             public string Difficulty { get; }
             public string WorldPreset { get; }
+            public string TextureSet { get; }
             public bool HasSpawnPosition { get; }
             public BlockPosition SpawnPosition { get; }
             public SavedBlockDelta[] ChangedBlocks { get; }
@@ -322,7 +327,7 @@ namespace Blockiverse.Persistence
 
         // ── Save ─────────────────────────────────────────────────────────────
 
-        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null)
+        public void Save(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null, string textureSet = BlockTextureSetIds.Default)
         {
             Save(new WorldSaveRequest(path, worldName, world)
             {
@@ -332,11 +337,12 @@ namespace Blockiverse.Persistence
                 Containers = containers,
                 Difficulty = difficulty,
                 WorldPreset = worldPreset,
+                TextureSet = textureSet,
                 Extras = extras,
             });
         }
 
-        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null, IReadOnlyList<WorldSavePlayerInventory> additionalPlayerInventories = null)
+        public void Save(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null, IReadOnlyList<WorldSavePlayerInventory> additionalPlayerInventories = null, string textureSet = BlockTextureSetIds.Default)
         {
             Save(new WorldSaveRequest(path, worldName, world)
             {
@@ -349,6 +355,7 @@ namespace Blockiverse.Persistence
                 Containers = containers,
                 Difficulty = difficulty,
                 WorldPreset = worldPreset,
+                TextureSet = textureSet,
                 Extras = extras,
                 AdditionalPlayerInventories = additionalPlayerInventories,
             });
@@ -359,7 +366,7 @@ namespace Blockiverse.Persistence
             Save(CaptureSnapshot(request));
         }
 
-        public WorldSaveSnapshot CaptureSnapshot(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null)
+        public WorldSaveSnapshot CaptureSnapshot(string path, string worldName, VoxelWorld world, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null, string textureSet = BlockTextureSetIds.Default)
         {
             return CaptureSnapshot(new WorldSaveRequest(path, worldName, world)
             {
@@ -369,11 +376,12 @@ namespace Blockiverse.Persistence
                 Containers = containers,
                 Difficulty = difficulty,
                 WorldPreset = worldPreset,
+                TextureSet = textureSet,
                 Extras = extras,
             });
         }
 
-        public WorldSaveSnapshot CaptureSnapshot(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null, IReadOnlyList<WorldSavePlayerInventory> additionalPlayerInventories = null)
+        public WorldSaveSnapshot CaptureSnapshot(string path, string worldName, VoxelWorld world, Inventory inventory, int selectedHotbarSlotIndex = 0, Inventory survivalSnapshot = null, string weatherState = null, string gameMode = "survival", long worldTimeTicks = 0, IReadOnlyList<SavedContainer> containers = null, string difficulty = null, string worldPreset = WorldPresetIds.SurvivalTerrain, WorldSaveExtras extras = null, IReadOnlyList<WorldSavePlayerInventory> additionalPlayerInventories = null, string textureSet = BlockTextureSetIds.Default)
         {
             return CaptureSnapshot(new WorldSaveRequest(path, worldName, world)
             {
@@ -386,6 +394,7 @@ namespace Blockiverse.Persistence
                 Containers = containers,
                 Difficulty = difficulty,
                 WorldPreset = worldPreset,
+                TextureSet = textureSet,
                 Extras = extras,
                 AdditionalPlayerInventories = additionalPlayerInventories,
             });
@@ -407,6 +416,7 @@ namespace Blockiverse.Persistence
             IReadOnlyList<SavedContainer> containers = request.Containers;
             string difficulty = request.Difficulty;
             string worldPreset = request.WorldPreset;
+            string textureSet = request.TextureSet;
             WorldSaveExtras extras = request.Extras;
             IReadOnlyList<WorldSavePlayerInventory> additionalPlayerInventories = request.AdditionalPlayerInventories;
 
@@ -441,6 +451,7 @@ namespace Blockiverse.Persistence
                 worldTimeTicks,
                 difficulty ?? string.Empty,
                 WorldPresetIds.Normalize(worldPreset),
+                BlockTextureSetIds.Normalize(textureSet),
                 hasSpawnPosition,
                 spawnPosition,
                 BuildChangedBlockDeltas(world, blockRegistry),
@@ -479,6 +490,7 @@ namespace Blockiverse.Persistence
                 Depth = snapshot.Depth,
                 ChunkSize = snapshot.ChunkSize,
                 WorldPreset = snapshot.WorldPreset,
+                TextureSet = snapshot.TextureSet,
                 GameMode = snapshot.GameMode,
                 Difficulty = snapshot.Difficulty,
                 CreatedAtUtc = createdAt,
@@ -652,6 +664,7 @@ namespace Blockiverse.Persistence
                 WeatherRngState = environment?.WeatherRngState ?? 1u,
                 GameMode = !string.IsNullOrEmpty(manifest.GameMode) ? manifest.GameMode : "survival",
                 WorldPreset = WorldPresetIds.Normalize(manifest.WorldPreset),
+                TextureSet = BlockTextureSetIds.Normalize(manifest.TextureSet),
                 Difficulty = manifest.Difficulty ?? string.Empty,
                 Containers = containers,
                 MultiplayerPlayerInventories = multiplayerPlayerInventories,

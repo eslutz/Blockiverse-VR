@@ -19,7 +19,7 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
-        public void MissingMetaAvatarUsesFallbackProxy()
+        public void MissingMetaAvatarUsesFallbackProxyAnchorsWithoutRenderingFirstPersonGeometry()
         {
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
 
@@ -31,7 +31,62 @@ namespace Blockiverse.Tests.Networking.EditMode
             Assert.That(avatarRig.HeadAnchor, Is.Not.Null);
             Assert.That(avatarRig.LeftHandAnchor, Is.Not.Null);
             Assert.That(avatarRig.RightHandAnchor, Is.Not.Null);
-            Assert.That(avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(), Has.Length.GreaterThanOrEqualTo(4));
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            Assert.That(renderers, Has.Length.GreaterThanOrEqualTo(4));
+            Assert.That(renderers, Has.All.Matches<Renderer>(renderer => !renderer.enabled));
+        }
+
+        [Test]
+        public void FirstPersonFallbackProxyRendersHandsOnly()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            Assert.That(avatarRig.IsUsingFallbackProxy, Is.True);
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Head" && renderer.enabled));
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Body" && renderer.enabled));
+        }
+
+        [Test]
+        public void FirstPersonFallbackHandsCanBeSuppressedWhileSystemKeyboardIsVisible()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            MethodInfo suppressMethod = typeof(BlockiverseNetworkAvatarRig).GetMethod(
+                "SetFirstPersonFallbackVisualsSuppressed",
+                BindingFlags.Instance | BindingFlags.Public);
+
+            Assert.That(suppressMethod, Is.Not.Null,
+                "The local fallback hand proxy needs an explicit suppression switch for system keyboard entry.");
+
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            suppressMethod.Invoke(avatarRig, new object[] { true });
+
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+            Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.True,
+                "Keyboard suppression should hide local hand renderers without disabling the fallback proxy object.");
+
+            suppressMethod.Invoke(avatarRig, new object[] { false });
+
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+            Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
         }
 
         [Test]

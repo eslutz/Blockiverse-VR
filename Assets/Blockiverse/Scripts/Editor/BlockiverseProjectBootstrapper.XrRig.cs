@@ -74,7 +74,7 @@ namespace Blockiverse.Editor
             camera.farClipPlane = 500.0f;
             cameraObject.AddComponent<AudioListener>();
             TrackedPoseDriver poseDriver = cameraObject.AddComponent<TrackedPoseDriver>();
-            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            ConfigureHeadPoseDriverReferenceActions(poseDriver);
 
             XROrigin origin = rig.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
@@ -144,6 +144,11 @@ namespace Blockiverse.Editor
             if (origin.Camera == null)
                 origin.Camera = cameraOffset.GetComponentInChildren<Camera>(true);
 
+            RemoveStaleChild(cameraOffset, LeftAimPoseName);
+            RemoveStaleChild(cameraOffset, RightAimPoseName);
+            RemoveStaleChild(cameraOffset, LeftRayOriginName);
+            RemoveStaleChild(cameraOffset, RightRayOriginName);
+
             Camera xrCamera = origin.Camera;
             TrackedPoseDriver poseDriver = xrCamera != null
                 ? xrCamera.GetComponent<TrackedPoseDriver>()
@@ -152,7 +157,7 @@ namespace Blockiverse.Editor
             if (poseDriver == null && xrCamera != null)
                 poseDriver = xrCamera.gameObject.AddComponent<TrackedPoseDriver>();
 
-            BlockiverseInputRig.ConfigureHeadPoseDriverActions(poseDriver);
+            ConfigureHeadPoseDriverReferenceActions(poseDriver);
             inputRig.ConfigureHeadPoseDriver(poseDriver);
             origin.RequestedTrackingOriginMode = XROrigin.TrackingOriginMode.Floor;
             EnsureXrRigLocomotion(rig, inputRig, origin);
@@ -222,10 +227,12 @@ namespace Blockiverse.Editor
             BlockiverseInputRig inputRig,
             BlockiverseControllerRole role)
         {
+            controller.layer = 0;
+
             // Native controller tracking: a TrackedPoseDriver drives the controller transform in
             // Update + BeforeRender, matching the head and removing the old hand-written pose.
             TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(controller);
-            BlockiverseInputRig.ConfigureControllerPoseDriverActions(poseDriver, role);
+            ConfigureControllerPoseDriverReferenceActions(poseDriver, role);
             poseDriver.enabled = true;
 
             BlockiverseControllerAnchor anchor = EnsureComponent<BlockiverseControllerAnchor>(controller);
@@ -234,116 +241,89 @@ namespace Blockiverse.Editor
             BlockiverseControllerHaptics haptics = EnsureComponent<BlockiverseControllerHaptics>(controller);
             haptics.Configure(role);
 
-            EnsureControllerInteractors(controller, inputRig, role);
+            Transform rayOrigin = EnsureControllerRayOrigin(controller.transform);
+            EnsureControllerInteractors(controller, inputRig, role, rayOrigin);
 
             EditorUtility.SetDirty(poseDriver);
             EditorUtility.SetDirty(anchor);
             EditorUtility.SetDirty(haptics);
         }
 
-        // Builds the native interaction (UI + block targeting, right hand only) and teleport rays
-        // on each controller, plus the mediator that switches between them while the locomotion
-        // mode is Teleport and thumbstick-forward is pushed.
+        static Transform EnsureControllerRayOrigin(Transform controller)
+        {
+            GameObject rayOrigin = EnsureChild(controller, ControllerRayOriginName);
+            rayOrigin.layer = controller != null ? controller.gameObject.layer : 0;
+            rayOrigin.transform.SetLocalPositionAndRotation(
+                Vector3.zero,
+                Quaternion.Euler(90.0f, 0.0f, 0.0f));
+            EditorUtility.SetDirty(rayOrigin);
+            return rayOrigin.transform;
+        }
+
+        // Builds native interaction (UI + block targeting) and teleport rays on each controller.
+        // The mediator enables only the active tool-hand interaction ray, while either controller
+        // can own teleport when Teleport mode and thumbstick-forward are active.
         static XRRayInteractor EnsureControllerInteractors(
             GameObject controller,
             BlockiverseInputRig inputRig,
-            BlockiverseControllerRole role)
+            BlockiverseControllerRole role,
+            Transform rayOrigin)
         {
             Material pointerMaterial = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.PointerLineMaterialPath);
             BlockiverseComfortSettings settings = inputRig != null ? inputRig.GetComponent<BlockiverseComfortSettings>() : null;
             string mapName = role == BlockiverseControllerRole.Left
                 ? BlockiverseInputActionNames.LeftHandMap
                 : BlockiverseInputActionNames.RightHandMap;
-            Transform aimPose = EnsureControllerAimPose(controller.transform.parent, role);
+            rayOrigin ??= controller.transform;
 
-            XRRayInteractor interactionRay = null;
+            GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
+            interactionRayObject.layer = controller.layer;
+            interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            interactionRayObject.SetActive(true);
 
-            // Only the right controller carries the UI/block interaction ray.
-            if (role == BlockiverseControllerRole.Right)
-            {
-                GameObject interactionRayObject = EnsureChild(controller.transform, InteractionRayName);
-                interactionRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-                interactionRayObject.SetActive(true);
-
-                interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
-                interactionRay.lineType = XRRayInteractor.LineType.StraightLine;
-                interactionRay.enableUIInteraction = true;
-                interactionRay.blockUIOnInteractableSelection = false;
-                interactionRay.maxRaycastDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;
-                interactionRay.manipulateAttachTransform = false;
-                interactionRay.rayOriginTransform = aimPose;
-                // Empty interaction layers: the ray never selects 3D interactables (incl. the chunk
-                // TeleportationArea). UI still works (separate path) and block targeting uses
-                // TryGetCurrent3DRaycastHit on this raycast mask.
-                interactionRay.interactionLayers = 0;
-                interactionRay.raycastMask = GetInteractionLayerMask();
-                interactionRay.uiPressInput = MakeButtonReader("UI Press", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.UiPress));
-                interactionRay.uiScrollInput = MakeVector2Reader("UI Scroll", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.UiScroll));
-                ConfigureLineVisual(interactionRayObject, pointerMaterial);
-                EditorUtility.SetDirty(interactionRay);
-            }
+            XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
+            BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetInteractionLayerMask());
+            interactionRay.selectInput = MakeUnusedButtonReader("Select");
+            interactionRay.activateInput = MakeUnusedButtonReader("Activate");
+            interactionRay.uiPressInput = MakeButtonReader(
+                "UI Press",
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.UiPress));
+            interactionRay.uiScrollInput = MakeVector2Reader(
+                "UI Scroll",
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
+            ConfigureLineVisual(interactionRayObject, pointerMaterial);
+            EditorUtility.SetDirty(interactionRay);
 
             // Both controllers get a teleport ray; the mediator activates it only in Teleport mode.
             GameObject teleportRayObject = EnsureChild(controller.transform, TeleportRayName);
+            teleportRayObject.layer = controller.layer;
             teleportRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
             XRRayInteractor teleportRay = EnsureComponent<XRRayInteractor>(teleportRayObject);
-            teleportRay.lineType = XRRayInteractor.LineType.ProjectileCurve;
-            teleportRay.enableUIInteraction = false;
-            teleportRay.manipulateAttachTransform = false;
-            teleportRay.rayOriginTransform = aimPose;
-            teleportRay.raycastMask = GetInteractionLayerMask();
+            BlockiverseRayDefaults.ConfigureTeleportRay(teleportRay, rayOrigin, GetInteractionLayerMask());
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
-            teleportRay.selectInput = MakeButtonReader("Teleport Select", FindRigAction(inputRig, mapName, BlockiverseInputActionNames.TeleportSelect));
+            teleportRay.selectInput = MakeButtonReader(
+                "Teleport Select",
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.TeleportSelect));
+            teleportRay.activateInput = MakeUnusedButtonReader("Activate");
+            teleportRay.uiPressInput = MakeUnusedButtonReader("UI Press");
+            teleportRay.uiScrollInput = MakeVector2Reader("UI Scroll", null);
             ConfigureLineVisual(teleportRayObject, pointerMaterial);
             teleportRayObject.SetActive(false);
             EditorUtility.SetDirty(teleportRay);
 
             BlockiverseLocomotionRayMediator mediator = EnsureComponent<BlockiverseLocomotionRayMediator>(controller);
-            mediator.Configure(inputRig, settings, interactionRay, teleportRay, role);
+            mediator.Configure(inputRig, settings, interactionRay, teleportRay, role, controller.GetComponent<BlockiverseControllerAnchor>());
             EditorUtility.SetDirty(mediator);
 
             return interactionRay;
         }
 
-        static Transform EnsureControllerAimPose(Transform cameraOffset, BlockiverseControllerRole role)
-        {
-            string aimPoseName = role == BlockiverseControllerRole.Left ? LeftAimPoseName : RightAimPoseName;
-            Transform aimPose = cameraOffset != null ? cameraOffset.Find(aimPoseName) : null;
-
-            if (aimPose == null)
-            {
-                GameObject aimPoseObject = EnsureChild(cameraOffset, aimPoseName);
-                aimPose = aimPoseObject.transform;
-            }
-
-            aimPose.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
-
-            TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(aimPose.gameObject);
-            BlockiverseInputRig.ConfigureControllerAimPoseDriverActions(poseDriver, role);
-            poseDriver.enabled = true;
-            EditorUtility.SetDirty(poseDriver);
-            EditorUtility.SetDirty(aimPose.gameObject);
-            return aimPose;
-        }
-
         static void ConfigureLineVisual(GameObject rayObject, Material pointerMaterial)
         {
             LineRenderer lineRenderer = EnsureComponent<LineRenderer>(rayObject);
-            lineRenderer.useWorldSpace = true;
-            lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            lineRenderer.receiveShadows = false;
-
-            if (pointerMaterial != null)
-                lineRenderer.sharedMaterial = pointerMaterial;
-
-            lineRenderer.startColor = PointerLineColor;
-            lineRenderer.endColor = PointerLineColor;
-
             XRInteractorLineVisual lineVisual = EnsureComponent<XRInteractorLineVisual>(rayObject);
-            lineVisual.lineWidth = 0.01f;
-            lineVisual.overrideInteractorLineLength = false;
-            lineVisual.stopLineAtFirstRaycastHit = true;
+            BlockiverseRayDefaults.ConfigureLineVisual(lineRenderer, lineVisual, pointerMaterial, PointerLineColor);
 
             EditorUtility.SetDirty(lineRenderer);
             EditorUtility.SetDirty(lineVisual);
@@ -352,26 +332,55 @@ namespace Blockiverse.Editor
         // Use InputActionReference mode so the bootstrapper-assigned reader does not take ownership
         // of the action's enable/disable lifecycle. The rig enables/disables the whole
         // InputActionAsset, and InputAction mode would fight that.
-        static XRInputButtonReader MakeButtonReader(string name, InputAction action)
+        static void ConfigureHeadPoseDriverReferenceActions(TrackedPoseDriver poseDriver)
         {
+            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
+                poseDriver,
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Position),
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.Rotation),
+                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState));
+        }
+
+        static void ConfigureControllerPoseDriverReferenceActions(TrackedPoseDriver poseDriver, BlockiverseControllerRole role)
+        {
+            string mapName = role == BlockiverseControllerRole.Left
+                ? BlockiverseInputActionNames.LeftHandMap
+                : BlockiverseInputActionNames.RightHandMap;
+
+            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
+                poseDriver,
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.Position),
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.Rotation),
+                LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
+        }
+
+        static XRInputButtonReader MakeButtonReader(string name, InputActionReference reference)
+        {
+            if (reference == null)
+                return MakeUnusedButtonReader(name);
+
             var reader = new XRInputButtonReader(name,
                 inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference);
 
-            if (action != null)
-                reader.inputActionReferencePerformed = InputActionReference.Create(action);
-
+            reader.inputActionReferencePerformed = reference;
             return reader;
         }
 
-        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputAction action)
+        static XRInputButtonReader MakeUnusedButtonReader(string name)
         {
-            if (action == null)
+            return new XRInputButtonReader(name,
+                inputSourceMode: XRInputButtonReader.InputSourceMode.Unused);
+        }
+
+        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputActionReference reference)
+        {
+            if (reference == null)
                 return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
 
             return new XRInputValueReader<Vector2>(name,
                 XRInputValueReader.InputSourceMode.InputActionReference)
             {
-                inputActionReference = InputActionReference.Create(action)
+                inputActionReference = reference
             };
         }
 
@@ -392,6 +401,9 @@ namespace Blockiverse.Editor
             // This component is intentionally unspawned on the local XR rig; the spawned network
             // player prefab owns the NetworkObject used for multiplayer avatar relay.
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
+            BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
+                EnsureComponent<BlockiverseKeyboardHandVisibilityController>(rig);
+            keyboardHandVisibility.Configure(avatarRig);
             MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(rig);
             BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(rig);
             Transform cameraOffset = rig.transform.Find("Camera Offset");
@@ -402,6 +414,7 @@ namespace Blockiverse.Editor
             avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
             avatarRig.SetMetaAvatarAvailable(false);
             avatarRig.ConfigureFallbackProxy(true);
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
             avatarPresenter.Configure(
                 avatarProvider,
                 avatarRig,
@@ -410,6 +423,7 @@ namespace Blockiverse.Editor
                 rightHand,
                 MetaAvatarPresentationMode.LocalFirstPerson);
             EditorUtility.SetDirty(avatarRig);
+            EditorUtility.SetDirty(keyboardHandVisibility);
             EditorUtility.SetDirty(avatarProvider);
             EditorUtility.SetDirty(avatarPresenter);
         }
@@ -426,9 +440,10 @@ namespace Blockiverse.Editor
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
             GameObject menuObject = EnsureRectChildMigrated(cameraOffset, leftController, ComfortMenuName);
+            const float comfortMenuScale = 0.00105f;
             menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
             menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
-            menuObject.transform.localScale = Vector3.one * 0.0013f;
+            menuObject.transform.localScale = Vector3.one * comfortMenuScale;
 
             RectTransform menuRect = menuObject.GetComponent<RectTransform>();
             menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ComfortMenuSize.x);
@@ -452,6 +467,7 @@ namespace Blockiverse.Editor
             panelRect.anchorMax = Vector2.one;
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
+            RemoveStaleChild(panelObject.transform, "Dominant Hand Only Toggle");
             Image panelImage = EnsureComponent<Image>(panelObject);
             Sprite comfortPanelSprite = GetRoundedSprite();
             if (comfortPanelSprite != null)
@@ -471,114 +487,127 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 1.0f),
                 new Vector2(0.0f, 1.0f),
                 new Vector2(32.0f, -36.0f),
-                new Vector2(460.0f, 56.0f));
+                TitleSizeWithClose(ComfortMenuSize.x, 56.0f));
 
             EnsureButtonControl(
                 panelObject.transform,
                 "Close Button",
                 "Close",
-                new Vector2(344.0f, -36.0f),
-                new Vector2(144.0f, 48.0f));
+                TopRightClosePosition(ComfortMenuSize.x),
+                MenuCloseButtonSize);
 
             // --- Movement Mode (Glide / Teleport) ---
             EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -90.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(32.0f, -94.0f), new Vector2(300.0f, 36.0f));
 
             Toggle glideToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Glide Toggle",
                 "Glide Motion",
                 settings == null || settings.LocomotionMode == BlockiverseLocomotionMode.Glide,
-                new Vector2(32.0f, -126.0f));
+                new Vector2(32.0f, -134.0f));
 
             Toggle teleportToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Teleport Toggle",
                 "Teleport",
                 settings != null && settings.LocomotionMode == BlockiverseLocomotionMode.Teleport,
-                new Vector2(32.0f, -170.0f));
+                new Vector2(32.0f, -182.0f));
 
             Slider moveSpeedSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Move Speed Slider",
                 "Move Speed",
                 settings != null ? settings.ContinuousMoveSpeed : 1.8f,
-                new Vector2(32.0f, -222.0f),
+                new Vector2(32.0f, -246.0f),
                 minValue: 0.5f,
                 maxValue: 4.0f);
 
             // --- Turning ---
+            EnsureLabel(panelObject.transform, "Turning Label", "Turning", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(532.0f, -94.0f), new Vector2(300.0f, 36.0f));
+
             Toggle smoothTurnToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Smooth Turn Toggle",
                 "Smooth Turn",
                 settings != null && settings.SmoothTurnEnabled,
-                new Vector2(32.0f, -324.0f));
+                new Vector2(532.0f, -134.0f));
 
             Slider snapTurnSlider = EnsureSnapTurnSlider(
                 panelObject.transform,
                 settings != null ? settings.SnapTurnDegrees : 45.0f,
-                new Vector2(32.0f, -370.0f));
+                new Vector2(532.0f, -198.0f));
 
             Toggle turnAroundToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Turn Around Toggle",
                 "Turn Around",
                 settings == null || settings.SnapTurnAroundEnabled,
-                new Vector2(32.0f, -416.0f));
+                new Vector2(532.0f, -300.0f));
 
             Slider smoothTurnSpeedSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Smooth Turn Speed Slider",
                 "Smooth Turn Speed",
                 settings != null ? settings.ContinuousTurnSpeed : 60.0f,
-                new Vector2(32.0f, -506.0f),
+                new Vector2(532.0f, -364.0f),
                 minValue: 30.0f,
                 maxValue: 180.0f);
 
             // --- Hand Roles ---
+            EnsureLabel(panelObject.transform, "Control Options Label", "Control Options", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(32.0f, -380.0f), new Vector2(300.0f, 36.0f));
+
             Toggle leftHandToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Left Hand Toggle",
                 "Left-Handed",
                 settings != null && settings.DominantHand == BlockiverseControllerRole.Left,
-                new Vector2(32.0f, -610.0f));
-
-            Toggle dominantHandOnlyToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Dominant Hand Only Toggle",
-                "One-Handed Controls",
-                settings != null && settings.DominantHandOnlyControls,
-                new Vector2(32.0f, -654.0f));
+                new Vector2(32.0f, -420.0f));
 
             Toggle toggleToMineToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Toggle To Mine Toggle",
                 "Toggle To Mine",
                 settings != null && settings.ToggleToMineEnabled,
-                new Vector2(32.0f, -698.0f));
+                new Vector2(32.0f, -468.0f));
 
             // --- Vignette ---
+            EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(532.0f, -500.0f), new Vector2(300.0f, 36.0f));
+
             Toggle vignetteToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Vignette Toggle",
                 "Motion Vignette",
-                settings == null || settings.VignetteEnabled,
-                new Vector2(32.0f, -762.0f));
+                settings != null && settings.VignetteEnabled,
+                new Vector2(532.0f, -540.0f));
 
             Slider vignetteSlider = EnsureVignetteSlider(
                 panelObject.transform,
-                settings != null ? settings.VignetteStrength : 1.0f,
-                new Vector2(32.0f, -806.0f));
+                settings != null ? settings.VignetteStrength : 0.0f,
+                new Vector2(532.0f, -604.0f));
+
+            EnsureLabel(panelObject.transform, "Player View Label", "Player View", 22,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
+                new Vector2(32.0f, -590.0f), new Vector2(300.0f, 36.0f));
 
             Slider eyeHeightSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Eye Height Slider",
                 "Eye Height",
                 settings != null ? settings.StandingEyeHeight : 1.6f,
-                new Vector2(32.0f, -902.0f),
+                new Vector2(32.0f, -632.0f),
                 minValue: 1.0f,
                 maxValue: 2.2f);
 
@@ -587,7 +616,7 @@ namespace Blockiverse.Editor
                 "UI Scale Slider",
                 "UI Scale",
                 settings != null ? settings.UiScale : 1.0f,
-                new Vector2(32.0f, -994.0f),
+                new Vector2(532.0f, -724.0f),
                 minValue: 0.85f,
                 maxValue: 1.35f);
 
@@ -596,7 +625,7 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Height Reset Button",
                 "Reset Height",
-                new Vector2(32.0f, -1106.0f));
+                new Vector2(32.0f, -742.0f));
 
             if (heightReset != null)
             {
@@ -619,14 +648,13 @@ namespace Blockiverse.Editor
                 vignetteToggle,
                 vignetteSlider,
                 leftHandToggle,
-                dominantHandOnlyToggle,
                 toggleToMineToggle,
                 eyeHeightSlider,
                 moveSpeedSlider,
                 smoothTurnSpeedSlider,
                 uiScaleSlider);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
-            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, 0.0013f);
+            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
@@ -686,6 +714,7 @@ namespace Blockiverse.Editor
 
             BlockiverseComfortSettings vignetteSettings = rig.GetComponent<BlockiverseComfortSettings>();
             float aperture = vignetteSettings != null ? vignetteSettings.VignetteAperture : 0.85f;
+            MeshRenderer vignetteRenderer = controller.GetComponent<MeshRenderer>();
 
             // Default parameters: aperture 0.85 is subtler than the XRI default (0.7).
             // The comfort menu's vignette strength slider adjusts this at runtime.
@@ -697,19 +726,23 @@ namespace Blockiverse.Editor
                 easeOutTime = 0.3f,
             };
 
-            // Ease the comfort vignette in/out during locomotion that causes vection or a viewpoint
-            // jump: continuous move, continuous (smooth) turn, teleport, gravity-driven falls, and
-            // physics jump arcs. Snap turn is itself a discrete comfort option, so it is intentionally
-            // excluded to avoid a vignette flicker on every snap.
+            // Ease the comfort vignette in/out only for intentional player locomotion that causes
+            // vection or a viewpoint jump. Gravity and jump providers can report active while the
+            // rig settles onto terrain during startup, which would close the menu view while idle.
+            // Snap turn is itself a discrete comfort option, so it is intentionally excluded too.
             controller.locomotionVignetteProviders.Clear();
             AddVignetteProvider(controller, rig.GetComponent<ContinuousMoveProvider>());
             AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
             AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
-            AddVignetteProvider(controller, rig.GetComponent<GravityProvider>());
-            AddVignetteProvider(controller, rig.GetComponent<JumpProvider>());
 
             BlockiverseVignetteSettingsDriver driver = EnsureComponent<BlockiverseVignetteSettingsDriver>(controller.gameObject);
             driver.Configure(vignetteSettings);
+
+            if (vignetteRenderer != null)
+            {
+                vignetteRenderer.enabled = vignetteSettings != null && vignetteSettings.VignetteEnabled;
+                EditorUtility.SetDirty(vignetteRenderer);
+            }
 
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(driver);
@@ -747,10 +780,24 @@ namespace Blockiverse.Editor
                 GameObjectUtility.RemoveMonoBehavioursWithMissingScript(child.gameObject);
         }
 
+        static void RemoveStaleChild(Transform parent, string childName)
+        {
+            Transform stale = parent != null ? parent.Find(childName) : null;
+            if (stale != null)
+                UnityEngine.Object.DestroyImmediate(stale.gameObject);
+        }
+
         static XRRayInteractor FindInteractionRay(GameObject rig)
         {
-            Transform rayTransform = rig.transform.Find("Camera Offset/Right Controller/" + InteractionRayName);
-            return rayTransform != null ? rayTransform.GetComponent<XRRayInteractor>() : null;
+            foreach (string controllerName in new[] { "Right Controller", "Left Controller" })
+            {
+                Transform rayTransform = rig.transform.Find($"Camera Offset/{controllerName}/{InteractionRayName}");
+                XRRayInteractor ray = rayTransform != null ? rayTransform.GetComponent<XRRayInteractor>() : null;
+                if (ray != null)
+                    return ray;
+            }
+
+            return null;
         }
 
         static void EnsureXrRigCreativeInputBridge(GameObject rig, BlockiverseInputRig inputRig)
@@ -781,8 +828,7 @@ namespace Blockiverse.Editor
             audioCuePlayer.ConfigureFeedbackSettings(feedbackSettings);
 
             BlockiverseVfxPool vfxPool = EnsureComponent<BlockiverseVfxPool>(rig);
-            vfxPool.ConfigureParticleMaterial(
-                EnsureMaterial(BlockiverseProject.VfxParticleMaterialPath, Color.white, preferUnlit: true));
+            vfxPool.ConfigureParticleMaterial(EnsureTransparentVfxParticleMaterial());
             vfxPool.ConfigureParticleSprites(
                 GetVfxSprite("block_dust_particle"),
                 GetVfxSprite("block_puff_particle"),
@@ -823,6 +869,13 @@ namespace Blockiverse.Editor
             // Comfort + feedback settings persist across launches (PlayerPrefs).
             BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
             EditorUtility.SetDirty(settingsPersistence);
+            BlockiverseDominantHandResolver dominantHandResolver = EnsureComponent<BlockiverseDominantHandResolver>(rig);
+            dominantHandResolver.Configure(rig.GetComponent<BlockiverseComfortSettings>());
+            EditorUtility.SetDirty(dominantHandResolver);
+
+            BlockiverseVerboseTraceController verboseTrace = EnsureComponent<BlockiverseVerboseTraceController>(rig);
+            verboseTrace.Configure(inputRig, null, controller, audioCuePlayer, vfxCuePlayer, musicController, interactionHaptics);
+            EditorUtility.SetDirty(verboseTrace);
 
             inputRig?.ConfigureTeleportFeedback(audioCuePlayer);
             ConfigurePanelFeedbackReferences(rig, audioCuePlayer, interactionHaptics);
@@ -834,6 +887,7 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(interactionHaptics);
             EditorUtility.SetDirty(survivalFeedback);
             EditorUtility.SetDirty(weatherFeedback);
+            EditorUtility.SetDirty(verboseTrace);
 
             if (inputRig != null)
                 EditorUtility.SetDirty(inputRig);

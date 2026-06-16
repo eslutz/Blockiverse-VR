@@ -22,7 +22,8 @@
 
 | Tag Family | Purpose | Example |
 |---|---|---|
-| `v<semver>` | Player-facing release tags cut from `main`. | `v0.1.0` |
+| `v<semver>` | Production release tags cut from `main`. | `v0.1.0` |
+| `v<semver>-alpha.*`, `v<semver>-beta.*`, `v<semver>-rc.*` | Player-facing prerelease channel tags created by GitHub Actions. Alpha tags may point to same-repository pull request commits; beta and RC tags must point to `main` history. | `v0.1.0-alpha.pr315.42.1`, `v0.1.0-beta.run12.1`, `v0.1.0-rc.1` |
 | `kg/YYYYMMDD-HHMM-<slug>` | Known-good engineering checkpoint. | `kg/20260606-1430-ruleset-world-docs` |
 | `checkpoint/<slug>` | Optional local-only temporary branch checkpoint. Do not push unless explicitly needed. | `checkpoint/worldgen-spike` |
 

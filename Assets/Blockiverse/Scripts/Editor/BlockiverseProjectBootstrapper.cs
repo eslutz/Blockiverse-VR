@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
@@ -46,6 +47,10 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
+using Unity.XR.CompositionLayers;
+using Unity.XR.CompositionLayers.Extensions;
+using Unity.XR.CompositionLayers.Layers;
+using Unity.XR.CompositionLayers.UIInteraction;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -63,6 +68,7 @@ namespace Blockiverse.Editor
             "Assets/Blockiverse/Scenes",
             "Assets/Blockiverse/Scripts",
             "Assets/Blockiverse/Settings",
+            BlockiverseProject.InputActionReferencesFolderPath,
             "Assets/Blockiverse/Tests/EditMode",
             "Assets/Blockiverse/Tests/PlayMode"
         };
@@ -73,6 +79,7 @@ namespace Blockiverse.Editor
             "com.unity.openxr.feature.input.oculustouch",
             "com.unity.openxr.feature.input.metaquestplus",
             "com.unity.openxr.feature.input.metaquestpro",
+            "com.unity.openxr.feature.compositionlayers",
             "com.meta.openxr.feature.metaxr",
             "com.meta.openxr.feature.foveation"
         };
@@ -118,17 +125,27 @@ namespace Blockiverse.Editor
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionRayName = "Interaction Ray";
         const string TeleportRayName = "Teleport Ray";
+        const string ControllerRayOriginName = "Ray Origin";
         const string LeftAimPoseName = "Left Aim Pose";
         const string RightAimPoseName = "Right Aim Pose";
+        const string LeftRayOriginName = "Left Ray Origin";
+        const string RightRayOriginName = "Right Ray Origin";
         const string TunnelingVignetteName = "Tunneling Vignette";
         const string TunnelingVignettePrefabPath = "Assets/Blockiverse/VR/TunnelingVignette/TunnelingVignette.prefab";
         const string StickDeadzoneProcessor = "stickDeadzone(min=0.2,max=0.95)";
         const string InteractionTestBlockName = "Interaction Test Block";
         const float JumpHeightMeters = 1.3f;
-        static readonly Vector2 ComfortMenuSize = new(520.0f, 1160.0f);
+        const int CompositionLayerOrderHud = 5;
+        const int CompositionLayerOrderMenu = 10;
+        const int CompositionLayerOrderModal = 20;
+        const float CompositionUiRenderScale = 2.0f;
+        const float MenuPanelInset = 28.0f;
+        static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
+        static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
         // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
         static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
-        static readonly Vector2 SurvivalHudSize = new(940.0f, 420.0f);
+        const float SurvivalHudScale = 0.00105f;
+        static readonly Vector2 SurvivalHudSize = new(560.0f, 180.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
@@ -204,6 +221,7 @@ namespace Blockiverse.Editor
             ConfigureEditorSerialization();
             ConfigureAndroidPlayer();
             ConfigureAppBranding();
+            ConfigureCompositionLayerSplash();
             ConfigureMetaProjectSettings();
             ConfigureAndroidManifest();
             ConfigureMetaRuntimeSettings();
@@ -422,6 +440,39 @@ namespace Blockiverse.Editor
         static void ConfigureAndroidManifest()
         {
             global::OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest(silentMode: true);
+            EnsureAndroidGameActivityLabel("Assets/Plugins/Android/AndroidManifest.xml");
+        }
+
+        static void EnsureAndroidGameActivityLabel(string manifestPath)
+        {
+            if (!File.Exists(manifestPath))
+                throw new FileNotFoundException("Android manifest was not generated.", manifestPath);
+
+            var manifest = new XmlDocument();
+            manifest.Load(manifestPath);
+
+            var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
+            namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
+
+            XmlNode activityNode = manifest.SelectSingleNode(
+                "/manifest/application/activity[@android:name='com.unity3d.player.UnityPlayerGameActivity']",
+                namespaceManager);
+
+            if (activityNode == null)
+                throw new InvalidOperationException("Android manifest is missing UnityPlayerGameActivity.");
+
+            const string androidNamespace = "http://schemas.android.com/apk/res/android";
+            XmlAttribute labelAttribute = activityNode.Attributes["label", androidNamespace];
+
+            if (labelAttribute == null)
+            {
+                labelAttribute = manifest.CreateAttribute("android", "label", androidNamespace);
+                activityNode.Attributes.Append(labelAttribute);
+            }
+
+            labelAttribute.Value = "@string/app_name";
+            manifest.Save(manifestPath);
+            AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
         }
 
         static void ConfigureMetaProjectSettings()
@@ -438,6 +489,8 @@ namespace Blockiverse.Editor
             projectConfig.eyeTrackingSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.colocationSessionSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.sceneSupport = global::OVRProjectConfig.FeatureSupport.None;
+            projectConfig.focusAware = true;
+            projectConfig.requiresSystemKeyboard = true;
             global::OVRProjectConfig.CommitProjectConfig(projectConfig);
         }
 
@@ -582,7 +635,74 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(feature);
             }
 
+            UnityEngine.XR.OpenXR.Features.OpenXRFeature metaQuestFeature =
+                FeatureHelpers.GetFeatureWithIdForBuildTarget(BuildTargetGroup.Android, "com.unity.openxr.feature.metaquest");
+            if (metaQuestFeature != null)
+            {
+                var serializedFeature = new SerializedObject(metaQuestFeature);
+                SerializedProperty keyboardProperty = serializedFeature.FindProperty("enableSystemKeyboard");
+                if (keyboardProperty != null)
+                    keyboardProperty.boolValue = true;
+                else
+                    BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "Meta Quest OpenXR feature does not expose enableSystemKeyboard.");
+                serializedFeature.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(metaQuestFeature);
+            }
+            else
+            {
+                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "Meta Quest OpenXR feature was not found; system keyboard support could not be enabled.");
+            }
+
             EditorUtility.SetDirty(openXrSettings);
+        }
+
+        static void ConfigureCompositionLayerSplash()
+        {
+            PlayerSettings.SplashScreen.show = false;
+            PlayerSettings.virtualRealitySplashScreen = null;
+
+            Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            CompositionLayersRuntimeSettings settings = CompositionLayersRuntimeSettings.Instance;
+            var serializedSettings = new SerializedObject(settings);
+
+            SetSerializedBool(serializedSettings, "m_EmulationInStandalone", false);
+            SetSerializedBool(serializedSettings, "m_EnableSplashScreen", true);
+            SetSerializedObject(serializedSettings, "m_SplashImage", launchArtwork);
+            SetSerializedEnum(serializedSettings, "m_BackgroundType", (int)CompositionLayersRuntimeSettings.SplashBackgroundType.SolidColor);
+            SetSerializedColor(serializedSettings, "m_BackgroundColor", new Color(0.02f, 0.03f, 0.04f, 1.0f));
+            SetSerializedFloat(serializedSettings, "m_SplashDuration", 1.4f);
+            SetSerializedFloat(serializedSettings, "m_FadeInDuration", 0.2f);
+            SetSerializedFloat(serializedSettings, "m_FadeOutDuration", 0.25f);
+            SetSerializedFloat(serializedSettings, "m_FollowSpeed", 2.0f);
+            SetSerializedFloat(serializedSettings, "m_FollowDistance", 2.0f);
+            SetSerializedBool(serializedSettings, "m_LockToHorizon", true);
+            SetSerializedEnum(serializedSettings, "m_LayerType", (int)CompositionLayersRuntimeSettings.Layer.Quad);
+            serializedSettings.ApplyModifiedPropertiesWithoutUndo();
+
+            settings.QuadLayerData.Size = new Vector2(1.6f, 0.9f);
+            settings.QuadLayerData.ApplyTransformScale = true;
+            EditorUtility.SetDirty(settings);
+        }
+
+        static void SetSerializedEnum(SerializedObject serializedObject, string propertyName, int value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.enumValueIndex = value;
+        }
+
+        static void SetSerializedColor(SerializedObject serializedObject, string propertyName, Color value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.colorValue = value;
+        }
+
+        static void SetSerializedObject(SerializedObject serializedObject, string propertyName, UnityEngine.Object value)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property != null)
+                property.objectReferenceValue = value;
         }
 
         static void EnsureTmpEssentialResources()
@@ -670,44 +790,18 @@ namespace Blockiverse.Editor
 
         static int EnsureInteractionLayer()
         {
-            int existingLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-
-            if (existingLayer >= 0)
-                return existingLayer;
-
-            UnityEngine.Object tagManagerAsset = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")
-                .FirstOrDefault();
-
-            if (tagManagerAsset == null)
-                return -1;
-
-            var tagManager = new SerializedObject(tagManagerAsset);
-            SerializedProperty layers = tagManager.FindProperty("layers");
-
-            if (layers == null)
-                return -1;
-
-            for (int layer = 8; layer < layers.arraySize; layer++)
-            {
-                SerializedProperty layerName = layers.GetArrayElementAtIndex(layer);
-
-                if (!string.IsNullOrEmpty(layerName.stringValue))
-                    continue;
-
-                layerName.stringValue = BlockiverseProject.InteractionLayerName;
-                tagManager.ApplyModifiedProperties();
-                EditorUtility.SetDirty(tagManagerAsset);
-                return layer;
-            }
-
-            BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"No available Unity layer slot for {BlockiverseProject.InteractionLayerName}; interaction objects will stay on their current layer.");
-            return -1;
+            return EnsureUnityLayer(BlockiverseProject.InteractionLayerName);
         }
 
         static LayerMask GetInteractionLayerMask()
         {
+            return (LayerMask)BlockiverseProject.InteractionLayerMask;
+        }
+
+        static int GetInteractionLayerIndex()
+        {
             int layer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-            return layer >= 0 ? (LayerMask)(1 << layer) : Physics.DefaultRaycastLayers;
+            return layer >= 0 ? layer : BlockiverseProject.InteractionLayerIndex;
         }
 
         static void AddControllerMap(InputActionAsset asset, string mapName, string controllerPath)
@@ -721,6 +815,7 @@ namespace Blockiverse.Editor
             map.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, $"{controllerPath}/gripPressed");
             map.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, $"{controllerPath}/primaryButton");
             map.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, $"{controllerPath}/secondaryButton");
+
             map.AddAction(BlockiverseInputActionNames.UiPress, InputActionType.Button, $"{controllerPath}/triggerPressed");
             map.AddAction(BlockiverseInputActionNames.UiScroll, InputActionType.PassThrough, $"{controllerPath}/thumbstick", expectedControlLayout: "Vector2");
             map.AddAction(BlockiverseInputActionNames.HapticDevice, InputActionType.PassThrough, $"{controllerPath}/*");
@@ -728,6 +823,7 @@ namespace Blockiverse.Editor
             move.AddBinding($"{controllerPath}/thumbstick", processors: StickDeadzoneProcessor);
             InputAction turn = map.AddAction(BlockiverseInputActionNames.Turn, InputActionType.PassThrough, expectedControlLayout: "Vector2");
             turn.AddBinding($"{controllerPath}/thumbstick", processors: StickDeadzoneProcessor);
+            map.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, $"{controllerPath}/thumbstickClicked");
             AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button), controllerPath);
             AddThumbstickYComposite(map.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button), controllerPath);
         }
@@ -736,8 +832,6 @@ namespace Blockiverse.Editor
         {
             InputActionMap map = asset.AddActionMap(BlockiverseInputActionNames.GameplayMap);
             map.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<XRController>{LeftHand}/menuButton");
-            map.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<XRController>{RightHand}/primaryButton");
-            map.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<XRController>{RightHand}/secondaryButton");
         }
 
         static XRGeneralSettings EnsureXrGeneralSettings(BuildTargetGroup targetGroup)

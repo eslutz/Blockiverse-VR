@@ -11,6 +11,7 @@ using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
@@ -19,6 +20,7 @@ using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using InputTrackingState = UnityEngine.XR.InputTrackingState;
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -593,7 +595,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator LeftHandedModeSwapsMoveAndTurnHands()
+        public IEnumerator LeftHandedModeSwapsControllerRoles()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
             InputActionAsset actions = CreateTestActions();
@@ -619,9 +621,27 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
 
+                int breakPresses = 0;
+                int placePresses = 0;
+                int quickMenuPresses = 0;
+                int blockTogglePresses = 0;
+                inputRig.BreakPressed.AddListener(() => breakPresses++);
+                inputRig.PlacePressed.AddListener(() => placePresses++);
+                inputRig.QuickMenuPressed.AddListener(() => quickMenuPresses++);
+                inputRig.BlockEditingTogglePressed.AddListener(() => blockTogglePresses++);
+
                 yield return null;
                 Assert.That(inputRig.ActiveMoveHand, Is.EqualTo(BlockiverseControllerRole.Right));
                 Assert.That(inputRig.ActiveTurnHand, Is.EqualTo(BlockiverseControllerRole.Left));
+                Assert.That(inputRig.ActiveToolHand, Is.EqualTo(BlockiverseControllerRole.Left));
+
+                InputAction leftPrimary = actions
+                    .FindActionMap(BlockiverseInputActionNames.LeftHandMap)
+                    .FindAction(BlockiverseInputActionNames.PrimaryButton);
+                Assert.That(inputRig.ResolveJumpActionForCurrentControls(), Is.SameAs(leftPrimary));
+                Assert.That(inputRig.JumpProvider?.jumpInput.inputActionReferencePerformed?.action,
+                    Is.SameAs(leftPrimary),
+                    "JumpProvider should follow the dominant controller primary button.");
 
                 Vector3 startPosition = origin.transform.position;
                 Set(gamepad.rightStick, new Vector2(0.0f, 1.0f));
@@ -632,6 +652,13 @@ namespace Blockiverse.Tests.PlayMode
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
 
+                Press(gamepad.rightStickButton);
+                yield return null;
+                Assert.That(inputRig.SprintActive, Is.True);
+                Release(gamepad.rightStickButton);
+                yield return null;
+                Assert.That(inputRig.SprintActive, Is.True);
+
                 Set(gamepad.leftStick, Vector2.right);
                 yield return null;
                 yield return null;
@@ -639,6 +666,36 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(Mathf.DeltaAngle(origin.transform.eulerAngles.y, 45.0f), Is.EqualTo(0.0f).Within(0.1f));
 
                 Set(gamepad.leftStick, Vector2.zero);
+                yield return null;
+
+                Press(gamepad.rightTrigger);
+                yield return null;
+                Assert.That(breakPresses, Is.EqualTo(0), "Support trigger should not break blocks.");
+                Release(gamepad.rightTrigger);
+                yield return null;
+
+                Press(gamepad.leftTrigger);
+                yield return null;
+                Assert.That(breakPresses, Is.EqualTo(1));
+                Release(gamepad.leftTrigger);
+                yield return null;
+
+                Press(gamepad.leftShoulder);
+                yield return null;
+                Assert.That(placePresses, Is.EqualTo(1));
+                Release(gamepad.leftShoulder);
+                yield return null;
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+                Assert.That(quickMenuPresses, Is.EqualTo(1));
+                Release(gamepad.rightShoulder);
+                yield return null;
+
+                Press(gamepad.selectButton);
+                yield return null;
+                Assert.That(blockTogglePresses, Is.EqualTo(1));
+                Release(gamepad.selectButton);
                 yield return null;
             }
             finally
@@ -649,18 +706,15 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator DominantHandOnlyModeMovesAndInteractsFromDominantHand()
+        public IEnumerator DominantHandOwnsTheOnlyActiveInteractionRay()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
             InputActionAsset actions = CreateTestActions();
-            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
 
             try
             {
                 var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
                 settings.DominantHand = BlockiverseControllerRole.Right;
-                settings.DominantHandOnlyControls = true;
-                settings.ContinuousMoveSpeed = 2.0f;
 
                 ConfigureXriLocomotionStack(
                     rigObject,
@@ -675,41 +729,39 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
 
-                int breakPresses = 0;
-                int placePresses = 0;
-                int quickMenuPresses = 0;
-                inputRig.BreakPressed.AddListener(() => breakPresses++);
-                inputRig.PlacePressed.AddListener(() => placePresses++);
-                inputRig.QuickMenuPressed.AddListener(() => quickMenuPresses++);
+                BlockiverseLocomotionRayMediator leftMediator = CreateRayMediator(
+                    rigObject,
+                    "Left Controller",
+                    BlockiverseControllerRole.Left,
+                    inputRig,
+                    settings,
+                    out GameObject leftInteractionObject,
+                    out _);
+                BlockiverseLocomotionRayMediator rightMediator = CreateRayMediator(
+                    rigObject,
+                    "Right Controller",
+                    BlockiverseControllerRole.Right,
+                    inputRig,
+                    settings,
+                    out GameObject rightInteractionObject,
+                    out _);
 
                 yield return null;
-                Assert.That(inputRig.ActiveMoveHand, Is.EqualTo(BlockiverseControllerRole.Right));
-                Assert.That(inputRig.ActiveTurnHand, Is.EqualTo(BlockiverseControllerRole.Right));
-                Assert.That(inputRig.ActiveToolHand, Is.EqualTo(BlockiverseControllerRole.Right));
 
-                Vector3 startPosition = origin.transform.position;
-                Set(gamepad.rightStick, new Vector2(0.0f, 1.0f));
-                yield return null;
+                InvokePrivate(leftMediator, "Update");
+                InvokePrivate(rightMediator, "Update");
 
-                Assert.That((origin.transform.position - startPosition).magnitude, Is.GreaterThan(0.0f));
+                Assert.That(leftInteractionObject.activeSelf, Is.False);
+                Assert.That(rightInteractionObject.activeSelf, Is.True);
 
-                Press(gamepad.rightTrigger);
-                yield return null;
-                Assert.That(breakPresses, Is.EqualTo(1));
-                Release(gamepad.rightTrigger);
+                settings.DominantHand = BlockiverseControllerRole.Left;
                 yield return null;
 
-                Press(gamepad.rightShoulder);
-                yield return null;
-                Assert.That(placePresses, Is.EqualTo(1));
-                Release(gamepad.rightShoulder);
-                yield return null;
+                InvokePrivate(leftMediator, "Update");
+                InvokePrivate(rightMediator, "Update");
 
-                Press(gamepad.buttonEast);
-                yield return null;
-                Assert.That(quickMenuPresses, Is.EqualTo(1));
-                Release(gamepad.buttonEast);
-                yield return null;
+                Assert.That(leftInteractionObject.activeSelf, Is.True);
+                Assert.That(rightInteractionObject.activeSelf, Is.False);
             }
             finally
             {
@@ -796,6 +848,67 @@ namespace Blockiverse.Tests.PlayMode
             finally
             {
                 if (controller != null)
+                InputSystem.RemoveDevice(controller);
+
+                Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator InteractionRayStaysHiddenUntilControllerHasPositionAndRotationTracking()
+        {
+            GameObject controllerObject = new("Right Controller");
+            controllerObject.SetActive(false);
+            XRController controller = InputSystem.AddDevice<XRController>();
+
+            try
+            {
+                InputSystem.SetDeviceUsage(controller, CommonUsages.RightHand);
+
+                TrackedPoseDriver poseDriver = controllerObject.AddComponent<TrackedPoseDriver>();
+                BlockiverseInputRig.ConfigureControllerPoseDriverActions(poseDriver, BlockiverseControllerRole.Right);
+
+                BlockiverseControllerAnchor anchor = controllerObject.AddComponent<BlockiverseControllerAnchor>();
+                anchor.Configure(BlockiverseControllerRole.Right, poseDriver);
+
+                GameObject interactionObject = new("Interaction Ray");
+                GameObject teleportObject = new("Teleport Ray");
+                interactionObject.transform.SetParent(controllerObject.transform, false);
+                teleportObject.transform.SetParent(controllerObject.transform, false);
+
+                XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+                XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+                controllerObject.SetActive(true);
+
+                BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+                mediator.Configure(
+                    rig: null,
+                    settings: null,
+                    interaction: interactionRay,
+                    teleport: teleportRay,
+                    controllerRole: BlockiverseControllerRole.Right);
+
+                Press(controller.isTracked);
+                Set(controller.trackingState, (int)InputTrackingState.Rotation);
+                Set(controller.deviceRotation, Quaternion.Euler(10.0f, 20.0f, 30.0f));
+                yield return null;
+
+                Assert.That(anchor.IsTracked, Is.False,
+                    "Rotation-only tracking should not count as a usable pointer pose because the ray origin position is stale.");
+                Assert.That(interactionObject.activeSelf, Is.False,
+                    "The interaction ray should stay hidden while the controller has no tracked position.");
+
+                Set(controller.trackingState, (int)(InputTrackingState.Position | InputTrackingState.Rotation));
+                Set(controller.devicePosition, new Vector3(0.25f, 1.1f, 0.4f));
+                Set(controller.deviceRotation, Quaternion.Euler(10.0f, 20.0f, 30.0f));
+                yield return null;
+
+                Assert.That(anchor.IsTracked, Is.True);
+                Assert.That(interactionObject.activeSelf, Is.True);
+            }
+            finally
+            {
+                if (controller != null)
                     InputSystem.RemoveDevice(controller);
 
                 Object.DestroyImmediate(controllerObject);
@@ -841,6 +954,121 @@ namespace Blockiverse.Tests.PlayMode
             finally
             {
                 DestroyRigImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TeleportRayRemainsActiveForReleaseFrame()
+        {
+            GameObject controllerObject = new("Teleport Mediator");
+            GameObject interactionObject = new("Interaction Ray");
+            GameObject teleportObject = new("Teleport Ray");
+
+            try
+            {
+                interactionObject.transform.SetParent(controllerObject.transform, false);
+                teleportObject.transform.SetParent(controllerObject.transform, false);
+                XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+                XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+                BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+
+                mediator.Configure(
+                    rig: null,
+                    settings: null,
+                    interaction: interactionRay,
+                    teleport: teleportRay,
+                    controllerRole: BlockiverseControllerRole.Right);
+
+                InvokePrivate(mediator, "SetTeleportActive", true);
+
+                Assert.That(teleportObject.activeSelf, Is.True);
+                Assert.That(interactionObject.activeSelf, Is.False);
+
+                InvokePrivate(mediator, "SetTeleportActive", false);
+
+                Assert.That(teleportObject.activeSelf, Is.True,
+                    "Thumbstick release must leave the teleport interactor alive for one frame so XRI can process select exit.");
+                Assert.That(interactionObject.activeSelf, Is.False,
+                    "The regular interaction ray should not re-enable until the teleport release frame has drained.");
+
+                yield return null;
+
+                Assert.That(teleportObject.activeSelf, Is.False);
+                Assert.That(interactionObject.activeSelf, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(controllerObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TeleportRayStaysHiddenWhileWorldInputIsSuppressed()
+        {
+            GameObject rigObject = new("Menu-Suppressed Teleport Rig");
+            GameObject controllerObject = new("Right Controller");
+            GameObject interactionObject = new("Interaction Ray");
+            GameObject teleportObject = new("Teleport Ray");
+            InputActionAsset actions = CreateTestActions();
+            InputAction teleportModeAction = new("Held Teleport Mode", InputActionType.Button, "<Gamepad>/leftShoulder");
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                controllerObject.transform.SetParent(rigObject.transform, false);
+                interactionObject.transform.SetParent(controllerObject.transform, false);
+                teleportObject.transform.SetParent(controllerObject.transform, false);
+
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.LocomotionMode = BlockiverseLocomotionMode.Teleport;
+
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+
+                XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+                XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+                teleportObject.SetActive(false);
+                BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+                mediator.Configure(
+                    inputRig,
+                    settings,
+                    interactionRay,
+                    teleportRay,
+                    BlockiverseControllerRole.Right);
+                SetPrivateField(mediator, "teleportModeAction", teleportModeAction);
+
+                actions.Enable();
+                teleportModeAction.Enable();
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+                Press(gamepad.leftShoulder);
+                InputSystem.Update();
+                Assert.That(teleportModeAction.IsPressed(), Is.True,
+                    "The test must hold teleport mode so a hidden teleport ray proves menu suppression, not missing input.");
+                InvokePrivate(mediator, "Update");
+
+                Assert.That(teleportObject.activeSelf, Is.False,
+                    "The teleport arc should not appear while title/menu routing suppresses world input.");
+                Assert.That(interactionObject.activeSelf, Is.True,
+                    "The UI interaction ray should remain available for menu selection.");
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+                InvokePrivate(mediator, "Update");
+
+                Assert.That(teleportObject.activeSelf, Is.True,
+                    "Teleport mode should resume once world input is enabled.");
+                Assert.That(interactionObject.activeSelf, Is.False);
+
+                yield return null;
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
+                Release(gamepad.leftShoulder);
+                InputSystem.RemoveDevice(gamepad);
+                teleportModeAction.Dispose();
+                Object.DestroyImmediate(rigObject);
                 Object.DestroyImmediate(actions);
             }
         }
@@ -905,6 +1133,31 @@ namespace Blockiverse.Tests.PlayMode
             return rigObject;
         }
 
+        static BlockiverseLocomotionRayMediator CreateRayMediator(
+            GameObject rigObject,
+            string controllerName,
+            BlockiverseControllerRole hand,
+            BlockiverseInputRig inputRig,
+            BlockiverseComfortSettings settings,
+            out GameObject interactionObject,
+            out GameObject teleportObject)
+        {
+            GameObject controllerObject = new(controllerName);
+            controllerObject.transform.SetParent(rigObject.transform, false);
+
+            interactionObject = new("Interaction Ray");
+            interactionObject.transform.SetParent(controllerObject.transform, false);
+            XRRayInteractor interactionRay = interactionObject.AddComponent<XRRayInteractor>();
+
+            teleportObject = new("Teleport Ray");
+            teleportObject.transform.SetParent(controllerObject.transform, false);
+            XRRayInteractor teleportRay = teleportObject.AddComponent<XRRayInteractor>();
+
+            BlockiverseLocomotionRayMediator mediator = controllerObject.AddComponent<BlockiverseLocomotionRayMediator>();
+            mediator.Configure(inputRig, settings, interactionRay, teleportRay, hand);
+            return mediator;
+        }
+
         static InputActionAsset CreateTestActions()
         {
             var actions = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -924,6 +1177,9 @@ namespace Blockiverse.Tests.PlayMode
             leftHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/leftShoulder");
             leftHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonWest");
             leftHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/select");
+            leftHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/leftStickPress");
+            leftHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
+            leftHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
             InputActionMap rightHand = actions.AddActionMap(BlockiverseInputActionNames.RightHandMap);
             rightHand.AddAction(
@@ -940,11 +1196,11 @@ namespace Blockiverse.Tests.PlayMode
             rightHand.AddAction(BlockiverseInputActionNames.Activate, InputActionType.Button, "<Gamepad>/rightShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonNorth");
             rightHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/buttonEast");
+            rightHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/rightStickPress");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
             InputActionMap gameplay = actions.AddActionMap(BlockiverseInputActionNames.GameplayMap);
-            gameplay.AddAction(BlockiverseInputActionNames.Jump, InputActionType.Button, "<Gamepad>/buttonNorth");
             gameplay.AddAction(BlockiverseInputActionNames.Menu, InputActionType.Button, "<Gamepad>/start");
 
             return actions;
@@ -978,6 +1234,24 @@ namespace Blockiverse.Tests.PlayMode
 
             Assert.That(updateMethod, Is.Not.Null);
             updateMethod.Invoke(null, new object[] { updateType });
+        }
+
+        static object InvokePrivate(object target, string methodName, params object[] args)
+        {
+            MethodInfo method = target.GetType().GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"{methodName} should exist.");
+            return method.Invoke(target, args);
+        }
+
+        static void SetPrivateField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{fieldName} should exist.");
+            field.SetValue(target, value);
         }
     }
 }

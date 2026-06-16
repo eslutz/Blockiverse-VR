@@ -26,11 +26,10 @@ namespace Blockiverse.VR
         [SerializeField] bool snapTurnAroundEnabled = true;
         [SerializeField] float standingEyeHeight = 1.6f;
         [SerializeField] float uiScale = 1.0f;
-        [SerializeField] bool vignetteEnabled = true;
+        [SerializeField] bool vignetteEnabled;
         // Normalized 0–1: 1 = strongest vignette (narrowest aperture), 0 = open.
-        [SerializeField] float vignetteStrength = 1.0f;
+        [SerializeField] float vignetteStrength;
         [SerializeField] BlockiverseControllerRole dominantHand = BlockiverseControllerRole.Right;
-        [SerializeField] bool dominantHandOnlyControls;
         [SerializeField] bool toggleToMineEnabled;
 
         public BlockiverseLocomotionMode LocomotionMode
@@ -91,12 +90,6 @@ namespace Blockiverse.VR
         {
             get => dominantHand;
             set => dominantHand = value;
-        }
-
-        public bool DominantHandOnlyControls
-        {
-            get => dominantHandOnlyControls;
-            set => dominantHandOnlyControls = value;
         }
 
         public bool ToggleToMineEnabled

@@ -1,16 +1,20 @@
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
 using Unity.XR.CoreUtils;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
@@ -21,6 +25,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using TMPro;
 using UnityEngine.UI;
 
@@ -28,6 +33,9 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class BlockiverseRigPrefabTests
     {
+        const string ControllerRayOriginName = "Ray Origin";
+        static readonly Quaternion ControllerRayOriginLocalRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
+
         [Test]
         public void XrRigPrefabIsWiredForQuestControllerAnchorsAndHaptics()
         {
@@ -129,7 +137,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(jumpProvider.mediator, Is.SameAs(mediator));
                 Assert.That(jumpProvider.disableGravityDuringJump, Is.False);
                 Assert.That(jumpProvider.inAirJumpCount, Is.EqualTo(0));
-                AssertJumpProviderUsesGameplayJump(inputRig, jumpProvider);
+                AssertJumpProviderUsesDominantPrimary(inputRig, jumpProvider);
                 Assert.That(poseDriver, Is.Not.Null);
                 Assert.That(poseDriver.enabled, Is.True);
                 Assert.That(poseDriver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
@@ -140,8 +148,6 @@ namespace Blockiverse.Tests.EditMode
 
                 AssertControllerPoseDriver(instance, "Left Controller", "<XRController>{LeftHand}/devicePosition", "<XRController>{LeftHand}/deviceRotation");
                 AssertControllerPoseDriver(instance, "Right Controller", "<XRController>{RightHand}/devicePosition", "<XRController>{RightHand}/deviceRotation");
-                AssertAimPoseDriver(instance, "Left Aim Pose", "<XRController>{LeftHand}/pointerPosition", "<XRController>{LeftHand}/pointerRotation");
-                AssertAimPoseDriver(instance, "Right Aim Pose", "<XRController>{RightHand}/pointerPosition", "<XRController>{RightHand}/pointerRotation");
             }
             finally
             {
@@ -159,12 +165,17 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
+            BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
             Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
             BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
             Assert.That(settings, Is.Not.Null);
+            Assert.That(dominantHandResolver, Is.Not.Null);
+            Assert.That(settings.VignetteEnabled, Is.False, "Generated rig should not start with the motion vignette enabled over the title/menu.");
+            Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f), "Generated rig should start with a fully open vignette strength.");
+            Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f), "Generated rig should leave the title/menu view unobscured.");
             Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
             Assert.That(menuTransform, Is.Not.Null);
             Assert.That(menu, Is.Not.Null);
@@ -207,10 +218,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefab, Is.Not.Null);
 
             TunnelingVignetteController vignette = prefab.GetComponentInChildren<TunnelingVignetteController>(true);
+            MeshRenderer vignetteRenderer = vignette != null ? vignette.GetComponent<MeshRenderer>() : null;
 
             Assert.That(vignette, Is.Not.Null, "Rig should carry a TunnelingVignetteController for comfort.");
             Assert.That(vignette.GetComponent<MeshFilter>()?.sharedMesh, Is.Not.Null, "Vignette mesh must be imported from the sample.");
-            Assert.That(vignette.GetComponent<MeshRenderer>()?.sharedMaterial, Is.Not.Null, "Vignette material must be assigned.");
+            Assert.That(vignetteRenderer?.sharedMaterial, Is.Not.Null, "Vignette material must be assigned.");
+            Assert.That(vignetteRenderer.enabled, Is.False, "Disabled comfort vignette must not render over the menu before locomotion.");
+            Assert.That(vignette.defaultParameters.apertureSize, Is.EqualTo(1.0f).Within(0.001f), "Startup vignette aperture should be fully open until intentional locomotion.");
             Assert.That(
                 vignette.locomotionVignetteProviders,
                 Has.All.Matches<LocomotionVignetteProvider>(p => p.enabled && p.locomotionProvider != null),
@@ -220,31 +234,110 @@ namespace Blockiverse.Tests.EditMode
                 .Select(provider => provider.locomotionProvider.GetType())
                 .ToList();
 
-            // Continuous motions and teleport mask vection/viewpoint jumps; snap turn is a discrete
-            // comfort option and is intentionally excluded to avoid a per-turn vignette flicker.
+            // Continuous motions and teleport mask intentional vection/viewpoint jumps. Snap turn,
+            // gravity, and jump are excluded so the vignette does not close while the title/menu rig
+            // is idle, settling, or performing a discrete comfort turn.
             Assert.That(providerTypes, Has.Count.GreaterThanOrEqualTo(3));
             Assert.That(providerTypes, Contains.Item(typeof(ContinuousMoveProvider)));
             Assert.That(providerTypes, Contains.Item(typeof(ContinuousTurnProvider)));
             Assert.That(providerTypes, Contains.Item(typeof(TeleportationProvider)));
             Assert.That(providerTypes, Has.No.Member(typeof(SnapTurnProvider)));
+            Assert.That(providerTypes, Has.No.Member(typeof(GravityProvider)));
+            Assert.That(providerTypes, Has.No.Member(typeof(JumpProvider)));
         }
 
         [Test]
-        public void XrRigBootstrapperAddsFallAndJumpVignetteProviders()
+        public void XrRigPrefabShowsFallbackHandsUntilLocalMetaAvatarIsReady()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseNetworkAvatarRig avatarRig = instance.GetComponent<BlockiverseNetworkAvatarRig>();
+
+                Assert.That(avatarRig, Is.Not.Null);
+                Assert.That(avatarRig.FirstPersonFallbackVisualsEnabled, Is.True);
+
+                avatarRig.SetMetaAvatarAvailable(false);
+                avatarRig.RefreshAvatarMode();
+
+                Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+
+                Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Left Hand" && renderer.enabled));
+                Assert.That(renderers, Has.Some.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Right Hand" && renderer.enabled));
+                Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Head" && renderer.enabled));
+                Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
+                    renderer.transform.name == "Fallback Body" && renderer.enabled));
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void CreativeInputBridgeKeepsRayVisibleForPausedMenus()
+        {
+            GameObject root = new("Menu Ray Test");
+
+            try
+            {
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+                GameObject rayObject = new("Interaction Ray");
+                rayObject.transform.SetParent(root.transform, worldPositionStays: false);
+                XRRayInteractor ray = rayObject.AddComponent<XRRayInteractor>();
+                LineRenderer lineRenderer = rayObject.AddComponent<LineRenderer>();
+                XRInteractorLineVisual lineVisual = rayObject.AddComponent<XRInteractorLineVisual>();
+                CreativeInteractionController interactionController = root.AddComponent<CreativeInteractionController>();
+                BlockiverseCreativeInputBridge bridge = root.AddComponent<BlockiverseCreativeInputBridge>();
+
+                interactionController.SetBlockEditingEnabled(false);
+                lineRenderer.enabled = true;
+                lineVisual.enabled = true;
+
+                bridge.Configure(null, ray, interactionController);
+
+                Assert.That(lineRenderer.enabled, Is.True, "Menus need the ray visual even while world input is blocked.");
+                Assert.That(lineVisual.enabled, Is.True, "Menus need the XRI line visual even while world input is blocked.");
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void XrRigBootstrapperLeavesFallAndJumpOutOfVignetteProviders()
         {
             string source = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs");
 
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())", source);
-            StringAssert.Contains("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())", source);
+            Assert.That(
+                source,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<GravityProvider>())"),
+                "Gravity can become active during startup grounding, so it must not close the comfort vignette while idle.");
+            Assert.That(
+                source,
+                Does.Not.Contain("AddVignetteProvider(controller, rig.GetComponent<JumpProvider>())"),
+                "Jump arcs are discrete gameplay movement and should not be a startup/menu vignette trigger.");
         }
 
         [Test]
-        public void InputRigSuppressesTurnWhileTurnHandRayHoversUi()
+        public void InputRigSuppressesTurnWhileToolHandRayHoversUi()
         {
             string source = File.ReadAllText("Assets/Blockiverse/Scripts/VR/BlockiverseInputRig.cs");
 
             StringAssert.Contains("UpdateTurnProviderEnabledState()", source);
             StringAssert.Contains("IsActiveTurnRayOverUi()", source);
+            StringAssert.Contains("GetToolHand()", source);
             StringAssert.Contains("IsOverUIGameObject()", source);
             StringAssert.Contains("!smoothTurn && !suppressTurnForUi", source);
             StringAssert.Contains("smoothTurn && !suppressTurnForUi", source);
@@ -287,34 +380,24 @@ namespace Blockiverse.Tests.EditMode
             InputActionMap gameplayMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.GameplayMap, throwIfNotFound: false);
             Assert.That(gameplayMap, Is.Not.Null);
 
-            InputAction jumpAction = gameplayMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false);
-            Assert.That(jumpAction, Is.Not.Null, "Jump action must exist in the gameplay map.");
-            Assert.That(jumpAction.bindings, Has.Some.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/primaryButton"),
-                "Jump should be bound to Right A.");
-            Assert.That(jumpAction.bindings, Has.None.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/primaryButton"),
-                "Jump must no longer be bound to Left X.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
+                "Jump should be resolved from the dominant controller map.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false), Is.Null,
+                "Block editing toggle should be resolved from the dominant controller map.");
+            Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false), Is.Null,
+                "Sprint should be resolved from the support controller map.");
             Assert.That(gameplayMap.FindAction(BlockiverseInputActionNames.Undo, throwIfNotFound: false), Is.Null,
                 "Undo must not have a controller button.");
-            InputAction blockEditingToggle = gameplayMap.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false);
-            Assert.That(blockEditingToggle, Is.Not.Null, "Right B should toggle block editing through the gameplay map.");
-            Assert.That(blockEditingToggle.bindings, Has.Some.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{RightHand}/secondaryButton"),
-                "Block editing toggle should be bound to Right B.");
-            Assert.That(blockEditingToggle.bindings, Has.None.Matches<InputBinding>(b =>
-                (b.effectivePath ?? b.path ?? "") == "<XRController>{LeftHand}/secondaryButton"),
-                "Block editing toggle must no longer be bound to Left Y.");
-
-            InputActionMap rightHandMap = inputRig.InputActions.FindActionMap(BlockiverseInputActionNames.RightHandMap, throwIfNotFound: false);
-            Assert.That(rightHandMap?.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
-                "RightHand/Jump is stale; JumpProvider should read Blockiverse Gameplay/Jump.");
 
             // Teleport Mode on both hands must be thumbstick-based, not a hardware button.
             foreach (string mapName in new[] { BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.RightHandMap })
             {
                 InputActionMap map = inputRig.InputActions.FindActionMap(mapName, throwIfNotFound: false);
                 Assert.That(map, Is.Not.Null, $"{mapName} must exist.");
+                string handUsage = mapName == BlockiverseInputActionNames.LeftHandMap ? "LeftHand" : "RightHand";
+                AssertControllerRoleActions(map, handUsage);
+                Assert.That(map.FindAction(BlockiverseInputActionNames.Jump, throwIfNotFound: false), Is.Null,
+                    $"{mapName}/Jump is stale; JumpProvider should read the dominant controller primary button.");
                 InputAction teleportMode = map.FindAction(BlockiverseInputActionNames.TeleportMode, throwIfNotFound: false);
                 InputAction teleportSelect = map.FindAction(BlockiverseInputActionNames.TeleportSelect, throwIfNotFound: false);
                 Assert.That(teleportMode, Is.Not.Null, $"Teleport Mode must exist in {mapName}.");
@@ -355,6 +438,9 @@ namespace Blockiverse.Tests.EditMode
                 InputAction rightUiPress = inputRig.InputActions
                     .FindActionMap(BlockiverseInputActionNames.RightHandMap)
                     .FindAction(BlockiverseInputActionNames.UiPress);
+                InputAction leftUiPress = inputRig.InputActions
+                    .FindActionMap(BlockiverseInputActionNames.LeftHandMap)
+                    .FindAction(BlockiverseInputActionNames.UiPress);
                 InputAction rightTeleportSelect = inputRig.InputActions
                     .FindActionMap(BlockiverseInputActionNames.RightHandMap)
                     .FindAction(BlockiverseInputActionNames.TeleportSelect);
@@ -368,25 +454,72 @@ namespace Blockiverse.Tests.EditMode
                 XRRayInteractor rightTeleportRay = instance.transform
                     .Find("Camera Offset/Right Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
+                XRRayInteractor leftInteractionRay = instance.transform
+                    .Find("Camera Offset/Left Controller/Interaction Ray")
+                    ?.GetComponent<XRRayInteractor>();
                 XRRayInteractor leftTeleportRay = instance.transform
                     .Find("Camera Offset/Left Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
+                Transform rightController = instance.transform.Find("Camera Offset/Right Controller");
+                Transform leftController = instance.transform.Find("Camera Offset/Left Controller");
+                Transform rightRayOrigin = instance.transform.Find("Camera Offset/Right Ray Origin");
+                Transform leftRayOrigin = instance.transform.Find("Camera Offset/Left Ray Origin");
+
+                XRInteractorLineVisual rightInteractionLineVisual = rightInteractionRay?.GetComponent<XRInteractorLineVisual>();
+                XRInteractorLineVisual rightTeleportLineVisual = rightTeleportRay?.GetComponent<XRInteractorLineVisual>();
+                XRInteractorLineVisual leftInteractionLineVisual = leftInteractionRay?.GetComponent<XRInteractorLineVisual>();
+                XRInteractorLineVisual leftTeleportLineVisual = leftTeleportRay?.GetComponent<XRInteractorLineVisual>();
 
                 Assert.That(rightInteractionRay, Is.Not.Null);
                 Assert.That(rightTeleportRay, Is.Not.Null);
+                Assert.That(leftInteractionRay, Is.Not.Null);
                 Assert.That(leftTeleportRay, Is.Not.Null);
+                Assert.That(rightInteractionLineVisual, Is.Not.Null);
+                Assert.That(rightTeleportLineVisual, Is.Not.Null);
+                Assert.That(leftInteractionLineVisual, Is.Not.Null);
+                Assert.That(leftTeleportLineVisual, Is.Not.Null);
+                Assert.That(rightController, Is.Not.Null);
+                Assert.That(leftController, Is.Not.Null);
+                Assert.That(rightRayOrigin, Is.Null,
+                    "Runtime repair must remove stale pointer-pose ray origins that can diverge from the visible controller.");
+                Assert.That(leftRayOrigin, Is.Null,
+                    "Runtime repair must remove stale pointer-pose ray origins that can diverge from the visible controller.");
+
+                rightInteractionLineVisual.overrideInteractorLineOrigin = true;
+                rightInteractionLineVisual.lineOriginTransform = null;
+                rightTeleportLineVisual.overrideInteractorLineOrigin = true;
+                rightTeleportLineVisual.lineOriginTransform = null;
+                leftInteractionLineVisual.overrideInteractorLineOrigin = true;
+                leftInteractionLineVisual.lineOriginTransform = null;
+                leftTeleportLineVisual.overrideInteractorLineOrigin = true;
+                leftTeleportLineVisual.lineOriginTransform = null;
+
+                inputRig.RepairRuntimeTracking();
+
+                Transform rightControllerRayOrigin = rightController.Find(ControllerRayOriginName);
+                Transform leftControllerRayOrigin = leftController.Find(ControllerRayOriginName);
+
+                AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
+                AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
                 AssertButtonReaderReferencesAction(rightInteractionRay.uiPressInput, rightUiPress, "Right trigger must click UI through the right UI Press action.");
-                Assert.That(rightInteractionRay.enableUIInteraction, Is.True);
-                Assert.That(rightInteractionRay.blockUIOnInteractableSelection, Is.False,
-                    "Selecting block interactables must not suppress UI clicks while a menu is visible.");
-                Assert.That(rightInteractionRay.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+                AssertButtonReaderReferencesAction(leftInteractionRay.uiPressInput, leftUiPress, "Left trigger must click UI through the left UI Press action.");
+                AssertInteractionRayDefaults(rightInteractionRay);
+                AssertInteractionRayDefaults(leftInteractionRay);
                 AssertButtonReaderReferencesAction(rightTeleportRay.selectInput, rightTeleportSelect, "Right teleport ray must use right thumbstick select.");
                 AssertButtonReaderReferencesAction(leftTeleportRay.selectInput, leftTeleportSelect, "Left teleport ray must use left thumbstick select.");
-                Assert.That(rightInteractionRay.rayOriginTransform, Is.Not.Null, "UI/block ray should use the OpenXR aim pose, not the controller grip pose.");
-                Assert.That(rightInteractionRay.rayOriginTransform.name, Is.EqualTo("Right Aim Pose"));
-                Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightInteractionRay.rayOriginTransform));
-                Assert.That(leftTeleportRay.rayOriginTransform, Is.Not.Null);
-                Assert.That(leftTeleportRay.rayOriginTransform.name, Is.EqualTo("Left Aim Pose"));
+                Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+                Assert.That(leftInteractionRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+                Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+                Assert.That(leftTeleportRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+                Assert.That(rightInteractionLineVisual.overrideInteractorLineOrigin, Is.False,
+                    "Runtime repair should leave the ray interactor as the single visual origin source.");
+                Assert.That(rightInteractionLineVisual.lineOriginTransform, Is.Null);
+                Assert.That(rightTeleportLineVisual.overrideInteractorLineOrigin, Is.False);
+                Assert.That(rightTeleportLineVisual.lineOriginTransform, Is.Null);
+                Assert.That(leftInteractionLineVisual.overrideInteractorLineOrigin, Is.False);
+                Assert.That(leftInteractionLineVisual.lineOriginTransform, Is.Null);
+                Assert.That(leftTeleportLineVisual.overrideInteractorLineOrigin, Is.False);
+                Assert.That(leftTeleportLineVisual.lineOriginTransform, Is.Null);
             }
             finally
             {
@@ -428,8 +561,24 @@ namespace Blockiverse.Tests.EditMode
                 flight.ApplyFlightState();
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enableFly, Is.True);
-                Assert.That(continuousMove.moveSpeed, Is.GreaterThanOrEqualTo(BlockiverseCreativeFlightController.FlightSpeedBlocksPerSecond));
+                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding the dominant primary button toward the right-hand aim pose, not by stick locomotion.");
+                Assert.That(continuousMove.enableFly, Is.False);
+                Assert.That(gravity.useGravity, Is.False);
+                Assert.That(jump.enabled, Is.False);
+                Assert.That(inputRig.TurnWithBothHands, Is.True, "Both sticks should keep turning available while the player is in creative flight.");
+
+                flight.SetFlightActive(false);
+
+                Assert.That(flight.IsFlightActive, Is.False);
+                Assert.That(continuousMove.enableFly, Is.False);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+                Assert.That(inputRig.TurnWithBothHands, Is.False);
+
+                flight.SetFlightActive(true);
+
+                Assert.That(flight.IsFlightActive, Is.True);
+                Assert.That(continuousMove.enabled, Is.False);
                 Assert.That(gravity.useGravity, Is.False);
                 Assert.That(jump.enabled, Is.False);
 
@@ -440,12 +589,71 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(continuousMove.enableFly, Is.False);
                 Assert.That(gravity.useGravity, Is.True);
                 Assert.That(jump.enabled, Is.True);
+                Assert.That(inputRig.TurnWithBothHands, Is.False);
             }
             finally
             {
                 Object.DestroyImmediate(rigObject);
                 Object.DestroyImmediate(worldObject);
             }
+        }
+
+        [Test]
+        public void SprintClickTogglesAndHoldTemporarilyRaisesMoveSpeed()
+        {
+            MethodInfo toggleMethod = typeof(BlockiverseInputRig).GetMethod(
+                "ShouldToggleSprint",
+                BindingFlags.Public | BindingFlags.Static);
+            MethodInfo speedMethod = typeof(BlockiverseInputRig).GetMethod(
+                "ResolveSprintMoveSpeed",
+                BindingFlags.Public | BindingFlags.Static);
+
+            Assert.That(toggleMethod, Is.Not.Null, "Sprint should expose its click-vs-hold threshold for tests.");
+            Assert.That(speedMethod, Is.Not.Null, "Sprint should expose move-speed scaling for tests.");
+            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.10f }), Is.True);
+            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.50f }), Is.False);
+            Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, false }), Is.EqualTo(1.8f).Within(0.001f));
+            Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, true }), Is.EqualTo(3.96f).Within(0.001f));
+        }
+
+        [Test]
+        public void CreativeFlightMovementUsesRightHandAimOnlyWhileJumpHeld()
+        {
+            Vector3 displacement = BlockiverseCreativeFlightController.ComputeFlightDisplacement(
+                new Vector3(0.0f, 0.25f, 1.0f),
+                moveHeld: true,
+                deltaSeconds: 0.5f);
+            Vector3 expectedDirection = new Vector3(0.0f, 0.25f, 1.0f).normalized;
+
+            Assert.That(displacement.normalized.x, Is.EqualTo(expectedDirection.x).Within(0.001f));
+            Assert.That(displacement.normalized.y, Is.EqualTo(expectedDirection.y).Within(0.001f));
+            Assert.That(displacement.normalized.z, Is.EqualTo(expectedDirection.z).Within(0.001f));
+            Assert.That(displacement.magnitude, Is.EqualTo(BlockiverseCreativeFlightController.FlightSpeedBlocksPerSecond * 0.5f).Within(0.001f));
+
+            Vector3 idle = BlockiverseCreativeFlightController.ComputeFlightDisplacement(Vector3.forward, moveHeld: false, deltaSeconds: 1.0f);
+
+            Assert.That(idle, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void CreativeFlightSprintUsesCanonicalSprintSpeed()
+        {
+            MethodInfo sprintFlightMethod = typeof(BlockiverseCreativeFlightController).GetMethod(
+                nameof(BlockiverseCreativeFlightController.ComputeFlightDisplacement),
+                new[] { typeof(Vector3), typeof(bool), typeof(bool), typeof(float) });
+
+            Assert.That(sprintFlightMethod, Is.Not.Null, "Creative flight should accept sprint state when computing displacement.");
+
+            Vector3 sprint = (Vector3)sprintFlightMethod.Invoke(null, new object[]
+            {
+                Vector3.forward,
+                true,
+                true,
+                0.5f,
+            });
+
+            Assert.That(sprint.normalized, Is.EqualTo(Vector3.forward));
+            Assert.That(sprint.magnitude, Is.EqualTo(2.2f).Within(0.001f));
         }
 
         [Test]
@@ -470,10 +678,19 @@ namespace Blockiverse.Tests.EditMode
                 XRRayInteractor rightTeleportRay = instance.transform
                     .Find("Camera Offset/Right Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
+                Transform rightController = instance.transform.Find("Camera Offset/Right Controller");
+                Transform rightRayOrigin = instance.transform.Find("Camera Offset/Right Ray Origin");
+                Transform rightControllerRayOrigin = rightController?.Find(ControllerRayOriginName);
 
                 Assert.That(inputRig.JumpProvider, Is.Not.Null);
+                Assert.That(rightController, Is.Not.Null);
+                Assert.That(rightRayOrigin, Is.Null,
+                    "Runtime repair must remove stale pointer-pose ray origins that can diverge from the visible controller.");
+                AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
                 Assert.That(rightInteractionRay, Is.Not.Null);
                 Assert.That(rightTeleportRay, Is.Not.Null);
+                Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+                Assert.That(rightTeleportRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
 
                 InputActionReference jumpReference = inputRig.JumpProvider.jumpInput.inputActionReferencePerformed;
                 InputActionReference uiPressReference = rightInteractionRay.uiPressInput.inputActionReferencePerformed;
@@ -502,6 +719,81 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PersistedXriInputsUseGeneratedAssetOwnedReferences()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            foreach (TrackedPoseDriver poseDriver in prefab.GetComponentsInChildren<TrackedPoseDriver>(true))
+            {
+                AssertActionPropertyUsesGeneratedReference(poseDriver.positionInput, $"{poseDriver.name} position");
+                AssertActionPropertyUsesGeneratedReference(poseDriver.rotationInput, $"{poseDriver.name} rotation");
+                AssertActionPropertyUsesGeneratedReference(poseDriver.trackingStateInput, $"{poseDriver.name} tracking state");
+            }
+
+            foreach (XRRayInteractor ray in prefab.GetComponentsInChildren<XRRayInteractor>(true))
+            {
+                AssertButtonReaderUsesGeneratedReference(ray.uiPressInput, $"{ray.name} UI press", allowUnused: true);
+                AssertValueReaderUsesGeneratedReference(ray.uiScrollInput, $"{ray.name} UI scroll", allowUnused: true);
+                AssertButtonReaderUsesGeneratedReference(ray.selectInput, $"{ray.name} select", allowUnused: true);
+            }
+
+            BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
+            Assert.That(inputRig, Is.Not.Null);
+            AssertButtonReaderUsesGeneratedReference(inputRig.JumpProvider.jumpInput, "Jump", allowUnused: false);
+
+            ContinuousMoveProvider continuousMove = prefab.GetComponent<ContinuousMoveProvider>();
+            SnapTurnProvider snapTurn = prefab.GetComponent<SnapTurnProvider>();
+            ContinuousTurnProvider continuousTurn = prefab.GetComponent<ContinuousTurnProvider>();
+
+            Assert.That(continuousMove, Is.Not.Null);
+            Assert.That(snapTurn, Is.Not.Null);
+            Assert.That(continuousTurn, Is.Not.Null);
+            AssertValueReaderUsesGeneratedReference(continuousMove.leftHandMoveInput, "Left hand move", allowUnused: false);
+            AssertValueReaderUsesGeneratedReference(continuousMove.rightHandMoveInput, "Right hand move", allowUnused: true);
+            AssertValueReaderUsesGeneratedReference(snapTurn.leftHandTurnInput, "Left hand snap turn", allowUnused: true);
+            AssertValueReaderUsesGeneratedReference(snapTurn.rightHandTurnInput, "Right hand snap turn", allowUnused: false);
+            AssertValueReaderUsesGeneratedReference(continuousTurn.leftHandTurnInput, "Left hand smooth turn", allowUnused: true);
+            AssertValueReaderUsesGeneratedReference(continuousTurn.rightHandTurnInput, "Right hand smooth turn", allowUnused: false);
+
+            try
+            {
+                Scene scene = EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single);
+                XRUIInputModule inputModule = scene.GetRootGameObjects()
+                    .SelectMany(root => root.GetComponentsInChildren<XRUIInputModule>(true))
+                    .SingleOrDefault();
+
+                Assert.That(inputModule, Is.Not.Null);
+                AssertGeneratedReference(inputModule.leftClickAction, "Boot XRUIInputModule left click");
+                AssertGeneratedReference(inputModule.scrollWheelAction, "Boot XRUIInputModule scroll");
+                AssertGeneratedReference(inputModule.navigateAction, "Boot XRUIInputModule navigate");
+                AssertGeneratedReference(inputModule.submitAction, "Boot XRUIInputModule submit");
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+        }
+
+        [Test]
+        public void GeneratedScenesDoNotStoreSceneLocalInputActionReferences()
+        {
+            foreach (string scenePath in new[]
+                     {
+                         BlockiverseProject.BootScenePath,
+                         BlockiverseProject.MultiplayerTestScenePath,
+                     })
+            {
+                string yaml = File.ReadAllText(scenePath);
+                Assert.That(
+                    yaml,
+                    Does.Not.Contain("m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.InputActionReference"),
+                    $"{scenePath} should reference generated InputActionReference assets instead of storing scene-local reference objects.");
+            }
+        }
+
+        [Test]
         public void XrRigPrefabIsWiredForNativeInteractorsAndBlockMenu()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
@@ -509,47 +801,72 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefab, Is.Not.Null);
 
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
-            Transform interactionRayTransform = rightController?.Find("Interaction Ray");
+            Transform rightInteractionRayTransform = rightController?.Find("Interaction Ray");
             Transform teleportRayTransform = rightController?.Find("Teleport Ray");
-            // Left controller now also carries a teleport ray for Teleport mode.
+            Transform rightControllerRayOrigin = rightController?.Find(ControllerRayOriginName);
             Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
-            Transform rightAimPose = prefab.transform.Find("Camera Offset/Right Aim Pose");
-            Transform leftAimPose = prefab.transform.Find("Camera Offset/Left Aim Pose");
+            Transform leftInteractionRayTransform = leftController?.Find("Interaction Ray");
+            Transform leftControllerRayOrigin = leftController?.Find(ControllerRayOriginName);
+            Transform rightRayOrigin = prefab.transform.Find("Camera Offset/Right Ray Origin");
+            Transform leftRayOrigin = prefab.transform.Find("Camera Offset/Left Ray Origin");
             Transform leftTeleportRayTransform = leftController?.Find("Teleport Ray");
             Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
-            XRRayInteractor interactionRay = interactionRayTransform?.GetComponent<XRRayInteractor>();
-            XRInteractorLineVisual interactionLineVisual = interactionRayTransform?.GetComponent<XRInteractorLineVisual>();
+            XRRayInteractor rightInteractionRay = rightInteractionRayTransform?.GetComponent<XRRayInteractor>();
+            XRRayInteractor leftInteractionRay = leftInteractionRayTransform?.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual rightInteractionLineVisual = rightInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
+            XRInteractorLineVisual leftInteractionLineVisual = leftInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
             XRRayInteractor teleportRay = teleportRayTransform?.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual teleportLineVisual = teleportRayTransform?.GetComponent<XRInteractorLineVisual>();
             BlockiverseLocomotionRayMediator mediator = rightController?.GetComponent<BlockiverseLocomotionRayMediator>();
             BlockiverseCreativeInputBridge creativeInputBridge = prefab.GetComponent<BlockiverseCreativeInputBridge>();
+            BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
+                prefab.GetComponent<BlockiverseKeyboardHandVisibilityController>();
             CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
             Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
             BlockiverseWorldSpacePanelPresenter blockMenuPresenter = blockMenu?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
 
             Assert.That(rightController, Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
-            Assert.That(interactionRay, Is.Not.Null);
-            Assert.That(interactionRay.enableUIInteraction, Is.True);
-            Assert.That(interactionRay.blockUIOnInteractableSelection, Is.False);
-            Assert.That(interactionRay.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
-            Assert.That(interactionRay.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
-            Assert.That(rightAimPose, Is.Not.Null, "Right app pointer should be driven by the OpenXR aim pose.");
-            Assert.That(leftAimPose, Is.Not.Null, "Left teleport pointer should be driven by the OpenXR aim pose.");
-            Assert.That(interactionRay.rayOriginTransform, Is.SameAs(rightAimPose));
-            Assert.That(interactionLineVisual, Is.Not.Null);
-            Assert.That(interactionLineVisual.lineWidth, Is.EqualTo(0.01f).Within(0.0001f));
+            Assert.That(rightInteractionRay, Is.Not.Null);
+            Assert.That(leftInteractionRay, Is.Not.Null);
+            AssertInteractionRayDefaults(rightInteractionRay);
+            AssertInteractionRayDefaults(leftInteractionRay);
+            Assert.That(prefab.transform.Find("Camera Offset/Right Aim Pose"), Is.Null,
+                "The interaction ray should not use a separately tracked aim pose that can diverge from the visible controller.");
+            Assert.That(prefab.transform.Find("Camera Offset/Left Aim Pose"), Is.Null,
+                "The teleport ray should not use a separately tracked aim pose that can diverge from the visible controller.");
+            Assert.That(rightRayOrigin, Is.Null,
+                "The interaction ray must not use a separately tracked pointer-pose ray origin that can diverge from the visible controller.");
+            Assert.That(leftRayOrigin, Is.Null,
+                "The teleport ray must not use a separately tracked pointer-pose ray origin that can diverge from the visible controller.");
+            AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
+            AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
+            Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+            Assert.That(leftInteractionRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+            Assert.That(rightInteractionLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(rightInteractionLineVisual);
+            Assert.That(leftInteractionLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(leftInteractionLineVisual);
             Assert.That(teleportRay, Is.Not.Null);
-            Assert.That(teleportRay.lineType, Is.EqualTo(XRRayInteractor.LineType.ProjectileCurve));
-            Assert.That(teleportRay.rayOriginTransform, Is.SameAs(rightAimPose));
+            AssertTeleportRayDefaults(teleportRay);
+            Assert.That(teleportRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
+            Assert.That(teleportLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(teleportLineVisual);
             Assert.That(teleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(mediator, Is.Not.Null);
             // Left controller also carries a teleport ray (either thumbstick can aim in Teleport mode).
             Assert.That(leftTeleportRayTransform, Is.Not.Null, "Left controller must have a Teleport Ray.");
             XRRayInteractor leftTeleportRay = leftTeleportRayTransform.GetComponent<XRRayInteractor>();
+            XRInteractorLineVisual leftTeleportLineVisual = leftTeleportRayTransform.GetComponent<XRInteractorLineVisual>();
             Assert.That(leftTeleportRay, Is.Not.Null);
-            Assert.That(leftTeleportRay.rayOriginTransform, Is.SameAs(leftAimPose));
+            AssertTeleportRayDefaults(leftTeleportRay);
+            Assert.That(leftTeleportRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+            Assert.That(leftTeleportLineVisual, Is.Not.Null);
+            AssertLineVisualDefaults(leftTeleportLineVisual);
             Assert.That(leftTeleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(creativeInputBridge, Is.Not.Null);
+            Assert.That(keyboardHandVisibility, Is.Not.Null,
+                "The local XR rig must hide first-person fallback hands while the Quest system keyboard is visible.");
             Assert.That(prefab.transform.Find("Camera Offset/Right Controller/Ray Pointer Line"), Is.Null);
             Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
@@ -631,21 +948,24 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popup, Is.Not.Null);
             BlockiverseWorldSpacePanelPresenter popupPresenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(popupPresenter, Is.Not.Null);
-            Assert.That(popupPresenter.ShowOnStart, Is.True);
+            Assert.That(popupPresenter.ShowOnStart, Is.False,
+                "The title router must own first-frame menu visibility; controls stay available from Settings.");
             Assert.That(popup.GetComponent<Canvas>()?.enabled, Is.False);
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
             string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                 .Select(label => label.text));
 
             // Canonical controller mapping (shared with the Settings → Controls screen).
-            Assert.That(popupText, Does.Contain("Right trigger: press UI or break blocks"));
-            Assert.That(popupText, Does.Contain("Right grip: place or use"));
-            Assert.That(popupText, Does.Contain("Left grip: blocks menu"));
+            Assert.That(popupText, Does.Contain("Dominant trigger: press UI / break"));
+            Assert.That(popupText, Does.Contain("Dominant grip: place / use"));
+            Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
             Assert.That(popupText, Does.Contain("Menu: pause"));
-            Assert.That(popupText, Does.Contain("Right stick: snap turn"));
-            Assert.That(popupText, Does.Contain("Right A: jump"));
-            Assert.That(popupText, Does.Contain("Right B: toggle block editing"));
-            Assert.That(popupText, Does.Contain("Left stick: move"));
+            Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
+            Assert.That(popupText, Does.Contain("Dominant primary button: jump"));
+            Assert.That(popupText, Does.Contain("Dominant secondary button: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Support stick: move"));
+            Assert.That(popupText, Does.Contain("Support stick click: sprint"));
+            Assert.That(popupText, Does.Contain("Either stick hold up: teleport aim, release to land"));
             Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
             Assert.That(popupText, Does.Not.Contain("Left X: jump"));
             Assert.That(popupText, Does.Not.Contain("Left Y: undo"));
@@ -654,13 +974,44 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(startupOverlay, Is.Not.Null);
             BlockiverseWorldSpacePanelPresenter startupPresenter = startupOverlay.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(startupPresenter, Is.Not.Null);
-            Assert.That(startupPresenter.ShowOnStart, Is.True);
+            Assert.That(startupPresenter.ShowOnStart, Is.False,
+                "The loading artwork must not auto-render over the title menu after the app reaches the menu.");
             Assert.That(startupOverlay.GetComponent<Canvas>()?.enabled, Is.False);
+            Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
+                "Startup artwork is decorative and must not intercept tracked-device UI rays.");
+
+            Canvas popupCanvas = popup.GetComponent<Canvas>();
+            Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
+            Assert.That(popupCanvas, Is.Not.Null);
+            Assert.That(startupCanvas, Is.Not.Null);
+            Assert.That(popupCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
+                "The first-run controller map must render in front of any startup artwork.");
+
+            CanvasGroup startupInputGate = startupOverlay.GetComponent<CanvasGroup>();
+            Assert.That(startupInputGate, Is.Not.Null);
+            Assert.That(startupInputGate.interactable, Is.False);
+            Assert.That(startupInputGate.blocksRaycasts, Is.False);
+
+            foreach (Graphic graphic in startupOverlay.GetComponentsInChildren<Graphic>(includeInactive: true))
+                Assert.That(graphic.raycastTarget, Is.False, $"{graphic.name} must not receive UI raycasts.");
 
             Assert.That(survivalHud, Is.Not.Null);
             Assert.That(survivalHud.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(11));
             Assert.That(survivalHud.GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true), Is.Not.Null);
             Assert.That(survivalHud.GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true), Is.Not.Null);
+
+            RectTransform survivalHudRect = survivalHud.GetComponent<RectTransform>();
+            Assert.That(survivalHudRect, Is.Not.Null);
+            Assert.That(survivalHudRect.rect.width, Is.LessThanOrEqualTo(600.0f),
+                "Gameplay HUD should be a compact overlay, not the full survival menu.");
+            Assert.That(survivalHudRect.rect.height, Is.LessThanOrEqualTo(220.0f),
+                "Gameplay HUD should not occupy the player's central field of view.");
+            Assert.That(survivalHud.Find("Panel/Inventory")?.gameObject.activeSelf, Is.False,
+                "The full inventory panel belongs behind an explicit inventory route, not always-visible gameplay HUD.");
+            Assert.That(survivalHud.Find("Panel/Crafting")?.gameObject.activeSelf, Is.False,
+                "The full crafting panel belongs behind an explicit crafting route, not always-visible gameplay HUD.");
+            Assert.That(survivalHud.Find("Panel/Shared Crate")?.gameObject.activeSelf, Is.False,
+                "The shared crate panel belongs behind an explicit crate route, not always-visible gameplay HUD.");
         }
 
         [Test]
@@ -701,6 +1052,55 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller.GetComponent<BlockiverseControllerHaptics>()?.Role, Is.EqualTo(expectedRole));
         }
 
+        static void AssertControllerRayOrigin(Transform controller, Transform rayOrigin)
+        {
+            Assert.That(rayOrigin, Is.Not.Null, $"{controller?.name} should carry a controller-local ray origin.");
+            Assert.That(rayOrigin.parent, Is.SameAs(controller));
+            Assert.That(Vector3.Distance(rayOrigin.localPosition, Vector3.zero), Is.LessThan(0.0001f),
+                "The ray should originate at the tracked controller, not a separate pointer-pose transform.");
+            Assert.That(Quaternion.Angle(rayOrigin.localRotation, ControllerRayOriginLocalRotation), Is.LessThan(0.001f),
+                "Quest grip-pose forward points up like a stick; the child origin flips XRI forward onto the physical pointing axis.");
+        }
+
+        static void AssertInteractionRayDefaults(XRRayInteractor ray)
+        {
+            Assert.That(ray, Is.Not.Null);
+            Assert.That(ray.lineType, Is.EqualTo(XRRayInteractor.LineType.StraightLine));
+            Assert.That(ray.hitDetectionType, Is.EqualTo(XRRayInteractor.HitDetectionType.Raycast));
+            Assert.That(ray.hitClosestOnly, Is.True);
+            Assert.That(ray.blendVisualLinePoints, Is.True);
+            Assert.That(ray.raycastSnapVolumeInteraction, Is.EqualTo(XRRayInteractor.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(ray.enableUIInteraction, Is.True);
+            Assert.That(ray.blockUIOnInteractableSelection, Is.False,
+                "Block targeting must not suppress UI clicks while a menu is visible.");
+            Assert.That(ray.interactionLayers.value, Is.EqualTo(0),
+                "Block targeting reads the raycast hit; it must not select 3D interactables.");
+            Assert.That(ray.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+        }
+
+        static void AssertTeleportRayDefaults(XRRayInteractor ray)
+        {
+            Assert.That(ray, Is.Not.Null);
+            Assert.That(ray.lineType, Is.EqualTo(XRRayInteractor.LineType.ProjectileCurve));
+            Assert.That(ray.hitDetectionType, Is.EqualTo(XRRayInteractor.HitDetectionType.Raycast));
+            Assert.That(ray.hitClosestOnly, Is.True);
+            Assert.That(ray.blendVisualLinePoints, Is.True);
+            Assert.That(ray.raycastSnapVolumeInteraction, Is.EqualTo(XRRayInteractor.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(ray.enableUIInteraction, Is.False);
+        }
+
+        static void AssertLineVisualDefaults(XRInteractorLineVisual lineVisual)
+        {
+            Assert.That(lineVisual.lineWidth, Is.EqualTo(0.01f).Within(0.0001f));
+            Assert.That(lineVisual.overrideInteractorLineOrigin, Is.False);
+            Assert.That(lineVisual.lineOriginTransform, Is.Null);
+            Assert.That(lineVisual.overrideInteractorLineLength, Is.False);
+            Assert.That(lineVisual.autoAdjustLineLength, Is.True);
+            Assert.That(lineVisual.minLineLength, Is.EqualTo(0.75f).Within(0.001f));
+            Assert.That(lineVisual.stopLineAtFirstRaycastHit, Is.True);
+            Assert.That(lineVisual.smoothMovement, Is.True);
+        }
+
         static void AssertBinding(InputActionProperty property, string expectedPath)
         {
             Assert.That(property.action, Is.Not.Null);
@@ -708,16 +1108,35 @@ namespace Blockiverse.Tests.EditMode
                 binding => binding.effectivePath == expectedPath || binding.path == expectedPath));
         }
 
-        static void AssertJumpProviderUsesGameplayJump(BlockiverseInputRig inputRig, JumpProvider jumpProvider)
+        static void AssertJumpProviderUsesDominantPrimary(BlockiverseInputRig inputRig, JumpProvider jumpProvider)
         {
-            InputAction jumpAction = inputRig.InputActions
-                .FindActionMap(BlockiverseInputActionNames.GameplayMap)
-                .FindAction(BlockiverseInputActionNames.Jump);
+            InputAction jumpAction = inputRig.ResolveJumpActionForCurrentControls();
 
             Assert.That(jumpProvider.jumpInput.inputSourceMode,
                 Is.EqualTo(XRInputButtonReader.InputSourceMode.InputActionReference));
             Assert.That(jumpProvider.jumpInput.inputActionReferencePerformed?.action,
                 Is.SameAs(jumpAction));
+        }
+
+        static void AssertControllerRoleActions(InputActionMap map, string handUsage)
+        {
+            string controllerPath = $"<XRController>{{{handUsage}}}";
+            InputAction primary = map.FindAction(BlockiverseInputActionNames.PrimaryButton, throwIfNotFound: false);
+            InputAction secondary = map.FindAction(BlockiverseInputActionNames.SecondaryButton, throwIfNotFound: false);
+            InputAction sprint = map.FindAction(BlockiverseInputActionNames.Sprint, throwIfNotFound: false);
+
+            Assert.That(primary, Is.Not.Null, $"{map.name}/Primary Button should exist.");
+            Assert.That(primary.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/primaryButton"),
+                $"{map.name}/Primary Button should be bound to {controllerPath}/primaryButton.");
+            Assert.That(secondary, Is.Not.Null, $"{map.name}/Secondary Button should exist.");
+            Assert.That(secondary.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/secondaryButton"),
+                $"{map.name}/Secondary Button should be bound to {controllerPath}/secondaryButton.");
+            Assert.That(sprint, Is.Not.Null, $"{map.name}/Sprint should exist.");
+            Assert.That(sprint.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
+                $"{map.name}/Sprint should be bound to {controllerPath}/thumbstickClicked.");
         }
 
         static void AssertButtonReaderReferencesAction(XRInputButtonReader reader, InputAction action, string message)
@@ -728,6 +1147,45 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(reader.inputActionReferencePerformed?.action,
                 Is.SameAs(action),
                 message);
+        }
+
+        static void AssertActionPropertyUsesGeneratedReference(InputActionProperty property, string context)
+        {
+            AssertGeneratedReference(property.reference, context);
+            Assert.That(property.action, Is.Not.Null, $"{context} should resolve a generated action.");
+        }
+
+        static void AssertButtonReaderUsesGeneratedReference(XRInputButtonReader reader, string context, bool allowUnused)
+        {
+            if (allowUnused && reader.inputSourceMode == XRInputButtonReader.InputSourceMode.Unused)
+                return;
+
+            Assert.That(reader.inputSourceMode,
+                Is.EqualTo(XRInputButtonReader.InputSourceMode.InputActionReference),
+                $"{context} should use InputActionReference mode.");
+            AssertGeneratedReference(reader.inputActionReferencePerformed, context);
+        }
+
+        static void AssertValueReaderUsesGeneratedReference(XRInputValueReader<Vector2> reader, string context, bool allowUnused)
+        {
+            if (allowUnused && reader.inputSourceMode == XRInputValueReader.InputSourceMode.Unused)
+                return;
+
+            Assert.That(reader.inputSourceMode,
+                Is.EqualTo(XRInputValueReader.InputSourceMode.InputActionReference),
+                $"{context} should use InputActionReference mode.");
+            AssertGeneratedReference(reader.inputActionReference, context);
+        }
+
+        static void AssertGeneratedReference(InputActionReference reference, string context)
+        {
+            Assert.That(reference, Is.Not.Null, $"{context} should use a generated InputActionReference asset.");
+            Assert.That(reference.action, Is.Not.Null, $"{context} reference should resolve an action.");
+
+            string path = AssetDatabase.GetAssetPath(reference);
+
+            Assert.That(path, Does.StartWith(BlockiverseProject.InputActionReferencesFolderPath + "/"),
+                $"{context} should reference an asset-owned InputActionReference, not a scene-local object.");
         }
 
         static void AssertControllerPoseDriver(GameObject instance, string controllerName, string positionPath, string rotationPath)
@@ -746,28 +1204,9 @@ namespace Blockiverse.Tests.EditMode
             AssertBinding(driver.rotationInput, rotationPath);
         }
 
-        static void AssertAimPoseDriver(GameObject instance, string aimPoseName, string positionPath, string rotationPath)
-        {
-            Transform aimPose = instance.transform.Find($"Camera Offset/{aimPoseName}");
-
-            Assert.That(aimPose, Is.Not.Null);
-
-            TrackedPoseDriver driver = aimPose.GetComponent<TrackedPoseDriver>();
-
-            Assert.That(driver, Is.Not.Null);
-            Assert.That(driver.enabled, Is.True);
-            Assert.That(driver.updateType, Is.EqualTo(TrackedPoseDriver.UpdateType.UpdateAndBeforeRender));
-            Assert.That(driver.trackingType, Is.EqualTo(TrackedPoseDriver.TrackingType.RotationAndPosition));
-            AssertBinding(driver.positionInput, positionPath);
-            AssertBinding(driver.rotationInput, rotationPath);
-        }
-
         static void AssertGravityUsesVoxelTerrainMask(GravityProvider gravityProvider)
         {
-            int terrainLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
-
-            Assert.That(terrainLayer, Is.GreaterThanOrEqualTo(0), "Blockiverse terrain interaction layer must exist.");
-            Assert.That(gravityProvider.sphereCastLayerMask.value, Is.EqualTo(1 << terrainLayer),
+            Assert.That(gravityProvider.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.InteractionLayerMask),
                 "Gravity grounding must ignore the player CharacterController and only test voxel terrain.");
             Assert.That(gravityProvider.sphereCastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Ignore));
         }

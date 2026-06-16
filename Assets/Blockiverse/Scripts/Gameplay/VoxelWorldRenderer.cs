@@ -61,6 +61,8 @@ namespace Blockiverse.Gameplay
             BlockRegistry blockRegistry,
             Material material,
             int layer,
+            Texture2D selectedAtlas = null,
+            string textureSetId = BlockTextureSetIds.Default,
             bool deferInitialRebuild = false)
         {
             // Reconfiguring onto a new world (new/load from the menus) must not leave the old
@@ -72,7 +74,7 @@ namespace Blockiverse.Gameplay
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             BlockVisualAtlas.ValidateRenderableBlockCoverage(registry);
-            chunkMaterial = BlockVisualAtlas.CreateMaterial(material);
+            chunkMaterial = BlockVisualAtlas.CreateMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
             skyLight = new VoxelSkyLightMap(world, registry);
             rebuildQueue = new ChunkRebuildQueue(world, skyLight);

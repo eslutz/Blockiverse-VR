@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Gameplay",
+    "Blockiverse.MetaPlatform",
     "Blockiverse.Networking",
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
@@ -19,7 +20,10 @@
     "Unity.TextMeshPro",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
-    "Unity.XR.OpenXR"
+    "Unity.XR.CompositionLayers",
+    "Unity.XR.CompositionLayers.UIInteraction",
+    "Unity.XR.OpenXR",
+    "Unity.XR.OpenXR.Editor"
   ],
   "includePlatforms": [
     "Editor"

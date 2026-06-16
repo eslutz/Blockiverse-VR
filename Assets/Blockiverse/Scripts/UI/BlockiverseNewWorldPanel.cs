@@ -1,4 +1,5 @@
 using System;
+using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -26,6 +27,7 @@ namespace Blockiverse.UI
             c => c.CycleWorldSize(),
             c => c.CycleWorldPreset(),
             c => c.CycleStartingBiome(),
+            c => c.CycleTextureSet(),
         };
 
         static readonly Action<NewWorldConfig>[] BackActions =
@@ -35,6 +37,7 @@ namespace Blockiverse.UI
             c => c.CycleWorldSize(false),
             c => c.CycleWorldPreset(false),
             c => c.CycleStartingBiome(false),
+            c => c.CycleTextureSet(false),
         };
 
         static readonly Func<NewWorldConfig, string>[] ValueGetters =
@@ -44,6 +47,7 @@ namespace Blockiverse.UI
             c => BlockiverseLocalization.DisplayNameForCanonicalId(c.WorldSize),
             c => BlockiverseLocalization.DisplayNameForCanonicalId(c.WorldPreset),
             c => BlockiverseLocalization.DisplayNameForCanonicalId(c.StartingBiome),
+            c => BlockiverseLocalization.DisplayNameForCanonicalId(c.TextureSet),
         };
 
         static readonly string[] CycleRowNames =
@@ -53,6 +57,7 @@ namespace Blockiverse.UI
             "World Size",
             "World Preset",
             "Starting Biome",
+            "Texture Set",
         };
 
         bool controlsWired;
@@ -79,6 +84,9 @@ namespace Blockiverse.UI
             this.cancelButton = cancelButton;
             this.errorLabel = errorLabel;
             controlsWired = false;
+            ConfigureNameInput();
+            ConfigureSeedInput();
+            ConfigureCycleButtonHitAreas();
             WireControls();
         }
 
@@ -111,6 +119,10 @@ namespace Blockiverse.UI
             changed |= AssignIfMissing(ref createButton, FindChildComponent<Button>(root, "Create Button"));
             changed |= AssignIfMissing(ref cancelButton, FindChildComponent<Button>(root, "Cancel Button"));
             changed |= AssignIfMissing(ref errorLabel, FindChildComponent<TMP_Text>(root, "Error"));
+
+            ConfigureNameInput();
+            ConfigureSeedInput();
+            ConfigureCycleButtonHitAreas();
 
             if (changed)
                 controlsWired = false;
@@ -158,6 +170,79 @@ namespace Blockiverse.UI
             createButton?.onClick.AddListener(OnCreate);
             cancelButton?.onClick.AddListener(() => ActionRequested?.Invoke(MenuActions.NewWorldCancel));
             controlsWired = true;
+        }
+
+        void ConfigureNameInput()
+        {
+            ConfigureEditableTextInput(nameInput);
+        }
+
+        void ConfigureSeedInput()
+        {
+            ConfigureEditableTextInput(seedInput);
+        }
+
+        static void ConfigureEditableTextInput(TMP_InputField input)
+        {
+            if (input == null)
+                return;
+
+            input.interactable = true;
+            input.readOnly = false;
+            input.lineType = TMP_InputField.LineType.SingleLine;
+            input.contentType = TMP_InputField.ContentType.Standard;
+            input.keyboardType = TouchScreenKeyboardType.Default;
+            input.characterValidation = TMP_InputField.CharacterValidation.None;
+            input.inputType = TMP_InputField.InputType.Standard;
+
+            if (input.targetGraphic == null && input.TryGetComponent(out Graphic inputGraphic))
+                input.targetGraphic = inputGraphic;
+
+            if (input.targetGraphic != null)
+                input.targetGraphic.raycastTarget = true;
+
+            if (input.textComponent != null)
+                input.textComponent.raycastTarget = false;
+
+            if (input.placeholder is Graphic placeholderGraphic)
+                placeholderGraphic.raycastTarget = false;
+
+            BlockiverseSystemKeyboardField keyboardField = input.GetComponent<BlockiverseSystemKeyboardField>();
+            keyboardField?.Configure(input, TouchScreenKeyboardType.Default);
+        }
+
+        void ConfigureCycleButtonHitAreas()
+        {
+            ConfigureButtonHitAreas(cycleBackButtons);
+            ConfigureButtonHitAreas(cycleNextButtons);
+        }
+
+        static void ConfigureButtonHitAreas(Button[] buttons)
+        {
+            if (buttons == null)
+                return;
+
+            for (int i = 0; i < buttons.Length; i++)
+                ConfigureButtonHitArea(buttons[i]);
+        }
+
+        static void ConfigureButtonHitArea(Button button)
+        {
+            if (button == null)
+                return;
+
+            if (button.targetGraphic == null && button.TryGetComponent(out Graphic rootGraphic))
+                button.targetGraphic = rootGraphic;
+
+            if (button.targetGraphic != null)
+                button.targetGraphic.raycastTarget = true;
+
+            foreach (Graphic childGraphic in button.GetComponentsInChildren<Graphic>(true))
+            {
+                if (button.targetGraphic != null && childGraphic == button.targetGraphic)
+                    continue;
+                childGraphic.raycastTarget = false;
+            }
         }
 
         void OnCycle(int idx, bool forward)

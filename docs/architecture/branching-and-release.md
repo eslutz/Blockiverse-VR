@@ -10,8 +10,8 @@ Blockiverse VR uses trunk-based development.
 - There are no long-lived release branches.
 - GitHub should automatically delete head branches after pull requests merge.
 
-Release channels use SemVer-derived Android `versionName` values. The root
-`VERSION` file is the SemVer base version source; see
+Release channels use SemVer-derived Android `versionName` values.
+`ProjectSettings/BlockiverseVersion.txt` is the SemVer base version source; see
 [ADR 0005](../adr/0005-release-versioning.md).
 
 | Workflow | Trigger | Purpose | Meta credentials |
