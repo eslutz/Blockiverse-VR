@@ -83,6 +83,19 @@ jobs:
           echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
           echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
 
+      - name: Free runner disk space for Unity Android image
+        if: runner.os == 'Linux'
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android/sdk
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          docker system prune --all --force
+          df -h
+
       # This smoke build is the GitHub-hosted Unity validation gate. It catches
       # package import, compile, Android target, and APK packaging failures.
       - name: Build Android smoke APK

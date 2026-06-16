@@ -110,6 +110,19 @@ jobs:
             printf 'ANDROID_KEY_PASSWORD=%s\n' "$ANDROID_KEY_PASSWORD"
           } > .ci-secrets/release-signing.env
 
+      - name: Free runner disk space for Unity Android image
+        if: runner.os == 'Linux'
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android/sdk
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          docker system prune --all --force
+          df -h
+
       - name: Build release-signed Android APK
         uses: game-ci/unity-builder@v4
         env:
