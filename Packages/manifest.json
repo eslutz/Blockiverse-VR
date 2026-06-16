@@ -9,6 +9,7 @@
     }
   ],
   "dependencies": {
+    "com.besty.unity-skills": "https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity",
     "com.meta.xr.sdk.avatars": "40.0.1",
     "com.meta.xr.sdk.core": "81.0.1",
     "com.meta.xr.sdk.interaction.ovr": "81.0.1",
@@ -58,5 +59,8 @@
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0"
-  }
+  },
+  "testables": [
+    "com.besty.unity-skills"
+  ]
 }

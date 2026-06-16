@@ -228,6 +228,7 @@ namespace Blockiverse.Editor
             ConfigureUniversalRenderPipeline();
             ConfigureOpenXrForAndroid();
             EnsureInteractionLayer();
+            EnsureCompositionUiLayer();
             EnsureInteractionMaterials();
             EnsureInputActions();
             EnsureXrRigPrefab();
@@ -658,7 +659,8 @@ namespace Blockiverse.Editor
 
         static void ConfigureCompositionLayerSplash()
         {
-            PlayerSettings.SplashScreen.show = false;
+            PlayerSettings.SplashScreen.show = true;
+            PlayerSettings.SplashScreen.showUnityLogo = true;
             PlayerSettings.virtualRealitySplashScreen = null;
 
             Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
@@ -793,15 +795,31 @@ namespace Blockiverse.Editor
             return EnsureUnityLayer(BlockiverseProject.InteractionLayerName);
         }
 
+        static int EnsureCompositionUiLayer()
+        {
+            return EnsureUnityLayer(BlockiverseProject.CompositionUiLayerName, BlockiverseProject.CompositionUiLayerIndex);
+        }
+
         static LayerMask GetInteractionLayerMask()
         {
             return (LayerMask)BlockiverseProject.InteractionLayerMask;
+        }
+
+        static LayerMask GetVrUiRaycastLayerMask()
+        {
+            return (LayerMask)BlockiverseProject.VrUiRaycastLayerMask;
         }
 
         static int GetInteractionLayerIndex()
         {
             int layer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
             return layer >= 0 ? layer : BlockiverseProject.InteractionLayerIndex;
+        }
+
+        static int GetCompositionUiLayerIndex()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.CompositionUiLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.CompositionUiLayerIndex;
         }
 
         static void AddControllerMap(InputActionAsset asset, string mapName, string controllerPath)
