@@ -19,6 +19,20 @@ namespace Blockiverse.Tests.PlayMode
         static readonly MethodInfo CreativeInputBridgeUpdateMethod =
             typeof(BlockiverseCreativeInputBridge).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public override void TearDown()
+        {
+            BlockiverseRuntimeState.Reset();
+            base.TearDown();
+        }
+
         [UnityTest]
         public IEnumerator BlockEditingToggleHidesAndRestoresTheInteractionRayVisual()
         {
@@ -33,23 +47,27 @@ namespace Blockiverse.Tests.PlayMode
                 LineRenderer lineRenderer = rayObject.AddComponent<LineRenderer>();
                 XRInteractorLineVisual lineVisual = rayObject.AddComponent<XRInteractorLineVisual>();
                 CreativeInteractionController controller = controllerObject.AddComponent<CreativeInteractionController>();
+                BlockiverseInputRig rig = bridgeObject.AddComponent<BlockiverseInputRig>();
                 BlockiverseCreativeInputBridge bridge = bridgeObject.AddComponent<BlockiverseCreativeInputBridge>();
 
                 lineRenderer.enabled = true;
                 lineVisual.enabled = true;
-                bridge.Configure(null, ray, controller);
+                bridge.Configure(rig, ray, controller);
 
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
                 controller.SetBlockEditingEnabled(false);
-                yield return null;
+                CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
 
                 Assert.That(lineRenderer.enabled, Is.False);
                 Assert.That(lineVisual.enabled, Is.False);
 
                 controller.SetBlockEditingEnabled(true);
-                yield return null;
+                CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
 
                 Assert.That(lineRenderer.enabled, Is.True);
                 Assert.That(lineVisual.enabled, Is.True);
+
+                yield return null;
             }
             finally
             {
@@ -110,7 +128,7 @@ namespace Blockiverse.Tests.PlayMode
             yield return null;
 
             GameObject worldObject = GameObject.Find("Creative World");
-            int interactionLayer = LayerMask.NameToLayer(BlockiverseProject.InteractionLayerName);
+            int interactionLayer = BlockiverseProject.InteractionLayerIndex;
 
             Assert.That(worldObject, Is.Not.Null);
             Assert.That(interactionLayer, Is.GreaterThanOrEqualTo(0));
@@ -147,6 +165,20 @@ namespace Blockiverse.Tests.PlayMode
 
     public sealed class BlockiverseInteractionInputPlayModeTests : InputTestFixture
     {
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public override void TearDown()
+        {
+            BlockiverseRuntimeState.Reset();
+            base.TearDown();
+        }
+
         [UnityTest]
         public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
         {

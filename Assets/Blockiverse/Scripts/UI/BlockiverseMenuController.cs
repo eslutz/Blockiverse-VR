@@ -291,17 +291,20 @@ namespace Blockiverse.UI
         // Called by the world manager after a world is created or loaded.
         public void EnterGameplay()
         {
-            router?.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
+            EnsureRouter(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
+            router.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen, allowWorldInput: true));
         }
 
         public void ShowWorldLoadingScreen()
         {
-            router?.ClearToRoot(new ScreenRoute(MenuActions.WorldLoadingScreen, pauseGame: true));
+            EnsureRouter(new ScreenRoute(MenuActions.WorldLoadingScreen, pauseGame: true));
+            router.ClearToRoot(new ScreenRoute(MenuActions.WorldLoadingScreen, pauseGame: true));
         }
 
         public void ShowTitleScreen()
         {
-            router?.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            EnsureRouter(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
             RefreshTitleMenu();
         }
 
@@ -427,8 +430,7 @@ namespace Blockiverse.UI
         {
             ResolveRuntimeReferences();
 
-            router = new UiScreenRouter(ResolveInitialRoute());
-            router.Changed += ApplyRouterState;
+            EnsureRouter(ResolveInitialRoute());
 
             if (inputRig != null)
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
@@ -488,13 +490,21 @@ namespace Blockiverse.UI
 
         public bool ShowLanMultiplayerScreen()
         {
-            if (router == null)
-                return false;
+            EnsureRouter(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
 
             if (router.ActiveScreen.ScreenId != MenuActions.LanMultiplayerScreen)
                 router.PushScreen(new ScreenRoute(MenuActions.LanMultiplayerScreen, pauseGame: true));
 
             return true;
+        }
+
+        void EnsureRouter(ScreenRoute root)
+        {
+            if (router != null)
+                return;
+
+            router = new UiScreenRouter(root);
+            router.Changed += ApplyRouterState;
         }
 
         // Status line on the title menu — used by the session coordinator to surface

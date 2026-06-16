@@ -157,7 +157,7 @@ namespace Blockiverse.Gameplay
 
             RefreshStats();
 
-            if (dirtyChunkScratch.Count >= LargeDirtyRebuildWarningThreshold)
+            if (!Application.isBatchMode && dirtyChunkScratch.Count >= LargeDirtyRebuildWarningThreshold)
             {
                 BlockiverseLog.Warning(
                     BlockiverseLogCategory.Renderer,

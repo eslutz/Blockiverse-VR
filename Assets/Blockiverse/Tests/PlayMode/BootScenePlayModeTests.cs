@@ -39,9 +39,12 @@ namespace Blockiverse.Tests.PlayMode
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-            SurvivalInventoryPanel inventoryPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>();
-            SurvivalCraftingPanel craftingPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>();
-            SurvivalHealthPanel healthPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalHealthPanel>();
+            SurvivalInventoryPanel inventoryPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
+            SurvivalCraftingPanel craftingPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>(FindObjectsInactive.Include);
+            SurvivalHealthPanel healthPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalHealthPanel>(FindObjectsInactive.Include);
 
             Assert.That(inventoryPanel, Is.Not.Null);
             Assert.That(craftingPanel, Is.Not.Null);
@@ -49,7 +52,7 @@ namespace Blockiverse.Tests.PlayMode
 
             Canvas canvas = inventoryPanel.GetComponentInParent<Canvas>();
             Assert.That(canvas, Is.Not.Null);
-            Assert.That(canvas.enabled, Is.True);
+            Assert.That(canvas.enabled, Is.False, "The gameplay HUD starts hidden while the title/menu route is active.");
             Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
             Assert.That(craftingPanel.GetComponentInParent<Canvas>(), Is.SameAs(canvas));
             Assert.That(healthPanel.GetComponentInParent<Canvas>(), Is.SameAs(canvas));
@@ -139,7 +142,8 @@ namespace Blockiverse.Tests.PlayMode
                 BlockiverseInputActionNames.UiPress);
 
             // World-space menus are raycast by the tracked-device raycaster, not the screen raycaster.
-            SurvivalInventoryPanel inventoryPanel = UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>();
+            SurvivalInventoryPanel inventoryPanel =
+                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
             Assert.That(inventoryPanel, Is.Not.Null);
             Canvas hudCanvas = inventoryPanel.GetComponentInParent<Canvas>();
             Assert.That(hudCanvas.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);

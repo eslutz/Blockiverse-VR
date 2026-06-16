@@ -191,6 +191,8 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
         [Test]
         public void AvatarSdkSceneManagersStayInactiveForEditorPlayMode()
         {
+            DisableMetaProjectSetupBackgroundChecks();
+
             try
             {
                 foreach (string scenePath in AvatarScenePaths)
@@ -210,6 +212,21 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             {
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             }
+        }
+
+        static void DisableMetaProjectSetupBackgroundChecks()
+        {
+            // Keep scene-opening tests isolated from Meta's background project setup.
+            // Newer Meta Core families have crashed here in Linux batchmode when
+            // OVRPlugin reports an unsupported 0.0.0 wrapper version.
+            Type updaterType = Type.GetType("OVRProjectSetupUpdater, Oculus.VR.Editor")
+                ?? AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(assembly => assembly.GetType("OVRProjectSetupUpdater"))
+                    .FirstOrDefault(type => type != null);
+            MethodInfo setupTemporaryRegistry = updaterType?.GetMethod(
+                "SetupTemporaryRegistry",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            setupTemporaryRegistry?.Invoke(null, null);
         }
 
         BlockiverseMetaAvatarPresenter CreatePresenter(

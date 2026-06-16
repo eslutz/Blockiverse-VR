@@ -773,12 +773,12 @@ namespace Blockiverse.Tests.EditMode
             GetChildComponent<Button>(panel.transform, "Panel/Deposit Input Button").onClick.Invoke();
             Assert.That(
                 GetChildComponent<TMP_Text>(panel.transform, "Panel/Status").text,
-                Is.EqualTo("Cannot deposit: Out of Reach"));
+                Is.EqualTo("Cannot deposit: Not a Station"));
 
             GetChildComponent<Button>(panel.transform, "Panel/Withdraw Input Button").onClick.Invoke();
             Assert.That(
                 GetChildComponent<TMP_Text>(panel.transform, "Panel/Status").text,
-                Is.EqualTo("Cannot withdraw: Out of Reach"));
+                Is.EqualTo("Cannot withdraw: Not a Station"));
 
             bool closed = false;
             panel.CloseRequested += () => closed = true;

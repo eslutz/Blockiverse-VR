@@ -1,0 +1,232 @@
+# Purpose: build a release-signed Quest APK from main or a trusted manual ref
+# and upload it to the Meta alpha channel. This workflow is a deployment lane,
+# not a pull request validation lane, and it requires signing and Meta upload
+# credentials through the meta-alpha environment.
+name: Quest Alpha
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Trusted branch, tag, or commit to publish to Meta ALPHA
+        required: false
+        type: string
+        default: main
+      version_name:
+        description: Optional Android versionName override for tested candidates
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quest-alpha
+  cancel-in-progress: false
+
+env:
+  META_AGE_GROUP: ${{ vars.META_AGE_GROUP || 'TEENS_AND_ADULTS' }}
+
+jobs:
+  alpha:
+    name: Build and upload Alpha APK
+    runs-on: ubuntu-latest
+    environment:
+      name: meta-alpha
+    outputs:
+      version_name: ${{ steps.settings.outputs.version_name }}
+      version_code: ${{ steps.settings.outputs.version_code }}
+      source_sha: ${{ steps.settings.outputs.source_sha }}
+      meta_build_id: ${{ steps.upload.outputs.meta_build_id }}
+    steps:
+      - name: Check out trusted source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          fetch-depth: 0
+          lfs: true
+
+      - name: Pull Git LFS assets
+        run: git lfs pull
+
+      - name: Restore Unity Library cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: unity-library-alpha-${{ runner.os }}-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          restore-keys: |
+            unity-library-alpha-${{ runner.os }}-6000.3.16f1-
+            unity-library-alpha-${{ runner.os }}-
+
+      - name: Compute Alpha build settings
+        id: settings
+        env:
+          VERSION_NAME_OVERRIDE: ${{ inputs.version_name }}
+        run: |
+          base_version="$(tr -d '[:space:]' < ProjectSettings/BlockiverseVersion.txt)"
+          if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ProjectSettings/BlockiverseVersion.txt must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            exit 64
+          fi
+
+          source_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=7 HEAD)"
+          if [ -n "$VERSION_NAME_OVERRIDE" ]; then
+            version_name="$VERSION_NAME_OVERRIDE"
+          else
+            version_name="${base_version}-alpha.run${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}.${short_sha}"
+          fi
+          version_code="$(( $(date -u +%s) - 1577836800 ))"
+          apk_filename="BlockiverseVR-${version_name}-alpha.apk"
+          artifact_dir=".ci-artifacts/alpha"
+          output_path="${artifact_dir}/${apk_filename}"
+
+          mkdir -p "$artifact_dir"
+
+          echo "apk_filename=$apk_filename" >> "$GITHUB_OUTPUT"
+          echo "artifact_dir=$artifact_dir" >> "$GITHUB_OUTPUT"
+          echo "output_path=$output_path" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
+          echo "version_name=$version_name" >> "$GITHUB_OUTPUT"
+
+      - name: Decode Android release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          mkdir -p .ci-secrets
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > .ci-secrets/blockiverse-release.keystore
+          {
+            printf 'ANDROID_KEYSTORE_PATH=%s\n' ".ci-secrets/blockiverse-release.keystore"
+            printf 'ANDROID_KEYSTORE_PASSWORD=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'ANDROID_KEY_ALIAS=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'ANDROID_KEY_PASSWORD=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > .ci-secrets/release-signing.env
+
+      - name: Build release-signed Android APK
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.3.16f1
+          targetPlatform: Android
+          buildMethod: Blockiverse.Editor.BlockiverseBuildSmoke.BuildReleaseAndroid
+          versioning: None
+          customParameters: >
+            -blockiverseBuildOutput ${{ steps.settings.outputs.output_path }}
+            -blockiverseBuildVersionName ${{ steps.settings.outputs.version_name }}
+            -blockiverseBuildVersionCode ${{ steps.settings.outputs.version_code }}
+            -blockiverseSigningConfigPath .ci-secrets/release-signing.env
+
+      - name: Verify APK and write release notes
+        env:
+          APK_FILENAME: ${{ steps.settings.outputs.apk_filename }}
+          ARTIFACT_DIR: ${{ steps.settings.outputs.artifact_dir }}
+          SOURCE_SHA: ${{ steps.settings.outputs.source_sha }}
+          VERSION_CODE: ${{ steps.settings.outputs.version_code }}
+          VERSION_NAME: ${{ steps.settings.outputs.version_name }}
+        run: |
+          test -f "${ARTIFACT_DIR}/${APK_FILENAME}"
+          cd "$ARTIFACT_DIR"
+          sha256sum "$APK_FILENAME" > checksums.txt
+          {
+            echo "# Blockiverse VR ${VERSION_NAME}"
+            echo
+            echo "- Meta channel: alpha"
+            echo "- Android versionName: ${VERSION_NAME}"
+            echo "- Android versionCode: ${VERSION_CODE}"
+            echo "- Source commit: ${SOURCE_SHA}"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "This is a release-signed Quest APK uploaded directly to Meta ALPHA."
+          } > release-notes.md
+
+      - name: Install Meta platform utility
+        env:
+          OVR_PLATFORM_UTIL_LINUX_SHA256: ${{ vars.OVR_PLATFORM_UTIL_LINUX_SHA256 }}
+          OVR_PLATFORM_UTIL_LINUX_URL: ${{ vars.OVR_PLATFORM_UTIL_LINUX_URL }}
+        run: |
+          curl -fsSL "$OVR_PLATFORM_UTIL_LINUX_URL" -o "$RUNNER_TEMP/ovr-platform-util"
+          if [ -n "$OVR_PLATFORM_UTIL_LINUX_SHA256" ]; then
+            echo "${OVR_PLATFORM_UTIL_LINUX_SHA256}  ${RUNNER_TEMP}/ovr-platform-util" | sha256sum -c -
+          fi
+          chmod +x "$RUNNER_TEMP/ovr-platform-util"
+          "$RUNNER_TEMP/ovr-platform-util" version
+
+      - name: Upload APK to Meta ALPHA
+        id: upload
+        env:
+          APK_FILENAME: ${{ steps.settings.outputs.apk_filename }}
+          ARTIFACT_DIR: ${{ steps.settings.outputs.artifact_dir }}
+          META_APP_ID: ${{ secrets.META_APP_ID }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          SOURCE_SHA: ${{ steps.settings.outputs.source_sha }}
+          VERSION_CODE: ${{ steps.settings.outputs.version_code }}
+          VERSION_NAME: ${{ steps.settings.outputs.version_name }}
+        run: |
+          case "$META_AGE_GROUP" in
+            TEENS_AND_ADULTS|MIXED_AGES|CHILDREN) ;;
+            *)
+              echo "META_AGE_GROUP must be TEENS_AND_ADULTS, MIXED_AGES, or CHILDREN." >&2
+              exit 65
+              ;;
+          esac
+
+          notes="$(cat "${ARTIFACT_DIR}/release-notes.md")"
+          output_path="${ARTIFACT_DIR}/meta-upload-output.txt"
+          summary_path="${ARTIFACT_DIR}/meta-upload-summary.json"
+
+          echo "Running ovr-platform-util upload-quest-build --channel alpha --apk ${ARTIFACT_DIR}/${APK_FILENAME}"
+          "$RUNNER_TEMP/ovr-platform-util" upload-quest-build \
+            --age-group "$META_AGE_GROUP" \
+            --app-id "$META_APP_ID" \
+            --app-secret "$META_APP_SECRET" \
+            --apk "${ARTIFACT_DIR}/${APK_FILENAME}" \
+            --channel alpha \
+            --notes "$notes" \
+            --disable-progress-bar true 2>&1 | tee "$output_path"
+
+          meta_build_id="$(
+            sed -nE 's/.*[Bb]uild[ _-]?[Ii][Dd][^0-9A-Za-z_-]*([0-9A-Za-z_-]+).*/\1/p' "$output_path" | head -n 1
+          )"
+          if [ -z "$meta_build_id" ]; then
+            meta_build_id="$(
+              sed -nE 's/.*"build[_-]?id"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/ip' "$output_path" | head -n 1
+            )"
+          fi
+
+          export meta_build_id summary_path
+          python3 - <<'PY'
+          import json
+          import os
+
+          summary = {
+              "action": "upload",
+              "channel": "alpha",
+              "meta_build_id": os.environ.get("meta_build_id", ""),
+              "source_sha": os.environ["SOURCE_SHA"],
+              "version_name": os.environ["VERSION_NAME"],
+              "version_code": os.environ["VERSION_CODE"],
+          }
+          with open(os.environ["summary_path"], "w", encoding="utf-8") as handle:
+              json.dump(summary, handle, separators=(",", ":"))
+              handle.write("\n")
+          PY
+
+          echo "meta_build_id=${meta_build_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Alpha artifact bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: blockiverse-alpha-${{ steps.settings.outputs.version_name }}
+          path: ${{ steps.settings.outputs.artifact_dir }}/
+          if-no-files-found: error

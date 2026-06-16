@@ -1,4 +1,6 @@
 using System.Collections;
+using System.IO;
+using Blockiverse.Core;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem.XR;
@@ -10,6 +12,7 @@ namespace Blockiverse.Tests.PlayMode
     {
         public static IEnumerator LoadSceneSingle(string sceneName)
         {
+            BlockiverseRuntimeState.Reset();
             yield return CleanupTrackedPoseDrivers();
 
             AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
@@ -22,9 +25,25 @@ namespace Blockiverse.Tests.PlayMode
 
         public static IEnumerator CleanupTrackedPoseDrivers()
         {
+            BlockiverseRuntimeState.Reset();
+            CleanupRuntimeActionBindings();
             DisableTrackedPoseDrivers();
             yield return null;
+            CleanupRuntimeActionBindings();
             DisableTrackedPoseDrivers();
+        }
+
+        static void CleanupRuntimeActionBindings()
+        {
+            DeleteFileIfPresent(Path.Combine(Application.dataPath, "StreamingAssets", "RuntimeActionBindings.json"));
+            DeleteFileIfPresent(Path.Combine(Application.dataPath, "StreamingAssets", "RuntimeActionBindings.json.meta"));
+            DeleteFileIfPresent(Path.Combine(Directory.GetCurrentDirectory(), "RuntimeActionBindings.json"));
+        }
+
+        static void DeleteFileIfPresent(string path)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
         }
 
         static void DisableTrackedPoseDrivers()

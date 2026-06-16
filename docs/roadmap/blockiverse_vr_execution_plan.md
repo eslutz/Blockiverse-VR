@@ -181,21 +181,24 @@ hotfix/*      short-lived urgent fixes
 
 Do not use a long-lived `develop` branch.
 
-### Release tags
+### Release version names
 
 ```text
 Production:
-v0.1.0
-v0.2.0
-v1.0.0
+0.1.0
+0.2.0
+1.0.0
 
-Prerelease channels:
-v0.1.0-alpha.pr315.42.1
-v0.1.0-beta.run12.1
-v0.1.0-rc.1
+Pre-release and validation builds:
+0.1.0-ci.run318.4.663f074
+0.1.0-alpha.run318.4.663f074
+0.1.0-beta.1
+0.1.0-rc.1
 ```
 
-Production release tags are player-facing and must point to commits reachable from `origin/main`. Prerelease channel tags are also player-facing GitHub Releases; alpha tags may point to same-repository pull request commits, while beta and RC tags must point to commits reachable from `origin/main`.
+Production-facing builds originate from trusted `main` history. Pull requests validate
+only and do not publish to Meta. Meta `beta`, `rc`, and `store` receive promoted
+builds so tested artifact identity is preserved.
 
 ### Known-good checkpoint tags
 
@@ -243,7 +246,7 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 SECURITY.md
 CHANGELOG.md
-AGENTS.md
+CLAUDE.md
 docs/
   architecture/
   adr/
@@ -363,7 +366,7 @@ Keep roadmap in docs/roadmap/blockiverse_vr_execution_plan.md
 Add ruleset docs under docs/rulesets/ or equivalent
 Document canonical world replacement strategy
 Document temporary ID migration strategy
-Keep AGENTS.md aligned with roadmap
+Keep CLAUDE.md aligned with roadmap
 Keep CHANGELOG.md updated for material changes
 Use source-available / All Rights Reserved until licensing posture changes
 ```
@@ -1284,7 +1287,11 @@ Performance reports are saved under docs/testing/performance/.
 
 ### Deliverable
 
-Alpha and beta APKs are versioned, attached to GitHub Releases, uploaded to Meta release channels, and installable on Quest. Release-candidate and production releases promote already-uploaded Meta build IDs so the RC and Store builds preserve exact artifact identity.
+Pull requests validate Unity tests and Android smoke builds. Trusted `main` pushes
+and manual trusted dispatches build release-signed APKs, upload artifacts to GitHub
+Actions, publish to Meta `alpha`, and keep the same artifact available for later
+promotion. Beta, release-candidate, and production releases promote already-uploaded
+Meta build IDs so the tested build preserves exact artifact identity.
 
 ### Scope
 
@@ -1292,10 +1299,11 @@ Alpha and beta APKs are versioned, attached to GitHub Releases, uploaded to Meta
 Production Android keystore outside repo
 GitHub Actions secret-based signing
 Version code/version name automation
-Alpha builds from same-repository pull request commits
-Beta builds from main merges
-RC promotion from selected Beta Meta build ID by manual dispatch
-Production promotion from selected RC Meta build ID after Store submission/review
+Quest CI validation for pull requests
+Alpha release-signed builds from main merges or manual trusted refs
+Beta promotion from selected Alpha Meta build by manual dispatch
+RC promotion from selected Beta Meta build by manual dispatch
+Production promotion from selected RC Meta build after Store submission/review
 APK checksum
 Symbols/log artifacts
 Release notes template
@@ -1306,10 +1314,11 @@ ADB/hzdb sideload validation path
 ### Release artifacts
 
 ```text
-BlockiverseVR-v0.1.0-alpha.pr315.42.1-alpha.apk
-BlockiverseVR-v0.1.0-beta.run12.1-beta.apk
+BlockiverseVR-0.1.0-alpha.run318.4.663f074-alpha.apk
 meta-upload-summary.json
 meta-upload-output.txt
+meta-promotion-summary.json
+meta-promotion-output.txt
 BlockiverseVR-v0.1.0-symbols.zip
 checksums.txt
 CHANGELOG.md excerpt
@@ -1320,12 +1329,13 @@ performance-summary.md
 ### Tests
 
 ```text
-CI: alpha prerelease tags may point to same-repository PR commits.
-CI: beta, RC, and production tags must be on main.
-CI: APK artifact exists.
+CI: pull requests do not receive Meta credentials or publish to Meta.
+CI: Unity Personal activation succeeds.
+CI: Android smoke APK artifact exists.
 CI: checksum is generated.
-CI: RC and production workflows do not build APKs.
-CI: promoted RC and production releases preserve the selected Meta build ID.
+CI: release-signed Alpha APK artifact exists.
+CI: Beta, RC, and production promotion jobs do not build APKs.
+CI: promoted Beta, RC, and production releases preserve the selected Meta build ID.
 Smoke: APK installs on Quest.
 Smoke: app launches to main menu.
 Smoke: boot scene reaches playable state.
@@ -1334,10 +1344,11 @@ Smoke: boot scene reaches playable state.
 ### Validation
 
 ```text
-The alpha PR workflow creates a `vX.Y.Z-alpha.*` GitHub pre-release for same-repository PR commits.
-Merging to main creates a `vX.Y.Z-beta.*` GitHub pre-release and uploads the signed APK to Meta `beta`.
-Manual RC dispatch creates a `vX.Y.Z-rc.*` GitHub pre-release and promotes the selected Beta build to Meta `rc` when the promotion toggle is set.
-Manual production dispatch creates a `vX.Y.Z` GitHub Release and promotes the selected RC build to Meta `store` only after the Store review approval toggle is set.
+Pull requests run Quest CI without Meta credentials.
+Merging to main uploads a release-signed APK to Meta `alpha`.
+Manual Alpha dispatch can publish a trusted ref or candidate versionName to Meta `alpha`.
+Manual promotion records the exact Meta build moved from `alpha -> beta`, `beta -> rc`, or `rc -> store`.
+Store promotion requires the `meta-store` environment approval gate.
 APK can be sideloaded.
 Version appears correctly in game.
 Release notes include known issues.
@@ -1360,7 +1371,6 @@ App ID
 Meta Platform settings
 Meta Horizon Avatar requirements
 Entitlement requirements
-User Age Group API / Mixed Ages requirements
 Data Use Checkup requirements
 Alpha/Beta/RC channels
 Private tester invites
@@ -1377,7 +1387,6 @@ Selected RC build can be promoted to Store.
 Release channel install works.
 Entitlement behavior is understood.
 Avatar/platform requirements are documented.
-User age category API behavior is documented and does not block offline/API-failure app launch.
 Private tester can launch app.
 Crash/log collection path documented.
 ```
@@ -1410,7 +1419,6 @@ Comfort rating notes
 Privacy policy
 Data usage declarations
 Age/child-safety review
-User Age Group API / Data Use Checkup evidence
 VRC checklist
 Performance evidence
 Content checklist
@@ -1432,8 +1440,6 @@ No analytics beyond documented diagnostics unless explicitly added
 Local saves remain local unless user shares them
 LAN multiplayer exchanges local network connection data only for the active session
 Meta Horizon Avatar/profile data use is disclosed when avatar integration ships
-Mixed Ages builds request Meta's user age category once per online session; UNKNOWN, offline, and failed responses do not block the base game
-Child accounts use fallback identity/avatar behavior for child-sensitive Meta social/profile features
 Cloud-hosted private worlds remain outside the first public candidate and are tracked in the future expansion section
 ```
 
@@ -1443,7 +1449,6 @@ Cloud-hosted private worlds remain outside the first public candidate and are tr
 Submission checklist complete.
 VRC checklist complete.
 Privacy policy link works.
-User Age Group API CH/TN/AD/UNKNOWN behavior is validated or documented with release-channel evidence.
 Store images meet dimensions.
 APK upload succeeds.
 Release channel RC build matches submitted build.
@@ -1598,7 +1603,7 @@ FEATURE: Trunk-based workflow
   STORY: Protect main
   STORY: Document release-from-main-only policy
   STORY: Document short-lived branch policy
-  STORY: Add forbidden-files checks
+  STORY: Ignore generated, local, and secret files
 
 FEATURE: Local Unity validation
   STORY: Keep scripts/unity/run-tests.sh as required local validation

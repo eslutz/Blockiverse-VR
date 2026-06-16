@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Purpose: local Unity test gate for developer machines. This script runs the
+# Unity EditMode and PlayMode suites in the local editor, where LAN/multiplayer
+# PlayMode tests are meaningful and stable enough to diagnose product behavior.
+# Do not use this as the GitHub-hosted PR gate; Quest CI uses an Android smoke
+# build because the Linux Android Unity test container is not reliable for the
+# full PlayMode suite.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -2,12 +2,13 @@
 
 Testing is split into:
 
-- Repository safety checks for shell syntax, release policy docs, and forbidden tracked files
+- Repository checks for markdown, shell syntax, release workflow conventions, and tracked-file policy
+- GitHub-hosted Quest CI for Unity Personal activation and Android smoke APK validation
 - Targeted local Unity validation for changed fixtures and subsystems
 - Full local Unity validation before review or merge for Unity-impacting changes
 - Development APK and Quest-device validation when Android, headset, release, or Quest performance behavior changes
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
-- Release channel workflow checks that upload alpha/beta builds and promote beta-to-RC and RC-to-store builds
+- Release channel workflow checks that upload alpha builds and promote selected tested Meta build IDs through beta, RC, and store channels
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
 - Multiplayer Play Mode tests for local multi-client behavior
@@ -32,7 +33,50 @@ Verbose gameplay tracing is available only in the Unity Editor and development b
 
 Attach relevant excerpts to issues or pull requests when they are needed as validation evidence. Do not commit local device logs, screenshots, recordings, traces, APKs, or other generated validation artifacts unless a tracked artifact is explicitly required.
 
-## Validation tiers
+## GitHub Workflows
+
+`quest-ci.yml` runs on pull requests and manual dispatch. It checks repository conventions, pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal through GameCI, builds an Android smoke APK, and uploads that APK as a validation artifact. It does not receive Meta credentials and must not publish to Meta. The Android smoke build is the GitHub-hosted Unity validation gate: it catches package import, compile, Android target, and APK packaging failures. The build does not require Meta Avatars sample preset zips while Blockiverse fallback preset avatars are disabled; if fallback presets are enabled later, the packaged Quest preset assets must be intentionally added. Full EditMode and PlayMode tests are intentionally local-only because GitHub-hosted UnityCI Android test containers are not reliable for the local LAN multiplayer PlayMode suite.
+
+`quest-alpha.yml` runs on pushes to `main` and manual dispatch of a trusted branch, tag, or commit. It pulls Git LFS assets, restores the Unity `Library` cache, activates Unity Personal with GameCI, computes Android version metadata, release signs the APK, uploads the artifact bundle to GitHub Actions, and publishes the APK directly to Meta `alpha`.
+
+`quest-promote.yml` runs by manual dispatch only. It requires the tested Meta build ID, promotes that selected build through `alpha -> beta`, `beta -> rc`, or `rc -> store`, and uploads a promotion record artifact. It does not rebuild APKs.
+
+Automated GitHub Actions validation is optimized for deterministic signals on GitHub-hosted runners:
+
+- `quest-ci.yml` verifies repository checks and Android smoke APK packaging for pull requests.
+- `quest-alpha.yml` builds and uploads a release-signed APK to Meta `alpha` after merge or manual trusted dispatch.
+- `quest-promote.yml` promotes an existing tested Meta build ID without rebuilding.
+
+Local validation is optimized for behavior:
+
+- `scripts/unity/run-tests.sh` runs the full local EditMode and PlayMode test gate.
+- `scripts/unity/run-local-validation.sh` runs shell syntax checks, full local Unity tests, and a development APK build.
+- `scripts/unity/build-development-apk.sh` produces a development APK for smoke installation.
+- Release-signed APKs are produced by `.github/workflows/quest-alpha.yml` only, using GitHub Actions secrets and the `meta-alpha` environment.
+
+## Required GitHub Configuration
+
+Repository secrets:
+
+- `UNITY_LICENSE` - the Unity Personal `.ulf` license file contents.
+- `UNITY_EMAIL` - the Unity account email used for Unity Personal activation.
+- `UNITY_PASSWORD` - the Unity account password used for Unity Personal activation.
+- `ANDROID_KEYSTORE_BASE64` - base64-encoded Android release keystore.
+- `ANDROID_KEYSTORE_PASSWORD` - Android keystore password.
+- `ANDROID_KEY_ALIAS` - Android key alias.
+- `ANDROID_KEY_PASSWORD` - Android key password.
+- `META_APP_ID` - Meta Horizon app ID for Blockiverse VR.
+- `META_APP_SECRET` - Meta app secret used by OVR Platform Utility for upload and promotion.
+
+Repository variables:
+
+- `META_AGE_GROUP` - normally `TEENS_AND_ADULTS`.
+- `OVR_PLATFORM_UTIL_LINUX_URL` - Linux OVR Platform Utility download URL.
+- `OVR_PLATFORM_UTIL_LINUX_SHA256` - checksum for the downloaded utility.
+
+Unity Personal activation follows the GameCI model: activate Unity Personal once locally, copy the generated `.ulf` file into `UNITY_LICENSE`, and provide `UNITY_EMAIL` and `UNITY_PASSWORD`. Do not commit, log, or upload the Unity license file.
+
+## Validation Tiers
 
 ### Docs/Repo
 
@@ -40,12 +84,8 @@ Use this tier for documentation-only, governance-only, PR-template, issue-templa
 
 ```sh
 git diff --check
-bash -n scripts/ci/forbidden-files.sh scripts/unity/*.sh
-scripts/ci/forbidden-files.sh
-test -f docs/architecture/branching-and-release.md
+bash -n scripts/unity/*.sh
 ```
-
-GitHub-hosted CI validates repository checks only. Unity validation is manual and local with Unity Hub Personal.
 
 ### Targeted Unity
 
@@ -95,6 +135,12 @@ scripts/unity/run-tests.sh
 
 With no arguments, the script remains the canonical full gate. It runs EditMode then PlayMode and writes `TestResults/Unity/EditMode.xml` and `TestResults/Unity/PlayMode.xml`.
 
+Run the combined local validation wrapper before moving a Unity-impacting pull request to review or merge when an APK build is also needed:
+
+```sh
+scripts/unity/run-local-validation.sh /tmp/blockiverse-vr-development.apk
+```
+
 ### APK/Quest Gate
 
 Add this tier when the change affects VR comfort, Android or Quest behavior, headset-only behavior, networking on devices, release signing, store submission, or Quest performance:
@@ -119,7 +165,7 @@ For Quest pointer/ray changes, validate the normal development APK in the real g
 
 Remove any temporary ray diagnostic scenes or build scripts once the issue is reproduced in the real game path. Stub ray worlds are not part of the validation gate.
 
-## Test selection rules
+## Test Selection Rules
 
 - Docs, governance, PR templates, issue templates, and markdown-only policy changes: run the Docs/Repo tier only.
 - Pure C# logic in engine-free assemblies: run the targeted EditMode fixture first, then the Unity Full Gate before review.
@@ -134,8 +180,8 @@ Local Unity validation requires globally installed tools on the developer machin
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
 - `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity`.
 
-Current GitHub Actions release workflows use the UnityCI editor container for alpha and beta APK builds and do not require UNITY_LICENSE, UNITY_EMAIL, or UNITY_PASSWORD secrets. RC and production workflows promote already-uploaded Meta build IDs and do not rebuild APKs. Unity Personal activation remains local for developer-run validation, and the local license file is not committed, copied into CI, or uploaded as an artifact.
+Release-signed builds are intentionally not produced by local scripts. Use `.github/workflows/quest-alpha.yml` to build and upload release-signed APKs from `main` or a trusted manual ref so signing material stays centralized in GitHub Actions secrets.
 
-Record the selected validation tier, exact commands, result summary, output APK path when applicable, promoted Meta build ID when applicable, intentionally deferred validation, and any residual risk in the pull request or linked issue. Local development APKs usually use `/tmp/blockiverse-vr-development.apk`; alpha channel development APKs are uploaded by the alpha release workflow for same-repository pull request commits.
+Record the selected validation tier, exact commands, result summary, output APK path when applicable, promoted Meta build ID when applicable, intentionally deferred validation, and any residual risk in the pull request or linked issue. Local development APKs usually use `/tmp/blockiverse-vr-development.apk`; alpha channel release-signed APKs are uploaded by the alpha release workflow.
 
 If the project later adopts a CI-compatible Unity license, Unity Build Automation, or a self-hosted runner with an accepted local license, reintroduce hosted Unity test and build jobs in a separate issue and update this document with the new validation contract.

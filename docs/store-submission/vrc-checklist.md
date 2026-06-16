@@ -42,12 +42,9 @@
 ## Content & legal
 
 - [ ] All art, characters, and audio are original (no third-party IP).
-- [ ] Privacy policy published and linked at `https://blockiversevr.com/privacy/` (see local pointer `privacy-policy.md`).
+- [ ] Privacy policy published and linked (see `privacy-policy.md`).
 - [ ] Data-use declarations match actual behavior (see `data-and-safety.md`).
 - [ ] Age rating questionnaire (IARC) completed.
-- [ ] Age group self-certification is current in the Meta Developer Dashboard.
-- [ ] Mixed Ages builds call `UserAgeCategory.Get()` at least once per online session.
-- [ ] CH/TN/AD/UNKNOWN handling is validated on Quest or documented with Meta dashboard/API evidence.
 
 ## Store presence
 
@@ -57,9 +54,12 @@
 
 ## Release Packaging
 
-- [ ] Signed Beta APK built from `main` and uploaded to Meta `beta` using
-      `.github/workflows/beta-release.yml` after production signing secrets are configured.
-- [ ] RC release promotes the selected Beta Meta build ID to Meta `rc` using
-      `.github/workflows/release-candidate.yml`.
-- [ ] Production release promotes the selected RC Meta build ID to Meta `store` using
-      `.github/workflows/production-release.yml` only after Store submission/review approval.
+- [ ] Release-signed APK built from trusted `main` history and uploaded to Meta `alpha`
+      using `.github/workflows/quest-alpha.yml` after Unity Personal, Android signing,
+      and Meta alpha secrets are configured.
+- [ ] Beta release promotes the tested Meta `alpha` build to Meta `beta` using
+      `.github/workflows/quest-promote.yml`.
+- [ ] RC release promotes the tested Meta `beta` build to Meta `rc` using
+      `.github/workflows/quest-promote.yml`.
+- [ ] Production release promotes the tested Meta `rc` build to Meta `store` using
+      `.github/workflows/quest-promote.yml` only after Store submission/review approval.

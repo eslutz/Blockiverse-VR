@@ -34,8 +34,8 @@ namespace Blockiverse.Tests.EditMode
         const string NetcodeProjectSettingsPath = "ProjectSettings/NetcodeForGameObjects.asset";
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
-        const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
         const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
+        const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
         const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
         const string XrRigBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs";
         static readonly string[] EngineFreeAsmdefPaths =
@@ -433,28 +433,22 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(GetBool(serializedSettings, "enableFaceTrackingVisemesOutput"), Is.False);
         }
 
-        static string ExtractMethodSource(string source, string signature)
+        [Test]
+        public void AndroidBuildTreatsUnusedMetaAvatarSamplePresetsAsOptional()
         {
-            int start = source.IndexOf(signature, StringComparison.Ordinal);
-            Assert.That(start, Is.GreaterThanOrEqualTo(0), $"Missing method signature: {signature}");
+            string buildSmokeSource = File.ReadAllText(BuildSmokePath);
 
-            int bodyStart = source.IndexOf('{', start);
-            Assert.That(bodyStart, Is.GreaterThanOrEqualTo(0), $"Missing method body: {signature}");
+            StringAssert.Contains("PrepareOptionalMetaAvatarSamplePresets()", buildSmokeSource);
+            StringAssert.Contains(".blockiverse-no-sample-presets", buildSmokeSource);
+            StringAssert.Contains("loadFallbackPreset: 1", buildSmokeSource);
 
-            int depth = 0;
-            for (int index = bodyStart; index < source.Length; index++)
+            foreach (string assetPath in EnumerateBlockiverseSerializedAssets())
             {
-                if (source[index] == '{')
-                    depth++;
-                else if (source[index] == '}')
-                    depth--;
-
-                if (depth == 0)
-                    return source.Substring(start, index - start + 1);
+                Assert.That(
+                    File.ReadAllText(assetPath),
+                    Does.Not.Contain("loadFallbackPreset: 1"),
+                    $"{assetPath} enables Meta sample preset avatars; either disable it or intentionally add packaged Quest preset assets.");
             }
-
-            Assert.Fail($"Unterminated method body: {signature}");
-            return string.Empty;
         }
 
         static bool GetBool(SerializedObject serializedObject, string propertyName)
@@ -462,6 +456,18 @@ namespace Blockiverse.Tests.EditMode
             SerializedProperty property = serializedObject.FindProperty(propertyName);
             Assert.That(property, Is.Not.Null);
             return property.boolValue;
+        }
+
+        static string[] EnumerateBlockiverseSerializedAssets()
+        {
+            return Directory
+                .GetFiles("Assets/Blockiverse", "*.*", SearchOption.AllDirectories)
+                .Where(path =>
+                {
+                    string extension = Path.GetExtension(path);
+                    return extension == ".asset" || extension == ".prefab" || extension == ".unity";
+                })
+                .ToArray();
         }
     }
 }

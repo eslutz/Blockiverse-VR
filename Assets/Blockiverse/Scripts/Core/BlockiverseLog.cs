@@ -98,7 +98,7 @@ namespace Blockiverse.Core
 
         static bool IsDevelopmentLoggingEnabled()
         {
-            return Debug.isDebugBuild || Application.isEditor;
+            return (Debug.isDebugBuild || Application.isEditor) && !Application.isBatchMode;
         }
 
         sealed class UnityDebugLogSink : IBlockiverseLogSink

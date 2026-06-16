@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Purpose: build a development-signed Quest APK for smoke testing and CI build
+# validation. This proves the Android target can compile and package, but it is
+# not suitable for Meta release-channel upload.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -17,13 +20,13 @@ fi
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 
 unity_args=(
-  -batchmode \
-  -nographics \
-  -quit \
-  -buildTarget Android \
-  -projectPath "$PROJECT_ROOT" \
-  -executeMethod Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid \
-  -blockiverseBuildOutput "$OUTPUT_PATH" \
+  -batchmode
+  -nographics
+  -quit
+  -buildTarget Android
+  -projectPath "$PROJECT_ROOT"
+  -executeMethod Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid
+  -blockiverseBuildOutput "$OUTPUT_PATH"
   -logFile -
 )
 

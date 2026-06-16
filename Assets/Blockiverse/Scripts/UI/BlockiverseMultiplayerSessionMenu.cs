@@ -491,6 +491,22 @@ namespace Blockiverse.UI
             DiscoverMenuController();
             if (menuController != null && menuController.ShowLanMultiplayerScreen())
                 sessionEndedRouteRequested = true;
+
+            RestoreInteractableMenuSurface();
+        }
+
+        void RestoreInteractableMenuSurface()
+        {
+            gameObject.SetActive(true);
+
+            foreach (Canvas canvas in GetComponentsInParent<Canvas>(includeInactive: true))
+            {
+                canvas.gameObject.SetActive(true);
+                canvas.enabled = true;
+            }
+
+            foreach (GraphicRaycaster raycaster in GetComponentsInParent<GraphicRaycaster>(includeInactive: true))
+                raycaster.enabled = true;
         }
 
         void RegisterControlCallbacks()
