@@ -33,6 +33,7 @@ namespace Blockiverse.VR
 
         CreativeHotbar hotbar;
         bool subscribedToHotbarSelection;
+        bool hasVisibilityCommand;
         float lastAppliedPanelScale = -1.0f;
 
         public Canvas TargetCanvas => targetCanvas;
@@ -127,6 +128,7 @@ namespace Blockiverse.VR
         public void Show()
         {
             EnsureCanvas();
+            hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
             if (recenterOnShow)
@@ -145,6 +147,7 @@ namespace Blockiverse.VR
         public void Hide()
         {
             EnsureCanvas();
+            hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
             GameObject root = ResolveTargetRoot();
@@ -230,7 +233,8 @@ namespace Blockiverse.VR
                 return;
             }
 
-            HideTargetWithoutFeedback();
+            if (!hasVisibilityCommand)
+                HideTargetWithoutFeedback();
         }
 
         void Update()
