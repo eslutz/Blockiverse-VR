@@ -1,9 +1,7 @@
-using Blockiverse.Core;
 using Unity.XR.CompositionLayers.Extensions;
 using Unity.XR.CompositionLayers;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.XR.Interaction.Toolkit.UI;
 
 namespace Blockiverse.VR
 {
@@ -11,7 +9,6 @@ namespace Blockiverse.VR
     public sealed class BlockiverseCompositionLayerRenderScale : MonoBehaviour
     {
         const float MinimumRenderScale = 1.0f;
-        const string InteractableUIMirrorTypeName = "Unity.XR.CompositionLayers.UIInteraction.InteractableUIMirror";
 
         [SerializeField] float renderScale = 2.0f;
         [SerializeField] Canvas sourceCanvas;
@@ -39,11 +36,6 @@ namespace Blockiverse.VR
             renderScale = Mathf.Max(MinimumRenderScale, scale);
         }
 
-        void Awake()
-        {
-            DisableCompositionLayerProxyInput();
-        }
-
         void Start()
         {
             ApplyRenderScale();
@@ -66,10 +58,8 @@ namespace Blockiverse.VR
 
         public void ApplyRenderScale()
         {
-            DisableCompositionLayerProxyInput();
             ResolveReferences();
-            EnsureCompositionUiLayerIsolation();
-            ExcludeCompositionUiLayerFromMainCamera();
+            ExcludeSourceCanvasLayerFromMainCamera();
 
             if (sourceCanvas == null || texturesExtension == null || mirrorCamera == null)
                 return;
@@ -168,89 +158,16 @@ namespace Blockiverse.VR
             }
         }
 
-        void EnsureCompositionUiLayerIsolation()
+        void ExcludeSourceCanvasLayerFromMainCamera()
         {
             if (sourceCanvas == null)
                 return;
 
-            SetLayerRecursively(sourceCanvas.gameObject, BlockiverseProject.CompositionUiLayerIndex);
-        }
-
-        void ExcludeCompositionUiLayerFromMainCamera()
-        {
             Camera mainCamera = Camera.main;
             if (mainCamera == null || mainCamera == mirrorCamera)
                 return;
 
-            mainCamera.cullingMask &= ~BlockiverseProject.CompositionUiLayerMask;
-        }
-
-        void DisableCompositionLayerProxyInput()
-        {
-            DisableComponentByTypeName(gameObject, InteractableUIMirrorTypeName);
-
-            ResolveReferences();
-            if (sourceCanvas == null)
-                return;
-
-            GraphicRaycaster legacyRaycaster = sourceCanvas.GetComponent<GraphicRaycaster>();
-            if (legacyRaycaster != null)
-                DestroyComponent(legacyRaycaster);
-
-            CanvasGroup inputGate = sourceCanvas.GetComponent<CanvasGroup>();
-            if (inputGate == null)
-            {
-                inputGate = sourceCanvas.gameObject.AddComponent<CanvasGroup>();
-                inputGate.interactable = true;
-                inputGate.blocksRaycasts = true;
-                inputGate.ignoreParentGroups = false;
-            }
-
-            bool receivesTrackedDeviceInput = inputGate.interactable || inputGate.blocksRaycasts;
-            TrackedDeviceGraphicRaycaster trackedRaycaster = sourceCanvas.GetComponent<TrackedDeviceGraphicRaycaster>();
-            if (receivesTrackedDeviceInput)
-            {
-                if (trackedRaycaster == null)
-                    sourceCanvas.gameObject.AddComponent<TrackedDeviceGraphicRaycaster>();
-            }
-            else if (trackedRaycaster != null)
-            {
-                DestroyComponent(trackedRaycaster);
-            }
-        }
-
-        static void DisableComponentByTypeName(GameObject root, string typeName)
-        {
-            if (root == null)
-                return;
-
-            foreach (MonoBehaviour behaviour in root.GetComponents<MonoBehaviour>())
-            {
-                if (behaviour == null || behaviour.GetType().FullName != typeName)
-                    continue;
-
-                behaviour.enabled = false;
-            }
-        }
-
-        static void DestroyComponent(Component component)
-        {
-            if (component == null)
-                return;
-
-            if (Application.isPlaying)
-                Destroy(component);
-            else
-                DestroyImmediate(component);
-        }
-
-        static void SetLayerRecursively(GameObject root, int layer)
-        {
-            if (root == null)
-                return;
-
-            foreach (Transform child in root.GetComponentsInChildren<Transform>(true))
-                child.gameObject.layer = layer;
+            mainCamera.cullingMask &= ~(1 << sourceCanvas.gameObject.layer);
         }
 
         void ReleaseOwnedRenderTexture()

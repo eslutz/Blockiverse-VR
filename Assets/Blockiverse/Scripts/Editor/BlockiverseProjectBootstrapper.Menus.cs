@@ -303,7 +303,8 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
-            GameObject popupObject = EnsureRectChild(cameraOffset, ControllerMappingPopupName);
+            Transform routedMenuParent = EnsureMenuCompositionSurface(cameraOffset, head).transform.Find(MenuCompositionCanvasName);
+            GameObject popupObject = EnsureRoutedMenuRectChild(cameraOffset, routedMenuParent, null, ControllerMappingPopupName);
             popupObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.06f);
             popupObject.transform.localRotation = Quaternion.identity;
             popupObject.transform.localScale = Vector3.one * 0.0013f;

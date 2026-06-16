@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Profiling;
 
 namespace Blockiverse.UI
 {
@@ -36,6 +37,13 @@ namespace Blockiverse.UI
     // routing is derived from the current top of the modal or screen stack.
     public sealed class UiScreenRouter
     {
+        static readonly ProfilerMarker PushScreenMarker = new("Blockiverse.UiScreenRouter.PushScreen");
+        static readonly ProfilerMarker PopScreenMarker = new("Blockiverse.UiScreenRouter.PopScreen");
+        static readonly ProfilerMarker ReplaceScreenMarker = new("Blockiverse.UiScreenRouter.ReplaceScreen");
+        static readonly ProfilerMarker ClearToRootMarker = new("Blockiverse.UiScreenRouter.ClearToRoot");
+        static readonly ProfilerMarker PushModalMarker = new("Blockiverse.UiScreenRouter.PushModal");
+        static readonly ProfilerMarker PopModalMarker = new("Blockiverse.UiScreenRouter.PopModal");
+
         readonly List<ScreenRoute> screenStack = new();
         readonly List<string> modalStack = new();
 
@@ -65,6 +73,8 @@ namespace Blockiverse.UI
 
         public void PushScreen(ScreenRoute route)
         {
+            using ProfilerMarker.AutoScope scope = PushScreenMarker.Auto();
+
             screenStack.Add(route);
             Changed?.Invoke();
         }
@@ -75,6 +85,8 @@ namespace Blockiverse.UI
             if (screenStack.Count <= 1)
                 return false;
 
+            using ProfilerMarker.AutoScope scope = PopScreenMarker.Auto();
+
             screenStack.RemoveAt(screenStack.Count - 1);
             Changed?.Invoke();
             return true;
@@ -82,6 +94,8 @@ namespace Blockiverse.UI
 
         public void ReplaceScreen(ScreenRoute route)
         {
+            using ProfilerMarker.AutoScope scope = ReplaceScreenMarker.Auto();
+
             screenStack[screenStack.Count - 1] = route;
             Changed?.Invoke();
         }
@@ -89,6 +103,8 @@ namespace Blockiverse.UI
         // Clears the entire stack down to a single new root (e.g. returning to the title menu).
         public void ClearToRoot(ScreenRoute root)
         {
+            using ProfilerMarker.AutoScope scope = ClearToRootMarker.Auto();
+
             screenStack.Clear();
             screenStack.Add(root);
             modalStack.Clear();
@@ -100,6 +116,8 @@ namespace Blockiverse.UI
             if (string.IsNullOrWhiteSpace(modalId))
                 throw new ArgumentException("Modal ids must be non-empty.", nameof(modalId));
 
+            using ProfilerMarker.AutoScope scope = PushModalMarker.Auto();
+
             modalStack.Add(modalId);
             Changed?.Invoke();
         }
@@ -109,6 +127,8 @@ namespace Blockiverse.UI
         {
             if (modalStack.Count == 0)
                 return false;
+
+            using ProfilerMarker.AutoScope scope = PopModalMarker.Auto();
 
             modalStack.RemoveAt(modalStack.Count - 1);
             Changed?.Invoke();

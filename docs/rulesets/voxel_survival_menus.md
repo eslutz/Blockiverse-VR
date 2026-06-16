@@ -12,7 +12,7 @@ The goal is to keep menus data-driven and easy to convert into game logic.
 - Every menu element should map to one explicit action ID.
 - Game simulation pauses in full-screen menus unless the screen is explicitly marked `simulationContinues = true`.
 - Inventory, crafting, and station screens should be usable without leaving the game world.
-- On Quest, launch splash/loading, menu, modal, and gameplay HUD surfaces may be backed by flat XR Quad composition layers for sharp text and artwork while preserving the same world-space layout, routing, and ray interaction model; controller and ray visuals must render through the normal scene camera, not a controller/ray projection composition layer.
+- On Quest, launch splash/loading, menu, modal, and gameplay HUD surfaces may be backed by XR Quad composition layers for sharp text and artwork while preserving the same routing and ray interaction model. Routed game menus must share one generated Quad composition surface, and controller/ray visuals that need to appear above that surface must render through the generated Projection Eye Rig layer rather than per-panel workaround layers.
 - Quest pointer ownership follows the player's active tool hand, which is initialized from the user's dominant-hand preference when available and remains controlled by the in-game Comfort setting.
 - Menu screens should use a consistent layout model:
   - Header area
