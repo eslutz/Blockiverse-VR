@@ -136,13 +136,16 @@ run_test_platform() {
   local unity_args=(
     "$UNITY_EDITOR"
     -batchmode
-    -nographics
     -projectPath "$PROJECT_ROOT"
     -runTests
     -testPlatform "$platform"
     -testResults "$results_file"
     -logFile -
   )
+
+  if [ "$platform" = "EditMode" ] || [ "${UNITY_PLAYMODE_NOGRAPHICS:-0}" = "1" ]; then
+    unity_args+=(-nographics)
+  fi
 
   if [ -n "$TEST_FILTER" ]; then
     unity_args+=(-testFilter "$TEST_FILTER")

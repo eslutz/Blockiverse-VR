@@ -38,6 +38,8 @@ namespace Blockiverse.VR
         bool lineVisualDefaultOverrideLineLength;
         float lineVisualDefaultLength;
 
+        const float MenuMissedUiRayLengthMeters = 1.0f;
+
         // Hold-to-mine (§7.3): survival break is a timed hold on a fixed target. ToolHit cues +
         // chip VFX play on a cadence while held; releasing or losing the target cancels; the
         // harvest submits when the block's work time elapses. Creative break stays instant.
@@ -505,6 +507,9 @@ namespace Blockiverse.VR
 
             RestoreInteractionRayLengthState();
 
+            if (!worldInputAllowed && !IsInteractionRayOverUi())
+                ClampInteractionRayToMenuAimGuide();
+
             if (!worldInputAllowed || !blockEditingVisible)
                 interactionController?.HidePreview();
         }
@@ -518,11 +523,27 @@ namespace Blockiverse.VR
             interactionLineVisual.lineLength = lineVisualDefaultLength;
         }
 
+        void ClampInteractionRayToMenuAimGuide()
+        {
+            if (interactionLineVisual == null)
+                return;
+
+            interactionLineVisual.overrideInteractorLineLength = true;
+            interactionLineVisual.lineLength = Mathf.Min(lineVisualDefaultLength, MenuMissedUiRayLengthMeters);
+        }
+
+        bool IsInteractionRayOverUi()
+        {
+            return interactionRay != null &&
+                interactionRay.isActiveAndEnabled &&
+                interactionRay.IsOverUIGameObject();
+        }
+
         bool CanInteract()
         {
             return interactionRay != null &&
                 interactionRay.isActiveAndEnabled &&
-                !interactionRay.IsOverUIGameObject();
+                !IsInteractionRayOverUi();
         }
     }
 }

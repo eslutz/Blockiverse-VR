@@ -349,7 +349,7 @@ namespace Blockiverse.Tests.Networking.EditMode
 
                 var result = (SurvivalCommandResult)processPlace.Invoke(
                     sync,
-                    new object[] { NetworkManager.ServerClientId, 41u, target, backpackSlot, false });
+                    new object[] { NetworkManager.ServerClientId, 41u, target, backpackSlot, false, false });
 
                 Assert.That(result.Accepted, Is.False);
                 Assert.That(result.FailureReason, Is.EqualTo(SurvivalCommandFailureReason.NotPlaceable));

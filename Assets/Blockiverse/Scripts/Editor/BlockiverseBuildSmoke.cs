@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using Blockiverse.Core;
 using UnityEditor;
@@ -15,9 +16,13 @@ namespace Blockiverse.Editor
         const string SigningConfigPathArgument = "-blockiverseSigningConfigPath";
         const string DefaultBuildOutputPath = "Builds/Android/BlockiverseVR-development.apk";
         const string DefaultReleaseBuildOutputPath = "Builds/Android/BlockiverseVR-release.apk";
+        const string BaseVersionFilePath = "ProjectSettings/BlockiverseVersion.txt";
         const string MetaAvatarSamplePresetDirectory = "Assets/Oculus/Avatar2_SampleAssets/SampleAssets/SampleAssets";
         const string MetaAvatarSamplePresetMarkerFile = ".blockiverse-no-sample-presets";
+        static readonly DateTime AndroidVersionCodeEpochUtc =
+            new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+        [MenuItem("Blockiverse/Build/Development Android APK")]
         public static void BuildDevelopmentAndroid()
         {
             string outputPath = GetArgumentValue(BuildOutputArgument) ?? DefaultBuildOutputPath;
@@ -27,7 +32,7 @@ namespace Blockiverse.Editor
                 Directory.CreateDirectory(outputDirectory);
 
             BlockiverseProjectBootstrapper.Run();
-            ConfigureAndroidVersion();
+            ConfigureAndroidVersion(allowLocalDevelopmentDefaults: true, requireExplicitVersion: false);
 
             var options = new BuildPlayerOptions
             {
@@ -61,7 +66,7 @@ namespace Blockiverse.Editor
 
             BlockiverseProjectBootstrapper.Run();
             ConfigureReleaseSigning();
-            ConfigureAndroidVersion();
+            ConfigureAndroidVersion(allowLocalDevelopmentDefaults: false, requireExplicitVersion: true);
 
             var options = new BuildPlayerOptions
             {
@@ -200,23 +205,97 @@ namespace Blockiverse.Editor
             PlayerSettings.Android.keyaliasPass = keyPassword;
         }
 
-        static void ConfigureAndroidVersion()
+        public static void ConfigureLocalDevelopmentAndroidVersion()
+        {
+            DateTime utcNow = DateTime.UtcNow;
+            ApplyAndroidVersion(
+                CreateLocalDevelopmentVersionName(utcNow),
+                CreateAndroidVersionCode(utcNow).ToString(CultureInfo.InvariantCulture));
+        }
+
+        public static string CreateLocalDevelopmentVersionName(DateTime utcNow)
+        {
+            string buildStamp = utcNow
+                .ToUniversalTime()
+                .ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+
+            return $"{ReadBaseVersion()}-dev.local.{buildStamp}";
+        }
+
+        public static int CreateAndroidVersionCode(DateTime utcNow)
+        {
+            double totalSeconds = (utcNow.ToUniversalTime() - AndroidVersionCodeEpochUtc).TotalSeconds;
+            if (totalSeconds < 1 || totalSeconds > int.MaxValue)
+                throw new InvalidOperationException($"Android versionCode timestamp is out of range: {utcNow:o}");
+
+            return (int)Math.Floor(totalSeconds);
+        }
+
+        static void ConfigureAndroidVersion(bool allowLocalDevelopmentDefaults, bool requireExplicitVersion)
         {
             string versionName = GetArgumentValue(BuildVersionNameArgument)
                 ?? Environment.GetEnvironmentVariable("UNITY_ANDROID_VERSION_NAME");
             string versionCode = GetArgumentValue(BuildVersionCodeArgument)
                 ?? Environment.GetEnvironmentVariable("UNITY_ANDROID_VERSION_CODE");
 
+            if (allowLocalDevelopmentDefaults && (string.IsNullOrWhiteSpace(versionName) || string.IsNullOrWhiteSpace(versionCode)))
+            {
+                DateTime utcNow = DateTime.UtcNow;
+                if (string.IsNullOrWhiteSpace(versionName))
+                    versionName = CreateLocalDevelopmentVersionName(utcNow);
+                if (string.IsNullOrWhiteSpace(versionCode))
+                    versionCode = CreateAndroidVersionCode(utcNow).ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (requireExplicitVersion && (string.IsNullOrWhiteSpace(versionName) || string.IsNullOrWhiteSpace(versionCode)))
+            {
+                throw new InvalidOperationException(
+                    "Android release builds must pass -blockiverseBuildVersionName and -blockiverseBuildVersionCode " +
+                    "or set UNITY_ANDROID_VERSION_NAME and UNITY_ANDROID_VERSION_CODE.");
+            }
+
+            ApplyAndroidVersion(versionName, versionCode);
+        }
+
+        static void ApplyAndroidVersion(string versionName, string versionCode)
+        {
             if (!string.IsNullOrWhiteSpace(versionName))
                 PlayerSettings.bundleVersion = versionName.Trim();
 
-            if (!string.IsNullOrWhiteSpace(versionCode))
-            {
-                if (!int.TryParse(versionCode.Trim(), out int parsedVersionCode) || parsedVersionCode < 1)
-                    throw new InvalidOperationException($"UNITY_ANDROID_VERSION_CODE must be a positive integer: {versionCode}");
+            if (string.IsNullOrWhiteSpace(versionCode))
+                return;
 
-                PlayerSettings.Android.bundleVersionCode = parsedVersionCode;
+            if (!int.TryParse(versionCode.Trim(), out int parsedVersionCode) || parsedVersionCode < 1)
+                throw new InvalidOperationException($"Android versionCode must be a positive integer: {versionCode}");
+
+            PlayerSettings.Android.bundleVersionCode = parsedVersionCode;
+        }
+
+        static string ReadBaseVersion()
+        {
+            if (!File.Exists(BaseVersionFilePath))
+                throw new FileNotFoundException($"Blockiverse base version file was not found: {BaseVersionFilePath}", BaseVersionFilePath);
+
+            string baseVersion = File.ReadAllText(BaseVersionFilePath).Trim();
+            if (!IsBaseSemVer(baseVersion))
+                throw new InvalidOperationException($"{BaseVersionFilePath} must contain MAJOR.MINOR.PATCH without a leading v.");
+
+            return baseVersion;
+        }
+
+        static bool IsBaseSemVer(string value)
+        {
+            string[] parts = value.Split('.');
+            if (parts.Length != 3)
+                return false;
+
+            foreach (string part in parts)
+            {
+                if (part.Length == 0 || !int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+                    return false;
             }
+
+            return true;
         }
 
         static Dictionary<string, string> ReadSigningConfig()

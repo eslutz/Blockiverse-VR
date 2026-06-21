@@ -33,6 +33,7 @@ Android `versionName` values derive from `ProjectSettings/BlockiverseVersion.txt
 
 | Stage | Android versionName format | Example |
 |---|---|---|
+| Local development | `MAJOR.MINOR.PATCH-dev.local.YYYYMMDDHHMMSS` | `0.1.0-dev.local.20260621120000` |
 | CI smoke | `MAJOR.MINOR.PATCH-ci.runRUN.ATTEMPT.SHORTSHA` | `0.1.0-ci.run318.4.663f074` |
 | Alpha | `MAJOR.MINOR.PATCH-alpha.runRUN.ATTEMPT.SHORTSHA` | `0.1.0-alpha.run318.4.663f074` |
 | Beta candidate | `MAJOR.MINOR.PATCH-beta.N` | `0.1.0-beta.1` |
@@ -50,6 +51,10 @@ It is monotonic across all newly uploaded builds and must not reset per channel.
 The Android code is not the product version; it exists only to satisfy Android
 package upgrade ordering.
 
+Local development APKs follow the same Android `versionCode` rule by default so
+current source builds can install over previously tested Alpha or development
+builds without uninstalling the app or invoking Android downgrade behavior.
+
 Promotion does not rewrite APK metadata. A build promoted from Alpha to Beta,
 RC, or Store keeps the exact `versionName`, `versionCode`, package name,
 keystore signature, and binary contents it had when it was uploaded to Alpha.
@@ -57,6 +62,9 @@ keystore signature, and binary contents it had when it was uploaded to Alpha.
 ## Consequences
 
 - Version bumps are explicit, reviewable code changes.
+- Local headset validation installs current development builds over earlier
+  builds instead of resetting package data because of stale project-setting
+  version codes.
 - Pull requests cannot leak Meta credentials or publish channel builds.
 - Alpha artifacts can be uploaded frequently while still using the same release
   signing path as later channels.

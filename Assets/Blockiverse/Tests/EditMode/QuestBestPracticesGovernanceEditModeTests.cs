@@ -67,13 +67,13 @@ namespace Blockiverse.Tests.EditMode
             string adr = File.ReadAllText("docs/adr/0006-quest-openxr-rendering-and-asset-policy.md");
             string standards = File.ReadAllText("docs/architecture/quest-runtime-engineering-standards.md");
 
-            StringAssert.Contains("Projection Eye Rig", menuRules);
+            StringAssert.Contains("composition menu cursor", menuRules);
             StringAssert.Contains("shared Quad composition surface", testingReadme);
             StringAssert.Contains("com.unity.addressables", adr);
             StringAssert.Contains("No recurring managed allocations", standards);
             StringAssert.Contains("Addressables", standards);
             StringAssert.Contains("Meta Avatars", standards);
-            Assert.That(menuRules, Does.Not.Contain("not a controller/ray projection composition layer"));
+            Assert.That(menuRules, Does.Not.Contain("Projection Eye Rig"));
         }
     }
 }

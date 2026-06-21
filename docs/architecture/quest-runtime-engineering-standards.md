@@ -25,8 +25,8 @@ This page captures the repo rules for Unity/C# code that runs in Quest gameplay,
 ## XR UI And Rendering Policy
 
 - Routed game menus use the generated shared Quad composition surface. Do not add per-menu composition layers.
-- Controller and ray visuals use the generated Projection Eye Rig layer when they must appear over compositor UI. Do not restore the removed ad hoc pointer projection object.
-- Keep UI raycast masks focused on terrain interaction plus composition UI collider layers. Visual projection layers are for rendering, not raycast targeting.
+- Controller and ray visuals stay on the normal main-camera render path. Do not add projection-layer cameras for controller rays, and do not restore the removed ad hoc pointer projection object.
+- Keep UI raycast masks focused on terrain interaction plus composition UI collider layers. The generated composition menu cursor is the over-menu feedback path for compositor-backed UI hits.
 
 ## Meta Avatars Policy
 

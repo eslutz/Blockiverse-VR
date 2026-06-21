@@ -98,6 +98,7 @@ namespace Blockiverse.Tests.PlayMode
 
                 BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
                 bridge.Configure(rig, ray, null);
+                CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
                 yield return null;
 
                 Assert.That(lineRenderer.enabled, Is.True);

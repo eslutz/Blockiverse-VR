@@ -99,8 +99,11 @@ namespace Blockiverse.Editor
         const string StationPanelName = "Station Panel";
         const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
         const float GameMenuScale = 0.0013f;
+        const float GameMenuDistanceMeters = 0.95f;
+        const float GameMenuVerticalOffsetMeters = -0.38f;
+        const float GameMenuPitchDegrees = 10.0f;
         // All game menu panels share one world-space position; only one is visible at a time.
-        static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.42f, 1.1f);
+        static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.05f, GameMenuDistanceMeters);
         static readonly Vector2 ActionMenuSize = new(440.0f, 540.0f);
         static readonly Vector2 ConfirmDialogSize = new(440.0f, 320.0f);
         static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
@@ -117,6 +120,7 @@ namespace Blockiverse.Editor
         const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         const string MenuCompositionSurfaceName = "Blockiverse Menu Composition Surface";
         const string MenuCompositionCanvasName = "Blockiverse Menu Canvas";
+        const string MenuCompositionCursorName = "Composition Menu Cursor";
         const string XrVisualProjectionRigName = "Blockiverse XR Visual Projection Rig";
         const string BootEventSystemName = "Boot Event System";
         const string MultiplayerEventSystemName = "Multiplayer Event System";
@@ -145,6 +149,7 @@ namespace Blockiverse.Editor
         const float MenuPanelInset = 28.0f;
         static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
         static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
+        static readonly Vector2 ComfortMenuCompositionSize = ComfortMenuSize * GameMenuScale;
         // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
         static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
         const float SurvivalHudScale = 0.00105f;
@@ -153,25 +158,25 @@ namespace Blockiverse.Editor
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
         // --- Dark-glass theme palette -------------------------------------------------------
-        // All panels share a deep charcoal-glass base with a single teal accent. Controls use
-        // a lighter tinted surface with hover/pressed tints via Button.ColorBlock.
-        static readonly Color PanelBaseColor       = new(0.06f, 0.07f, 0.09f, 0.99f);
-        static readonly Color PanelHeaderColor     = new(0.09f, 0.11f, 0.14f, 1.00f);
-        static readonly Color ControlNormalColor   = new(0.16f, 0.20f, 0.24f, 1.00f);
-        static readonly Color ControlHighlightColor= new(0.26f, 0.34f, 0.40f, 1.00f);
-        static readonly Color ControlPressedColor  = new(0.10f, 0.14f, 0.18f, 1.00f);
-        static readonly Color ControlSelectedColor = new(0.20f, 0.29f, 0.36f, 1.00f);
-        static readonly Color AccentColor          = new(0.18f, 0.75f, 0.56f, 1.00f);
-        static readonly Color AccentHighlightColor = new(0.24f, 0.88f, 0.66f, 1.00f);
+        // Composition-layer UI sits over bright world content, so panels stay opaque and button
+        // states use high-contrast colors that remain legible in headset captures.
+        static readonly Color PanelBaseColor       = new(0.015f, 0.022f, 0.032f, 1.00f);
+        static readonly Color PanelHeaderColor     = new(0.035f, 0.050f, 0.070f, 1.00f);
+        static readonly Color ControlNormalColor   = new(0.060f, 0.085f, 0.115f, 1.00f);
+        static readonly Color ControlHighlightColor= new(0.000f, 0.710f, 0.880f, 1.00f);
+        static readonly Color ControlPressedColor  = new(0.000f, 0.380f, 0.520f, 1.00f);
+        static readonly Color ControlSelectedColor = new(1.000f, 0.650f, 0.160f, 1.00f);
+        static readonly Color AccentColor          = new(0.000f, 0.780f, 0.980f, 1.00f);
+        static readonly Color AccentHighlightColor = new(0.000f, 0.930f, 1.000f, 1.00f);
         static readonly Color TextPrimaryColor     = new(0.95f, 0.97f, 1.00f, 1.00f);
         static readonly Color TextDimColor         = new(0.65f, 0.70f, 0.75f, 1.00f);
-        static readonly Color DividerColor         = new(0.22f, 0.28f, 0.34f, 0.80f);
+        static readonly Color DividerColor         = new(0.18f, 0.36f, 0.44f, 0.95f);
 
         // Legacy per-panel aliases used by a few callers that haven't been refactored yet.
         static readonly Color ComfortMenuPanelColor    = PanelBaseColor;
         static readonly Color ComfortMenuControlColor  = ControlNormalColor;
         static readonly Color ComfortMenuAccentColor   = AccentColor;
-        static readonly Color BlockMenuPanelColor      = new(0.05f, 0.09f, 0.13f, 0.96f);
+        static readonly Color BlockMenuPanelColor      = new(0.015f, 0.035f, 0.055f, 1.00f);
         static readonly Color SurvivalHudPanelColor    = PanelBaseColor;
         static readonly Color SurvivalHudSectionColor  = PanelHeaderColor;
         static readonly Color SurvivalHudAccentColor   = AccentColor;
@@ -368,8 +373,8 @@ namespace Blockiverse.Editor
                 return;
             }
 
-            PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Android, new[] { icon });
-            PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Unknown, new[] { icon });
+            PlayerSettings.SetIcons(NamedBuildTarget.Android, new[] { icon }, IconKind.Application);
+            PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Application);
             ConfigureAndroidPlatformIcons(icon);
         }
 
@@ -497,7 +502,6 @@ namespace Blockiverse.Editor
             projectConfig.eyeTrackingSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.colocationSessionSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.sceneSupport = global::OVRProjectConfig.FeatureSupport.None;
-            projectConfig.focusAware = true;
             projectConfig.requiresSystemKeyboard = true;
             global::OVRProjectConfig.CommitProjectConfig(projectConfig);
         }
