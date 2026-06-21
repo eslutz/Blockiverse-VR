@@ -114,6 +114,7 @@ namespace Blockiverse.Editor
             jumpProvider.unlimitedInAirJumps = false;
             jumpProvider.inAirJumpCount = 0;
             jumpProvider.jumpInput = MakeButtonReader(
+                jumpProvider.jumpInput,
                 "Jump",
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.PrimaryButton));
 
@@ -175,16 +176,24 @@ namespace Blockiverse.Editor
             if (continuousMove != null)
             {
                 continuousMove.leftHandMoveInput = MakeVector2Reader(
+                    continuousMove.leftHandMoveInput,
                     "Left Hand Move",
                     LoadInputActionReference(BlockiverseInputActionNames.LeftHandMap, BlockiverseInputActionNames.Move));
-                continuousMove.rightHandMoveInput = MakeVector2Reader("Right Hand Move", null);
+                continuousMove.rightHandMoveInput = MakeVector2Reader(
+                    continuousMove.rightHandMoveInput,
+                    "Right Hand Move",
+                    null);
                 EditorUtility.SetDirty(continuousMove);
             }
 
             if (snapTurn != null)
             {
-                snapTurn.leftHandTurnInput = MakeVector2Reader("Left Hand Snap Turn", null);
+                snapTurn.leftHandTurnInput = MakeVector2Reader(
+                    snapTurn.leftHandTurnInput,
+                    "Left Hand Snap Turn",
+                    null);
                 snapTurn.rightHandTurnInput = MakeVector2Reader(
+                    snapTurn.rightHandTurnInput,
                     "Right Hand Snap Turn",
                     LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Turn));
                 EditorUtility.SetDirty(snapTurn);
@@ -192,8 +201,12 @@ namespace Blockiverse.Editor
 
             if (continuousTurn != null)
             {
-                continuousTurn.leftHandTurnInput = MakeVector2Reader("Left Hand Smooth Turn", null);
+                continuousTurn.leftHandTurnInput = MakeVector2Reader(
+                    continuousTurn.leftHandTurnInput,
+                    "Left Hand Smooth Turn",
+                    null);
                 continuousTurn.rightHandTurnInput = MakeVector2Reader(
+                    continuousTurn.rightHandTurnInput,
                     "Right Hand Smooth Turn",
                     LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.Turn));
                 EditorUtility.SetDirty(continuousTurn);

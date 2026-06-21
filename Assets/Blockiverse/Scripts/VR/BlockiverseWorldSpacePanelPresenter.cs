@@ -34,6 +34,7 @@ namespace Blockiverse.VR
         CreativeHotbar hotbar;
         bool subscribedToHotbarSelection;
         bool hasVisibilityCommand;
+        [SerializeField] bool usesSharedCompositionRoot;
         float lastAppliedPanelScale = -1.0f;
 
         public Canvas TargetCanvas => targetCanvas;
@@ -56,6 +57,7 @@ namespace Blockiverse.VR
         public BlockiverseAudioCue ShowFeedbackCue => showFeedbackCue;
         public BlockiverseAudioCue HideFeedbackCue => hideFeedbackCue;
         public string ShowOnStartPlayerPrefsKey => showOnStartPlayerPrefsKey;
+        public bool UsesSharedCompositionRoot => usesSharedCompositionRoot;
 
         public void Configure(
             Canvas canvas,
@@ -81,6 +83,7 @@ namespace Blockiverse.VR
             recenterOnShow = recenterWhenShown;
             showOnStart = showWhenStarted;
             showOnStartPlayerPrefsKey = showWhenStartedPlayerPrefsKey;
+            usesSharedCompositionRoot = false;
             DiscoverHotbarSelection();
             SubscribeHotbarSelectionFeedback();
         }
@@ -91,6 +94,7 @@ namespace Blockiverse.VR
             targetCanvas = null;
             targetRoot = root != null ? root : gameObject;
             placementRoot = sharedPlacementRoot != null ? sharedPlacementRoot : transform;
+            usesSharedCompositionRoot = sharedPlacementRoot != null && placementRoot != transform;
             DiscoverHotbarSelection();
             SubscribeHotbarSelectionFeedback();
         }
@@ -295,6 +299,9 @@ namespace Blockiverse.VR
 
         float ResolvePanelScale()
         {
+            if (usesSharedCompositionRoot)
+                return 1.0f;
+
             DiscoverComfortSettings();
             return panelScale * (comfortSettings != null ? comfortSettings.UiScale : 1.0f);
         }

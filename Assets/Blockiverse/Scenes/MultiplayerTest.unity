@@ -710,6 +710,7 @@ GameObject:
   - component: {fileID: 367609777}
   - component: {fileID: 367609779}
   - component: {fileID: 367609780}
+  - component: {fileID: 367609781}
   m_Layer: 11
   m_Name: Host Button
   m_TagString: Untagged
@@ -750,15 +751,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -796,13 +797,13 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
-    m_HighlightedColor: {r: 0.24, g: 0.88, b: 0.66, a: 1}
-    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
-    m_SelectedColor: {r: 0.18, g: 0.75, b: 0.56, a: 1}
+    m_NormalColor: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+    m_HighlightedColor: {r: 0, g: 0.71, b: 0.88, a: 1}
+    m_PressedColor: {r: 0, g: 0.38, b: 0.52, a: 1}
+    m_SelectedColor: {r: 1, g: 0.65, b: 0.16, a: 1}
     m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1
-    m_FadeDuration: 0.08
+    m_ColorMultiplier: 1.05
+    m_FadeDuration: 0.04
   m_SpriteState:
     m_HighlightedSprite: {fileID: 0}
     m_PressedSprite: {fileID: 0}
@@ -837,6 +838,21 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
+--- !u!114 &367609781
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 367609775}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0.18, g: 0.36, b: 0.44, a: 0.95}
+  m_EffectDistance: {x: 2, y: -2}
+  m_UseGraphicAlpha: 0
 --- !u!1001 &370030338
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -960,15 +976,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1284,6 +1300,7 @@ GameObject:
   - component: {fileID: 543566527}
   - component: {fileID: 543566529}
   - component: {fileID: 543566530}
+  - component: {fileID: 543566531}
   m_Layer: 11
   m_Name: Join Button
   m_TagString: Untagged
@@ -1324,15 +1341,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1370,13 +1387,13 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
-    m_HighlightedColor: {r: 0.24, g: 0.88, b: 0.66, a: 1}
-    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
-    m_SelectedColor: {r: 0.18, g: 0.75, b: 0.56, a: 1}
+    m_NormalColor: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+    m_HighlightedColor: {r: 0, g: 0.71, b: 0.88, a: 1}
+    m_PressedColor: {r: 0, g: 0.38, b: 0.52, a: 1}
+    m_SelectedColor: {r: 1, g: 0.65, b: 0.16, a: 1}
     m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1
-    m_FadeDuration: 0.08
+    m_ColorMultiplier: 1.05
+    m_FadeDuration: 0.04
   m_SpriteState:
     m_HighlightedSprite: {fileID: 0}
     m_PressedSprite: {fileID: 0}
@@ -1411,6 +1428,21 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
+--- !u!114 &543566531
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 543566525}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0.18, g: 0.36, b: 0.44, a: 0.95}
+  m_EffectDistance: {x: 2, y: -2}
+  m_UseGraphicAlpha: 0
 --- !u!1 &681260475
 GameObject:
   m_ObjectHideFlags: 0
@@ -1424,6 +1456,7 @@ GameObject:
   - component: {fileID: 681260477}
   - component: {fileID: 681260479}
   - component: {fileID: 681260480}
+  - component: {fileID: 681260481}
   m_Layer: 11
   m_Name: Stop Button
   m_TagString: Untagged
@@ -1464,15 +1497,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1510,13 +1543,13 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
-    m_HighlightedColor: {r: 0.24, g: 0.88, b: 0.66, a: 1}
-    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
-    m_SelectedColor: {r: 0.18, g: 0.75, b: 0.56, a: 1}
+    m_NormalColor: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+    m_HighlightedColor: {r: 0, g: 0.71, b: 0.88, a: 1}
+    m_PressedColor: {r: 0, g: 0.38, b: 0.52, a: 1}
+    m_SelectedColor: {r: 1, g: 0.65, b: 0.16, a: 1}
     m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1
-    m_FadeDuration: 0.08
+    m_ColorMultiplier: 1.05
+    m_FadeDuration: 0.04
   m_SpriteState:
     m_HighlightedSprite: {fileID: 0}
     m_PressedSprite: {fileID: 0}
@@ -1551,6 +1584,21 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
+--- !u!114 &681260481
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 681260475}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0.18, g: 0.36, b: 0.44, a: 0.95}
+  m_EffectDistance: {x: 2, y: -2}
+  m_UseGraphicAlpha: 0
 --- !u!1 &918318036
 GameObject:
   m_ObjectHideFlags: 0
@@ -1694,15 +1742,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.99}
+  m_Color: {r: 0.015, g: 0.022, b: 0.032, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4

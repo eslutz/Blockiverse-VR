@@ -31,6 +31,7 @@ namespace Blockiverse.UI
         const string ControllerMappingPopupName = "Controller Mapping Popup";
         const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string SurvivalHudName = "Survival HUD";
+        const string BlockMenuName = "Block Menu";
         const float GameplayHudScale = 0.00105f;
 
         [SerializeField] BlockiverseInputRig inputRig;
@@ -50,6 +51,7 @@ namespace Blockiverse.UI
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
         [SerializeField] BlockiverseWorldSpacePanelPresenter controllerMappingPresenter;
         [SerializeField] BlockiverseWorldSpacePanelPresenter worldLoadingPresenter;
+        [SerializeField] BlockiverseWorldSpacePanelPresenter blockMenuPresenter;
 
         readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
@@ -236,6 +238,7 @@ namespace Blockiverse.UI
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ControllerMappingPopupName);
             BlockiverseWorldSpacePanelPresenter worldLoading =
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StartupLoadingOverlayName);
+            blockMenuPresenter ??= FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
 
             if (screenPresenters.Count == 0 ||
                 titlePresenter != null || pausePresenter != null || deathPresenter != null ||
@@ -433,7 +436,10 @@ namespace Blockiverse.UI
             EnsureRouter(ResolveInitialRoute());
 
             if (inputRig != null)
+            {
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
+                inputRig.QuickMenuPressed.AddListener(OnQuickMenuPressed);
+            }
 
             WireMenus();
             WireStationPanel();
@@ -450,6 +456,24 @@ namespace Blockiverse.UI
                 comfortMenu = BlockiverseSceneLookup.Find<BlockiverseComfortMenu>(FindObjectsInactive.Include);
 
             ApplyRouterState();
+        }
+
+        public void OnQuickMenuPressed()
+        {
+            if (router == null)
+                return;
+
+            if (blockMenuPresenter == null)
+                blockMenuPresenter = FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
+
+            if (!CanUseQuickBlockMenu())
+            {
+                HideQuickBlockMenu();
+                return;
+            }
+
+            blockMenuPresenter?.ToggleVisible();
+            SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
         }
 
         ScreenRoute ResolveInitialRoute()
@@ -526,6 +550,7 @@ namespace Blockiverse.UI
                 router.Changed -= ApplyRouterState;
             BlockiverseRuntimeState.Reset();
             inputRig?.MenuPressed.RemoveListener(OnMenuPressed);
+            inputRig?.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
             UnwireMenus();
             UnwireStationPanel();
             UnwireVitalsRuntime();
@@ -838,6 +863,29 @@ namespace Blockiverse.UI
                     string.Equals(screenId, inputTarget, StringComparison.Ordinal);
                 SetPresenterInputEnabled(presenter, acceptsInput);
             }
+
+            if (!CanUseQuickBlockMenu())
+                HideQuickBlockMenu();
+            else
+                SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
+        }
+
+        bool CanUseQuickBlockMenu()
+        {
+            return router != null &&
+                !router.HasModal &&
+                string.Equals(router.ActiveScreen.ScreenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
+        }
+
+        void HideQuickBlockMenu()
+        {
+            if (blockMenuPresenter == null)
+                return;
+
+            if (blockMenuPresenter.IsVisible)
+                blockMenuPresenter.Hide();
+
+            SetPresenterInputEnabled(blockMenuPresenter, false);
         }
 
         bool HasConfirmModalOpen()

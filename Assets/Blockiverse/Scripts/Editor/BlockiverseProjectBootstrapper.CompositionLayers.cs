@@ -4,7 +4,6 @@ using Blockiverse.Gameplay;
 using Blockiverse.VR;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.InputSystem.XR;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using UnityEngine.XR.Interaction.Toolkit.UI;
@@ -49,6 +48,8 @@ namespace Blockiverse.Editor
                 return;
 
             RemoveStaleChild(cameraOffset, "Blockiverse UI Pointer Projection");
+            RemoveStaleChild(cameraOffset, XrVisualProjectionRigName);
+            EnsureControllerVisualsUseMainCameraLayer(cameraOffset);
 
             Transform head = cameraOffset.Find("Main Camera");
             GameObject menuSurface = EnsureMenuCompositionSurface(cameraOffset, head);
@@ -59,19 +60,19 @@ namespace Blockiverse.Editor
 
             foreach (string panelName in WorldSpaceVrUiPanelNames)
                 EnsureWorldSpaceVrUiPanel(cameraOffset, panelName);
-
-            EnsureXrVisualProjectionRig(cameraOffset, head);
         }
 
         static GameObject EnsureMenuCompositionSurface(Transform cameraOffset, Transform head)
         {
             GameObject surface = EnsureChild(cameraOffset, MenuCompositionSurfaceName);
+            RemoveStaleCompositionLayerDefaultCanvas(surface.transform);
             surface.layer = GetCompositionUiLayerIndex();
             surface.transform.localPosition = GameMenuLocalPosition;
-            surface.transform.localRotation = Quaternion.identity;
-            surface.transform.localScale = Vector3.one * GameMenuScale;
+            surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0.0f);
+            surface.transform.localScale = Vector3.one;
 
             CompositionLayer layer = EnsureComponent<CompositionLayer>(surface);
+            CompositionOutline outline = EnsureComponent<CompositionOutline>(surface);
             if (layer.LayerData is not QuadLayerData quadLayerData)
             {
                 layer.ChangeLayerDataType(typeof(QuadLayerData));
@@ -80,25 +81,19 @@ namespace Blockiverse.Editor
 
             if (quadLayerData != null)
             {
-                quadLayerData.Size = ComfortMenuSize;
+                quadLayerData.Size = ComfortMenuCompositionSize;
                 quadLayerData.ApplyTransformScale = true;
             }
 
             layer.Order = CompositionLayerOrderMenu;
+            layer.enabled = false;
             TexturesExtension textures = EnsureComponent<TexturesExtension>(surface);
-            InteractableUIMirror mirror = EnsureComponent<InteractableUIMirror>(surface);
-            mirror.enabled = true;
-            XRSimpleInteractable simpleInteractable = EnsureComponent<XRSimpleInteractable>(surface);
-            MeshCollider meshCollider = EnsureComponent<MeshCollider>(surface);
-            EnsureComponent<UIHandle>(surface);
-            EnsureComponent<UIFocus>(surface);
-            QuadUIScale quadUiScale = EnsureComponent<QuadUIScale>(surface);
 
             GameObject canvasObject = EnsureRectChild(surface.transform, MenuCompositionCanvasName);
             canvasObject.layer = GetCompositionUiLayerIndex();
             canvasObject.transform.localPosition = Vector3.zero;
             canvasObject.transform.localRotation = Quaternion.identity;
-            canvasObject.transform.localScale = Vector3.one;
+            canvasObject.transform.localScale = Vector3.one * GameMenuScale;
 
             RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
             canvasRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -125,6 +120,15 @@ namespace Blockiverse.Editor
             canvasGroup.ignoreParentGroups = false;
 
             Camera canvasCamera = EnsureMenuCompositionCanvasCamera(canvasObject.transform);
+            InteractableUIMirror mirror = EnsureComponent<InteractableUIMirror>(surface);
+            mirror.enabled = true;
+            XRSimpleInteractable simpleInteractable = EnsureComponent<XRSimpleInteractable>(surface);
+            MeshCollider meshCollider = EnsureComponent<MeshCollider>(surface);
+            EnsureComponent<UIHandle>(surface);
+            EnsureComponent<UIFocus>(surface);
+            QuadUIScale quadUiScale = EnsureComponent<QuadUIScale>(surface);
+            RemoveComponentIfPresent<GraphicRaycaster>(canvasObject);
+            ConfigureCompositionLayerSerializedReferences(layer, canvas, mirror, outline);
             ConfigureInteractableUIMirrorSerializedReferences(
                 mirror,
                 layer,
@@ -132,10 +136,16 @@ namespace Blockiverse.Editor
                 simpleInteractable,
                 meshCollider,
                 quadUiScale,
+                canvasRect,
+                canvasGroup,
                 canvasCamera,
                 trackedDeviceRaycaster);
+            canvasGroup.interactable = true;
+            canvasGroup.blocksRaycasts = true;
+            canvasGroup.ignoreParentGroups = false;
             BlockiverseCompositionLayerRenderScale renderScale = EnsureComponent<BlockiverseCompositionLayerRenderScale>(surface);
             renderScale.Configure(canvas, layer, textures, canvasCamera, CompositionUiRenderScale);
+            EnsureCompositionMenuCursor(surface, canvasRect, cameraOffset);
 
             SetLayerRecursively(surface, GetCompositionUiLayerIndex());
             EditorUtility.SetDirty(canvasGroup);
@@ -146,6 +156,50 @@ namespace Blockiverse.Editor
             return surface;
         }
 
+        static void RemoveStaleCompositionLayerDefaultCanvas(Transform surface)
+        {
+            if (surface == null)
+                return;
+
+            Transform defaultCanvas = surface.Find("Canvas");
+            if (defaultCanvas != null)
+                UnityEngine.Object.DestroyImmediate(defaultCanvas.gameObject);
+        }
+
+        static void EnsureCompositionMenuCursor(GameObject surface, RectTransform menuCanvas, Transform cameraOffset)
+        {
+            if (surface == null || menuCanvas == null)
+                return;
+
+            GameObject cursorObject = EnsureRectChild(menuCanvas, MenuCompositionCursorName);
+            cursorObject.layer = GetCompositionUiLayerIndex();
+            cursorObject.transform.localPosition = Vector3.zero;
+            cursorObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 45.0f);
+            cursorObject.transform.localScale = Vector3.one;
+
+            RectTransform cursorRect = cursorObject.GetComponent<RectTransform>();
+            cursorRect.anchorMin = new Vector2(0.5f, 0.5f);
+            cursorRect.anchorMax = new Vector2(0.5f, 0.5f);
+            cursorRect.pivot = new Vector2(0.5f, 0.5f);
+            cursorRect.anchoredPosition = Vector2.zero;
+            cursorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 18.0f);
+            cursorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 18.0f);
+
+            Image cursorImage = EnsureComponent<Image>(cursorObject);
+            cursorImage.color = PointerLineColor;
+            cursorImage.raycastTarget = false;
+            cursorImage.maskable = false;
+
+            BlockiverseCompositionMenuCursor cursor = EnsureComponent<BlockiverseCompositionMenuCursor>(surface);
+            BlockiverseInputRig inputRig = cameraOffset != null ? cameraOffset.GetComponentInParent<BlockiverseInputRig>() : null;
+            cursor.Configure(inputRig, menuCanvas, cursorRect, cursorImage);
+            cursorObject.SetActive(false);
+
+            EditorUtility.SetDirty(cursorImage);
+            EditorUtility.SetDirty(cursor);
+            EditorUtility.SetDirty(cursorObject);
+        }
+
 
         static void ConfigureInteractableUIMirrorSerializedReferences(
             InteractableUIMirror mirror,
@@ -154,6 +208,8 @@ namespace Blockiverse.Editor
             XRSimpleInteractable simpleInteractable,
             MeshCollider meshCollider,
             LayerUIScale layerUiScale,
+            RectTransform canvasRectTransform,
+            CanvasGroup canvasGroup,
             Camera canvasCamera,
             TrackedDeviceGraphicRaycaster trackedDeviceRaycaster)
         {
@@ -166,10 +222,29 @@ namespace Blockiverse.Editor
             SetSerializedObject(serializedMirror, "xrSimpleInteractable", simpleInteractable);
             SetSerializedObject(serializedMirror, "meshCollider", meshCollider);
             SetSerializedObject(serializedMirror, "layerUIScale", layerUiScale);
+            SetSerializedObject(serializedMirror, "canvasRectTransform", canvasRectTransform);
+            SetSerializedObject(serializedMirror, "canvasGroup", canvasGroup);
             SetSerializedObject(serializedMirror, "canvasCamera", canvasCamera);
             SetSerializedObject(serializedMirror, "trackedDeviceGraphicRaycaster", trackedDeviceRaycaster);
             serializedMirror.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(mirror);
+        }
+
+        static void ConfigureCompositionLayerSerializedReferences(
+            CompositionLayer compositionLayer,
+            Canvas canvas,
+            Component mirror,
+            Component outline)
+        {
+            if (compositionLayer == null)
+                return;
+
+            var serializedLayer = new SerializedObject(compositionLayer);
+            SetSerializedObject(serializedLayer, "m_UICanvas", canvas);
+            SetSerializedObject(serializedLayer, "m_UIMirrorComponent", mirror);
+            SetSerializedObject(serializedLayer, "m_LayerOutline", outline);
+            serializedLayer.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(compositionLayer);
         }
 
         static Camera EnsureMenuCompositionCanvasCamera(Transform canvasTransform)
@@ -182,9 +257,9 @@ namespace Blockiverse.Editor
 
             Camera camera = EnsureComponent<Camera>(cameraObject);
             camera.orthographic = true;
-            camera.nearClipPlane = 0.0f;
+            camera.nearClipPlane = 0.01f;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.001f);
+            camera.backgroundColor = Color.clear;
             camera.cullingMask = 1 << GetCompositionUiLayerIndex();
             camera.enabled = false;
             EditorUtility.SetDirty(cameraObject);
@@ -303,90 +378,33 @@ namespace Blockiverse.Editor
             RemoveComponentIfPresent<Canvas>(panel);
         }
 
-        static void EnsureXrVisualProjectionRig(Transform cameraOffset, Transform head)
+        static void EnsureControllerVisualsUseMainCameraLayer(Transform cameraOffset)
         {
-            int visualLayer = EnsureXrVisualProjectionLayer();
-            GameObject projectionRig = EnsureChild(cameraOffset, XrVisualProjectionRigName);
-            projectionRig.layer = visualLayer;
-            projectionRig.transform.localPosition = Vector3.zero;
-            projectionRig.transform.localRotation = Quaternion.identity;
-            projectionRig.transform.localScale = Vector3.one;
+            if (cameraOffset == null)
+                return;
 
-            CompositionLayer layer = EnsureComponent<CompositionLayer>(projectionRig);
-            if (layer.LayerData is not ProjectionLayerRigData)
-                layer.ChangeLayerDataType(typeof(ProjectionLayerRigData));
-            layer.Order = CompositionLayerOrderMenu + 5;
-
-            TexturesExtension textures = EnsureComponent<TexturesExtension>(projectionRig);
-            textures.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
-
-            Camera mainCamera = head != null ? head.GetComponent<Camera>() : null;
-            if (mainCamera != null)
-            {
-                mainCamera.cullingMask &= ~BlockiverseProject.XrVisualProjectionLayerMask;
-                EditorUtility.SetDirty(mainCamera);
-            }
-
-            EnsureProjectionEyeCamera(projectionRig.transform, "Left Camera", visualLayer,
-                BlockiverseInputActionNames.LeftEyePosition, BlockiverseInputActionNames.LeftEyeRotation, mainCamera);
-            EnsureProjectionEyeCamera(projectionRig.transform, "Right Camera", visualLayer,
-                BlockiverseInputActionNames.RightEyePosition, BlockiverseInputActionNames.RightEyeRotation, mainCamera);
-
-            SetControllerVisualLayer(cameraOffset.Find("Left Controller"), visualLayer);
-            SetControllerVisualLayer(cameraOffset.Find("Right Controller"), visualLayer);
-
-            EditorUtility.SetDirty(layer);
-            EditorUtility.SetDirty(projectionRig);
+            EnsureControllerVisualUsesMainCameraLayer(cameraOffset.Find("Left Controller"));
+            EnsureControllerVisualUsesMainCameraLayer(cameraOffset.Find("Right Controller"));
         }
 
-        static void EnsureProjectionEyeCamera(
-            Transform parent,
-            string name,
-            int visualLayer,
-            string positionActionName,
-            string rotationActionName,
-            Camera mainCamera)
-        {
-            GameObject cameraObject = EnsureChild(parent, name);
-            cameraObject.layer = visualLayer;
-            cameraObject.transform.localPosition = Vector3.zero;
-            cameraObject.transform.localRotation = Quaternion.identity;
-            cameraObject.transform.localScale = Vector3.one;
-
-            Camera camera = EnsureComponent<Camera>(cameraObject);
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = Color.clear;
-            camera.cullingMask = 1 << visualLayer;
-            camera.depth = mainCamera != null ? mainCamera.depth - 1.0f : -1.0f;
-            camera.enabled = true;
-
-            TrackedPoseDriver poseDriver = EnsureComponent<TrackedPoseDriver>(cameraObject);
-            ConfigureProjectionEyePoseDriverReferenceActions(poseDriver, positionActionName, rotationActionName);
-
-            EditorUtility.SetDirty(camera);
-            EditorUtility.SetDirty(poseDriver);
-            EditorUtility.SetDirty(cameraObject);
-        }
-
-        static void ConfigureProjectionEyePoseDriverReferenceActions(
-            TrackedPoseDriver poseDriver,
-            string positionActionName,
-            string rotationActionName)
-        {
-            BlockiverseInputRig.ConfigurePoseDriverActionReferences(
-                poseDriver,
-                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, positionActionName),
-                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, rotationActionName),
-                LoadInputActionReference(BlockiverseInputActionNames.HeadMap, BlockiverseInputActionNames.TrackingState));
-        }
-
-        static void SetControllerVisualLayer(Transform controller, int visualLayer)
+        static void EnsureControllerVisualUsesMainCameraLayer(Transform controller)
         {
             if (controller == null)
                 return;
 
-            SetLayerRecursively(controller.gameObject, visualLayer);
-            EditorUtility.SetDirty(controller.gameObject);
+            SetObjectLayer(controller, 0);
+            SetObjectLayer(controller.Find(ControllerRayOriginName), 0);
+            SetObjectLayer(controller.Find(InteractionRayName), 0);
+            SetObjectLayer(controller.Find(TeleportRayName), 0);
+        }
+
+        static void SetObjectLayer(Transform target, int layer)
+        {
+            if (target == null)
+                return;
+
+            target.gameObject.layer = layer;
+            EditorUtility.SetDirty(target.gameObject);
         }
 
         static void RemoveStaleCompositionLayerComponents(GameObject panel)

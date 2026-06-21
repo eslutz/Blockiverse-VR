@@ -200,6 +200,26 @@ namespace Blockiverse.Editor
             return new Vector2(panelWidth - (MenuPanelInset * 3.0f) - MenuCloseButtonSize.x, height);
         }
 
+        static void ConfigureRoutedMenuPresenter(
+            BlockiverseWorldSpacePanelPresenter presenter,
+            Canvas canvas,
+            Transform head,
+            float scale = GameMenuScale,
+            bool showWhenStarted = false,
+            string showWhenStartedPlayerPrefsKey = null)
+        {
+            presenter.Configure(
+                canvas,
+                head,
+                GameMenuDistanceMeters,
+                0.0f,
+                GameMenuVerticalOffsetMeters,
+                GameMenuPitchDegrees,
+                scale,
+                showWhenStarted: showWhenStarted,
+                showWhenStartedPlayerPrefsKey: showWhenStartedPlayerPrefsKey);
+        }
+
         // Builds the LAN multiplayer panel on the rig: host/join/stop controls plus a close
         // button, presented through the same world-space presenter stack as the other menus.
         static (BlockiverseWorldSpacePanelPresenter presenter, Button closeButton) EnsureLanMultiplayerMenuPanel(
@@ -284,7 +304,7 @@ namespace Blockiverse.Editor
             menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(menu);
@@ -378,7 +398,7 @@ namespace Blockiverse.Editor
             actionMenu.Configure(titleLabel, buttons, labels, statusLabel);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(actionMenu);
@@ -535,7 +555,7 @@ namespace Blockiverse.Editor
                 createButton, cancelButton, errorLabel);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(panel);
@@ -667,7 +687,7 @@ namespace Blockiverse.Editor
                 pageLabel);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(panel);
@@ -777,7 +797,7 @@ namespace Blockiverse.Editor
                 mute, haptics, reducedFlash, reducedParticles);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(panel);
@@ -886,7 +906,7 @@ namespace Blockiverse.Editor
             WireButton(weatherButton, panel, nameof(BlockiverseCreativeToolsPanel.CycleWeather), panel.CycleWeather);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(panel);
@@ -953,7 +973,7 @@ namespace Blockiverse.Editor
                 TopRightClosePosition(W), MenuCloseButtonSize);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(presenter);
@@ -1039,7 +1059,7 @@ namespace Blockiverse.Editor
             panel.Configure(metadataLabel, renameField);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
             EditorUtility.SetDirty(actionMenu);
@@ -1131,7 +1151,7 @@ namespace Blockiverse.Editor
             handleRect.anchorMax = new Vector2(0.0f, 0.5f);
             handleRect.sizeDelta = new Vector2(36.0f, 36.0f);
             Image handle = EnsureComponent<Image>(handleObject);
-            Sprite knobSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            Sprite knobSprite = GetUiControlSprite("slider_knob");
             if (knobSprite != null)
                 handle.sprite = knobSprite;
             handle.color = TextPrimaryColor;
@@ -1275,7 +1295,7 @@ namespace Blockiverse.Editor
                 withdrawFuelButton);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            presenter.Configure(canvas, head, 1.1f, 0.0f, -0.06f, 0.0f, GameMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head);
             presenter.ConfigureFeedback(BlockiverseAudioCue.ContainerOpen, BlockiverseAudioCue.ContainerClose);
 
             EditorUtility.SetDirty(stationPanel);

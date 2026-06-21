@@ -75,23 +75,17 @@ namespace Blockiverse.Tests.PlayMode
             {
                 yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-                GameObject popup = GameObject.Find("Controller Mapping Popup");
+                GameObject popup = FindGameObjectIncludingInactive("Controller Mapping Popup");
                 Assert.That(popup, Is.Not.Null);
-                GameObject titleMenu = GameObject.Find("Title Menu");
+                GameObject titleMenu = FindGameObjectIncludingInactive("Title Menu");
                 Assert.That(titleMenu, Is.Not.Null);
-
-                Canvas canvas = popup.GetComponent<Canvas>();
-                Assert.That(canvas, Is.Not.Null);
-                Assert.That(canvas.enabled, Is.True);
-                Canvas titleCanvas = titleMenu.GetComponent<Canvas>();
-                Assert.That(titleCanvas, Is.Not.Null);
-                Assert.That(titleCanvas.enabled, Is.False,
-                    "The title menu must wait until the first-run controller map is dismissed.");
 
                 BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
                 Assert.That(presenter, Is.Not.Null);
                 Assert.That(presenter.IsVisible, Is.True);
                 Assert.That(presenter.ShowOnStart, Is.False);
+                Assert.That(titleMenu.activeInHierarchy, Is.False,
+                    "The title menu must wait until the first-run controller map is dismissed.");
 
                 Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
                 Assert.That(closeButton, Is.Not.Null);
@@ -99,14 +93,27 @@ namespace Blockiverse.Tests.PlayMode
                 closeButton.onClick.Invoke();
                 yield return null;
 
-                Assert.That(canvas.enabled, Is.False);
-                Assert.That(titleCanvas.enabled, Is.True);
+                Assert.That(presenter.IsVisible, Is.False);
+                Assert.That(titleMenu.activeInHierarchy, Is.True);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally
             {
                 PlayerPrefs.DeleteKey(key);
             }
+        }
+
+        static GameObject FindGameObjectIncludingInactive(string name)
+        {
+            foreach (Transform transform in UnityEngine.Object.FindObjectsByType<Transform>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None))
+            {
+                if (transform.name == name)
+                    return transform.gameObject;
+            }
+
+            return null;
         }
 
         [UnityTest]

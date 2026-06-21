@@ -47,6 +47,9 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
+using Unity.XR.CompositionLayers;
+using Unity.XR.CompositionLayers.Extensions;
+using Unity.XR.CompositionLayers.UIInteraction;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -275,18 +278,86 @@ namespace Blockiverse.Editor
 
         static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
         {
+            RemoveStaleRootCompositionLayers(scene);
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
 
-            if (rig == null)
+            if (rig != null)
+                UnityEngine.Object.DestroyImmediate(rig);
+
+            GameObject rigInstance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
+            if (rigInstance != null)
             {
-                PrefabUtility.InstantiatePrefab(rigPrefab, scene);
+                rigInstance.name = BlockiverseProject.XrRigRootName;
+                RemoveGeneratedCompositionLayerSceneOverrides(rigInstance);
+                EditorUtility.SetDirty(rigInstance);
+            }
+        }
+
+        static void RemoveStaleRootCompositionLayers(Scene scene)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (root == null || root.name == BlockiverseProject.XrRigRootName)
+                    continue;
+
+                if (root.name == "Composition Render Scale Surface" ||
+                    root.GetComponent<CompositionLayer>() != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(root);
+                }
+            }
+        }
+
+        static void RemoveGeneratedCompositionLayerSceneOverrides(GameObject rigInstance)
+        {
+            if (rigInstance == null)
                 return;
+
+            Transform cameraOffset = rigInstance.transform.Find("Camera Offset");
+            Transform surface = cameraOffset != null ? cameraOffset.Find(MenuCompositionSurfaceName) : null;
+            if (surface == null)
+                return;
+
+            MeshCollider meshCollider = surface.GetComponent<MeshCollider>();
+            RevertPrefabObjectOverride(meshCollider);
+            if (meshCollider != null && meshCollider.sharedMesh != null)
+            {
+                meshCollider.sharedMesh = null;
+                EditorUtility.SetDirty(meshCollider);
             }
 
-            if (rig.GetComponent<BlockiverseXRRigMarker>() == null)
-                rig.AddComponent<BlockiverseXRRigMarker>();
+            TexturesExtension texturesExtension = surface.GetComponent<TexturesExtension>();
+            RevertPrefabObjectOverride(texturesExtension);
+            if (texturesExtension != null)
+            {
+                texturesExtension.LeftTexture = null;
+                texturesExtension.RightTexture = null;
+                EditorUtility.SetDirty(texturesExtension);
+            }
 
-            EnsureXrRigControllerBindings(rig);
+            InteractableUIMirror mirror = surface.GetComponent<InteractableUIMirror>();
+            RevertPrefabObjectOverride(mirror);
+
+            Camera canvasCamera = surface.Find($"{MenuCompositionCanvasName}/CanvasCamera")?.GetComponent<Camera>();
+            RevertPrefabObjectOverride(canvasCamera);
+            if (canvasCamera != null)
+            {
+                canvasCamera.targetTexture = null;
+                canvasCamera.enabled = false;
+                canvasCamera.nearClipPlane = 0.01f;
+                canvasCamera.clearFlags = CameraClearFlags.SolidColor;
+                canvasCamera.backgroundColor = Color.clear;
+                canvasCamera.cullingMask = 1 << GetCompositionUiLayerIndex();
+                EditorUtility.SetDirty(canvasCamera);
+            }
+        }
+
+        static void RevertPrefabObjectOverride(UnityEngine.Object target)
+        {
+            if (target == null || !PrefabUtility.IsPartOfPrefabInstance(target))
+                return;
+
+            PrefabUtility.RevertObjectOverride(target, InteractionMode.AutomatedAction);
         }
 
         static void EnsureBootSceneLight(Scene scene)

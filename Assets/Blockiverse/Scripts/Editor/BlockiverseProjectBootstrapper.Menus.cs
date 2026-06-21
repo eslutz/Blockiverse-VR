@@ -186,7 +186,6 @@ namespace Blockiverse.Editor
                     inputRig.QuickMenuPressed,
                     presenter,
                     nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
-                UnityEventTools.AddPersistentListener(inputRig.QuickMenuPressed, presenter.ToggleVisible);
                 EditorUtility.SetDirty(inputRig);
             }
 
@@ -367,14 +366,11 @@ namespace Blockiverse.Editor
                 MenuCloseButtonSize);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(popupObject);
-            presenter.Configure(
+            ConfigureRoutedMenuPresenter(
+                presenter,
                 canvas,
                 head,
-                1.06f,
-                0.0f,
-                -0.14f,
-                0.0f,
-                0.0013f,
+                GameMenuScale,
                 showWhenStarted: false,
                 showWhenStartedPlayerPrefsKey: BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey);
 
@@ -382,7 +378,6 @@ namespace Blockiverse.Editor
                 closeButton.onClick,
                 presenter,
                 nameof(BlockiverseWorldSpacePanelPresenter.Hide));
-            UnityEventTools.AddPersistentListener(closeButton.onClick, presenter.Hide);
 
             EditorUtility.SetDirty(closeButton);
             EditorUtility.SetDirty(presenter);
@@ -1003,7 +998,7 @@ namespace Blockiverse.Editor
             checkmarkRect.offsetMin = new Vector2(7.0f, 7.0f);
             checkmarkRect.offsetMax = new Vector2(-7.0f, -7.0f);
             Image checkmark = EnsureComponent<Image>(checkmarkObject);
-            Sprite checkmarkSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Checkmark.psd");
+            Sprite checkmarkSprite = GetUiControlSprite("checkbox_check");
             if (checkmarkSprite != null)
                 checkmark.sprite = checkmarkSprite;
             checkmark.color = AccentColor;
@@ -1118,7 +1113,7 @@ namespace Blockiverse.Editor
             handleRect.anchorMax = new Vector2(0.0f, 0.5f);
             handleRect.sizeDelta = new Vector2(36.0f, 36.0f);
             Image handle = EnsureComponent<Image>(handleObject);
-            Sprite knobSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            Sprite knobSprite = GetUiControlSprite("slider_knob");
             if (knobSprite != null)
                 handle.sprite = knobSprite;
             handle.color = TextPrimaryColor;
@@ -1240,18 +1235,24 @@ namespace Blockiverse.Editor
             image.color = ControlNormalColor;
             ConfigureUiRaycastBlocker(image);
 
+            Outline outline = EnsureComponent<Outline>(buttonObject);
+            outline.effectColor = DividerColor;
+            outline.effectDistance = new Vector2(2.0f, -2.0f);
+            outline.useGraphicAlpha = false;
+            EditorUtility.SetDirty(outline);
+
             Button button = EnsureComponent<Button>(buttonObject);
             button.targetGraphic = image;
             button.transition = Selectable.Transition.ColorTint;
             button.colors = new ColorBlock
             {
                 normalColor      = ControlNormalColor,
-                highlightedColor = AccentHighlightColor,
+                highlightedColor = ControlHighlightColor,
                 pressedColor     = ControlPressedColor,
-                selectedColor    = AccentColor,
+                selectedColor    = ControlSelectedColor,
                 disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
-                colorMultiplier  = 1.0f,
-                fadeDuration     = 0.08f
+                colorMultiplier  = 1.05f,
+                fadeDuration     = 0.04f
             };
             ConfigureSelectableFeedback(button);
 
@@ -1417,7 +1418,7 @@ namespace Blockiverse.Editor
             TextMeshProUGUI tmp = EnsureComponent<TextMeshProUGUI>(labelObject);
             tmp.text = label;
             tmp.color = colorOverride ?? TextPrimaryColor;
-            tmp.enableWordWrapping = true;
+            tmp.textWrappingMode = TextWrappingModes.Normal;
             ConfigureGeneratedTextSizing(tmp, fontSize);
 
             // Map TextAnchor to TMP alignment.
@@ -1646,16 +1647,16 @@ namespace Blockiverse.Editor
             return component;
         }
 
-        // Returns Unity's built-in 9-slice rounded-rectangle sprite ("Background.psd").
-        // When set on an Image with Image.Type.Sliced it produces rounded corners at any size.
-        // Returns null when running without the UISprite built-ins (very rare; handled gracefully by callers).
-        static Sprite GetRoundedSprite() => Resources.GetBuiltinResource<Sprite>("UI/Skin/Background.psd");
+        static Sprite GetRoundedSprite() => GetUiControlSprite("settings_panel") ?? GetUiControlSprite("hotbar_frame");
 
         static Sprite GetUiSprite(string name)
         {
-            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Sprites/UI/{name}.png");
+            Sprite sprite = GetUiControlSprite(name);
             return sprite != null ? sprite : GetRoundedSprite();
         }
+
+        static Sprite GetUiControlSprite(string name) =>
+            AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Sprites/UI/{name}.png");
 
         static Sprite GetVfxSprite(string name) =>
             AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Sprites/VFX/{name}.png");

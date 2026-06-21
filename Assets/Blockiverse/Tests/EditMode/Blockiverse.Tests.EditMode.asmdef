@@ -11,6 +11,7 @@
     "Blockiverse.Survival.Health",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
+    "Blockiverse.Editor",
     "Blockiverse.UI",
     "Blockiverse.VR",
     "Unity.InputSystem",

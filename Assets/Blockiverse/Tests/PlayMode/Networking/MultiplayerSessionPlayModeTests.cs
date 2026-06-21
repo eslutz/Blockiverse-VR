@@ -2865,6 +2865,14 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
         static GameObject CreateMainCamera(string name, Vector3 position)
         {
+            foreach (Camera camera in UnityEngine.Object.FindObjectsByType<Camera>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None))
+            {
+                if (camera != null && camera.CompareTag("MainCamera"))
+                    camera.tag = "Untagged";
+            }
+
             GameObject cameraObject = new(name)
             {
                 tag = "MainCamera"

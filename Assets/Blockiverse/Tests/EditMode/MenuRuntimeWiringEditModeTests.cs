@@ -258,6 +258,88 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ControllerMappingRouteClosesQuickBlockMenuAndOwnsRaycasts()
+        {
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            PlayerPrefs.DeleteKey(key);
+
+            try
+            {
+                GameObject rig = CreateRoot("Rig");
+                BlockiverseInputRig inputRig = rig.AddComponent<BlockiverseInputRig>();
+                BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+                BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+                AddPresenter(titleMenu.gameObject);
+
+                GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
+                Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
+                mappingCanvas.enabled = false;
+                BlockiverseWorldSpacePanelPresenter mappingPresenter =
+                    controllerMapping.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                mappingPresenter.Configure(
+                    mappingCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false,
+                    showWhenStartedPlayerPrefsKey: key);
+
+                GameObject blockMenu = CreateChild(rig.transform, "Block Menu");
+                Canvas blockMenuCanvas = blockMenu.AddComponent<Canvas>();
+                BlockiverseWorldSpacePanelPresenter blockMenuPresenter =
+                    blockMenu.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                blockMenuPresenter.Configure(
+                    blockMenuCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false);
+                blockMenuPresenter.Show();
+
+                StartMenuController(controller);
+
+                CanvasGroup blockMenuInput = blockMenu.GetComponent<CanvasGroup>();
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen));
+                Assert.That(mappingCanvas.enabled, Is.True);
+                Assert.That(blockMenuCanvas.enabled, Is.False,
+                    "The Blocks quick menu must not remain visible behind the first-run controller map.");
+                Assert.That(blockMenuInput, Is.Not.Null);
+                Assert.That(blockMenuInput.interactable, Is.False);
+                Assert.That(blockMenuInput.blocksRaycasts, Is.False,
+                    "The Blocks quick menu must not steal tracked-device raycasts from the controller-map Close button.");
+
+                inputRig.QuickMenuPressed.Invoke();
+
+                Assert.That(blockMenuCanvas.enabled, Is.False,
+                    "Support-grip quick-menu input must be ignored while routed menu UI owns input.");
+                Assert.That(blockMenuInput.blocksRaycasts, Is.False);
+
+                controller.CloseControllerMappingScreen();
+                inputRig.QuickMenuPressed.Invoke();
+
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+                Assert.That(blockMenuCanvas.enabled, Is.False,
+                    "The quick block menu is gameplay-only and must not open over the title menu.");
+
+                controller.EnterGameplay();
+                inputRig.QuickMenuPressed.Invoke();
+
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
+                Assert.That(blockMenuCanvas.enabled, Is.True);
+                Assert.That(blockMenuInput.interactable, Is.True);
+                Assert.That(blockMenuInput.blocksRaycasts, Is.True);
+            }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+        }
+
+        [Test]
         public void ControllerMappingSeenLaunchesTitleMenuDirectly()
         {
             string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;

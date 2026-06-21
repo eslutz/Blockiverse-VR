@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Xml;
 using Blockiverse.Core;
+using Blockiverse.Editor;
 using Blockiverse.MetaPlatform;
 using NUnit.Framework;
 using UnityEditor;
@@ -35,6 +36,7 @@ namespace Blockiverse.Tests.EditMode
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
+        const string ProjectBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.cs";
         const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
         const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
         const string XrRigBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.XrRig.cs";
@@ -140,6 +142,23 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void BootSceneDoesNotPersistCompositionLayerPlaneMeshOverrides()
+        {
+            string bootScene = File.ReadAllText(BootScenePath);
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+
+            Assert.That(sceneBootstrapper, Does.Contain("DestroyImmediate(rig)"),
+                "The generated Boot rig must be replaced from the prefab so stale composition-layer scene overrides are dropped.");
+            Assert.That(sceneBootstrapper, Does.Contain("RemoveStaleRootCompositionLayers(scene)"),
+                "The generated Boot scene must also delete package/test-created composition layer roots that are outside the generated rig.");
+            Assert.That(bootScene, Does.Not.Contain("m_Name: Composition Layer Plane"),
+                "Boot.unity must not persist generated composition-layer meshes; old pixel-sized meshes trigger large-triangle warnings on scene import.");
+            Assert.That(bootScene, Does.Not.Contain("m_Name: Composition Render Scale Surface"),
+                "Boot.unity must not persist root composition layers with invalid layer data because they submit black compositor surfaces on Quest.");
+            Assert.That(bootScene, Does.Not.Contain("m_Extent: {x: 430, y: 430, z: 0}"));
+        }
+
+        [Test]
         public void RayDiagnosticWorldsAndBuildEntrypointsAreRemoved()
         {
             string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
@@ -159,6 +178,26 @@ namespace Blockiverse.Tests.EditMode
                 EditorBuildSettings.scenes.Select(scene => scene.path),
                 Has.None.Matches<string>(path => path.Contains("RayDiagnostic")),
                 "Diagnostic stub scenes must not be part of the generated build scene list.");
+        }
+
+        [Test]
+        public void LocalDevelopmentBuildMetadataDoesNotFallBackToProjectSettingsVersionCode()
+        {
+            string buildSmoke = File.ReadAllText(BuildSmokePath);
+            string buildScript = File.ReadAllText("scripts/unity/build-development-apk.sh");
+            var sampleUtc = new DateTime(2026, 6, 21, 12, 0, 0, DateTimeKind.Utc);
+
+            Assert.That(BlockiverseBuildSmoke.CreateLocalDevelopmentVersionName(sampleUtc),
+                Is.EqualTo("0.1.0-dev.local.20260621120000"));
+            Assert.That(BlockiverseBuildSmoke.CreateAndroidVersionCode(
+                    new DateTime(2020, 1, 1, 0, 0, 1, DateTimeKind.Utc)),
+                Is.EqualTo(1));
+            Assert.That(BlockiverseBuildSmoke.CreateAndroidVersionCode(sampleUtc), Is.GreaterThan(1));
+            StringAssert.Contains("CreateLocalDevelopmentVersionName(utcNow)", buildSmoke);
+            StringAssert.Contains("CreateAndroidVersionCode(utcNow)", buildSmoke);
+            StringAssert.Contains("1577836800", buildScript);
+            StringAssert.Contains("-blockiverseBuildVersionName \"$UNITY_ANDROID_VERSION_NAME\"", buildScript);
+            StringAssert.Contains("-blockiverseBuildVersionCode \"$UNITY_ANDROID_VERSION_CODE\"", buildScript);
         }
 
         [Test]
@@ -187,7 +226,24 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("text.enableAutoSizing = true", menuBootstrapper);
             StringAssert.Contains("text.fontSizeMin =", menuBootstrapper);
             StringAssert.Contains("TextOverflowModes.Ellipsis", menuBootstrapper);
+            StringAssert.Contains("TextWrappingModes.Normal", menuBootstrapper);
+            Assert.That(menuBootstrapper, Does.Not.Contain("enableWordWrapping"));
             Assert.That(menuBootstrapper, Does.Not.Contain("TextOverflowModes.Truncate"));
+        }
+
+        [Test]
+        public void GeneratedUiDoesNotDependOnRemovedBuiltinSkinSprites()
+        {
+            string[] bootstrapperFiles = Directory
+                .GetFiles("Assets/Blockiverse/Scripts/Editor", "BlockiverseProjectBootstrapper*.cs")
+                .OrderBy(path => path)
+                .ToArray();
+            string bootstrapperSource = string.Join("\n", bootstrapperFiles.Select(File.ReadAllText));
+
+            Assert.That(bootstrapperSource, Does.Not.Contain("Resources.GetBuiltinResource<Sprite>(\"UI/Skin/"),
+                "Unity 6000.3 no longer ships the legacy UI/Skin PSD sprites used by old UGUI examples.");
+            StringAssert.Contains("checkbox_check", bootstrapperSource);
+            StringAssert.Contains("slider_knob", bootstrapperSource);
         }
 
         [Test]
@@ -311,9 +367,21 @@ namespace Blockiverse.Tests.EditMode
         public void MetaProjectConfigRequiresSystemKeyboard()
         {
             string projectConfig = File.ReadAllText(OculusProjectConfigPath);
+            string bootstrapper = File.ReadAllText(ProjectBootstrapperPath);
 
-            StringAssert.Contains("focusAware: 1", projectConfig);
             StringAssert.Contains("requiresSystemKeyboard: 1", projectConfig);
+            Assert.That(bootstrapper, Does.Not.Contain("projectConfig.focusAware"),
+                "Meta XR now requires focus awareness by default; writing the obsolete field keeps compiler warnings alive.");
+        }
+
+        [Test]
+        public void AppBrandingUsesNamedBuildTargetIconsApi()
+        {
+            string bootstrapper = File.ReadAllText(ProjectBootstrapperPath);
+
+            StringAssert.Contains("PlayerSettings.SetIcons(NamedBuildTarget.Android", bootstrapper);
+            StringAssert.Contains("PlayerSettings.SetIcons(NamedBuildTarget.Unknown", bootstrapper);
+            Assert.That(bootstrapper, Does.Not.Contain("SetIconsForTargetGroup"));
         }
 
         [Test]

@@ -10,6 +10,7 @@ namespace Blockiverse.VR
     {
         public const float PointerLineWidthMeters = 0.01f;
         public const float PointerMinimumLineLengthMeters = 0.75f;
+        public const int DefaultXriInteractionLayerMask = 1;
 
         public static void ConfigureInteractionRay(
             XRRayInteractor ray,
@@ -25,9 +26,9 @@ namespace Blockiverse.VR
             ray.blockUIOnInteractableSelection = false;
             ray.maxRaycastDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;
             ray.manipulateAttachTransform = false;
-            // The ray is used for UI and for reading the current block raycast hit. It should not
-            // select 3D XRI interactables such as teleport areas.
-            ray.interactionLayers = 0;
+            // XRI UI mirroring still requires layer overlap with XRSimpleInteractable surfaces.
+            // Selection/activation bindings remain unused so the ray does not select 3D tools.
+            ray.interactionLayers = DefaultXriInteractionLayerMask;
         }
 
         public static void ConfigureTeleportRay(
