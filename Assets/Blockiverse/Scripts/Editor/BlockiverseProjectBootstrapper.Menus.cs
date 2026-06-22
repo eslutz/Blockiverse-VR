@@ -229,7 +229,7 @@ namespace Blockiverse.Editor
             artworkRect.offsetMax = Vector2.zero;
 
             RawImage artworkImage = EnsureComponent<RawImage>(artworkObject);
-            artworkImage.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            artworkImage.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPlainPath);
             artworkImage.color = Color.white;
             artworkImage.raycastTarget = false;
 
