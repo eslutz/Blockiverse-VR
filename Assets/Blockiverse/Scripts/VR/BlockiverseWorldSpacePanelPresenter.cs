@@ -139,6 +139,9 @@ namespace Blockiverse.VR
                 Recenter();
 
             GameObject root = ResolveTargetRoot();
+            if (root != null && !root.activeSelf)
+                root.SetActive(true);
+
             if (targetCanvas != null)
                 targetCanvas.enabled = true;
             else if (root != null)

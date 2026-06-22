@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
@@ -74,6 +75,7 @@ namespace Blockiverse.Editor
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
+            RemoveStaleRootCompositionLayerSceneDocuments(BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
         }
 
@@ -303,9 +305,97 @@ namespace Blockiverse.Editor
                 if (root.name == "Composition Render Scale Surface" ||
                     root.GetComponent<CompositionLayer>() != null)
                 {
-                    UnityEngine.Object.DestroyImmediate(root);
+                    root.SetActive(false);
+                    EditorUtility.SetDirty(root);
                 }
             }
+        }
+
+        static void RemoveStaleRootCompositionLayerSceneDocuments(string scenePath)
+        {
+            if (!File.Exists(scenePath))
+                return;
+
+            string sceneYaml = File.ReadAllText(scenePath);
+            IReadOnlyList<string> sceneDocuments = SplitUnityYamlDocuments(sceneYaml);
+            var gameObjectIdsToRemove = new HashSet<string>();
+            var objectIdsToRemove = new HashSet<string>();
+            var rootTransformIdsToRemove = new HashSet<string>();
+
+            foreach (string document in sceneDocuments)
+            {
+                if (!TryGetUnityYamlDocumentId(document, out string gameObjectId) ||
+                    !document.StartsWith("--- !u!1 ", StringComparison.Ordinal) ||
+                    !IsStaleRootCompositionLayerGameObjectDocument(document))
+                {
+                    continue;
+                }
+
+                gameObjectIdsToRemove.Add(gameObjectId);
+                objectIdsToRemove.Add(gameObjectId);
+
+                foreach (Match componentMatch in Regex.Matches(document, @"component:\s*\{fileID:\s*(-?\d+)\}"))
+                {
+                    string componentId = componentMatch.Groups[1].Value;
+                    objectIdsToRemove.Add(componentId);
+                    if (!rootTransformIdsToRemove.Contains(componentId))
+                        rootTransformIdsToRemove.Add(componentId);
+                }
+            }
+
+            if (objectIdsToRemove.Count == 0)
+                return;
+
+            var keptDocuments = sceneDocuments
+                .Where(document =>
+                {
+                    if (!TryGetUnityYamlDocumentId(document, out string documentId))
+                        return true;
+
+                    return !objectIdsToRemove.Contains(documentId);
+                })
+                .ToList();
+
+            string cleanedSceneYaml = string.Concat(keptDocuments);
+            foreach (string transformId in rootTransformIdsToRemove)
+            {
+                cleanedSceneYaml = Regex.Replace(
+                    cleanedSceneYaml,
+                    $@"(?m)^\s*-\s*\{{fileID:\s*{Regex.Escape(transformId)}\}}\r?\n",
+                    string.Empty);
+            }
+
+            if (cleanedSceneYaml == sceneYaml)
+                return;
+
+            File.WriteAllText(scenePath, cleanedSceneYaml);
+            AssetDatabase.ImportAsset(scenePath, ImportAssetOptions.ForceUpdate);
+        }
+
+        static IReadOnlyList<string> SplitUnityYamlDocuments(string yaml)
+        {
+            var documents = new List<string>();
+            int firstDocumentIndex = yaml.IndexOf("--- !u!", StringComparison.Ordinal);
+            if (firstDocumentIndex > 0)
+                documents.Add(yaml[..firstDocumentIndex]);
+
+            foreach (Match match in Regex.Matches(yaml, @"(?ms)^--- !u!.*?(?=^--- !u!|\z)"))
+                documents.Add(match.Value);
+
+            return documents.Count > 0 ? documents : new[] { yaml };
+        }
+
+        static bool TryGetUnityYamlDocumentId(string document, out string documentId)
+        {
+            Match match = Regex.Match(document, @"^--- !u!\d+ &(-?\d+)", RegexOptions.Multiline);
+            documentId = match.Success ? match.Groups[1].Value : string.Empty;
+            return match.Success;
+        }
+
+        static bool IsStaleRootCompositionLayerGameObjectDocument(string document)
+        {
+            return document.Contains("m_Name: Composition Render Scale Surface", StringComparison.Ordinal) ||
+                   document.Contains("m_Name: Composition Layer Plane", StringComparison.Ordinal);
         }
 
         static void RemoveGeneratedCompositionLayerSceneOverrides(GameObject rigInstance)

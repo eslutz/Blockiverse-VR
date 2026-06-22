@@ -302,8 +302,7 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
-            Transform routedMenuParent = EnsureMenuCompositionSurface(cameraOffset, head).transform.Find(MenuCompositionCanvasName);
-            GameObject popupObject = EnsureRoutedMenuRectChild(cameraOffset, routedMenuParent, null, ControllerMappingPopupName);
+            GameObject popupObject = EnsureWorldSpaceMenuRectChild(cameraOffset, null, ControllerMappingPopupName);
             popupObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.06f);
             popupObject.transform.localRotation = Quaternion.identity;
             popupObject.transform.localScale = Vector3.one * 0.0013f;
@@ -1235,24 +1234,18 @@ namespace Blockiverse.Editor
             image.color = ControlNormalColor;
             ConfigureUiRaycastBlocker(image);
 
-            Outline outline = EnsureComponent<Outline>(buttonObject);
-            outline.effectColor = DividerColor;
-            outline.effectDistance = new Vector2(2.0f, -2.0f);
-            outline.useGraphicAlpha = false;
-            EditorUtility.SetDirty(outline);
-
             Button button = EnsureComponent<Button>(buttonObject);
             button.targetGraphic = image;
             button.transition = Selectable.Transition.ColorTint;
             button.colors = new ColorBlock
             {
                 normalColor      = ControlNormalColor,
-                highlightedColor = ControlHighlightColor,
+                highlightedColor = AccentHighlightColor,
                 pressedColor     = ControlPressedColor,
-                selectedColor    = ControlSelectedColor,
+                selectedColor    = AccentColor,
                 disabledColor    = new Color(0.5f, 0.5f, 0.5f, 0.5f),
-                colorMultiplier  = 1.05f,
-                fadeDuration     = 0.04f
+                colorMultiplier  = 1.0f,
+                fadeDuration     = 0.08f
             };
             ConfigureSelectableFeedback(button);
 
@@ -1551,7 +1544,7 @@ namespace Blockiverse.Editor
             if (legacyRaycaster != null)
                 UnityEngine.Object.DestroyImmediate(legacyRaycaster);
 
-            SetLayerRecursively(canvasObject, GetCompositionUiLayerIndex());
+            SetLayerRecursively(canvasObject, GetInteractionLayerIndex());
 
             CanvasGroup inputGate = EnsureComponent<CanvasGroup>(canvasObject);
             inputGate.interactable = true;
@@ -1584,7 +1577,7 @@ namespace Blockiverse.Editor
 
             foreach (Graphic graphic in canvasObject.GetComponentsInChildren<Graphic>(true))
             {
-                graphic.gameObject.layer = GetCompositionUiLayerIndex();
+                graphic.gameObject.layer = GetInteractionLayerIndex();
                 graphic.raycastTarget = false;
                 EditorUtility.SetDirty(graphic);
             }

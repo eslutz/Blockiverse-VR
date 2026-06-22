@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 206503895}
   - component: {fileID: 206503897}
   - component: {fileID: 206503898}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Text
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -419,7 +419,7 @@ GameObject:
   - component: {fileID: 270811746}
   - component: {fileID: 270811748}
   - component: {fileID: 270811749}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Status
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -571,7 +571,7 @@ GameObject:
   - component: {fileID: 308501972}
   - component: {fileID: 308501974}
   - component: {fileID: 308501975}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -711,7 +711,7 @@ GameObject:
   - component: {fileID: 367609779}
   - component: {fileID: 367609780}
   - component: {fileID: 367609781}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Host Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -751,7 +751,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -797,13 +797,13 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.06, g: 0.085, b: 0.115, a: 1}
-    m_HighlightedColor: {r: 0, g: 0.71, b: 0.88, a: 1}
-    m_PressedColor: {r: 0, g: 0.38, b: 0.52, a: 1}
-    m_SelectedColor: {r: 1, g: 0.65, b: 0.16, a: 1}
+    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+    m_HighlightedColor: {r: 0.24, g: 0.88, b: 0.66, a: 1}
+    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
+    m_SelectedColor: {r: 0.18, g: 0.75, b: 0.56, a: 1}
     m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1.05
-    m_FadeDuration: 0.04
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.08
   m_SpriteState:
     m_HighlightedSprite: {fileID: 0}
     m_PressedSprite: {fileID: 0}
@@ -935,7 +935,7 @@ GameObject:
   - component: {fileID: 477340632}
   - component: {fileID: 477340633}
   - component: {fileID: 477340634}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Address Input
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -976,7 +976,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1146,7 +1146,7 @@ GameObject:
   - component: {fileID: 493624583}
   - component: {fileID: 493624584}
   - component: {fileID: 493624585}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Placeholder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1301,7 +1301,7 @@ GameObject:
   - component: {fileID: 543566529}
   - component: {fileID: 543566530}
   - component: {fileID: 543566531}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Join Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1341,7 +1341,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1387,13 +1387,13 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.06, g: 0.085, b: 0.115, a: 1}
-    m_HighlightedColor: {r: 0, g: 0.71, b: 0.88, a: 1}
-    m_PressedColor: {r: 0, g: 0.38, b: 0.52, a: 1}
-    m_SelectedColor: {r: 1, g: 0.65, b: 0.16, a: 1}
+    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+    m_HighlightedColor: {r: 0.24, g: 0.88, b: 0.66, a: 1}
+    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
+    m_SelectedColor: {r: 0.18, g: 0.75, b: 0.56, a: 1}
     m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1.05
-    m_FadeDuration: 0.04
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.08
   m_SpriteState:
     m_HighlightedSprite: {fileID: 0}
     m_PressedSprite: {fileID: 0}
@@ -1457,7 +1457,7 @@ GameObject:
   - component: {fileID: 681260479}
   - component: {fileID: 681260480}
   - component: {fileID: 681260481}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Stop Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1497,7 +1497,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.06, g: 0.085, b: 0.115, a: 1}
+  m_Color: {r: 0.16, g: 0.2, b: 0.24, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1543,13 +1543,13 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.06, g: 0.085, b: 0.115, a: 1}
-    m_HighlightedColor: {r: 0, g: 0.71, b: 0.88, a: 1}
-    m_PressedColor: {r: 0, g: 0.38, b: 0.52, a: 1}
-    m_SelectedColor: {r: 1, g: 0.65, b: 0.16, a: 1}
+    m_NormalColor: {r: 0.16, g: 0.2, b: 0.24, a: 1}
+    m_HighlightedColor: {r: 0.24, g: 0.88, b: 0.66, a: 1}
+    m_PressedColor: {r: 0.1, g: 0.14, b: 0.18, a: 1}
+    m_SelectedColor: {r: 0.18, g: 0.75, b: 0.56, a: 1}
     m_DisabledColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
-    m_ColorMultiplier: 1.05
-    m_FadeDuration: 0.04
+    m_ColorMultiplier: 1
+    m_FadeDuration: 0.08
   m_SpriteState:
     m_HighlightedSprite: {fileID: 0}
     m_PressedSprite: {fileID: 0}
@@ -1697,7 +1697,7 @@ GameObject:
   - component: {fileID: 1040312988}
   - component: {fileID: 1040312990}
   - component: {fileID: 1040312989}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1742,7 +1742,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.015, g: 0.022, b: 0.032, a: 1}
+  m_Color: {r: 0.06, g: 0.07, b: 0.09, a: 0.99}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1778,7 +1778,7 @@ GameObject:
   - component: {fileID: 1054825088}
   - component: {fileID: 1054825090}
   - component: {fileID: 1054825091}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1915,7 +1915,7 @@ GameObject:
   - component: {fileID: 1131957198}
   - component: {fileID: 1131957200}
   - component: {fileID: 1131957201}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Title
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2135,7 +2135,7 @@ GameObject:
   - component: {fileID: 1689157741}
   - component: {fileID: 1689157743}
   - component: {fileID: 1689157744}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2496,7 +2496,7 @@ GameObject:
   - component: {fileID: 2058886981}
   - component: {fileID: 2058886986}
   - component: {fileID: 2058886987}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Multiplayer Session Menu
   m_TagString: Untagged
   m_Icon: {fileID: 0}

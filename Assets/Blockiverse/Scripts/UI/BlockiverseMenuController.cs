@@ -6,6 +6,7 @@ using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.VR;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Blockiverse.UI
 {
@@ -33,6 +34,7 @@ namespace Blockiverse.UI
         const string SurvivalHudName = "Survival HUD";
         const string BlockMenuName = "Block Menu";
         const float GameplayHudScale = 0.00105f;
+        const float ControllerMappingCloseFallbackMaxDistanceMeters = 3.0f;
 
         [SerializeField] BlockiverseInputRig inputRig;
 
@@ -52,6 +54,7 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseWorldSpacePanelPresenter controllerMappingPresenter;
         [SerializeField] BlockiverseWorldSpacePanelPresenter worldLoadingPresenter;
         [SerializeField] BlockiverseWorldSpacePanelPresenter blockMenuPresenter;
+        [SerializeField] Button controllerMappingCloseButton;
 
         readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
@@ -239,6 +242,9 @@ namespace Blockiverse.UI
             BlockiverseWorldSpacePanelPresenter worldLoading =
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StartupLoadingOverlayName);
             blockMenuPresenter ??= FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
+            controllerMappingCloseButton ??= controllerMapping != null
+                ? controllerMapping.transform.Find("Panel/Close Button")?.GetComponent<Button>()
+                : null;
 
             if (screenPresenters.Count == 0 ||
                 titlePresenter != null || pausePresenter != null || deathPresenter != null ||
@@ -439,6 +445,7 @@ namespace Blockiverse.UI
             {
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
                 inputRig.QuickMenuPressed.AddListener(OnQuickMenuPressed);
+                inputRig.BreakPressed.AddListener(OnControllerMappingCloseFallbackPressed);
             }
 
             WireMenus();
@@ -551,6 +558,7 @@ namespace Blockiverse.UI
             BlockiverseRuntimeState.Reset();
             inputRig?.MenuPressed.RemoveListener(OnMenuPressed);
             inputRig?.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
+            inputRig?.BreakPressed.RemoveListener(OnControllerMappingCloseFallbackPressed);
             UnwireMenus();
             UnwireStationPanel();
             UnwireVitalsRuntime();
@@ -886,6 +894,71 @@ namespace Blockiverse.UI
                 blockMenuPresenter.Hide();
 
             SetPresenterInputEnabled(blockMenuPresenter, false);
+        }
+
+        void OnControllerMappingCloseFallbackPressed()
+        {
+            if (router == null ||
+                router.HasModal ||
+                !string.Equals(router.ActiveScreen.ScreenId, MenuActions.ControllerMappingScreen, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (controllerMappingCloseButton == null)
+                ResolveRuntimeReferences();
+
+            RectTransform closeRect = controllerMappingCloseButton != null
+                ? controllerMappingCloseButton.GetComponent<RectTransform>()
+                : null;
+            if (closeRect == null ||
+                inputRig == null ||
+                !AnyInteractionRayIntersectsRect(closeRect))
+            {
+                return;
+            }
+
+            CloseControllerMappingScreen();
+        }
+
+        bool AnyInteractionRayIntersectsRect(RectTransform target)
+        {
+            if (inputRig.TryGetActiveInteractionRayPose(out Vector3 rayOrigin, out Vector3 rayDirection) &&
+                RayIntersectsRect(rayOrigin, rayDirection, target))
+            {
+                return true;
+            }
+
+            return TryControllerRayIntersectsRect(BlockiverseControllerRole.Left, target) ||
+                   TryControllerRayIntersectsRect(BlockiverseControllerRole.Right, target);
+        }
+
+        bool TryControllerRayIntersectsRect(BlockiverseControllerRole hand, RectTransform target)
+        {
+            return inputRig.TryGetInteractionRayPose(hand, out Vector3 rayOrigin, out Vector3 rayDirection) &&
+                   RayIntersectsRect(rayOrigin, rayDirection, target);
+        }
+
+        static bool RayIntersectsRect(Vector3 rayOrigin, Vector3 rayDirection, RectTransform target)
+        {
+            if (rayDirection.sqrMagnitude <= Mathf.Epsilon || target == null)
+                return false;
+
+            var ray = new Ray(rayOrigin, rayDirection.normalized);
+            var plane = new Plane(target.forward, target.position);
+            if (!plane.Raycast(ray, out float distance) ||
+                distance < 0.0f ||
+                distance > ControllerMappingCloseFallbackMaxDistanceMeters)
+            {
+                return false;
+            }
+
+            Vector3 localHit = target.InverseTransformPoint(ray.GetPoint(distance));
+            Rect rect = target.rect;
+            return localHit.x >= rect.xMin &&
+                   localHit.x <= rect.xMax &&
+                   localHit.y >= rect.yMin &&
+                   localHit.y <= rect.yMax;
         }
 
         bool HasConfirmModalOpen()

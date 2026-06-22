@@ -49,16 +49,13 @@ namespace Blockiverse.Editor
 
             RemoveStaleChild(cameraOffset, "Blockiverse UI Pointer Projection");
             RemoveStaleChild(cameraOffset, XrVisualProjectionRigName);
+            RemoveStaleChild(cameraOffset, MenuCompositionSurfaceName);
             EnsureControllerVisualsUseMainCameraLayer(cameraOffset);
 
-            Transform head = cameraOffset.Find("Main Camera");
-            GameObject menuSurface = EnsureMenuCompositionSurface(cameraOffset, head);
-            Transform menuCanvas = menuSurface.transform.Find(MenuCompositionCanvasName);
+            foreach (string panelName in WorldSpaceVrUiPanelNames)
+                EnsureWorldSpaceVrUiPanel(cameraOffset, panelName);
 
             foreach (string panelName in RoutedCompositionMenuPanelNames)
-                RouteMenuPanelToCompositionSurface(cameraOffset, menuCanvas, menuSurface.transform, panelName);
-
-            foreach (string panelName in WorldSpaceVrUiPanelNames)
                 EnsureWorldSpaceVrUiPanel(cameraOffset, panelName);
         }
 
@@ -292,6 +289,38 @@ namespace Blockiverse.Editor
             return EnsureRectChild(menuCanvas, name);
         }
 
+        static GameObject EnsureWorldSpaceMenuRectChild(
+            Transform cameraOffset,
+            Transform legacyParent,
+            string name)
+        {
+            Transform existing = cameraOffset != null ? cameraOffset.Find(name) : null;
+            Transform legacy = FindLegacyCompositionMenuPanel(cameraOffset, name);
+            if (legacy == null && legacyParent != null)
+                legacy = legacyParent.Find(name);
+
+            if (existing == null && legacy != null)
+            {
+                legacy.SetParent(cameraOffset, false);
+                legacy.gameObject.layer = GetInteractionLayerIndex();
+                legacy.gameObject.SetActive(true);
+                EditorUtility.SetDirty(legacy.gameObject);
+                return legacy.gameObject;
+            }
+
+            if (existing != null && legacy != null && legacy != existing)
+                UnityEngine.Object.DestroyImmediate(legacy.gameObject);
+
+            return EnsureRectChild(cameraOffset, name);
+        }
+
+        static Transform FindLegacyCompositionMenuPanel(Transform cameraOffset, string name)
+        {
+            Transform menuSurface = cameraOffset != null ? cameraOffset.Find(MenuCompositionSurfaceName) : null;
+            Transform menuCanvas = menuSurface != null ? menuSurface.Find(MenuCompositionCanvasName) : null;
+            return menuCanvas != null ? menuCanvas.Find(name) : null;
+        }
+
         static void RouteMenuPanelToCompositionSurface(
             Transform cameraOffset,
             Transform menuCanvas,
@@ -366,6 +395,7 @@ namespace Blockiverse.Editor
                 return;
 
             SetLayerRecursively(panel.gameObject, GetInteractionLayerIndex());
+            panel.gameObject.SetActive(true);
             RemoveStaleCompositionLayerComponents(panel.gameObject);
             EditorUtility.SetDirty(panel.gameObject);
         }

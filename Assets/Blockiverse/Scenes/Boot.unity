@@ -165,7 +165,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
   interactionLayer: 10
   interactionController: {fileID: 597296392}
-  hotbar: {fileID: 708422848}
+  hotbar: {fileID: 2130032729}
   placementPreview: {fileID: 0}
   voidSafetyFloor: {fileID: 0}
   initializeDefaultWorldOnAwake: 0
@@ -224,123 +224,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &708422846
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1299769022157528344, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: interactionController
-      value: 
-      objectReference: {fileID: 597296392}
-    - target: {fileID: 3695208377462190846, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: interactionController
-      value: 
-      objectReference: {fileID: 597296392}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6788423518949538828, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_Name
-      value: BlockiverseXRRig
-      objectReference: {fileID: 0}
-    - target: {fileID: 7696098874269562721, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: m_isRichText
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8273465101139274317, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: interactionController
-      value: 
-      objectReference: {fileID: 597296392}
-    - target: {fileID: 9154700309049800205, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: interactionController
-      value: 
-      objectReference: {fileID: 597296392}
-    - target: {fileID: 9184814749599219660, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      propertyPath: interactionController
-      value: 
-      objectReference: {fileID: 597296392}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 4431834766342421996, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 708422849}
-  m_SourcePrefab: {fileID: 100100000, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
---- !u!1 &708422847 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4431834766342421996, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-  m_PrefabInstance: {fileID: 708422846}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &708422848 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3110682427877720823, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-  m_PrefabInstance: {fileID: 708422846}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 917fc1f9e1f244dab3d301e086932df2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
---- !u!114 &708422849
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 708422847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
-  m_IgnoreReversedGraphics: 1
-  m_BlockingObjects: 0
-  m_BlockingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
 --- !u!1 &810693170
 GameObject:
   m_ObjectHideFlags: 0
@@ -704,6 +587,114 @@ MonoBehaviour:
   dayLengthSeconds: 1200
   normalizedTime: 0.22
   timeScale: 1
+--- !u!1001 &2130032728
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 202718927529316846, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_isRichText
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1299769022157528344, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 3695208377462190846, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4474765016073847360, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5081866798074439455, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_isRichText
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5682766642281728253, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_isRichText
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6233286959013211523, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_isRichText
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6788423518949538828, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_Name
+      value: BlockiverseXRRig
+      objectReference: {fileID: 0}
+    - target: {fileID: 7696098874269562721, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: m_isRichText
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8273465101139274317, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 9154700309049800205, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 9184814749599219660, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+--- !u!114 &2130032729 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 3110682427877720823, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+  m_PrefabInstance: {fileID: 2130032728}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 917fc1f9e1f244dab3d301e086932df2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -714,4 +705,4 @@ SceneRoots:
   - {fileID: 597296395}
   - {fileID: 974660987}
   - {fileID: 1411919007}
-  - {fileID: 708422846}
+  - {fileID: 2130032728}

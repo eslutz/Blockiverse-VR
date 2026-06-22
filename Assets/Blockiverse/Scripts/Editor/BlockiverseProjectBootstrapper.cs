@@ -158,25 +158,25 @@ namespace Blockiverse.Editor
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
         // --- Dark-glass theme palette -------------------------------------------------------
-        // Composition-layer UI sits over bright world content, so panels stay opaque and button
-        // states use high-contrast colors that remain legible in headset captures.
-        static readonly Color PanelBaseColor       = new(0.015f, 0.022f, 0.032f, 1.00f);
-        static readonly Color PanelHeaderColor     = new(0.035f, 0.050f, 0.070f, 1.00f);
-        static readonly Color ControlNormalColor   = new(0.060f, 0.085f, 0.115f, 1.00f);
-        static readonly Color ControlHighlightColor= new(0.000f, 0.710f, 0.880f, 1.00f);
-        static readonly Color ControlPressedColor  = new(0.000f, 0.380f, 0.520f, 1.00f);
-        static readonly Color ControlSelectedColor = new(1.000f, 0.650f, 0.160f, 1.00f);
-        static readonly Color AccentColor          = new(0.000f, 0.780f, 0.980f, 1.00f);
-        static readonly Color AccentHighlightColor = new(0.000f, 0.930f, 1.000f, 1.00f);
+        // All panels share a deep charcoal-glass base with a single teal accent. Controls use
+        // a lighter tinted surface with hover/pressed tints via Button.ColorBlock.
+        static readonly Color PanelBaseColor       = new(0.06f, 0.07f, 0.09f, 0.99f);
+        static readonly Color PanelHeaderColor     = new(0.09f, 0.11f, 0.14f, 1.00f);
+        static readonly Color ControlNormalColor   = new(0.16f, 0.20f, 0.24f, 1.00f);
+        static readonly Color ControlHighlightColor= new(0.26f, 0.34f, 0.40f, 1.00f);
+        static readonly Color ControlPressedColor  = new(0.10f, 0.14f, 0.18f, 1.00f);
+        static readonly Color ControlSelectedColor = new(0.20f, 0.29f, 0.36f, 1.00f);
+        static readonly Color AccentColor          = new(0.18f, 0.75f, 0.56f, 1.00f);
+        static readonly Color AccentHighlightColor = new(0.24f, 0.88f, 0.66f, 1.00f);
         static readonly Color TextPrimaryColor     = new(0.95f, 0.97f, 1.00f, 1.00f);
         static readonly Color TextDimColor         = new(0.65f, 0.70f, 0.75f, 1.00f);
-        static readonly Color DividerColor         = new(0.18f, 0.36f, 0.44f, 0.95f);
+        static readonly Color DividerColor         = new(0.22f, 0.28f, 0.34f, 0.80f);
 
         // Legacy per-panel aliases used by a few callers that haven't been refactored yet.
         static readonly Color ComfortMenuPanelColor    = PanelBaseColor;
         static readonly Color ComfortMenuControlColor  = ControlNormalColor;
         static readonly Color ComfortMenuAccentColor   = AccentColor;
-        static readonly Color BlockMenuPanelColor      = new(0.015f, 0.035f, 0.055f, 1.00f);
+        static readonly Color BlockMenuPanelColor      = new(0.05f, 0.09f, 0.13f, 0.96f);
         static readonly Color SurvivalHudPanelColor    = PanelBaseColor;
         static readonly Color SurvivalHudSectionColor  = PanelHeaderColor;
         static readonly Color SurvivalHudAccentColor   = AccentColor;
@@ -678,9 +678,9 @@ namespace Blockiverse.Editor
         {
             PlayerSettings.SplashScreen.show = true;
             PlayerSettings.SplashScreen.showUnityLogo = true;
-            PlayerSettings.virtualRealitySplashScreen = null;
-
             Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            PlayerSettings.virtualRealitySplashScreen = launchArtwork;
+
             CompositionLayersRuntimeSettings settings = CompositionLayersRuntimeSettings.Instance;
             var serializedSettings = new SerializedObject(settings);
 
