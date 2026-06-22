@@ -14,6 +14,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -29,6 +30,35 @@ namespace Blockiverse.Tests.EditMode
                     UnityEngine.Object.DestroyImmediate(target);
             objectsToDestroy.Clear();
             BlockiverseRuntimeState.Reset();
+        }
+
+        [Test]
+        public void WorldSpacePresenterShowActivatesInactiveCanvasRoot()
+        {
+            GameObject panel = CreateRoot("Routed Panel");
+            Canvas canvas = panel.AddComponent<Canvas>();
+            canvas.enabled = false;
+            BlockiverseWorldSpacePanelPresenter presenter = panel.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(
+                canvas,
+                targetHeadset: null,
+                distance: 1.2f,
+                horizontalOffset: 0.0f,
+                verticalOffset: 0.0f,
+                pitch: 0.0f);
+            panel.SetActive(false);
+
+            presenter.Show();
+
+            Assert.That(panel.activeSelf, Is.True,
+                "A routed menu root can be inactive in generated assets; Show must reactivate it before enabling the Canvas.");
+            Assert.That(canvas.enabled, Is.True);
+
+            presenter.Hide();
+
+            Assert.That(panel.activeSelf, Is.True,
+                "Hidden routed menus should keep their scripts initialized and hide through Canvas.enabled.");
+            Assert.That(canvas.enabled, Is.False);
         }
 
         [Test]
@@ -332,6 +362,80 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(blockMenuCanvas.enabled, Is.True);
                 Assert.That(blockMenuInput.interactable, Is.True);
                 Assert.That(blockMenuInput.blocksRaycasts, Is.True);
+            }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+        }
+
+        [Test]
+        public void ControllerMappingCloseFallbackUsesEitherInteractionRay()
+        {
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            PlayerPrefs.DeleteKey(key);
+
+            try
+            {
+                GameObject rig = CreateRoot("Rig");
+                BlockiverseInputRig inputRig = rig.AddComponent<BlockiverseInputRig>();
+                BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+                BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+                AddPresenter(titleMenu.gameObject);
+
+                GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
+                Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
+                mappingCanvas.enabled = false;
+                BlockiverseWorldSpacePanelPresenter mappingPresenter =
+                    controllerMapping.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                mappingPresenter.Configure(
+                    mappingCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false,
+                    showWhenStartedPlayerPrefsKey: key);
+
+                GameObject panel = CreateChild(controllerMapping.transform, "Panel");
+                Button closeButton = AddButton(panel.transform, "Close Button");
+                RectTransform closeRect = closeButton.GetComponent<RectTransform>();
+                closeRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 120.0f);
+                closeRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 48.0f);
+                closeRect.localPosition = Vector3.zero;
+                closeRect.localRotation = Quaternion.identity;
+
+                GameObject rightRayObject = CreateChild(rig.transform, "Right Interaction Ray");
+                XRRayInteractor rightInteractionRay = rightRayObject.AddComponent<XRRayInteractor>();
+                GameObject rightRayOrigin = CreateChild(rightRayObject.transform, "Ray Origin");
+                rightInteractionRay.rayOriginTransform = rightRayOrigin.transform;
+                SetPrivateField(inputRig, "rightInteractionRay", rightInteractionRay);
+
+                GameObject leftRayObject = CreateChild(rig.transform, "Left Interaction Ray");
+                XRRayInteractor leftInteractionRay = leftRayObject.AddComponent<XRRayInteractor>();
+                GameObject leftRayOrigin = CreateChild(leftRayObject.transform, "Ray Origin");
+                leftInteractionRay.rayOriginTransform = leftRayOrigin.transform;
+                SetPrivateField(inputRig, "leftInteractionRay", leftInteractionRay);
+                SetPrivateField(controller, "controllerMappingCloseButton", closeButton);
+
+                StartMenuController(controller);
+
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen));
+
+                Vector3 closeForward = closeRect.forward;
+                rightRayOrigin.transform.SetPositionAndRotation(
+                    closeRect.position + Vector3.right,
+                    Quaternion.LookRotation(closeForward, Vector3.up));
+                leftRayOrigin.transform.SetPositionAndRotation(
+                    closeRect.position - closeForward,
+                    Quaternion.LookRotation(closeForward, Vector3.up));
+
+                inputRig.BreakPressed.Invoke();
+
+                Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+                Assert.That(mappingCanvas.enabled, Is.False);
             }
             finally
             {
@@ -1206,6 +1310,15 @@ namespace Blockiverse.Tests.EditMode
                 .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(onEnable, Is.Not.Null, $"{behaviour.GetType().Name} must expose an OnEnable method for this wiring test.");
             onEnable.Invoke(behaviour, null);
+        }
+
+        static void SetPrivateField<T>(object target, string fieldName, T value)
+        {
+            FieldInfo field = target
+                .GetType()
+                .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose private field '{fieldName}' for this wiring test.");
+            field.SetValue(target, value);
         }
 
         Material CreateTestChunkMaterial()

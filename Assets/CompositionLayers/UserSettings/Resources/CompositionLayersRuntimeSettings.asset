@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.XR.CompositionLayers::Unity.XR.CompositionLayers.CompositionLayersRuntimeSettings
   m_EmulationInStandalone: 0
   m_EnableSplashScreen: 1
-  m_SplashImage: {fileID: 2800000, guid: 6e4cf5e26f6546f0b967f7ea13af3f7c, type: 3}
+  m_SplashImage: {fileID: 2800000, guid: 0632e70e945440ac8ef06e8c5ed73414, type: 3}
   m_BackgroundType: 0
   m_BackgroundColor: {r: 0.02, g: 0.03, b: 0.04, a: 1}
   m_SplashDuration: 1.4

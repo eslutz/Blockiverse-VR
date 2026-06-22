@@ -60,8 +60,7 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
-            GameObject menuSurface = EnsureMenuCompositionSurface(cameraOffset, head);
-            Transform routedMenuParent = menuSurface.transform.Find(MenuCompositionCanvasName);
+            Transform routedMenuParent = cameraOffset;
 
             var (titleMenu, titlePresenter) = EnsureActionMenuPanel(
                 routedMenuParent, TitleMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);

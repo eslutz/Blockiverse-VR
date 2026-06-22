@@ -183,6 +183,35 @@ namespace Blockiverse.VR
             }
         }
 
+        public bool TryGetActiveInteractionRayPose(out Vector3 origin, out Vector3 direction)
+        {
+            return TryGetInteractionRayPose(GetToolHand(), out origin, out direction);
+        }
+
+        public bool TryGetInteractionRayPose(
+            BlockiverseControllerRole hand,
+            out Vector3 origin,
+            out Vector3 direction)
+        {
+            origin = default;
+            direction = default;
+
+            XRRayInteractor interactionRay = hand == BlockiverseControllerRole.Left
+                ? leftInteractionRay
+                : rightInteractionRay;
+            Transform rayOrigin = interactionRay != null && interactionRay.rayOriginTransform != null
+                ? interactionRay.rayOriginTransform
+                : interactionRay != null
+                    ? interactionRay.transform
+                    : null;
+            if (rayOrigin == null)
+                return false;
+
+            origin = rayOrigin.position;
+            direction = rayOrigin.forward;
+            return direction.sqrMagnitude > Mathf.Epsilon;
+        }
+
         public void RefreshLocomotionProviderState()
         {
             comfortApplied = false;
@@ -519,14 +548,14 @@ namespace Blockiverse.VR
 
         void UpdateCreativeBindings()
         {
-            if (!BlockiverseRuntimeState.AllowWorldInput)
-                return;
-
             if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
                 breakPressed?.Invoke();
 
             if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
                 breakReleased?.Invoke();
+
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return;
 
             if (cachedPlaceAction != null && cachedPlaceAction.WasPressedThisFrame())
                 placePressed?.Invoke();
@@ -1007,11 +1036,7 @@ namespace Blockiverse.VR
 
         static LayerMask GetVrUiRaycastLayerMask()
         {
-            int compositionUiLayer = LayerMask.NameToLayer(BlockiverseProject.CompositionUiLayerName);
-            int compositionUiMask = compositionUiLayer >= 0
-                ? 1 << compositionUiLayer
-                : BlockiverseProject.CompositionUiLayerMask;
-            return (LayerMask)(GetVoxelTerrainLayerMask().value | compositionUiMask);
+            return GetVoxelTerrainLayerMask();
         }
 
         public static void ConfigureCharacterController(CharacterController controller)
