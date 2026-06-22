@@ -1017,6 +1017,23 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void XrRigStartupLoadingOverlayUsesPlainLaunchArtwork()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            RawImage artwork = prefab.transform
+                .Find("Camera Offset/Startup Loading Overlay/Artwork")
+                ?.GetComponent<RawImage>();
+
+            Assert.That(artwork, Is.Not.Null);
+            Assert.That(artwork.texture, Is.Not.Null);
+            Assert.That(AssetDatabase.GetAssetPath(artwork.texture), Is.EqualTo(BlockiverseProject.LaunchArtworkPlainPath),
+                "The in-game world loading overlay draws a separate title treatment, so its background art must be the no-title variant.");
+        }
+
+        [Test]
         public void XrRigPrefabShowsControllerMappingPopupAndInteractiveSurvivalHud()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
