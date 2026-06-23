@@ -183,11 +183,36 @@ namespace Blockiverse.Tests.EditMode
                 MenuActions.LoadWorldCancel,
             }));
             Assert.That(view.SelectionRows.Count, Is.EqualTo(2));
-            Assert.That(view.SelectionRows.Single(row => row.ValueId == "Builder").Selected, Is.True);
+            Assert.That(
+                view.SelectionRows.Single(row =>
+                    row.ValueId == BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix + "Builder").Selected,
+                Is.True);
             Assert.That(view.Paging.HasValue, Is.True);
             Assert.That(view.Paging.Value.PageIndex, Is.EqualTo(1));
             Assert.That(view.Paging.Value.PageCount, Is.EqualTo(2));
             Assert.That(view.Status, Is.EqualTo("Two saves"));
+        }
+
+        [Test]
+        public void RuntimeLoadWorldViewNamespacesSaveSelectionIds()
+        {
+            DateTime created = new(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+            var saves = new[]
+            {
+                new WorldSaveSummary("inventory.slot.0", "1234", "survival", "normal", 4, created, created),
+            };
+
+            BlockiverseUiToolkitMenuView view =
+                BlockiverseUiToolkitMenuCatalog.CreateLoadWorldView(
+                    saves,
+                    saves[0],
+                    pageIndex: 0,
+                    pageCount: 1,
+                    status: string.Empty);
+
+            Assert.That(view.SelectionRows.Single().ValueId,
+                Is.EqualTo(BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix + "inventory.slot.0"));
+            Assert.That(view.SelectionRows.Single().Label, Does.Contain("inventory.slot.0"));
         }
 
         [Test]

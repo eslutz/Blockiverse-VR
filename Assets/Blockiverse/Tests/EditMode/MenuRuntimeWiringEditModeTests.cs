@@ -144,6 +144,33 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void UiToolkitLoadWorldSelectionUsesNamespacedSaveId()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedLoadWorldPanel(rig.transform);
+            GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
+            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
+            var visibleRoot = new UiVisualElement();
+            visibleRoot.style.display = UiDisplayStyle.Flex;
+            SetPrivateField(surface, "root", visibleRoot);
+            controller.ConfigureUiToolkitMenuSurface(surface, useRuntimeMenus: true);
+            WorldSaveSummary first = CreateSave("First World");
+            WorldSaveSummary colliding = CreateSave("inventory.slot.0");
+
+            StartMenuController(controller);
+            controller.SetSaveList(new[] { first, colliding });
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.LoadWorldScreen, pauseGame: true));
+
+            InvokeMenuSelection(
+                controller,
+                BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix + "inventory.slot.0");
+
+            Assert.That(controller.PendingLoadSave?.Name, Is.EqualTo("inventory.slot.0"));
+        }
+
+        [Test]
         public void DeathWhilePausedRoutesToDeathScreen()
         {
             GameObject rig = CreateRoot("Rig");
@@ -1483,6 +1510,15 @@ namespace Blockiverse.Tests.EditMode
                 .GetMethod("HandleAction", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(handleAction, Is.Not.Null, $"{nameof(BlockiverseMenuController)} must expose HandleAction for this wiring test.");
             handleAction.Invoke(controller, new object[] { actionId });
+        }
+
+        static void InvokeMenuSelection(BlockiverseMenuController controller, string valueId)
+        {
+            MethodInfo handleSelection = controller
+                .GetType()
+                .GetMethod("HandleUiToolkitSelectionInvoked", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(handleSelection, Is.Not.Null, $"{nameof(BlockiverseMenuController)} must expose HandleUiToolkitSelectionInvoked for this wiring test.");
+            handleSelection.Invoke(controller, new object[] { valueId });
         }
 
         Material CreateTestChunkMaterial()

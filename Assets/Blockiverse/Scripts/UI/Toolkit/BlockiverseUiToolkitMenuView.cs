@@ -208,6 +208,7 @@ namespace Blockiverse.UI
         public const string AudioMusicVolumeField = "settings_audio.music_volume";
         public const string AudioHapticIntensityField = "settings_audio.haptic_intensity";
         public const string LanAddressField = "lan_multiplayer.address";
+        public const string LoadWorldSaveSelectionPrefix = "load_world.save.";
         public const string InventorySlotSelectionPrefix = "inventory.slot.";
         public const string CraftingRecipeSelectionPrefix = "crafting.recipe.";
         public const string ContainerSlotSelectionPrefix = "container.slot.";
@@ -468,7 +469,7 @@ namespace Blockiverse.UI
                 bool selected = selectedSave.HasValue &&
                     string.Equals(selectedSave.Value.Name, save.Name, StringComparison.OrdinalIgnoreCase);
                 rows[i] = new MenuSelectionRow(
-                    save.Name,
+                    LoadWorldSaveSelectionPrefix + save.Name,
                     BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LoadWorldEntry, save.Name, save.DayCount),
                     $"{Display(save.GameMode)} / {Display(save.Difficulty)} / Seed {save.Seed}",
                     selected);

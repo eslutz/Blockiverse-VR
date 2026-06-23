@@ -1800,6 +1800,9 @@ namespace Blockiverse.UI
 
         void HandleUiToolkitSelectionInvoked(string valueId)
         {
+            if (TryHandleUiToolkitLoadWorldSelection(valueId))
+                return;
+
             if (TryHandleUiToolkitInventorySelection(valueId))
                 return;
 
@@ -1812,8 +1815,21 @@ namespace Blockiverse.UI
             if (TryHandleUiToolkitBlockCatalogSelection(valueId))
                 return;
 
-            if (uiToolkitSaveList.Select(valueId))
+        }
+
+        bool TryHandleUiToolkitLoadWorldSelection(string valueId)
+        {
+            if (string.IsNullOrWhiteSpace(valueId) ||
+                !valueId.StartsWith(BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string saveName = valueId.Substring(BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix.Length);
+            if (uiToolkitSaveList.Select(saveName))
                 ApplyRouterState();
+
+            return true;
         }
 
         bool TryHandleUiToolkitInventorySelection(string valueId)
