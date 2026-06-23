@@ -186,7 +186,6 @@ namespace Blockiverse.Editor
                     inputRig.QuickMenuPressed,
                     presenter,
                     nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
-                UnityEventTools.AddPersistentListener(inputRig.QuickMenuPressed, presenter.ToggleVisible);
                 EditorUtility.SetDirty(inputRig);
             }
 
@@ -230,7 +229,7 @@ namespace Blockiverse.Editor
             artworkRect.offsetMax = Vector2.zero;
 
             RawImage artworkImage = EnsureComponent<RawImage>(artworkObject);
-            artworkImage.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            artworkImage.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPlainPath);
             artworkImage.color = Color.white;
             artworkImage.raycastTarget = false;
 
@@ -303,8 +302,7 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
-            Transform routedMenuParent = EnsureMenuCompositionSurface(cameraOffset, head).transform.Find(MenuCompositionCanvasName);
-            GameObject popupObject = EnsureRoutedMenuRectChild(cameraOffset, routedMenuParent, null, ControllerMappingPopupName);
+            GameObject popupObject = EnsureWorldSpaceMenuRectChild(cameraOffset, null, ControllerMappingPopupName);
             popupObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.06f);
             popupObject.transform.localRotation = Quaternion.identity;
             popupObject.transform.localScale = Vector3.one * 0.0013f;
@@ -367,14 +365,11 @@ namespace Blockiverse.Editor
                 MenuCloseButtonSize);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(popupObject);
-            presenter.Configure(
+            ConfigureRoutedMenuPresenter(
+                presenter,
                 canvas,
                 head,
-                1.06f,
-                0.0f,
-                -0.14f,
-                0.0f,
-                0.0013f,
+                GameMenuScale,
                 showWhenStarted: false,
                 showWhenStartedPlayerPrefsKey: BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey);
 
@@ -382,7 +377,6 @@ namespace Blockiverse.Editor
                 closeButton.onClick,
                 presenter,
                 nameof(BlockiverseWorldSpacePanelPresenter.Hide));
-            UnityEventTools.AddPersistentListener(closeButton.onClick, presenter.Hide);
 
             EditorUtility.SetDirty(closeButton);
             EditorUtility.SetDirty(presenter);
@@ -1003,7 +997,7 @@ namespace Blockiverse.Editor
             checkmarkRect.offsetMin = new Vector2(7.0f, 7.0f);
             checkmarkRect.offsetMax = new Vector2(-7.0f, -7.0f);
             Image checkmark = EnsureComponent<Image>(checkmarkObject);
-            Sprite checkmarkSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Checkmark.psd");
+            Sprite checkmarkSprite = GetUiControlSprite("checkbox_check");
             if (checkmarkSprite != null)
                 checkmark.sprite = checkmarkSprite;
             checkmark.color = AccentColor;
@@ -1118,7 +1112,7 @@ namespace Blockiverse.Editor
             handleRect.anchorMax = new Vector2(0.0f, 0.5f);
             handleRect.sizeDelta = new Vector2(36.0f, 36.0f);
             Image handle = EnsureComponent<Image>(handleObject);
-            Sprite knobSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            Sprite knobSprite = GetUiControlSprite("slider_knob");
             if (knobSprite != null)
                 handle.sprite = knobSprite;
             handle.color = TextPrimaryColor;
@@ -1417,7 +1411,7 @@ namespace Blockiverse.Editor
             TextMeshProUGUI tmp = EnsureComponent<TextMeshProUGUI>(labelObject);
             tmp.text = label;
             tmp.color = colorOverride ?? TextPrimaryColor;
-            tmp.enableWordWrapping = true;
+            tmp.textWrappingMode = TextWrappingModes.Normal;
             ConfigureGeneratedTextSizing(tmp, fontSize);
 
             // Map TextAnchor to TMP alignment.
@@ -1550,7 +1544,7 @@ namespace Blockiverse.Editor
             if (legacyRaycaster != null)
                 UnityEngine.Object.DestroyImmediate(legacyRaycaster);
 
-            SetLayerRecursively(canvasObject, GetCompositionUiLayerIndex());
+            SetLayerRecursively(canvasObject, GetInteractionLayerIndex());
 
             CanvasGroup inputGate = EnsureComponent<CanvasGroup>(canvasObject);
             inputGate.interactable = true;
@@ -1583,7 +1577,7 @@ namespace Blockiverse.Editor
 
             foreach (Graphic graphic in canvasObject.GetComponentsInChildren<Graphic>(true))
             {
-                graphic.gameObject.layer = GetCompositionUiLayerIndex();
+                graphic.gameObject.layer = GetInteractionLayerIndex();
                 graphic.raycastTarget = false;
                 EditorUtility.SetDirty(graphic);
             }
@@ -1646,16 +1640,16 @@ namespace Blockiverse.Editor
             return component;
         }
 
-        // Returns Unity's built-in 9-slice rounded-rectangle sprite ("Background.psd").
-        // When set on an Image with Image.Type.Sliced it produces rounded corners at any size.
-        // Returns null when running without the UISprite built-ins (very rare; handled gracefully by callers).
-        static Sprite GetRoundedSprite() => Resources.GetBuiltinResource<Sprite>("UI/Skin/Background.psd");
+        static Sprite GetRoundedSprite() => GetUiControlSprite("settings_panel") ?? GetUiControlSprite("hotbar_frame");
 
         static Sprite GetUiSprite(string name)
         {
-            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Sprites/UI/{name}.png");
+            Sprite sprite = GetUiControlSprite(name);
             return sprite != null ? sprite : GetRoundedSprite();
         }
+
+        static Sprite GetUiControlSprite(string name) =>
+            AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Sprites/UI/{name}.png");
 
         static Sprite GetVfxSprite(string name) =>
             AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/Blockiverse/Art/Sprites/VFX/{name}.png");

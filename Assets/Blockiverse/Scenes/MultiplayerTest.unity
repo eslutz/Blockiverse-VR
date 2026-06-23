@@ -130,7 +130,7 @@ GameObject:
   - component: {fileID: 206503895}
   - component: {fileID: 206503897}
   - component: {fileID: 206503898}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Text
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -419,7 +419,7 @@ GameObject:
   - component: {fileID: 270811746}
   - component: {fileID: 270811748}
   - component: {fileID: 270811749}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Status
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -571,7 +571,7 @@ GameObject:
   - component: {fileID: 308501972}
   - component: {fileID: 308501974}
   - component: {fileID: 308501975}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -710,7 +710,8 @@ GameObject:
   - component: {fileID: 367609777}
   - component: {fileID: 367609779}
   - component: {fileID: 367609780}
-  m_Layer: 11
+  - component: {fileID: 367609781}
+  m_Layer: 10
   m_Name: Host Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -757,8 +758,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -837,6 +838,21 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
+--- !u!114 &367609781
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 367609775}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0.18, g: 0.36, b: 0.44, a: 0.95}
+  m_EffectDistance: {x: 2, y: -2}
+  m_UseGraphicAlpha: 0
 --- !u!1001 &370030338
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -919,7 +935,7 @@ GameObject:
   - component: {fileID: 477340632}
   - component: {fileID: 477340633}
   - component: {fileID: 477340634}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Address Input
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -967,8 +983,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1130,7 +1146,7 @@ GameObject:
   - component: {fileID: 493624583}
   - component: {fileID: 493624584}
   - component: {fileID: 493624585}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Placeholder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1284,7 +1300,8 @@ GameObject:
   - component: {fileID: 543566527}
   - component: {fileID: 543566529}
   - component: {fileID: 543566530}
-  m_Layer: 11
+  - component: {fileID: 543566531}
+  m_Layer: 10
   m_Name: Join Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1331,8 +1348,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1411,6 +1428,21 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
+--- !u!114 &543566531
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 543566525}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0.18, g: 0.36, b: 0.44, a: 0.95}
+  m_EffectDistance: {x: 2, y: -2}
+  m_UseGraphicAlpha: 0
 --- !u!1 &681260475
 GameObject:
   m_ObjectHideFlags: 0
@@ -1424,7 +1456,8 @@ GameObject:
   - component: {fileID: 681260477}
   - component: {fileID: 681260479}
   - component: {fileID: 681260480}
-  m_Layer: 11
+  - component: {fileID: 681260481}
+  m_Layer: 10
   m_Name: Stop Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1471,8 +1504,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1551,6 +1584,21 @@ MonoBehaviour:
   pressAudio: 0
   hoverCue: 2
   pressCue: 3
+--- !u!114 &681260481
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 681260475}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 0.18, g: 0.36, b: 0.44, a: 0.95}
+  m_EffectDistance: {x: 2, y: -2}
+  m_UseGraphicAlpha: 0
 --- !u!1 &918318036
 GameObject:
   m_ObjectHideFlags: 0
@@ -1649,7 +1697,7 @@ GameObject:
   - component: {fileID: 1040312988}
   - component: {fileID: 1040312990}
   - component: {fileID: 1040312989}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1701,8 +1749,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 0
+  m_Sprite: {fileID: 21300000, guid: 90582bb190582bb190582bb190582bb1, type: 3}
+  m_Type: 1
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -1730,7 +1778,7 @@ GameObject:
   - component: {fileID: 1054825088}
   - component: {fileID: 1054825090}
   - component: {fileID: 1054825091}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1867,7 +1915,7 @@ GameObject:
   - component: {fileID: 1131957198}
   - component: {fileID: 1131957200}
   - component: {fileID: 1131957201}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Title
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2087,7 +2135,7 @@ GameObject:
   - component: {fileID: 1689157741}
   - component: {fileID: 1689157743}
   - component: {fileID: 1689157744}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2448,7 +2496,7 @@ GameObject:
   - component: {fileID: 2058886981}
   - component: {fileID: 2058886986}
   - component: {fileID: 2058886987}
-  m_Layer: 11
+  m_Layer: 10
   m_Name: Multiplayer Session Menu
   m_TagString: Untagged
   m_Icon: {fileID: 0}

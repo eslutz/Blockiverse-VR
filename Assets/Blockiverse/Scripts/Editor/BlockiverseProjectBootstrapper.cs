@@ -67,6 +67,8 @@ namespace Blockiverse.Editor
             "Assets/Blockiverse/Prefabs/Networking",
             "Assets/Blockiverse/Scenes",
             "Assets/Blockiverse/Scripts",
+            BlockiverseProject.UiFolderPath,
+            BlockiverseProject.UiMenuFolderPath,
             "Assets/Blockiverse/Settings",
             BlockiverseProject.InputActionReferencesFolderPath,
             "Assets/Blockiverse/Tests/EditMode",
@@ -99,8 +101,13 @@ namespace Blockiverse.Editor
         const string StationPanelName = "Station Panel";
         const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
         const float GameMenuScale = 0.0013f;
+        const float UiToolkitMenuScale = 1.0f;
+        const float GameMenuDistanceMeters = 0.95f;
+        const float GameMenuVerticalOffsetMeters = -0.38f;
+        const float GameMenuPitchDegrees = 10.0f;
         // All game menu panels share one world-space position; only one is visible at a time.
-        static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.42f, 1.1f);
+        static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.05f, GameMenuDistanceMeters);
+        static readonly Vector2 UiToolkitMenuWorldSpaceSize = new(1.05f, 0.59f);
         static readonly Vector2 ActionMenuSize = new(440.0f, 540.0f);
         static readonly Vector2 ConfirmDialogSize = new(440.0f, 320.0f);
         static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
@@ -117,6 +124,7 @@ namespace Blockiverse.Editor
         const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         const string MenuCompositionSurfaceName = "Blockiverse Menu Composition Surface";
         const string MenuCompositionCanvasName = "Blockiverse Menu Canvas";
+        const string MenuCompositionCursorName = "Composition Menu Cursor";
         const string XrVisualProjectionRigName = "Blockiverse XR Visual Projection Rig";
         const string BootEventSystemName = "Boot Event System";
         const string MultiplayerEventSystemName = "Multiplayer Event System";
@@ -145,6 +153,7 @@ namespace Blockiverse.Editor
         const float MenuPanelInset = 28.0f;
         static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
         static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
+        static readonly Vector2 ComfortMenuCompositionSize = ComfortMenuSize * GameMenuScale;
         // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
         static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
         const float SurvivalHudScale = 0.00105f;
@@ -368,8 +377,8 @@ namespace Blockiverse.Editor
                 return;
             }
 
-            PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Android, new[] { icon });
-            PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Unknown, new[] { icon });
+            PlayerSettings.SetIcons(NamedBuildTarget.Android, new[] { icon }, IconKind.Application);
+            PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Application);
             ConfigureAndroidPlatformIcons(icon);
         }
 
@@ -497,7 +506,6 @@ namespace Blockiverse.Editor
             projectConfig.eyeTrackingSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.colocationSessionSupport = global::OVRProjectConfig.FeatureSupport.None;
             projectConfig.sceneSupport = global::OVRProjectConfig.FeatureSupport.None;
-            projectConfig.focusAware = true;
             projectConfig.requiresSystemKeyboard = true;
             global::OVRProjectConfig.CommitProjectConfig(projectConfig);
         }
@@ -674,9 +682,9 @@ namespace Blockiverse.Editor
         {
             PlayerSettings.SplashScreen.show = true;
             PlayerSettings.SplashScreen.showUnityLogo = true;
-            PlayerSettings.virtualRealitySplashScreen = null;
-
             Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
+            PlayerSettings.virtualRealitySplashScreen = launchArtwork;
+
             CompositionLayersRuntimeSettings settings = CompositionLayersRuntimeSettings.Instance;
             var serializedSettings = new SerializedObject(settings);
 

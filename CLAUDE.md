@@ -8,6 +8,8 @@ Canonical game design lives in [docs/rulesets/](docs/rulesets/) and the roadmap 
 Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 [docs/testing/README.md](docs/testing/README.md).
 
+Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
+
 ## Agent Workflow Policy
 
 - The project owner is Eric Slutz; the GitHub username for assignment and review is `eslutz`.
@@ -25,10 +27,17 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 - Before adding or changing GitHub Actions, packages, SDKs, CLIs, Unity packages, build images, or other third-party dependencies, verify the current stable version from official upstream sources. Prefer latest stable majors unless the repo has a documented compatibility constraint.
 - Update documentation when behavior, workflow, architecture, project policy, release process, store submission, or user-visible scope changes.
 
+### Memory And Handoff Policy
+
+- Read [MEMORIES.md](MEMORIES.md) before substantial work. Treat it as the current handoff for decisions, validation status, local tooling state, dirty-worktree constraints, and deferred external gates.
+- Keep [MEMORIES.md](MEMORIES.md) concise. Update it when project state, architecture decisions, validation status, package/tooling setup, release gates, or source/generated artifact rules materially change.
+- Do not turn [MEMORIES.md](MEMORIES.md) into a changelog. Remove stale paths, obsolete blockers, and superseded decisions when refreshing it.
+- Keep long-form testing instructions in [docs/testing/README.md](docs/testing/README.md), not in the memory file.
+
 ### Release Policy
 
 - Production releases are cut from `main`.
-- Release versioning follows [ADR 0005](docs/adr/0005-release-versioning.md), with the root `VERSION` file as the SemVer base version source.
+- Release versioning follows [ADR 0005](docs/adr/0005-release-versioning.md), with `ProjectSettings/BlockiverseVersion.txt` as the SemVer base version source.
 - Pull requests use `.github/workflows/quest-ci.yml` for validation only. PR workflows must not receive Meta credentials or publish to Meta release channels.
 - Meta channel CD is split across:
   - `.github/workflows/quest-alpha.yml`, which builds a release-signed Quest APK from `main` pushes or manual trusted refs and uploads it to Meta `alpha`;
@@ -49,7 +58,12 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 ### Tooling Policy
 
 - Prefer reproducible command-line tooling over GUI-only actions when command output is useful validation evidence.
-- Use the Unity MCP server for interactive Unity Editor inspection, simulator-oriented editor workflows, scene/object checks, and Unity-specific automation exposed through MCP.
+- Use MCP for Unity as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.coplaydev.unity-mcp` locally from `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main`, configure it from `Window > MCP For Unity > Local Setup Window`, and start the local server at `http://127.0.0.1:8080/mcp`.
+- Use Unity Skills for module-specific REST workflows, advisory docs, XR diagnostics, batch/workflow operations, console/debug triage, package-aware guidance, and targeted Unity Test Runner jobs. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.besty.unity-skills` locally from `https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity`, start it from `Window > UnitySkills > Start Server`, and verify `http://localhost:8090/health`.
+- Before using Unity Skills, read `/Users/ericslutz/.agents/skills/unity-skills/SKILL.md`, then the relevant module `SKILL.md` from `/Users/ericslutz/.agents/skills/unity-skills/skills/`. Honor `currentMode`, approval grants, and forbidden-skill behavior. Do not add skills to the Allowlist unless Eric explicitly asks.
+- Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
+- Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
+- A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
 - Verify Quest-device tooling before device work with `hzdb --version` and `hzdb device list`.

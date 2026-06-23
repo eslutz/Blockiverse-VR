@@ -4,12 +4,11 @@ using Blockiverse.VR;
 using NUnit.Framework;
 using Unity.XR.CompositionLayers;
 using Unity.XR.CompositionLayers.Extensions;
-using Unity.XR.CompositionLayers.Layers;
 using Unity.XR.CompositionLayers.UIInteraction;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.OpenXR;
 
@@ -26,6 +25,10 @@ namespace Blockiverse.Tests.EditMode
         const string MenuCompositionSurfaceName = "Blockiverse Menu Composition Surface";
         const string MenuCompositionCanvasName = "Blockiverse Menu Canvas";
         const string XrVisualProjectionRigName = "Blockiverse XR Visual Projection Rig";
+        const string NamedLaunchArtworkPath = "Assets/Blockiverse/Art/Sprites/Branding/blockiverse_launch_landscape_named.png";
+        const float ExpectedMenuDistanceMeters = 0.95f;
+        const float ExpectedMenuVerticalOffsetMeters = -0.38f;
+        const float ExpectedMenuPitchDegrees = 10.0f;
 
         static readonly string[] RoutedMenuPanels =
         {
@@ -45,14 +48,6 @@ namespace Blockiverse.Tests.EditMode
             "Controller Mapping Popup",
             "Confirm Dialog",
         };
-
-        static readonly string[] WorldSpacePanels =
-        {
-            "Startup Loading Overlay",
-            "Survival HUD",
-            "Block Menu",
-        };
-
 
         [SetUp]
         public void EnsureProjectLayersAvailable()
@@ -97,7 +92,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void AndroidOpenXrCompositionLayerStartupSplashIsEnabled()
+        public void AndroidOpenXrCompositionLayerStartupSplashUsesBlockiverseBranding()
         {
             OpenXRSettings androidSettings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
             UnityEngine.XR.OpenXR.Features.OpenXRFeature compositionFeature =
@@ -105,15 +100,17 @@ namespace Blockiverse.Tests.EditMode
                     BuildTargetGroup.Android,
                     "com.unity.openxr.feature.compositionlayers");
             CompositionLayersRuntimeSettings runtimeSettings = CompositionLayersRuntimeSettings.Instance;
+            Texture2D namedSplash = AssetDatabase.LoadAssetAtPath<Texture2D>(NamedLaunchArtworkPath);
 
             Assert.That(androidSettings, Is.Not.Null);
             Assert.That(compositionFeature, Is.Not.Null);
-            Assert.That(compositionFeature.enabled, Is.True, "Quest builds must enable OpenXR composition layer support for the startup splash.");
-            Assert.That(PlayerSettings.SplashScreen.show, Is.True, "Quest startup should restore Unity's Made with Unity splash before Blockiverse branding.");
-            Assert.That(PlayerSettings.SplashScreen.showUnityLogo, Is.True, "Unity Personal builds should keep the Made with Unity logo visible.");
-            Assert.That(PlayerSettings.virtualRealitySplashScreen, Is.Null);
+            Assert.That(compositionFeature.enabled, Is.True, "Quest builds keep OpenXR composition support for startup splash only.");
+            Assert.That(namedSplash, Is.Not.Null, "The old Blockiverse named launch screen should be copied into this project.");
+            Assert.That(PlayerSettings.SplashScreen.show, Is.True);
+            Assert.That(PlayerSettings.SplashScreen.showUnityLogo, Is.True);
+            Assert.That(AssetDatabase.GetAssetPath(PlayerSettings.virtualRealitySplashScreen), Is.EqualTo(NamedLaunchArtworkPath));
             Assert.That(runtimeSettings.EnableSplashScreen, Is.True);
-            Assert.That(runtimeSettings.SplashImage, Is.SameAs(AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath)));
+            Assert.That(AssetDatabase.GetAssetPath(runtimeSettings.SplashImage), Is.EqualTo(NamedLaunchArtworkPath));
             Assert.That(runtimeSettings.LayerType, Is.EqualTo(CompositionLayersRuntimeSettings.Layer.Quad));
             Assert.That(runtimeSettings.BackgroundType, Is.EqualTo(CompositionLayersRuntimeSettings.SplashBackgroundType.SolidColor));
             Assert.That(runtimeSettings.FollowDistance, Is.EqualTo(2.0f).Within(0.001f));
@@ -122,144 +119,67 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void GeneratedRigUsesSingleCompositionLayerMenuSurface()
+        public void GeneratedRigUsesWorldSpaceXrMenusWithoutCompositionMenuSurface()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
             Assert.That(prefab, Is.Not.Null);
-            int vrUiLayer = LayerMask.NameToLayer(VrUiLayerName);
-            Assert.That(vrUiLayer, Is.EqualTo(VrUiLayerIndex),
-                "VR UI uses a dedicated layer so rays can target panels without including unrelated world geometry.");
 
             Transform cameraOffset = prefab.transform.Find("Camera Offset");
             Assert.That(cameraOffset, Is.Not.Null);
-            Transform menuSurface = cameraOffset.Find(MenuCompositionSurfaceName);
-            Assert.That(menuSurface, Is.Not.Null, "Generated routed menus should share one Quest composition-layer surface.");
-
-            CompositionLayer menuLayer = menuSurface.GetComponent<CompositionLayer>();
-            TexturesExtension texturesExtension = menuSurface.GetComponent<TexturesExtension>();
-            InteractableUIMirror mirror = menuSurface.GetComponent<InteractableUIMirror>();
-            BlockiverseCompositionLayerRenderScale renderScale =
-                menuSurface.GetComponent<BlockiverseCompositionLayerRenderScale>();
-
-            Assert.That(menuLayer, Is.Not.Null);
-            Assert.That(menuLayer.LayerData, Is.TypeOf<QuadLayerData>());
-            Assert.That(texturesExtension, Is.Not.Null);
-            Assert.That(mirror, Is.Not.Null);
-            Assert.That(mirror.enabled, Is.True);
-            Assert.That(menuSurface.GetComponent<XRSimpleInteractable>(), Is.Not.Null);
-            Assert.That(menuSurface.GetComponent<MeshCollider>(), Is.Not.Null);
-            Assert.That(menuSurface.GetComponent<QuadUIScale>(), Is.Not.Null);
-            Assert.That(renderScale, Is.Not.Null);
-            Assert.That(menuSurface.gameObject.layer, Is.EqualTo(vrUiLayer));
-
-            Transform menuCanvasTransform = menuSurface.Find(MenuCompositionCanvasName);
-            Assert.That(menuCanvasTransform, Is.Not.Null);
-            Canvas menuCanvas = menuCanvasTransform.GetComponent<Canvas>();
-            Assert.That(menuCanvas, Is.Not.Null);
-            Assert.That(menuCanvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
-            Assert.That(menuCanvas.enabled, Is.True);
-            Assert.That(menuCanvasTransform.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
-            Assert.That(menuCanvasTransform.GetComponent<GraphicRaycaster>(), Is.Null);
-            CanvasGroup menuInputGate = menuCanvasTransform.GetComponent<CanvasGroup>();
-            Assert.That(menuInputGate, Is.Not.Null);
-            Assert.That(menuInputGate.interactable, Is.True);
-            Assert.That(menuInputGate.blocksRaycasts, Is.True,
-                "The shared composition menu canvas owns the tracked-device raycaster, so it must not block routed panel input globally.");
-            Assert.That(menuCanvasTransform.gameObject.layer, Is.EqualTo(vrUiLayer));
-
-            foreach (string name in RoutedMenuPanels)
-            {
-                Transform panel = menuCanvasTransform.Find(name);
-                Assert.That(panel, Is.Not.Null, $"{name} should be routed under the shared menu composition canvas.");
-
-                Assert.That(panel.GetComponent<Canvas>(), Is.Null, $"{name} should not create an independent world-space canvas.");
-                Assert.That(panel.gameObject.layer, Is.EqualTo(vrUiLayer), $"{name} should stay on the dedicated VR UI layer.");
-                Assert.That(panel.GetComponent<CompositionLayer>(), Is.Null, $"{name} must not create a per-screen composition layer.");
-                Assert.That(panel.GetComponent<TexturesExtension>(), Is.Null, $"{name} must not submit an independent compositor texture.");
-                Assert.That(panel.GetComponent<InteractableUIMirror>(), Is.Null, $"{name} must not create an independent composition-layer proxy UI path.");
-                Assert.That(panel.Find("CanvasCamera"), Is.Null, $"{name} should not keep a hidden composition-layer mirror camera.");
-                Assert.That(panel.GetComponent<GraphicRaycaster>(), Is.Null, $"{name} should not use screen-space GraphicRaycaster input.");
-                Assert.That(panel.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null, $"{name} should not own a separate tracked-device raycaster.");
-                Assert.That(panel.gameObject.activeSelf, Is.False, $"{name} visibility should be presenter-controlled through active state.");
-
-                BlockiverseWorldSpacePanelPresenter presenter =
-                    panel.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-                Assert.That(presenter, Is.Not.Null, $"{name} should keep presenter-based routing.");
-                Assert.That(presenter.TargetRoot, Is.SameAs(panel.gameObject), $"{name} should toggle its routed panel root.");
-                Assert.That(presenter.PlacementRoot, Is.SameAs(menuSurface), $"{name} should recenter the shared composition surface.");
-
-                foreach (Graphic graphic in panel.GetComponentsInChildren<Graphic>(includeInactive: true))
-                    Assert.That(graphic.gameObject.layer, Is.EqualTo(vrUiLayer),
-                        $"{name}/{graphic.name} should stay on the dedicated VR UI layer.");
-            }
+            Assert.That(cameraOffset.Find(MenuCompositionSurfaceName), Is.Null,
+                "Interactive menus should not be rendered through a shared composition layer surface.");
+            Assert.That(cameraOffset.Find(MenuCompositionCanvasName), Is.Null);
+            Assert.That(prefab.GetComponentsInChildren<CompositionLayer>(includeInactive: true), Is.Empty,
+                "The generated rig should not contain interactive composition layers.");
+            Assert.That(prefab.GetComponentsInChildren<InteractableUIMirror>(includeInactive: true), Is.Empty,
+                "The generated rig should not proxy menu input through composition-layer UI mirroring.");
+            Assert.That(prefab.GetComponentsInChildren<BlockiverseCompositionLayerRenderScale>(includeInactive: true), Is.Empty);
+            Assert.That(prefab.GetComponentsInChildren<BlockiverseCompositionMenuCursor>(includeInactive: true), Is.Empty);
 
             int interactionLayer = LayerMask.NameToLayer(InteractionLayerName);
             Assert.That(interactionLayer, Is.EqualTo(InteractionLayerIndex));
-            foreach (string name in WorldSpacePanels)
+
+            foreach (string name in RoutedMenuPanels)
             {
                 Transform panel = cameraOffset.Find(name);
-                Assert.That(panel, Is.Not.Null, $"{name} should remain a direct world-space panel.");
-                Assert.That(panel.gameObject.layer, Is.EqualTo(interactionLayer),
-                    $"{name} should render through the main eye camera while remaining targetable by controller rays.");
-                Assert.That(panel.GetComponent<Canvas>(), Is.Not.Null, $"{name} should retain its own world-space canvas.");
-                Assert.That(panel.GetComponent<CompositionLayer>(), Is.Null, $"{name} should not use the routed menu composition layer.");
-                Assert.That(panel.GetComponent<TexturesExtension>(), Is.Null, $"{name} should not submit an independent compositor texture.");
-                Assert.That(panel.GetComponent<InteractableUIMirror>(), Is.Null, $"{name} should not create a second composition-layer proxy.");
+                Assert.That(panel, Is.Not.Null, $"{name} should be a direct world-space child of Camera Offset.");
+                AssertWorldSpaceXrMenuPanel(panel, interactionLayer, name);
             }
+
+            Transform controllerMap = cameraOffset.Find("Controller Mapping Popup");
+            Button closeButton = controllerMap?.Find("Panel/Close Button")?.GetComponent<Button>();
+            Assert.That(closeButton, Is.Not.Null, "The Controller Map close button must be a real UGUI Button.");
+            Assert.That(closeButton.interactable, Is.True);
+            Image closeImage = closeButton.GetComponent<Image>();
+            Assert.That(closeImage, Is.Not.Null);
+            Assert.That(closeImage.raycastTarget, Is.True,
+                "The close button must be reachable by XRI tracked-device UI raycasts.");
         }
 
         [Test]
-        public void SurvivalHudWorldSpacePanelKeepsInventoryCraftingAndCrateSections()
-        {
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
-            Transform hud = prefab?.transform.Find("Camera Offset/Survival HUD");
-
-            Assert.That(hud, Is.Not.Null);
-            Assert.That(hud.GetComponent<CompositionLayer>(), Is.Null);
-            Assert.That(hud.GetComponentInChildren<SurvivalHealthPanel>(true), Is.Not.Null);
-            Assert.That(hud.GetComponentInChildren<SurvivalInventoryPanel>(true), Is.Not.Null);
-            Assert.That(hud.GetComponentInChildren<SurvivalCraftingPanel>(true), Is.Not.Null);
-            Assert.That(hud.GetComponentInChildren<SurvivalCratePanel>(true), Is.Not.Null);
-        }
-
-        [Test]
-        public void ControllerRayVisualsRenderThroughProjectionEyeRigAboveMenus()
+        public void ControllerRayVisualsStayOnMainCameraPathForWorldSpaceMenus()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
             Transform cameraOffset = prefab?.transform.Find("Camera Offset");
             Assert.That(cameraOffset, Is.Not.Null);
 
-            Transform staleProjection = cameraOffset.Find("Blockiverse UI Pointer Projection");
-            Assert.That(staleProjection, Is.Null, "The deprecated ad-hoc pointer projection object should not be generated.");
+            Assert.That(cameraOffset.Find("Blockiverse UI Pointer Projection"), Is.Null);
+            Assert.That(cameraOffset.Find(XrVisualProjectionRigName), Is.Null,
+                "Controller/ray visuals should not be rendered by a composition ProjectionLayerRigData camera path.");
+            Assert.That(cameraOffset.Find(MenuCompositionSurfaceName), Is.Null,
+                "World-space menus do not need a composition-layer menu cursor or collider.");
 
             int visualLayer = LayerMask.NameToLayer(XrVisualLayerName);
             Assert.That(visualLayer, Is.EqualTo(XrVisualLayerIndex));
-
-            Transform projectionRig = cameraOffset.Find(XrVisualProjectionRigName);
-            Assert.That(projectionRig, Is.Not.Null, "Controller/ray visuals need a Projection Eye Rig above the composition menu layer.");
-            Assert.That(projectionRig.gameObject.layer, Is.EqualTo(visualLayer));
-
-            CompositionLayer projectionLayer = projectionRig.GetComponent<CompositionLayer>();
-            CompositionLayer menuLayer = cameraOffset.Find(MenuCompositionSurfaceName)?.GetComponent<CompositionLayer>();
-            Assert.That(projectionLayer, Is.Not.Null);
-            Assert.That(projectionLayer.LayerData, Is.TypeOf<ProjectionLayerRigData>());
-            Assert.That(menuLayer, Is.Not.Null);
-            Assert.That(projectionLayer.Order, Is.GreaterThan(menuLayer.Order));
+            int vrUiLayer = LayerMask.NameToLayer(VrUiLayerName);
+            Assert.That(vrUiLayer, Is.EqualTo(VrUiLayerIndex));
 
             Camera mainCamera = cameraOffset.Find("Main Camera")?.GetComponent<Camera>();
             Assert.That(mainCamera, Is.Not.Null);
-            Assert.That((mainCamera.cullingMask & (1 << visualLayer)), Is.EqualTo(0),
-                "XR visual objects should be culled from the default scene camera and rendered by the projection layer.");
-
-            foreach (string eyeCameraName in new[] { "Left Camera", "Right Camera" })
-            {
-                Camera eyeCamera = projectionRig.Find(eyeCameraName)?.GetComponent<Camera>();
-                Assert.That(eyeCamera, Is.Not.Null, eyeCameraName);
-                Assert.That(eyeCamera.clearFlags, Is.EqualTo(CameraClearFlags.SolidColor));
-                Assert.That(eyeCamera.backgroundColor, Is.EqualTo(Color.clear));
-                Assert.That(eyeCamera.cullingMask, Is.EqualTo(1 << visualLayer));
-                Assert.That(eyeCamera.GetComponent<UnityEngine.InputSystem.XR.TrackedPoseDriver>(), Is.Not.Null);
-            }
+            Assert.That((mainCamera.cullingMask & (1 << visualLayer)), Is.EqualTo(0));
+            Assert.That((mainCamera.cullingMask & (1 << vrUiLayer)), Is.EqualTo(0));
+            Assert.That((mainCamera.cullingMask & BlockiverseProject.InteractionLayerMask), Is.Not.EqualTo(0),
+                "World-space interaction UI should remain visible through the main eye camera.");
 
             foreach (string path in new[]
             {
@@ -273,103 +193,71 @@ namespace Blockiverse.Tests.EditMode
             {
                 Transform target = cameraOffset.Find(path);
                 Assert.That(target, Is.Not.Null, path);
-                Assert.That(target.gameObject.layer, Is.EqualTo(visualLayer),
-                    $"{path} should render through the Projection Eye Rig layer.");
+                Assert.That(target.gameObject.layer, Is.Not.EqualTo(visualLayer),
+                    $"{path} should not be moved to the XR visual projection layer.");
+                Assert.That((mainCamera.cullingMask & (1 << target.gameObject.layer)), Is.Not.EqualTo(0),
+                    $"{path} should stay on a layer rendered by the main eye camera.");
             }
 
-            int vrUiLayer = LayerMask.NameToLayer(VrUiLayerName);
-            int vrUiLayerMask = 1 << vrUiLayer;
             foreach (string path in new[]
             {
                 "Left Controller/Interaction Ray",
                 "Right Controller/Interaction Ray",
             })
             {
-                UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor ray =
-                    cameraOffset.Find(path)?.GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor>();
+                XRRayInteractor ray = cameraOffset.Find(path)?.GetComponent<XRRayInteractor>();
                 Assert.That(ray, Is.Not.Null, path);
                 Assert.That((ray.raycastMask.value & BlockiverseProject.InteractionLayerMask), Is.Not.EqualTo(0),
-                    $"{path} should still target voxel terrain.");
-                Assert.That((ray.raycastMask.value & vrUiLayerMask), Is.Not.EqualTo(0),
-                    $"{path} should target the composition-layer UI collider for routed menu input.");
+                    $"{path} should target voxel terrain and world-space UI.");
+                Assert.That((ray.raycastMask.value & BlockiverseProject.CompositionUiLayerMask), Is.EqualTo(0),
+                    $"{path} should not target the unused composition UI layer for menu input.");
+                Assert.That(ray.interactionLayers.value, Is.EqualTo(BlockiverseRayDefaults.DefaultXriInteractionLayerMask));
             }
         }
 
-        [Test]
-        public void PresenterShowHideControlsCanvasVisibility()
+        static void AssertWorldSpaceXrMenuPanel(Transform panel, int expectedLayer, string panelName)
         {
-            GameObject panel = new("World Space Presenter Test");
-            GameObject headset = new("World Space Presenter Headset");
-            try
-            {
-                headset.transform.SetPositionAndRotation(
-                    new Vector3(1.0f, 2.0f, 3.0f),
-                    Quaternion.LookRotation(Vector3.right, Vector3.up));
-                Canvas canvas = panel.AddComponent<Canvas>();
-                canvas.enabled = false;
-                BlockiverseWorldSpacePanelPresenter presenter =
-                    panel.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-                presenter.Configure(canvas, headset.transform, 2.0f, 0.5f, 0.25f, 10.0f, 0.003f);
+            Assert.That(panel.gameObject.layer, Is.EqualTo(expectedLayer), $"{panelName} should render through the main eye camera.");
+            Assert.That(panel.gameObject.activeSelf, Is.True,
+                $"{panelName} should keep its GameObject active; routed visibility is controlled by Canvas.enabled.");
+            Canvas canvas = panel.GetComponent<Canvas>();
+            Assert.That(canvas, Is.Not.Null, $"{panelName} should retain its own world-space canvas.");
+            Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
+            Assert.That(canvas.enabled, Is.False,
+                $"{panelName} should start hidden by disabling its Canvas, not by deactivating the GameObject.");
+            Assert.That(panel.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
+                $"{panelName} should receive XRI tracked-device UI raycasts directly.");
+            Assert.That(panel.GetComponent<GraphicRaycaster>(), Is.Null,
+                $"{panelName} should not use the screen-space GraphicRaycaster.");
 
-                presenter.Show();
+            CanvasGroup inputGate = panel.GetComponent<CanvasGroup>();
+            Assert.That(inputGate, Is.Not.Null, $"{panelName} should expose a canvas input gate.");
+            Assert.That(inputGate.interactable, Is.True);
+            Assert.That(inputGate.blocksRaycasts, Is.True);
 
-                Assert.That(canvas.enabled, Is.True);
-                Assert.That(
-                    Vector3.Distance(panel.transform.position, new Vector3(3.0f, 2.25f, 2.5f)),
-                    Is.LessThan(0.001f));
-                Assert.That(panel.transform.localScale, Is.EqualTo(Vector3.one * 0.003f));
+            Assert.That(panel.GetComponent<CompositionLayer>(), Is.Null);
+            Assert.That(panel.GetComponent<TexturesExtension>(), Is.Null);
+            Assert.That(panel.GetComponent<InteractableUIMirror>(), Is.Null);
+            Assert.That(panel.Find("CanvasCamera"), Is.Null);
 
-                presenter.Hide();
+            BlockiverseWorldSpacePanelPresenter presenter = panel.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(presenter, Is.Not.Null, $"{panelName} should keep presenter-based visibility.");
+            Assert.That(presenter.TargetCanvas, Is.SameAs(canvas));
+            Assert.That(presenter.TargetRoot, Is.SameAs(panel.gameObject));
+            Assert.That(presenter.PlacementRoot, Is.SameAs(panel));
+            Assert.That(presenter.UsesSharedCompositionRoot, Is.False);
 
-                Assert.That(canvas.enabled, Is.False);
+            var serializedPresenter = new SerializedObject(presenter);
+            Assert.That(serializedPresenter.FindProperty("distanceMeters").floatValue,
+                Is.EqualTo(ExpectedMenuDistanceMeters).Within(0.001f));
+            Assert.That(serializedPresenter.FindProperty("verticalOffsetMeters").floatValue,
+                Is.EqualTo(ExpectedMenuVerticalOffsetMeters).Within(0.001f));
+            Assert.That(serializedPresenter.FindProperty("pitchDegrees").floatValue,
+                Is.EqualTo(ExpectedMenuPitchDegrees).Within(0.001f));
 
-                presenter.ToggleVisible();
-
-                Assert.That(canvas.enabled, Is.True);
-            }
-            finally
-            {
-                Object.DestroyImmediate(panel);
-                Object.DestroyImmediate(headset);
-            }
-        }
-
-        [Test]
-        public void PresenterShowHideControlsSharedCompositionRoot()
-        {
-            GameObject panel = new("Shared Composition Panel Test");
-            GameObject surface = new("Shared Composition Surface Test");
-            GameObject headset = new("Shared Composition Headset");
-            try
-            {
-                panel.SetActive(false);
-                headset.transform.SetPositionAndRotation(
-                    new Vector3(1.0f, 2.0f, 3.0f),
-                    Quaternion.LookRotation(Vector3.right, Vector3.up));
-
-                BlockiverseWorldSpacePanelPresenter presenter =
-                    panel.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-                presenter.Configure(null, headset.transform, 2.0f, 0.5f, 0.25f, 10.0f, 0.003f);
-                presenter.ConfigureSharedCompositionTarget(panel, surface.transform);
-
-                presenter.Show();
-
-                Assert.That(panel.activeSelf, Is.True);
-                Assert.That(
-                    Vector3.Distance(surface.transform.position, new Vector3(3.0f, 2.25f, 2.5f)),
-                    Is.LessThan(0.001f));
-                Assert.That(surface.transform.localScale, Is.EqualTo(Vector3.one * 0.003f));
-
-                presenter.Hide();
-
-                Assert.That(panel.activeSelf, Is.False);
-            }
-            finally
-            {
-                Object.DestroyImmediate(panel);
-                Object.DestroyImmediate(surface);
-                Object.DestroyImmediate(headset);
-            }
+            foreach (Graphic graphic in panel.GetComponentsInChildren<Graphic>(includeInactive: true))
+                Assert.That(graphic.gameObject.layer, Is.EqualTo(expectedLayer),
+                    $"{panelName}/{graphic.name} should stay on the world-space interaction UI layer.");
         }
     }
 }

@@ -77,7 +77,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator MenuModeClampsInteractionRayVisualWhenUiIsMissed()
+        public IEnumerator MenuModeKeepsInteractionRayVisualAtDefaultLengthWhenUiIsMissed()
         {
             var bridgeObject = new GameObject("Creative Input Bridge");
             var rayObject = new GameObject("Interaction Ray");
@@ -98,13 +98,14 @@ namespace Blockiverse.Tests.PlayMode
 
                 BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
                 bridge.Configure(rig, ray, null);
+                CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
                 yield return null;
 
                 Assert.That(lineRenderer.enabled, Is.True);
                 Assert.That(lineVisual.enabled, Is.True);
-                Assert.That(lineVisual.overrideInteractorLineLength, Is.True,
-                    "A menu-mode ray with no UI hit should draw only a short aim guide instead of the full XRI line behind the menu.");
-                Assert.That(lineVisual.lineLength, Is.LessThan(1.5f));
+                Assert.That(lineVisual.overrideInteractorLineLength, Is.False,
+                    "A menu-mode ray with no UI hit should keep the normal XRI line length; shortening it hides ray/menu alignment defects.");
+                Assert.That(lineVisual.lineLength, Is.EqualTo(10.0f).Within(0.001f));
 
                 BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
                 CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
@@ -259,6 +260,47 @@ namespace Blockiverse.Tests.PlayMode
 
                 Assert.That(breakPresses, Is.EqualTo(1));
                 Assert.That(placePresses, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(rigObject);
+                Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator RightSelectStillRaisesBreakEventWhileWorldInputIsSuppressed()
+        {
+            GameObject rigObject = new("Test Input Rig");
+            InputActionAsset actions = CreateCreativeBindingActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            int breakPresses = 0;
+            int breakReleases = 0;
+            int placePresses = 0;
+
+            try
+            {
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+                inputRig.BreakPressed.AddListener(() => breakPresses++);
+                inputRig.BreakReleased.AddListener(() => breakReleases++);
+                inputRig.PlacePressed.AddListener(() => placePresses++);
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+                Press(gamepad.rightTrigger);
+                yield return null;
+                Release(gamepad.rightTrigger);
+                yield return null;
+
+                Press(gamepad.rightShoulder);
+                yield return null;
+
+                Assert.That(breakPresses, Is.EqualTo(1),
+                    "Menu-specific trigger fallbacks need the dominant trigger event even while world editing is suppressed.");
+                Assert.That(breakReleases, Is.EqualTo(1));
+                Assert.That(placePresses, Is.EqualTo(0),
+                    "World edit/use actions should remain suppressed while routed menus are active.");
             }
             finally
             {

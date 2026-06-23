@@ -31,6 +31,11 @@ namespace Blockiverse.UI
         public Inventory Inventory { get; private set; }
         public CraftingRecipeBook RecipeBook { get; private set; }
         public PlayerVitals Vitals { get; private set; }
+        public SurvivalVitalsRuntime VitalsRuntime => vitalsRuntime;
+        public SurvivalInventoryPanel InventoryPanel => inventoryPanel;
+        public SurvivalCraftingPanel CraftingPanel => craftingPanel;
+        public SurvivalCratePanel CratePanel => cratePanel;
+        public string CurrentStatusText => statusLabel != null ? statusLabel.text : string.Empty;
 
         CreativeWorldManager worldManager;
         SurvivalVitalsRuntime vitalsRuntime;

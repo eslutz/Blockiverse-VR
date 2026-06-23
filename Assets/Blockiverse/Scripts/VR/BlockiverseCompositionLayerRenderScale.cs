@@ -21,6 +21,7 @@ namespace Blockiverse.VR
         int lastHeight;
 
         public float RenderScale => renderScale;
+        public bool IsSubmittingLayer { get; private set; }
 
         public void Configure(
             Canvas canvas,
@@ -48,6 +49,7 @@ namespace Blockiverse.VR
 
         void OnDisable()
         {
+            IsSubmittingLayer = false;
             ReleaseOwnedRenderTexture();
         }
 
@@ -62,16 +64,29 @@ namespace Blockiverse.VR
             ExcludeSourceCanvasLayerFromMainCamera();
 
             if (sourceCanvas == null || texturesExtension == null || mirrorCamera == null)
+            {
+                IsSubmittingLayer = false;
                 return;
+            }
 
-            bool visible = sourceCanvas.enabled && (compositionLayer == null || compositionLayer.enabled);
-            mirrorCamera.enabled = visible;
-            if (!visible)
+            bool shouldSubmitLayer = sourceCanvas.enabled && HasVisibleRenderableContent();
+            IsSubmittingLayer = shouldSubmitLayer;
+            SetCompositionLayerEnabled(shouldSubmitLayer);
+            mirrorCamera.enabled = false;
+            if (!shouldSubmitLayer)
+            {
+                ClearSubmittedTextures();
                 return;
+            }
 
             RectTransform rectTransform = sourceCanvas.GetComponent<RectTransform>();
             if (rectTransform == null)
+            {
+                IsSubmittingLayer = false;
+                SetCompositionLayerEnabled(false);
+                ClearSubmittedTextures();
                 return;
+            }
 
             ConfigureMirrorCamera(rectTransform);
 
@@ -97,6 +112,7 @@ namespace Blockiverse.VR
             mirrorCamera.targetTexture = renderTexture;
             texturesExtension.LeftTexture = renderTexture;
             texturesExtension.RightTexture = renderTexture;
+            mirrorCamera.Render();
         }
 
         void ConfigureMirrorCamera(RectTransform rectTransform)
@@ -109,9 +125,9 @@ namespace Blockiverse.VR
             mirrorCamera.transform.localRotation = Quaternion.identity;
             mirrorCamera.gameObject.layer = sourceCanvas.gameObject.layer;
             mirrorCamera.orthographic = true;
-            mirrorCamera.nearClipPlane = 0.0f;
+            mirrorCamera.nearClipPlane = 0.01f;
             mirrorCamera.clearFlags = CameraClearFlags.SolidColor;
-            mirrorCamera.backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.001f);
+            mirrorCamera.backgroundColor = Color.clear;
             mirrorCamera.cullingMask = 1 << sourceCanvas.gameObject.layer;
 
             Rect rect = rectTransform.rect;
@@ -156,6 +172,42 @@ namespace Blockiverse.VR
                     }
                 }
             }
+        }
+
+        bool HasVisibleRenderableContent()
+        {
+            Graphic[] graphics = sourceCanvas.GetComponentsInChildren<Graphic>(includeInactive: false);
+            foreach (Graphic graphic in graphics)
+            {
+                if (graphic == null ||
+                    !graphic.enabled ||
+                    !graphic.gameObject.activeInHierarchy ||
+                    graphic.color.a <= 0.001f)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        void SetCompositionLayerEnabled(bool enabled)
+        {
+            if (compositionLayer != null && compositionLayer.enabled != enabled)
+                compositionLayer.enabled = enabled;
+        }
+
+        void ClearSubmittedTextures()
+        {
+            if (texturesExtension == null)
+                return;
+
+            if (texturesExtension.LeftTexture == renderTexture)
+                texturesExtension.LeftTexture = null;
+            if (texturesExtension.RightTexture == renderTexture)
+                texturesExtension.RightTexture = null;
         }
 
         void ExcludeSourceCanvasLayerFromMainCamera()

@@ -28,6 +28,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 using TMPro;
 using UnityEngine.UI;
+using UIDocument = UnityEngine.UIElements.UIDocument;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -166,7 +167,7 @@ namespace Blockiverse.Tests.EditMode
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
             BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
-            Transform menuTransform = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Comfort Settings Menu");
+            Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
             BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
@@ -188,7 +189,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
             Assert.That(presenter.PlaysHideFeedback, Is.True);
             Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
-            Assert.That(presenter.PlacementRoot.localScale.x, Is.LessThanOrEqualTo(0.00135f), "Comfort menu should no longer fill the first-person view.");
+            Assert.That(presenter.UsesSharedCompositionRoot, Is.False);
+            Assert.That(presenter.TargetCanvas, Is.SameAs(menuTransform.GetComponent<Canvas>()));
+            Assert.That(menuTransform.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
+                "Comfort menu should receive XRI tracked-device UI raycasts directly.");
 
             Image panelImage = menuTransform.Find("Panel")?.GetComponent<Image>();
             TMP_Text title = menuTransform.Find("Panel/Title")?.GetComponent<TMP_Text>();
@@ -208,6 +212,36 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(teleportToggle, Is.Not.Null, "Comfort menu should have a Teleport toggle.");
             Assert.That(vignetteToggle, Is.Not.Null, "Comfort menu should have a Motion Vignette toggle.");
             Assert.That(vignetteSlider, Is.Not.Null, "Comfort menu should have a vignette strength slider.");
+        }
+
+        [Test]
+        public void XrRigPrefabHasReadableUiToolkitMenuPhysicalSize()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+            Assert.That(prefab, Is.Not.Null);
+
+            Transform surface = prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface");
+            Assert.That(surface, Is.Not.Null, "Runtime UI Toolkit replacement surface should be generated under Camera Offset.");
+            Assert.That(surface.localScale.x, Is.EqualTo(1.0f).Within(0.001f),
+                "UI Toolkit fixed world-space documents use physical meters directly; do not apply UGUI-style tiny transform scaling.");
+            Assert.That(surface.localScale.y, Is.EqualTo(1.0f).Within(0.001f));
+            Assert.That(surface.localScale.z, Is.EqualTo(1.0f).Within(0.001f));
+
+            UIDocument document = surface.GetComponent<UIDocument>();
+            Assert.That(document, Is.Not.Null);
+            Assert.That(document.worldSpaceSizeMode, Is.EqualTo(UIDocument.WorldSpaceSizeMode.Fixed));
+            Assert.That(document.worldSpaceSize.x, Is.InRange(0.9f, 1.2f),
+                "UITK menu width should be a readable physical size in meters, not a pixel resolution.");
+            Assert.That(document.worldSpaceSize.y, Is.InRange(0.5f, 0.75f),
+                "UITK menu height should be a readable physical size in meters, not a pixel resolution.");
+
+            BlockiverseWorldSpacePanelPresenter presenter = surface.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(presenter, Is.Not.Null);
+            FieldInfo panelScaleField = typeof(BlockiverseWorldSpacePanelPresenter)
+                .GetField("panelScale", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(panelScaleField, Is.Not.Null);
+            Assert.That((float)panelScaleField.GetValue(presenter), Is.EqualTo(1.0f).Within(0.001f),
+                "Presenter scale should preserve the fixed physical document size and only be adjusted by comfort UI scale.");
         }
 
         [Test]
@@ -283,7 +317,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CreativeInputBridgeKeepsRayStableForPausedMenus()
+        public void CreativeInputBridgeKeepsWorldSpaceMenuRayAtGameplayLength()
         {
             GameObject root = new("Menu Ray Test");
 
@@ -310,7 +344,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(lineRenderer.enabled, Is.True, "Menus need the ray visual even while world input is blocked.");
                 Assert.That(lineVisual.enabled, Is.True, "Menus need the XRI line visual even while world input is blocked.");
                 Assert.That(lineVisual.overrideInteractorLineLength, Is.False,
-                    "Title/loading menus should use the same ray length behavior as gameplay instead of forcing a short miss ray.");
+                    "World-space XR menus should keep the controller ray at its normal gameplay length.");
                 Assert.That(lineVisual.lineLength, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
             }
             finally
@@ -961,9 +995,8 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
             UnityEngine.Events.UnityEvent quickMenuEvent = inputRig.QuickMenuPressed;
             Assert.That(quickMenuEvent, Is.Not.Null);
-            Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(1));
-            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(blockMenuPresenter));
-            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
+            Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(0),
+                "Support-grip quick menu input must be routed by BlockiverseMenuController at runtime so modal/routed UI can own raycasts.");
         }
 
         [Test]
@@ -1015,13 +1048,30 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void XrRigStartupLoadingOverlayUsesPlainLaunchArtwork()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            RawImage artwork = prefab.transform
+                .Find("Camera Offset/Startup Loading Overlay/Artwork")
+                ?.GetComponent<RawImage>();
+
+            Assert.That(artwork, Is.Not.Null);
+            Assert.That(artwork.texture, Is.Not.Null);
+            Assert.That(AssetDatabase.GetAssetPath(artwork.texture), Is.EqualTo(BlockiverseProject.LaunchArtworkPlainPath),
+                "The in-game world loading overlay draws a separate title treatment, so its background art must be the no-title variant.");
+        }
+
+        [Test]
         public void XrRigPrefabShowsControllerMappingPopupAndInteractiveSurvivalHud()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
 
-            Transform popup = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Controller Mapping Popup");
+            Transform popup = prefab.transform.Find("Camera Offset/Controller Mapping Popup");
             Transform startupOverlay = prefab.transform.Find("Camera Offset/Startup Loading Overlay");
             Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
 
@@ -1030,9 +1080,33 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popupPresenter, Is.Not.Null);
             Assert.That(popupPresenter.ShowOnStart, Is.False,
                 "The title router must own first-frame menu visibility; controls stay available from Settings.");
-            Assert.That(popup.GetComponent<Canvas>(), Is.Null, "The routed popup should use the shared composition menu canvas.");
-            Assert.That(popup.gameObject.activeSelf, Is.False);
+            Canvas popupCanvas = popup.GetComponent<Canvas>();
+            Assert.That(popupCanvas, Is.Not.Null, "The routed popup should use its own world-space XR UI canvas.");
+            Assert.That(popupCanvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
+            Assert.That(popup.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
+                "The Controller Map must receive XRI tracked-device UI raycasts directly.");
+            Assert.That(popup.GetComponent<GraphicRaycaster>(), Is.Null,
+                "The Controller Map should not use screen-space GraphicRaycaster input.");
+            var serializedPopupPresenter = new SerializedObject(popupPresenter);
+            Assert.That(serializedPopupPresenter.FindProperty("distanceMeters").floatValue, Is.EqualTo(0.95f).Within(0.001f));
+            Assert.That(serializedPopupPresenter.FindProperty("verticalOffsetMeters").floatValue, Is.EqualTo(-0.38f).Within(0.001f),
+                "The first-run controller mapping screen should be centered below eye height for reachable close-button interaction.");
+            Assert.That(serializedPopupPresenter.FindProperty("pitchDegrees").floatValue, Is.EqualTo(10.0f).Within(0.001f));
+            Assert.That(popup.GetComponent<CanvasGroup>(), Is.Not.Null,
+                "The menu router toggles per-panel input through the routed panel's CanvasGroup.");
+            Assert.That(popup.gameObject.activeSelf, Is.True,
+                "The routed popup GameObject must stay active so the menu controller can enable its Canvas at runtime.");
+            Assert.That(popupCanvas.enabled, Is.False,
+                "The routed popup should start hidden through Canvas.enabled rather than an inactive root.");
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
+            Button closeButton = popup.Find("Panel/Close Button")?.GetComponent<Button>();
+            BlockiverseMenuController menuController = prefab.GetComponent<BlockiverseMenuController>();
+            Assert.That(closeButton, Is.Not.Null);
+            Assert.That(menuController, Is.Not.Null);
+            Assert.That(closeButton.onClick.GetPersistentEventCount(), Is.EqualTo(1));
+            Assert.That(closeButton.onClick.GetPersistentTarget(0), Is.SameAs(menuController));
+            Assert.That(closeButton.onClick.GetPersistentMethodName(0),
+                Is.EqualTo(nameof(BlockiverseMenuController.CloseControllerMappingScreen)));
             string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
                 .Select(label => label.text));
 
@@ -1062,7 +1136,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
                 "Startup artwork is decorative and must not intercept tracked-device UI rays.");
 
-            Canvas menuCanvas = popup.GetComponentInParent<Canvas>(includeInactive: true);
+            Canvas menuCanvas = popup.GetComponent<Canvas>();
             Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
             Assert.That(menuCanvas, Is.Not.Null);
             Assert.That(startupCanvas, Is.Not.Null);
@@ -1155,8 +1229,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(ray.enableUIInteraction, Is.True);
             Assert.That(ray.blockUIOnInteractableSelection, Is.False,
                 "Block targeting must not suppress UI clicks while a menu is visible.");
-            Assert.That(ray.interactionLayers.value, Is.EqualTo(0),
-                "Block targeting reads the raycast hit; it must not select 3D interactables.");
+            Assert.That(ray.interactionLayers.value, Is.EqualTo(BlockiverseRayDefaults.DefaultXriInteractionLayerMask),
+                "World-space UI and simple interactables should keep XRI Default overlap; selection inputs stay disabled elsewhere.");
             Assert.That(ray.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
         }
 

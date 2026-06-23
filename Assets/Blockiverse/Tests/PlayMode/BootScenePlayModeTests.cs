@@ -75,23 +75,25 @@ namespace Blockiverse.Tests.PlayMode
             {
                 yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-                GameObject popup = GameObject.Find("Controller Mapping Popup");
+                GameObject popup = FindGameObjectIncludingInactive("Controller Mapping Popup");
                 Assert.That(popup, Is.Not.Null);
-                GameObject titleMenu = GameObject.Find("Title Menu");
+                GameObject titleMenu = FindGameObjectIncludingInactive("Title Menu");
                 Assert.That(titleMenu, Is.Not.Null);
-
-                Canvas canvas = popup.GetComponent<Canvas>();
-                Assert.That(canvas, Is.Not.Null);
-                Assert.That(canvas.enabled, Is.True);
                 Canvas titleCanvas = titleMenu.GetComponent<Canvas>();
                 Assert.That(titleCanvas, Is.Not.Null);
-                Assert.That(titleCanvas.enabled, Is.False,
-                    "The title menu must wait until the first-run controller map is dismissed.");
+                GameObject uiToolkitSurfaceObject = FindGameObjectIncludingInactive("UI Toolkit Menu Surface");
+                BlockiverseUiToolkitMenuSurface uiToolkitSurface =
+                    uiToolkitSurfaceObject != null
+                        ? uiToolkitSurfaceObject.GetComponent<BlockiverseUiToolkitMenuSurface>()
+                        : null;
 
                 BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
                 Assert.That(presenter, Is.Not.Null);
-                Assert.That(presenter.IsVisible, Is.True);
                 Assert.That(presenter.ShowOnStart, Is.False);
+                Assert.That(presenter.IsVisible || (uiToolkitSurface != null && uiToolkitSurface.IsVisible), Is.True,
+                    "The first-run controller map should be visible through either the legacy presenter or the UI Toolkit replacement.");
+                Assert.That(titleCanvas.enabled, Is.False,
+                    "The title menu must stay visually hidden until the first-run controller map is dismissed.");
 
                 Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
                 Assert.That(closeButton, Is.Not.Null);
@@ -99,14 +101,28 @@ namespace Blockiverse.Tests.PlayMode
                 closeButton.onClick.Invoke();
                 yield return null;
 
-                Assert.That(canvas.enabled, Is.False);
-                Assert.That(titleCanvas.enabled, Is.True);
+                Assert.That(presenter.IsVisible, Is.False);
+                Assert.That(titleCanvas.enabled || (uiToolkitSurface != null && uiToolkitSurface.IsVisible), Is.True,
+                    "After dismissing the first-run controller map, the title menu should be visible through either the legacy canvas or the UI Toolkit replacement.");
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally
             {
                 PlayerPrefs.DeleteKey(key);
             }
+        }
+
+        static GameObject FindGameObjectIncludingInactive(string name)
+        {
+            foreach (Transform transform in UnityEngine.Object.FindObjectsByType<Transform>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None))
+            {
+                if (transform.name == name)
+                    return transform.gameObject;
+            }
+
+            return null;
         }
 
         [UnityTest]

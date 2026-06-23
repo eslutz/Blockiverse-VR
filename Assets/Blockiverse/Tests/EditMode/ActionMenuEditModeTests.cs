@@ -30,8 +30,8 @@ namespace Blockiverse.Tests.EditMode
         public void ActionMenuSetsTitleAndLabelsAndEmitsActionOnClick()
         {
             BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("PauseMenu");
-            Button[] buttons = CreateButtons(7);
-            TMP_Text[] labels = CreateTexts(7);
+            Button[] buttons = CreateButtons(8);
+            TMP_Text[] labels = CreateTexts(8);
             TMP_Text title = CreateText("Title");
             menu.Configure(title, buttons, labels);
 
@@ -41,9 +41,10 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(title.text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused)));
             Assert.That(labels[0].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseResume)));
-            Assert.That(labels[2].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseToggleMode)));
-            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
-            Assert.That(labels[5].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseReturnToTitle)));
+            Assert.That(labels[2].text, Is.EqualTo("Player Hub"));
+            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseToggleMode)));
+            Assert.That(labels[4].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
+            Assert.That(labels[6].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseReturnToTitle)));
 
             string invoked = null;
             menu.ActionInvoked += id => invoked = id;
@@ -51,10 +52,10 @@ namespace Blockiverse.Tests.EditMode
             buttons[0].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseResume));
 
-            buttons[2].onClick.Invoke();
+            buttons[3].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseToggleMode));
 
-            buttons[5].onClick.Invoke();
+            buttons[6].onClick.Invoke();
             Assert.That(invoked, Is.EqualTo(MenuActions.PauseReturnToTitle));
         }
 
@@ -113,6 +114,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(survivalIds, Does.Contain(MenuActions.PauseResume));
             Assert.That(survivalIds, Does.Contain(MenuActions.PauseSaveGame));
+            Assert.That(survivalIds, Does.Contain(MenuActions.PausePlayerHub));
             Assert.That(survivalIds, Does.Not.Contain(MenuActions.PauseToggleMode));
             Assert.That(survivalIds, Does.Not.Contain(MenuActions.PauseCreativeTools));
             Assert.That(survivalIds, Does.Not.Contain(MenuActions.PauseQuit));
@@ -151,11 +153,12 @@ namespace Blockiverse.Tests.EditMode
         public void BuiltInMenuLabelsResolveThroughLocalizationKeys()
         {
             BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PauseResume, "Continuar");
+            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PausePlayerHub, "Jugador");
             BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PauseToggleMode, "Cambiar modo");
 
             BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("PauseMenu");
-            Button[] buttons = CreateButtons(7);
-            TMP_Text[] labels = CreateTexts(7);
+            Button[] buttons = CreateButtons(8);
+            TMP_Text[] labels = CreateTexts(8);
             menu.Configure(CreateText("Title"), buttons, labels);
 
             menu.SetMenu(
@@ -163,8 +166,9 @@ namespace Blockiverse.Tests.EditMode
                 MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true));
 
             Assert.That(labels[0].text, Is.EqualTo("Continuar"));
-            Assert.That(labels[2].text, Is.EqualTo("Cambiar modo"));
-            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
+            Assert.That(labels[2].text, Is.EqualTo("Jugador"));
+            Assert.That(labels[3].text, Is.EqualTo("Cambiar modo"));
+            Assert.That(labels[4].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
         }
 
         [Test]

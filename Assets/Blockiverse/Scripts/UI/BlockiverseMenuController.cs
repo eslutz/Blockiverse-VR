@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.VR;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace Blockiverse.UI
 {
@@ -31,9 +34,15 @@ namespace Blockiverse.UI
         const string ControllerMappingPopupName = "Controller Mapping Popup";
         const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string SurvivalHudName = "Survival HUD";
+        const string BlockMenuName = "Block Menu";
+        const string UiToolkitMenuSurfaceName = "UI Toolkit Menu Surface";
+        const int UiToolkitLoadWorldMaxEntries = 6;
         const float GameplayHudScale = 0.00105f;
+        const float ControllerMappingCloseFallbackMaxDistanceMeters = 3.0f;
 
         [SerializeField] BlockiverseInputRig inputRig;
+        [SerializeField] BlockiverseUiToolkitMenuSurface uiToolkitMenuSurface;
+        [SerializeField] bool useUiToolkitRuntimeMenus = true;
 
         [SerializeField] BlockiverseActionMenu titleMenu;
         [SerializeField] BlockiverseActionMenu pauseMenu;
@@ -45,17 +54,47 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseWorldDetailsPanel worldDetailsPanel;
         [SerializeField] BlockiverseActionMenu worldDetailsMenu;
         [SerializeField] BlockiverseComfortMenu comfortMenu;
+        [SerializeField] BlockiverseComfortSettings comfortSettings;
+        [SerializeField] BlockiverseHeightReset heightReset;
+        [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
+        [SerializeField] BlockiverseMultiplayerSessionMenu lanMultiplayerMenu;
         [SerializeField] BlockiverseStationPanel stationPanel;
+        [SerializeField] BlockiverseCreativeToolsPanel creativeToolsPanel;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
+        [SerializeField] SurvivalHudController survivalHudController;
+        [SerializeField] CreativeHotbar creativeHotbar;
         [SerializeField] BlockiverseWorldSpacePanelPresenter controllerMappingPresenter;
         [SerializeField] BlockiverseWorldSpacePanelPresenter worldLoadingPresenter;
+        [SerializeField] BlockiverseWorldSpacePanelPresenter blockMenuPresenter;
+        [SerializeField] Button controllerMappingCloseButton;
 
         readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
+        IReadOnlyList<MenuAction> confirmActions = MenuActions.Confirm();
+        string confirmPrompt = string.Empty;
+        string titleStatus = string.Empty;
+        string pauseStatus = string.Empty;
+        bool deathHasBedrollSpawn;
         UiScreenRouter router;
         bool hasLatestSave;
         bool hasAnySave;
+        NewWorldConfig uiToolkitNewWorldConfig;
+        string uiToolkitNewWorldStatus = string.Empty;
+        readonly SaveListModel uiToolkitSaveList = new();
+        int uiToolkitLoadWorldPageIndex;
+        string uiToolkitLoadWorldStatus = string.Empty;
+        WorldSaveSummary? uiToolkitDetailsSave;
+        string uiToolkitDetailsRenameText = string.Empty;
+        string uiToolkitLanAddress = BlockiverseNetworkConfig.DefaultAddress;
+        int uiToolkitInventoryFirstSlot;
+        int uiToolkitSelectedInventorySlot;
+        int uiToolkitCraftingPage;
+        int uiToolkitSelectedCraftingRecipe = -1;
+        int uiToolkitPinnedCraftingRecipe = -1;
+        int uiToolkitContainerFirstSlot;
+        int uiToolkitCatalogCategoryIndex;
+        int uiToolkitCatalogPageIndex;
 
         public UiScreenRouter Router => router;
 
@@ -69,6 +108,7 @@ namespace Blockiverse.UI
             hasLatestSave = latestSaveExists;
             hasAnySave = anySaveExists;
             RefreshTitleMenu();
+            ApplyRouterState();
         }
 
         void RefreshTitleMenu()
@@ -90,6 +130,7 @@ namespace Blockiverse.UI
             pauseMenu?.SetMenu(
                 BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused),
                 MenuActions.PauseMenu(canToggleMode, canOpenCreativeTools, CanQuit()));
+            ApplyRouterState();
         }
 
         public void Configure(
@@ -114,6 +155,12 @@ namespace Blockiverse.UI
             loadWorldPanel = loadWorld;
             worldDetailsPanel = worldDetails;
             worldDetailsMenu = worldDetailsActions;
+        }
+
+        public void ConfigureUiToolkitMenuSurface(BlockiverseUiToolkitMenuSurface surface, bool useRuntimeMenus = true)
+        {
+            uiToolkitMenuSurface = surface;
+            useUiToolkitRuntimeMenus = useRuntimeMenus;
         }
 
         public void ConfigurePresenters(
@@ -183,13 +230,29 @@ namespace Blockiverse.UI
             confirmMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(ConfirmDialogName);
             settingsMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(SettingsPanelName);
             comfortMenu ??= FindGeneratedComponent<BlockiverseComfortMenu>(ComfortSettingsPanelName);
+            comfortSettings ??= GetComponent<BlockiverseComfortSettings>()
+                ?? BlockiverseSceneLookup.Find<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+            heightReset ??= GetComponent<BlockiverseHeightReset>()
+                ?? BlockiverseSceneLookup.Find<BlockiverseHeightReset>(FindObjectsInactive.Include);
+            feedbackSettings ??= GetComponent<BlockiverseFeedbackSettings>()
+                ?? BlockiverseSceneLookup.Find<BlockiverseFeedbackSettings>(FindObjectsInactive.Include);
             newWorldPanel ??= FindGeneratedComponent<BlockiverseNewWorldPanel>(NewWorldPanelName);
             loadWorldPanel ??= FindGeneratedComponent<BlockiverseLoadWorldPanel>(LoadWorldPanelName);
             worldDetailsPanel ??= FindGeneratedComponent<BlockiverseWorldDetailsPanel>(WorldDetailsPanelName);
             worldDetailsMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(WorldDetailsPanelName);
             stationPanel ??= FindGeneratedComponent<BlockiverseStationPanel>(StationPanelName);
+            creativeToolsPanel ??= FindGeneratedComponent<BlockiverseCreativeToolsPanel>(CreativeToolsPanelName);
+            lanMultiplayerMenu ??= FindGeneratedComponent<BlockiverseMultiplayerSessionMenu>(LanMultiplayerPanelName);
+            uiToolkitMenuSurface ??= FindGeneratedComponent<BlockiverseUiToolkitMenuSurface>(UiToolkitMenuSurfaceName);
             if (survivalSync == null)
                 survivalSync = BlockiverseSceneLookup.Find<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+            if (vitalsRuntime == null)
+                vitalsRuntime = BlockiverseSceneLookup.Find<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+            if (survivalHudController == null)
+                survivalHudController = FindGeneratedComponent<SurvivalHudController>(SurvivalHudName)
+                    ?? BlockiverseSceneLookup.Find<SurvivalHudController>(FindObjectsInactive.Include);
+            if (creativeHotbar == null)
+                creativeHotbar = BlockiverseSceneLookup.Find<CreativeHotbar>(FindObjectsInactive.Include);
 
             titleMenu?.ResolveRuntimeReferences();
             pauseMenu?.ResolveRuntimeReferences();
@@ -236,6 +299,10 @@ namespace Blockiverse.UI
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ControllerMappingPopupName);
             BlockiverseWorldSpacePanelPresenter worldLoading =
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StartupLoadingOverlayName);
+            blockMenuPresenter ??= FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
+            controllerMappingCloseButton ??= controllerMapping != null
+                ? controllerMapping.transform.Find("Panel/Close Button")?.GetComponent<Button>()
+                : null;
 
             if (screenPresenters.Count == 0 ||
                 titlePresenter != null || pausePresenter != null || deathPresenter != null ||
@@ -311,6 +378,7 @@ namespace Blockiverse.UI
         // Shows the death screen, updating the respawn options.
         public void ShowDeathScreen(bool hasBedrollSpawn)
         {
+            deathHasBedrollSpawn = hasBedrollSpawn;
             if (deathMenu == null)
                 ResolveRuntimeReferences();
 
@@ -327,7 +395,9 @@ namespace Blockiverse.UI
         // Pushes a confirm modal over the current screen; callback receives true on accept, false on cancel.
         public void RequestConfirm(string prompt, string confirmLabel, string cancelLabel, Action<bool> callback)
         {
-            confirmMenu?.SetMenu(prompt, MenuActions.Confirm(confirmLabel, cancelLabel));
+            confirmPrompt = prompt ?? string.Empty;
+            confirmActions = MenuActions.Confirm(confirmLabel, cancelLabel);
+            confirmMenu?.SetMenu(prompt, confirmActions);
             confirmCallback = callback;
             router?.PushModal(MenuActions.ConfirmModal);
         }
@@ -335,16 +405,23 @@ namespace Blockiverse.UI
         // Feeds the load-world panel when saves are enumerated by the world manager.
         public void SetSaveList(IEnumerable<WorldSaveSummary> saves)
         {
+            var saveList = saves != null ? new List<WorldSaveSummary>(saves) : new List<WorldSaveSummary>();
+            uiToolkitSaveList.SetSaves(saveList);
+            uiToolkitLoadWorldPageIndex = 0;
+
             if (loadWorldPanel == null)
                 ResolveRuntimeReferences();
-            loadWorldPanel?.SetSaves(saves);
+            loadWorldPanel?.SetSaves(saveList);
+            ApplyRouterState();
         }
 
         public void SetLoadWorldStatus(string message)
         {
+            uiToolkitLoadWorldStatus = message ?? string.Empty;
             if (loadWorldPanel == null)
                 ResolveRuntimeReferences();
             loadWorldPanel?.SetStatus(message);
+            ApplyRouterState();
         }
 
         public bool IsActiveScreen(string screenId)
@@ -357,6 +434,9 @@ namespace Blockiverse.UI
         {
             get
             {
+                if (CanReadUiToolkitPendingState(MenuActions.NewWorldScreen) && uiToolkitNewWorldConfig != null)
+                    return uiToolkitNewWorldConfig;
+
                 if (newWorldPanel == null)
                     ResolveRuntimeReferences();
                 return newWorldPanel?.Config;
@@ -368,6 +448,9 @@ namespace Blockiverse.UI
         {
             get
             {
+                if (CanReadUiToolkitPendingState(MenuActions.LoadWorldScreen) && uiToolkitSaveList.SelectedSave.HasValue)
+                    return uiToolkitSaveList.SelectedSave;
+
                 if (loadWorldPanel == null)
                     ResolveRuntimeReferences();
                 return loadWorldPanel?.SelectedSave;
@@ -379,6 +462,9 @@ namespace Blockiverse.UI
         {
             get
             {
+                if (uiToolkitDetailsSave.HasValue)
+                    return uiToolkitDetailsSave;
+
                 if (worldDetailsPanel == null)
                     ResolveRuntimeReferences();
                 return worldDetailsPanel?.CurrentSave;
@@ -389,6 +475,9 @@ namespace Blockiverse.UI
         {
             get
             {
+                if (uiToolkitDetailsSave.HasValue)
+                    return uiToolkitDetailsRenameText;
+
                 if (worldDetailsPanel == null)
                     ResolveRuntimeReferences();
                 return worldDetailsPanel?.PendingRenameText ?? string.Empty;
@@ -398,9 +487,13 @@ namespace Blockiverse.UI
         // Re-shows the details screen content for an updated save (after rename/duplicate).
         public void ShowWorldDetails(WorldSaveSummary save)
         {
+            uiToolkitDetailsSave = save;
+            uiToolkitDetailsRenameText = save.Name;
+
             if (worldDetailsPanel == null)
                 ResolveRuntimeReferences();
             worldDetailsPanel?.ShowSave(save);
+            ApplyRouterState();
         }
 
         // Pops the World Details screen (after a delete removed the shown save).
@@ -413,15 +506,17 @@ namespace Blockiverse.UI
         // Generic error dialog (§6.22 adapted): a single-OK modal over the current screen.
         public void ShowError(string message)
         {
+            confirmPrompt = message ?? string.Empty;
+            confirmActions = new[]
+            {
+                new MenuAction(
+                    MenuActions.ConfirmAccept,
+                    BlockiverseLocalization.Keys.ConfirmOk,
+                    "OK"),
+            };
             confirmMenu?.SetMenu(
                 message,
-                new[]
-                {
-                    new MenuAction(
-                        MenuActions.ConfirmAccept,
-                        BlockiverseLocalization.Keys.ConfirmOk,
-                        "OK"),
-                });
+                confirmActions);
             confirmCallback = null;
             router?.PushModal(MenuActions.ConfirmModal);
         }
@@ -433,7 +528,11 @@ namespace Blockiverse.UI
             EnsureRouter(ResolveInitialRoute());
 
             if (inputRig != null)
+            {
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
+                inputRig.QuickMenuPressed.AddListener(OnQuickMenuPressed);
+                inputRig.BreakPressed.AddListener(OnControllerMappingCloseFallbackPressed);
+            }
 
             WireMenus();
             WireStationPanel();
@@ -450,6 +549,40 @@ namespace Blockiverse.UI
                 comfortMenu = BlockiverseSceneLookup.Find<BlockiverseComfortMenu>(FindObjectsInactive.Include);
 
             ApplyRouterState();
+        }
+
+        public void OnQuickMenuPressed()
+        {
+            if (router == null)
+                return;
+
+            if (useUiToolkitRuntimeMenus && uiToolkitMenuSurface != null)
+            {
+                if (string.Equals(router.ActiveScreen.ScreenId, MenuActions.BlockCatalogScreen, StringComparison.Ordinal))
+                {
+                    router.PopScreen();
+                    return;
+                }
+
+                if (CanUseQuickBlockMenu())
+                {
+                    uiToolkitCatalogPageIndex = 0;
+                    router.PushScreen(new ScreenRoute(MenuActions.BlockCatalogScreen));
+                    return;
+                }
+            }
+
+            if (blockMenuPresenter == null)
+                blockMenuPresenter = FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
+
+            if (!CanUseQuickBlockMenu())
+            {
+                HideQuickBlockMenu();
+                return;
+            }
+
+            blockMenuPresenter?.ToggleVisible();
+            SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
         }
 
         ScreenRoute ResolveInitialRoute()
@@ -511,13 +644,17 @@ namespace Blockiverse.UI
         // save/load failures without leaving the title screen.
         public void SetTitleStatus(string message)
         {
+            titleStatus = message ?? string.Empty;
             titleMenu?.SetStatus(message ?? string.Empty);
+            ApplyRouterState();
         }
 
         // Status line on the pause menu — used by save/autosave flows while gameplay is paused.
         public void SetPauseStatus(string message)
         {
+            pauseStatus = message ?? string.Empty;
             pauseMenu?.SetStatus(message ?? string.Empty);
+            ApplyRouterState();
         }
 
         void OnDestroy()
@@ -526,6 +663,8 @@ namespace Blockiverse.UI
                 router.Changed -= ApplyRouterState;
             BlockiverseRuntimeState.Reset();
             inputRig?.MenuPressed.RemoveListener(OnMenuPressed);
+            inputRig?.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
+            inputRig?.BreakPressed.RemoveListener(OnControllerMappingCloseFallbackPressed);
             UnwireMenus();
             UnwireStationPanel();
             UnwireVitalsRuntime();
@@ -646,6 +785,10 @@ namespace Blockiverse.UI
                     ActionRequested?.Invoke(actionId);
                     break;
                 case MenuActions.TitleNewWorld:
+                    uiToolkitNewWorldConfig = new NewWorldConfig();
+                    uiToolkitNewWorldConfig.SetName(NewWorldConfig.DefaultName);
+                    uiToolkitNewWorldConfig.RandomizeSeed(null);
+                    uiToolkitNewWorldStatus = string.Empty;
                     newWorldPanel?.ResetForNewWorld();
                     router.PushScreen(new ScreenRoute(MenuActions.NewWorldScreen, pauseGame: true));
                     break;
@@ -655,6 +798,29 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.TitleMultiplayer:
                     ShowLanMultiplayerScreen();
+                    break;
+                case MenuActions.LanMultiplayerHost:
+                    ResolveRuntimeReferences();
+                    lanMultiplayerMenu?.StartLanHost();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.LanMultiplayerJoin:
+                    ResolveRuntimeReferences();
+                    if (!CanReadUiToolkitPendingState(MenuActions.LanMultiplayerScreen))
+                    {
+                        ApplyRouterState();
+                        break;
+                    }
+
+                    if (lanMultiplayerMenu?.AddressInput != null)
+                        lanMultiplayerMenu.AddressInput.SetTextWithoutNotify(uiToolkitLanAddress);
+                    lanMultiplayerMenu?.JoinLanSession();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.LanMultiplayerStop:
+                    ResolveRuntimeReferences();
+                    lanMultiplayerMenu?.StopSession();
+                    ApplyRouterState();
                     break;
                 case MenuActions.LanMultiplayerClose:
                     if (router.ActiveScreen.ScreenId == MenuActions.LanMultiplayerScreen)
@@ -672,6 +838,9 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.PauseSaveGame:
                     ActionRequested?.Invoke(actionId);
+                    break;
+                case MenuActions.PausePlayerHub:
+                    router.PushScreen(new ScreenRoute(MenuActions.PlayerHubScreen, pauseGame: true));
                     break;
                 case MenuActions.PauseToggleMode:
                     if (BlockiverseSceneLookup.Find<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include)
@@ -709,6 +878,207 @@ namespace Blockiverse.UI
                     RequestQuitConfirmation(MenuActions.PauseSaveGame, BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseQuit));
                     break;
 
+                case MenuActions.PlayerHubInventory:
+                    ResolveRuntimeReferences();
+                    uiToolkitInventoryFirstSlot = survivalHudController?.InventoryPanel != null
+                        ? survivalHudController.InventoryPanel.FirstVisibleSlotIndex
+                        : 0;
+                    router.PushScreen(new ScreenRoute(MenuActions.InventoryScreen, pauseGame: true));
+                    break;
+                case MenuActions.PlayerHubVitals:
+                    router.PushScreen(new ScreenRoute(MenuActions.VitalsStatusScreen, pauseGame: true));
+                    break;
+                case MenuActions.PlayerHubCrafting:
+                    uiToolkitCraftingPage = 0;
+                    router.PushScreen(new ScreenRoute(MenuActions.CraftingScreen, pauseGame: true));
+                    break;
+                case MenuActions.PlayerHubContext:
+                    router.PushScreen(new ScreenRoute(MenuActions.ContextHubScreen, pauseGame: true));
+                    break;
+                case MenuActions.PlayerHubStatus:
+                    router.PushScreen(new ScreenRoute(MenuActions.StatusHubScreen, pauseGame: true));
+                    break;
+                case MenuActions.PlayerHubRecipePin:
+                    router.PushScreen(new ScreenRoute(MenuActions.RecipePinOverlay, pauseGame: true));
+                    break;
+                case MenuActions.PlayerHubClose:
+                case MenuActions.InventoryBack:
+                case MenuActions.VitalsBack:
+                case MenuActions.CraftingBack:
+                case MenuActions.ContextHubBack:
+                case MenuActions.StatusHubBack:
+                case MenuActions.ContainerBack:
+                case MenuActions.MapBack:
+                case MenuActions.FarmingBack:
+                case MenuActions.ItemDetailsBack:
+                case MenuActions.RecipePinBack:
+                case MenuActions.BlockCatalogBack:
+                case MenuActions.AvatarStatusBack:
+                case MenuActions.MetaPolicyStatusBack:
+                case MenuActions.DiagnosticsBack:
+                case MenuActions.NetworkCommandStatusBack:
+                case MenuActions.SurvivalRejectionDismiss:
+                    router.PopScreen();
+                    break;
+                case MenuActions.InventoryItemDetails:
+                    router.PushScreen(new ScreenRoute(MenuActions.ItemDetailsPopover, pauseGame: true));
+                    break;
+                case MenuActions.CraftingCraftSelected:
+                    ResolveRuntimeReferences();
+                    if (uiToolkitSelectedCraftingRecipe >= 0)
+                        survivalHudController?.CraftingPanel?.TryCraftAtIndex(uiToolkitSelectedCraftingRecipe);
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CraftingPinSelected:
+                    if (uiToolkitSelectedCraftingRecipe >= 0)
+                        uiToolkitPinnedCraftingRecipe = uiToolkitSelectedCraftingRecipe;
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CraftingRepair:
+                    ResolveRuntimeReferences();
+                    survivalHudController?.CraftingPanel?.TryRepairHeldTool();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.RecipePinClear:
+                    uiToolkitPinnedCraftingRecipe = -1;
+                    ApplyRouterState();
+                    break;
+                case MenuActions.ContextHubContainer:
+                    uiToolkitContainerFirstSlot = 0;
+                    router.PushScreen(new ScreenRoute(MenuActions.ContainerScreen, pauseGame: true));
+                    break;
+                case MenuActions.ContextHubStation:
+                    router.PushScreen(new ScreenRoute(MenuActions.StationMenuScreen, pauseGame: true));
+                    break;
+                case MenuActions.ContextHubFarming:
+                    router.PushScreen(new ScreenRoute(MenuActions.FarmingSummaryScreen, pauseGame: true));
+                    break;
+                case MenuActions.FarmingOpenActions:
+                    router.PushScreen(new ScreenRoute(MenuActions.FarmingActionPopup, pauseGame: true));
+                    break;
+                case MenuActions.ContextHubMap:
+                    router.PushScreen(new ScreenRoute(MenuActions.MapWayflagScreen, pauseGame: true));
+                    break;
+                case MenuActions.ContextHubCreativeTools:
+                    router.PushScreen(new ScreenRoute(MenuActions.CreativeToolsScreen));
+                    break;
+                case MenuActions.StatusHubVitals:
+                    router.PushScreen(new ScreenRoute(MenuActions.VitalsStatusScreen, pauseGame: true));
+                    break;
+                case MenuActions.StatusHubAvatar:
+                    router.PushScreen(new ScreenRoute(MenuActions.AvatarStatusScreen, pauseGame: true));
+                    break;
+                case MenuActions.StatusHubMetaPolicy:
+                    router.PushScreen(new ScreenRoute(MenuActions.MetaPolicyStatusScreen, pauseGame: true));
+                    break;
+                case MenuActions.StatusHubDiagnostics:
+                    router.PushScreen(new ScreenRoute(MenuActions.DiagnosticsScreen, pauseGame: true));
+                    break;
+                case MenuActions.StatusHubNetwork:
+                    router.PushScreen(new ScreenRoute(MenuActions.NetworkCommandStatusScreen, pauseGame: true));
+                    break;
+                case MenuActions.ContainerDepositHeld:
+                    ResolveRuntimeReferences();
+                    survivalHudController?.CratePanel?.DepositHeld();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.StationDepositInput:
+                    stationPanel?.DepositHeldInput();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.StationDepositFuel:
+                    stationPanel?.DepositHeldFuel();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.StationCollectOutput:
+                    stationPanel?.CollectOutput();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.StationWithdrawInput:
+                    stationPanel?.WithdrawInput();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.StationWithdrawFuel:
+                    stationPanel?.WithdrawFuel();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.StationBack:
+                    HandleStationCloseRequested();
+                    break;
+                case MenuActions.MapSetWayflag:
+                case MenuActions.MapClearWayflag:
+                case MenuActions.FarmingTill:
+                case MenuActions.FarmingPlant:
+                case MenuActions.FarmingHarvest:
+                    ShowError("Use normal world interaction for this action in the current build.");
+                    break;
+                case MenuActions.BlockCatalogPreviousCategory:
+                    CycleUiToolkitCatalogCategory(forward: false);
+                    uiToolkitCatalogPageIndex = 0;
+                    ApplyRouterState();
+                    break;
+                case MenuActions.BlockCatalogNextCategory:
+                    CycleUiToolkitCatalogCategory(forward: true);
+                    uiToolkitCatalogPageIndex = 0;
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsSetA:
+                    creativeToolsPanel?.SetCornerA();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsSetB:
+                    creativeToolsPanel?.SetCornerB();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsPickBlock:
+                    creativeToolsPanel?.PickBlock();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsFill:
+                    creativeToolsPanel?.FillRegion();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsReplace:
+                    creativeToolsPanel?.ReplaceRegion();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsDelete:
+                    creativeToolsPanel?.DeleteRegion();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsCopy:
+                    creativeToolsPanel?.CopyRegion();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsPaste:
+                    creativeToolsPanel?.PasteRegion();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsUndo:
+                    creativeToolsPanel?.UndoEdit();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsRedo:
+                    creativeToolsPanel?.RedoEdit();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsSpawnTree:
+                    creativeToolsPanel?.SpawnTree();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsSpawnRuin:
+                    creativeToolsPanel?.SpawnRuin();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsToggleCycle:
+                    creativeToolsPanel?.ToggleDayNightCycle();
+                    ApplyRouterState();
+                    break;
+                case MenuActions.CreativeToolsCycleWeather:
+                    creativeToolsPanel?.CycleWeather();
+                    ApplyRouterState();
+                    break;
+
                 case MenuActions.DeathRespawnBedroll:
                     vitalsRuntime?.RespawnAtBedroll();
                     ActionRequested?.Invoke(actionId);
@@ -739,27 +1109,42 @@ namespace Blockiverse.UI
                     router.PopModal();
                     break;
 
+                case MenuActions.ControllerMappingClose:
+                    CloseControllerMappingScreen();
+                    break;
+
                 case MenuActions.NewWorldCreate:
                     // Routed to gameplay by the session coordinator (EnterGameplay) only after
                     // generation succeeds.
-                    if (newWorldPanel?.Config?.IsValid(out _) == true)
+                    NewWorldConfig pendingConfig = PendingNewWorldConfig;
+                    string newWorldError = string.Empty;
+                    if (pendingConfig != null && pendingConfig.IsValid(out newWorldError))
+                    {
+                        uiToolkitNewWorldStatus = string.Empty;
                         ActionRequested?.Invoke(actionId);
+                    }
+                    else
+                    {
+                        uiToolkitNewWorldStatus = newWorldError ?? string.Empty;
+                        ApplyRouterState();
+                    }
                     break;
                 case MenuActions.NewWorldCancel:
                     router.PopScreen();
                     break;
 
                 case MenuActions.LoadWorldLoad:
-                    if (loadWorldPanel?.SelectedSave.HasValue == true)
+                    if (PendingLoadSave.HasValue)
                         ActionRequested?.Invoke(actionId);
                     break;
                 case MenuActions.LoadWorldCancel:
                     router.PopScreen();
                     break;
                 case MenuActions.LoadWorldDetails:
-                    if (loadWorldPanel?.SelectedSave.HasValue == true && worldDetailsPanel != null)
+                    WorldSaveSummary? selectedSave = PendingLoadSave;
+                    if (selectedSave.HasValue)
                     {
-                        worldDetailsPanel.ShowSave(loadWorldPanel.SelectedSave.Value);
+                        ShowWorldDetails(selectedSave.Value);
                         router.PushScreen(new ScreenRoute(MenuActions.WorldDetailsScreen, pauseGame: true));
                     }
                     break;
@@ -768,13 +1153,14 @@ namespace Blockiverse.UI
                 case MenuActions.WorldDetailsPlay:
                 case MenuActions.WorldDetailsRename:
                 case MenuActions.WorldDetailsDuplicate:
-                    if (worldDetailsPanel?.CurrentSave.HasValue == true)
+                    if (PendingDetailsSave.HasValue)
                         ActionRequested?.Invoke(actionId);
                     break;
                 case MenuActions.WorldDetailsDeleteRequested:
-                    if (worldDetailsPanel?.CurrentSave.HasValue == true)
+                    WorldSaveSummary? detailsSave = PendingDetailsSave;
+                    if (detailsSave.HasValue)
                     {
-                        string worldName = worldDetailsPanel.CurrentSave.Value.Name;
+                        string worldName = detailsSave.Value.Name;
                         RequestConfirm(
                             BlockiverseLocalization.Format(BlockiverseLocalization.Keys.WorldDetailsDeletePrompt, worldName),
                             BlockiverseLocalization.Text(BlockiverseLocalization.Keys.WorldDetailsDelete),
@@ -818,12 +1204,18 @@ namespace Blockiverse.UI
             if (!HasConfirmModalOpen())
                 confirmCallback = null;
 
+            bool uiToolkitVisible = TryShowUiToolkitSurface(activeId, inputTarget);
+
             foreach (var (screenId, presenter) in screenPresenters)
             {
                 bool isModal = screenId == MenuActions.ConfirmModal;
                 bool visible = isModal
                     ? router.HasModal && inputTarget == screenId
                     : screenId == activeId;
+                if (visible &&
+                    uiToolkitVisible &&
+                    BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(screenId))
+                    visible = false;
 
                 if (string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal))
                     presenter.GetComponent<BlockiverseStartupOverlay>()?.SetAutomaticHide(!visible);
@@ -838,6 +1230,414 @@ namespace Blockiverse.UI
                     string.Equals(screenId, inputTarget, StringComparison.Ordinal);
                 SetPresenterInputEnabled(presenter, acceptsInput);
             }
+
+            if (!CanUseQuickBlockMenu())
+                HideQuickBlockMenu();
+            else
+                SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
+
+            if (!uiToolkitVisible)
+            {
+                uiToolkitMenuSurface?.Hide();
+                uiToolkitMenuSurface?.GetComponent<BlockiverseWorldSpacePanelPresenter>()?.Hide();
+            }
+        }
+
+        bool TryShowUiToolkitSurface(string activeId, string inputTarget)
+        {
+            if (!useUiToolkitRuntimeMenus || uiToolkitMenuSurface == null)
+                return false;
+
+            string candidate = router.HasModal ? inputTarget : activeId;
+            if (!BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(candidate))
+                return false;
+
+            bool acceptsInput = !string.Equals(candidate, MenuActions.WorldLoadingScreen, StringComparison.Ordinal) &&
+                string.Equals(candidate, inputTarget, StringComparison.Ordinal);
+            uiToolkitMenuSurface.GetComponent<BlockiverseWorldSpacePanelPresenter>()?.Show();
+            uiToolkitMenuSurface.Show(CreateUiToolkitMenuView(candidate), acceptsInput);
+            return true;
+        }
+
+        bool CanReadUiToolkitPendingState(string screenId)
+        {
+            if (!useUiToolkitRuntimeMenus || uiToolkitMenuSurface == null || !uiToolkitMenuSurface.IsVisible)
+                return false;
+
+            return router != null && string.Equals(router.ActiveScreen.ScreenId, screenId, StringComparison.Ordinal);
+        }
+
+        BlockiverseUiToolkitMenuView CreateUiToolkitMenuView(string screenId)
+        {
+            if (string.Equals(screenId, MenuActions.NewWorldScreen, StringComparison.Ordinal))
+            {
+                return BlockiverseUiToolkitMenuCatalog.CreateNewWorldView(
+                    EnsureUiToolkitNewWorldConfig(),
+                    uiToolkitNewWorldStatus);
+            }
+
+            if (string.Equals(screenId, MenuActions.LoadWorldScreen, StringComparison.Ordinal))
+            {
+                int pageCount = UiToolkitLoadWorldPageCount();
+                ClampUiToolkitLoadWorldPage(pageCount);
+                return BlockiverseUiToolkitMenuCatalog.CreateLoadWorldView(
+                    UiToolkitLoadWorldPage(),
+                    uiToolkitSaveList.SelectedSave,
+                    uiToolkitLoadWorldPageIndex,
+                    pageCount,
+                    uiToolkitLoadWorldStatus);
+            }
+
+            if (string.Equals(screenId, MenuActions.WorldDetailsScreen, StringComparison.Ordinal))
+            {
+                return BlockiverseUiToolkitMenuCatalog.CreateWorldDetailsView(
+                    PendingDetailsSave,
+                    PendingDetailsRenameText);
+            }
+
+            if (string.Equals(screenId, MenuActions.ComfortSettingsScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateComfortView(comfortSettings);
+            }
+
+            if (string.Equals(screenId, MenuActions.AudioSettingsScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateAudioView(feedbackSettings);
+            }
+
+            if (string.Equals(screenId, MenuActions.ControlsScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateControlsView();
+
+            if (string.Equals(screenId, MenuActions.LanMultiplayerScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                lanMultiplayerMenu?.RefreshStatus();
+                bool canStart = lanMultiplayerMenu?.HostButton == null || lanMultiplayerMenu.HostButton.interactable;
+                bool canStop = lanMultiplayerMenu?.StopButton != null && lanMultiplayerMenu.StopButton.interactable;
+                string status = lanMultiplayerMenu?.StatusText != null ? lanMultiplayerMenu.StatusText.text : string.Empty;
+                return BlockiverseUiToolkitMenuCatalog.CreateLanView(uiToolkitLanAddress, status, canStart, canStop);
+            }
+
+            if (string.Equals(screenId, MenuActions.PlayerHubScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreatePlayerHubView();
+
+            if (string.Equals(screenId, MenuActions.ContextHubScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateContextHubView(
+                    survivalHudController?.CratePanel != null,
+                    stationPanel != null && stationPanel.IsOpen,
+                    survivalSync != null && survivalSync.CanUseCreativeMode);
+            }
+
+            if (string.Equals(screenId, MenuActions.StatusHubScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateStatusHubView();
+
+            if (string.Equals(screenId, MenuActions.InventoryScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                SurvivalInventoryPanel inventoryPanel = survivalHudController != null
+                    ? survivalHudController.InventoryPanel
+                    : null;
+                int selectedHotbar = inventoryPanel != null ? inventoryPanel.SelectedHotbarSlotIndex : 0;
+                return BlockiverseUiToolkitMenuCatalog.CreateInventoryView(
+                    survivalHudController?.Inventory,
+                    ItemRegistry.Default,
+                    selectedHotbar,
+                    uiToolkitInventoryFirstSlot,
+                    UiToolkitLoadWorldMaxEntries);
+            }
+
+            if (string.Equals(screenId, MenuActions.ItemDetailsPopover, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                Inventory inventory = survivalHudController?.Inventory;
+                ItemStack stack = inventory != null &&
+                    uiToolkitSelectedInventorySlot >= 0 &&
+                    uiToolkitSelectedInventorySlot < inventory.SlotCount
+                        ? inventory.GetSlot(uiToolkitSelectedInventorySlot)
+                        : ItemStack.Empty;
+                return BlockiverseUiToolkitMenuCatalog.CreateItemDetailsView(stack, ItemRegistry.Default);
+            }
+
+            if (string.Equals(screenId, MenuActions.VitalsStatusScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateVitalsView(
+                    survivalHudController?.Vitals ?? vitalsRuntime?.Vitals,
+                    survivalHudController?.VitalsRuntime?.SurvivalVitals ?? vitalsRuntime?.SurvivalVitals,
+                    survivalHudController?.CurrentStatusText ?? string.Empty);
+            }
+
+            if (string.Equals(screenId, MenuActions.CraftingScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateCraftingView(
+                    survivalHudController?.RecipeBook,
+                    survivalHudController?.Inventory,
+                    ItemRegistry.Default,
+                    uiToolkitCraftingPage,
+                    UiToolkitLoadWorldMaxEntries,
+                    uiToolkitSelectedCraftingRecipe,
+                    uiToolkitPinnedCraftingRecipe);
+            }
+
+            if (string.Equals(screenId, MenuActions.RecipePinOverlay, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                BlockiverseUiToolkitMenuCatalog.TryGetInstantRecipe(
+                    survivalHudController?.RecipeBook,
+                    uiToolkitPinnedCraftingRecipe,
+                    out CraftingRecipe recipe);
+                return BlockiverseUiToolkitMenuCatalog.CreateRecipePinView(
+                    recipe,
+                    survivalHudController?.Inventory,
+                    ItemRegistry.Default);
+            }
+
+            if (string.Equals(screenId, MenuActions.ContainerScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateContainerView(
+                    survivalSync?.SharedCrateInventory,
+                    ItemRegistry.Default,
+                    uiToolkitContainerFirstSlot,
+                    UiToolkitLoadWorldMaxEntries);
+            }
+
+            if (string.Equals(screenId, MenuActions.StationMenuScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                stationPanel?.ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateStationView(
+                    stationPanel?.CurrentStation,
+                    stationPanel?.CurrentStatusText ?? string.Empty,
+                    ItemRegistry.Default);
+            }
+
+            if (string.Equals(screenId, MenuActions.CampfireStationScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.Campfire);
+
+            if (string.Equals(screenId, MenuActions.ClayKilnStationScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.ClayKiln);
+
+            if (string.Equals(screenId, MenuActions.BellowsForgeStationScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.BellowsForge);
+
+            if (string.Equals(screenId, MenuActions.PrepBoardStationScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.PrepBoard);
+
+            if (string.Equals(screenId, MenuActions.MendBenchStationScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.MendBench);
+
+            if (string.Equals(screenId, MenuActions.BlockCatalogScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateBlockCatalogView(
+                    CreativeCatalog.CreateDefault(),
+                    BlockRegistry.Default,
+                    creativeHotbar,
+                    uiToolkitCatalogCategoryIndex,
+                    uiToolkitCatalogPageIndex,
+                    UiToolkitLoadWorldMaxEntries);
+            }
+
+            if (string.Equals(screenId, MenuActions.CreativeToolsScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateCreativeToolsView(creativeToolsPanel, creativeHotbar);
+            }
+
+            if (string.Equals(screenId, MenuActions.MapWayflagScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateMapWayflagView();
+
+            if (string.Equals(screenId, MenuActions.FarmingSummaryScreen, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateFarmingSummaryView();
+
+            if (string.Equals(screenId, MenuActions.FarmingActionPopup, StringComparison.Ordinal))
+                return BlockiverseUiToolkitMenuCatalog.CreateFarmingActionView();
+
+            if (string.Equals(screenId, MenuActions.AvatarStatusScreen, StringComparison.Ordinal))
+            {
+                return BlockiverseUiToolkitMenuCatalog.CreateSimpleStatusView(
+                    screenId,
+                    "Avatar Status",
+                    "Shows local and remote avatar session state when platform avatar services are available.",
+                    MenuActions.AvatarStatusBack);
+            }
+
+            if (string.Equals(screenId, MenuActions.MetaPolicyStatusScreen, StringComparison.Ordinal))
+            {
+                return BlockiverseUiToolkitMenuCatalog.CreateSimpleStatusView(
+                    screenId,
+                    "Meta Policy Status",
+                    "Shows platform, social, and avatar policy decisions when Meta platform checks are available.",
+                    MenuActions.MetaPolicyStatusBack);
+            }
+
+            if (string.Equals(screenId, MenuActions.DiagnosticsScreen, StringComparison.Ordinal))
+            {
+                ResolveRuntimeReferences();
+                return BlockiverseUiToolkitMenuCatalog.CreateDiagnosticsView(survivalSync);
+            }
+
+            if (string.Equals(screenId, MenuActions.NetworkCommandStatusScreen, StringComparison.Ordinal))
+            {
+                return BlockiverseUiToolkitMenuCatalog.CreateSimpleStatusView(
+                    screenId,
+                    "Network Command Status",
+                    "Shows accepted, duplicate, pending, and rejected survival/network command feedback.",
+                    MenuActions.NetworkCommandStatusBack);
+            }
+
+            if (string.Equals(screenId, MenuActions.SurvivalRejectionScreen, StringComparison.Ordinal))
+            {
+                return BlockiverseUiToolkitMenuCatalog.CreateSimpleStatusView(
+                    screenId,
+                    "Survival Rejection",
+                    "Explains a rejected survival command and links back to the relevant gameplay route.",
+                    MenuActions.SurvivalRejectionDismiss);
+            }
+
+            bool canToggleMode = survivalSync != null && survivalSync.CanToggleMode;
+            bool canOpenCreativeTools = survivalSync != null && survivalSync.CanUseCreativeMode;
+            return BlockiverseUiToolkitMenuCatalog.CreateRuntimeView(
+                screenId,
+                hasLatestSave,
+                hasAnySave,
+                CanQuit(),
+                canToggleMode,
+                canOpenCreativeTools,
+                deathHasBedrollSpawn,
+                titleStatus,
+                pauseStatus,
+                confirmPrompt,
+                confirmActions);
+        }
+
+        NewWorldConfig EnsureUiToolkitNewWorldConfig()
+        {
+            if (uiToolkitNewWorldConfig == null)
+            {
+                uiToolkitNewWorldConfig = new NewWorldConfig();
+                uiToolkitNewWorldConfig.SetName(NewWorldConfig.DefaultName);
+                uiToolkitNewWorldConfig.RandomizeSeed(null);
+            }
+
+            return uiToolkitNewWorldConfig;
+        }
+
+        IReadOnlyList<WorldSaveSummary> UiToolkitLoadWorldPage()
+        {
+            IReadOnlyList<WorldSaveSummary> visible = uiToolkitSaveList.VisibleSaves;
+            int pageCount = UiToolkitLoadWorldPageCount(visible.Count);
+            ClampUiToolkitLoadWorldPage(pageCount);
+            return visible
+                .Skip(uiToolkitLoadWorldPageIndex * UiToolkitLoadWorldMaxEntries)
+                .Take(UiToolkitLoadWorldMaxEntries)
+                .ToArray();
+        }
+
+        int UiToolkitLoadWorldPageCount() => UiToolkitLoadWorldPageCount(uiToolkitSaveList.VisibleSaves.Count);
+
+        static int UiToolkitLoadWorldPageCount(int visibleCount) =>
+            Mathf.Max(1, Mathf.CeilToInt(visibleCount / (float)UiToolkitLoadWorldMaxEntries));
+
+        void ClampUiToolkitLoadWorldPage(int pageCount)
+        {
+            uiToolkitLoadWorldPageIndex = Mathf.Clamp(uiToolkitLoadWorldPageIndex, 0, Mathf.Max(0, pageCount - 1));
+        }
+
+        void SelectFirstUiToolkitSaveOnCurrentPage()
+        {
+            IReadOnlyList<WorldSaveSummary> page = UiToolkitLoadWorldPage();
+            if (page.Count > 0)
+                uiToolkitSaveList.Select(page[0].Name);
+        }
+
+        bool CanUseQuickBlockMenu()
+        {
+            return router != null &&
+                !router.HasModal &&
+                string.Equals(router.ActiveScreen.ScreenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
+        }
+
+        void HideQuickBlockMenu()
+        {
+            if (blockMenuPresenter == null)
+                return;
+
+            if (blockMenuPresenter.IsVisible)
+                blockMenuPresenter.Hide();
+
+            SetPresenterInputEnabled(blockMenuPresenter, false);
+        }
+
+        void OnControllerMappingCloseFallbackPressed()
+        {
+            if (router == null ||
+                router.HasModal ||
+                !string.Equals(router.ActiveScreen.ScreenId, MenuActions.ControllerMappingScreen, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (controllerMappingCloseButton == null)
+                ResolveRuntimeReferences();
+
+            RectTransform closeRect = controllerMappingCloseButton != null
+                ? controllerMappingCloseButton.GetComponent<RectTransform>()
+                : null;
+            if (closeRect == null ||
+                inputRig == null ||
+                !AnyInteractionRayIntersectsRect(closeRect))
+            {
+                return;
+            }
+
+            CloseControllerMappingScreen();
+        }
+
+        bool AnyInteractionRayIntersectsRect(RectTransform target)
+        {
+            if (inputRig.TryGetActiveInteractionRayPose(out Vector3 rayOrigin, out Vector3 rayDirection) &&
+                RayIntersectsRect(rayOrigin, rayDirection, target))
+            {
+                return true;
+            }
+
+            return TryControllerRayIntersectsRect(BlockiverseControllerRole.Left, target) ||
+                   TryControllerRayIntersectsRect(BlockiverseControllerRole.Right, target);
+        }
+
+        bool TryControllerRayIntersectsRect(BlockiverseControllerRole hand, RectTransform target)
+        {
+            return inputRig.TryGetInteractionRayPose(hand, out Vector3 rayOrigin, out Vector3 rayDirection) &&
+                   RayIntersectsRect(rayOrigin, rayDirection, target);
+        }
+
+        static bool RayIntersectsRect(Vector3 rayOrigin, Vector3 rayDirection, RectTransform target)
+        {
+            if (rayDirection.sqrMagnitude <= Mathf.Epsilon || target == null)
+                return false;
+
+            var ray = new Ray(rayOrigin, rayDirection.normalized);
+            var plane = new Plane(target.forward, target.position);
+            if (!plane.Raycast(ray, out float distance) ||
+                distance < 0.0f ||
+                distance > ControllerMappingCloseFallbackMaxDistanceMeters)
+            {
+                return false;
+            }
+
+            Vector3 localHit = target.InverseTransformPoint(ray.GetPoint(distance));
+            Rect rect = target.rect;
+            return localHit.x >= rect.xMin &&
+                   localHit.x <= rect.xMax &&
+                   localHit.y >= rect.yMin &&
+                   localHit.y <= rect.yMax;
         }
 
         bool HasConfirmModalOpen()
@@ -895,6 +1695,16 @@ namespace Blockiverse.UI
 
         void WireMenus()
         {
+            if (uiToolkitMenuSurface != null)
+            {
+                uiToolkitMenuSurface.ActionInvoked += HandleAction;
+                uiToolkitMenuSurface.TextInputChanged += HandleUiToolkitTextInputChanged;
+                uiToolkitMenuSurface.CycleInvoked += HandleUiToolkitCycleInvoked;
+                uiToolkitMenuSurface.SelectionInvoked += HandleUiToolkitSelectionInvoked;
+                uiToolkitMenuSurface.ToggleChanged += HandleUiToolkitToggleChanged;
+                uiToolkitMenuSurface.SliderChanged += HandleUiToolkitSliderChanged;
+                uiToolkitMenuSurface.PageInvoked += HandleUiToolkitPageInvoked;
+            }
             if (titleMenu != null) titleMenu.ActionInvoked += HandleAction;
             if (pauseMenu != null) pauseMenu.ActionInvoked += HandleAction;
             if (deathMenu != null) deathMenu.ActionInvoked += HandleAction;
@@ -907,6 +1717,16 @@ namespace Blockiverse.UI
 
         void UnwireMenus()
         {
+            if (uiToolkitMenuSurface != null)
+            {
+                uiToolkitMenuSurface.ActionInvoked -= HandleAction;
+                uiToolkitMenuSurface.TextInputChanged -= HandleUiToolkitTextInputChanged;
+                uiToolkitMenuSurface.CycleInvoked -= HandleUiToolkitCycleInvoked;
+                uiToolkitMenuSurface.SelectionInvoked -= HandleUiToolkitSelectionInvoked;
+                uiToolkitMenuSurface.ToggleChanged -= HandleUiToolkitToggleChanged;
+                uiToolkitMenuSurface.SliderChanged -= HandleUiToolkitSliderChanged;
+                uiToolkitMenuSurface.PageInvoked -= HandleUiToolkitPageInvoked;
+            }
             if (titleMenu != null) titleMenu.ActionInvoked -= HandleAction;
             if (pauseMenu != null) pauseMenu.ActionInvoked -= HandleAction;
             if (deathMenu != null) deathMenu.ActionInvoked -= HandleAction;
@@ -915,6 +1735,335 @@ namespace Blockiverse.UI
             if (worldDetailsMenu != null) worldDetailsMenu.ActionInvoked -= HandleAction;
             if (newWorldPanel != null) newWorldPanel.ActionRequested -= HandleAction;
             if (loadWorldPanel != null) loadWorldPanel.ActionRequested -= HandleAction;
+        }
+
+        void HandleUiToolkitTextInputChanged(string fieldId, string value)
+        {
+            if (string.Equals(fieldId, BlockiverseUiToolkitMenuCatalog.NewWorldNameField, StringComparison.Ordinal))
+            {
+                EnsureUiToolkitNewWorldConfig().SetName(value);
+                uiToolkitNewWorldStatus = string.Empty;
+                return;
+            }
+
+            if (string.Equals(fieldId, BlockiverseUiToolkitMenuCatalog.NewWorldSeedField, StringComparison.Ordinal))
+            {
+                EnsureUiToolkitNewWorldConfig().SetSeed(value);
+                uiToolkitNewWorldStatus = string.Empty;
+                return;
+            }
+
+            if (string.Equals(fieldId, BlockiverseUiToolkitMenuCatalog.WorldDetailsRenameField, StringComparison.Ordinal))
+            {
+                uiToolkitDetailsRenameText = value ?? string.Empty;
+                return;
+            }
+
+            if (string.Equals(fieldId, BlockiverseUiToolkitMenuCatalog.LanAddressField, StringComparison.Ordinal))
+            {
+                uiToolkitLanAddress = string.IsNullOrWhiteSpace(value)
+                    ? BlockiverseNetworkConfig.DefaultAddress
+                    : value.Trim();
+            }
+        }
+
+        void HandleUiToolkitCycleInvoked(string fieldId, bool forward)
+        {
+            NewWorldConfig config = EnsureUiToolkitNewWorldConfig();
+            switch (fieldId)
+            {
+                case BlockiverseUiToolkitMenuCatalog.NewWorldGameModeField:
+                    config.CycleGameMode(forward);
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.NewWorldDifficultyField:
+                    config.CycleDifficulty(forward);
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.NewWorldSizeField:
+                    config.CycleWorldSize(forward);
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.NewWorldPresetField:
+                    config.CycleWorldPreset(forward);
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.NewWorldStartingBiomeField:
+                    config.CycleStartingBiome(forward);
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.NewWorldTextureSetField:
+                    config.CycleTextureSet(forward);
+                    break;
+                default:
+                    return;
+            }
+
+            uiToolkitNewWorldStatus = string.Empty;
+            ApplyRouterState();
+        }
+
+        void HandleUiToolkitSelectionInvoked(string valueId)
+        {
+            if (TryHandleUiToolkitInventorySelection(valueId))
+                return;
+
+            if (TryHandleUiToolkitCraftingSelection(valueId))
+                return;
+
+            if (TryHandleUiToolkitContainerSelection(valueId))
+                return;
+
+            if (TryHandleUiToolkitBlockCatalogSelection(valueId))
+                return;
+
+            if (uiToolkitSaveList.Select(valueId))
+                ApplyRouterState();
+        }
+
+        bool TryHandleUiToolkitInventorySelection(string valueId)
+        {
+            if (string.IsNullOrWhiteSpace(valueId) ||
+                !valueId.StartsWith(BlockiverseUiToolkitMenuCatalog.InventorySlotSelectionPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveRuntimeReferences();
+            if (!int.TryParse(valueId.Substring(BlockiverseUiToolkitMenuCatalog.InventorySlotSelectionPrefix.Length), out int slotIndex))
+                return true;
+
+            Inventory inventory = survivalHudController?.Inventory;
+            SurvivalInventoryPanel inventoryPanel = survivalHudController?.InventoryPanel;
+            if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount)
+                return true;
+
+            uiToolkitSelectedInventorySlot = slotIndex;
+            int selectedHotbar = inventoryPanel != null ? inventoryPanel.SelectedHotbarSlotIndex : 0;
+            if (slotIndex < inventory.HotbarSlotCount)
+            {
+                inventoryPanel?.SetSelectedHotbarSlotIndex(slotIndex);
+            }
+            else if (inventory.HotbarSlotCount > 0)
+            {
+                inventory.SwapSlots(selectedHotbar, slotIndex);
+                inventoryPanel?.Refresh();
+                survivalHudController?.CraftingPanel?.Refresh();
+            }
+
+            ApplyRouterState();
+            return true;
+        }
+
+        bool TryHandleUiToolkitCraftingSelection(string valueId)
+        {
+            if (string.IsNullOrWhiteSpace(valueId) ||
+                !valueId.StartsWith(BlockiverseUiToolkitMenuCatalog.CraftingRecipeSelectionPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveRuntimeReferences();
+            if (int.TryParse(valueId.Substring(BlockiverseUiToolkitMenuCatalog.CraftingRecipeSelectionPrefix.Length), out int recipeIndex))
+                uiToolkitSelectedCraftingRecipe = recipeIndex;
+
+            ApplyRouterState();
+            return true;
+        }
+
+        bool TryHandleUiToolkitContainerSelection(string valueId)
+        {
+            if (string.IsNullOrWhiteSpace(valueId) ||
+                !valueId.StartsWith(BlockiverseUiToolkitMenuCatalog.ContainerSlotSelectionPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveRuntimeReferences();
+            if (int.TryParse(valueId.Substring(BlockiverseUiToolkitMenuCatalog.ContainerSlotSelectionPrefix.Length), out int slotIndex))
+                survivalHudController?.CratePanel?.WithdrawSlot(slotIndex);
+
+            ApplyRouterState();
+            return true;
+        }
+
+        bool TryHandleUiToolkitBlockCatalogSelection(string valueId)
+        {
+            if (string.IsNullOrWhiteSpace(valueId) ||
+                !valueId.StartsWith(BlockiverseUiToolkitMenuCatalog.BlockCatalogSelectionPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ResolveRuntimeReferences();
+            string idText = valueId.Substring(BlockiverseUiToolkitMenuCatalog.BlockCatalogSelectionPrefix.Length);
+            if (int.TryParse(idText, out int blockId))
+                creativeHotbar?.SelectBlock(new BlockId(blockId));
+
+            ApplyRouterState();
+            return true;
+        }
+
+        void HandleUiToolkitToggleChanged(string fieldId, bool value)
+        {
+            ResolveRuntimeReferences();
+
+            switch (fieldId)
+            {
+                case BlockiverseUiToolkitMenuCatalog.ComfortUseTeleportField:
+                    if (comfortSettings != null)
+                        comfortSettings.LocomotionMode = value
+                            ? BlockiverseLocomotionMode.Teleport
+                            : BlockiverseLocomotionMode.Glide;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortSmoothTurnField:
+                    if (comfortSettings != null) comfortSettings.SmoothTurnEnabled = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortSnapTurnAroundField:
+                    if (comfortSettings != null) comfortSettings.SnapTurnAroundEnabled = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortVignetteField:
+                    if (comfortSettings != null) comfortSettings.VignetteEnabled = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortLeftHandField:
+                    if (comfortSettings != null)
+                        comfortSettings.DominantHand = value ? BlockiverseControllerRole.Left : BlockiverseControllerRole.Right;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortToggleToMineField:
+                    if (comfortSettings != null) comfortSettings.ToggleToMineEnabled = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioMuteAllField:
+                    if (feedbackSettings != null) feedbackSettings.MuteAll = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioHapticsField:
+                    if (feedbackSettings != null) feedbackSettings.HapticsEnabled = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioReducedFlashField:
+                    if (feedbackSettings != null) feedbackSettings.ReducedFlash = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioReducedParticlesField:
+                    if (feedbackSettings != null) feedbackSettings.ReducedParticles = value;
+                    break;
+            }
+        }
+
+        void HandleUiToolkitSliderChanged(string fieldId, float value)
+        {
+            ResolveRuntimeReferences();
+
+            switch (fieldId)
+            {
+                case BlockiverseUiToolkitMenuCatalog.ComfortSnapTurnDegreesField:
+                    if (comfortSettings != null) comfortSettings.SnapTurnDegrees = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortMoveSpeedField:
+                    if (comfortSettings != null) comfortSettings.ContinuousMoveSpeed = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortTurnSpeedField:
+                    if (comfortSettings != null) comfortSettings.ContinuousTurnSpeed = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortVignetteStrengthField:
+                    if (comfortSettings != null) comfortSettings.VignetteStrength = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortEyeHeightField:
+                    if (comfortSettings != null)
+                    {
+                        comfortSettings.StandingEyeHeight = value;
+                        heightReset?.ApplyStandingEyeHeight(comfortSettings.StandingEyeHeight);
+                    }
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.ComfortUiScaleField:
+                    if (comfortSettings != null) comfortSettings.UiScale = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioMasterVolumeField:
+                    if (feedbackSettings != null) feedbackSettings.MasterVolume = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioEffectsVolumeField:
+                    if (feedbackSettings != null) feedbackSettings.EffectsVolume = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioUiVolumeField:
+                    if (feedbackSettings != null) feedbackSettings.UiVolume = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioWeatherVolumeField:
+                    if (feedbackSettings != null) feedbackSettings.WeatherVolume = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioMusicVolumeField:
+                    if (feedbackSettings != null) feedbackSettings.MusicVolume = value;
+                    break;
+                case BlockiverseUiToolkitMenuCatalog.AudioHapticIntensityField:
+                    if (feedbackSettings != null) feedbackSettings.HapticIntensity = value;
+                    break;
+            }
+        }
+
+        void HandleUiToolkitPageInvoked(int delta)
+        {
+            if (router != null && string.Equals(router.ActiveScreen.ScreenId, MenuActions.InventoryScreen, StringComparison.Ordinal))
+            {
+                int visibleCount = UiToolkitLoadWorldMaxEntries;
+                int slotCount = survivalHudController?.Inventory != null ? survivalHudController.Inventory.SlotCount : visibleCount;
+                int inventoryPageCount = Mathf.Max(1, Mathf.CeilToInt(slotCount / (float)visibleCount));
+                int pageIndex = Mathf.Clamp((uiToolkitInventoryFirstSlot / visibleCount) + delta, 0, inventoryPageCount - 1);
+                uiToolkitInventoryFirstSlot = pageIndex * visibleCount;
+                ApplyRouterState();
+                return;
+            }
+
+            if (router != null && string.Equals(router.ActiveScreen.ScreenId, MenuActions.CraftingScreen, StringComparison.Ordinal))
+            {
+                int recipeCount = survivalHudController?.RecipeBook != null
+                    ? survivalHudController.RecipeBook.All.Count(recipe => recipe.TimeTicks <= 0)
+                    : 0;
+                int craftingPageCount = Mathf.Max(1, Mathf.CeilToInt(recipeCount / (float)UiToolkitLoadWorldMaxEntries));
+                uiToolkitCraftingPage = Mathf.Clamp(uiToolkitCraftingPage + delta, 0, craftingPageCount - 1);
+                ApplyRouterState();
+                return;
+            }
+
+            if (router != null && string.Equals(router.ActiveScreen.ScreenId, MenuActions.ContainerScreen, StringComparison.Ordinal))
+            {
+                int visibleCount = UiToolkitLoadWorldMaxEntries;
+                int slotCount = survivalSync?.SharedCrateInventory != null ? survivalSync.SharedCrateInventory.SlotCount : visibleCount;
+                int containerPageCount = Mathf.Max(1, Mathf.CeilToInt(slotCount / (float)visibleCount));
+                int pageIndex = Mathf.Clamp((uiToolkitContainerFirstSlot / visibleCount) + delta, 0, containerPageCount - 1);
+                uiToolkitContainerFirstSlot = pageIndex * visibleCount;
+                ApplyRouterState();
+                return;
+            }
+
+            if (router != null && string.Equals(router.ActiveScreen.ScreenId, MenuActions.BlockCatalogScreen, StringComparison.Ordinal))
+            {
+                int catalogEntryCount = UiToolkitCatalogEntryCount();
+                int catalogPageCount = Mathf.Max(1, Mathf.CeilToInt(catalogEntryCount / (float)UiToolkitLoadWorldMaxEntries));
+                uiToolkitCatalogPageIndex = Mathf.Clamp(uiToolkitCatalogPageIndex + delta, 0, catalogPageCount - 1);
+                ApplyRouterState();
+                return;
+            }
+
+            int pageCount = UiToolkitLoadWorldPageCount();
+            int nextPage = Mathf.Clamp(uiToolkitLoadWorldPageIndex + delta, 0, pageCount - 1);
+            if (nextPage == uiToolkitLoadWorldPageIndex)
+                return;
+
+            uiToolkitLoadWorldPageIndex = nextPage;
+            SelectFirstUiToolkitSaveOnCurrentPage();
+            ApplyRouterState();
+        }
+
+        int UiToolkitCatalogEntryCount()
+        {
+            var categories = (CreativeCatalogCategory[])Enum.GetValues(typeof(CreativeCatalogCategory));
+            uiToolkitCatalogCategoryIndex = Mathf.Clamp(uiToolkitCatalogCategoryIndex, 0, categories.Length - 1);
+            CreativeCatalog catalog = CreativeCatalog.CreateDefault();
+            return catalog.InCategory(categories[uiToolkitCatalogCategoryIndex]).Count();
+        }
+
+        void CycleUiToolkitCatalogCategory(bool forward)
+        {
+            var categories = (CreativeCatalogCategory[])Enum.GetValues(typeof(CreativeCatalogCategory));
+            if (categories.Length == 0)
+            {
+                uiToolkitCatalogCategoryIndex = 0;
+                return;
+            }
+
+            int delta = forward ? 1 : -1;
+            uiToolkitCatalogCategoryIndex = (uiToolkitCatalogCategoryIndex + delta + categories.Length) % categories.Length;
         }
 
         T FindGeneratedComponent<T>(string objectName) where T : Component

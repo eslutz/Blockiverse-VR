@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="BlockiverseMenuTheme.uss" />
+    <ui:VisualElement name="blockiverse-menu-root" class="bv-menu-root">
+        <ui:VisualElement name="blockiverse-menu-screen" class="bv-menu-screen">
+            <ui:VisualElement name="blockiverse-menu-header" class="bv-menu-header">
+                <ui:VisualElement name="blockiverse-menu-title-group">
+                    <ui:Label name="blockiverse-menu-kicker" class="bv-menu-kicker" text="BLOCKIVERSE VR" />
+                    <ui:Label name="blockiverse-menu-title" class="bv-menu-title" text="Menu" />
+                </ui:VisualElement>
+                <ui:Label name="blockiverse-menu-purpose" class="bv-menu-purpose" text="Choose an option." />
+            </ui:VisualElement>
+            <ui:VisualElement name="blockiverse-menu-body" class="bv-menu-body">
+                <ui:ScrollView name="blockiverse-menu-actions-scroll" class="bv-menu-actions-scroll" mode="Vertical">
+                    <ui:VisualElement name="blockiverse-menu-actions" class="bv-menu-actions" />
+                </ui:ScrollView>
+                <ui:ScrollView name="blockiverse-menu-details-scroll" class="bv-menu-details-scroll" mode="Vertical">
+                    <ui:VisualElement name="blockiverse-menu-details" class="bv-menu-details" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+            <ui:Label name="blockiverse-menu-status" class="bv-menu-status" text="" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

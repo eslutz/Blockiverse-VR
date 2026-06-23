@@ -30,6 +30,7 @@ namespace Blockiverse.UI
 
             public const string PauseResume = "ui.action.pause.resume";
             public const string PauseSaveGame = "ui.action.pause.save_game";
+            public const string PausePlayerHub = "ui.action.pause.player_hub";
             public const string PauseToggleMode = "ui.action.pause.toggle_mode";
             public const string PauseCreativeTools = "ui.action.pause.creative_tools";
             public const string PauseSettings = "ui.action.pause.settings";
@@ -265,6 +266,7 @@ namespace Blockiverse.UI
 
             [Keys.PauseResume] = "Resume",
             [Keys.PauseSaveGame] = "Save Game",
+            [Keys.PausePlayerHub] = "Player Hub",
             [Keys.PauseToggleMode] = "Switch Survival/Creative",
             [Keys.PauseCreativeTools] = "Creative Tools",
             [Keys.PauseSettings] = "Settings",

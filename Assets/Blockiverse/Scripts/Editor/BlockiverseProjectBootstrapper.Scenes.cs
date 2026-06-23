@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
@@ -47,6 +48,9 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
+using Unity.XR.CompositionLayers;
+using Unity.XR.CompositionLayers.Extensions;
+using Unity.XR.CompositionLayers.UIInteraction;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -71,6 +75,7 @@ namespace Blockiverse.Editor
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
+            RemoveStaleRootCompositionLayerSceneDocuments(BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
         }
 
@@ -275,18 +280,174 @@ namespace Blockiverse.Editor
 
         static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
         {
+            RemoveStaleRootCompositionLayers(scene);
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
 
-            if (rig == null)
+            if (rig != null)
+                UnityEngine.Object.DestroyImmediate(rig);
+
+            GameObject rigInstance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
+            if (rigInstance != null)
             {
-                PrefabUtility.InstantiatePrefab(rigPrefab, scene);
+                rigInstance.name = BlockiverseProject.XrRigRootName;
+                RemoveGeneratedCompositionLayerSceneOverrides(rigInstance);
+                EditorUtility.SetDirty(rigInstance);
+            }
+        }
+
+        static void RemoveStaleRootCompositionLayers(Scene scene)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (root == null || root.name == BlockiverseProject.XrRigRootName)
+                    continue;
+
+                if (root.name == "Composition Render Scale Surface" ||
+                    root.GetComponent<CompositionLayer>() != null)
+                {
+                    root.SetActive(false);
+                    EditorUtility.SetDirty(root);
+                }
+            }
+        }
+
+        static void RemoveStaleRootCompositionLayerSceneDocuments(string scenePath)
+        {
+            if (!File.Exists(scenePath))
                 return;
+
+            string sceneYaml = File.ReadAllText(scenePath);
+            IReadOnlyList<string> sceneDocuments = SplitUnityYamlDocuments(sceneYaml);
+            var gameObjectIdsToRemove = new HashSet<string>();
+            var objectIdsToRemove = new HashSet<string>();
+            var rootTransformIdsToRemove = new HashSet<string>();
+
+            foreach (string document in sceneDocuments)
+            {
+                if (!TryGetUnityYamlDocumentId(document, out string gameObjectId) ||
+                    !document.StartsWith("--- !u!1 ", StringComparison.Ordinal) ||
+                    !IsStaleRootCompositionLayerGameObjectDocument(document))
+                {
+                    continue;
+                }
+
+                gameObjectIdsToRemove.Add(gameObjectId);
+                objectIdsToRemove.Add(gameObjectId);
+
+                foreach (Match componentMatch in Regex.Matches(document, @"component:\s*\{fileID:\s*(-?\d+)\}"))
+                {
+                    string componentId = componentMatch.Groups[1].Value;
+                    objectIdsToRemove.Add(componentId);
+                    if (!rootTransformIdsToRemove.Contains(componentId))
+                        rootTransformIdsToRemove.Add(componentId);
+                }
             }
 
-            if (rig.GetComponent<BlockiverseXRRigMarker>() == null)
-                rig.AddComponent<BlockiverseXRRigMarker>();
+            if (objectIdsToRemove.Count == 0)
+                return;
 
-            EnsureXrRigControllerBindings(rig);
+            var keptDocuments = sceneDocuments
+                .Where(document =>
+                {
+                    if (!TryGetUnityYamlDocumentId(document, out string documentId))
+                        return true;
+
+                    return !objectIdsToRemove.Contains(documentId);
+                })
+                .ToList();
+
+            string cleanedSceneYaml = string.Concat(keptDocuments);
+            foreach (string transformId in rootTransformIdsToRemove)
+            {
+                cleanedSceneYaml = Regex.Replace(
+                    cleanedSceneYaml,
+                    $@"(?m)^\s*-\s*\{{fileID:\s*{Regex.Escape(transformId)}\}}\r?\n",
+                    string.Empty);
+            }
+
+            if (cleanedSceneYaml == sceneYaml)
+                return;
+
+            File.WriteAllText(scenePath, cleanedSceneYaml);
+            AssetDatabase.ImportAsset(scenePath, ImportAssetOptions.ForceUpdate);
+        }
+
+        static IReadOnlyList<string> SplitUnityYamlDocuments(string yaml)
+        {
+            var documents = new List<string>();
+            int firstDocumentIndex = yaml.IndexOf("--- !u!", StringComparison.Ordinal);
+            if (firstDocumentIndex > 0)
+                documents.Add(yaml[..firstDocumentIndex]);
+
+            foreach (Match match in Regex.Matches(yaml, @"(?ms)^--- !u!.*?(?=^--- !u!|\z)"))
+                documents.Add(match.Value);
+
+            return documents.Count > 0 ? documents : new[] { yaml };
+        }
+
+        static bool TryGetUnityYamlDocumentId(string document, out string documentId)
+        {
+            Match match = Regex.Match(document, @"^--- !u!\d+ &(-?\d+)", RegexOptions.Multiline);
+            documentId = match.Success ? match.Groups[1].Value : string.Empty;
+            return match.Success;
+        }
+
+        static bool IsStaleRootCompositionLayerGameObjectDocument(string document)
+        {
+            return document.Contains("m_Name: Composition Render Scale Surface", StringComparison.Ordinal) ||
+                   document.Contains("m_Name: Composition Layer Plane", StringComparison.Ordinal);
+        }
+
+        static void RemoveGeneratedCompositionLayerSceneOverrides(GameObject rigInstance)
+        {
+            if (rigInstance == null)
+                return;
+
+            Transform cameraOffset = rigInstance.transform.Find("Camera Offset");
+            Transform surface = cameraOffset != null ? cameraOffset.Find(MenuCompositionSurfaceName) : null;
+            if (surface == null)
+                return;
+
+            MeshCollider meshCollider = surface.GetComponent<MeshCollider>();
+            RevertPrefabObjectOverride(meshCollider);
+            if (meshCollider != null && meshCollider.sharedMesh != null)
+            {
+                meshCollider.sharedMesh = null;
+                EditorUtility.SetDirty(meshCollider);
+            }
+
+            TexturesExtension texturesExtension = surface.GetComponent<TexturesExtension>();
+            RevertPrefabObjectOverride(texturesExtension);
+            if (texturesExtension != null)
+            {
+                texturesExtension.LeftTexture = null;
+                texturesExtension.RightTexture = null;
+                EditorUtility.SetDirty(texturesExtension);
+            }
+
+            InteractableUIMirror mirror = surface.GetComponent<InteractableUIMirror>();
+            RevertPrefabObjectOverride(mirror);
+
+            Camera canvasCamera = surface.Find($"{MenuCompositionCanvasName}/CanvasCamera")?.GetComponent<Camera>();
+            RevertPrefabObjectOverride(canvasCamera);
+            if (canvasCamera != null)
+            {
+                canvasCamera.targetTexture = null;
+                canvasCamera.enabled = false;
+                canvasCamera.nearClipPlane = 0.01f;
+                canvasCamera.clearFlags = CameraClearFlags.SolidColor;
+                canvasCamera.backgroundColor = Color.clear;
+                canvasCamera.cullingMask = 1 << GetCompositionUiLayerIndex();
+                EditorUtility.SetDirty(canvasCamera);
+            }
+        }
+
+        static void RevertPrefabObjectOverride(UnityEngine.Object target)
+        {
+            if (target == null || !PrefabUtility.IsPartOfPrefabInstance(target))
+                return;
+
+            PrefabUtility.RevertObjectOverride(target, InteractionMode.AutomatedAction);
         }
 
         static void EnsureBootSceneLight(Scene scene)

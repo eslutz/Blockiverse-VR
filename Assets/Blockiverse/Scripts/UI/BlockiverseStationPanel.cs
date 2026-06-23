@@ -40,6 +40,8 @@ namespace Blockiverse.UI
 
         public bool IsOpen => station != null;
         public BlockPosition OpenPosition => stationPosition;
+        public SmeltingStationModel CurrentStation => station;
+        public string CurrentStatusText => statusLabel != null ? statusLabel.text : string.Empty;
 
         public void Configure(
             TMP_Text titleLabel,
@@ -224,14 +226,22 @@ namespace Blockiverse.UI
         }
 
         // Deposits one of the held hotbar item into a station input slot (host-validated).
-        void OnDepositInput() => SubmitHeldItemTransfer(isFuel: false);
+        void OnDepositInput() => DepositHeldInput();
 
         // Deposits one of the held hotbar item as fuel (host-validated; non-fuels are rejected).
-        void OnDepositFuel() => SubmitHeldItemTransfer(isFuel: true);
+        void OnDepositFuel() => DepositHeldFuel();
 
-        void OnWithdrawInput() => SubmitStationWithdrawal(isFuel: false);
+        void OnWithdrawInput() => WithdrawInput();
 
-        void OnWithdrawFuel() => SubmitStationWithdrawal(isFuel: true);
+        void OnWithdrawFuel() => WithdrawFuel();
+
+        public void DepositHeldInput() => SubmitHeldItemTransfer(isFuel: false);
+
+        public void DepositHeldFuel() => SubmitHeldItemTransfer(isFuel: true);
+
+        public void WithdrawInput() => SubmitStationWithdrawal(isFuel: false);
+
+        public void WithdrawFuel() => SubmitStationWithdrawal(isFuel: true);
 
         void SubmitHeldItemTransfer(bool isFuel)
         {
@@ -291,7 +301,9 @@ namespace Blockiverse.UI
             RefreshDisplay();
         }
 
-        void OnCollectOutput()
+        void OnCollectOutput() => CollectOutput();
+
+        public void CollectOutput()
         {
             if (station == null || !DiscoverSurvivalSync())
                 return;

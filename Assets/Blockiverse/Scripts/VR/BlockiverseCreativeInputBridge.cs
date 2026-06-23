@@ -518,11 +518,18 @@ namespace Blockiverse.VR
             interactionLineVisual.lineLength = lineVisualDefaultLength;
         }
 
+        bool IsInteractionRayOverUi()
+        {
+            return interactionRay != null &&
+                interactionRay.isActiveAndEnabled &&
+                interactionRay.IsOverUIGameObject();
+        }
+
         bool CanInteract()
         {
             return interactionRay != null &&
                 interactionRay.isActiveAndEnabled &&
-                !interactionRay.IsOverUIGameObject();
+                !IsInteractionRayOverUi();
         }
     }
 }

@@ -198,8 +198,9 @@ namespace Blockiverse.Editor
             if (camera == null)
                 return;
 
-            camera.cullingMask |= BlockiverseProject.VrUiRaycastLayerMask;
-            camera.cullingMask &= ~BlockiverseProject.XrVisualProjectionLayerMask;
+            camera.cullingMask |= BlockiverseProject.InteractionLayerMask;
+            camera.cullingMask &= ~(BlockiverseProject.CompositionUiLayerMask |
+                                    BlockiverseProject.XrVisualProjectionLayerMask);
             EditorUtility.SetDirty(camera);
         }
 
@@ -295,12 +296,14 @@ namespace Blockiverse.Editor
 
             XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
             BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetVrUiRaycastLayerMask());
-            interactionRay.selectInput = MakeUnusedButtonReader("Select");
-            interactionRay.activateInput = MakeUnusedButtonReader("Activate");
+            interactionRay.selectInput = MakeUnusedButtonReader(interactionRay.selectInput, "Select");
+            interactionRay.activateInput = MakeUnusedButtonReader(interactionRay.activateInput, "Activate");
             interactionRay.uiPressInput = MakeButtonReader(
+                interactionRay.uiPressInput,
                 "UI Press",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.UiPress));
             interactionRay.uiScrollInput = MakeVector2Reader(
+                interactionRay.uiScrollInput,
                 "UI Scroll",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
             ConfigureLineVisual(interactionRayObject, pointerMaterial);
@@ -315,11 +318,12 @@ namespace Blockiverse.Editor
             BlockiverseRayDefaults.ConfigureTeleportRay(teleportRay, rayOrigin, GetInteractionLayerMask());
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
             teleportRay.selectInput = MakeButtonReader(
+                teleportRay.selectInput,
                 "Teleport Select",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.TeleportSelect));
-            teleportRay.activateInput = MakeUnusedButtonReader("Activate");
-            teleportRay.uiPressInput = MakeUnusedButtonReader("UI Press");
-            teleportRay.uiScrollInput = MakeVector2Reader("UI Scroll", null);
+            teleportRay.activateInput = MakeUnusedButtonReader(teleportRay.activateInput, "Activate");
+            teleportRay.uiPressInput = MakeUnusedButtonReader(teleportRay.uiPressInput, "UI Press");
+            teleportRay.uiScrollInput = MakeVector2Reader(teleportRay.uiScrollInput, "UI Scroll", null);
             ConfigureLineVisual(teleportRayObject, pointerMaterial);
             teleportRayObject.SetActive(false);
             EditorUtility.SetDirty(teleportRay);
@@ -366,34 +370,47 @@ namespace Blockiverse.Editor
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
         }
 
-        static XRInputButtonReader MakeButtonReader(string name, InputActionReference reference)
+        static XRInputButtonReader MakeButtonReader(
+            XRInputButtonReader current,
+            string name,
+            InputActionReference reference)
         {
             if (reference == null)
-                return MakeUnusedButtonReader(name);
+                return MakeUnusedButtonReader(current, name);
 
-            var reader = new XRInputButtonReader(name,
-                inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference);
-
+            XRInputButtonReader reader = current ?? new XRInputButtonReader(name);
+            reader.inputSourceMode = XRInputButtonReader.InputSourceMode.InputActionReference;
             reader.inputActionReferencePerformed = reference;
+            reader.inputActionReferenceValue = reference;
+            reader.SetObjectReference(null);
             return reader;
         }
 
-        static XRInputButtonReader MakeUnusedButtonReader(string name)
+        static XRInputButtonReader MakeUnusedButtonReader(XRInputButtonReader current, string name)
         {
-            return new XRInputButtonReader(name,
-                inputSourceMode: XRInputButtonReader.InputSourceMode.Unused);
+            XRInputButtonReader reader = current ?? new XRInputButtonReader(name);
+            reader.inputSourceMode = XRInputButtonReader.InputSourceMode.Unused;
+            reader.inputActionReferencePerformed = null;
+            reader.inputActionReferenceValue = null;
+            reader.SetObjectReference(null);
+            reader.manualPerformed = false;
+            reader.manualValue = 0.0f;
+            return reader;
         }
 
-        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputActionReference reference)
+        static XRInputValueReader<Vector2> MakeVector2Reader(
+            XRInputValueReader<Vector2> current,
+            string name,
+            InputActionReference reference)
         {
-            if (reference == null)
-                return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
-
-            return new XRInputValueReader<Vector2>(name,
-                XRInputValueReader.InputSourceMode.InputActionReference)
-            {
-                inputActionReference = reference
-            };
+            XRInputValueReader<Vector2> reader = current ?? new XRInputValueReader<Vector2>(name);
+            reader.inputSourceMode = reference == null
+                ? XRInputValueReader.InputSourceMode.Unused
+                : XRInputValueReader.InputSourceMode.InputActionReference;
+            reader.inputActionReference = reference;
+            reader.SetObjectReference(null);
+            reader.manualValue = Vector2.zero;
+            return reader;
         }
 
         static InputAction FindRigAction(BlockiverseInputRig inputRig, string mapName, string actionName)
@@ -449,10 +466,9 @@ namespace Blockiverse.Editor
             if (cameraOffset == null)
                 return;
 
-            Transform routedMenuParent = EnsureMenuCompositionSurface(cameraOffset, head).transform.Find(MenuCompositionCanvasName);
             BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
             BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
-            GameObject menuObject = EnsureRoutedMenuRectChild(cameraOffset, routedMenuParent, leftController, ComfortMenuName);
+            GameObject menuObject = EnsureWorldSpaceMenuRectChild(cameraOffset, leftController, ComfortMenuName);
             const float comfortMenuScale = 0.00105f;
             menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
             menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
@@ -667,7 +683,7 @@ namespace Blockiverse.Editor
                 smoothTurnSpeedSlider,
                 uiScaleSlider);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
-            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, comfortMenuScale);
+            ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);
             presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
 
