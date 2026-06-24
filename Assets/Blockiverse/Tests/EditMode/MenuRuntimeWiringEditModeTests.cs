@@ -11,6 +11,7 @@ using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -168,6 +169,102 @@ namespace Blockiverse.Tests.EditMode
                 BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix + "inventory.slot.0");
 
             Assert.That(controller.PendingLoadSave?.Name, Is.EqualTo("inventory.slot.0"));
+        }
+
+        [Test]
+        public void UiToolkitSurfaceAppliesPendingViewAfterVisualTreeResolves()
+        {
+            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
+            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
+            var view = new BlockiverseUiToolkitMenuView(
+                MenuActions.TitleScreen,
+                "Title",
+                "Purpose",
+                new[] { new MenuAction(MenuActions.TitleNewWorld, "New World") });
+
+            surface.Show(view, acceptsInput: true);
+
+            var root = new UiVisualElement();
+            var actions = new UiVisualElement();
+            var details = new UiVisualElement();
+            var title = new UnityEngine.UIElements.Label();
+            SetPrivateField(surface, "root", root);
+            SetPrivateField(surface, "actionsRoot", actions);
+            SetPrivateField(surface, "detailsRoot", details);
+            SetPrivateField(surface, "titleLabel", title);
+
+            EnableBehaviour(surface);
+
+            Assert.That(title.text, Is.EqualTo("Title"));
+            Assert.That(actions.childCount, Is.EqualTo(1));
+            Assert.That(actions[0], Is.TypeOf<UnityEngine.UIElements.Button>());
+            Assert.That(((UnityEngine.UIElements.Button)actions[0]).text, Is.EqualTo("New World"));
+            Assert.That(details.childCount, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void UiToolkitSurfaceRestoresRuntimeWorldSpaceColliderReference()
+        {
+            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
+            var document = surfaceObject.AddComponent<UnityEngine.UIElements.UIDocument>();
+            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
+
+            surface.Configure(document);
+
+            BoxCollider worldSpaceCollider = surfaceObject.GetComponent<BoxCollider>();
+            var serializedDocument = new SerializedObject(document);
+            SerializedProperty colliderProperty = serializedDocument.FindProperty("m_WorldSpaceCollider");
+
+            Assert.That(document.worldSpaceSizeMode, Is.EqualTo(UnityEngine.UIElements.UIDocument.WorldSpaceSizeMode.Fixed));
+            Assert.That(document.worldSpaceSize.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.x).Within(0.001f));
+            Assert.That(document.worldSpaceSize.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.y).Within(0.001f));
+            Assert.That(worldSpaceCollider, Is.Not.Null);
+            Assert.That(worldSpaceCollider.isTrigger, Is.True);
+            Assert.That(worldSpaceCollider.size.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x).Within(0.001f));
+            Assert.That(worldSpaceCollider.size.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y).Within(0.001f));
+            Assert.That(colliderProperty, Is.Not.Null);
+            Assert.That(colliderProperty.objectReferenceValue, Is.SameAs(worldSpaceCollider),
+                "Runtime Configure must restore UIDocument's private world-space collider reference after UIDocument startup clears it.");
+        }
+
+        [Test]
+        public void UiToolkitSurfaceRecentersWhenVisiblePanelDriftsOutOfReadableRange()
+        {
+            GameObject cameraObject = CreateRoot("Main Camera");
+            cameraObject.tag = "MainCamera";
+            cameraObject.AddComponent<Camera>();
+            cameraObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
+            surfaceObject.transform.position = new Vector3(0.0f, 0.0f, 10.0f);
+            var presenter = surfaceObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.ConfigureWorldSpaceTarget(
+                surfaceObject,
+                cameraObject.transform,
+                distance: 1.0f,
+                horizontalOffset: 0.0f,
+                verticalOffset: -0.2f,
+                pitch: 0.0f,
+                scale: BlockiverseUiToolkitMenuSurface.ReadableTransformScale);
+            var document = surfaceObject.AddComponent<UnityEngine.UIElements.UIDocument>();
+            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
+            surface.Configure(document);
+            surface.Show(new BlockiverseUiToolkitMenuView(
+                MenuActions.TitleScreen,
+                "Menu",
+                "Choose an option.",
+                new[] { new MenuAction(MenuActions.TitleNewWorld, "New World") }), acceptsInput: true);
+            var visibleRoot = new UiVisualElement();
+            visibleRoot.style.display = UiDisplayStyle.Flex;
+            SetPrivateField(surface, "root", visibleRoot);
+
+            InvokeBehaviourMethod(surface, "LateUpdate");
+
+            Assert.That(surfaceObject.transform.position.x, Is.EqualTo(0.0f).Within(0.001f));
+            Assert.That(surfaceObject.transform.position.y, Is.EqualTo(-0.2f).Within(0.001f));
+            Assert.That(surfaceObject.transform.position.z, Is.EqualTo(1.0f).Within(0.001f));
+            Assert.That(surfaceObject.transform.localScale.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
+            Assert.That(document.worldSpaceSize.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.x).Within(0.001f));
         }
 
         [Test]
@@ -1487,11 +1584,16 @@ namespace Blockiverse.Tests.EditMode
 
         static void EnableBehaviour(MonoBehaviour behaviour)
         {
-            MethodInfo onEnable = behaviour
+            InvokeBehaviourMethod(behaviour, "OnEnable");
+        }
+
+        static void InvokeBehaviourMethod(MonoBehaviour behaviour, string methodName)
+        {
+            MethodInfo method = behaviour
                 .GetType()
-                .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(onEnable, Is.Not.Null, $"{behaviour.GetType().Name} must expose an OnEnable method for this wiring test.");
-            onEnable.Invoke(behaviour, null);
+                .GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"{behaviour.GetType().Name} must expose a {methodName} method for this wiring test.");
+            method.Invoke(behaviour, null);
         }
 
         static void SetPrivateField<T>(object target, string fieldName, T value)

@@ -28,6 +28,10 @@ namespace Blockiverse.Editor
             document.worldSpaceSizeMode = UIDocument.WorldSpaceSizeMode.Fixed;
             document.worldSpaceSize = UiToolkitMenuWorldSpaceSize;
 
+            BoxCollider worldSpaceCollider = EnsureComponent<BoxCollider>(surfaceObject);
+            ConfigureUiToolkitWorldSpaceCollider(worldSpaceCollider);
+            AssignUiToolkitWorldSpaceCollider(document, worldSpaceCollider);
+
             XRUIToolkitManager toolkitManager = EnsureComponent<XRUIToolkitManager>(surfaceObject);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(surfaceObject);
             presenter.ConfigureWorldSpaceTarget(
@@ -42,6 +46,7 @@ namespace Blockiverse.Editor
             surface.Configure(document);
 
             EditorUtility.SetDirty(document);
+            EditorUtility.SetDirty(worldSpaceCollider);
             EditorUtility.SetDirty(toolkitManager);
             EditorUtility.SetDirty(presenter);
             EditorUtility.SetDirty(surface);
@@ -94,6 +99,28 @@ namespace Blockiverse.Editor
             if (colliderIsTrigger != null)
                 colliderIsTrigger.boolValue = true;
 
+            serialized.ApplyModifiedProperties();
+        }
+
+        static void ConfigureUiToolkitWorldSpaceCollider(BoxCollider worldSpaceCollider)
+        {
+            if (worldSpaceCollider == null)
+                return;
+
+            worldSpaceCollider.isTrigger = true;
+            worldSpaceCollider.center = Vector3.zero;
+            worldSpaceCollider.size = BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize;
+        }
+
+        static void AssignUiToolkitWorldSpaceCollider(UIDocument document, Collider worldSpaceCollider)
+        {
+            if (document == null || worldSpaceCollider == null)
+                return;
+
+            var serialized = new SerializedObject(document);
+            SerializedProperty colliderProperty = serialized.FindProperty("m_WorldSpaceCollider");
+            if (colliderProperty != null)
+                colliderProperty.objectReferenceValue = worldSpaceCollider;
             serialized.ApplyModifiedProperties();
         }
     }

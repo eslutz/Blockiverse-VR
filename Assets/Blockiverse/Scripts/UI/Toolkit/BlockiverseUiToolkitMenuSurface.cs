@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Blockiverse.VR;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -9,19 +10,38 @@ namespace Blockiverse.UI
     [DisallowMultipleComponent]
     public sealed class BlockiverseUiToolkitMenuSurface : MonoBehaviour
     {
-        const float ReadableTransformScale = 1.0f;
-        static readonly Vector2 ReadableWorldSpaceSize = new(1.05f, 0.59f);
+        const float ReferencePanelWidthPixels = 1280.0f;
+        const float ReferencePanelHeightPixels = 720.0f;
+        const float ReferencePixelsPerUnit = 100.0f;
+        const int RecenterFramesAfterShow = 90;
+        const float MinimumReadableDistanceMeters = 0.55f;
+        const float MaximumReadableDistanceMeters = 1.8f;
+        public const float ReadableTransformScale = 0.1f;
+        public static readonly Vector2 ReadableWorldSpaceSize = new(ReferencePanelWidthPixels, ReferencePanelHeightPixels);
+        public static readonly Vector3 ReadableWorldSpaceColliderSize = new(
+            ReferencePanelWidthPixels / ReferencePixelsPerUnit,
+            ReferencePanelHeightPixels / ReferencePixelsPerUnit,
+            0.08f);
+        static readonly FieldInfo WorldSpaceColliderField = typeof(UIDocument)
+            .GetField("m_WorldSpaceCollider", BindingFlags.NonPublic | BindingFlags.Instance);
 
         [SerializeField] UIDocument document;
         [SerializeField] bool hideOnAwake = true;
 
         VisualElement root;
+        VisualElement screenRoot;
         Label kickerLabel;
         Label titleLabel;
         Label purposeLabel;
         VisualElement actionsRoot;
         VisualElement detailsRoot;
         Label statusLabel;
+        VisualElement documentRoot;
+        BlockiverseUiToolkitMenuView pendingView;
+        bool pendingAcceptsInput;
+        bool wantsVisible;
+        bool warnedMissingWorldSpaceColliderField;
+        int recenterFramesRemaining;
         readonly List<Button> buttons = new();
 
         public event Action<string> ActionInvoked;
@@ -39,7 +59,9 @@ namespace Blockiverse.UI
             document = targetDocument;
             EnsureReadableWorldSpaceSizing();
             ResolveVisualTree();
-            if (hideOnAwake)
+            if (wantsVisible)
+                TryApplyPendingView();
+            else if (hideOnAwake)
                 Hide();
         }
 
@@ -50,8 +72,28 @@ namespace Blockiverse.UI
 
             EnsureReadableWorldSpaceSizing();
             ResolveVisualTree();
-            if (hideOnAwake)
+            if (wantsVisible)
+                TryApplyPendingView();
+            else if (hideOnAwake)
                 Hide();
+        }
+
+        void OnEnable()
+        {
+            EnsureReadableWorldSpaceSizing();
+            ResolveVisualTree();
+            if (wantsVisible)
+                TryApplyPendingView();
+            else if (hideOnAwake)
+                Hide();
+        }
+
+        void LateUpdate()
+        {
+            EnsureReadableWorldSpaceSizing();
+            EnsureReadablePlacement();
+            if (wantsVisible && pendingView != null)
+                TryApplyPendingView();
         }
 
         public void Show(BlockiverseUiToolkitMenuView view, bool acceptsInput)
@@ -59,10 +101,44 @@ namespace Blockiverse.UI
             if (view == null)
                 throw new ArgumentNullException(nameof(view));
 
+            wantsVisible = true;
+            pendingView = view;
+            pendingAcceptsInput = acceptsInput;
+            recenterFramesRemaining = RecenterFramesAfterShow;
+            TryApplyPendingView();
+        }
+
+        public void Hide()
+        {
+            wantsVisible = false;
+            pendingView = null;
             ResolveVisualTree();
             if (root == null)
                 return;
 
+            root.style.display = DisplayStyle.None;
+        }
+
+        public void SetInputEnabled(bool acceptsInput)
+        {
+            pendingAcceptsInput = acceptsInput;
+            ResolveVisualTree();
+            root?.SetEnabled(acceptsInput);
+        }
+
+        bool TryApplyPendingView()
+        {
+            ResolveVisualTree();
+            if (pendingView == null || root == null || actionsRoot == null || detailsRoot == null)
+                return false;
+
+            ApplyView(pendingView, pendingAcceptsInput);
+            pendingView = null;
+            return true;
+        }
+
+        void ApplyView(BlockiverseUiToolkitMenuView view, bool acceptsInput)
+        {
             root.style.display = DisplayStyle.Flex;
             root.SetEnabled(acceptsInput);
 
@@ -79,31 +155,56 @@ namespace Blockiverse.UI
             PopulateDetails(view);
         }
 
-        public void Hide()
-        {
-            ResolveVisualTree();
-            if (root != null)
-                root.style.display = DisplayStyle.None;
-        }
-
-        public void SetInputEnabled(bool acceptsInput)
-        {
-            ResolveVisualTree();
-            root?.SetEnabled(acceptsInput);
-        }
-
         void ResolveVisualTree()
         {
             if (document == null || document.rootVisualElement == null)
                 return;
 
-            root ??= document.rootVisualElement.Q<VisualElement>("blockiverse-menu-root");
-            kickerLabel ??= document.rootVisualElement.Q<Label>("blockiverse-menu-kicker");
-            titleLabel ??= document.rootVisualElement.Q<Label>("blockiverse-menu-title");
-            purposeLabel ??= document.rootVisualElement.Q<Label>("blockiverse-menu-purpose");
-            actionsRoot ??= document.rootVisualElement.Q<VisualElement>("blockiverse-menu-actions");
-            detailsRoot ??= document.rootVisualElement.Q<VisualElement>("blockiverse-menu-details");
-            statusLabel ??= document.rootVisualElement.Q<Label>("blockiverse-menu-status");
+            if (!ReferenceEquals(documentRoot, document.rootVisualElement))
+            {
+                documentRoot = document.rootVisualElement;
+                root = null;
+                screenRoot = null;
+                kickerLabel = null;
+                titleLabel = null;
+                purposeLabel = null;
+                actionsRoot = null;
+                detailsRoot = null;
+                statusLabel = null;
+                buttons.Clear();
+            }
+
+            root = documentRoot.Q<VisualElement>("blockiverse-menu-root");
+            screenRoot = documentRoot.Q<VisualElement>("blockiverse-menu-screen");
+            kickerLabel = documentRoot.Q<Label>("blockiverse-menu-kicker");
+            titleLabel = documentRoot.Q<Label>("blockiverse-menu-title");
+            purposeLabel = documentRoot.Q<Label>("blockiverse-menu-purpose");
+            actionsRoot = documentRoot.Q<VisualElement>("blockiverse-menu-actions");
+            detailsRoot = documentRoot.Q<VisualElement>("blockiverse-menu-details");
+            statusLabel = documentRoot.Q<Label>("blockiverse-menu-status");
+            ApplyFixedPanelLayout();
+        }
+
+        void ApplyFixedPanelLayout()
+        {
+            documentRoot.style.width = ReferencePanelWidthPixels;
+            documentRoot.style.height = ReferencePanelHeightPixels;
+
+            if (root != null)
+            {
+                root.style.width = ReferencePanelWidthPixels;
+                root.style.height = ReferencePanelHeightPixels;
+                root.style.minWidth = ReferencePanelWidthPixels;
+                root.style.minHeight = ReferencePanelHeightPixels;
+            }
+
+            if (screenRoot != null)
+            {
+                screenRoot.style.width = ReferencePanelWidthPixels;
+                screenRoot.style.height = ReferencePanelHeightPixels;
+                screenRoot.style.minWidth = ReferencePanelWidthPixels;
+                screenRoot.style.minHeight = ReferencePanelHeightPixels;
+            }
         }
 
         void EnsureReadableWorldSpaceSizing()
@@ -113,9 +214,68 @@ namespace Blockiverse.UI
 
             document.worldSpaceSizeMode = UIDocument.WorldSpaceSizeMode.Fixed;
             document.worldSpaceSize = ReadableWorldSpaceSize;
+            EnsureWorldSpaceCollider();
 
             if (TryGetComponent(out BlockiverseWorldSpacePanelPresenter presenter))
                 presenter.EnsurePanelScale(ReadableTransformScale);
+        }
+
+        void EnsureReadablePlacement()
+        {
+            if (!wantsVisible || !IsVisible)
+                return;
+
+            if (!TryGetComponent(out BlockiverseWorldSpacePanelPresenter presenter))
+                return;
+
+            Transform head = Camera.main != null ? Camera.main.transform : null;
+            bool shouldRecenter = recenterFramesRemaining > 0;
+            if (recenterFramesRemaining > 0)
+                recenterFramesRemaining--;
+
+            if (head != null)
+            {
+                Vector3 toPanel = transform.position - head.position;
+                float distance = toPanel.magnitude;
+                float forwardDistance = Vector3.Dot(head.forward, toPanel);
+                shouldRecenter |= distance < MinimumReadableDistanceMeters ||
+                    distance > MaximumReadableDistanceMeters ||
+                    forwardDistance < MinimumReadableDistanceMeters;
+            }
+
+            if (shouldRecenter)
+                presenter.Recenter();
+        }
+
+        void EnsureWorldSpaceCollider()
+        {
+            if (!TryGetComponent(out BoxCollider worldSpaceCollider))
+                worldSpaceCollider = gameObject.AddComponent<BoxCollider>();
+
+            worldSpaceCollider.isTrigger = true;
+            worldSpaceCollider.center = Vector3.zero;
+            worldSpaceCollider.size = ReadableWorldSpaceColliderSize;
+            AssignWorldSpaceCollider(worldSpaceCollider);
+        }
+
+        void AssignWorldSpaceCollider(Collider worldSpaceCollider)
+        {
+            if (document == null || worldSpaceCollider == null)
+                return;
+
+            if (WorldSpaceColliderField == null)
+            {
+                if (!warnedMissingWorldSpaceColliderField)
+                {
+                    Debug.LogWarning("UI Toolkit menu could not find UIDocument.m_WorldSpaceCollider; XR UI rays may not hit the runtime menu.", this);
+                    warnedMissingWorldSpaceColliderField = true;
+                }
+
+                return;
+            }
+
+            if (!ReferenceEquals(WorldSpaceColliderField.GetValue(document), worldSpaceCollider))
+                WorldSpaceColliderField.SetValue(document, worldSpaceCollider);
         }
 
         void PopulateActions(IReadOnlyList<MenuAction> actions, bool acceptsInput)

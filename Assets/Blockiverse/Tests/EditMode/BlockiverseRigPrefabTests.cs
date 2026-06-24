@@ -222,26 +222,54 @@ namespace Blockiverse.Tests.EditMode
 
             Transform surface = prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface");
             Assert.That(surface, Is.Not.Null, "Runtime UI Toolkit replacement surface should be generated under Camera Offset.");
-            Assert.That(surface.localScale.x, Is.EqualTo(1.0f).Within(0.001f),
-                "UI Toolkit fixed world-space documents use physical meters directly; do not apply UGUI-style tiny transform scaling.");
-            Assert.That(surface.localScale.y, Is.EqualTo(1.0f).Within(0.001f));
-            Assert.That(surface.localScale.z, Is.EqualTo(1.0f).Within(0.001f));
+            Assert.That(surface.localScale.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f),
+                "UI Toolkit menu uses a pixel layout with a small world transform scale so it renders at a readable VR size.");
+            Assert.That(surface.localScale.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
+            Assert.That(surface.localScale.z, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
 
             UIDocument document = surface.GetComponent<UIDocument>();
             Assert.That(document, Is.Not.Null);
             Assert.That(document.worldSpaceSizeMode, Is.EqualTo(UIDocument.WorldSpaceSizeMode.Fixed));
-            Assert.That(document.worldSpaceSize.x, Is.InRange(0.9f, 1.2f),
-                "UITK menu width should be a readable physical size in meters, not a pixel resolution.");
-            Assert.That(document.worldSpaceSize.y, Is.InRange(0.5f, 0.75f),
-                "UITK menu height should be a readable physical size in meters, not a pixel resolution.");
+            Assert.That(document.worldSpaceSize.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.x).Within(0.001f),
+                "UITK menu width should stay headset-readable without filling the player's view.");
+            Assert.That(document.worldSpaceSize.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.y).Within(0.001f),
+                "UITK menu height should stay headset-readable without filling the player's view.");
+            var serializedPanelSettings = new SerializedObject(document.panelSettings);
+            SerializedProperty pixelsPerUnit = serializedPanelSettings.FindProperty("m_PixelsPerUnit");
+            Assert.That(pixelsPerUnit, Is.Not.Null,
+                "PanelSettings should expose the UI Toolkit pixels-per-unit conversion used for world-space rendering.");
+            Assert.That(
+                document.worldSpaceSize.x / pixelsPerUnit.floatValue * surface.localScale.x,
+                Is.EqualTo(1.28f).Within(0.01f),
+                "Rendered UI Toolkit geometry should be physically readable; a large collider alone does not make the visual panel readable.");
+            Assert.That(
+                document.worldSpaceSize.y / pixelsPerUnit.floatValue * surface.localScale.y,
+                Is.EqualTo(0.72f).Within(0.01f));
 
             BlockiverseWorldSpacePanelPresenter presenter = surface.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(presenter, Is.Not.Null);
             FieldInfo panelScaleField = typeof(BlockiverseWorldSpacePanelPresenter)
                 .GetField("panelScale", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(panelScaleField, Is.Not.Null);
-            Assert.That((float)panelScaleField.GetValue(presenter), Is.EqualTo(1.0f).Within(0.001f),
-                "Presenter scale should preserve the fixed physical document size and only be adjusted by comfort UI scale.");
+            Assert.That((float)panelScaleField.GetValue(presenter), Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f),
+                "Presenter scale should match the generated transform scale so recentered menus keep the intended physical size.");
+
+            BoxCollider worldSpaceCollider = surface.GetComponent<BoxCollider>();
+            Assert.That(worldSpaceCollider, Is.Not.Null,
+                "UI Toolkit world-space menus need a collider so XR UI rays can hit the document instead of passing through it.");
+            Assert.That(worldSpaceCollider.isTrigger, Is.True);
+            Assert.That(worldSpaceCollider.size.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x).Within(0.001f));
+            Assert.That(worldSpaceCollider.size.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y).Within(0.001f));
+            Assert.That(worldSpaceCollider.size.x * surface.localScale.x, Is.EqualTo(1.28f).Within(0.01f),
+                "UI Toolkit menu should be large enough to read in headset without returning to the previous oversized panel.");
+            Assert.That(worldSpaceCollider.size.y * surface.localScale.y, Is.EqualTo(0.72f).Within(0.01f));
+
+            var serializedDocument = new SerializedObject(document);
+            SerializedProperty colliderProperty = serializedDocument.FindProperty("m_WorldSpaceCollider");
+            Assert.That(colliderProperty, Is.Not.Null,
+                "UIDocument should expose the serialized world-space collider reference.");
+            Assert.That(colliderProperty.objectReferenceValue, Is.SameAs(worldSpaceCollider),
+                "UIDocument must be wired to the generated collider for UI Toolkit XR interaction.");
         }
 
         [Test]

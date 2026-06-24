@@ -16538,6 +16538,7 @@ GameObject:
   - component: {fileID: 1831216949791924614}
   - component: {fileID: 5262275623251888070}
   - component: {fileID: 1248329399134172422}
+  - component: {fileID: 3114911382085510914}
   m_Layer: 10
   m_Name: UI Toolkit Menu Surface
   m_TagString: Untagged
@@ -16555,7 +16556,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0.08715574, y: 0, z: 0, w: 0.9961947}
   m_LocalPosition: {x: 0, y: 1.05, z: 0.95}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 6200346131006441375}
@@ -16578,11 +16579,11 @@ MonoBehaviour:
   m_SortingOrder: 0
   m_Position: 0
   m_WorldSpaceSizeMode: 1
-  m_WorldSpaceWidth: 1.05
-  m_WorldSpaceHeight: 0.59
+  m_WorldSpaceWidth: 1280
+  m_WorldSpaceHeight: 720
   m_PivotReferenceSize: 0
   m_Pivot: 0
-  m_WorldSpaceCollider: {fileID: 0}
+  m_WorldSpaceCollider: {fileID: 3114911382085510914}
 --- !u!114 &1831216949791924614
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16629,7 +16630,7 @@ MonoBehaviour:
   horizontalOffsetMeters: 0
   verticalOffsetMeters: -0.38
   pitchDegrees: 10
-  panelScale: 1
+  panelScale: 0.1
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
   showOnStart: 0
@@ -16643,6 +16644,27 @@ MonoBehaviour:
   audioCuePlayer: {fileID: 8273465101139274317}
   interactionHaptics: {fileID: 1299769022157528344}
   usesSharedCompositionRoot: 0
+--- !u!65 &3114911382085510914
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2173730413132742028}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 12.8, y: 7.2, z: 0.08}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &2174484878843134474
 GameObject:
   m_ObjectHideFlags: 0
