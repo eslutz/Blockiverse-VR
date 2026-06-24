@@ -203,6 +203,58 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void UiToolkitSurfaceButtonsApplyVisualAndHapticFeedback()
+        {
+            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
+            var haptics = surfaceObject.AddComponent<BlockiverseInteractionHaptics>();
+            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
+            SetPrivateField(surface, "interactionHaptics", haptics);
+
+            int tickCount = 0;
+            int clickCount = 0;
+            var requestedPatterns = new List<BlockiverseHapticPattern>();
+            haptics.UiTickRequested += () => tickCount++;
+            haptics.UiClickRequested += () => clickCount++;
+            haptics.PatternRequested += requestedPatterns.Add;
+
+            var view = new BlockiverseUiToolkitMenuView(
+                MenuActions.TitleScreen,
+                "Title",
+                "Purpose",
+                new[] { new MenuAction(MenuActions.TitleNewWorld, "New World") },
+                textInputs: new[] { new MenuTextInputRow("test.name", "Name", "World") },
+                toggleRows: new[] { new MenuToggleRow("test.toggle", "Toggle", true) },
+                sliderRows: new[] { new MenuSliderRow("test.slider", "Slider", 0.5f, 0.0f, 1.0f) });
+
+            surface.Show(view, acceptsInput: true);
+
+            var root = new UiVisualElement();
+            var actions = new UiVisualElement();
+            var details = new UiVisualElement();
+            SetPrivateField(surface, "root", root);
+            SetPrivateField(surface, "actionsRoot", actions);
+            SetPrivateField(surface, "detailsRoot", details);
+
+            EnableBehaviour(surface);
+
+            Assert.That(actions.childCount, Is.EqualTo(1));
+            var button = (UnityEngine.UIElements.Button)actions[0];
+            AssertInteractiveFeedback(button, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: false);
+
+            var textField = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.TextField>(details, "test.name");
+            Assert.That(textField, Is.Not.Null);
+            AssertInteractiveFeedback(textField, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+
+            var toggle = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Toggle>(details, "test.toggle");
+            Assert.That(toggle, Is.Not.Null);
+            AssertInteractiveFeedback(toggle, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+
+            var slider = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Slider>(details, "test.slider");
+            Assert.That(slider, Is.Not.Null);
+            AssertInteractiveFeedback(slider, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+        }
+
+        [Test]
         public void UiToolkitSurfaceRestoresRuntimeWorldSpaceColliderReference()
         {
             GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
@@ -1594,6 +1646,95 @@ namespace Blockiverse.Tests.EditMode
                 .GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, $"{behaviour.GetType().Name} must expose a {methodName} method for this wiring test.");
             method.Invoke(behaviour, null);
+        }
+
+        static void SendTargetedEvent(UnityEngine.UIElements.VisualElement target, UnityEngine.UIElements.EventBase evt)
+        {
+            Assert.That(target, Is.Not.Null);
+            try
+            {
+                evt.target = target;
+                target.SendEvent(evt);
+            }
+            finally
+            {
+                evt.Dispose();
+            }
+        }
+
+        static void AssertInteractiveFeedback(
+            UnityEngine.UIElements.VisualElement element,
+            ref int tickCount,
+            ref int clickCount,
+            List<BlockiverseHapticPattern> requestedPatterns,
+            bool clickOnPointerDown)
+        {
+            Assert.That(element, Is.Not.Null);
+            Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.False);
+            Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.False);
+
+            int expectedTicks = tickCount + 1;
+            int expectedPatternCount = requestedPatterns.Count + 1;
+            SendTargetedEvent(element, UnityEngine.UIElements.PointerOverEvent.GetPooled());
+
+            Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.True,
+                "Pointer-over should apply the visible hover class.");
+            Assert.That(tickCount, Is.EqualTo(expectedTicks),
+                "Crossing onto a UI Toolkit control should trigger the hover haptic.");
+            Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
+            Assert.That(requestedPatterns[requestedPatterns.Count - 1], Is.EqualTo(BlockiverseHapticPattern.UiTick));
+
+            SendTargetedEvent(element, UnityEngine.UIElements.PointerOverEvent.GetPooled());
+
+            Assert.That(tickCount, Is.EqualTo(expectedTicks),
+                "Staying over the same control should not repeat the boundary-crossing haptic.");
+            Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
+
+            int expectedClicks = clickCount + 1;
+            expectedPatternCount = requestedPatterns.Count + 1;
+            SendTargetedEvent(element, UnityEngine.UIElements.PointerDownEvent.GetPooled());
+
+            Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.True,
+                "Pointer-down should apply the visible pressed class.");
+
+            if (!clickOnPointerDown)
+                InvokeButtonClicked((UnityEngine.UIElements.Button)element);
+
+            Assert.That(clickCount, Is.EqualTo(expectedClicks),
+                "Clicking or pressing a UI Toolkit control should trigger the click haptic.");
+            Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
+            Assert.That(requestedPatterns[requestedPatterns.Count - 1], Is.EqualTo(BlockiverseHapticPattern.UiClick));
+
+            SendTargetedEvent(element, UnityEngine.UIElements.PointerUpEvent.GetPooled());
+
+            Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.False,
+                "Pointer-up should remove the pressed class.");
+
+            SendTargetedEvent(element, UnityEngine.UIElements.PointerOutEvent.GetPooled());
+
+            Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.False,
+                "Pointer-out should remove the hover class.");
+        }
+
+        static void InvokeButtonClicked(UnityEngine.UIElements.Button button)
+        {
+            Assert.That(button, Is.Not.Null);
+            FieldInfo clickableField = button
+                .GetType()
+                .GetField("m_Clickable", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(clickableField, Is.Not.Null,
+                $"{nameof(UnityEngine.UIElements.Button)} must expose its clickable for this wiring test.");
+            var clickable = clickableField.GetValue(button);
+            Assert.That(clickable, Is.Not.Null);
+
+            FieldInfo clickedField = clickable
+                .GetType()
+                .GetField("clicked", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(clickedField, Is.Not.Null,
+                $"{nameof(UnityEngine.UIElements.Clickable)} must expose its clicked delegate for this wiring test.");
+            var callback = clickedField.GetValue(clickable) as Action;
+            Assert.That(callback, Is.Not.Null);
+            callback.Invoke();
         }
 
         static void SetPrivateField<T>(object target, string fieldName, T value)

@@ -43,6 +43,7 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] BlockiverseUiToolkitMenuSurface uiToolkitMenuSurface;
         [SerializeField] bool useUiToolkitRuntimeMenus = true;
+        BlockiverseUiToolkitMenuSurface wiredUiToolkitMenuSurface;
 
         [SerializeField] BlockiverseActionMenu titleMenu;
         [SerializeField] BlockiverseActionMenu pauseMenu;
@@ -161,6 +162,7 @@ namespace Blockiverse.UI
         {
             uiToolkitMenuSurface = surface;
             useUiToolkitRuntimeMenus = useRuntimeMenus;
+            WireUiToolkitMenuSurface();
         }
 
         public void ConfigurePresenters(
@@ -244,6 +246,7 @@ namespace Blockiverse.UI
             creativeToolsPanel ??= FindGeneratedComponent<BlockiverseCreativeToolsPanel>(CreativeToolsPanelName);
             lanMultiplayerMenu ??= FindGeneratedComponent<BlockiverseMultiplayerSessionMenu>(LanMultiplayerPanelName);
             uiToolkitMenuSurface ??= FindGeneratedComponent<BlockiverseUiToolkitMenuSurface>(UiToolkitMenuSurfaceName);
+            WireUiToolkitMenuSurface();
             if (survivalSync == null)
                 survivalSync = BlockiverseSceneLookup.Find<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
             if (vitalsRuntime == null)
@@ -1695,16 +1698,7 @@ namespace Blockiverse.UI
 
         void WireMenus()
         {
-            if (uiToolkitMenuSurface != null)
-            {
-                uiToolkitMenuSurface.ActionInvoked += HandleAction;
-                uiToolkitMenuSurface.TextInputChanged += HandleUiToolkitTextInputChanged;
-                uiToolkitMenuSurface.CycleInvoked += HandleUiToolkitCycleInvoked;
-                uiToolkitMenuSurface.SelectionInvoked += HandleUiToolkitSelectionInvoked;
-                uiToolkitMenuSurface.ToggleChanged += HandleUiToolkitToggleChanged;
-                uiToolkitMenuSurface.SliderChanged += HandleUiToolkitSliderChanged;
-                uiToolkitMenuSurface.PageInvoked += HandleUiToolkitPageInvoked;
-            }
+            WireUiToolkitMenuSurface();
             if (titleMenu != null) titleMenu.ActionInvoked += HandleAction;
             if (pauseMenu != null) pauseMenu.ActionInvoked += HandleAction;
             if (deathMenu != null) deathMenu.ActionInvoked += HandleAction;
@@ -1717,16 +1711,7 @@ namespace Blockiverse.UI
 
         void UnwireMenus()
         {
-            if (uiToolkitMenuSurface != null)
-            {
-                uiToolkitMenuSurface.ActionInvoked -= HandleAction;
-                uiToolkitMenuSurface.TextInputChanged -= HandleUiToolkitTextInputChanged;
-                uiToolkitMenuSurface.CycleInvoked -= HandleUiToolkitCycleInvoked;
-                uiToolkitMenuSurface.SelectionInvoked -= HandleUiToolkitSelectionInvoked;
-                uiToolkitMenuSurface.ToggleChanged -= HandleUiToolkitToggleChanged;
-                uiToolkitMenuSurface.SliderChanged -= HandleUiToolkitSliderChanged;
-                uiToolkitMenuSurface.PageInvoked -= HandleUiToolkitPageInvoked;
-            }
+            UnwireUiToolkitMenuSurface();
             if (titleMenu != null) titleMenu.ActionInvoked -= HandleAction;
             if (pauseMenu != null) pauseMenu.ActionInvoked -= HandleAction;
             if (deathMenu != null) deathMenu.ActionInvoked -= HandleAction;
@@ -1735,6 +1720,37 @@ namespace Blockiverse.UI
             if (worldDetailsMenu != null) worldDetailsMenu.ActionInvoked -= HandleAction;
             if (newWorldPanel != null) newWorldPanel.ActionRequested -= HandleAction;
             if (loadWorldPanel != null) loadWorldPanel.ActionRequested -= HandleAction;
+        }
+
+        void WireUiToolkitMenuSurface()
+        {
+            if (uiToolkitMenuSurface == null || wiredUiToolkitMenuSurface == uiToolkitMenuSurface)
+                return;
+
+            UnwireUiToolkitMenuSurface();
+            uiToolkitMenuSurface.ActionInvoked += HandleAction;
+            uiToolkitMenuSurface.TextInputChanged += HandleUiToolkitTextInputChanged;
+            uiToolkitMenuSurface.CycleInvoked += HandleUiToolkitCycleInvoked;
+            uiToolkitMenuSurface.SelectionInvoked += HandleUiToolkitSelectionInvoked;
+            uiToolkitMenuSurface.ToggleChanged += HandleUiToolkitToggleChanged;
+            uiToolkitMenuSurface.SliderChanged += HandleUiToolkitSliderChanged;
+            uiToolkitMenuSurface.PageInvoked += HandleUiToolkitPageInvoked;
+            wiredUiToolkitMenuSurface = uiToolkitMenuSurface;
+        }
+
+        void UnwireUiToolkitMenuSurface()
+        {
+            if (wiredUiToolkitMenuSurface == null)
+                return;
+
+            wiredUiToolkitMenuSurface.ActionInvoked -= HandleAction;
+            wiredUiToolkitMenuSurface.TextInputChanged -= HandleUiToolkitTextInputChanged;
+            wiredUiToolkitMenuSurface.CycleInvoked -= HandleUiToolkitCycleInvoked;
+            wiredUiToolkitMenuSurface.SelectionInvoked -= HandleUiToolkitSelectionInvoked;
+            wiredUiToolkitMenuSurface.ToggleChanged -= HandleUiToolkitToggleChanged;
+            wiredUiToolkitMenuSurface.SliderChanged -= HandleUiToolkitSliderChanged;
+            wiredUiToolkitMenuSurface.PageInvoked -= HandleUiToolkitPageInvoked;
+            wiredUiToolkitMenuSurface = null;
         }
 
         void HandleUiToolkitTextInputChanged(string fieldId, string value)

@@ -8,6 +8,7 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
@@ -15,6 +16,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Jump;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.VR
@@ -943,6 +945,15 @@ namespace Blockiverse.VR
                         TryFindAction(mapName, BlockiverseInputActionNames.UiScroll, out InputAction uiScroll)
                             ? uiScroll
                             : null);
+                    EnsureUiToolkitNearFarInteractor(
+                        interactionRay,
+                        rayOrigin,
+                        TryFindAction(mapName, BlockiverseInputActionNames.UiPress, out InputAction nearFarUiPress)
+                            ? nearFarUiPress
+                            : null,
+                        TryFindAction(mapName, BlockiverseInputActionNames.UiScroll, out InputAction nearFarUiScroll)
+                            ? nearFarUiScroll
+                            : null);
                 }
 
                 XRRayInteractor teleportRay = rayMediator.TeleportRay;
@@ -964,6 +975,59 @@ namespace Blockiverse.VR
 
                 rayMediator.Configure(this, comfortSettings, interactionRay, teleportRay, rayMediator.Hand, anchor);
             }
+        }
+
+        static NearFarInteractor EnsureUiToolkitNearFarInteractor(
+            XRRayInteractor interactionRay,
+            Transform rayOrigin,
+            InputAction uiPress,
+            InputAction uiScroll)
+        {
+            if (interactionRay == null)
+                return null;
+
+            const string uiToolkitRayInputName = "UI Toolkit Ray Input";
+            Transform uiToolkitRayTransform = interactionRay.transform.Find(uiToolkitRayInputName);
+            GameObject rayObject;
+            if (uiToolkitRayTransform == null)
+            {
+                rayObject = new GameObject(uiToolkitRayInputName);
+                rayObject.transform.SetParent(interactionRay.transform, false);
+            }
+            else
+            {
+                rayObject = uiToolkitRayTransform.gameObject;
+            }
+
+            rayObject.layer = interactionRay.gameObject.layer;
+            rayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            rayObject.SetActive(true);
+
+            CurveInteractionCaster farCaster =
+                rayObject.GetComponent<CurveInteractionCaster>() ??
+                rayObject.AddComponent<CurveInteractionCaster>();
+            farCaster.castOrigin = rayOrigin != null ? rayOrigin : rayObject.transform;
+            farCaster.raycastMask = GetVrUiRaycastLayerMask();
+            farCaster.raycastTriggerInteraction = QueryTriggerInteraction.Collide;
+            farCaster.raycastSnapVolumeInteraction = CurveInteractionCaster.QuerySnapVolumeInteraction.Ignore;
+            farCaster.raycastUIDocumentTriggerInteraction = QueryUIDocumentInteraction.Collide;
+            farCaster.hitDetectionType = CurveInteractionCaster.HitDetectionType.Raycast;
+            farCaster.castDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;
+            farCaster.targetNumCurveSegments = 1;
+
+            NearFarInteractor nearFar =
+                rayObject.GetComponent<NearFarInteractor>() ??
+                rayObject.AddComponent<NearFarInteractor>();
+            nearFar.enableNearCasting = false;
+            nearFar.enableFarCasting = true;
+            nearFar.farInteractionCaster = farCaster;
+            nearFar.enableUIInteraction = true;
+            nearFar.blockUIOnInteractableSelection = false;
+            nearFar.selectInput = CreateButtonActionReader(nearFar.selectInput, "Select", null);
+            nearFar.activateInput = CreateButtonActionReader(nearFar.activateInput, "Activate", null);
+            nearFar.uiPressInput = CreateButtonActionReader(nearFar.uiPressInput, "UI Press", uiPress);
+            nearFar.uiScrollInput = CreateVector2ActionReader(nearFar.uiScrollInput, "UI Scroll", uiScroll);
+            return nearFar;
         }
 
         static Transform EnsureControllerRayOrigin(Transform controller)

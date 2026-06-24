@@ -8,7 +8,7 @@ Testing is split into:
 - Full local Unity validation before review or merge for Unity-impacting changes
 - Development APK and Quest-device validation when Android, headset, release, or Quest performance behavior changes
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
-- Editor-assisted validation through Unity MCP and Unity Skills for targeted diagnostics, console review, scene/project inspection, XR triage, and Unity Test Runner jobs
+- Editor-assisted validation through Unity MCP for targeted diagnostics, console review, scene/project inspection, XR triage, and Unity Test Runner jobs
 - Release channel workflow checks that upload alpha builds and promote selected tested Meta build IDs through beta, RC, and store channels
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
@@ -21,7 +21,7 @@ Performance reports belong in `docs/testing/performance/`.
 
 Meta XR Simulator setup, MCP configuration, and historical smoke-script notes are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md). New smoke scripts should use the canonical world presets and rulesets in `../rulesets/`.
 
-Editor-assisted validation can shorten investigation loops, but it does not replace the scripted gates below. Use MCP for Unity as the default live Editor bridge when the Unity Editor is open and connected; use Unity Skills for module-specific REST workflows, advisory guidance, XR diagnostics, batch/workflow operations, debug/console triage, and targeted Unity Test Runner jobs. Treat both as local developer tooling unless a separate dependency-update task explicitly adds them to `Packages/manifest.json`.
+Editor-assisted validation can shorten investigation loops, but it does not replace the scripted gates below. Use MCP for Unity as the default live Editor bridge when the Unity Editor is open and connected. Treat MCP as local developer tooling unless a separate dependency-update task explicitly adds it to `Packages/manifest.json`.
 
 Smoke-check MCP for Unity:
 
@@ -30,18 +30,6 @@ codex mcp list
 # Then read mcpforunity://instances and mcpforunity://project/info,
 # confirm the active instance points at this checkout, and call read_console.
 ```
-
-Smoke-check Unity Skills:
-
-```sh
-curl http://localhost:8090/health
-curl -X POST http://localhost:8090/skill/unity_diagnose \
-  -H 'Content-Type: application/json' \
-  -d '{}'
-curl 'http://localhost:8090/skills?category=xr'
-```
-
-If both Unity automation packages are installed locally, Unity may log a duplicate `package.json.meta` GUID warning from the package cache. Do not treat that warning by itself as a validation failure if Unity compiles, MCP for Unity can read the console, Unity Skills health is `ok`, `scripts/unity/run-tests.sh` passes, and the committed package manifests remain clean. Fix the package metadata through an upstream or forked package patch if the warning starts blocking import, test runs, or local server startup.
 
 Unity editor domain reloads can also log `Call to StopSubsystems without an initialized manager` from `XRManagerSettings.OnDisable()` while Android OpenXR automatic loading/running is enabled but no XR loader was initialized in the macOS editor. Keep Android automatic loading/running enabled for Quest builds; treat this editor-domain-reload stack as local editor noise unless the same warning appears in Quest player logs or blocks tests/builds.
 
@@ -195,12 +183,12 @@ fall back to `ProjectSettings.asset` versionCode `1`.
 
 `hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`; the expected current executable path is `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`. Prefer `hzdb` for Quest device discovery, APK install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 
-When Unity is already open to keep MCP for Unity and Unity Skills alive, prefer
+When Unity is already open to keep MCP for Unity alive, prefer
 the open-Editor install path instead of closing the project for batchmode. Build
 through MCP or `Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()`,
 then let the running Unity editor spawn `hzdb app install --replace
 --grant-permissions Builds/Android/BlockiverseVR-development.apk`. This keeps
-the editor, MCP bridge, and Unity Skills server alive while still replacing the
+the editor and MCP bridge alive while still replacing the
 APK on the headset. If `hzdb app launch --cold-start --wait-for-idle --verify`
 reports a Quest system dialog such as `LaunchCheckControllerRequiredDialogActivity`,
 treat install as successful but launch verification as blocked by headset state.

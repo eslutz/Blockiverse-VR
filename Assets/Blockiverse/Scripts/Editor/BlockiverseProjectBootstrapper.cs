@@ -101,13 +101,13 @@ namespace Blockiverse.Editor
         const string StationPanelName = "Station Panel";
         const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
         const float GameMenuScale = 0.0013f;
-        const float UiToolkitMenuScale = 1.0f;
+        const float UiToolkitMenuScale = BlockiverseUiToolkitMenuSurface.ReadableTransformScale;
         const float GameMenuDistanceMeters = 0.95f;
         const float GameMenuVerticalOffsetMeters = -0.38f;
         const float GameMenuPitchDegrees = 10.0f;
         // All game menu panels share one world-space position; only one is visible at a time.
         static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.05f, GameMenuDistanceMeters);
-        static readonly Vector2 UiToolkitMenuWorldSpaceSize = new(1.05f, 0.59f);
+        static readonly Vector2 UiToolkitMenuWorldSpaceSize = BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize;
         static readonly Vector2 ActionMenuSize = new(440.0f, 540.0f);
         static readonly Vector2 ConfirmDialogSize = new(440.0f, 320.0f);
         static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
@@ -135,6 +135,7 @@ namespace Blockiverse.Editor
         const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
         const string PointerLineName = "Ray Pointer Line";
         const string InteractionRayName = "Interaction Ray";
+        const string UiToolkitInteractionRayName = "UI Toolkit Ray Input";
         const string TeleportRayName = "Teleport Ray";
         const string ControllerRayOriginName = "Ray Origin";
         const string LeftAimPoseName = "Left Aim Pose";

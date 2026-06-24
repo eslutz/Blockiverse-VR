@@ -547,7 +547,7 @@ Human visual review remains a required gate:
   - station close returns to Gameplay HUD,
   - death route cannot be dismissed without respawn/title action.
 
-### Unity MCP And Unity Skills Validation
+### Unity MCP Validation
 
 Use Unity MCP after each converted phase:
 
@@ -570,16 +570,6 @@ Use Unity MCP after each converted phase:
   - no new compile/runtime menu errors.
 - `run_tests`
   - use MCP test tool when useful, but keep `scripts/unity/run-tests.sh` as the repo-level gate unless the repo instruction changes.
-
-Use Unity Skills/REST where available:
-
-- `uitk_find_files`
-- `uitk_list_documents`
-- `uitk_get_panel_settings`
-- `uitk_inspect_uxml`
-- `uitk_inspect_document`
-- `xr_check_setup`
-- `xr_get_scene_report`
 
 Expected XR invariants:
 

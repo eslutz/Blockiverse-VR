@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:Style src="BlockiverseMenuTheme.uss" />
-    <ui:VisualElement name="blockiverse-menu-root" class="bv-menu-root">
+    <ui:VisualElement name="blockiverse-menu-root" class="bv-menu-root" style="display: none;">
         <ui:VisualElement name="blockiverse-menu-screen" class="bv-menu-screen">
             <ui:VisualElement name="blockiverse-menu-header" class="bv-menu-header">
                 <ui:VisualElement name="blockiverse-menu-title-group">

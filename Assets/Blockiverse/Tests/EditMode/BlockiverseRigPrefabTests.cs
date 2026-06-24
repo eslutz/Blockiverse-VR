@@ -17,6 +17,7 @@ using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
@@ -520,12 +521,18 @@ namespace Blockiverse.Tests.EditMode
                 XRRayInteractor rightInteractionRay = instance.transform
                     .Find("Camera Offset/Right Controller/Interaction Ray")
                     ?.GetComponent<XRRayInteractor>();
+                NearFarInteractor rightUiToolkitInteractor = rightInteractionRay != null
+                    ? rightInteractionRay.GetComponentInChildren<NearFarInteractor>(true)
+                    : null;
                 XRRayInteractor rightTeleportRay = instance.transform
                     .Find("Camera Offset/Right Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
                 XRRayInteractor leftInteractionRay = instance.transform
                     .Find("Camera Offset/Left Controller/Interaction Ray")
                     ?.GetComponent<XRRayInteractor>();
+                NearFarInteractor leftUiToolkitInteractor = leftInteractionRay != null
+                    ? leftInteractionRay.GetComponentInChildren<NearFarInteractor>(true)
+                    : null;
                 XRRayInteractor leftTeleportRay = instance.transform
                     .Find("Camera Offset/Left Controller/Teleport Ray")
                     ?.GetComponent<XRRayInteractor>();
@@ -574,6 +581,16 @@ namespace Blockiverse.Tests.EditMode
                 AssertButtonReaderReferencesAction(leftInteractionRay.uiPressInput, leftUiPress, "Left trigger must click UI through the left UI Press action.");
                 AssertInteractionRayDefaults(rightInteractionRay);
                 AssertInteractionRayDefaults(leftInteractionRay);
+                AssertUiToolkitNearFarInteractorDefaults(
+                    rightUiToolkitInteractor,
+                    rightControllerRayOrigin,
+                    rightUiPress,
+                    "Right UI Toolkit near/far interactor must drive world-space UI Toolkit menus.");
+                AssertUiToolkitNearFarInteractorDefaults(
+                    leftUiToolkitInteractor,
+                    leftControllerRayOrigin,
+                    leftUiPress,
+                    "Left UI Toolkit near/far interactor must drive world-space UI Toolkit menus.");
                 AssertButtonReaderReferencesAction(rightTeleportRay.selectInput, rightTeleportSelect, "Right teleport ray must use right thumbstick select.");
                 AssertButtonReaderReferencesAction(leftTeleportRay.selectInput, leftTeleportSelect, "Left teleport ray must use left thumbstick select.");
                 Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
@@ -911,6 +928,15 @@ namespace Blockiverse.Tests.EditMode
                 AssertGeneratedReference(inputModule.scrollWheelAction, "Boot XRUIInputModule scroll");
                 AssertGeneratedReference(inputModule.navigateAction, "Boot XRUIInputModule navigate");
                 AssertGeneratedReference(inputModule.submitAction, "Boot XRUIInputModule submit");
+
+                UnityEngine.UIElements.PanelInputConfiguration panelInputConfiguration =
+                    inputModule.GetComponent<UnityEngine.UIElements.PanelInputConfiguration>();
+                Assert.That(panelInputConfiguration, Is.Not.Null,
+                    "UI Toolkit world-space tracked-device input needs PanelInputConfiguration on the EventSystem.");
+                Assert.That(
+                    panelInputConfiguration.panelInputRedirection,
+                    Is.EqualTo(UnityEngine.UIElements.PanelInputConfiguration.PanelInputRedirection.Never),
+                    "UI Toolkit tracked-device input should not be redirected through the EventSystem.");
             }
             finally
             {
@@ -955,6 +981,8 @@ namespace Blockiverse.Tests.EditMode
             Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
             XRRayInteractor rightInteractionRay = rightInteractionRayTransform?.GetComponent<XRRayInteractor>();
             XRRayInteractor leftInteractionRay = leftInteractionRayTransform?.GetComponent<XRRayInteractor>();
+            NearFarInteractor rightUiToolkitInteractor = rightInteractionRayTransform?.GetComponentInChildren<NearFarInteractor>(true);
+            NearFarInteractor leftUiToolkitInteractor = leftInteractionRayTransform?.GetComponentInChildren<NearFarInteractor>(true);
             XRInteractorLineVisual rightInteractionLineVisual = rightInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
             XRInteractorLineVisual leftInteractionLineVisual = leftInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
             XRRayInteractor teleportRay = teleportRayTransform?.GetComponent<XRRayInteractor>();
@@ -985,6 +1013,16 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
             Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
             Assert.That(leftInteractionRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+            AssertUiToolkitNearFarInteractorDefaults(
+                rightUiToolkitInteractor,
+                rightControllerRayOrigin,
+                null,
+                "Right interaction ray must include the XRI interactor type that supports world-space UI Toolkit pointers.");
+            AssertUiToolkitNearFarInteractorDefaults(
+                leftUiToolkitInteractor,
+                leftControllerRayOrigin,
+                null,
+                "Left interaction ray must include the XRI interactor type that supports world-space UI Toolkit pointers.");
             Assert.That(rightInteractionLineVisual, Is.Not.Null);
             AssertLineVisualDefaults(rightInteractionLineVisual);
             Assert.That(leftInteractionLineVisual, Is.Not.Null);
@@ -1253,6 +1291,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(ray.hitDetectionType, Is.EqualTo(XRRayInteractor.HitDetectionType.Raycast));
             Assert.That(ray.hitClosestOnly, Is.True);
             Assert.That(ray.blendVisualLinePoints, Is.True);
+            Assert.That(ray.raycastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Collide),
+                "UI Toolkit menu surfaces use trigger colliders, so the visible pointer ray should stop at the menu.");
             Assert.That(ray.raycastSnapVolumeInteraction, Is.EqualTo(XRRayInteractor.QuerySnapVolumeInteraction.Ignore));
             Assert.That(ray.enableUIInteraction, Is.True);
             Assert.That(ray.blockUIOnInteractableSelection, Is.False,
@@ -1260,6 +1300,37 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(ray.interactionLayers.value, Is.EqualTo(BlockiverseRayDefaults.DefaultXriInteractionLayerMask),
                 "World-space UI and simple interactables should keep XRI Default overlap; selection inputs stay disabled elsewhere.");
             Assert.That(ray.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+        }
+
+        static void AssertUiToolkitNearFarInteractorDefaults(
+            NearFarInteractor interactor,
+            Transform expectedRayOrigin,
+            InputAction expectedUiPress,
+            string message)
+        {
+            Assert.That(interactor, Is.Not.Null, message);
+            Assert.That(interactor.enableNearCasting, Is.False,
+                "UI Toolkit menu pointing should only use the far ray so the current controller-hand/menu visual relationship stays unchanged.");
+            Assert.That(interactor.enableFarCasting, Is.True);
+            Assert.That(interactor.enableUIInteraction, Is.True);
+            Assert.That(interactor.blockUIOnInteractableSelection, Is.False);
+            AssertButtonReaderUnused(interactor.selectInput, "Select");
+            AssertButtonReaderUnused(interactor.activateInput, "Activate");
+            if (expectedUiPress != null)
+                AssertButtonReaderReferencesAction(interactor.uiPressInput, expectedUiPress, message);
+
+            Assert.That(interactor.farInteractionCaster, Is.TypeOf<CurveInteractionCaster>());
+            var farCaster = (CurveInteractionCaster)interactor.farInteractionCaster;
+            Assert.That(farCaster.castOrigin, Is.SameAs(expectedRayOrigin));
+            Assert.That(farCaster.raycastMask.value, Is.EqualTo(BlockiverseProject.VrUiRaycastLayerMask));
+            Assert.That(farCaster.raycastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Collide),
+                "UI Toolkit menu surfaces use trigger colliders; the UITK far caster must hit them for hover and click events.");
+            Assert.That(farCaster.raycastSnapVolumeInteraction, Is.EqualTo(CurveInteractionCaster.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(farCaster.raycastUIDocumentTriggerInteraction, Is.EqualTo(QueryUIDocumentInteraction.Collide),
+                "UI Toolkit menu colliders are triggers; the far caster must still include UIDocument trigger hits.");
+            Assert.That(farCaster.hitDetectionType, Is.EqualTo(CurveInteractionCaster.HitDetectionType.Raycast));
+            Assert.That(farCaster.castDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+            Assert.That(farCaster.targetNumCurveSegments, Is.EqualTo(1));
         }
 
         static void AssertTeleportRayDefaults(XRRayInteractor ray)
@@ -1337,6 +1408,15 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(reader.inputActionReferencePerformed?.action,
                 Is.SameAs(action),
                 message);
+        }
+
+        static void AssertButtonReaderUnused(XRInputButtonReader reader, string context)
+        {
+            Assert.That(reader.inputSourceMode,
+                Is.EqualTo(XRInputButtonReader.InputSourceMode.Unused),
+                $"{context} should be unused.");
+            Assert.That(reader.inputActionReferencePerformed, Is.Null);
+            Assert.That(reader.inputActionReferenceValue, Is.Null);
         }
 
         static void AssertActionPropertyUsesGeneratedReference(InputActionProperty property, string context)

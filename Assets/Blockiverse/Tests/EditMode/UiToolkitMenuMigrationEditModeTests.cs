@@ -396,6 +396,7 @@ namespace Blockiverse.Tests.EditMode
 
             StringAssert.Contains("<ui:Style src=\"BlockiverseMenuTheme.uss\" />", uxml);
             StringAssert.Contains("name=\"blockiverse-menu-root\"", uxml);
+            StringAssert.Contains("style=\"display: none;\"", uxml);
             StringAssert.Contains("name=\"blockiverse-menu-actions-scroll\"", uxml);
             StringAssert.Contains("name=\"blockiverse-menu-actions\"", uxml);
             StringAssert.Contains("name=\"blockiverse-menu-details-scroll\"", uxml);

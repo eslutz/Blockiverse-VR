@@ -2,7 +2,7 @@
 
 Project directory: `/Users/ericslutz/Developer/Code/Blockiverse/Blockiverse-VR`
 
-This report covers the implemented in-game menu surfaces in the current Unity project. It is based on the live Boot scene plus source review of `MenuActions`, `BlockiverseMenuController`, `BlockiverseWorldSessionController`, the generated UGUI menu bootstrapper files, and the concrete panel presenters. Unity MCP was connected to the current project and reported active scene `Assets/Blockiverse/Scenes/Boot.unity`; Unity Skills confirmed UGUI menu surfaces, no UITK files, one XR Origin, XR UI input, controller rays, and the Android URP graphics stack.
+This report covers the implemented in-game menu surfaces in the current Unity project. It is based on the live Boot scene plus source review of `MenuActions`, `BlockiverseMenuController`, `BlockiverseWorldSessionController`, the generated UGUI menu bootstrapper files, and the concrete panel presenters. Unity MCP was connected to the current project and reported active scene `Assets/Blockiverse/Scenes/Boot.unity`; source and scene inspection confirmed UGUI menu surfaces, no UITK files, one XR Origin, XR UI input, controller rays, and the Android URP graphics stack.
 
 ## High-Level Shape
 

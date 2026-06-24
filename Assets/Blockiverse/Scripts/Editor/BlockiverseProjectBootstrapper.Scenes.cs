@@ -34,6 +34,7 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.UIElements;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -587,11 +588,14 @@ namespace Blockiverse.Editor
                 inputModule,
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress),
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
+            PanelInputConfiguration panelInputConfiguration = EnsureComponent<PanelInputConfiguration>(eventSystemObject);
+            panelInputConfiguration.panelInputRedirection = PanelInputConfiguration.PanelInputRedirection.Never;
 
             EnsureXrInteractionManager(scene);
 
             EditorUtility.SetDirty(eventSystem);
             EditorUtility.SetDirty(inputModule);
+            EditorUtility.SetDirty(panelInputConfiguration);
             EditorUtility.SetDirty(eventSystemObject);
         }
 
@@ -646,12 +650,12 @@ namespace Blockiverse.Editor
             panelRect.anchorMax = Vector2.one;
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
-            Image panelImage = EnsureComponent<Image>(panelObject);
+            UnityEngine.UI.Image panelImage = EnsureComponent<UnityEngine.UI.Image>(panelObject);
             Sprite panelSprite = GetRoundedSprite();
             if (panelSprite != null)
             {
                 panelImage.sprite = panelSprite;
-                panelImage.type = Image.Type.Sliced;
+                panelImage.type = UnityEngine.UI.Image.Type.Sliced;
             }
             panelImage.color = MultiplayerMenuPanelColor;
 
@@ -675,21 +679,21 @@ namespace Blockiverse.Editor
                 new Vector2(28.0f, -102.0f),
                 new Vector2(500.0f, 58.0f));
 
-            Button hostButton = EnsureButtonControl(
+            UnityEngine.UI.Button hostButton = EnsureButtonControl(
                 panelObject.transform,
                 "Host Button",
                 "Host",
                 new Vector2(28.0f, -182.0f),
                 new Vector2(148.0f, 54.0f));
 
-            Button joinButton = EnsureButtonControl(
+            UnityEngine.UI.Button joinButton = EnsureButtonControl(
                 panelObject.transform,
                 "Join Button",
                 "Join",
                 new Vector2(198.0f, -182.0f),
                 new Vector2(148.0f, 54.0f));
 
-            Button stopButton = EnsureButtonControl(
+            UnityEngine.UI.Button stopButton = EnsureButtonControl(
                 panelObject.transform,
                 "Stop Button",
                 "Stop",

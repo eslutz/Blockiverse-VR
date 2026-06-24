@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Blockiverse.Gameplay;
 using Blockiverse.VR;
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 
 namespace Blockiverse.UI
 {
@@ -16,6 +20,8 @@ namespace Blockiverse.UI
         const int RecenterFramesAfterShow = 90;
         const float MinimumReadableDistanceMeters = 0.55f;
         const float MaximumReadableDistanceMeters = 1.8f;
+        const string FeedbackHoverClass = "bv-interactive--hovered";
+        const string FeedbackPressedClass = "bv-interactive--pressed";
         public const float ReadableTransformScale = 0.1f;
         public static readonly Vector2 ReadableWorldSpaceSize = new(ReferencePanelWidthPixels, ReferencePanelHeightPixels);
         public static readonly Vector3 ReadableWorldSpaceColliderSize = new(
@@ -27,6 +33,8 @@ namespace Blockiverse.UI
 
         [SerializeField] UIDocument document;
         [SerializeField] bool hideOnAwake = true;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
         VisualElement root;
         VisualElement screenRoot;
@@ -43,6 +51,18 @@ namespace Blockiverse.UI
         bool warnedMissingWorldSpaceColliderField;
         int recenterFramesRemaining;
         readonly List<Button> buttons = new();
+        readonly HashSet<VisualElement> fallbackInteractiveElements = new();
+        readonly Dictionary<Button, Action> fallbackButtonActions = new();
+        readonly List<Collider> fallbackColliderTargets = new();
+        readonly List<RaycastHit> fallbackRaycastHits = new();
+        XRInteractionManager fallbackInteractionManager;
+        NearFarInteractor[] fallbackNearFarInteractors = Array.Empty<NearFarInteractor>();
+        CurveInteractionCaster[] fallbackCasters = Array.Empty<CurveInteractionCaster>();
+        VisualElement fallbackHoveredElement;
+        VisualElement fallbackPressedElement;
+        Vector2 fallbackPointerPanelPosition;
+        bool fallbackWasPressed;
+        float nextFallbackReferenceRefreshTime;
 
         public event Action<string> ActionInvoked;
         public event Action<string, string> TextInputChanged;
@@ -94,6 +114,7 @@ namespace Blockiverse.UI
             EnsureReadablePlacement();
             if (wantsVisible && pendingView != null)
                 TryApplyPendingView();
+            UpdateXRPointerFallback();
         }
 
         public void Show(BlockiverseUiToolkitMenuView view, bool acceptsInput)
@@ -116,6 +137,7 @@ namespace Blockiverse.UI
             if (root == null)
                 return;
 
+            ClearXRPointerFallbackState();
             root.style.display = DisplayStyle.None;
         }
 
@@ -172,6 +194,9 @@ namespace Blockiverse.UI
                 detailsRoot = null;
                 statusLabel = null;
                 buttons.Clear();
+                fallbackInteractiveElements.Clear();
+                fallbackButtonActions.Clear();
+                ClearXRPointerFallbackState();
             }
 
             root = documentRoot.Q<VisualElement>("blockiverse-menu-root");
@@ -285,6 +310,8 @@ namespace Blockiverse.UI
 
             actionsRoot.Clear();
             buttons.Clear();
+            fallbackInteractiveElements.Clear();
+            fallbackButtonActions.Clear();
 
             if (actions == null || actions.Count == 0)
             {
@@ -309,10 +336,81 @@ namespace Blockiverse.UI
 
                 string actionId = action.ActionId;
                 button.SetEnabled(acceptsInput);
-                button.clicked += () => ActionInvoked?.Invoke(actionId);
+                RegisterInteractiveFeedback(button);
+                Action invokeAction = () => ActionInvoked?.Invoke(actionId);
+                button.clicked += invokeAction;
+                RegisterXRPointerFallbackAction(button, invokeAction);
                 actionsRoot.Add(button);
                 buttons.Add(button);
             }
+        }
+
+        void RegisterInteractiveFeedback(VisualElement element, bool playClickFeedbackOnPointerDown)
+        {
+            if (element == null)
+                return;
+
+            fallbackInteractiveElements.Add(element);
+            element.RegisterCallback<PointerEnterEvent>(_ => ApplyInteractiveHover(element));
+            element.RegisterCallback<PointerOverEvent>(_ => ApplyInteractiveHover(element));
+            element.RegisterCallback<PointerLeaveEvent>(_ => ClearInteractiveHover(element));
+            element.RegisterCallback<PointerOutEvent>(_ => ClearInteractiveHover(element));
+            element.RegisterCallback<PointerDownEvent>(_ =>
+            {
+                if (!CanPlayInteractiveFeedback(element))
+                    return;
+
+                element.AddToClassList(FeedbackPressedClass);
+                if (playClickFeedbackOnPointerDown)
+                    PlayUiClickFeedback();
+            });
+            element.RegisterCallback<PointerUpEvent>(_ =>
+            {
+                element.RemoveFromClassList(FeedbackPressedClass);
+            });
+        }
+
+        void RegisterInteractiveFeedback(Button button)
+        {
+            if (button == null)
+                return;
+
+            RegisterInteractiveFeedback((VisualElement)button, playClickFeedbackOnPointerDown: false);
+            button.clicked += PlayUiClickFeedback;
+        }
+
+        void ApplyInteractiveHover(VisualElement element)
+        {
+            if (!CanPlayInteractiveFeedback(element) || element.ClassListContains(FeedbackHoverClass))
+                return;
+
+            element.AddToClassList(FeedbackHoverClass);
+            PlayUiHoverFeedback();
+        }
+
+        static void ClearInteractiveHover(VisualElement element)
+        {
+            if (element == null)
+                return;
+
+            element.RemoveFromClassList(FeedbackHoverClass);
+            element.RemoveFromClassList(FeedbackPressedClass);
+        }
+
+        static bool CanPlayInteractiveFeedback(VisualElement element) =>
+            element != null && element.enabledInHierarchy;
+
+        void PlayUiHoverFeedback()
+        {
+            BlockiverseUiFeedback.Resolve(ref audioCuePlayer, ref interactionHaptics);
+            interactionHaptics?.PlayUiTick();
+        }
+
+        void PlayUiClickFeedback()
+        {
+            BlockiverseUiFeedback.Resolve(ref audioCuePlayer, ref interactionHaptics);
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.UiSelect);
+            interactionHaptics?.PlayUiClick();
         }
 
         void PopulateDetails(BlockiverseUiToolkitMenuView view)
@@ -393,6 +491,7 @@ namespace Blockiverse.UI
                 field.AddToClassList("bv-text-field");
                 field.SetValueWithoutNotify(input.Value);
                 string fieldId = input.FieldId;
+                RegisterInteractiveFeedback(field, playClickFeedbackOnPointerDown: true);
                 field.RegisterValueChangedCallback(evt => TextInputChanged?.Invoke(fieldId, evt.newValue));
                 row.Add(field);
 
@@ -419,7 +518,10 @@ namespace Blockiverse.UI
                 var back = new Button { text = "<" };
                 back.name = $"{fieldId}-previous";
                 back.AddToClassList("bv-icon-button");
-                back.clicked += () => CycleInvoked?.Invoke(fieldId, false);
+                RegisterInteractiveFeedback(back);
+                Action invokePrevious = () => CycleInvoked?.Invoke(fieldId, false);
+                back.clicked += invokePrevious;
+                RegisterXRPointerFallbackAction(back, invokePrevious);
                 row.Add(back);
 
                 var value = new Label(cycle.Value);
@@ -429,7 +531,10 @@ namespace Blockiverse.UI
                 var next = new Button { text = ">" };
                 next.name = $"{fieldId}-next";
                 next.AddToClassList("bv-icon-button");
-                next.clicked += () => CycleInvoked?.Invoke(fieldId, true);
+                RegisterInteractiveFeedback(next);
+                Action invokeNext = () => CycleInvoked?.Invoke(fieldId, true);
+                next.clicked += invokeNext;
+                RegisterXRPointerFallbackAction(next, invokeNext);
                 row.Add(next);
 
                 detailsRoot.Add(row);
@@ -450,7 +555,10 @@ namespace Blockiverse.UI
                 button.AddToClassList("bv-selection-button");
                 if (selection.Selected)
                     button.AddToClassList("bv-selection-button--selected");
-                button.clicked += () => SelectionInvoked?.Invoke(valueId);
+                RegisterInteractiveFeedback(button);
+                Action invokeSelection = () => SelectionInvoked?.Invoke(valueId);
+                button.clicked += invokeSelection;
+                RegisterXRPointerFallbackAction(button, invokeSelection);
 
                 var label = new Label(selection.Label);
                 label.AddToClassList("bv-selection-label");
@@ -479,7 +587,10 @@ namespace Blockiverse.UI
             var previous = new Button { text = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LoadWorldPreviousPage) };
             previous.AddToClassList("bv-page-button");
             previous.SetEnabled(value.PageIndex > 0);
-            previous.clicked += () => PageInvoked?.Invoke(-1);
+            RegisterInteractiveFeedback(previous);
+            Action invokePrevious = () => PageInvoked?.Invoke(-1);
+            previous.clicked += invokePrevious;
+            RegisterXRPointerFallbackAction(previous, invokePrevious);
             row.Add(previous);
 
             var label = new Label(value.DisplayText);
@@ -489,7 +600,10 @@ namespace Blockiverse.UI
             var next = new Button { text = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LoadWorldNextPage) };
             next.AddToClassList("bv-page-button");
             next.SetEnabled(value.PageIndex < value.PageCount - 1);
-            next.clicked += () => PageInvoked?.Invoke(1);
+            RegisterInteractiveFeedback(next);
+            Action invokeNext = () => PageInvoked?.Invoke(1);
+            next.clicked += invokeNext;
+            RegisterXRPointerFallbackAction(next, invokeNext);
             row.Add(next);
 
             detailsRoot.Add(row);
@@ -526,6 +640,7 @@ namespace Blockiverse.UI
                 toggle.AddToClassList("bv-toggle");
                 toggle.SetValueWithoutNotify(toggleRow.Value);
                 string fieldId = toggleRow.FieldId;
+                RegisterInteractiveFeedback(toggle, playClickFeedbackOnPointerDown: true);
                 toggle.RegisterValueChangedCallback(evt => ToggleChanged?.Invoke(fieldId, evt.newValue));
                 row.Add(toggle);
 
@@ -561,6 +676,7 @@ namespace Blockiverse.UI
                 slider.AddToClassList("bv-slider");
                 slider.SetValueWithoutNotify(sliderRow.Value);
                 string fieldId = sliderRow.FieldId;
+                RegisterInteractiveFeedback(slider, playClickFeedbackOnPointerDown: true);
                 slider.RegisterValueChangedCallback(evt =>
                 {
                     valueLabel.text = evt.newValue.ToString("0.##");
@@ -570,6 +686,204 @@ namespace Blockiverse.UI
 
                 detailsRoot.Add(row);
             }
+        }
+
+        void RegisterXRPointerFallbackAction(Button button, Action action)
+        {
+            if (button == null || action == null)
+                return;
+
+            fallbackButtonActions[button] = action;
+        }
+
+        void UpdateXRPointerFallback()
+        {
+            if (!IsVisible || root == null || document == null)
+            {
+                ClearXRPointerFallbackState();
+                return;
+            }
+
+            if (!TryGetXRPointerTarget(out VisualElement target, out Vector2 panelPosition, out bool pressed))
+            {
+                ClearXRPointerFallbackState();
+                return;
+            }
+
+            fallbackPointerPanelPosition = panelPosition;
+            if (!ReferenceEquals(target, fallbackHoveredElement))
+            {
+                ClearInteractiveHover(fallbackHoveredElement);
+                fallbackHoveredElement = target;
+                ApplyInteractiveHover(fallbackHoveredElement);
+            }
+
+            if (pressed && !fallbackWasPressed)
+            {
+                fallbackPressedElement = target;
+                if (CanPlayInteractiveFeedback(fallbackPressedElement))
+                {
+                    fallbackPressedElement.AddToClassList(FeedbackPressedClass);
+                    if (fallbackPressedElement is not Button)
+                        PlayUiClickFeedback();
+                }
+            }
+
+            if (pressed && fallbackPressedElement is Slider slider)
+                ApplySliderPointerValue(slider, fallbackPointerPanelPosition);
+
+            if (!pressed && fallbackWasPressed)
+            {
+                VisualElement pressedElement = fallbackPressedElement;
+                ClearInteractiveHover(pressedElement);
+                if (ReferenceEquals(pressedElement, target))
+                    ActivateFallbackElement(pressedElement, fallbackPointerPanelPosition);
+
+                fallbackPressedElement = null;
+                if (fallbackHoveredElement != null)
+                    ApplyInteractiveHover(fallbackHoveredElement);
+            }
+
+            fallbackWasPressed = pressed;
+        }
+
+        void ClearXRPointerFallbackState()
+        {
+            ClearInteractiveHover(fallbackPressedElement);
+            if (!ReferenceEquals(fallbackPressedElement, fallbackHoveredElement))
+                ClearInteractiveHover(fallbackHoveredElement);
+
+            fallbackHoveredElement = null;
+            fallbackPressedElement = null;
+            fallbackWasPressed = false;
+        }
+
+        bool TryGetXRPointerTarget(out VisualElement target, out Vector2 panelPosition, out bool pressed)
+        {
+            target = null;
+            panelPosition = default;
+            pressed = false;
+
+            RefreshXRPointerFallbackReferences();
+
+            if (fallbackInteractionManager == null)
+                return false;
+
+            foreach (NearFarInteractor interactor in fallbackNearFarInteractors)
+            {
+                if (interactor == null || !interactor.isActiveAndEnabled || !interactor.enableUIInteraction)
+                    continue;
+
+                if (interactor.farInteractionCaster is not CurveInteractionCaster caster)
+                    continue;
+
+                if (TryGetTargetFromCaster(caster, out target, out panelPosition))
+                {
+                    pressed = interactor.uiPressInput != null && interactor.uiPressInput.ReadIsPerformed();
+                    return true;
+                }
+            }
+
+            foreach (CurveInteractionCaster caster in fallbackCasters)
+            {
+                if (caster == null || !caster.isActiveAndEnabled)
+                    continue;
+
+                if (TryGetTargetFromCaster(caster, out target, out panelPosition))
+                    return true;
+            }
+
+            return false;
+        }
+
+        void RefreshXRPointerFallbackReferences()
+        {
+            if (fallbackInteractionManager != null && Time.unscaledTime < nextFallbackReferenceRefreshTime)
+                return;
+
+            fallbackInteractionManager = FindFirstObjectByType<XRInteractionManager>();
+            fallbackNearFarInteractors = FindObjectsByType<NearFarInteractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            fallbackCasters = FindObjectsByType<CurveInteractionCaster>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            nextFallbackReferenceRefreshTime = Time.unscaledTime + 1.0f;
+        }
+
+        bool TryGetTargetFromCaster(CurveInteractionCaster caster, out VisualElement target, out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+            fallbackColliderTargets.Clear();
+            fallbackRaycastHits.Clear();
+
+            if (!caster.TryGetColliderTargets(fallbackInteractionManager, fallbackColliderTargets, fallbackRaycastHits))
+                return false;
+
+            for (int i = 0; i < fallbackRaycastHits.Count; i++)
+            {
+                RaycastHit hit = fallbackRaycastHits[i];
+                if (hit.collider == null || hit.collider.gameObject != gameObject)
+                    continue;
+
+                Vector3 localPoint = transform.InverseTransformPoint(hit.point);
+                panelPosition = new Vector2(localPoint.x, localPoint.y);
+                VisualElement picked = document.rootVisualElement.panel?.Pick(panelPosition);
+                target = FindFallbackInteractiveElement(picked);
+                return target != null;
+            }
+
+            return false;
+        }
+
+        VisualElement FindFallbackInteractiveElement(VisualElement picked)
+        {
+            for (VisualElement current = picked; current != null; current = current.parent)
+            {
+                if (fallbackInteractiveElements.Contains(current) || IsFallbackInteractiveElement(current))
+                    return current;
+            }
+
+            return null;
+        }
+
+        static bool IsFallbackInteractiveElement(VisualElement element) =>
+            element is Button ||
+            element is Toggle ||
+            element is Slider ||
+            element is TextField;
+
+        void ActivateFallbackElement(VisualElement element, Vector2 panelPosition)
+        {
+            if (!CanPlayInteractiveFeedback(element))
+                return;
+
+            switch (element)
+            {
+                case Button button when fallbackButtonActions.TryGetValue(button, out Action action):
+                    PlayUiClickFeedback();
+                    action.Invoke();
+                    break;
+                case Toggle toggle:
+                    toggle.value = !toggle.value;
+                    break;
+                case Slider slider:
+                    ApplySliderPointerValue(slider, panelPosition);
+                    break;
+                case TextField textField:
+                    textField.Focus();
+                    break;
+            }
+        }
+
+        static void ApplySliderPointerValue(Slider slider, Vector2 panelPosition)
+        {
+            if (slider == null)
+                return;
+
+            Rect bounds = slider.worldBound;
+            if (bounds.width <= Mathf.Epsilon)
+                return;
+
+            float normalized = Mathf.Clamp01((panelPosition.x - bounds.xMin) / bounds.width);
+            slider.value = Mathf.Lerp(slider.lowValue, slider.highValue, normalized);
         }
 
         static bool IsDangerAction(string actionId)

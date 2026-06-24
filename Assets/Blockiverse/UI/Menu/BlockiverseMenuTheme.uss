@@ -140,7 +140,19 @@
     scale: 1.015 1.015;
 }
 
+.bv-action-button.bv-interactive--hovered {
+    background-color: #243746;
+    border-color: var(--bv-color-accent);
+    scale: 1.015 1.015;
+}
+
 .bv-action-button:active {
+    background-color: #0E151C;
+    border-color: var(--bv-color-accent-strong);
+    scale: 0.985 0.985;
+}
+
+.bv-action-button.bv-interactive--pressed {
     background-color: #0E151C;
     border-color: var(--bv-color-accent-strong);
     scale: 0.985 0.985;
@@ -233,6 +245,16 @@
     color: var(--bv-color-text);
 }
 
+.bv-text-field.bv-interactive--hovered .unity-text-input {
+    background-color: #111F2A;
+    border-color: var(--bv-color-accent);
+}
+
+.bv-text-field.bv-interactive--pressed .unity-text-input {
+    background-color: #0A1016;
+    border-color: var(--bv-color-accent-strong);
+}
+
 .bv-cycle-row {
     min-height: 60px;
     flex-direction: row;
@@ -258,6 +280,20 @@
     color: var(--bv-color-text);
     font-size: var(--bv-font-md);
     -unity-font-style: bold;
+}
+
+.bv-icon-button.bv-interactive--hovered,
+.bv-page-button.bv-interactive--hovered,
+.bv-selection-button.bv-interactive--hovered {
+    background-color: #243746;
+    border-color: var(--bv-color-accent);
+}
+
+.bv-icon-button.bv-interactive--pressed,
+.bv-page-button.bv-interactive--pressed,
+.bv-selection-button.bv-interactive--pressed {
+    background-color: #0E151C;
+    border-color: var(--bv-color-accent-strong);
 }
 
 .bv-cycle-value {
@@ -350,6 +386,19 @@
 .bv-toggle {
     min-width: 96px;
     min-height: 46px;
+    border-width: 1px;
+    border-color: transparent;
+    border-radius: var(--bv-radius-sm);
+}
+
+.bv-toggle.bv-interactive--hovered {
+    background-color: #243746;
+    border-color: var(--bv-color-accent);
+}
+
+.bv-toggle.bv-interactive--pressed {
+    background-color: #0E151C;
+    border-color: var(--bv-color-accent-strong);
 }
 
 .bv-slider-row {
@@ -370,6 +419,19 @@
 
 .bv-slider {
     min-height: 36px;
+    border-width: 1px;
+    border-color: transparent;
+    border-radius: var(--bv-radius-sm);
+}
+
+.bv-slider.bv-interactive--hovered {
+    background-color: #243746;
+    border-color: var(--bv-color-accent);
+}
+
+.bv-slider.bv-interactive--pressed {
+    background-color: #0E151C;
+    border-color: var(--bv-color-accent-strong);
 }
 
 .bv-pill-row {

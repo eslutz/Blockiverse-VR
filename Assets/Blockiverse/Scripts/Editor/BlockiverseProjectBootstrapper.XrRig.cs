@@ -37,6 +37,7 @@ using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
@@ -306,6 +307,7 @@ namespace Blockiverse.Editor
                 interactionRay.uiScrollInput,
                 "UI Scroll",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
+            EnsureUiToolkitNearFarInteractor(interactionRayObject, rayOrigin, mapName);
             ConfigureLineVisual(interactionRayObject, pointerMaterial);
             EditorUtility.SetDirty(interactionRay);
 
@@ -333,6 +335,49 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(mediator);
 
             return interactionRay;
+        }
+
+        static NearFarInteractor EnsureUiToolkitNearFarInteractor(
+            GameObject interactionRayObject,
+            Transform rayOrigin,
+            string inputActionMapName)
+        {
+            GameObject uiToolkitRayObject = EnsureChild(interactionRayObject.transform, UiToolkitInteractionRayName);
+            uiToolkitRayObject.layer = interactionRayObject.layer;
+            uiToolkitRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            uiToolkitRayObject.SetActive(true);
+
+            CurveInteractionCaster farCaster = EnsureComponent<CurveInteractionCaster>(uiToolkitRayObject);
+            farCaster.castOrigin = rayOrigin != null ? rayOrigin : uiToolkitRayObject.transform;
+            farCaster.raycastMask = GetVrUiRaycastLayerMask();
+            farCaster.raycastTriggerInteraction = QueryTriggerInteraction.Collide;
+            farCaster.raycastSnapVolumeInteraction = CurveInteractionCaster.QuerySnapVolumeInteraction.Ignore;
+            farCaster.raycastUIDocumentTriggerInteraction = QueryUIDocumentInteraction.Collide;
+            farCaster.hitDetectionType = CurveInteractionCaster.HitDetectionType.Raycast;
+            farCaster.castDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;
+            farCaster.targetNumCurveSegments = 1;
+
+            NearFarInteractor nearFar = EnsureComponent<NearFarInteractor>(uiToolkitRayObject);
+            nearFar.enableNearCasting = false;
+            nearFar.enableFarCasting = true;
+            nearFar.farInteractionCaster = farCaster;
+            nearFar.enableUIInteraction = true;
+            nearFar.blockUIOnInteractableSelection = false;
+            nearFar.selectInput = MakeUnusedButtonReader(nearFar.selectInput, "Select");
+            nearFar.activateInput = MakeUnusedButtonReader(nearFar.activateInput, "Activate");
+            nearFar.uiPressInput = MakeButtonReader(
+                nearFar.uiPressInput,
+                "UI Press",
+                LoadInputActionReference(inputActionMapName, BlockiverseInputActionNames.UiPress));
+            nearFar.uiScrollInput = MakeVector2Reader(
+                nearFar.uiScrollInput,
+                "UI Scroll",
+                LoadInputActionReference(inputActionMapName, BlockiverseInputActionNames.UiScroll));
+
+            EditorUtility.SetDirty(farCaster);
+            EditorUtility.SetDirty(nearFar);
+            EditorUtility.SetDirty(uiToolkitRayObject);
+            return nearFar;
         }
 
         static void ConfigureLineVisual(GameObject rayObject, Material pointerMaterial)
