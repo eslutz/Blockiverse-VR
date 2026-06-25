@@ -58,8 +58,8 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 ### Tooling Policy
 
 - Prefer reproducible command-line tooling over GUI-only actions when command output is useful validation evidence.
-- Use MCP for Unity as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.coplaydev.unity-mcp` locally from `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main`, configure it from `Window > MCP For Unity > Local Setup Window`, and start the local server at `http://127.0.0.1:8080/mcp`.
-- Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
+- Use the Unity IDE built-in MCP server as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; start or restart it from `Project Settings > AI > Unity MCP Server`.
+- Before using Unity MCP, confirm the active project root points at this checkout. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
 - MCP is an investigation and automation aid, not a substitute for committed scripts or test evidence.
 - Do not commit package manifest or lockfile changes for local editor automation tools unless Eric explicitly requests a dependency update.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
@@ -71,7 +71,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 ### Unity Licensing Recovery
 
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
-or waits on `LicenseClient-ericslutz-6000.3.16`, reset the local Unity/Hub process state:
+or waits on `LicenseClient-ericslutz-6000.3.18`, reset the local Unity/Hub process state:
 
 ```sh
 osascript -e 'tell application "Unity Hub" to quit'
@@ -86,14 +86,14 @@ processes running.
 
 ## Commands
 
-Unity 6000.3.16f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
+Unity 6000.3.18f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
 
 ```sh
 # Required validation — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
 scripts/unity/run-tests.sh
 
 # Single test / one platform (the script takes no args; invoke Unity directly)
-"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity}" \
+"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.3.18f1/Unity.app/Contents/MacOS/Unity}" \
   -batchmode -nographics -projectPath . -runTests -testPlatform EditMode \
   -testFilter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" \
   -testResults TestResults/Unity/Single.xml -logFile -
@@ -111,7 +111,7 @@ python3 scripts/audio/generate-audio.py           # all SFX
 
 ## Architecture
 
-VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK, XRI, Netcode for GameObjects 2.11.2. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
+VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK, XRI, Netcode for GameObjects 2.13.0. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
 
 ### Assembly layering (Assets/Blockiverse/Scripts/)
 

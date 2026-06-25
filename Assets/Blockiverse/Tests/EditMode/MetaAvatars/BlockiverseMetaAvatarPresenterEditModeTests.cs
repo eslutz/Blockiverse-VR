@@ -197,7 +197,7 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             {
                 foreach (string scenePath in AvatarScenePaths)
                 {
-                    Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+                    Scene scene = OpenSceneIgnoringUnityCleanupLogs(scenePath);
                     OvrAvatarManager[] managers = scene.GetRootGameObjects()
                         .SelectMany(sceneRoot => sceneRoot.GetComponentsInChildren<OvrAvatarManager>(true))
                         .ToArray();
@@ -210,7 +210,7 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             }
             finally
             {
-                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                OpenEmptySceneIgnoringUnityCleanupLogs();
             }
         }
 
@@ -251,6 +251,34 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
         {
             if (gameObject != null)
                 UnityEngine.Object.DestroyImmediate(gameObject);
+        }
+
+        static void OpenEmptySceneIgnoringUnityCleanupLogs()
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
+        }
+
+        static Scene OpenSceneIgnoringUnityCleanupLogs(string scenePath)
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                return EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
 
         static CAPI.ovrAvatar2EntityFilters GetCreationInfoRenderFilters(BlockiverseMetaAvatarEntity entity)

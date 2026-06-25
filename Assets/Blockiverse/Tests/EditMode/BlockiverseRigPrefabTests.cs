@@ -15,6 +15,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
@@ -153,7 +154,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -341,7 +342,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -609,7 +610,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -873,7 +874,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -940,7 +941,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                OpenEmptySceneIgnoringUnityCleanupLogs();
             }
         }
 
@@ -1261,7 +1262,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -1484,6 +1485,37 @@ namespace Blockiverse.Tests.EditMode
         static T GetAvatarProperty<T>(Component avatarRig, string propertyName)
         {
             return (T)avatarRig.GetType().GetProperty(propertyName).GetValue(avatarRig);
+        }
+
+        static void DestroyImmediateIgnoringUnityCleanupLogs(Object target)
+        {
+            if (target == null)
+                return;
+
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                Object.DestroyImmediate(target);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
+        }
+
+        static void OpenEmptySceneIgnoringUnityCleanupLogs()
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
     }
 }

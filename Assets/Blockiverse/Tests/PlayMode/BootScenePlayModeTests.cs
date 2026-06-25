@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 using System;
 using System.Collections;
 using Blockiverse.Core;
@@ -40,11 +41,11 @@ namespace Blockiverse.Tests.PlayMode
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
             SurvivalInventoryPanel inventoryPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
+                UnityEngine.Object.FindAnyObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
             SurvivalCraftingPanel craftingPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>(FindObjectsInactive.Include);
+                UnityEngine.Object.FindAnyObjectByType<SurvivalCraftingPanel>(FindObjectsInactive.Include);
             SurvivalHealthPanel healthPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalHealthPanel>(FindObjectsInactive.Include);
+                UnityEngine.Object.FindAnyObjectByType<SurvivalHealthPanel>(FindObjectsInactive.Include);
 
             Assert.That(inventoryPanel, Is.Not.Null);
             Assert.That(craftingPanel, Is.Not.Null);
@@ -132,8 +133,8 @@ namespace Blockiverse.Tests.PlayMode
 
             yield return null;
 
-            XRUIInputModule uiInputModule = UnityEngine.Object.FindFirstObjectByType<XRUIInputModule>();
-            XRInteractionManager interactionManager = UnityEngine.Object.FindFirstObjectByType<XRInteractionManager>();
+            XRUIInputModule uiInputModule = UnityEngine.Object.FindAnyObjectByType<XRUIInputModule>();
+            XRInteractionManager interactionManager = UnityEngine.Object.FindAnyObjectByType<XRInteractionManager>();
 
             Assert.That(uiInputModule, Is.Not.Null, "EventSystem should use XRUIInputModule for tracked-device UI.");
             Assert.That(interactionManager, Is.Not.Null, "Scene should contain an XRInteractionManager.");
@@ -159,7 +160,7 @@ namespace Blockiverse.Tests.PlayMode
 
             // World-space menus are raycast by the tracked-device raycaster, not the screen raycaster.
             SurvivalInventoryPanel inventoryPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
+                UnityEngine.Object.FindAnyObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
             Assert.That(inventoryPanel, Is.Not.Null);
             Canvas hudCanvas = inventoryPanel.GetComponentInParent<Canvas>();
             Assert.That(hudCanvas.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
@@ -177,7 +178,7 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(rayInteractor.blockUIOnInteractableSelection, Is.False, controllerName);
             }
 
-            CreativeWorldManager worldManager = UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+            CreativeWorldManager worldManager = UnityEngine.Object.FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             Assert.That(worldManager, Is.Not.Null);
             Assert.That(worldManager.World, Is.Null, "Boot should wait for Create/Load/Join before generating a voxel world.");
         }

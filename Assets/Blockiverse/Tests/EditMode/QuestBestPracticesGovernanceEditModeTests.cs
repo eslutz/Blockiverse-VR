@@ -13,7 +13,7 @@ namespace Blockiverse.Tests.EditMode
             string bootstrapper = File.ReadAllText("Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.cs");
 
             StringAssert.Contains("MobileTextureSubtarget.ASTC", bootstrapper);
-            StringAssert.Contains("\"com.unity.xr.compositionlayers\": \"2.4.0\"", manifest);
+            StringAssert.Contains("\"com.unity.xr.compositionlayers\": \"2.5.0\"", manifest);
             StringAssert.Contains("\"com.unity.addressables\": \"3.1.0\"", manifest);
             string compositionLayerBlock = PackageBlock(lockFile, "com.unity.xr.compositionlayers");
             string addressablesBlock = PackageBlock(lockFile, "com.unity.addressables");

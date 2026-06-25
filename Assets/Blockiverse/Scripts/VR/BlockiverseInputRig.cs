@@ -1287,7 +1287,7 @@ namespace Blockiverse.VR
         void PlayTeleportCue()
         {
             if (audioCuePlayer == null && Application.isPlaying)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
 
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
             leftControllerHaptics?.SendPattern(BlockiverseHapticPattern.TeleportLand);

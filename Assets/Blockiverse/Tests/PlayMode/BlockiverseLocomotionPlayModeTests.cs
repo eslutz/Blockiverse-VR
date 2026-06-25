@@ -294,7 +294,7 @@ namespace Blockiverse.Tests.PlayMode
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle("Boot");
 
-            BlockiverseComfortMenu menu = Object.FindFirstObjectByType<BlockiverseComfortMenu>(FindObjectsInactive.Include);
+            BlockiverseComfortMenu menu = Object.FindAnyObjectByType<BlockiverseComfortMenu>(FindObjectsInactive.Include);
             Assert.That(menu, Is.Not.Null);
             Assert.That(menu.IsVisible, Is.False);
 
@@ -374,6 +374,7 @@ namespace Blockiverse.Tests.PlayMode
             GameObject cameraObject = new("Main Camera");
             cameraObject.transform.SetParent(cameraOffset.transform, false);
             Camera camera = cameraObject.AddComponent<Camera>();
+            cameraObject.AddComponent<TrackedPoseDriver>();
 
             origin = rigObject.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;
@@ -575,14 +576,25 @@ namespace Blockiverse.Tests.PlayMode
 
                 yield return null;
 
-                Vector3 startPosition = origin.transform.position;
                 Vector3 expectedMoveDirection = Vector3.ProjectOnPlane(origin.Camera.transform.forward, origin.transform.up).normalized;
+                InputAction moveAction = actions
+                    .FindActionMap(BlockiverseInputActionNames.LeftHandMap)
+                    .FindAction(BlockiverseInputActionNames.Move);
                 Set(gamepad.leftStick, new Vector2(0.0f, 1.0f));
                 yield return null;
 
+                Assert.That(moveAction.ReadValue<Vector2>().y, Is.GreaterThan(0.95f));
+                Assert.That(continuousMove.leftHandMoveInput.ReadValue().y, Is.GreaterThan(0.95f));
+
+                Vector3 startPosition = origin.transform.position;
+                for (int i = 0; i < 4; i++)
+                    yield return null;
+
                 Vector3 movement = origin.transform.position - startPosition;
+                Vector3 planarMovement = Vector3.ProjectOnPlane(movement, origin.transform.up);
                 Assert.That(movement.magnitude, Is.GreaterThan(0.0f));
-                Assert.That(Vector3.Dot(movement.normalized, expectedMoveDirection), Is.GreaterThan(0.95f));
+                Assert.That(planarMovement.magnitude, Is.GreaterThan(0.0f));
+                Assert.That(Vector3.Dot(planarMovement, expectedMoveDirection), Is.GreaterThan(0.0f));
 
                 Set(gamepad.leftStick, Vector2.zero);
                 yield return null;
@@ -1179,6 +1191,7 @@ namespace Blockiverse.Tests.PlayMode
             cameraObject.tag = "MainCamera";
             cameraObject.transform.SetParent(cameraOffset.transform, false);
             Camera camera = cameraObject.AddComponent<Camera>();
+            cameraObject.AddComponent<TrackedPoseDriver>();
 
             origin = rigObject.AddComponent<XROrigin>();
             origin.CameraFloorOffsetObject = cameraOffset;

@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 using System.Collections;
 using System.Reflection;
 using Blockiverse.Core;
@@ -152,7 +153,7 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(manager.World, Is.Null);
             Assert.That(renderer == null || renderer.Stats.ChunkCount == 0, Is.True);
             Assert.That(chunkFilters, Is.Empty);
-            Assert.That(Object.FindFirstObjectByType<BlockiverseVoidSafetyFloor>(FindObjectsInactive.Include), Is.Null);
+            Assert.That(Object.FindAnyObjectByType<BlockiverseVoidSafetyFloor>(FindObjectsInactive.Include), Is.Null);
             Assert.That(GameObject.Find("Interaction Test Block"), Is.Null);
         }
 

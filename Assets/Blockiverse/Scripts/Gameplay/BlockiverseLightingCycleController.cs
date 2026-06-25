@@ -33,7 +33,7 @@ namespace Blockiverse.Gameplay
                 sunLight = GetComponent<Light>();
 
             if (environmentSource == null)
-                environmentSource = FindFirstObjectByType<CreativeWorldManager>();
+                environmentSource = FindAnyObjectByType<CreativeWorldManager>();
 
             ApplyCurrentLighting();
         }

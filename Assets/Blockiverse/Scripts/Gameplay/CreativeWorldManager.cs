@@ -479,7 +479,9 @@ namespace Blockiverse.Gameplay
                 subscribedWorld = World;
             }
 
-            worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
+            worldTimeClock = GetComponent<WorldTimeClock>();
+            if (worldTimeClock == null)
+                worldTimeClock = FindAnyObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
                 return;
 
@@ -721,10 +723,10 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (hotbar == null)
-                hotbar = FindFirstObjectByType<CreativeHotbar>();
+                hotbar = FindAnyObjectByType<CreativeHotbar>();
 
             if (placementPreview == null)
-                placementPreview = FindFirstObjectByType<PlacementPreview>();
+                placementPreview = FindAnyObjectByType<PlacementPreview>();
 
             if (placementPreview == null)
                 placementPreview = CreatePlacementPreview();

@@ -25,7 +25,7 @@ namespace Blockiverse.Editor
             UIDocument document = EnsureComponent<UIDocument>(surfaceObject);
             document.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(BlockiverseProject.UiToolkitMenuShellPath);
             document.panelSettings = EnsureUiToolkitMenuPanelSettings();
-            document.worldSpaceSizeMode = UIDocument.WorldSpaceSizeMode.Fixed;
+            SetFixedWorldSpaceSizeMode(document);
             document.worldSpaceSize = UiToolkitMenuWorldSpaceSize;
 
             BoxCollider worldSpaceCollider = EnsureComponent<BoxCollider>(surfaceObject);
@@ -52,6 +52,15 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(surface);
             EditorUtility.SetDirty(surfaceObject);
             return surface;
+        }
+
+        static void SetFixedWorldSpaceSizeMode(UIDocument document)
+        {
+#if UNITY_6000_5_OR_NEWER
+            document.worldSpaceSizeMode = WorldSpaceSizeMode.Fixed;
+#else
+            document.worldSpaceSizeMode = UIDocument.WorldSpaceSizeMode.Fixed;
+#endif
         }
 
         static void EnsureUiToolkitMenuAssets()

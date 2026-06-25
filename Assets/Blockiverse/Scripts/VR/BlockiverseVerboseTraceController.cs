@@ -138,15 +138,15 @@ namespace Blockiverse.VR
                 return;
 
             if (inputRig == null)
-                inputRig = GetComponent<BlockiverseInputRig>() ?? FindFirstObjectByType<BlockiverseInputRig>(FindObjectsInactive.Include);
+                inputRig = GetComponent<BlockiverseInputRig>() ?? FindAnyObjectByType<BlockiverseInputRig>(FindObjectsInactive.Include);
             if (audioCuePlayer == null)
-                audioCuePlayer = GetComponent<BlockiverseAudioCuePlayer>() ?? FindFirstObjectByType<BlockiverseAudioCuePlayer>(FindObjectsInactive.Include);
+                audioCuePlayer = GetComponent<BlockiverseAudioCuePlayer>() ?? FindAnyObjectByType<BlockiverseAudioCuePlayer>(FindObjectsInactive.Include);
             if (vfxCuePlayer == null)
-                vfxCuePlayer = GetComponent<BlockiverseVfxCuePlayer>() ?? FindFirstObjectByType<BlockiverseVfxCuePlayer>(FindObjectsInactive.Include);
+                vfxCuePlayer = GetComponent<BlockiverseVfxCuePlayer>() ?? FindAnyObjectByType<BlockiverseVfxCuePlayer>(FindObjectsInactive.Include);
             if (musicController == null)
-                musicController = GetComponent<BlockiverseMusicController>() ?? FindFirstObjectByType<BlockiverseMusicController>(FindObjectsInactive.Include);
+                musicController = GetComponent<BlockiverseMusicController>() ?? FindAnyObjectByType<BlockiverseMusicController>(FindObjectsInactive.Include);
             if (interactionHaptics == null)
-                interactionHaptics = GetComponent<BlockiverseInteractionHaptics>() ?? FindFirstObjectByType<BlockiverseInteractionHaptics>(FindObjectsInactive.Include);
+                interactionHaptics = GetComponent<BlockiverseInteractionHaptics>() ?? FindAnyObjectByType<BlockiverseInteractionHaptics>(FindObjectsInactive.Include);
 
             DiscoverOptionalDependencies();
         }
@@ -157,15 +157,15 @@ namespace Blockiverse.VR
                 return;
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             if (interactionController == null)
-                interactionController = FindFirstObjectByType<CreativeInteractionController>(FindObjectsInactive.Include);
+                interactionController = FindAnyObjectByType<CreativeInteractionController>(FindObjectsInactive.Include);
             if (survivalSync == null)
-                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
             if (chunkAuthoritySync == null)
-                chunkAuthoritySync = FindFirstObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
+                chunkAuthoritySync = FindAnyObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
             if (environmentDynamics == null)
-                environmentDynamics = FindFirstObjectByType<EnvironmentDynamicsController>(FindObjectsInactive.Include);
+                environmentDynamics = FindAnyObjectByType<EnvironmentDynamicsController>(FindObjectsInactive.Include);
         }
 
         void TryStartRuntimeTrace()

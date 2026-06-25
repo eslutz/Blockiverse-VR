@@ -340,7 +340,7 @@ namespace Blockiverse.VR
         void DiscoverComfortSettings()
         {
             if (comfortSettings == null && Application.isPlaying)
-                comfortSettings = FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                comfortSettings = FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
         }
 
         float ResolvePanelScale()

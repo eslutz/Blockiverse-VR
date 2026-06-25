@@ -96,13 +96,13 @@ namespace Blockiverse.UI
         void ResolveReferences()
         {
             if (interactionController == null)
-                interactionController = FindFirstObjectByType<CreativeInteractionController>(FindObjectsInactive.Include);
+                interactionController = FindAnyObjectByType<CreativeInteractionController>(FindObjectsInactive.Include);
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (hotbar == null)
-                hotbar = FindFirstObjectByType<CreativeHotbar>(FindObjectsInactive.Include);
+                hotbar = FindAnyObjectByType<CreativeHotbar>(FindObjectsInactive.Include);
         }
 
         void WireSliders()

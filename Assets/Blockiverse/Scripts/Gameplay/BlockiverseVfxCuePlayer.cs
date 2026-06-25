@@ -66,7 +66,7 @@ namespace Blockiverse.Gameplay
             if (feedbackSettings == null)
                 feedbackSettings = GetComponent<BlockiverseFeedbackSettings>();
             if (interactionController == null && Application.isPlaying)
-                interactionController = FindFirstObjectByType<CreativeInteractionController>();
+                interactionController = FindAnyObjectByType<CreativeInteractionController>();
         }
 
         void Subscribe()

@@ -67,7 +67,7 @@ namespace Blockiverse.UI
         void ResolveReferences()
         {
             if (feedbackSettings == null)
-                feedbackSettings = FindFirstObjectByType<BlockiverseFeedbackSettings>(FindObjectsInactive.Include);
+                feedbackSettings = FindAnyObjectByType<BlockiverseFeedbackSettings>(FindObjectsInactive.Include);
         }
 
         // Pushes the live setting values into the controls (without re-firing the listeners).

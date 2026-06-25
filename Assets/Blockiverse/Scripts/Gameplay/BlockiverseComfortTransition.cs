@@ -32,7 +32,7 @@ namespace Blockiverse.Gameplay
                 return false;
 
             BlockiverseComfortTransition transition = rig.GetComponent<BlockiverseComfortTransition>() ??
-                FindFirstObjectByType<BlockiverseComfortTransition>(FindObjectsInactive.Include);
+                FindAnyObjectByType<BlockiverseComfortTransition>(FindObjectsInactive.Include);
             if (transition == null || !transition.isActiveAndEnabled)
                 return false;
 

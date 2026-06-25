@@ -468,6 +468,7 @@ namespace Blockiverse.Editor
 
             var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
             namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
+            namespaceManager.AddNamespace("tools", "http://schemas.android.com/tools");
 
             XmlNode activityNode = manifest.SelectSingleNode(
                 "/manifest/application/activity[@android:name='com.unity3d.player.UnityPlayerGameActivity']",
@@ -486,6 +487,12 @@ namespace Blockiverse.Editor
             }
 
             labelAttribute.Value = "@string/app_name";
+
+            XmlNode supportedDevicesNode = manifest.SelectSingleNode(
+                "/manifest/application/meta-data[@android:name='com.oculus.supportedDevices']",
+                namespaceManager);
+            supportedDevicesNode?.Attributes.RemoveNamedItem("replace", "http://schemas.android.com/tools");
+
             manifest.Save(manifestPath);
             AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
         }
@@ -638,6 +645,7 @@ namespace Blockiverse.Editor
 
             OpenXRSettings openXrSettings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
             openXrSettings.renderMode = OpenXRSettings.RenderMode.SinglePassInstanced;
+            openXrSettings.latencyOptimization = OpenXRSettings.LatencyOptimization.PrioritizeInputPolling;
             openXrSettings.depthSubmissionMode = OpenXRSettings.DepthSubmissionMode.None;
 
             foreach (string featureId in AndroidOpenXrFeatureIds)

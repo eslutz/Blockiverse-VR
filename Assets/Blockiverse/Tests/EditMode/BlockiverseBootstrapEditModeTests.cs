@@ -12,6 +12,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 using UnityEngine.XR.OpenXR;
 using Object = UnityEngine.Object;
 
@@ -36,6 +37,7 @@ namespace Blockiverse.Tests.EditMode
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
+        const string AndroidGradlePostprocessorPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseAndroidGradlePostprocessor.cs";
         const string ProjectBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.cs";
         const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
         const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
@@ -216,7 +218,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                OpenEmptySceneIgnoringUnityCleanupLogs();
             }
         }
 
@@ -351,6 +353,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(androidSettings, Is.Not.Null);
             Assert.That(androidSettings.renderMode, Is.EqualTo(OpenXRSettings.RenderMode.SinglePassInstanced));
+            Assert.That(androidSettings.latencyOptimization, Is.EqualTo(OpenXRSettings.LatencyOptimization.PrioritizeInputPolling));
             Assert.That(androidSettings.GetFeatures(), Has.Some.Matches<UnityEngine.XR.OpenXR.Features.OpenXRFeature>(
                 feature => feature.enabled && feature.GetType().Name == "MetaQuestFeature"));
 
@@ -419,6 +422,7 @@ namespace Blockiverse.Tests.EditMode
 
             var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
             namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
+            namespaceManager.AddNamespace("tools", "http://schemas.android.com/tools");
 
             XmlNode internetPermission = manifest.SelectSingleNode(
                 "/manifest/uses-permission[@android:name='android.permission.INTERNET']",
@@ -443,6 +447,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(
                 supportedDevicesNode.Attributes["android:value"]?.Value,
                 Is.EqualTo("quest3|quest3s"));
+            Assert.That(
+                supportedDevicesNode.Attributes["replace", "http://schemas.android.com/tools"],
+                Is.Null,
+                "The supported devices value is the source value; a redundant tools:replace emits Android manifest warnings.");
 
             XmlNode keyboardFeatureNode = manifest.SelectSingleNode(
                 "/manifest/uses-feature[@android:name='oculus.software.overlay_keyboard']",
@@ -528,6 +536,24 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
+        [Test]
+        public void AndroidBuildNormalizesGeneratedMetaAarManifests()
+        {
+            string postprocessorSource = File.ReadAllText(AndroidGradlePostprocessorPath);
+
+            StringAssert.Contains("IPostGenerateGradleAndroidProject", postprocessorSource);
+            StringAssert.Contains("InteractionSdk.aar", postprocessorSource);
+            StringAssert.Contains("OVRPlugin.aar", postprocessorSource);
+            StringAssert.Contains("com.oculus.integration.interactionsdk", postprocessorSource);
+            StringAssert.Contains("com.oculus.integration.ovrplugin", postprocessorSource);
+            StringAssert.Contains(":InteractionSdk@aar", postprocessorSource);
+            StringAssert.Contains(":OVRPlugin@aar", postprocessorSource);
+            StringAssert.Contains("ModernizeGeneratedGradleFiles", postprocessorSource);
+            StringAssert.Contains("namespace|ndkPath|ndkVersion|debugSymbolLevel|version", postprocessorSource);
+            StringAssert.Contains("abortOnError|useLegacyPackaging|prefab", postprocessorSource);
+            StringAssert.Contains("signingConfig =", postprocessorSource);
+        }
+
         static bool GetBool(SerializedObject serializedObject, string propertyName)
         {
             SerializedProperty property = serializedObject.FindProperty(propertyName);
@@ -545,6 +571,20 @@ namespace Blockiverse.Tests.EditMode
                     return extension == ".asset" || extension == ".prefab" || extension == ".unity";
                 })
                 .ToArray();
+        }
+
+        static void OpenEmptySceneIgnoringUnityCleanupLogs()
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
     }
 }

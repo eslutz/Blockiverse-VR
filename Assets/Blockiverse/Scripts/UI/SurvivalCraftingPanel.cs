@@ -589,7 +589,7 @@ namespace Blockiverse.UI
                 return;
 
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = FindAnyObjectByType<BlockiverseVfxCuePlayer>();
         }
 
         void EnsureBound()

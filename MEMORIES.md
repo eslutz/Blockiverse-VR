@@ -22,7 +22,7 @@ This file is the concise handoff for future Codex/agent work in the original Blo
 
 ## Current Unity Project Shape
 
-- Unity editor: `6000.3.16f1` (`a56f230f6470`).
+- Unity editor: `6000.3.18f1` (`5ebeb53e4c07`).
 - Target: Meta Quest 3 and Quest 3S.
 - Main scene: `Assets/Blockiverse/Scenes/Boot.unity`; this is the whole game scene, not a scene-switching flow.
 - Generated scene/prefab/input wiring is owned by `BlockiverseProjectBootstrapper.Run()`. Change the bootstrapper and regenerate instead of hand-authoring generated scene and prefab wiring.
@@ -33,10 +33,8 @@ This file is the concise handoff for future Codex/agent work in the original Blo
 
 ## Package And Tooling State
 
-- Timestamp: 2026-06-21. Manifest pins on `origin/main` do not include Unity MCP editor tooling. Current committed pins include Meta Avatars `40.0.1`, Meta XR Core/Interaction OVR/Platform `81.0.1`, Addressables `3.1.0`, Input System `1.19.0`, Multiplayer Center `1.0.1`, Netcode for GameObjects `2.11.2`, Unity Transport `2.7.3`, URP `17.0.1`, Unity Test Framework `1.4.6`, Composition Layers `2.4.0`, XRI `3.3.2`, XR Management `4.6.0`, Unity OpenXR: Meta `2.5.0`, and OpenXR `1.17.0`.
-- Timestamp: 2026-06-21. MCP for Unity is documented as local developer tooling only. Do not commit `Packages/manifest.json` or `Packages/packages-lock.json` additions for `com.coplaydev.unity-mcp` unless Eric explicitly opens a dependency-update task.
-- Timestamp: 2026-06-20. MCP for Unity `9.7.3` was verified running at `http://127.0.0.1:8080/mcp` with the Unity instance `Blockiverse-VR@c7c423ae62cb914c`. If the MCP HTTP process stops, restart it with `uvx --from mcpforunityserver==9.7.3 mcp-for-unity --transport http --http-url http://127.0.0.1:8080 --project-scoped-tools`, then connect the Unity bridge from `Window > MCP For Unity`.
-- MCP for Unity should be treated as the default live Editor bridge for inspection, console reads, scene/object checks, script/asset automation, and test jobs exposed through MCP.
+- Timestamp: 2026-06-25. Manifest pins do not include package-based Unity MCP editor tooling. The latest currently supported editor/package matrix is Unity `6000.3.18f1` with Meta Avatars `40.0.1`, Meta XR Core/Interaction OVR/Platform `81.0.1`, Addressables `3.1.0`, Input System `1.19.0`, Multiplayer Center `1.0.1`, Netcode for GameObjects `2.13.0`, Unity Transport `2.7.3`, URP `17.0.1`, Unity AI Assistant `2.12.0-pre.2`, Unity AI Inference `2.6.1`, Unity Test Framework `1.4.6`, Composition Layers `2.5.0`, XRI `3.5.1`, XR Management `4.6.0`, Unity OpenXR: Meta `2.5.0`, OpenXR `1.17.1`, and UGUI `2.0.0`. Unity `6000.5.1f1` and Meta XR Core/Interaction OVR/Platform `203.0.0` were checked but are not yet supported because Meta package code fails compilation under that editor/package combination.
+- Timestamp: 2026-06-25. Use the Unity IDE built-in MCP server as the default live Editor bridge for inspection, console reads, scene/object checks, script/asset automation, and test jobs exposed through MCP. It is local developer tooling, not a committed project dependency. Restart it from `Project Settings > AI > Unity MCP Server` if Codex reports a stale named pipe such as `/tmp/unity-mcp-c7c423ae-41914`.
 
 ## Validation Source Of Truth
 

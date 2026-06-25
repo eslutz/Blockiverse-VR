@@ -49,7 +49,7 @@ namespace Blockiverse.Gameplay
             sampler = new FrameStatisticsSampler(Mathf.Max(1, sampleWindow));
 
             if (worldRenderer == null)
-                worldRenderer = FindFirstObjectByType<VoxelWorldRenderer>();
+                worldRenderer = FindAnyObjectByType<VoxelWorldRenderer>();
         }
 
         void Update()

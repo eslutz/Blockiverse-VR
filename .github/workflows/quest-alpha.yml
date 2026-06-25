@@ -56,9 +56,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: unity-library-alpha-${{ runner.os }}-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          key: unity-library-alpha-${{ runner.os }}-6000.3.18f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
-            unity-library-alpha-${{ runner.os }}-6000.3.16f1-
+            unity-library-alpha-${{ runner.os }}-6000.3.18f1-
             unity-library-alpha-${{ runner.os }}-
 
       - name: Compute Alpha build settings
@@ -130,7 +130,7 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion: 6000.3.16f1
+          unityVersion: 6000.3.18f1
           targetPlatform: Android
           buildMethod: Blockiverse.Editor.BlockiverseBuildSmoke.BuildReleaseAndroid
           versioning: None

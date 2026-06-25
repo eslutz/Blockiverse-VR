@@ -203,7 +203,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
         }
     }
 }

@@ -24,7 +24,7 @@ namespace Blockiverse.VR
         public static void PlayAudio(ref BlockiverseAudioCuePlayer audioCuePlayer, BlockiverseAudioCue cue)
         {
             if (audioCuePlayer == null && Application.isPlaying)
-                audioCuePlayer = Object.FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = Object.FindAnyObjectByType<BlockiverseAudioCuePlayer>();
 
             audioCuePlayer?.PlayCue(cue);
         }
@@ -37,10 +37,10 @@ namespace Blockiverse.VR
                 return;
 
             if (audioCuePlayer == null)
-                audioCuePlayer = Object.FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = Object.FindAnyObjectByType<BlockiverseAudioCuePlayer>();
 
             if (interactionHaptics == null)
-                interactionHaptics = Object.FindFirstObjectByType<BlockiverseInteractionHaptics>();
+                interactionHaptics = Object.FindAnyObjectByType<BlockiverseInteractionHaptics>();
         }
     }
 }

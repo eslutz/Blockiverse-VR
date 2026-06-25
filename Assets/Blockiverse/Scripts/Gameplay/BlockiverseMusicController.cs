@@ -265,7 +265,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (feedbackSettings == null)
                 feedbackSettings = GetComponent<BlockiverseFeedbackSettings>();

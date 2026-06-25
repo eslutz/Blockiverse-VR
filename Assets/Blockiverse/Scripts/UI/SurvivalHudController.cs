@@ -109,19 +109,19 @@ namespace Blockiverse.UI
             // Bind to the authoritative survival inventory when the runtime survival sync is present so
             // the HUD, harvesting, crafting, and container loot all share one inventory. Falls back to a
             // standalone inventory for isolated validation/tests.
-            survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+            survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
             Inventory = survivalSync != null ? survivalSync.LocalInventory : new Inventory(itemRegistry);
             RecipeBook = CraftingRecipeBook.Default;
 
             // Bind to the runtime-owned vitals (ticked by SurvivalVitalsRuntime) when present so the
             // HUD shows live health/hunger/thirst/stamina. Falls back to a standalone instance for
             // isolated validation/tests.
-            vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+            vitalsRuntime = FindAnyObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
             Vitals = vitalsRuntime != null ? vitalsRuntime.Vitals : new PlayerVitals();
-            inputBridge = FindFirstObjectByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include);
+            inputBridge = FindAnyObjectByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include);
 
             // Register this inventory as the container-loot destination so breaking a crate fills it.
-            worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+            worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             if (worldManager != null)
                 worldManager.SetActivePlayerInventory(Inventory);
 

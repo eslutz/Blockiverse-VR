@@ -337,7 +337,7 @@ namespace Blockiverse.UI
         bool DiscoverSurvivalSync()
         {
             if (survivalSync == null && Application.isPlaying)
-                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>();
+                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>();
 
             return survivalSync != null;
         }

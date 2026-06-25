@@ -102,9 +102,9 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = FindAnyObjectByType<BlockiverseVfxCuePlayer>();
 
             Vector3 lightPosition = GetLightPosition(position);
             audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.TorchIgnite, lightPosition);

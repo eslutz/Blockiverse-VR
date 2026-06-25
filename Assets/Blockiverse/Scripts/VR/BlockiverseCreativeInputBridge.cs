@@ -157,9 +157,9 @@ namespace Blockiverse.VR
         void PlayMineStrikeFeedback()
         {
             if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = FindAnyObjectByType<BlockiverseVfxCuePlayer>();
 
             var worldCenter = new Vector3(miningTarget.X + 0.5f, miningTarget.Y + 0.5f, miningTarget.Z + 0.5f);
             BlockiverseAudioCue cue = interactionController != null &&
@@ -212,7 +212,7 @@ namespace Blockiverse.VR
         void DiscoverDependencies()
         {
             if (inputRig == null)
-                inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindFirstObjectByType<BlockiverseInputRig>();
+                inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindAnyObjectByType<BlockiverseInputRig>();
 
             DiscoverInteractionRays();
             RefreshActiveInteractionRay();
@@ -223,14 +223,14 @@ namespace Blockiverse.VR
             DiscoverInteractionRayVisuals();
 
             if (interactionController == null && Application.isPlaying)
-                interactionController = FindFirstObjectByType<CreativeInteractionController>();
+                interactionController = FindAnyObjectByType<CreativeInteractionController>();
 
             if (survivalSync == null && Application.isPlaying)
-                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>();
+                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>();
 
             if (comfortSettings == null)
                 comfortSettings = GetComponentInParent<BlockiverseComfortSettings>() ??
-                    FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                    FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
 
             ApplyPlayerOccupancyPredicate();
         }
