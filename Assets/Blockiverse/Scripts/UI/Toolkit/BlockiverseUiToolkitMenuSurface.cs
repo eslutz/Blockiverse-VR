@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -237,12 +238,21 @@ namespace Blockiverse.UI
             if (document == null)
                 return;
 
-            document.worldSpaceSizeMode = UIDocument.WorldSpaceSizeMode.Fixed;
+            SetFixedWorldSpaceSizeMode(document);
             document.worldSpaceSize = ReadableWorldSpaceSize;
             EnsureWorldSpaceCollider();
 
             if (TryGetComponent(out BlockiverseWorldSpacePanelPresenter presenter))
                 presenter.EnsurePanelScale(ReadableTransformScale);
+        }
+
+        static void SetFixedWorldSpaceSizeMode(UIDocument targetDocument)
+        {
+#if UNITY_6000_5_OR_NEWER
+            targetDocument.worldSpaceSizeMode = WorldSpaceSizeMode.Fixed;
+#else
+            targetDocument.worldSpaceSizeMode = UIDocument.WorldSpaceSizeMode.Fixed;
+#endif
         }
 
         void EnsureReadablePlacement()
@@ -801,7 +811,7 @@ namespace Blockiverse.UI
             if (fallbackInteractionManager != null && Time.unscaledTime < nextFallbackReferenceRefreshTime)
                 return;
 
-            fallbackInteractionManager = FindFirstObjectByType<XRInteractionManager>();
+            fallbackInteractionManager = FindAnyObjectByType<XRInteractionManager>();
             fallbackNearFarInteractors = FindObjectsByType<NearFarInteractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             fallbackCasters = FindObjectsByType<CurveInteractionCaster>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             nextFallbackReferenceRefreshTime = Time.unscaledTime + 1.0f;
@@ -824,13 +834,29 @@ namespace Blockiverse.UI
                     continue;
 
                 Vector3 localPoint = transform.InverseTransformPoint(hit.point);
-                panelPosition = new Vector2(localPoint.x, localPoint.y);
+                panelPosition = LocalPointToPanelPosition(localPoint);
                 VisualElement picked = document.rootVisualElement.panel?.Pick(panelPosition);
                 target = FindFallbackInteractiveElement(picked);
                 return target != null;
             }
 
             return false;
+        }
+
+        internal static Vector2 LocalPointToPanelPosition(Vector3 localPoint)
+        {
+            float normalizedX = Mathf.InverseLerp(
+                -ReadableWorldSpaceColliderSize.x * 0.5f,
+                ReadableWorldSpaceColliderSize.x * 0.5f,
+                localPoint.x);
+            float normalizedY = Mathf.InverseLerp(
+                ReadableWorldSpaceColliderSize.y * 0.5f,
+                -ReadableWorldSpaceColliderSize.y * 0.5f,
+                localPoint.y);
+
+            return new Vector2(
+                Mathf.Clamp01(normalizedX) * ReferencePanelWidthPixels,
+                Mathf.Clamp01(normalizedY) * ReferencePanelHeightPixels);
         }
 
         VisualElement FindFallbackInteractiveElement(VisualElement picked)

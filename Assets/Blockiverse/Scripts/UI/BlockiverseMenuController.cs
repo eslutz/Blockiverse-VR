@@ -30,7 +30,6 @@ namespace Blockiverse.UI
         const string WorldDetailsPanelName = "World Details Panel";
         const string CreativeToolsPanelName = "Creative Tools Panel";
         const string StationPanelName = "Station Panel";
-        const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
         const string ControllerMappingPopupName = "Controller Mapping Popup";
         const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string SurvivalHudName = "Survival HUD";
@@ -58,9 +57,10 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
-        [SerializeField] BlockiverseMultiplayerSessionMenu lanMultiplayerMenu;
         [SerializeField] BlockiverseStationPanel stationPanel;
         [SerializeField] BlockiverseCreativeToolsPanel creativeToolsPanel;
+        [SerializeField] BlockiverseNetworkSession lanSession;
+        [SerializeField] BlockiverseWorldSessionController worldSessionController;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
         [SerializeField] SurvivalHudController survivalHudController;
@@ -88,6 +88,12 @@ namespace Blockiverse.UI
         WorldSaveSummary? uiToolkitDetailsSave;
         string uiToolkitDetailsRenameText = string.Empty;
         string uiToolkitLanAddress = BlockiverseNetworkConfig.DefaultAddress;
+        string uiToolkitLanStatus = string.Empty;
+        BlockiverseConnectionState lastDisplayedLanState = BlockiverseConnectionState.Stopped;
+        NetworkSessionMode lastDisplayedLanMode = NetworkSessionMode.Offline;
+        string lastDisplayedLanDisconnectReason = string.Empty;
+        bool enteredGameplayForCurrentLanSession;
+        bool lanSessionEndedRouteRequested;
         int uiToolkitInventoryFirstSlot;
         int uiToolkitSelectedInventorySlot;
         int uiToolkitCraftingPage;
@@ -219,6 +225,21 @@ namespace Blockiverse.UI
             stationPanel = panel;
         }
 
+        public void ConfigureLanSession(
+            BlockiverseNetworkSession session,
+            BlockiverseWorldSessionController sessionController)
+        {
+            if (lanSession != session)
+            {
+                enteredGameplayForCurrentLanSession = false;
+                lanSessionEndedRouteRequested = false;
+            }
+
+            lanSession = session;
+            worldSessionController = sessionController;
+            RefreshLanStatus();
+        }
+
         public void ResolveRuntimeReferences()
         {
             if (inputRig == null)
@@ -244,7 +265,8 @@ namespace Blockiverse.UI
             worldDetailsMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(WorldDetailsPanelName);
             stationPanel ??= FindGeneratedComponent<BlockiverseStationPanel>(StationPanelName);
             creativeToolsPanel ??= FindGeneratedComponent<BlockiverseCreativeToolsPanel>(CreativeToolsPanelName);
-            lanMultiplayerMenu ??= FindGeneratedComponent<BlockiverseMultiplayerSessionMenu>(LanMultiplayerPanelName);
+            lanSession ??= BlockiverseSceneLookup.Find<BlockiverseNetworkSession>(FindObjectsInactive.Include);
+            worldSessionController ??= BlockiverseSceneLookup.Find<BlockiverseWorldSessionController>(FindObjectsInactive.Include);
             uiToolkitMenuSurface ??= FindGeneratedComponent<BlockiverseUiToolkitMenuSurface>(UiToolkitMenuSurfaceName);
             WireUiToolkitMenuSurface();
             if (survivalSync == null)
@@ -285,8 +307,6 @@ namespace Blockiverse.UI
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ComfortSettingsPanelName);
             BlockiverseWorldSpacePanelPresenter stationPresenter =
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StationPanelName);
-            BlockiverseWorldSpacePanelPresenter lanPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(LanMultiplayerPanelName);
             BlockiverseWorldSpacePanelPresenter audioPresenter =
                 FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(AudioSettingsPanelName);
             BlockiverseWorldSpacePanelPresenter controlsPresenter =
@@ -310,7 +330,7 @@ namespace Blockiverse.UI
             if (screenPresenters.Count == 0 ||
                 titlePresenter != null || pausePresenter != null || deathPresenter != null ||
                 confirmPresenter != null || newWorldPresenter != null || loadWorldPresenter != null ||
-                settingsPresenter != null || comfortSettingsPresenter != null || stationPresenter != null || lanPresenter != null ||
+                settingsPresenter != null || comfortSettingsPresenter != null || stationPresenter != null ||
                 audioPresenter != null || controlsPresenter != null || worldDetailsPresenter != null ||
                 creativeToolsPresenter != null || gameplayHudPresenter != null || controllerMapping != null ||
                 worldLoading != null)
@@ -324,7 +344,7 @@ namespace Blockiverse.UI
                     loadWorldPresenter,
                     settingsPresenter,
                     stationPresenter,
-                    lanPresenter,
+                    null,
                     audioPresenter,
                     controlsPresenter,
                     worldDetailsPresenter,
@@ -554,6 +574,20 @@ namespace Blockiverse.UI
             ApplyRouterState();
         }
 
+        void Update()
+        {
+            if (lanSession == null)
+                return;
+
+            if (lastDisplayedLanState != lanSession.CurrentState ||
+                lastDisplayedLanMode != lanSession.CurrentMode ||
+                lastDisplayedLanDisconnectReason != lanSession.LastDisconnectReason)
+            {
+                RefreshLanStatus();
+                ApplyRouterState();
+            }
+        }
+
         public void OnQuickMenuPressed()
         {
             if (router == null)
@@ -613,7 +647,7 @@ namespace Blockiverse.UI
             controllerMappingPresenter?.Hide();
         }
 
-        // Close hook for the LAN multiplayer panel's button (wired by the bootstrapper).
+        // Close hook for the current LAN multiplayer route.
         public void CloseLanMultiplayerScreen()
         {
             HandleAction(MenuActions.LanMultiplayerClose);
@@ -804,25 +838,17 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.LanMultiplayerHost:
                     ResolveRuntimeReferences();
-                    lanMultiplayerMenu?.StartLanHost();
+                    StartUiToolkitLanHost();
                     ApplyRouterState();
                     break;
                 case MenuActions.LanMultiplayerJoin:
                     ResolveRuntimeReferences();
-                    if (!CanReadUiToolkitPendingState(MenuActions.LanMultiplayerScreen))
-                    {
-                        ApplyRouterState();
-                        break;
-                    }
-
-                    if (lanMultiplayerMenu?.AddressInput != null)
-                        lanMultiplayerMenu.AddressInput.SetTextWithoutNotify(uiToolkitLanAddress);
-                    lanMultiplayerMenu?.JoinLanSession();
+                    JoinUiToolkitLanSession();
                     ApplyRouterState();
                     break;
                 case MenuActions.LanMultiplayerStop:
                     ResolveRuntimeReferences();
-                    lanMultiplayerMenu?.StopSession();
+                    StopUiToolkitLanSession();
                     ApplyRouterState();
                     break;
                 case MenuActions.LanMultiplayerClose:
@@ -1270,6 +1296,273 @@ namespace Blockiverse.UI
             return router != null && string.Equals(router.ActiveScreen.ScreenId, screenId, StringComparison.Ordinal);
         }
 
+        void StartUiToolkitLanHost()
+        {
+            if (lanSession == null)
+            {
+                SetLanStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                return;
+            }
+
+            if (!TrySuspendSinglePlayerSessionForLan())
+                return;
+
+            bool started = lanSession.StartHost();
+            SetLanStatus(started
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStartingHost)
+                : BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LanStartHostFailed, DescribeLanSessionState()));
+            RefreshLanStatus();
+        }
+
+        void JoinUiToolkitLanSession()
+        {
+            if (lanSession == null)
+            {
+                SetLanStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                return;
+            }
+
+            string address = ResolveUiToolkitLanAddress();
+            if (!TrySuspendSinglePlayerSessionForLan())
+                return;
+
+            bool started = lanSession.StartClient(address);
+            SetLanStatus(started
+                ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LanJoining, address, lanSession.Config.Port)
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanJoinFailed,
+                    address,
+                    lanSession.Config.Port,
+                    DescribeLanSessionState()));
+            RefreshLanStatus();
+        }
+
+        void StopUiToolkitLanSession()
+        {
+            if (lanSession == null)
+            {
+                SetLanStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                return;
+            }
+
+            bool wasActive = lanSession.NetworkManager.IsListening || lanSession.NetworkManager.ShutdownInProgress;
+            lanSession.StopSession();
+            SetLanStatus(DescribeLanStopResult(wasActive));
+            RefreshLanStatus();
+        }
+
+        bool TrySuspendSinglePlayerSessionForLan()
+        {
+            if (worldSessionController == null)
+                worldSessionController = BlockiverseSceneLookup.Find<BlockiverseWorldSessionController>(FindObjectsInactive.Include);
+
+            if (worldSessionController == null)
+                return true;
+
+            if (worldSessionController.TrySuspendActiveSessionForMultiplayer(out string failureReason))
+                return true;
+
+            SetLanStatus(string.IsNullOrWhiteSpace(failureReason)
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusSuspendSinglePlayerFailed)
+                : failureReason);
+            return false;
+        }
+
+        void RefreshLanStatus()
+        {
+            if (lanSession == null)
+            {
+                enteredGameplayForCurrentLanSession = false;
+                lanSessionEndedRouteRequested = false;
+                SetLanStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                return;
+            }
+
+            SetLanStatus(DescribeLanSessionState());
+            if (!IsShowingLanSessionEndedMessage())
+                lanSessionEndedRouteRequested = false;
+
+            TryEnterGameplayForConnectedLanSession();
+            EnsureLanSessionEndedMenuAvailable();
+            lastDisplayedLanState = lanSession.CurrentState;
+            lastDisplayedLanMode = lanSession.CurrentMode;
+            lastDisplayedLanDisconnectReason = lanSession.LastDisconnectReason;
+        }
+
+        void ComputeLanControlState(out bool canStart, out bool canStop)
+        {
+            canStart = lanSession != null &&
+                !lanSession.NetworkManager.IsListening &&
+                !lanSession.NetworkManager.ShutdownInProgress;
+            canStop = lanSession != null &&
+                (lanSession.NetworkManager.IsListening || lanSession.NetworkManager.ShutdownInProgress);
+        }
+
+        string ResolveUiToolkitLanAddress() =>
+            string.IsNullOrWhiteSpace(uiToolkitLanAddress)
+                ? BlockiverseNetworkConfig.DefaultAddress
+                : uiToolkitLanAddress.Trim();
+
+        string DescribeLanSessionState()
+        {
+            if (lanSession == null)
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable);
+
+            return lanSession.CurrentState switch
+            {
+                BlockiverseConnectionState.StartingHost => BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStartingHost),
+                BlockiverseConnectionState.Hosting => lanSession.LastStopRequestSucceeded
+                    ? BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.LanHosting,
+                        DescribeLanHostJoinAddresses(),
+                        lanSession.Config.Port)
+                    : DescribeLanStopResult(wasActive: true),
+                BlockiverseConnectionState.StartingClient => BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanJoining,
+                    ResolveUiToolkitLanAddress(),
+                    lanSession.Config.Port),
+                BlockiverseConnectionState.ConnectedClient => BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanConnected,
+                    ResolveUiToolkitLanAddress(),
+                    lanSession.Config.Port),
+                BlockiverseConnectionState.Disconnecting => DescribeLanStoppingState(),
+                BlockiverseConnectionState.Disconnected => DescribeLanDisconnectedState(),
+                BlockiverseConnectionState.Failed => DescribeLanFailedState(),
+                _ => BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanStoppedWithDefault,
+                    BlockiverseNetworkConfig.DefaultAddress),
+            };
+        }
+
+        string DescribeLanStopResult(bool wasActive)
+        {
+            if (lanSession == null)
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable);
+
+            if (!lanSession.LastStopRequestSucceeded)
+            {
+                return string.IsNullOrWhiteSpace(lanSession.LastDisconnectReason)
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopFailed)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.LanStopFailedWithReason,
+                        lanSession.LastDisconnectReason);
+            }
+
+            if (lanSession.LastStopForcedAfterPreparationFailure)
+            {
+                return BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanStoppingWithoutShutdownSave,
+                    lanSession.LastDisconnectReason);
+            }
+
+            return wasActive
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopping)
+                : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopped);
+        }
+
+        string DescribeLanStoppingState()
+        {
+            if (lanSession != null && lanSession.LastStopForcedAfterPreparationFailure)
+            {
+                return BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanStoppingWithoutShutdownSave,
+                    lanSession.LastDisconnectReason);
+            }
+
+            return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStopping);
+        }
+
+        string DescribeLanDisconnectedState()
+        {
+            if (!IsShowingLanSessionEndedMessage())
+                return DescribeLanUnableToReachHostState();
+
+            string reconnectMessage =
+                BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanHostDisconnected,
+                    ResolveUiToolkitLanAddress(),
+                    lanSession.Config.Port);
+
+            return string.IsNullOrWhiteSpace(lanSession.LastDisconnectReason)
+                ? reconnectMessage
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanLastDisconnect,
+                    reconnectMessage,
+                    lanSession.LastDisconnectReason);
+        }
+
+        string DescribeLanUnableToReachHostState()
+        {
+            string retryMessage =
+                BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanUnableToReach,
+                    ResolveUiToolkitLanAddress(),
+                    lanSession.Config.Port);
+
+            return string.IsNullOrWhiteSpace(lanSession.LastDisconnectReason)
+                ? retryMessage
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanLastDisconnect,
+                    retryMessage,
+                    lanSession.LastDisconnectReason);
+        }
+
+        string DescribeLanHostJoinAddresses()
+        {
+            if (lanSession == null)
+                return BlockiverseNetworkConfig.DefaultAddress;
+
+            string listenAddress = lanSession.Config.ListenAddress;
+            return BlockiverseLanAddressUtility.IsWildcardListenAddress(listenAddress)
+                ? BlockiverseLanAddressUtility.DescribeLocalIPv4Addresses(BlockiverseNetworkConfig.DefaultAddress)
+                : listenAddress.Trim();
+        }
+
+        string DescribeLanFailedState()
+        {
+            return lanSession == null || string.IsNullOrWhiteSpace(lanSession.LastDisconnectReason)
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanFailed)
+                : lanSession.LastDisconnectReason;
+        }
+
+        void SetLanStatus(string message)
+        {
+            uiToolkitLanStatus = message ?? string.Empty;
+        }
+
+        bool IsShowingLanSessionEndedMessage() =>
+            lanSession != null &&
+            lanSession.CurrentState == BlockiverseConnectionState.Disconnected &&
+            lanSession.HasConnectedAsClient;
+
+        void TryEnterGameplayForConnectedLanSession()
+        {
+            if (lanSession == null)
+                return;
+
+            if (lanSession.CurrentState != BlockiverseConnectionState.Hosting &&
+                lanSession.CurrentState != BlockiverseConnectionState.ConnectedClient)
+            {
+                enteredGameplayForCurrentLanSession = false;
+                return;
+            }
+
+            if (enteredGameplayForCurrentLanSession)
+                return;
+
+            enteredGameplayForCurrentLanSession = true;
+            EnterGameplay();
+        }
+
+        void EnsureLanSessionEndedMenuAvailable()
+        {
+            if (!IsShowingLanSessionEndedMessage() || lanSessionEndedRouteRequested)
+                return;
+
+            if (ShowLanMultiplayerScreen())
+                lanSessionEndedRouteRequested = true;
+        }
+
         BlockiverseUiToolkitMenuView CreateUiToolkitMenuView(string screenId)
         {
             if (string.Equals(screenId, MenuActions.NewWorldScreen, StringComparison.Ordinal))
@@ -1316,11 +1609,9 @@ namespace Blockiverse.UI
             if (string.Equals(screenId, MenuActions.LanMultiplayerScreen, StringComparison.Ordinal))
             {
                 ResolveRuntimeReferences();
-                lanMultiplayerMenu?.RefreshStatus();
-                bool canStart = lanMultiplayerMenu?.HostButton == null || lanMultiplayerMenu.HostButton.interactable;
-                bool canStop = lanMultiplayerMenu?.StopButton != null && lanMultiplayerMenu.StopButton.interactable;
-                string status = lanMultiplayerMenu?.StatusText != null ? lanMultiplayerMenu.StatusText.text : string.Empty;
-                return BlockiverseUiToolkitMenuCatalog.CreateLanView(uiToolkitLanAddress, status, canStart, canStop);
+                RefreshLanStatus();
+                ComputeLanControlState(out bool canStart, out bool canStop);
+                return BlockiverseUiToolkitMenuCatalog.CreateLanView(uiToolkitLanAddress, uiToolkitLanStatus, canStart, canStop);
             }
 
             if (string.Equals(screenId, MenuActions.PlayerHubScreen, StringComparison.Ordinal))

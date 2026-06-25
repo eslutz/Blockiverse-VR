@@ -146,7 +146,6 @@ namespace Blockiverse.Tests.EditMode
                 "Scripts/UI/SurvivalInventoryPanel.cs",
                 "Scripts/UI/SurvivalCraftingPanel.cs",
                 "Scripts/UI/BlockiverseComfortMenu.cs",
-                "Scripts/UI/BlockiverseMultiplayerSessionMenu.cs",
                 "Scripts/VR/BlockiverseWorldSpacePanelPresenter.cs",
             };
 

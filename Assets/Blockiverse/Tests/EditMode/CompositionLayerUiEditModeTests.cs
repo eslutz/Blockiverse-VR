@@ -42,7 +42,6 @@ namespace Blockiverse.Tests.EditMode
             "Audio Settings Panel",
             "Controls Panel",
             "World Details Panel",
-            "LAN Multiplayer Panel",
             "Creative Tools Panel",
             "Station Panel",
             "Controller Mapping Popup",

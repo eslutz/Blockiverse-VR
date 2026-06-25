@@ -61,6 +61,9 @@ namespace Blockiverse.Editor
                 return;
 
             Transform routedMenuParent = cameraOffset;
+            Transform staleLanPanel = routedMenuParent.Find(LanMultiplayerPanelName);
+            if (staleLanPanel != null)
+                UnityEngine.Object.DestroyImmediate(staleLanPanel.gameObject);
 
             var (titleMenu, titlePresenter) = EnsureActionMenuPanel(
                 routedMenuParent, TitleMenuName, ActionMenuSize, head, buttonCount: 6, sortOrder: 25);
@@ -80,7 +83,6 @@ namespace Blockiverse.Editor
             Button comfortCloseButton =
                 comfortRoot?.Find("Panel/Close Button")?.GetComponent<Button>();
             var (stationPanel, stationPresenter) = EnsureStationMenuPanel(routedMenuParent, head);
-            var (lanPresenter, lanCloseButton) = EnsureLanMultiplayerMenuPanel(routedMenuParent, head);
             var (audioPanel, audioPresenter, audioCloseButton) = EnsureAudioSettingsMenuPanel(routedMenuParent, head);
             var (controlsPresenter, controlsCloseButton) = EnsureControlsMenuPanel(routedMenuParent, head);
             var (worldDetailsPanel, worldDetailsMenu, worldDetailsPresenter) = EnsureWorldDetailsMenuPanel(routedMenuParent, head);
@@ -103,7 +105,7 @@ namespace Blockiverse.Editor
             controller.ConfigurePresenters(
                 titlePresenter, pausePresenter, deathPresenter, confirmPresenter,
                 newWorldPresenter, loadWorldPresenter, settingsPresenter, stationPresenter,
-                lanPresenter, audioPresenter, controlsPresenter, worldDetailsPresenter,
+                null, audioPresenter, controlsPresenter, worldDetailsPresenter,
                 creativeToolsPresenter, gameplayHudPresenter, comfortPresenter, controllerMappingPresenter,
                 worldLoadingPresenter);
             controller.ConfigureStationPanel(stationPanel);
@@ -141,13 +143,6 @@ namespace Blockiverse.Editor
 
             EditorUtility.SetDirty(creativeToolsPanel);
 
-            if (lanCloseButton != null)
-            {
-                RemovePersistentListeners(lanCloseButton.onClick, controller, nameof(BlockiverseMenuController.CloseLanMultiplayerScreen));
-                UnityEventTools.AddPersistentListener(lanCloseButton.onClick, controller.CloseLanMultiplayerScreen);
-                EditorUtility.SetDirty(lanCloseButton);
-            }
-
             if (audioCloseButton != null)
             {
                 RemovePersistentListeners(audioCloseButton.onClick, controller, nameof(BlockiverseMenuController.CloseAudioSettingsScreen));
@@ -167,15 +162,6 @@ namespace Blockiverse.Editor
             // The session coordinator implements the menu's save/load/new-world/continue verbs.
             BlockiverseWorldSessionController sessionController = EnsureComponent<BlockiverseWorldSessionController>(rig);
             EditorUtility.SetDirty(sessionController);
-
-            BlockiverseMultiplayerSessionMenu lanSessionMenu =
-                lanPresenter != null ? lanPresenter.GetComponent<BlockiverseMultiplayerSessionMenu>() : null;
-            if (lanSessionMenu != null)
-            {
-                lanSessionMenu.ConfigureMenuController(controller);
-                lanSessionMenu.ConfigureWorldSessionController(sessionController);
-                EditorUtility.SetDirty(lanSessionMenu);
-            }
 
             if (inputRig != null)
             {
@@ -219,100 +205,6 @@ namespace Blockiverse.Editor
                 scale,
                 showWhenStarted: showWhenStarted,
                 showWhenStartedPlayerPrefsKey: showWhenStartedPlayerPrefsKey);
-        }
-
-        // Builds the LAN multiplayer panel on the rig: host/join/stop controls plus a close
-        // button, presented through the same world-space presenter stack as the other menus.
-        static (BlockiverseWorldSpacePanelPresenter presenter, Button closeButton) EnsureLanMultiplayerMenuPanel(
-            Transform parent,
-            Transform head)
-        {
-            float width = LanMultiplayerPanelSize.x;
-            float height = LanMultiplayerPanelSize.y;
-
-            GameObject panelRoot = EnsureRectChild(parent, LanMultiplayerPanelName);
-            panelRoot.transform.localPosition = GameMenuLocalPosition;
-            panelRoot.transform.localRotation = Quaternion.identity;
-            panelRoot.transform.localScale = Vector3.one * GameMenuScale;
-
-            RectTransform rootRect = panelRoot.GetComponent<RectTransform>();
-            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
-            rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
-
-            Canvas canvas = EnsureComponent<Canvas>(panelRoot);
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 25;
-            canvas.enabled = false;
-            ConfigureCanvasWorldCamera(canvas, head);
-
-            CanvasScaler scaler = EnsureComponent<CanvasScaler>(panelRoot);
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            scaler.dynamicPixelsPerUnit = 10.0f;
-
-            EnsureTrackedDeviceRaycaster(panelRoot);
-
-            GameObject bg = EnsureRectChild(panelRoot.transform, "Panel");
-            RectTransform bgRect = bg.GetComponent<RectTransform>();
-            bgRect.anchorMin = Vector2.zero;
-            bgRect.anchorMax = Vector2.one;
-            bgRect.offsetMin = Vector2.zero;
-            bgRect.offsetMax = Vector2.zero;
-            Image bgImage = EnsureComponent<Image>(bg);
-            Sprite rounded = GetRoundedSprite();
-            if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; }
-            bgImage.color = PanelBaseColor;
-
-            EnsureLabel(
-                bg.transform, "Title", "LAN Multiplayer", 30, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(MenuPanelInset, -18.0f), TitleSizeWithClose(width, 48.0f));
-
-            TMP_InputField addressInput = EnsureInputFieldControl(
-                bg.transform,
-                "Address Input",
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder),
-                string.Empty,
-                new Vector2(28.0f, -100.0f),
-                new Vector2(width - 56.0f, 58.0f));
-
-            Button hostButton = EnsureButtonControl(
-                bg.transform, "Host Button", "Host", new Vector2(28.0f, -180.0f), new Vector2(164.0f, 54.0f));
-            Button joinButton = EnsureButtonControl(
-                bg.transform, "Join Button", "Join", new Vector2(228.0f, -180.0f), new Vector2(164.0f, 54.0f));
-            Button stopButton = EnsureButtonControl(
-                bg.transform, "Stop Button", "Stop", new Vector2(428.0f, -180.0f), new Vector2(164.0f, 54.0f));
-
-            GameObject statusBadge = EnsureRectChild(bg.transform, "Status Badge");
-            RectTransform statusBadgeRect = statusBadge.GetComponent<RectTransform>();
-            ConfigureTopLeftRect(statusBadgeRect, new Vector2(22.0f, -248.0f), new Vector2(width - 44.0f, 132.0f));
-            Image statusBadgeImage = EnsureComponent<Image>(statusBadge);
-            ApplySlicedSprite(statusBadgeImage, GetUiSprite("multiplayer_status_badge"));
-            statusBadgeImage.color = new Color(0.3f, 0.68f, 0.9f, 0.22f);
-            statusBadgeImage.raycastTarget = false;
-
-            TextMeshProUGUI statusText = EnsureLabel(
-                bg.transform, "Status",
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault),
-                22, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1),
-                new Vector2(28.0f, -256.0f), new Vector2(width - 56.0f, 120.0f),
-                TextDimColor);
-
-            Button closeButton = EnsureButtonControl(
-                bg.transform, "Close Button", "Close", TopRightClosePosition(width), MenuCloseButtonSize);
-
-            BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(panelRoot);
-            menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
-
-            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
-            ConfigureRoutedMenuPresenter(presenter, canvas, head);
-            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
-
-            EditorUtility.SetDirty(menu);
-            EditorUtility.SetDirty(presenter);
-            EditorUtility.SetDirty(panelRoot);
-
-            return (presenter, closeButton);
         }
 
         // Builds a world-space panel canvas with a background, title label, N full-width action

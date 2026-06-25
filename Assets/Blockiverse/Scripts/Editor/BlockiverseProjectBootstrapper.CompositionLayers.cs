@@ -28,7 +28,6 @@ namespace Blockiverse.Editor
             AudioSettingsPanelName,
             ControlsPanelName,
             WorldDetailsPanelName,
-            LanMultiplayerPanelName,
             CreativeToolsPanelName,
             StationPanelName,
             ControllerMappingPopupName,

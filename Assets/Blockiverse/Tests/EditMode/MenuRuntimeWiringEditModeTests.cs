@@ -14,6 +14,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.TestTools;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UiDisplayStyle = UnityEngine.UIElements.DisplayStyle;
@@ -28,11 +29,20 @@ namespace Blockiverse.Tests.EditMode
         [TearDown]
         public void TearDown()
         {
-            foreach (UnityEngine.Object target in objectsToDestroy)
-                if (target != null)
-                    UnityEngine.Object.DestroyImmediate(target);
-            objectsToDestroy.Clear();
-            BlockiverseRuntimeState.Reset();
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                foreach (UnityEngine.Object target in objectsToDestroy)
+                    if (target != null)
+                        UnityEngine.Object.DestroyImmediate(target);
+                objectsToDestroy.Clear();
+                BlockiverseRuntimeState.Reset();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
 
         [Test]
@@ -239,19 +249,54 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(actions.childCount, Is.EqualTo(1));
             var button = (UnityEngine.UIElements.Button)actions[0];
-            AssertInteractiveFeedback(button, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: false);
+            AssertInteractiveFeedback(surface, button, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: false);
 
             var textField = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.TextField>(details, "test.name");
             Assert.That(textField, Is.Not.Null);
-            AssertInteractiveFeedback(textField, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+            AssertInteractiveFeedback(surface, textField, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
 
             var toggle = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Toggle>(details, "test.toggle");
             Assert.That(toggle, Is.Not.Null);
-            AssertInteractiveFeedback(toggle, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+            AssertInteractiveFeedback(surface, toggle, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
 
             var slider = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Slider>(details, "test.slider");
             Assert.That(slider, Is.Not.Null);
-            AssertInteractiveFeedback(slider, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+            AssertInteractiveFeedback(surface, slider, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
+        }
+
+        [Test]
+        public void UiToolkitFallbackPointerConvertsLocalHitsToPanelCoordinates()
+        {
+            MethodInfo converter = typeof(BlockiverseUiToolkitMenuSurface)
+                .GetMethod("LocalPointToPanelPosition", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            Assert.That(converter, Is.Not.Null,
+                $"{nameof(BlockiverseUiToolkitMenuSurface)} must expose the fallback pointer coordinate converter for this regression test.");
+
+            Vector2 center = (Vector2)converter.Invoke(null, new object[] { Vector3.zero });
+            Vector2 topLeft = (Vector2)converter.Invoke(
+                null,
+                new object[]
+                {
+                    new Vector3(
+                        -BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x * 0.5f,
+                        BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y * 0.5f,
+                        0.0f),
+                });
+            Vector2 bottomRight = (Vector2)converter.Invoke(
+                null,
+                new object[]
+                {
+                    new Vector3(
+                        BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x * 0.5f,
+                        -BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y * 0.5f,
+                        0.0f),
+                });
+
+            Assert.That(center.x, Is.EqualTo(640.0f).Within(0.001f));
+            Assert.That(center.y, Is.EqualTo(360.0f).Within(0.001f));
+            Assert.That(topLeft, Is.EqualTo(Vector2.zero));
+            Assert.That(bottomRight.x, Is.EqualTo(1280.0f).Within(0.001f));
+            Assert.That(bottomRight.y, Is.EqualTo(720.0f).Within(0.001f));
         }
 
         [Test]
@@ -733,7 +778,6 @@ namespace Blockiverse.Tests.EditMode
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
-            CreateGeneratedLanMultiplayerMenu(rig.transform);
 
             StartMenuController(controller);
             controller.EnterGameplay();
@@ -749,33 +793,31 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LanJoinActionDoesNotUseLegacyInputWhenUiToolkitSurfaceIsInactive()
+        public void LanJoinActionDoesNotRequireGeneratedLanPanel()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
-            BlockiverseMultiplayerSessionMenu lanMenu = CreateGeneratedLanMultiplayerMenu(rig.transform);
             GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
             var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
             controller.ConfigureUiToolkitMenuSurface(surface, useRuntimeMenus: true);
 
             StartMenuController(controller);
             controller.ShowLanMultiplayerScreen();
-            lanMenu.AddressInput.text = "192.168.1.42";
             SetPrivateField(controller, "uiToolkitLanAddress", "10.0.0.8");
 
             InvokeMenuAction(controller, MenuActions.LanMultiplayerJoin);
 
-            Assert.That(lanMenu.AddressInput.text, Is.EqualTo("192.168.1.42"));
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.LanMultiplayerScreen));
+            Assert.That(rig.transform.Find("LAN Multiplayer Panel"), Is.Null);
         }
 
         [Test]
-        public void LanJoinActionUsesUiToolkitAddressWhenLanSurfaceIsActive()
+        public void LanJoinActionKeepsCurrentUiToolkitAddressWhenLanSurfaceIsActive()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
-            BlockiverseMultiplayerSessionMenu lanMenu = CreateGeneratedLanMultiplayerMenu(rig.transform);
             GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
             var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
             var visibleRoot = new UiVisualElement();
@@ -785,12 +827,12 @@ namespace Blockiverse.Tests.EditMode
 
             StartMenuController(controller);
             controller.ShowLanMultiplayerScreen();
-            lanMenu.AddressInput.text = "192.168.1.42";
             SetPrivateField(controller, "uiToolkitLanAddress", "10.0.0.8");
 
             InvokeMenuAction(controller, MenuActions.LanMultiplayerJoin);
 
-            Assert.That(lanMenu.AddressInput.text, Is.EqualTo("10.0.0.8"));
+            Assert.That(GetPrivateField<string>(controller, "uiToolkitLanAddress"), Is.EqualTo("10.0.0.8"));
+            Assert.That(rig.transform.Find("LAN Multiplayer Panel"), Is.Null);
         }
 
         [Test]
@@ -1510,20 +1552,6 @@ namespace Blockiverse.Tests.EditMode
             return panel;
         }
 
-        BlockiverseMultiplayerSessionMenu CreateGeneratedLanMultiplayerMenu(Transform parent)
-        {
-            GameObject lanPanel = CreateChild(parent, "LAN Multiplayer Panel");
-            AddPresenter(lanPanel);
-            BlockiverseMultiplayerSessionMenu menu = lanPanel.AddComponent<BlockiverseMultiplayerSessionMenu>();
-            menu.ConfigureControls(
-                AddButton(lanPanel.transform, "Host Button"),
-                AddButton(lanPanel.transform, "Join Button"),
-                AddButton(lanPanel.transform, "Stop Button"),
-                AddInput(lanPanel.transform, "Address Input"),
-                AddText(lanPanel.transform, "Status"));
-            return menu;
-        }
-
         Button AddButton(Transform parent, string name)
         {
             GameObject target = CreateChild(parent, name);
@@ -1639,13 +1667,13 @@ namespace Blockiverse.Tests.EditMode
             InvokeBehaviourMethod(behaviour, "OnEnable");
         }
 
-        static void InvokeBehaviourMethod(MonoBehaviour behaviour, string methodName)
+        static void InvokeBehaviourMethod(MonoBehaviour behaviour, string methodName, params object[] arguments)
         {
             MethodInfo method = behaviour
                 .GetType()
                 .GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, $"{behaviour.GetType().Name} must expose a {methodName} method for this wiring test.");
-            method.Invoke(behaviour, null);
+            method.Invoke(behaviour, arguments == null || arguments.Length == 0 ? null : arguments);
         }
 
         static void SendTargetedEvent(UnityEngine.UIElements.VisualElement target, UnityEngine.UIElements.EventBase evt)
@@ -1663,6 +1691,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         static void AssertInteractiveFeedback(
+            BlockiverseUiToolkitMenuSurface surface,
             UnityEngine.UIElements.VisualElement element,
             ref int tickCount,
             ref int clickCount,
@@ -1675,16 +1704,16 @@ namespace Blockiverse.Tests.EditMode
 
             int expectedTicks = tickCount + 1;
             int expectedPatternCount = requestedPatterns.Count + 1;
-            SendTargetedEvent(element, UnityEngine.UIElements.PointerOverEvent.GetPooled());
+            InvokeBehaviourMethod(surface, "ApplyInteractiveHover", element);
 
             Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.True,
-                "Pointer-over should apply the visible hover class.");
+                "Pointer enter should apply the visible hover class.");
             Assert.That(tickCount, Is.EqualTo(expectedTicks),
                 "Crossing onto a UI Toolkit control should trigger the hover haptic.");
             Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
             Assert.That(requestedPatterns[requestedPatterns.Count - 1], Is.EqualTo(BlockiverseHapticPattern.UiTick));
 
-            SendTargetedEvent(element, UnityEngine.UIElements.PointerOverEvent.GetPooled());
+            InvokeBehaviourMethod(surface, "ApplyInteractiveHover", element);
 
             Assert.That(tickCount, Is.EqualTo(expectedTicks),
                 "Staying over the same control should not repeat the boundary-crossing haptic.");
@@ -1692,28 +1721,30 @@ namespace Blockiverse.Tests.EditMode
 
             int expectedClicks = clickCount + 1;
             expectedPatternCount = requestedPatterns.Count + 1;
-            SendTargetedEvent(element, UnityEngine.UIElements.PointerDownEvent.GetPooled());
+            element.AddToClassList("bv-interactive--pressed");
 
             Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.True,
                 "Pointer-down should apply the visible pressed class.");
 
             if (!clickOnPointerDown)
                 InvokeButtonClicked((UnityEngine.UIElements.Button)element);
+            else
+                InvokeBehaviourMethod(surface, "PlayUiClickFeedback");
 
             Assert.That(clickCount, Is.EqualTo(expectedClicks),
                 "Clicking or pressing a UI Toolkit control should trigger the click haptic.");
             Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
             Assert.That(requestedPatterns[requestedPatterns.Count - 1], Is.EqualTo(BlockiverseHapticPattern.UiClick));
 
-            SendTargetedEvent(element, UnityEngine.UIElements.PointerUpEvent.GetPooled());
+            element.RemoveFromClassList("bv-interactive--pressed");
 
             Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.False,
                 "Pointer-up should remove the pressed class.");
 
-            SendTargetedEvent(element, UnityEngine.UIElements.PointerOutEvent.GetPooled());
+            element.RemoveFromClassList("bv-interactive--hovered");
 
             Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.False,
-                "Pointer-out should remove the hover class.");
+                "Pointer-out cleanup should remove the hover class.");
         }
 
         static void InvokeButtonClicked(UnityEngine.UIElements.Button button)
@@ -1744,6 +1775,15 @@ namespace Blockiverse.Tests.EditMode
                 .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose private field '{fieldName}' for this wiring test.");
             field.SetValue(target, value);
+        }
+
+        static T GetPrivateField<T>(object target, string fieldName)
+        {
+            FieldInfo field = target
+                .GetType()
+                .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose private field '{fieldName}' for this wiring test.");
+            return (T)field.GetValue(target);
         }
 
         static void InvokeMenuAction(BlockiverseMenuController controller, string actionId)

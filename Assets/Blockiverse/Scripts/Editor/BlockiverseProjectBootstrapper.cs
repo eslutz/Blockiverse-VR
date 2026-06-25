@@ -114,7 +114,6 @@ namespace Blockiverse.Editor
         static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
         static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
         static readonly Vector2 StationPanelSize = new(540.0f, 620.0f);
-        static readonly Vector2 LanMultiplayerPanelSize = new(620.0f, 520.0f);
 
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
@@ -161,7 +160,6 @@ namespace Blockiverse.Editor
         static readonly Vector2 SurvivalHudSize = new(560.0f, 180.0f);
         static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
         static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
-        static readonly Vector2 MultiplayerSessionMenuSize = new(560.0f, 380.0f);
         // --- Dark-glass theme palette -------------------------------------------------------
         // All panels share a deep charcoal-glass base with a single teal accent. Controls use
         // a lighter tinted surface with hover/pressed tints via Button.ColorBlock.
@@ -186,7 +184,6 @@ namespace Blockiverse.Editor
         static readonly Color SurvivalHudSectionColor  = PanelHeaderColor;
         static readonly Color SurvivalHudAccentColor   = AccentColor;
         static readonly Color StartupOverlayPanelColor = new(0.02f, 0.03f, 0.04f, 0.97f);
-        static readonly Color MultiplayerMenuPanelColor= PanelBaseColor;
         static readonly Color MultiplayerMenuInputColor= ControlNormalColor;
         // --- end palette --------------------------------------------------------------------
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
