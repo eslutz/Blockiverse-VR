@@ -58,9 +58,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: Library
-          key: unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          key: unity-library-ci-${{ runner.os }}-Android-6000.3.18f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
           restore-keys: |
-            unity-library-ci-${{ runner.os }}-Android-6000.3.16f1-
+            unity-library-ci-${{ runner.os }}-Android-6000.3.18f1-
             unity-library-ci-${{ runner.os }}-Android-
 
       - name: Compute smoke build settings
@@ -105,7 +105,7 @@ jobs:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion: 6000.3.16f1
+          unityVersion: 6000.3.18f1
           targetPlatform: Android
           buildMethod: Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid
           versioning: None

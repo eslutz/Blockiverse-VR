@@ -11,6 +11,7 @@ namespace Blockiverse.Gameplay
 {
     public enum CreativeWorldGenerationPreset
     {
+        MenuWorld,
         SurvivalLite,
         FlatCreative,
         VoidBuilder
@@ -90,6 +91,7 @@ namespace Blockiverse.Gameplay
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
         public string TextureSet => BlockTextureSetIds.Normalize(textureSet);
+        public bool IsMenuWorldActive { get; private set; }
 
         // The world's rules mode. Explicitly initialized sandbox worlds default to Creative; saves
         // and the new-world flow set it from their manifest/config (see SetGameMode/ParseGameMode).
@@ -386,10 +388,12 @@ namespace Blockiverse.Gameplay
             WorldGenerationSettings settings = generatedWorld.Settings;
             Settings = settings;
             GenerationPreset = generatedWorld.GenerationPreset;
+            IsMenuWorldActive = generatedWorld.GenerationPreset == CreativeWorldGenerationPreset.MenuWorld;
             World = generatedWorld.World;
             pendingContainerLoot = generatedWorld.ContainerLoot;
             pendingWorldTimeTicks = 0;
             ConfigureWorldRuntime(settings, authoritySyncOverride, deferInitialRendererRebuild);
+            interactionController?.SetBlockEditingEnabled(!IsMenuWorldActive);
             PositionRigAtSpawn(settings.SpawnPosition);
         }
 
@@ -437,6 +441,12 @@ namespace Blockiverse.Gameplay
             ConfigureInteractionController(settings);
         }
 
+        public void InitializeMenuWorld()
+        {
+            InitializeGeneratedWorld(WorldSaveGeneration.GenerateMenuWorld());
+            SetGameMode(WorldGameMode.Creative);
+        }
+
         void ConfigureTorchbudLights()
         {
             if (torchbudLightManager == null)
@@ -479,7 +489,9 @@ namespace Blockiverse.Gameplay
                 subscribedWorld = World;
             }
 
-            worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
+            worldTimeClock = GetComponent<WorldTimeClock>();
+            if (worldTimeClock == null)
+                worldTimeClock = FindAnyObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
                 return;
 
@@ -721,10 +733,10 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (hotbar == null)
-                hotbar = FindFirstObjectByType<CreativeHotbar>();
+                hotbar = FindAnyObjectByType<CreativeHotbar>();
 
             if (placementPreview == null)
-                placementPreview = FindFirstObjectByType<PlacementPreview>();
+                placementPreview = FindAnyObjectByType<PlacementPreview>();
 
             if (placementPreview == null)
                 placementPreview = CreatePlacementPreview();

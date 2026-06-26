@@ -349,7 +349,7 @@ namespace Blockiverse.Tests.Networking.EditMode
 
                 var result = (SurvivalCommandResult)processPlace.Invoke(
                     sync,
-                    new object[] { NetworkManager.ServerClientId, 41u, target, backpackSlot, false });
+                    new object[] { NetworkManager.ServerClientId, 41u, target, backpackSlot, false, false });
 
                 Assert.That(result.Accepted, Is.False);
                 Assert.That(result.FailureReason, Is.EqualTo(SurvivalCommandFailureReason.NotPlaceable));
@@ -638,6 +638,7 @@ namespace Blockiverse.Tests.Networking.EditMode
         [Test]
         public void HostStationCraftsAdvanceFromWorldTimeClockTicks()
         {
+            var decoyClockObject = new GameObject("Station Clock Decoy");
             var worldObject = new GameObject("Station Clock World");
             var syncObject = new GameObject("Station Clock Survival Sync");
             var stationPosition = new BlockPosition(2, 1, 2);
@@ -645,6 +646,7 @@ namespace Blockiverse.Tests.Networking.EditMode
             try
             {
                 BlockiverseRuntimeState.Reset();
+                decoyClockObject.AddComponent<WorldTimeClock>();
                 WorldTimeClock clock = worldObject.AddComponent<WorldTimeClock>();
                 clock.Configure(WorldTimeClock.DefaultDayLengthSeconds, startNormalizedTime: 0.25f, timeScale: 1.0f);
                 CreativeWorldManager worldManager = worldObject.AddComponent<CreativeWorldManager>();
@@ -659,6 +661,7 @@ namespace Blockiverse.Tests.Networking.EditMode
                 var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
                 world.SetBlock(stationPosition, BlockRegistry.ClayKiln, trackChange: false);
                 worldManager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.FlatCreative));
+                Assert.That(worldManager.WorldTimeClock, Is.SameAs(clock));
                 worldManager.SetGameMode(WorldGameMode.Survival);
 
                 MultiplayerSurvivalSync sync = syncObject.AddComponent<MultiplayerSurvivalSync>();
@@ -677,6 +680,7 @@ namespace Blockiverse.Tests.Networking.EditMode
                 BlockiverseRuntimeState.Reset();
                 Object.DestroyImmediate(syncObject);
                 Object.DestroyImmediate(worldObject);
+                Object.DestroyImmediate(decoyClockObject);
             }
         }
 

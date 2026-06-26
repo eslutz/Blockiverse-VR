@@ -10,9 +10,8 @@ namespace Blockiverse.VR
     /// Controls the teleport arc for one controller hand. In <see cref="BlockiverseLocomotionMode.Teleport"/>
     /// mode, pushing the thumbstick forward activates the arc; releasing teleports. In Glide mode
     /// (or whenever the rig is in Glide locomotion) the teleport ray stays inactive so the
-    /// thumbstick forward movement is available for walking. The interaction ray (UI + block
-    /// targeting) is disabled while the teleport arc is showing so the trigger cannot also break
-    /// blocks or click menus.
+    /// thumbstick forward movement is available for walking. The gameplay interaction ray is
+    /// disabled while the teleport arc is showing so the trigger cannot also break blocks.
     /// </summary>
     public sealed class BlockiverseLocomotionRayMediator : MonoBehaviour
     {
@@ -144,7 +143,7 @@ namespace Blockiverse.VR
             // SelectExited to the TeleportationArea before regular UI/block interaction resumes.
             bool hasTrackedPose = HasUsableRayPose();
             bool showTeleportRay = active && hasTrackedPose;
-            bool showInteractionRay = enableInteractionRay && hasTrackedPose && IsActiveInteractionHand();
+            bool showInteractionRay = enableInteractionRay && hasTrackedPose && CanUseInteractionRay();
 
             if (teleportRay != null && teleportRay.gameObject.activeSelf != showTeleportRay)
                 teleportRay.gameObject.SetActive(showTeleportRay);
@@ -160,6 +159,16 @@ namespace Blockiverse.VR
 
             ResolveControllerAnchor();
             return controllerAnchor == null || controllerAnchor.IsTracked;
+        }
+
+        bool CanUseInteractionRay()
+        {
+            return IsMenuInputActive() || IsActiveInteractionHand();
+        }
+
+        static bool IsMenuInputActive()
+        {
+            return BlockiverseRuntimeState.MenuInputActive;
         }
 
         bool IsActiveInteractionHand()

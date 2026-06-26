@@ -8,8 +8,8 @@ using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using Blockiverse.VR;
 using NUnit.Framework;
-using TMPro;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -91,7 +91,7 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
             SurvivalFeedbackBridge bridge = CreateBridge();
-            BlockiverseSubtitleToastPanel toastPanel = CreateToastPanel(out TMP_Text toastLabel);
+            BlockiverseSubtitleToastPanel toastPanel = CreateToastPanel(out BlockiverseHudToolkitSurface hudSurface);
             var playedCues = new List<BlockiverseAudioCue>();
 
             audioCuePlayer.ConfigureClip(BlockiverseAudioCue.ToolWrong, CreateClip("tool_wrong"));
@@ -108,7 +108,7 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(playedCues, Is.EqualTo(new[] { BlockiverseAudioCue.ToolWrong }));
             Assert.That(toastPanel.IsVisible, Is.True);
-            Assert.That(toastLabel.text, Is.EqualTo("Inventory full."));
+            Assert.That(hudSurface.CurrentStatusText, Is.EqualTo("Inventory full."));
         }
 
         [Test]
@@ -457,14 +457,14 @@ namespace Blockiverse.Tests.EditMode
             return gameObject.AddComponent<SurvivalFeedbackBridge>();
         }
 
-        BlockiverseSubtitleToastPanel CreateToastPanel(out TMP_Text label)
+        BlockiverseSubtitleToastPanel CreateToastPanel(out BlockiverseHudToolkitSurface surface)
         {
             var gameObject = new GameObject("Subtitle Toast Panel");
             objectsToDestroy.Add(gameObject);
-            label = new GameObject("Toast Label").AddComponent<TextMeshProUGUI>();
-            label.transform.SetParent(gameObject.transform, worldPositionStays: false);
+            surface = gameObject.AddComponent<BlockiverseHudToolkitSurface>();
+            surface.Configure(gameObject.AddComponent<UIDocument>());
             var panel = gameObject.AddComponent<BlockiverseSubtitleToastPanel>();
-            panel.Configure(label);
+            panel.Configure(surface);
             return panel;
         }
 

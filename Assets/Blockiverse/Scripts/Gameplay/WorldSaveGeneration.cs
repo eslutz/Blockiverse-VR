@@ -11,6 +11,12 @@ namespace Blockiverse.Gameplay
         public const int BuilderWorldHeight = 64;
         public const int FlatBuilderGroundHeight = 8;
         public const int VoidBuilderGroundHeight = 32;
+        public const int MenuWorldSeed = 2019;
+        public const int MenuWorldSize = 16;
+        public const int MenuWorldHeight = 16;
+        public const int MenuWorldGroundHeight = 2;
+        public const int MenuWorldBarrierBaseY = MenuWorldGroundHeight;
+        public const int MenuWorldBarrierHeight = 3;
         // Survival worlds always generate at the canonical full height; derived from
         // WorldConstants.WorldMaxY because WorldConstants has no height constant of its own.
         public const int SurvivalWorldHeight = WorldConstants.WorldMaxY + 1;
@@ -20,6 +26,37 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry = BlockRegistry.Default;
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
             return GenerateWorld(CreativeWorldGenerationPreset.SurvivalLite, registry, settings);
+        }
+
+        public static GeneratedCreativeWorld GenerateMenuWorld()
+        {
+            BlockRegistry registry = BlockRegistry.Default;
+            var settings = new WorldGenerationSettings(
+                MenuWorldSize,
+                MenuWorldHeight,
+                MenuWorldSize,
+                WorldConstants.ChunkSize,
+                MenuWorldSeed,
+                MenuWorldGroundHeight);
+            VoxelWorld world = new FlatBuilderPreset(registry, settings).Generate();
+
+            for (int x = 0; x < settings.Bounds.Width; x++)
+            {
+                for (int z = 0; z < settings.Bounds.Depth; z++)
+                {
+                    if (x != 0 && z != 0 && x != settings.Bounds.Width - 1 && z != settings.Bounds.Depth - 1)
+                        continue;
+
+                    for (int y = MenuWorldBarrierBaseY; y < MenuWorldBarrierBaseY + MenuWorldBarrierHeight; y++)
+                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.CutstoneBlock, trackChange: false);
+                }
+            }
+
+            return new GeneratedCreativeWorld(
+                registry,
+                settings,
+                world,
+                CreativeWorldGenerationPreset.MenuWorld);
         }
 
         public static GeneratedCreativeWorld GenerateNewWorld(
@@ -88,6 +125,8 @@ namespace Blockiverse.Gameplay
 
             switch (preset)
             {
+                case CreativeWorldGenerationPreset.MenuWorld:
+                    return GenerateMenuWorld();
                 case CreativeWorldGenerationPreset.FlatCreative:
                     return new GeneratedCreativeWorld(
                         registry,

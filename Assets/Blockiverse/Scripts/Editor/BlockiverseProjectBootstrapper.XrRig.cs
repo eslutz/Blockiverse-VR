@@ -11,7 +11,6 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -31,12 +30,12 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
@@ -100,12 +99,8 @@ namespace Blockiverse.Editor
             EnsureXrRigAvatar(rig);
             EnsureComponent<BlockiverseFoveatedRenderingController>(rig);
             EnsureComponent<BlockiverseComfortTransition>(rig);
-            EnsureComponent<BlockiverseTmpFontFallbackBootstrapper>(rig);
-            EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
             EnsureXrRigTunnelingVignette(rig);
-            EnsureXrRigStartupLoadingOverlay(rig);
-            EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             EnsureXrRigCreativeFlight(rig, inputRig);
@@ -180,12 +175,8 @@ namespace Blockiverse.Editor
             EnsureXrRigAvatar(rig);
             EnsureComponent<BlockiverseFoveatedRenderingController>(rig);
             EnsureComponent<BlockiverseComfortTransition>(rig);
-            EnsureComponent<BlockiverseTmpFontFallbackBootstrapper>(rig);
-            EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
             EnsureXrRigTunnelingVignette(rig);
-            EnsureXrRigStartupLoadingOverlay(rig);
-            EnsureXrRigControllerMappingPopup(rig);
             EnsureXrRigSurvivalHud(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             EnsureXrRigCreativeFlight(rig, inputRig);
@@ -198,8 +189,9 @@ namespace Blockiverse.Editor
             if (camera == null)
                 return;
 
-            camera.cullingMask |= BlockiverseProject.VrUiRaycastLayerMask;
-            camera.cullingMask &= ~BlockiverseProject.XrVisualProjectionLayerMask;
+            camera.cullingMask |= BlockiverseProject.InteractionLayerMask | BlockiverseProject.VrUiLayerMask;
+            camera.cullingMask &= ~(BlockiverseProject.CompositionUiLayerMask |
+                                    BlockiverseProject.XrVisualProjectionLayerMask);
             EditorUtility.SetDirty(camera);
         }
 
@@ -272,9 +264,9 @@ namespace Blockiverse.Editor
             return rayOrigin.transform;
         }
 
-        // Builds native interaction (UI + block targeting) and teleport rays on each controller.
-        // The mediator enables only the active tool-hand interaction ray, while either controller
-        // can own teleport when Teleport mode and thumbstick-forward are active.
+        // Builds the gameplay interaction ray, the dedicated UI Toolkit XRI input ray, and the
+        // teleport ray on each controller. The mediator only gates the visible gameplay and
+        // teleport rays; UI Toolkit input stays on its own controller-level NearFarInteractor.
         static XRRayInteractor EnsureControllerInteractors(
             GameObject controller,
             BlockiverseInputRig inputRig,
@@ -295,14 +287,17 @@ namespace Blockiverse.Editor
 
             XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
             BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetVrUiRaycastLayerMask());
-            interactionRay.selectInput = MakeUnusedButtonReader("Select");
-            interactionRay.activateInput = MakeUnusedButtonReader("Activate");
+            interactionRay.selectInput = MakeUnusedButtonReader(interactionRay.selectInput, "Select");
+            interactionRay.activateInput = MakeUnusedButtonReader(interactionRay.activateInput, "Activate");
             interactionRay.uiPressInput = MakeButtonReader(
+                interactionRay.uiPressInput,
                 "UI Press",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.UiPress));
             interactionRay.uiScrollInput = MakeVector2Reader(
+                interactionRay.uiScrollInput,
                 "UI Scroll",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.UiScroll));
+            EnsureUiToolkitNearFarInteractor(controller, interactionRayObject, rayOrigin, mapName);
             ConfigureLineVisual(interactionRayObject, pointerMaterial);
             EditorUtility.SetDirty(interactionRay);
 
@@ -315,11 +310,12 @@ namespace Blockiverse.Editor
             BlockiverseRayDefaults.ConfigureTeleportRay(teleportRay, rayOrigin, GetInteractionLayerMask());
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
             teleportRay.selectInput = MakeButtonReader(
+                teleportRay.selectInput,
                 "Teleport Select",
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.TeleportSelect));
-            teleportRay.activateInput = MakeUnusedButtonReader("Activate");
-            teleportRay.uiPressInput = MakeUnusedButtonReader("UI Press");
-            teleportRay.uiScrollInput = MakeVector2Reader("UI Scroll", null);
+            teleportRay.activateInput = MakeUnusedButtonReader(teleportRay.activateInput, "Activate");
+            teleportRay.uiPressInput = MakeUnusedButtonReader(teleportRay.uiPressInput, "UI Press");
+            teleportRay.uiScrollInput = MakeVector2Reader(teleportRay.uiScrollInput, "UI Scroll", null);
             ConfigureLineVisual(teleportRayObject, pointerMaterial);
             teleportRayObject.SetActive(false);
             EditorUtility.SetDirty(teleportRay);
@@ -329,6 +325,65 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(mediator);
 
             return interactionRay;
+        }
+
+        static NearFarInteractor EnsureUiToolkitNearFarInteractor(
+            GameObject controller,
+            GameObject interactionRayObject,
+            Transform rayOrigin,
+            string inputActionMapName)
+        {
+            Transform parent = controller != null ? controller.transform : interactionRayObject.transform;
+            Transform uiToolkitRayTransform = parent.Find(UiToolkitInteractionRayName);
+            if (uiToolkitRayTransform == null && interactionRayObject != null)
+                uiToolkitRayTransform = interactionRayObject.transform.Find(UiToolkitInteractionRayName);
+
+            GameObject uiToolkitRayObject;
+            if (uiToolkitRayTransform == null)
+            {
+                uiToolkitRayObject = EnsureChild(parent, UiToolkitInteractionRayName);
+            }
+            else
+            {
+                uiToolkitRayObject = uiToolkitRayTransform.gameObject;
+                uiToolkitRayObject.transform.SetParent(parent, worldPositionStays: false);
+            }
+
+            uiToolkitRayObject.layer = controller != null ? controller.layer : interactionRayObject.layer;
+            uiToolkitRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            uiToolkitRayObject.SetActive(true);
+
+            CurveInteractionCaster farCaster = EnsureComponent<CurveInteractionCaster>(uiToolkitRayObject);
+            farCaster.castOrigin = rayOrigin != null ? rayOrigin : uiToolkitRayObject.transform;
+            farCaster.raycastMask = GetVrUiRaycastLayerMask();
+            farCaster.raycastTriggerInteraction = QueryTriggerInteraction.Collide;
+            farCaster.raycastSnapVolumeInteraction = CurveInteractionCaster.QuerySnapVolumeInteraction.Ignore;
+            farCaster.raycastUIDocumentTriggerInteraction = QueryUIDocumentInteraction.Collide;
+            farCaster.hitDetectionType = CurveInteractionCaster.HitDetectionType.Raycast;
+            farCaster.castDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;
+            farCaster.targetNumCurveSegments = 1;
+
+            NearFarInteractor nearFar = EnsureComponent<NearFarInteractor>(uiToolkitRayObject);
+            nearFar.enableNearCasting = false;
+            nearFar.enableFarCasting = true;
+            nearFar.farInteractionCaster = farCaster;
+            nearFar.enableUIInteraction = true;
+            nearFar.blockUIOnInteractableSelection = false;
+            nearFar.selectInput = MakeUnusedButtonReader(nearFar.selectInput, "Select");
+            nearFar.activateInput = MakeUnusedButtonReader(nearFar.activateInput, "Activate");
+            nearFar.uiPressInput = MakeButtonReader(
+                nearFar.uiPressInput,
+                "UI Press",
+                LoadInputActionReference(inputActionMapName, BlockiverseInputActionNames.UiPress));
+            nearFar.uiScrollInput = MakeVector2Reader(
+                nearFar.uiScrollInput,
+                "UI Scroll",
+                LoadInputActionReference(inputActionMapName, BlockiverseInputActionNames.UiScroll));
+
+            EditorUtility.SetDirty(farCaster);
+            EditorUtility.SetDirty(nearFar);
+            EditorUtility.SetDirty(uiToolkitRayObject);
+            return nearFar;
         }
 
         static void ConfigureLineVisual(GameObject rayObject, Material pointerMaterial)
@@ -366,34 +421,47 @@ namespace Blockiverse.Editor
                 LoadInputActionReference(mapName, BlockiverseInputActionNames.TrackingState));
         }
 
-        static XRInputButtonReader MakeButtonReader(string name, InputActionReference reference)
+        static XRInputButtonReader MakeButtonReader(
+            XRInputButtonReader current,
+            string name,
+            InputActionReference reference)
         {
             if (reference == null)
-                return MakeUnusedButtonReader(name);
+                return MakeUnusedButtonReader(current, name);
 
-            var reader = new XRInputButtonReader(name,
-                inputSourceMode: XRInputButtonReader.InputSourceMode.InputActionReference);
-
+            XRInputButtonReader reader = current ?? new XRInputButtonReader(name);
+            reader.inputSourceMode = XRInputButtonReader.InputSourceMode.InputActionReference;
             reader.inputActionReferencePerformed = reference;
+            reader.inputActionReferenceValue = reference;
+            reader.SetObjectReference(null);
             return reader;
         }
 
-        static XRInputButtonReader MakeUnusedButtonReader(string name)
+        static XRInputButtonReader MakeUnusedButtonReader(XRInputButtonReader current, string name)
         {
-            return new XRInputButtonReader(name,
-                inputSourceMode: XRInputButtonReader.InputSourceMode.Unused);
+            XRInputButtonReader reader = current ?? new XRInputButtonReader(name);
+            reader.inputSourceMode = XRInputButtonReader.InputSourceMode.Unused;
+            reader.inputActionReferencePerformed = null;
+            reader.inputActionReferenceValue = null;
+            reader.SetObjectReference(null);
+            reader.manualPerformed = false;
+            reader.manualValue = 0.0f;
+            return reader;
         }
 
-        static XRInputValueReader<Vector2> MakeVector2Reader(string name, InputActionReference reference)
+        static XRInputValueReader<Vector2> MakeVector2Reader(
+            XRInputValueReader<Vector2> current,
+            string name,
+            InputActionReference reference)
         {
-            if (reference == null)
-                return new XRInputValueReader<Vector2>(name, XRInputValueReader.InputSourceMode.Unused);
-
-            return new XRInputValueReader<Vector2>(name,
-                XRInputValueReader.InputSourceMode.InputActionReference)
-            {
-                inputActionReference = reference
-            };
+            XRInputValueReader<Vector2> reader = current ?? new XRInputValueReader<Vector2>(name);
+            reader.inputSourceMode = reference == null
+                ? XRInputValueReader.InputSourceMode.Unused
+                : XRInputValueReader.InputSourceMode.InputActionReference;
+            reader.inputActionReference = reference;
+            reader.SetObjectReference(null);
+            reader.manualValue = Vector2.zero;
+            return reader;
         }
 
         static InputAction FindRigAction(BlockiverseInputRig inputRig, string mapName, string actionName)
@@ -413,9 +481,6 @@ namespace Blockiverse.Editor
             // This component is intentionally unspawned on the local XR rig; the spawned network
             // player prefab owns the NetworkObject used for multiplayer avatar relay.
             BlockiverseNetworkAvatarRig avatarRig = EnsureComponent<BlockiverseNetworkAvatarRig>(rig);
-            BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
-                EnsureComponent<BlockiverseKeyboardHandVisibilityController>(rig);
-            keyboardHandVisibility.Configure(avatarRig);
             MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(rig);
             BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(rig);
             Transform cameraOffset = rig.transform.Find("Camera Offset");
@@ -435,260 +500,8 @@ namespace Blockiverse.Editor
                 rightHand,
                 MetaAvatarPresentationMode.LocalFirstPerson);
             EditorUtility.SetDirty(avatarRig);
-            EditorUtility.SetDirty(keyboardHandVisibility);
             EditorUtility.SetDirty(avatarProvider);
             EditorUtility.SetDirty(avatarPresenter);
-        }
-
-        static void EnsureXrRigComfortMenu(GameObject rig, BlockiverseInputRig inputRig)
-        {
-            Transform cameraOffset = rig.transform.Find("Camera Offset");
-            Transform leftController = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
-            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
-
-            if (cameraOffset == null)
-                return;
-
-            Transform routedMenuParent = EnsureMenuCompositionSurface(cameraOffset, head).transform.Find(MenuCompositionCanvasName);
-            BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
-            BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
-            GameObject menuObject = EnsureRoutedMenuRectChild(cameraOffset, routedMenuParent, leftController, ComfortMenuName);
-            const float comfortMenuScale = 0.00105f;
-            menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
-            menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
-            menuObject.transform.localScale = Vector3.one * comfortMenuScale;
-
-            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
-            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ComfortMenuSize.x);
-            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, ComfortMenuSize.y);
-
-            Canvas canvas = EnsureComponent<Canvas>(menuObject);
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 10;
-            canvas.enabled = false;
-            ConfigureCanvasWorldCamera(canvas, head);
-
-            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            scaler.dynamicPixelsPerUnit = 10.0f;
-
-            EnsureTrackedDeviceRaycaster(menuObject);
-
-            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
-            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-            RemoveStaleChild(panelObject.transform, "Dominant Hand Only Toggle");
-            Image panelImage = EnsureComponent<Image>(panelObject);
-            Sprite comfortPanelSprite = GetRoundedSprite();
-            if (comfortPanelSprite != null)
-            {
-                panelImage.sprite = comfortPanelSprite;
-                panelImage.type = Image.Type.Sliced;
-            }
-            panelImage.color = ComfortMenuPanelColor;
-
-            EnsureLabel(
-                panelObject.transform,
-                "Title",
-                "Comfort Settings",
-                32,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -36.0f),
-                TitleSizeWithClose(ComfortMenuSize.x, 56.0f));
-
-            EnsureButtonControl(
-                panelObject.transform,
-                "Close Button",
-                "Close",
-                TopRightClosePosition(ComfortMenuSize.x),
-                MenuCloseButtonSize);
-
-            // --- Movement Mode (Glide / Teleport) ---
-            EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -94.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle glideToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Glide Toggle",
-                "Glide Motion",
-                settings == null || settings.LocomotionMode == BlockiverseLocomotionMode.Glide,
-                new Vector2(32.0f, -134.0f));
-
-            Toggle teleportToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Teleport Toggle",
-                "Teleport",
-                settings != null && settings.LocomotionMode == BlockiverseLocomotionMode.Teleport,
-                new Vector2(32.0f, -182.0f));
-
-            Slider moveSpeedSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "Move Speed Slider",
-                "Move Speed",
-                settings != null ? settings.ContinuousMoveSpeed : 1.8f,
-                new Vector2(32.0f, -246.0f),
-                minValue: 0.5f,
-                maxValue: 4.0f);
-
-            // --- Turning ---
-            EnsureLabel(panelObject.transform, "Turning Label", "Turning", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(532.0f, -94.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle smoothTurnToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Smooth Turn Toggle",
-                "Smooth Turn",
-                settings != null && settings.SmoothTurnEnabled,
-                new Vector2(532.0f, -134.0f));
-
-            Slider snapTurnSlider = EnsureSnapTurnSlider(
-                panelObject.transform,
-                settings != null ? settings.SnapTurnDegrees : 45.0f,
-                new Vector2(532.0f, -198.0f));
-
-            Toggle turnAroundToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Turn Around Toggle",
-                "Turn Around",
-                settings == null || settings.SnapTurnAroundEnabled,
-                new Vector2(532.0f, -300.0f));
-
-            Slider smoothTurnSpeedSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "Smooth Turn Speed Slider",
-                "Smooth Turn Speed",
-                settings != null ? settings.ContinuousTurnSpeed : 60.0f,
-                new Vector2(532.0f, -364.0f),
-                minValue: 30.0f,
-                maxValue: 180.0f);
-
-            // --- Hand Roles ---
-            EnsureLabel(panelObject.transform, "Control Options Label", "Control Options", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -380.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle leftHandToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Left Hand Toggle",
-                "Left-Handed",
-                settings != null && settings.DominantHand == BlockiverseControllerRole.Left,
-                new Vector2(32.0f, -420.0f));
-
-            Toggle toggleToMineToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Toggle To Mine Toggle",
-                "Toggle To Mine",
-                settings != null && settings.ToggleToMineEnabled,
-                new Vector2(32.0f, -468.0f));
-
-            // --- Vignette ---
-            EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(532.0f, -500.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle vignetteToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Vignette Toggle",
-                "Motion Vignette",
-                settings != null && settings.VignetteEnabled,
-                new Vector2(532.0f, -540.0f));
-
-            Slider vignetteSlider = EnsureVignetteSlider(
-                panelObject.transform,
-                settings != null ? settings.VignetteStrength : 0.0f,
-                new Vector2(532.0f, -604.0f));
-
-            EnsureLabel(panelObject.transform, "Player View Label", "Player View", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -590.0f), new Vector2(300.0f, 36.0f));
-
-            Slider eyeHeightSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "Eye Height Slider",
-                "Eye Height",
-                settings != null ? settings.StandingEyeHeight : 1.6f,
-                new Vector2(32.0f, -632.0f),
-                minValue: 1.0f,
-                maxValue: 2.2f);
-
-            Slider uiScaleSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "UI Scale Slider",
-                "UI Scale",
-                settings != null ? settings.UiScale : 1.0f,
-                new Vector2(532.0f, -724.0f),
-                minValue: 0.85f,
-                maxValue: 1.35f);
-
-            // --- Height Reset ---
-            Button heightResetButton = EnsureButtonControl(
-                panelObject.transform,
-                "Height Reset Button",
-                "Reset Height",
-                new Vector2(32.0f, -742.0f));
-
-            if (heightReset != null)
-            {
-                RemovePersistentListeners(
-                    heightResetButton.onClick,
-                    heightReset,
-                    nameof(BlockiverseHeightReset.ResetHeight));
-                UnityEventTools.AddPersistentListener(heightResetButton.onClick, heightReset.ResetHeight);
-                EditorUtility.SetDirty(heightResetButton);
-            }
-
-            BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
-            menu.Configure(canvas, settings, heightReset);
-            menu.ConfigureControls(
-                glideToggle,
-                teleportToggle,
-                smoothTurnToggle,
-                snapTurnSlider,
-                turnAroundToggle,
-                vignetteToggle,
-                vignetteSlider,
-                leftHandToggle,
-                toggleToMineToggle,
-                eyeHeightSlider,
-                moveSpeedSlider,
-                smoothTurnSpeedSlider,
-                uiScaleSlider);
-            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
-            presenter.Configure(canvas, head, 1.3f, 0.0f, -0.06f, 0.0f, comfortMenuScale);
-            presenter.ConfigureComfortSettings(settings);
-            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
-
-            if (inputRig != null)
-            {
-                // Hardware Menu is owned by BlockiverseMenuController's pause/back route.
-                // Comfort settings open through the Settings menu, so scrub stale direct toggles.
-                RemovePersistentListeners(
-                    inputRig.MenuPressed,
-                    menu,
-                    nameof(BlockiverseComfortMenu.ToggleVisible));
-                RemovePersistentListeners(
-                    inputRig.MenuPressed,
-                    presenter,
-                    nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
-                EditorUtility.SetDirty(inputRig);
-            }
-
-            EditorUtility.SetDirty(menuObject);
-            EditorUtility.SetDirty(menu);
-            EditorUtility.SetDirty(presenter);
         }
 
         static void EnsureXrRigTunnelingVignette(GameObject rig)
@@ -776,10 +589,10 @@ namespace Blockiverse.Editor
 
         static void EnsureXrRigInteraction(GameObject rig, BlockiverseInputRig inputRig)
         {
-            // The native XRRayInteractor (built alongside the controller anchor) replaces the old
-            // custom ray pointer + UI pointer; strip any stale objects/scripts from older prefabs.
+            // The generated rig uses XRI controller interactors for world targeting and UI Toolkit
+            // input; strip any stale missing-script objects left on generated prefabs.
             RemoveStaleRayPointer(rig);
-            EnsureBlockMenuPlaceholder(rig, inputRig);
+            EnsureComponent<CreativeHotbar>(rig).ConfigureFromDefaultCatalog(null);
         }
 
         static void RemoveStaleRayPointer(GameObject rig)
@@ -944,13 +757,7 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(hotbar);
             }
 
-            foreach (BlockiverseComfortMenu menu in rig.GetComponentsInChildren<BlockiverseComfortMenu>(true))
-            {
-                menu.ConfigureFeedback(audioCuePlayer, interactionHaptics);
-                EditorUtility.SetDirty(menu);
-            }
-
-            foreach (BlockiverseWorldSpacePanelPresenter presenter in rig.GetComponentsInChildren<BlockiverseWorldSpacePanelPresenter>(true))
+            foreach (BlockiverseUiToolkitMenuPresenter presenter in rig.GetComponentsInChildren<BlockiverseUiToolkitMenuPresenter>(true))
             {
                 presenter.ConfigureFeedback(
                     audioCuePlayer,

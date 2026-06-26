@@ -15,8 +15,10 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 using UnityEngine.XR.Interaction.Toolkit.Interactors.Visuals;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
@@ -26,8 +28,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
-using TMPro;
-using UnityEngine.UI;
+using UIDocument = UnityEngine.UIElements.UIDocument;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -151,12 +152,12 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
         [Test]
-        public void XrRigPrefabIsWiredForComfortSettingsMenu()
+        public void XrRigPrefabUsesUiToolkitMenusWithoutGeneratedComfortSurface()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
@@ -166,8 +167,6 @@ namespace Blockiverse.Tests.EditMode
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
             BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
-            Transform menuTransform = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Comfort Settings Menu");
-            BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
@@ -177,37 +176,67 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f), "Generated rig should start with a fully open vignette strength.");
             Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f), "Generated rig should leave the title/menu view unobscured.");
             Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
-            Assert.That(menuTransform, Is.Not.Null);
-            Assert.That(menu, Is.Not.Null);
-            Assert.That(menu.IsVisible, Is.False);
+            Assert.That(prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface"), Is.Null,
+                "The title/menu surface is a fixed Boot-scene menu-world object, not a child of the XR rig.");
             Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(0),
                 "Hardware Menu is routed by BlockiverseMenuController at runtime; persistent comfort toggles double-handle pause/back.");
-            BlockiverseWorldSpacePanelPresenter presenter = menuTransform.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+        }
+
+        [Test]
+        public void GeneratedUiToolkitMenuHasReadablePhysicalSize()
+        {
+            Scene scene = EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single);
+            GameObject menuRoot = scene.GetRootGameObjects().FirstOrDefault(root => root.name == "Menu World UI");
+            Transform surface = menuRoot != null ? menuRoot.transform.Find("UI Toolkit Menu Surface") : null;
+            Assert.That(surface, Is.Not.Null, "Runtime UI Toolkit menu surface should be generated under the fixed menu-world root.");
+            Assert.That(surface.localScale.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f),
+                "UI Toolkit menu uses a pixel layout with a small world transform scale so it renders at a readable VR size.");
+            Assert.That(surface.localScale.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
+            Assert.That(surface.localScale.z, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
+
+            UIDocument document = surface.GetComponent<UIDocument>();
+            Assert.That(document, Is.Not.Null);
+            Assert.That(document.worldSpaceSizeMode, Is.EqualTo(UIDocument.WorldSpaceSizeMode.Fixed));
+            Assert.That(document.worldSpaceSize.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.x).Within(0.001f),
+                "UITK menu width should stay headset-readable without filling the player's view.");
+            Assert.That(document.worldSpaceSize.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.y).Within(0.001f),
+                "UITK menu height should stay headset-readable without filling the player's view.");
+            var serializedPanelSettings = new SerializedObject(document.panelSettings);
+            SerializedProperty pixelsPerUnit = serializedPanelSettings.FindProperty("m_PixelsPerUnit");
+            Assert.That(pixelsPerUnit, Is.Not.Null,
+                "PanelSettings should expose the UI Toolkit pixels-per-unit conversion used for world-space rendering.");
+            Assert.That(
+                document.worldSpaceSize.x / pixelsPerUnit.floatValue * surface.localScale.x,
+                Is.EqualTo(1.28f).Within(0.01f),
+                "Rendered UI Toolkit geometry should be physically readable; a large collider alone does not make the visual panel readable.");
+            Assert.That(
+                document.worldSpaceSize.y / pixelsPerUnit.floatValue * surface.localScale.y,
+                Is.EqualTo(0.72f).Within(0.01f));
+
+            BlockiverseUiToolkitMenuPresenter presenter = surface.GetComponent<BlockiverseUiToolkitMenuPresenter>();
             Assert.That(presenter, Is.Not.Null);
-            Assert.That(presenter.PlaysShowFeedback, Is.True);
-            Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
-            Assert.That(presenter.PlaysHideFeedback, Is.True);
-            Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
-            Assert.That(presenter.PlacementRoot.localScale.x, Is.LessThanOrEqualTo(0.00135f), "Comfort menu should no longer fill the first-person view.");
+            FieldInfo panelScaleField = typeof(BlockiverseUiToolkitMenuPresenter)
+                .GetField("panelScale", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(panelScaleField, Is.Not.Null);
+            Assert.That((float)panelScaleField.GetValue(presenter), Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f),
+                "Presenter scale should match the fixed generated menu transform scale.");
 
-            Image panelImage = menuTransform.Find("Panel")?.GetComponent<Image>();
-            TMP_Text title = menuTransform.Find("Panel/Title")?.GetComponent<TMP_Text>();
+            BoxCollider worldSpaceCollider = surface.GetComponent<BoxCollider>();
+            Assert.That(worldSpaceCollider, Is.Not.Null,
+                "UI Toolkit world-space menus need a collider so XR UI rays can hit the document instead of passing through it.");
+            Assert.That(worldSpaceCollider.isTrigger, Is.True);
+            Assert.That(worldSpaceCollider.size.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x).Within(0.001f));
+            Assert.That(worldSpaceCollider.size.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y).Within(0.001f));
+            Assert.That(worldSpaceCollider.size.x * surface.localScale.x, Is.EqualTo(1.28f).Within(0.01f),
+                "UI Toolkit menu should be large enough to read in headset without returning to the previous oversized panel.");
+            Assert.That(worldSpaceCollider.size.y * surface.localScale.y, Is.EqualTo(0.72f).Within(0.01f));
 
-            Assert.That(panelImage, Is.Not.Null);
-            Assert.That(panelImage.color.a, Is.GreaterThanOrEqualTo(0.98f), "Comfort menu panel should be effectively opaque over terrain.");
-            Assert.That(title, Is.Not.Null);
-            Assert.That(title.fontSize, Is.LessThanOrEqualTo(34.0f), "Comfort menu title should fit a compact VR panel.");
-
-            // Menu must contain Glide and Teleport selectors + vignette toggle.
-            Toggle glideToggle = menuTransform.Find("Panel/Glide Toggle")?.GetComponent<Toggle>();
-            Toggle teleportToggle = menuTransform.Find("Panel/Teleport Toggle")?.GetComponent<Toggle>();
-            Toggle vignetteToggle = menuTransform.Find("Panel/Vignette Toggle")?.GetComponent<Toggle>();
-            Slider vignetteSlider = menuTransform.Find("Panel/Vignette Slider/Slider")?.GetComponent<Slider>();
-
-            Assert.That(glideToggle, Is.Not.Null, "Comfort menu should have a Glide Motion toggle.");
-            Assert.That(teleportToggle, Is.Not.Null, "Comfort menu should have a Teleport toggle.");
-            Assert.That(vignetteToggle, Is.Not.Null, "Comfort menu should have a Motion Vignette toggle.");
-            Assert.That(vignetteSlider, Is.Not.Null, "Comfort menu should have a vignette strength slider.");
+            var serializedDocument = new SerializedObject(document);
+            SerializedProperty colliderProperty = serializedDocument.FindProperty("m_WorldSpaceCollider");
+            Assert.That(colliderProperty, Is.Not.Null,
+                "UIDocument should expose the serialized world-space collider reference.");
+            Assert.That(colliderProperty.objectReferenceValue, Is.SameAs(worldSpaceCollider),
+                "UIDocument must be wired to the generated collider for UI Toolkit XR interaction.");
         }
 
         [Test]
@@ -278,12 +307,12 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
         [Test]
-        public void CreativeInputBridgeKeepsRayStableForPausedMenus()
+        public void CreativeInputBridgeKeepsWorldSpaceMenuRayAtGameplayLength()
         {
             GameObject root = new("Menu Ray Test");
 
@@ -310,7 +339,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(lineRenderer.enabled, Is.True, "Menus need the ray visual even while world input is blocked.");
                 Assert.That(lineVisual.enabled, Is.True, "Menus need the XRI line visual even while world input is blocked.");
                 Assert.That(lineVisual.overrideInteractorLineLength, Is.False,
-                    "Title/loading menus should use the same ray length behavior as gameplay instead of forcing a short miss ray.");
+                    "World-space XR menus should keep the controller ray at its normal gameplay length.");
                 Assert.That(lineVisual.lineLength, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
             }
             finally
@@ -505,6 +534,12 @@ namespace Blockiverse.Tests.EditMode
 
                 Transform rightControllerRayOrigin = rightController.Find(ControllerRayOriginName);
                 Transform leftControllerRayOrigin = leftController.Find(ControllerRayOriginName);
+                NearFarInteractor rightUiToolkitInteractor = rightController
+                    .Find("UI Toolkit Ray Input")
+                    ?.GetComponent<NearFarInteractor>();
+                NearFarInteractor leftUiToolkitInteractor = leftController
+                    .Find("UI Toolkit Ray Input")
+                    ?.GetComponent<NearFarInteractor>();
 
                 AssertControllerRayOrigin(rightController, rightControllerRayOrigin);
                 AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
@@ -512,6 +547,16 @@ namespace Blockiverse.Tests.EditMode
                 AssertButtonReaderReferencesAction(leftInteractionRay.uiPressInput, leftUiPress, "Left trigger must click UI through the left UI Press action.");
                 AssertInteractionRayDefaults(rightInteractionRay);
                 AssertInteractionRayDefaults(leftInteractionRay);
+                AssertUiToolkitNearFarInteractorDefaults(
+                    rightUiToolkitInteractor,
+                    rightControllerRayOrigin,
+                    rightUiPress,
+                    "Right UI Toolkit near/far interactor must drive world-space UI Toolkit menus.");
+                AssertUiToolkitNearFarInteractorDefaults(
+                    leftUiToolkitInteractor,
+                    leftControllerRayOrigin,
+                    leftUiPress,
+                    "Left UI Toolkit near/far interactor must drive world-space UI Toolkit menus.");
                 AssertButtonReaderReferencesAction(rightTeleportRay.selectInput, rightTeleportSelect, "Right teleport ray must use right thumbstick select.");
                 AssertButtonReaderReferencesAction(leftTeleportRay.selectInput, leftTeleportSelect, "Left teleport ray must use left thumbstick select.");
                 Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
@@ -530,7 +575,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -611,6 +656,64 @@ namespace Blockiverse.Tests.EditMode
             {
                 Object.DestroyImmediate(rigObject);
                 Object.DestroyImmediate(worldObject);
+            }
+        }
+
+        [Test]
+        public void MenuInputDoesNotSuppressXriLocomotionProviders()
+        {
+            var rigObject = new GameObject("Menu Locomotion Rig");
+
+            try
+            {
+                var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                settings.LocomotionMode = BlockiverseLocomotionMode.Glide;
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                var continuousMove = rigObject.AddComponent<ContinuousMoveProvider>();
+                var snapTurn = rigObject.AddComponent<SnapTurnProvider>();
+                var gravity = rigObject.AddComponent<GravityProvider>();
+                var jump = rigObject.AddComponent<JumpProvider>();
+
+                inputRig.ConfigureLocomotion(
+                    teleport: null,
+                    snapTurn: snapTurn,
+                    reset: null,
+                    continuousMove: continuousMove,
+                    settings: settings,
+                    gravity: gravity,
+                    jump: jump);
+
+                inputRig.RefreshLocomotionProviderState();
+
+                Assert.That(continuousMove.enabled, Is.True);
+                Assert.That(gravity.enabled, Is.True);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+                Assert.That(snapTurn.enabled, Is.True);
+
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false, menuInputActive: true);
+                inputRig.RefreshLocomotionProviderState();
+
+                Assert.That(continuousMove.enabled, Is.True,
+                    "Menu world grounding, not menu route state, should keep the title player stable.");
+                Assert.That(gravity.enabled, Is.True);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+                Assert.That(snapTurn.enabled, Is.True);
+
+                BlockiverseRuntimeState.Reset();
+                inputRig.RefreshLocomotionProviderState();
+
+                Assert.That(continuousMove.enabled, Is.True);
+                Assert.That(gravity.enabled, Is.True);
+                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(jump.enabled, Is.True);
+                Assert.That(snapTurn.enabled, Is.True);
+            }
+            finally
+            {
+                BlockiverseRuntimeState.Reset();
+                Object.DestroyImmediate(rigObject);
             }
         }
 
@@ -794,7 +897,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -849,10 +952,19 @@ namespace Blockiverse.Tests.EditMode
                 AssertGeneratedReference(inputModule.scrollWheelAction, "Boot XRUIInputModule scroll");
                 AssertGeneratedReference(inputModule.navigateAction, "Boot XRUIInputModule navigate");
                 AssertGeneratedReference(inputModule.submitAction, "Boot XRUIInputModule submit");
+
+                UnityEngine.UIElements.PanelInputConfiguration panelInputConfiguration =
+                    inputModule.GetComponent<UnityEngine.UIElements.PanelInputConfiguration>();
+                Assert.That(panelInputConfiguration, Is.Not.Null,
+                    "UI Toolkit world-space tracked-device input needs PanelInputConfiguration on the EventSystem.");
+                Assert.That(
+                    panelInputConfiguration.panelInputRedirection,
+                    Is.EqualTo(UnityEngine.UIElements.PanelInputConfiguration.PanelInputRedirection.Never),
+                    "UI Toolkit tracked-device input should not be redirected through the EventSystem.");
             }
             finally
             {
-                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                OpenEmptySceneIgnoringUnityCleanupLogs();
             }
         }
 
@@ -874,7 +986,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigPrefabIsWiredForNativeInteractorsAndBlockMenu()
+        public void XrRigPrefabIsWiredForNativeInteractorsAndUiToolkitBlockCatalog()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
@@ -883,32 +995,41 @@ namespace Blockiverse.Tests.EditMode
             Transform rightController = prefab.transform.Find("Camera Offset/Right Controller");
             Transform rightInteractionRayTransform = rightController?.Find("Interaction Ray");
             Transform teleportRayTransform = rightController?.Find("Teleport Ray");
+            Transform rightUiToolkitRayTransform = rightController?.Find("UI Toolkit Ray Input");
             Transform rightControllerRayOrigin = rightController?.Find(ControllerRayOriginName);
             Transform leftController = prefab.transform.Find("Camera Offset/Left Controller");
             Transform leftInteractionRayTransform = leftController?.Find("Interaction Ray");
+            Transform leftUiToolkitRayTransform = leftController?.Find("UI Toolkit Ray Input");
             Transform leftControllerRayOrigin = leftController?.Find(ControllerRayOriginName);
             Transform rightRayOrigin = prefab.transform.Find("Camera Offset/Right Ray Origin");
             Transform leftRayOrigin = prefab.transform.Find("Camera Offset/Left Ray Origin");
             Transform leftTeleportRayTransform = leftController?.Find("Teleport Ray");
-            Transform blockMenu = prefab.transform.Find("Camera Offset/Block Menu");
             XRRayInteractor rightInteractionRay = rightInteractionRayTransform?.GetComponent<XRRayInteractor>();
             XRRayInteractor leftInteractionRay = leftInteractionRayTransform?.GetComponent<XRRayInteractor>();
+            NearFarInteractor rightUiToolkitInteractor = rightUiToolkitRayTransform?.GetComponent<NearFarInteractor>();
+            NearFarInteractor leftUiToolkitInteractor = leftUiToolkitRayTransform?.GetComponent<NearFarInteractor>();
             XRInteractorLineVisual rightInteractionLineVisual = rightInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
             XRInteractorLineVisual leftInteractionLineVisual = leftInteractionRayTransform?.GetComponent<XRInteractorLineVisual>();
             XRRayInteractor teleportRay = teleportRayTransform?.GetComponent<XRRayInteractor>();
             XRInteractorLineVisual teleportLineVisual = teleportRayTransform?.GetComponent<XRInteractorLineVisual>();
             BlockiverseLocomotionRayMediator mediator = rightController?.GetComponent<BlockiverseLocomotionRayMediator>();
             BlockiverseCreativeInputBridge creativeInputBridge = prefab.GetComponent<BlockiverseCreativeInputBridge>();
-            BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
-                prefab.GetComponent<BlockiverseKeyboardHandVisibilityController>();
-            CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
-            Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
-            BlockiverseWorldSpacePanelPresenter blockMenuPresenter = blockMenu?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            CreativeHotbar hotbar = prefab.GetComponent<CreativeHotbar>();
 
             Assert.That(rightController, Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
             Assert.That(rightInteractionRay, Is.Not.Null);
             Assert.That(leftInteractionRay, Is.Not.Null);
+            Assert.That(rightUiToolkitRayTransform, Is.Not.Null);
+            Assert.That(leftUiToolkitRayTransform, Is.Not.Null);
+            Assert.That(rightUiToolkitRayTransform.parent, Is.SameAs(rightController),
+                "UI Toolkit menu input must stay active even if the gameplay interaction ray object is toggled.");
+            Assert.That(leftUiToolkitRayTransform.parent, Is.SameAs(leftController),
+                "UI Toolkit menu input must stay active even if the gameplay interaction ray object is toggled.");
+            Assert.That(rightInteractionRayTransform.Find("UI Toolkit Ray Input"), Is.Null,
+                "UI Toolkit menu input must not be nested under the toggled gameplay interaction ray.");
+            Assert.That(leftInteractionRayTransform.Find("UI Toolkit Ray Input"), Is.Null,
+                "UI Toolkit menu input must not be nested under the toggled gameplay interaction ray.");
             AssertInteractionRayDefaults(rightInteractionRay);
             AssertInteractionRayDefaults(leftInteractionRay);
             Assert.That(prefab.transform.Find("Camera Offset/Right Aim Pose"), Is.Null,
@@ -923,6 +1044,16 @@ namespace Blockiverse.Tests.EditMode
             AssertControllerRayOrigin(leftController, leftControllerRayOrigin);
             Assert.That(rightInteractionRay.rayOriginTransform, Is.SameAs(rightControllerRayOrigin));
             Assert.That(leftInteractionRay.rayOriginTransform, Is.SameAs(leftControllerRayOrigin));
+            AssertUiToolkitNearFarInteractorDefaults(
+                rightUiToolkitInteractor,
+                rightControllerRayOrigin,
+                null,
+                "Right interaction ray must include the XRI interactor type that supports world-space UI Toolkit pointers.");
+            AssertUiToolkitNearFarInteractorDefaults(
+                leftUiToolkitInteractor,
+                leftControllerRayOrigin,
+                null,
+                "Left interaction ray must include the XRI interactor type that supports world-space UI Toolkit pointers.");
             Assert.That(rightInteractionLineVisual, Is.Not.Null);
             AssertLineVisualDefaults(rightInteractionLineVisual);
             Assert.That(leftInteractionLineVisual, Is.Not.Null);
@@ -945,25 +1076,51 @@ namespace Blockiverse.Tests.EditMode
             AssertLineVisualDefaults(leftTeleportLineVisual);
             Assert.That(leftTeleportRayTransform.gameObject.activeSelf, Is.False);
             Assert.That(creativeInputBridge, Is.Not.Null);
-            Assert.That(keyboardHandVisibility, Is.Not.Null,
-                "The local XR rig must hide first-person fallback hands while the Quest system keyboard is visible.");
             Assert.That(prefab.transform.Find("Camera Offset/Right Controller/Ray Pointer Line"), Is.Null);
-            Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
-            Assert.That(blockMenuCanvas, Is.Not.Null);
-            Assert.That(blockMenuPresenter, Is.Not.Null);
-            Assert.That(blockMenuPresenter.PlaysShowFeedback, Is.True);
-            Assert.That(blockMenuPresenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.InventoryOpen));
-            Assert.That(blockMenuPresenter.PlaysHideFeedback, Is.True);
-            Assert.That(blockMenuPresenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.InventoryClose));
-            Assert.That(blockMenuCanvas.enabled, Is.False);
 
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
             UnityEngine.Events.UnityEvent quickMenuEvent = inputRig.QuickMenuPressed;
             Assert.That(quickMenuEvent, Is.Not.Null);
-            Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(1));
-            Assert.That(quickMenuEvent.GetPersistentTarget(0), Is.SameAs(blockMenuPresenter));
-            Assert.That(quickMenuEvent.GetPersistentMethodName(0), Is.EqualTo(nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible)));
+            Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(0),
+                "Support-grip quick menu input must be routed by BlockiverseMenuController at runtime so UI Toolkit menus can own raycasts.");
+        }
+
+        [Test]
+        public void UiToolkitNearFarInteractorsStayActiveWhenGameplayInteractionRayIsHidden()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+            Assert.That(prefab, Is.Not.Null);
+
+            GameObject instance = Object.Instantiate(prefab);
+            try
+            {
+                Transform rightController = instance.transform.Find("Camera Offset/Right Controller");
+                Transform leftController = instance.transform.Find("Camera Offset/Left Controller");
+                Transform rightInteractionRay = rightController?.Find("Interaction Ray");
+                Transform leftInteractionRay = leftController?.Find("Interaction Ray");
+                Transform rightUiToolkitRay = rightController?.Find("UI Toolkit Ray Input");
+                Transform leftUiToolkitRay = leftController?.Find("UI Toolkit Ray Input");
+
+                Assert.That(rightInteractionRay, Is.Not.Null);
+                Assert.That(leftInteractionRay, Is.Not.Null);
+                Assert.That(rightUiToolkitRay, Is.Not.Null);
+                Assert.That(leftUiToolkitRay, Is.Not.Null);
+
+                rightInteractionRay.gameObject.SetActive(false);
+                leftInteractionRay.gameObject.SetActive(false);
+
+                Assert.That(rightUiToolkitRay.gameObject.activeInHierarchy, Is.True,
+                    "UI Toolkit XRI menu input must remain active when the gameplay interaction ray is hidden.");
+                Assert.That(leftUiToolkitRay.gameObject.activeInHierarchy, Is.True,
+                    "UI Toolkit XRI menu input must remain active when the gameplay interaction ray is hidden.");
+                Assert.That(rightUiToolkitRay.GetComponent<NearFarInteractor>(), Is.Not.Null);
+                Assert.That(leftUiToolkitRay.GetComponent<NearFarInteractor>(), Is.Not.Null);
+            }
+            finally
+            {
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
+            }
         }
 
         [Test]
@@ -1015,85 +1172,42 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigPrefabShowsControllerMappingPopupAndInteractiveSurvivalHud()
+        public void XrRigPrefabRoutesControllerMappingThroughUiToolkitAndKeepsInteractiveSurvivalHud()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
 
-            Transform popup = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Controller Mapping Popup");
-            Transform startupOverlay = prefab.transform.Find("Camera Offset/Startup Loading Overlay");
+            Transform uiToolkitSurface = prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface");
             Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
 
-            Assert.That(popup, Is.Not.Null);
-            BlockiverseWorldSpacePanelPresenter popupPresenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(popupPresenter, Is.Not.Null);
-            Assert.That(popupPresenter.ShowOnStart, Is.False,
-                "The title router must own first-frame menu visibility; controls stay available from Settings.");
-            Assert.That(popup.GetComponent<Canvas>(), Is.Null, "The routed popup should use the shared composition menu canvas.");
-            Assert.That(popup.gameObject.activeSelf, Is.False);
-            Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
-            string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
-                .Select(label => label.text));
-
-            // Canonical controller mapping (shared with the Settings → Controls screen).
-            Assert.That(popupText, Does.Contain("Dominant trigger: press UI / break"));
-            Assert.That(popupText, Does.Contain("Dominant grip: place / use"));
-            Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
-            Assert.That(popupText, Does.Contain("Menu: pause"));
-            Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
-            Assert.That(popupText, Does.Contain("Dominant stick click: crouch"));
-            Assert.That(popupText, Does.Contain("Dominant primary button: jump"));
-            Assert.That(popupText, Does.Contain("Dominant secondary button: toggle block editing"));
-            Assert.That(popupText, Does.Contain("Support stick: move"));
-            Assert.That(popupText, Does.Contain("Support stick click: sprint"));
-            Assert.That(popupText, Does.Contain("Either stick hold up: teleport aim, release to land"));
-            Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
-            Assert.That(popupText, Does.Not.Contain("Left X: jump"));
-            Assert.That(popupText, Does.Not.Contain("Left Y: undo"));
-            Assert.That(popupText, Does.Not.Contain("undo"));
-
-            Assert.That(startupOverlay, Is.Not.Null);
-            BlockiverseWorldSpacePanelPresenter startupPresenter = startupOverlay.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(startupPresenter, Is.Not.Null);
-            Assert.That(startupPresenter.ShowOnStart, Is.False,
-                "The loading artwork must not auto-render over the title menu after the app reaches the menu.");
-            Assert.That(startupOverlay.GetComponent<Canvas>()?.enabled, Is.False);
-            Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
-                "Startup artwork is decorative and must not intercept tracked-device UI rays.");
-
-            Canvas menuCanvas = popup.GetComponentInParent<Canvas>(includeInactive: true);
-            Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
-            Assert.That(menuCanvas, Is.Not.Null);
-            Assert.That(startupCanvas, Is.Not.Null);
-            Assert.That(menuCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
-                "The first-run controller map must render in front of any startup artwork.");
-
-            CanvasGroup startupInputGate = startupOverlay.GetComponent<CanvasGroup>();
-            Assert.That(startupInputGate, Is.Not.Null);
-            Assert.That(startupInputGate.interactable, Is.False);
-            Assert.That(startupInputGate.blocksRaycasts, Is.False);
-
-            foreach (Graphic graphic in startupOverlay.GetComponentsInChildren<Graphic>(includeInactive: true))
-                Assert.That(graphic.raycastTarget, Is.False, $"{graphic.name} must not receive UI raycasts.");
+            BlockiverseMenuController menuController = prefab.GetComponent<BlockiverseMenuController>();
+            Assert.That(uiToolkitSurface, Is.Null,
+                "The title/menu UI Toolkit surface is fixed in the Boot scene's menu world instead of following the XR rig.");
+            Assert.That(menuController, Is.Not.Null);
 
             Assert.That(survivalHud, Is.Not.Null);
-            Assert.That(survivalHud.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(11));
-            Assert.That(survivalHud.GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true), Is.Not.Null);
-            Assert.That(survivalHud.GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true), Is.Not.Null);
+            Assert.That(survivalHud.GetComponent<SurvivalHudController>(), Is.Not.Null);
+            Assert.That(survivalHud.GetComponent<BlockiverseHudToolkitSurface>(), Is.Not.Null);
 
-            RectTransform survivalHudRect = survivalHud.GetComponent<RectTransform>();
-            Assert.That(survivalHudRect, Is.Not.Null);
-            Assert.That(survivalHudRect.rect.width, Is.LessThanOrEqualTo(600.0f),
+            string prefabYaml = File.ReadAllText(BlockiverseProject.XrRigPrefabPath);
+            Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Inventory" + "Panel"));
+            Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Crafting" + "Panel"));
+            Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Crate" + "Panel"));
+            Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Health" + "Panel"));
+
+            UIDocument survivalHudDocument = survivalHud.GetComponent<UIDocument>();
+            Assert.That(survivalHudDocument, Is.Not.Null);
+            Assert.That(survivalHudDocument.worldSpaceSize.x, Is.LessThanOrEqualTo(600.0f),
                 "Gameplay HUD should be a compact overlay, not the full survival menu.");
-            Assert.That(survivalHudRect.rect.height, Is.LessThanOrEqualTo(220.0f),
+            Assert.That(survivalHudDocument.worldSpaceSize.y, Is.LessThanOrEqualTo(220.0f),
                 "Gameplay HUD should not occupy the player's central field of view.");
-            Assert.That(survivalHud.Find("Panel/Inventory")?.gameObject.activeSelf, Is.False,
-                "The full inventory panel belongs behind an explicit inventory route, not always-visible gameplay HUD.");
-            Assert.That(survivalHud.Find("Panel/Crafting")?.gameObject.activeSelf, Is.False,
-                "The full crafting panel belongs behind an explicit crafting route, not always-visible gameplay HUD.");
-            Assert.That(survivalHud.Find("Panel/Shared Crate")?.gameObject.activeSelf, Is.False,
-                "The shared crate panel belongs behind an explicit crate route, not always-visible gameplay HUD.");
+            Assert.That(survivalHud.Find("Panel/Inventory"), Is.Null,
+                "Inventory menu rendering belongs to the UI Toolkit runtime surface, not hidden HUD children.");
+            Assert.That(survivalHud.Find("Panel/Crafting"), Is.Null,
+                "Crafting menu rendering belongs to the UI Toolkit runtime surface, not hidden HUD children.");
+            Assert.That(survivalHud.Find("Panel/Shared Crate"), Is.Null,
+                "Shared crate menu rendering belongs to the UI Toolkit runtime surface, not hidden HUD children.");
         }
 
         [Test]
@@ -1121,7 +1235,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(instance);
+                DestroyImmediateIgnoringUnityCleanupLogs(instance);
             }
         }
 
@@ -1151,13 +1265,48 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(ray.hitDetectionType, Is.EqualTo(XRRayInteractor.HitDetectionType.Raycast));
             Assert.That(ray.hitClosestOnly, Is.True);
             Assert.That(ray.blendVisualLinePoints, Is.True);
+            Assert.That(ray.raycastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Collide),
+                "UI Toolkit menu surfaces use trigger colliders, so the visible pointer ray should stop at the menu.");
             Assert.That(ray.raycastSnapVolumeInteraction, Is.EqualTo(XRRayInteractor.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(ray.raycastMask.value, Is.EqualTo(BlockiverseProject.VrUiRaycastLayerMask),
+                "Visible controller UI rays should only query the dedicated UI Toolkit menu layer.");
             Assert.That(ray.enableUIInteraction, Is.True);
             Assert.That(ray.blockUIOnInteractableSelection, Is.False,
                 "Block targeting must not suppress UI clicks while a menu is visible.");
-            Assert.That(ray.interactionLayers.value, Is.EqualTo(0),
-                "Block targeting reads the raycast hit; it must not select 3D interactables.");
+            Assert.That(ray.interactionLayers.value, Is.EqualTo(BlockiverseRayDefaults.DefaultXriInteractionLayerMask),
+                "World-space UI and simple interactables should keep XRI Default overlap; selection inputs stay disabled elsewhere.");
             Assert.That(ray.maxRaycastDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+        }
+
+        static void AssertUiToolkitNearFarInteractorDefaults(
+            NearFarInteractor interactor,
+            Transform expectedRayOrigin,
+            InputAction expectedUiPress,
+            string message)
+        {
+            Assert.That(interactor, Is.Not.Null, message);
+            Assert.That(interactor.enableNearCasting, Is.False,
+                "UI Toolkit menu pointing should only use the far ray so the current controller-hand/menu visual relationship stays unchanged.");
+            Assert.That(interactor.enableFarCasting, Is.True);
+            Assert.That(interactor.enableUIInteraction, Is.True);
+            Assert.That(interactor.blockUIOnInteractableSelection, Is.False);
+            AssertButtonReaderUnused(interactor.selectInput, "Select");
+            AssertButtonReaderUnused(interactor.activateInput, "Activate");
+            if (expectedUiPress != null)
+                AssertButtonReaderReferencesAction(interactor.uiPressInput, expectedUiPress, message);
+
+            Assert.That(interactor.farInteractionCaster, Is.TypeOf<CurveInteractionCaster>());
+            var farCaster = (CurveInteractionCaster)interactor.farInteractionCaster;
+            Assert.That(farCaster.castOrigin, Is.SameAs(expectedRayOrigin));
+            Assert.That(farCaster.raycastMask.value, Is.EqualTo(BlockiverseProject.VrUiRaycastLayerMask));
+            Assert.That(farCaster.raycastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Collide),
+                "UI Toolkit menu surfaces use trigger colliders; the UITK far caster must hit them for hover and click events.");
+            Assert.That(farCaster.raycastSnapVolumeInteraction, Is.EqualTo(CurveInteractionCaster.QuerySnapVolumeInteraction.Ignore));
+            Assert.That(farCaster.raycastUIDocumentTriggerInteraction, Is.EqualTo(QueryUIDocumentInteraction.Collide),
+                "UI Toolkit menu colliders are triggers; the far caster must still include UIDocument trigger hits.");
+            Assert.That(farCaster.hitDetectionType, Is.EqualTo(CurveInteractionCaster.HitDetectionType.Raycast));
+            Assert.That(farCaster.castDistance, Is.EqualTo(CreativeInteractionController.MaxBlockInteractionReachMeters).Within(0.001f));
+            Assert.That(farCaster.targetNumCurveSegments, Is.EqualTo(1));
         }
 
         static void AssertTeleportRayDefaults(XRRayInteractor ray)
@@ -1237,6 +1386,15 @@ namespace Blockiverse.Tests.EditMode
                 message);
         }
 
+        static void AssertButtonReaderUnused(XRInputButtonReader reader, string context)
+        {
+            Assert.That(reader.inputSourceMode,
+                Is.EqualTo(XRInputButtonReader.InputSourceMode.Unused),
+                $"{context} should be unused.");
+            Assert.That(reader.inputActionReferencePerformed, Is.Null);
+            Assert.That(reader.inputActionReferenceValue, Is.Null);
+        }
+
         static void AssertActionPropertyUsesGeneratedReference(InputActionProperty property, string context)
         {
             AssertGeneratedReference(property.reference, context);
@@ -1302,6 +1460,37 @@ namespace Blockiverse.Tests.EditMode
         static T GetAvatarProperty<T>(Component avatarRig, string propertyName)
         {
             return (T)avatarRig.GetType().GetProperty(propertyName).GetValue(avatarRig);
+        }
+
+        static void DestroyImmediateIgnoringUnityCleanupLogs(Object target)
+        {
+            if (target == null)
+                return;
+
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                Object.DestroyImmediate(target);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
+        }
+
+        static void OpenEmptySceneIgnoringUnityCleanupLogs()
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
     }
 }

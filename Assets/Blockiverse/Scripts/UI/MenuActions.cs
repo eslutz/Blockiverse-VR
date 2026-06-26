@@ -2,8 +2,8 @@ using System.Collections.Generic;
 
 namespace Blockiverse.UI
 {
-    // Canonical screen ids and action ids for the menu system (voxel_survival_menus §3, §6, §7),
-    // plus factories for the button-list menus driven by BlockiverseActionMenu.
+    // Canonical screen ids and action ids for the UI Toolkit menu system
+    // (voxel_survival_menus §3, §6, §7).
     public static class MenuActions
     {
         // ── Screen ids (§3) ──────────────────────────────────────────────────
@@ -24,6 +24,24 @@ namespace Blockiverse.UI
         public const string LanMultiplayerScreen = "lan_multiplayer";
         public const string StationMenuScreen = "station_menu";
         public const string ConfirmModal = "confirm_dialog";
+        public const string InventoryScreen = "inventory";
+        public const string VitalsStatusScreen = "vitals_status";
+        public const string CraftingScreen = "crafting";
+        public const string ContainerScreen = "container";
+        public const string MapWayflagScreen = "map_wayflag";
+        public const string ItemDetailsPopover = "item_details_popover";
+        public const string RecipePinOverlay = "recipe_pin_overlay";
+        public const string BlockCatalogScreen = "block_catalog";
+        public const string PlayerHubScreen = "player_hub";
+        public const string ContextHubScreen = "context_hub";
+        public const string StatusHubScreen = "status_hub";
+        public const string FarmingSummaryScreen = "farming_summary";
+        public const string FarmingActionPopup = "farming_action_popup";
+        public const string AvatarStatusScreen = "avatar_status";
+        public const string MetaPolicyStatusScreen = "meta_policy_status";
+        public const string DiagnosticsScreen = "diagnostics";
+        public const string NetworkCommandStatusScreen = "network_command_status";
+        public const string SurvivalRejectionScreen = "survival_rejection";
 
         // ── Title actions (§6.2) ─────────────────────────────────────────────
         public const string TitleContinue = "title.continue_latest_save";
@@ -33,12 +51,19 @@ namespace Blockiverse.UI
         public const string TitleSettings = "title.open_settings";
         public const string TitleQuit = "title.quit_requested";
 
+        // ── First-run controller mapping actions ─────────────────────────────
+        public const string ControllerMappingClose = "controller_mapping.close";
+
         // ── LAN multiplayer actions (§6) ─────────────────────────────────────
+        public const string LanMultiplayerHost = "lan_multiplayer.host";
+        public const string LanMultiplayerJoin = "lan_multiplayer.join";
+        public const string LanMultiplayerStop = "lan_multiplayer.stop";
         public const string LanMultiplayerClose = "lan_multiplayer.close";
 
         // ── Pause actions (§6.7) ─────────────────────────────────────────────
         public const string PauseResume = "pause.resume";
         public const string PauseSaveGame = "pause.save_game";
+        public const string PausePlayerHub = "pause.open_player_hub";
         public const string PauseToggleMode = "pause.toggle_survival_creative";
         public const string PauseCreativeTools = "pause.open_creative_tools";
         public const string PauseSettings = "pause.open_settings";
@@ -82,6 +107,75 @@ namespace Blockiverse.UI
         public const string ConfirmAccept = "confirm.accept";
         public const string ConfirmCancel = "confirm.cancel";
 
+        // ── Player hub actions (§6/§8 survival menu surfaces) ────────────────
+        public const string PlayerHubInventory = "player_hub.open_inventory";
+        public const string PlayerHubVitals = "player_hub.open_vitals";
+        public const string PlayerHubCrafting = "player_hub.open_crafting";
+        public const string PlayerHubClose = "player_hub.close";
+        public const string InventoryItemDetails = "inventory.item_details";
+        public const string InventoryBack = "inventory.back";
+        public const string VitalsBack = "vitals_status.back";
+        public const string CraftingRepair = "crafting.repair";
+        public const string CraftingCraftSelected = "crafting.craft_selected";
+        public const string CraftingPinSelected = "crafting.pin_selected";
+        public const string CraftingBack = "crafting.back";
+        public const string PlayerHubContext = "player_hub.open_context";
+        public const string PlayerHubStatus = "player_hub.open_status";
+        public const string PlayerHubRecipePin = "player_hub.open_recipe_pin";
+        public const string ContextHubContainer = "context_hub.open_container";
+        public const string ContextHubStation = "context_hub.open_station";
+        public const string ContextHubFarming = "context_hub.open_farming";
+        public const string ContextHubMap = "context_hub.open_map";
+        public const string ContextHubCreativeTools = "context_hub.open_creative_tools";
+        public const string ContextHubBack = "context_hub.back";
+        public const string StatusHubVitals = "status_hub.open_vitals";
+        public const string StatusHubAvatar = "status_hub.open_avatar";
+        public const string StatusHubMetaPolicy = "status_hub.open_meta_policy";
+        public const string StatusHubDiagnostics = "status_hub.open_diagnostics";
+        public const string StatusHubNetwork = "status_hub.open_network";
+        public const string StatusHubBack = "status_hub.back";
+        public const string ContainerDepositHeld = "container.deposit_held";
+        public const string ContainerBack = "container.back";
+        public const string StationDepositInput = "station.deposit_input";
+        public const string StationDepositFuel = "station.deposit_fuel";
+        public const string StationCollectOutput = "station.collect_output";
+        public const string StationWithdrawInput = "station.withdraw_input";
+        public const string StationWithdrawFuel = "station.withdraw_fuel";
+        public const string StationBack = "station.back";
+        public const string MapSetWayflag = "map_wayflag.set";
+        public const string MapClearWayflag = "map_wayflag.clear";
+        public const string MapBack = "map_wayflag.back";
+        public const string FarmingOpenActions = "farming.open_actions";
+        public const string FarmingTill = "farming_action.till";
+        public const string FarmingPlant = "farming_action.plant";
+        public const string FarmingHarvest = "farming_action.harvest";
+        public const string FarmingBack = "farming.back";
+        public const string ItemDetailsBack = "item_details.back";
+        public const string RecipePinClear = "recipe_pin.clear";
+        public const string RecipePinBack = "recipe_pin.back";
+        public const string BlockCatalogPreviousCategory = "block_catalog.previous_category";
+        public const string BlockCatalogNextCategory = "block_catalog.next_category";
+        public const string BlockCatalogBack = "block_catalog.back";
+        public const string CreativeToolsSetA = "creative_tools.set_a";
+        public const string CreativeToolsSetB = "creative_tools.set_b";
+        public const string CreativeToolsPickBlock = "creative_tools.pick_block";
+        public const string CreativeToolsFill = "creative_tools.fill";
+        public const string CreativeToolsReplace = "creative_tools.replace";
+        public const string CreativeToolsDelete = "creative_tools.delete";
+        public const string CreativeToolsCopy = "creative_tools.copy";
+        public const string CreativeToolsPaste = "creative_tools.paste";
+        public const string CreativeToolsUndo = "creative_tools.undo";
+        public const string CreativeToolsRedo = "creative_tools.redo";
+        public const string CreativeToolsSpawnTree = "creative_tools.spawn_tree";
+        public const string CreativeToolsSpawnRuin = "creative_tools.spawn_ruin";
+        public const string CreativeToolsToggleCycle = "creative_tools.toggle_cycle";
+        public const string CreativeToolsCycleWeather = "creative_tools.cycle_weather";
+        public const string AvatarStatusBack = "avatar_status.back";
+        public const string MetaPolicyStatusBack = "meta_policy_status.back";
+        public const string DiagnosticsBack = "diagnostics.back";
+        public const string NetworkCommandStatusBack = "network_command_status.back";
+        public const string SurvivalRejectionDismiss = "survival_rejection.dismiss";
+
         // Title menu, filtered by what the player can currently do (§6.2 "Enabled When").
         public static IReadOnlyList<MenuAction> Title(bool hasLatestSave, bool hasAnySave, bool canQuit)
         {
@@ -100,10 +194,11 @@ namespace Blockiverse.UI
 
         public static IReadOnlyList<MenuAction> PauseMenu(bool canToggleMode, bool canOpenCreativeTools, bool canQuit = true)
         {
-            var actions = new List<MenuAction>(7)
+            var actions = new List<MenuAction>(8)
             {
                 Localized(PauseResume, BlockiverseLocalization.Keys.PauseResume, "Resume"),
                 Localized(PauseSaveGame, BlockiverseLocalization.Keys.PauseSaveGame, "Save Game"),
+                Localized(PausePlayerHub, BlockiverseLocalization.Keys.PausePlayerHub, "Player Hub"),
             };
             if (canToggleMode)
                 actions.Add(Localized(PauseToggleMode, BlockiverseLocalization.Keys.PauseToggleMode, "Switch Survival/Creative"));
@@ -160,7 +255,7 @@ namespace Blockiverse.UI
             Localized(WorldDetailsBack, BlockiverseLocalization.Keys.WorldDetailsBack, "Back"),
         };
 
-        static MenuAction Localized(string actionId, string labelKey, string fallbackLabel) =>
-            new(actionId, labelKey, fallbackLabel);
+        static MenuAction Localized(string actionId, string labelKey, string defaultLabel) =>
+            new(actionId, labelKey, defaultLabel);
     }
 }

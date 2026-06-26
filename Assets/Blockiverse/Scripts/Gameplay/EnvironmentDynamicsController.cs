@@ -84,10 +84,10 @@ namespace Blockiverse.Gameplay
         void ResolveReferences()
         {
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (chunkAuthoritySync == null)
-                chunkAuthoritySync = FindFirstObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
+                chunkAuthoritySync = FindAnyObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
         }
 
         void OnWorldTick(int ticks)

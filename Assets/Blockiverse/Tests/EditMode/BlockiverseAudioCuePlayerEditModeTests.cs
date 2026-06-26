@@ -4,8 +4,7 @@ using Blockiverse.Voxel;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
-using TMPro;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -181,10 +180,11 @@ namespace Blockiverse.Tests.EditMode
         {
             GameObject hotbarObject = new("Creative Hotbar");
             objectsToDestroy.Add(hotbarObject);
-            Canvas canvas = hotbarObject.AddComponent<Canvas>();
+            GameObject hotbarVisibility = new("Hotbar Visibility");
+            hotbarVisibility.transform.SetParent(hotbarObject.transform, false);
             CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-            BlockiverseWorldSpacePanelPresenter presenter = hotbarObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-            TMP_Text label = CreateText("Selected Block Label");
+            BlockiverseUiToolkitMenuPresenter presenter = hotbarObject.AddComponent<BlockiverseUiToolkitMenuPresenter>();
+            var label = new Label();
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
             BlockiverseInteractionHaptics haptics = CreateHaptics();
             var playedCues = new List<BlockiverseAudioCue>();
@@ -197,10 +197,10 @@ namespace Blockiverse.Tests.EditMode
             haptics.UiTickRequested += () => uiTicks++;
 
             hotbar.ConfigureDefault(label);
-            hotbar.ConfigureCanvas(canvas);
+            hotbar.ConfigureVisibilityRoot(hotbarVisibility);
             hotbar.ConfigureFeedback(audioCuePlayer);
-            presenter.Configure(
-                canvas,
+            presenter.ConfigureWorldSpaceTarget(
+                hotbarObject,
                 targetHeadset: null,
                 distance: 1.0f,
                 horizontalOffset: 0.0f,
@@ -227,25 +227,24 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void WorldSpacePanelPresenterShowAndHidePlayConfiguredFeedback()
+        public void UiToolkitMenuPresenterShowAndHidePlayConfiguredFeedback()
         {
-            GameObject panelObject = new("World Space Panel");
+            GameObject panelObject = new("UI Toolkit Menu Presenter");
             objectsToDestroy.Add(panelObject);
-            Canvas canvas = panelObject.AddComponent<Canvas>();
-            BlockiverseWorldSpacePanelPresenter presenter = panelObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            BlockiverseUiToolkitMenuPresenter presenter = panelObject.AddComponent<BlockiverseUiToolkitMenuPresenter>();
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
             BlockiverseInteractionHaptics haptics = CreateHaptics();
             var playedCues = new List<BlockiverseAudioCue>();
             int uiTicks = 0;
 
-            canvas.enabled = false;
+            panelObject.SetActive(false);
             audioCuePlayer.ConfigureClip(BlockiverseAudioCue.InventoryOpen, CreateClip("inventory_open"));
             audioCuePlayer.ConfigureClip(BlockiverseAudioCue.InventoryClose, CreateClip("inventory_close"));
             audioCuePlayer.CuePlayed += (cue, _) => playedCues.Add(cue);
             haptics.UiTickRequested += () => uiTicks++;
 
-            presenter.Configure(
-                canvas,
+            presenter.ConfigureWorldSpaceTarget(
+                panelObject,
                 targetHeadset: null,
                 distance: 1.0f,
                 horizontalOffset: 0.0f,
@@ -282,13 +281,6 @@ namespace Blockiverse.Tests.EditMode
             var gameObject = new GameObject("Interaction Haptics");
             objectsToDestroy.Add(gameObject);
             return gameObject.AddComponent<BlockiverseInteractionHaptics>();
-        }
-
-        TextMeshProUGUI CreateText(string name)
-        {
-            var gameObject = new GameObject(name);
-            objectsToDestroy.Add(gameObject);
-            return gameObject.AddComponent<TextMeshProUGUI>();
         }
 
         static AudioClip CreateClip(string name)

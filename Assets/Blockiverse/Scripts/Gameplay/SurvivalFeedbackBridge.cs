@@ -58,25 +58,25 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (survivalSync == null)
-                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
 
             if (worldManager == null)
-                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (vitalsRuntime == null)
-                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+                vitalsRuntime = FindAnyObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
 
             if (audioCuePlayer == null)
-                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
 
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = FindAnyObjectByType<BlockiverseVfxCuePlayer>();
 
             if (toastPanel == null)
-                toastPanel = FindFirstObjectByType<BlockiverseSubtitleToastPanel>(FindObjectsInactive.Include);
+                toastPanel = FindAnyObjectByType<BlockiverseSubtitleToastPanel>(FindObjectsInactive.Include);
 
             if (session == null)
-                session = FindFirstObjectByType<BlockiverseNetworkSession>(FindObjectsInactive.Include);
+                session = FindAnyObjectByType<BlockiverseNetworkSession>(FindObjectsInactive.Include);
         }
 
         void Subscribe()

@@ -6,10 +6,8 @@ using Blockiverse.UI;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
-using TMPro;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -49,38 +47,38 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CreativeToolsPanelClearsRegionHistoryAndClipboardWhenWorldChanges()
+        public void CreativeToolsStateClearsRegionHistoryAndClipboardWhenWorldChanges()
         {
             CreativeInteractionController controller = CreateRoot("Creative Controller").AddComponent<CreativeInteractionController>();
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
             ConfigureWorldManager(manager, controller);
-            BlockiverseCreativeToolsPanel panel = CreateRoot("Creative Tools Panel").AddComponent<BlockiverseCreativeToolsPanel>();
-            panel.Configure(controller, manager, null, null, null, null, null, null);
+            BlockiverseCreativeToolsInteractionState state = CreateRoot("Creative Tools Menu State").AddComponent<BlockiverseCreativeToolsInteractionState>();
+            state.Configure(controller, manager, null);
 
             var firstWorld = CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 21);
             var target = new BlockPosition(1, 1, 1);
             firstWorld.World.SetBlock(target, BlockRegistry.Graystone);
             manager.InitializeGeneratedWorld(firstWorld);
             controller.UpdatePreview(target, Vector3.up);
-            InvokePanelUpdate(panel);
-            panel.SetCornerA();
-            panel.SetCornerB();
+            InvokeInteractionStateUpdate(state);
+            state.SetCornerA();
+            state.SetCornerB();
 
-            panel.CopyRegion();
-            panel.DeleteRegion();
+            state.CopyRegion();
+            state.DeleteRegion();
 
-            Assert.That(panel.HasWorldEditClipboard, Is.True);
-            Assert.That(panel.WorldEditUndoCount, Is.EqualTo(1));
+            Assert.That(state.HasWorldEditClipboard, Is.True);
+            Assert.That(state.WorldEditUndoCount, Is.EqualTo(1));
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 22));
-            InvokePanelUpdate(panel);
+            InvokeInteractionStateUpdate(state);
 
-            Assert.That(panel.HasWorldEditClipboard, Is.False);
-            Assert.That(panel.WorldEditUndoCount, Is.EqualTo(0));
+            Assert.That(state.HasWorldEditClipboard, Is.False);
+            Assert.That(state.WorldEditUndoCount, Is.EqualTo(0));
         }
 
         [Test]
-        public void CreativeTimeSlidersAreIgnoredDuringLanSession()
+        public void CreativeTimeActionsAreIgnoredDuringLanSession()
         {
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
             ConfigureWorldManager(manager);
@@ -90,12 +88,9 @@ namespace Blockiverse.Tests.EditMode
                 startNormalizedTime: 0.25f,
                 timeScale: 1.0f);
 
-            Slider timeOfDay = CreateSlider("Time Of Day", 0.0f, 1.0f);
-            Slider timeScale = CreateSlider("Time Scale", 0.0f, 5.0f);
-            TMP_Text status = CreateRoot("Status").AddComponent<TextMeshProUGUI>();
-            BlockiverseCreativeToolsPanel panel = CreateRoot("Creative Tools Panel").AddComponent<BlockiverseCreativeToolsPanel>();
-            panel.Configure(null, manager, null, null, status, null, timeOfDay, timeScale);
-            panel.ConfigureNetworkSessionActiveProvider(() => true);
+            BlockiverseCreativeToolsInteractionState state = CreateRoot("Creative Tools Menu State").AddComponent<BlockiverseCreativeToolsInteractionState>();
+            state.Configure(null, manager, null);
+            state.ConfigureNetworkSessionActiveProvider(() => true);
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 23));
             WorldTimeClock activeClock = manager.WorldTimeClock;
@@ -104,20 +99,17 @@ namespace Blockiverse.Tests.EditMode
                 WorldTimeClock.DefaultDayLengthSeconds,
                 startNormalizedTime: 0.25f,
                 timeScale: 1.0f);
-            panel.RefreshEnvironmentControls();
+            state.RefreshEnvironmentControls();
 
-            timeOfDay.value = 0.75f;
-            timeScale.value = 3.0f;
+            state.ToggleDayNightCycle();
 
             Assert.That(activeClock.NormalizedTime, Is.EqualTo(0.25f).Within(0.0001f));
             Assert.That(activeClock.TimeScale, Is.EqualTo(1.0f).Within(0.0001f));
-            Assert.That(timeOfDay.value, Is.EqualTo(0.25f).Within(0.0001f));
-            Assert.That(timeScale.value, Is.EqualTo(1.0f).Within(0.0001f));
-            Assert.That(status.text, Is.EqualTo("Time controls are host/offline only."));
+            Assert.That(state.StatusText, Is.EqualTo("Time controls are host/offline only."));
         }
 
         [Test]
-        public void CreativeToolsPanelTogglesDayNightCycleAndWeatherOffline()
+        public void CreativeToolsStateTogglesDayNightCycleAndWeatherOffline()
         {
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
             ConfigureWorldManager(manager);
@@ -127,13 +119,9 @@ namespace Blockiverse.Tests.EditMode
                 startNormalizedTime: 0.25f,
                 timeScale: 1.0f);
 
-            TMP_Text status = CreateRoot("Status").AddComponent<TextMeshProUGUI>();
-            TMP_Text weather = CreateRoot("Weather").AddComponent<TextMeshProUGUI>();
-            Slider timeOfDay = CreateSlider("Time Of Day", 0.0f, 1.0f);
-            Slider timeScale = CreateSlider("Time Scale", 0.0f, 5.0f);
-            BlockiverseCreativeToolsPanel panel = CreateRoot("Creative Tools Panel").AddComponent<BlockiverseCreativeToolsPanel>();
-            panel.Configure(null, manager, null, null, status, weather, timeOfDay, timeScale);
-            panel.ConfigureNetworkSessionActiveProvider(() => false);
+            BlockiverseCreativeToolsInteractionState state = CreateRoot("Creative Tools Menu State").AddComponent<BlockiverseCreativeToolsInteractionState>();
+            state.Configure(null, manager, null);
+            state.ConfigureNetworkSessionActiveProvider(() => false);
 
             manager.InitializeGeneratedWorld(CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 26));
             WorldTimeClock activeClock = manager.WorldTimeClock;
@@ -142,26 +130,26 @@ namespace Blockiverse.Tests.EditMode
                 WorldTimeClock.DefaultDayLengthSeconds,
                 startNormalizedTime: 0.25f,
                 timeScale: 1.0f);
-            panel.RefreshEnvironmentControls();
+            state.RefreshEnvironmentControls();
 
-            panel.ToggleDayNightCycle();
+            state.ToggleDayNightCycle();
             float frozenTime = activeClock.NormalizedTime;
             activeClock.AdvanceRuntime(60.0f);
 
             Assert.That(activeClock.TimeScale, Is.EqualTo(0.0f).Within(0.0001f));
             Assert.That(activeClock.NormalizedTime, Is.EqualTo(frozenTime).Within(0.0001f));
-            Assert.That(status.text, Is.EqualTo("Day/night cycle paused."));
+            Assert.That(state.StatusText, Is.EqualTo("Day/night cycle paused."));
 
-            panel.ToggleDayNightCycle();
+            state.ToggleDayNightCycle();
 
             Assert.That(activeClock.TimeScale, Is.EqualTo(1.0f).Within(0.0001f));
-            Assert.That(status.text, Is.EqualTo("Day/night cycle resumed."));
+            Assert.That(state.StatusText, Is.EqualTo("Day/night cycle resumed."));
 
             WeatherState before = manager.GetWeatherSyncState().State;
-            panel.CycleWeather();
+            state.CycleWeather();
 
             Assert.That(manager.GetWeatherSyncState().State, Is.Not.EqualTo(before));
-            Assert.That(weather.text, Does.StartWith("Weather: "));
+            Assert.That(state.WeatherText, Does.StartWith("Weather: "));
         }
 
         [Test]
@@ -300,14 +288,6 @@ namespace Blockiverse.Tests.EditMode
             manager.Configure(material, layer: -1, controller: controller);
         }
 
-        Slider CreateSlider(string name, float min, float max)
-        {
-            Slider slider = CreateRoot(name).AddComponent<Slider>();
-            slider.minValue = min;
-            slider.maxValue = max;
-            return slider;
-        }
-
         static T GetPrivateField<T>(object target, string fieldName)
         {
             FieldInfo field = target.GetType().GetField(
@@ -317,13 +297,13 @@ namespace Blockiverse.Tests.EditMode
             return (T)field.GetValue(target);
         }
 
-        static void InvokePanelUpdate(BlockiverseCreativeToolsPanel panel)
+        static void InvokeInteractionStateUpdate(BlockiverseCreativeToolsInteractionState state)
         {
-            MethodInfo method = typeof(BlockiverseCreativeToolsPanel).GetMethod(
+            MethodInfo method = typeof(BlockiverseCreativeToolsInteractionState).GetMethod(
                 "Update",
                 BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null, "Creative tools panel should expose the expected Unity update callback.");
-            method.Invoke(panel, null);
+            Assert.That(method, Is.Not.Null, "Creative tools state should expose the expected Unity update callback.");
+            method.Invoke(state, null);
         }
     }
 }

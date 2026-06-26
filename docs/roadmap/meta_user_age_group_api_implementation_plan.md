@@ -6,7 +6,7 @@
 
 **Architecture:** Add one Meta platform policy layer that retrieves `UserAgeCategory.Get()` once per Quest session, caches the last known category as a fallback, and exposes typed feature gates to gameplay, UI, and Meta Avatars code. Child accounts keep access to the base offline/LAN game experience but avoid child-restricted Meta platform calls such as profile/avatar lookup, future invites, friends, matchmaking, or other social SDK features until the current Meta policy review explicitly permits them.
 
-**Tech Stack:** Unity `6000.3.16f1`, C#, Meta XR Core SDK `201.0.0`, Meta XR Platform SDK `201.0.0`, Oculus Platform `UserAgeCategory.Get()`, Unity Test Framework, `scripts/unity/run-tests.sh`, Horizon Debug Bridge `hzdb`.
+**Tech Stack:** Unity `6000.3.18f1`, C#, Meta XR Core SDK `81.0.1`, Meta XR Platform SDK `81.0.1`, Oculus Platform `UserAgeCategory.Get()`, Unity Test Framework, `scripts/unity/run-tests.sh`, Horizon Debug Bridge `hzdb`.
 
 ---
 
@@ -32,12 +32,12 @@ Checked on 2026-06-13 against Meta's current docs:
 - Meta says age-group self-certification is mandatory for Quest release channels.
 - Meta says `UserAgeCategory.Get()` is required only for apps self-certified as Mixed Ages.
 - Meta says Mixed Ages apps should call the API at least once per user session when online, should not interrupt the user experience, should not block the app when offline or when the API fails, and may cache the last known age category as a fallback.
-- Meta's Unity API requires Meta XR Platform SDK build version `56.0` or later. This repo currently has `com.meta.xr.sdk.platform` `201.0.0`, so the installed SDK is new enough.
+- Meta's Unity API requires Meta XR Platform SDK build version `56.0` or later. This repo currently has `com.meta.xr.sdk.platform` `81.0.1`, so the installed SDK is new enough.
 
 Pre-implementation repo state:
 
 - The Developer Dashboard screenshots show Mixed Ages selected, which makes the API required unless Eric re-certifies the app as Teens and Adults.
-- `Packages/manifest.json` includes `com.meta.xr.sdk.platform` `201.0.0`.
+- `Packages/manifest.json` includes `com.meta.xr.sdk.platform` `81.0.1`.
 - `Assets/Blockiverse/Scripts/MetaAvatars/MetaHorizonAvatarProvider.cs` already called `Oculus.Platform.Core.Initialize()`, `Users.GetAccessToken()`, and `Users.GetLoggedInUser()` to load Meta Horizon avatars.
 - No repo code called `Oculus.Platform.UserAgeCategory.Get()`.
 - Store docs said the app was not directed at children, which conflicted with a Mixed Ages dashboard selection and had to be resolved before submission.

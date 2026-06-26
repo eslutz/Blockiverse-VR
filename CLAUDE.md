@@ -8,6 +8,8 @@ Canonical game design lives in [docs/rulesets/](docs/rulesets/) and the roadmap 
 Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 [docs/testing/README.md](docs/testing/README.md).
 
+Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
+
 ## Agent Workflow Policy
 
 - The project owner is Eric Slutz; the GitHub username for assignment and review is `eslutz`.
@@ -25,10 +27,17 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 - Before adding or changing GitHub Actions, packages, SDKs, CLIs, Unity packages, build images, or other third-party dependencies, verify the current stable version from official upstream sources. Prefer latest stable majors unless the repo has a documented compatibility constraint.
 - Update documentation when behavior, workflow, architecture, project policy, release process, store submission, or user-visible scope changes.
 
+### Memory And Handoff Policy
+
+- Read [MEMORIES.md](MEMORIES.md) before substantial work. Treat it as the current handoff for decisions, validation status, local tooling state, dirty-worktree constraints, and deferred external gates.
+- Keep [MEMORIES.md](MEMORIES.md) concise. Update it when project state, architecture decisions, validation status, package/tooling setup, release gates, or source/generated artifact rules materially change.
+- Do not turn [MEMORIES.md](MEMORIES.md) into a changelog. Remove stale paths, obsolete blockers, and superseded decisions when refreshing it.
+- Keep long-form testing instructions in [docs/testing/README.md](docs/testing/README.md), not in the memory file.
+
 ### Release Policy
 
 - Production releases are cut from `main`.
-- Release versioning follows [ADR 0005](docs/adr/0005-release-versioning.md), with the root `VERSION` file as the SemVer base version source.
+- Release versioning follows [ADR 0005](docs/adr/0005-release-versioning.md), with `ProjectSettings/BlockiverseVersion.txt` as the SemVer base version source.
 - Pull requests use `.github/workflows/quest-ci.yml` for validation only. PR workflows must not receive Meta credentials or publish to Meta release channels.
 - Meta channel CD is split across:
   - `.github/workflows/quest-alpha.yml`, which builds a release-signed Quest APK from `main` pushes or manual trusted refs and uploads it to Meta `alpha`;
@@ -49,7 +58,10 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 ### Tooling Policy
 
 - Prefer reproducible command-line tooling over GUI-only actions when command output is useful validation evidence.
-- Use the Unity MCP server for interactive Unity Editor inspection, simulator-oriented editor workflows, scene/object checks, and Unity-specific automation exposed through MCP.
+- Use the Unity IDE built-in MCP server as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; start or restart it from `Project Settings > AI > Unity MCP Server`.
+- Before using Unity MCP, confirm the active project root points at this checkout. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
+- MCP is an investigation and automation aid, not a substitute for committed scripts or test evidence.
+- Do not commit package manifest or lockfile changes for local editor automation tools unless Eric explicitly requests a dependency update.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
 - Verify Quest-device tooling before device work with `hzdb --version` and `hzdb device list`.
@@ -59,7 +71,7 @@ Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
 ### Unity Licensing Recovery
 
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
-or waits on `LicenseClient-ericslutz-6000.3.16`, reset the local Unity/Hub process state:
+or waits on `LicenseClient-ericslutz-6000.3.18`, reset the local Unity/Hub process state:
 
 ```sh
 osascript -e 'tell application "Unity Hub" to quit'
@@ -74,14 +86,14 @@ processes running.
 
 ## Commands
 
-Unity 6000.3.16f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
+Unity 6000.3.18f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
 
 ```sh
 # Required validation — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
 scripts/unity/run-tests.sh
 
 # Single test / one platform (the script takes no args; invoke Unity directly)
-"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity}" \
+"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.3.18f1/Unity.app/Contents/MacOS/Unity}" \
   -batchmode -nographics -projectPath . -runTests -testPlatform EditMode \
   -testFilter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" \
   -testResults TestResults/Unity/Single.xml -logFile -
@@ -99,7 +111,7 @@ python3 scripts/audio/generate-audio.py           # all SFX
 
 ## Architecture
 
-VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK, XRI, Netcode for GameObjects 2.11.2. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
+VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK, XRI, Netcode for GameObjects 2.13.0. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
 
 ### Assembly layering (Assets/Blockiverse/Scripts/)
 

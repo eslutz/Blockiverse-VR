@@ -11,7 +11,6 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -31,7 +30,6 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -54,10 +52,93 @@ namespace Blockiverse.Editor
     {
         static void EnsureInteractionMaterials()
         {
+            EnsureGeneratedUiControlSprites();
             EnsureMaterial(BlockiverseProject.PointerLineMaterialPath, PointerLineColor, preferUnlit: true);
             EnsureFluidAtlasTiles();
             EnsureBlockItemIcons();
             EnsureBlockTextureMaterial();
+        }
+
+        static void EnsureGeneratedUiControlSprites()
+        {
+            EnsureGeneratedUiSprite("checkbox_check", 32, CheckboxCheckPixel);
+            EnsureGeneratedUiSprite("slider_knob", 32, SliderKnobPixel);
+        }
+
+        static void EnsureGeneratedUiSprite(string name, int size, Func<int, int, Color32> pixelAt)
+        {
+            string path = $"Assets/Blockiverse/Art/Sprites/UI/{name}.png";
+            bool wrote = false;
+
+            if (!File.Exists(path))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+
+                var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: false);
+                try
+                {
+                    for (int y = 0; y < size; y++)
+                    {
+                        for (int x = 0; x < size; x++)
+                            texture.SetPixel(x, y, pixelAt(x, y));
+                    }
+
+                    texture.Apply();
+                    File.WriteAllBytes(path, texture.EncodeToPNG());
+                    wrote = true;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(texture);
+                }
+            }
+
+            AssetDatabase.ImportAsset(path, wrote ? ImportAssetOptions.ForceUpdate : ImportAssetOptions.Default);
+            if (AssetImporter.GetAtPath(path) is TextureImporter importer)
+            {
+                importer.textureType = TextureImporterType.Sprite;
+                importer.spriteImportMode = SpriteImportMode.Single;
+                importer.mipmapEnabled = false;
+                importer.filterMode = FilterMode.Point;
+                importer.wrapMode = TextureWrapMode.Clamp;
+                importer.alphaIsTransparency = true;
+                importer.spritePixelsPerUnit = 16.0f;
+                importer.SaveAndReimport();
+            }
+        }
+
+        static Color32 CheckboxCheckPixel(int x, int y)
+        {
+            var point = new Vector2(x + 0.5f, y + 0.5f);
+            float distance = Mathf.Min(
+                DistanceToSegment(point, new Vector2(6.0f, 16.0f), new Vector2(13.0f, 9.0f)),
+                DistanceToSegment(point, new Vector2(13.0f, 9.0f), new Vector2(26.0f, 24.0f)));
+
+            return distance <= 2.1f
+                ? new Color32(255, 255, 255, 255)
+                : new Color32(255, 255, 255, 0);
+        }
+
+        static Color32 SliderKnobPixel(int x, int y)
+        {
+            var point = new Vector2(x + 0.5f, y + 0.5f);
+            float distance = Vector2.Distance(point, new Vector2(16.0f, 16.0f));
+            if (distance <= 13.5f)
+                return new Color32(255, 255, 255, 255);
+            if (distance <= 15.5f)
+                return new Color32(255, 255, 255, (byte)Mathf.RoundToInt((15.5f - distance) / 2.0f * 255.0f));
+            return new Color32(255, 255, 255, 0);
+        }
+
+        static float DistanceToSegment(Vector2 point, Vector2 start, Vector2 end)
+        {
+            Vector2 segment = end - start;
+            float lengthSquared = Vector2.Dot(segment, segment);
+            if (lengthSquared <= Mathf.Epsilon)
+                return Vector2.Distance(point, start);
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - start, segment) / lengthSquared);
+            return Vector2.Distance(point, start + segment * t);
         }
 
         // Every registered item needs a committed inventory icon. Block-mapped items (terrain,

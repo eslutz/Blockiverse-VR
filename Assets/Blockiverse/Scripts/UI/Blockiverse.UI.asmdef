@@ -12,8 +12,7 @@
     "Blockiverse.Voxel",
     "Blockiverse.VR",
     "Blockiverse.WorldGen",
-    "UnityEngine.UI",
-    "Unity.TextMeshPro",
+    "Unity.XR.Interaction.Toolkit",
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],

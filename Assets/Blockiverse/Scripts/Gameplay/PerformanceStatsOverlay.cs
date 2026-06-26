@@ -1,12 +1,13 @@
 using Blockiverse.Core;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Gameplay
 {
     /// <summary>
     /// Local-only diagnostics overlay that reports frame timing and voxel render stats
     /// (FPS, triangles, chunk count, queued rebuilds) for Quest performance validation.
-    /// Renders through IMGUI so it needs no scene canvas; off by default in release builds.
+    /// Renders through UI Toolkit; off by default in release builds.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PerformanceStatsOverlay : MonoBehaviour
@@ -17,10 +18,9 @@ namespace Blockiverse.Gameplay
         [SerializeField, Min(0f)] float logIntervalSeconds = 5f;
 
         FrameStatisticsSampler sampler;
-        GUIStyle overlayStyle;
+        UIDocument document;
+        Label overlayLabel;
         float logTimer;
-
-        static readonly Rect OverlayRect = new(12f, 12f, 320f, 96f);
 
         public bool Visible
         {
@@ -49,12 +49,14 @@ namespace Blockiverse.Gameplay
             sampler = new FrameStatisticsSampler(Mathf.Max(1, sampleWindow));
 
             if (worldRenderer == null)
-                worldRenderer = FindFirstObjectByType<VoxelWorldRenderer>();
+                worldRenderer = FindAnyObjectByType<VoxelWorldRenderer>();
+            EnsureOverlay();
         }
 
         void Update()
         {
             Sampler.AddFrame(Time.unscaledDeltaTime);
+            UpdateOverlay();
 
             if (logIntervalSeconds <= 0f)
                 return;
@@ -81,36 +83,45 @@ namespace Blockiverse.Gameplay
         }
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-        void OnGUI()
+        void EnsureOverlay()
         {
+            if (document != null && overlayLabel != null)
+                return;
+
+            GameObject overlayObject = new("Performance Stats UI Toolkit Overlay");
+            overlayObject.transform.SetParent(transform, false);
+            document = overlayObject.AddComponent<UIDocument>();
+            overlayLabel = new Label { name = "blockiverse-performance-stats" };
+            overlayLabel.style.position = Position.Absolute;
+            overlayLabel.style.left = 12.0f;
+            overlayLabel.style.top = 12.0f;
+            overlayLabel.style.width = 360.0f;
+            overlayLabel.style.paddingLeft = 10.0f;
+            overlayLabel.style.paddingRight = 10.0f;
+            overlayLabel.style.paddingTop = 8.0f;
+            overlayLabel.style.paddingBottom = 8.0f;
+            overlayLabel.style.fontSize = 16.0f;
+            overlayLabel.style.color = Color.white;
+            overlayLabel.style.backgroundColor = new Color(0.0f, 0.0f, 0.0f, 0.72f);
+            document.rootVisualElement.Add(overlayLabel);
+        }
+
+        void UpdateOverlay()
+        {
+            EnsureOverlay();
+            if (overlayLabel == null)
+                return;
+
+            overlayLabel.style.display = visible && Sampler.HasSamples ? DisplayStyle.Flex : DisplayStyle.None;
             if (!visible || !Sampler.HasSamples)
                 return;
 
             VoxelRenderStats stats = worldRenderer != null ? worldRenderer.Stats : default;
-            string text =
+            overlayLabel.text =
                 $"FPS avg {Sampler.AverageFps:0.0}  min {Sampler.MinFps:0.0}  max {Sampler.MaxFps:0.0}\n" +
                 $"Frame {Sampler.AverageFrameMilliseconds:0.00} ms\n" +
                 $"Chunks {stats.ChunkCount}  Tris {stats.TriangleCount:n0}\n" +
                 $"Rebuild queue {stats.QueuedRebuildCount}";
-
-            GUI.Label(OverlayRect, text, OverlayStyle);
-        }
-
-        GUIStyle OverlayStyle
-        {
-            get
-            {
-                if (overlayStyle != null)
-                return overlayStyle;
-
-                overlayStyle = new GUIStyle(GUI.skin.box)
-                {
-                    alignment = TextAnchor.UpperLeft,
-                    fontSize = 16,
-                    padding = new RectOffset(10, 10, 8, 8)
-                };
-                return overlayStyle;
-            }
         }
 #endif
     }

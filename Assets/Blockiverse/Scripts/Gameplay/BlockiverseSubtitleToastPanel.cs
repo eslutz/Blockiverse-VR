@@ -1,4 +1,3 @@
-using TMPro;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -6,47 +5,55 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class BlockiverseSubtitleToastPanel : MonoBehaviour
     {
-        [SerializeField] TMP_Text messageLabel;
+        [SerializeField] BlockiverseHudToolkitSurface hudSurface;
         [SerializeField] float visibleSeconds = 2.5f;
 
+        string currentMessage = string.Empty;
+        bool visible;
         float visibleUntil;
 
-        public string CurrentMessage => messageLabel != null ? messageLabel.text : string.Empty;
-        public bool IsVisible => messageLabel != null && messageLabel.gameObject.activeSelf;
+        public string CurrentMessage => currentMessage;
+        public bool IsVisible => visible;
 
-        public void Configure(TMP_Text targetMessageLabel, float targetVisibleSeconds = 2.5f)
+        public void Configure(BlockiverseHudToolkitSurface targetHudSurface, float targetVisibleSeconds = 2.5f)
         {
-            messageLabel = targetMessageLabel;
+            hudSurface = targetHudSurface;
             visibleSeconds = Mathf.Max(0.1f, targetVisibleSeconds);
             Clear();
         }
 
         public void ShowToast(string message)
         {
-            if (messageLabel == null || string.IsNullOrWhiteSpace(message))
+            if (string.IsNullOrWhiteSpace(message))
                 return;
 
-            messageLabel.text = message;
-            messageLabel.gameObject.SetActive(true);
+            EnsureSurface();
+            currentMessage = message;
+            visible = true;
             visibleUntil = Time.unscaledTime + Mathf.Max(0.1f, visibleSeconds);
+            hudSurface?.ShowToast(message, visibleSeconds);
         }
 
         public void Clear()
         {
-            visibleUntil = 0f;
-            if (messageLabel == null)
-                return;
-
-            messageLabel.text = string.Empty;
-            messageLabel.gameObject.SetActive(false);
+            currentMessage = string.Empty;
+            visible = false;
+            visibleUntil = 0.0f;
+            hudSurface?.SetStatus(string.Empty);
         }
 
         void Update()
         {
-            if (visibleUntil <= 0f || Time.unscaledTime < visibleUntil)
+            if (visibleUntil <= 0.0f || Time.unscaledTime < visibleUntil)
                 return;
 
             Clear();
+        }
+
+        void EnsureSurface()
+        {
+            if (hudSurface == null)
+                hudSurface = FindAnyObjectByType<BlockiverseHudToolkitSurface>(FindObjectsInactive.Include);
         }
     }
 }

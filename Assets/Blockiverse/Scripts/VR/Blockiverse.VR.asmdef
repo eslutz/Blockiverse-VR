@@ -8,8 +8,6 @@
     "Blockiverse.Survival.Health",
     "Blockiverse.Voxel",
     "Unity.InputSystem",
-    "UnityEngine.UI",
-    "Unity.TextMeshPro",
     "Unity.Netcode.Runtime",
     "Unity.XR.CompositionLayers",
     "Unity.XR.CoreUtils",

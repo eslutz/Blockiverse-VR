@@ -36,8 +36,8 @@ namespace Blockiverse.Tests.EditMode
                 "Assets/Blockiverse/Scripts/UI/SurvivalHudController.cs",
                 new[]
                 {
-                    @"\b(panel|inventoryPanel|craftingPanel|healthPanel|cratePanel|worldManager)\s*\?\.",
-                    @"\b(inventoryPanel|craftingPanel|healthPanel|cratePanel|statusLabel|miningProgressSlider)\s*\?\?=",
+                    @"\b(panel|worldManager|survivalSync|inputBridge|healthLabel|healthSlider|healthStateLabel|statusLabel|miningProgressSlider)\s*\?\.",
+                    @"\b(healthLabel|healthSlider|healthStateLabel|statusLabel|miningProgressSlider)\s*\?\?=",
                 }),
         };
 

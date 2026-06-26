@@ -1,3 +1,4 @@
+#pragma warning disable 0618
 using System.Collections;
 using System.IO;
 using Blockiverse.Core;
@@ -5,6 +6,10 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -55,6 +60,30 @@ namespace Blockiverse.Tests.PlayMode
                 if (driver != null && driver.enabled)
                     driver.enabled = false;
             }
+        }
+    }
+
+    public sealed class BlockiverseRuntimeActionBindingsCleanup : IPostBuildCleanup
+    {
+        public void Cleanup()
+        {
+            string streamingAssetsPath = Path.Combine(Application.dataPath, "StreamingAssets");
+#if UNITY_EDITOR
+            AssetDatabase.DeleteAsset("Assets/StreamingAssets/RuntimeActionBindings.json");
+            AssetDatabase.DeleteAsset("Assets/StreamingAssets/RuntimeActionBindings.json.meta");
+#endif
+            DeleteFileIfPresent(Path.Combine(streamingAssetsPath, "RuntimeActionBindings.json"));
+            DeleteFileIfPresent(Path.Combine(streamingAssetsPath, "RuntimeActionBindings.json.meta"));
+            DeleteFileIfPresent(Path.Combine(Directory.GetCurrentDirectory(), "RuntimeActionBindings.json"));
+#if UNITY_EDITOR
+            AssetDatabase.Refresh();
+#endif
+        }
+
+        static void DeleteFileIfPresent(string path)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
         }
     }
 }

@@ -6,12 +6,13 @@ using Blockiverse.Gameplay;
 using Blockiverse.Persistence;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
+using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
-using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -36,6 +37,7 @@ namespace Blockiverse.Tests.EditMode
                 Object.DestroyImmediate(sunObject);
             if (!string.IsNullOrEmpty(tempRoot) && Directory.Exists(tempRoot))
                 Directory.Delete(tempRoot, recursive: true);
+            PlayerPrefs.DeleteKey(BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey);
             SetStaticField<string>("savesRoot", null);
         }
 
@@ -105,14 +107,14 @@ namespace Blockiverse.Tests.EditMode
             string savePath = Path.Combine(tempRoot, "Pause Save.vxlworld");
 
             CreativeWorldManager worldManager = CreateWorldManager();
-            BlockiverseMenuController menuController = CreateMenuControllerWithPauseStatus(out TMP_Text pauseStatus);
+            BlockiverseMenuController menuController = CreateMenuController();
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
             SetPrivateField(controller, "currentSavePath", savePath);
             SetPrivateField(controller, "currentWorldName", "Pause Save");
 
             InvokePrivateMethod(controller, "HandleAction", MenuActions.PauseSaveGame);
 
-            Assert.That(pauseStatus.text, Is.EqualTo("Game saved."));
+            Assert.That(GetMenuControllerPrivateField<string>(menuController, "pauseStatus"), Is.EqualTo("Game saved."));
             Assert.That(Directory.Exists(savePath), Is.True);
         }
 
@@ -120,19 +122,19 @@ namespace Blockiverse.Tests.EditMode
         public void AutoSaveCompletionReportsStatusOnPauseMenu()
         {
             CreativeWorldManager worldManager = CreateWorldManager();
-            BlockiverseMenuController menuController = CreateMenuControllerWithPauseStatus(out TMP_Text pauseStatus);
+            BlockiverseMenuController menuController = CreateMenuController();
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
 
             SetPrivateField(controller, "autoSaveTask", Task.CompletedTask);
             SetPrivateField(controller, "autoSaveWorldName", "Autosave Success");
             InvokePrivateMethod(controller, "CompleteAutoSaveIfReady");
-            Assert.That(pauseStatus.text, Is.EqualTo("Autosaved."));
+            Assert.That(GetMenuControllerPrivateField<string>(menuController, "pauseStatus"), Is.EqualTo("Autosaved."));
 
             SetPrivateField(controller, "autoSaveTask", Task.FromException(new IOException("autosave failed")));
             SetPrivateField(controller, "autoSaveWorldName", "Autosave Failure");
             LogAssert.Expect(LogType.Error, "[Blockiverse][Persistence] Failed to autosave world session name=Autosave Failure exception=IOException");
             InvokePrivateMethod(controller, "CompleteAutoSaveIfReady");
-            Assert.That(pauseStatus.text, Is.EqualTo("Autosave failed."));
+            Assert.That(GetMenuControllerPrivateField<string>(menuController, "pauseStatus"), Is.EqualTo("Autosave failed."));
         }
 
         [Test]
@@ -182,6 +184,57 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(worldManager.GameMode, Is.EqualTo(WorldGameMode.Creative));
             Assert.That(worldManager.TextureSet, Is.EqualTo("ai_simplified"));
             Assert.That(menuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
+            Assert.That(worldManager.IsMenuWorldActive, Is.False);
+            Assert.That(worldManager.GetComponent<CreativeInteractionController>().BlockEditingEnabled, Is.True);
+        }
+
+        [Test]
+        public void StartInitializesReadOnlyMenuWorldBeforeAnySession()
+        {
+            CreativeWorldManager worldManager = CreateWorldManager();
+            CreativeInteractionController interactionController = worldManager.GetComponent<CreativeInteractionController>();
+            BlockiverseMenuController menuController = CreateMenuController();
+            BlockiverseHudToolkitSurface hudSurface = new GameObject("Gameplay HUD").AddComponent<BlockiverseHudToolkitSurface>();
+            hudSurface.transform.SetParent(menuObject.transform, worldPositionStays: false);
+            hudSurface.Configure(hudSurface.gameObject.AddComponent<UIDocument>());
+            hudSurface.SetVisible(true);
+            menuController.ConfigureHudToolkitSurface(hudSurface);
+            menuController.ShowTitleScreen();
+            BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
+
+            InvokeUnityMessage(controller, "Start");
+
+            Assert.That(worldManager.IsMenuWorldActive, Is.True);
+            Assert.That(worldManager.GenerationPreset, Is.EqualTo(CreativeWorldGenerationPreset.MenuWorld));
+            Assert.That(worldManager.GameMode, Is.EqualTo(WorldGameMode.Creative));
+            Assert.That(worldManager.World.Seed, Is.EqualTo(WorldSaveGeneration.MenuWorldSeed));
+            Assert.That(controller.HasActiveSession, Is.False);
+            Assert.That(interactionController.BlockEditingEnabled, Is.False);
+            Assert.That(menuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+            Assert.That(hudSurface.IsVisible, Is.False);
+        }
+
+        [Test]
+        public void ReturnToTitleSavesSessionAndRestoresReadOnlyMenuWorld()
+        {
+            tempRoot = Path.Combine(Path.GetTempPath(), "blockiverse-session-controller-" + System.Guid.NewGuid().ToString("N"));
+            string savePath = Path.Combine(tempRoot, "Return To Title.vxlworld");
+
+            CreativeWorldManager worldManager = CreateWorldManager();
+            CreativeInteractionController interactionController = worldManager.GetComponent<CreativeInteractionController>();
+            BlockiverseMenuController menuController = CreateMenuController();
+            BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
+            SetPrivateField(controller, "currentSavePath", savePath);
+            SetPrivateField(controller, "currentWorldName", "Return To Title");
+            interactionController.SetBlockEditingEnabled(true);
+
+            InvokePrivateMethod(controller, "HandleAction", MenuActions.PauseReturnToTitle);
+
+            Assert.That(Directory.Exists(savePath), Is.True);
+            Assert.That(controller.HasActiveSession, Is.False);
+            Assert.That(worldManager.IsMenuWorldActive, Is.True);
+            Assert.That(worldManager.World.Seed, Is.EqualTo(WorldSaveGeneration.MenuWorldSeed));
+            Assert.That(interactionController.BlockEditingEnabled, Is.False);
         }
 
         [Test]
@@ -260,14 +313,14 @@ namespace Blockiverse.Tests.EditMode
             string missingPath = Path.Combine(tempRoot, "Missing World.vxlworld");
 
             CreativeWorldManager worldManager = CreateWorldManager();
-            BlockiverseMenuController menuController = CreateMenuControllerWithLoadPanel(out TMP_Text loadWorldStatus);
+            BlockiverseMenuController menuController = CreateMenuController();
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
             menuController.Router.PushScreen(new ScreenRoute(MenuActions.LoadWorldScreen, pauseGame: true));
 
             bool loaded = controller.LoadSave(missingPath);
 
             Assert.That(loaded, Is.False);
-            Assert.That(loadWorldStatus.text, Does.Contain("Failed to load:"));
+            Assert.That(GetMenuControllerPrivateField<string>(menuController, "uiToolkitLoadWorldStatus"), Does.Contain("Failed to load:"));
         }
 
         [Test]
@@ -295,13 +348,29 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(WorldSaveGeneration.SizeFor("medium"), Is.EqualTo((192, 192)));
             Assert.That(WorldSaveGeneration.SizeFor("infinite"), Is.EqualTo((256, 256)));
             Assert.That(WorldSaveGeneration.SizeFor("unknown"), Is.EqualTo((128, 128)));
+
+            GeneratedCreativeWorld menuWorld = WorldSaveGeneration.GenerateMenuWorld();
+            Assert.That(menuWorld.GenerationPreset, Is.EqualTo(CreativeWorldGenerationPreset.MenuWorld));
+            Assert.That(menuWorld.World.Seed, Is.EqualTo(2019));
+            Assert.That(menuWorld.World.Bounds.Width, Is.EqualTo(16));
+            Assert.That(menuWorld.World.Bounds.Height, Is.EqualTo(16));
+            Assert.That(menuWorld.World.Bounds.Depth, Is.EqualTo(16));
+            Assert.That(menuWorld.Settings.SpawnPosition, Is.EqualTo(new BlockPosition(8, 3, 8)));
+            Assert.That(menuWorld.World.GetBlock(new BlockPosition(8, 1, 8)), Is.EqualTo(BlockRegistry.MeadowTurf));
+            Assert.That(menuWorld.World.GetBlock(new BlockPosition(0, 2, 8)), Is.EqualTo(BlockRegistry.CutstoneBlock));
+            Assert.That(menuWorld.World.GetBlock(new BlockPosition(15, 4, 8)), Is.EqualTo(BlockRegistry.CutstoneBlock));
+            Assert.That(menuWorld.World.GetBlock(new BlockPosition(8, 2, 8)), Is.EqualTo(BlockRegistry.Air));
         }
 
         CreativeWorldManager CreateWorldManager()
         {
             worldObject = new GameObject("World Manager");
             worldObject.SetActive(false);
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
+            Assert.That(material, Is.Not.Null, "Session controller tests should use the committed authored chunk material.");
+            CreativeInteractionController interactionController = worldObject.AddComponent<CreativeInteractionController>();
             CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
+            manager.Configure(material, layer: -1, controller: interactionController);
             manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
             manager.InitializeDefaultWorld();
             return manager;
@@ -333,39 +402,12 @@ namespace Blockiverse.Tests.EditMode
 
         BlockiverseMenuController CreateMenuController()
         {
+            PlayerPrefs.SetInt(BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey, 1);
             menuObject = new GameObject("Menu Controller");
             BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            InvokeUnityMessage(controller, "Start");
-            return controller;
-        }
-
-        BlockiverseMenuController CreateMenuControllerWithPauseStatus(out TMP_Text pauseStatus)
-        {
-            menuObject = new GameObject("Menu Controller");
-            GameObject pauseObject = new("Pause Menu");
-            pauseObject.transform.SetParent(menuObject.transform, worldPositionStays: false);
-            BlockiverseActionMenu pauseMenu = pauseObject.AddComponent<BlockiverseActionMenu>();
-            pauseStatus = new GameObject("Status").AddComponent<TextMeshProUGUI>();
-            pauseStatus.transform.SetParent(pauseObject.transform, worldPositionStays: false);
-            pauseMenu.Configure(null, null, null, pauseStatus);
-
-            BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.Configure(null, null, pauseMenu, null, null, null, null);
-            return controller;
-        }
-
-        BlockiverseMenuController CreateMenuControllerWithLoadPanel(out TMP_Text loadWorldStatus)
-        {
-            menuObject = new GameObject("Menu Controller");
-            GameObject panelObject = new("Load World Panel");
-            panelObject.transform.SetParent(menuObject.transform, worldPositionStays: false);
-            BlockiverseLoadWorldPanel loadWorldPanel = panelObject.AddComponent<BlockiverseLoadWorldPanel>();
-            loadWorldStatus = new GameObject("Selection").AddComponent<TextMeshProUGUI>();
-            loadWorldStatus.transform.SetParent(panelObject.transform, worldPositionStays: false);
-            loadWorldPanel.Configure(null, null, null, null, loadWorldStatus);
-
-            BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.Configure(null, null, null, null, null, null, loadWorldPanel);
+            var surfaceObject = new GameObject("UI Toolkit Menu Surface");
+            surfaceObject.transform.SetParent(menuObject.transform, worldPositionStays: false);
+            controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
             InvokeUnityMessage(controller, "Start");
             return controller;
         }
@@ -438,6 +480,15 @@ namespace Blockiverse.Tests.EditMode
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
             field.SetValue(controller, value);
+        }
+
+        static T GetMenuControllerPrivateField<T>(BlockiverseMenuController controller, string fieldName)
+        {
+            FieldInfo field = typeof(BlockiverseMenuController).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
+            return (T)field.GetValue(controller);
         }
 
         static void SetStaticField<T>(string fieldName, T value)

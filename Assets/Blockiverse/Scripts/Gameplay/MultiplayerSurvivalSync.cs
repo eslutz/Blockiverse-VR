@@ -3945,7 +3945,7 @@ namespace Blockiverse.Gameplay
             if (Application.isPlaying && !inLifecycleResolve)
                 Debug.LogWarning("MultiplayerSurvivalSync fell back to a CreativeWorldManager scene scan outside Awake/OnEnable/Configure; wire it via Configure or the inspector.");
 
-            return FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+            return FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
         }
 
         void ResolveReferences()

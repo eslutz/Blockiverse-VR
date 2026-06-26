@@ -40,7 +40,7 @@ namespace Blockiverse.Gameplay
                 characterController = GetComponent<CharacterController>() ?? GetComponentInParent<CharacterController>();
 
             if (audioCuePlayer == null)
-                audioCuePlayer = GetComponent<BlockiverseAudioCuePlayer>() ?? FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = GetComponent<BlockiverseAudioCuePlayer>() ?? FindAnyObjectByType<BlockiverseAudioCuePlayer>();
         }
 
         void Update()

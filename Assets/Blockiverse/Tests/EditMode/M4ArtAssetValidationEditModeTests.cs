@@ -29,9 +29,10 @@ namespace Blockiverse.Tests.EditMode
             "health_pip",
             "inventory_panel",
             "crafting_panel",
-            "multiplayer_status_badge",
             "settings_panel",
-            "feedback_toast"
+            "feedback_toast",
+            "checkbox_check",
+            "slider_knob"
         };
 
         static readonly string[] VfxSpriteNames =
