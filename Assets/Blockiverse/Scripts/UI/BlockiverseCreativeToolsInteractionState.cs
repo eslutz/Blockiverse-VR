@@ -2,10 +2,8 @@ using System;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
-using TMPro;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.UI
 {
@@ -15,32 +13,32 @@ namespace Blockiverse.UI
     // (time-of-day, day-cycle speed, weather). Region edits bypass the per-block authority
     // channel, so everything that mutates the world is gated to offline creative worlds.
     [DisallowMultipleComponent]
-    public sealed class BlockiverseCreativeToolsPanel : MonoBehaviour
+    public sealed class BlockiverseCreativeToolsInteractionState : MonoBehaviour
     {
         const float DefaultCycleTimeScale = 1.0f;
 
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] CreativeHotbar hotbar;
-        [SerializeField] TMP_Text cornersLabel;
-        [SerializeField] TMP_Text statusLabel;
-        [SerializeField] TMP_Text weatherLabel;
-        [SerializeField] Slider timeOfDaySlider;
-        [SerializeField] Slider timeScaleSlider;
 
         readonly WorldEditService editService = new();
 
         BlockPosition? cornerA;
         BlockPosition? cornerB;
-        // The last block the interaction ray pointed at: pressing a panel button moves the ray
-        // over UI (clearing the live target), so actions use this cached aim instead.
+        // The last block the interaction ray pointed at: pressing a UITK action moves the ray over
+        // UI (clearing the live target), so actions use this cached aim instead.
         BlockPosition? lastTarget;
         VoxelWorld trackedWorld;
         Func<bool> networkSessionActiveProvider;
-        bool wired;
+        string cornersText = string.Empty;
+        string statusText = string.Empty;
+        string weatherText = string.Empty;
 
         public int WorldEditUndoCount => editService.UndoCount;
         public bool HasWorldEditClipboard => editService.HasClipboard;
+        public string CornersText => cornersText;
+        public string StatusText => statusText;
+        public string WeatherText => weatherText;
 
         public void ConfigureNetworkSessionActiveProvider(Func<bool> provider)
         {
@@ -50,23 +48,11 @@ namespace Blockiverse.UI
         public void Configure(
             CreativeInteractionController controller,
             CreativeWorldManager manager,
-            CreativeHotbar creativeHotbar,
-            TMP_Text corners,
-            TMP_Text status,
-            TMP_Text weather,
-            Slider timeOfDay,
-            Slider timeScale)
+            CreativeHotbar creativeHotbar)
         {
-            UnwireSliders();
             interactionController = controller;
             worldManager = manager;
             hotbar = creativeHotbar;
-            cornersLabel = corners;
-            statusLabel = status;
-            weatherLabel = weather;
-            timeOfDaySlider = timeOfDay;
-            timeScaleSlider = timeScale;
-            WireSliders();
             ResetWorldEditStateIfWorldChanged();
         }
 
@@ -74,14 +60,8 @@ namespace Blockiverse.UI
         {
             ResolveReferences();
             ResetWorldEditStateIfWorldChanged();
-            WireSliders();
             RefreshEnvironmentControls();
             RefreshCornersLabel();
-        }
-
-        void OnDisable()
-        {
-            UnwireSliders();
         }
 
         void Update()
@@ -105,38 +85,15 @@ namespace Blockiverse.UI
                 hotbar = FindAnyObjectByType<CreativeHotbar>(FindObjectsInactive.Include);
         }
 
-        void WireSliders()
-        {
-            if (wired)
-                return;
-
-            timeOfDaySlider?.onValueChanged.AddListener(OnTimeOfDayChanged);
-            timeScaleSlider?.onValueChanged.AddListener(OnTimeScaleChanged);
-            wired = true;
-        }
-
-        void UnwireSliders()
-        {
-            if (!wired)
-                return;
-
-            timeOfDaySlider?.onValueChanged.RemoveListener(OnTimeOfDayChanged);
-            timeScaleSlider?.onValueChanged.RemoveListener(OnTimeScaleChanged);
-            wired = false;
-        }
-
-        // Pushes the live clock/weather values into the controls without re-firing listeners.
+        // Refreshes the values exposed to the UI Toolkit details view.
         public void RefreshEnvironmentControls()
         {
             WorldTimeClock clock = worldManager != null ? worldManager.WorldTimeClock : null;
             if (clock != null)
-            {
-                timeOfDaySlider?.SetValueWithoutNotify(clock.NormalizedTime);
-                timeScaleSlider?.SetValueWithoutNotify(clock.TimeScale);
-            }
+                statusText = $"Time {Mathf.RoundToInt(clock.NormalizedTime * 100.0f)}%, speed {Mathf.RoundToInt(clock.TimeScale * 100.0f)}%";
 
-            if (weatherLabel != null && worldManager != null)
-                weatherLabel.text = BlockiverseLocalization.Format(
+            if (worldManager != null)
+                weatherText = BlockiverseLocalization.Format(
                     BlockiverseLocalization.Keys.CreativeWeather,
                     BlockiverseLocalization.DisplayName(worldManager.GetWeatherSyncState().State));
         }
@@ -169,12 +126,9 @@ namespace Blockiverse.UI
 
         void RefreshCornersLabel()
         {
-            if (cornersLabel == null)
-                return;
-
             string a = cornerA.HasValue ? cornerA.Value.ToString() : "—";
             string b = cornerB.HasValue ? cornerB.Value.ToString() : "—";
-            cornersLabel.text = BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeCorners, a, b);
+            cornersText = BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeCorners, a, b);
         }
 
         // ── Region operations (§12.1) ─────────────────────────────────────────
@@ -307,30 +261,6 @@ namespace Blockiverse.UI
         }
 
         // ── Environment controls ──────────────────────────────────────────────
-
-        void OnTimeOfDayChanged(float value)
-        {
-            if (NetworkSessionActive())
-            {
-                RefreshEnvironmentControls();
-                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeTimeHostOnly));
-                return;
-            }
-
-            worldManager?.WorldTimeClock?.SetNormalizedTime(value);
-        }
-
-        void OnTimeScaleChanged(float value)
-        {
-            if (NetworkSessionActive())
-            {
-                RefreshEnvironmentControls();
-                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeTimeHostOnly));
-                return;
-            }
-
-            worldManager?.WorldTimeClock?.SetTimeScale(value);
-        }
 
         public void ToggleDayNightCycle()
         {
@@ -485,8 +415,7 @@ namespace Blockiverse.UI
 
         void SetStatus(string message)
         {
-            if (statusLabel != null)
-                statusLabel.text = message;
+            statusText = message ?? string.Empty;
         }
     }
 }

@@ -835,7 +835,38 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &261709246
+--- !u!1 &336460940
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 336460941}
+  m_Layer: 0
+  m_Name: Ray Origin Probe
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &336460941
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 336460940}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &547118448
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -843,7 +874,19 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1248329399134172422, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: audioCuePlayer
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 1248329399134172422, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionHaptics
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 1299769022157528344, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 1528170066896198070, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
       value: 
       objectReference: {fileID: 597296392}
@@ -891,11 +934,31 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5292123046959407743, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 5945966480565670973, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 6477973602101866707, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
     - target: {fileID: 6788423518949538828, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Name
       value: BlockiverseXRRig
       objectReference: {fileID: 0}
+    - target: {fileID: 7921076824908767289, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: uiToolkitMenuSurface
+      value: 
+      objectReference: {fileID: 2002702404}
     - target: {fileID: 8273465101139274317, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: interactionController
+      value: 
+      objectReference: {fileID: 597296392}
+    - target: {fileID: 8681117543468626901, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: interactionController
       value: 
       objectReference: {fileID: 597296392}
@@ -912,10 +975,10 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
---- !u!114 &261709247 stripped
+--- !u!114 &547118449 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3110682427877720823, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-  m_PrefabInstance: {fileID: 261709246}
+  m_CorrespondingSourceObject: {fileID: 4402953607293053293, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+  m_PrefabInstance: {fileID: 547118448}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
@@ -923,37 +986,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 917fc1f9e1f244dab3d301e086932df2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
---- !u!1 &336460940
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 336460941}
-  m_Layer: 0
-  m_Name: Ray Origin Probe
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &336460941
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 336460940}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &597296390
 GameObject:
   m_ObjectHideFlags: 0
@@ -1000,7 +1032,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
   interactionLayer: 10
   interactionController: {fileID: 597296392}
-  hotbar: {fileID: 261709247}
+  hotbar: {fileID: 547118449}
   placementPreview: {fileID: 0}
   voidSafetyFloor: {fileID: 0}
   initializeDefaultWorldOnAwake: 0
@@ -2065,6 +2097,38 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1578376091
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1578376092}
+  m_Layer: 0
+  m_Name: Menu World UI
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1578376092
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1578376091}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 2002702403}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1590357433
 GameObject:
   m_ObjectHideFlags: 0
@@ -2194,6 +2258,146 @@ MonoBehaviour:
   dayLengthSeconds: 1200
   normalizedTime: 0.22
   timeScale: 1
+--- !u!1 &2002702402
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2002702403}
+  - component: {fileID: 2002702408}
+  - component: {fileID: 2002702407}
+  - component: {fileID: 2002702406}
+  - component: {fileID: 2002702405}
+  - component: {fileID: 2002702404}
+  m_Layer: 13
+  m_Name: UI Toolkit Menu Surface
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2002702403
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002702402}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.08715574, y: 0, z: 0, w: 0.9961947}
+  m_LocalPosition: {x: 0, y: 1.05, z: 0.95}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1578376092}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2002702404
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002702402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0de303a1cd40e444eb54ffeac2de61b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.UI::Blockiverse.UI.BlockiverseUiToolkitMenuSurface
+  document: {fileID: 2002702408}
+  hideOnAwake: 1
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
+--- !u!114 &2002702405
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002702402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d5de57bc6d1408ba7dbbb9aee6588d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseUiToolkitMenuPresenter
+  targetRoot: {fileID: 2002702402}
+  placementRoot: {fileID: 2002702403}
+  headset: {fileID: 0}
+  distanceMeters: 0.95
+  horizontalOffsetMeters: 0
+  verticalOffsetMeters: -0.38
+  pitchDegrees: 10
+  panelScale: 0.1
+  comfortSettings: {fileID: 0}
+  recenterOnShow: 0
+  showOnStart: 0
+  playShowFeedback: 0
+  showFeedbackCue: 3
+  playHideFeedback: 0
+  hideFeedbackCue: 4
+  hapticOnShow: 1
+  hapticOnHide: 1
+  showOnStartPlayerPrefsKey: 
+  audioCuePlayer: {fileID: 0}
+  interactionHaptics: {fileID: 0}
+--- !u!114 &2002702406
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002702402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a00cff961714664a0cb9bc68a41d6f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.XRUIToolkitManager
+--- !u!65 &2002702407
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002702402}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 12.8, y: 7.2, z: 0.08}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &2002702408
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002702402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
+  m_PanelSettings: {fileID: 11400000, guid: 447189f9bd071445993469a1c560133c, type: 2}
+  m_ParentUI: {fileID: 0}
+  sourceAsset: {fileID: 9197481963319205126, guid: bccc3fb2fb76a49298d36eafa2d48fef, type: 3}
+  m_SortingOrder: 0
+  m_Position: 0
+  m_WorldSpaceSizeMode: 1
+  m_WorldSpaceWidth: 1280
+  m_WorldSpaceHeight: 720
+  m_PivotReferenceSize: 0
+  m_Pivot: 0
+  m_WorldSpaceCollider: {fileID: 2002702407}
 --- !u!1 &2136392232
 GameObject:
   m_ObjectHideFlags: 0
@@ -2242,4 +2446,5 @@ SceneRoots:
   - {fileID: 80623511}
   - {fileID: 754512983}
   - {fileID: 336460941}
-  - {fileID: 261709246}
+  - {fileID: 547118448}
+  - {fileID: 1578376092}

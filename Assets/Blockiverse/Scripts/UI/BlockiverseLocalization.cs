@@ -8,7 +8,7 @@ using Blockiverse.WorldGen;
 
 namespace Blockiverse.UI
 {
-    // Lightweight runtime string lookup for generated XR menus. English values remain the fallback
+    // Lightweight runtime string lookup for UI Toolkit menus. English values remain the fallback
     // language, while tests and future locale loaders can override keys without rebuilding menus.
     public static class BlockiverseLocalization
     {

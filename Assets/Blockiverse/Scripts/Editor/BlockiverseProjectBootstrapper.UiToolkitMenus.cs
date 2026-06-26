@@ -20,7 +20,7 @@ namespace Blockiverse.Editor
             surfaceObject.transform.localPosition = GameMenuLocalPosition;
             surfaceObject.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0.0f);
             surfaceObject.transform.localScale = Vector3.one * UiToolkitMenuScale;
-            SetLayerRecursively(surfaceObject, GetInteractionLayerIndex());
+            SetLayerRecursively(surfaceObject, GetVrUiLayerIndex());
 
             UIDocument document = EnsureComponent<UIDocument>(surfaceObject);
             document.visualTreeAsset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(BlockiverseProject.UiToolkitMenuShellPath);
@@ -33,7 +33,7 @@ namespace Blockiverse.Editor
             AssignUiToolkitWorldSpaceCollider(document, worldSpaceCollider);
 
             XRUIToolkitManager toolkitManager = EnsureComponent<XRUIToolkitManager>(surfaceObject);
-            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(surfaceObject);
+            BlockiverseUiToolkitMenuPresenter presenter = EnsureComponent<BlockiverseUiToolkitMenuPresenter>(surfaceObject);
             presenter.ConfigureWorldSpaceTarget(
                 surfaceObject,
                 head,
@@ -41,7 +41,8 @@ namespace Blockiverse.Editor
                 0.0f,
                 GameMenuVerticalOffsetMeters,
                 GameMenuPitchDegrees,
-                UiToolkitMenuScale);
+                UiToolkitMenuScale,
+                recenterWhenShown: false);
             BlockiverseUiToolkitMenuSurface surface = EnsureComponent<BlockiverseUiToolkitMenuSurface>(surfaceObject);
             surface.Configure(document);
 

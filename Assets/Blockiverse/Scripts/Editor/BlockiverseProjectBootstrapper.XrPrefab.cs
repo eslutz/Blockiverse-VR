@@ -11,7 +11,6 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -31,7 +30,6 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -54,24 +52,8 @@ namespace Blockiverse.Editor
     {
         static GameObject EnsureXrRigPrefab()
         {
-            var existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
-
-            if (existingPrefab != null)
-            {
-                GameObject prefabContents = PrefabUtility.LoadPrefabContents(BlockiverseProject.XrRigPrefabPath);
-
-                try
-                {
-                    EnsureXrRigControllerBindings(prefabContents);
-                    PrefabUtility.SaveAsPrefabAsset(prefabContents, BlockiverseProject.XrRigPrefabPath);
-                }
-                finally
-                {
-                    PrefabUtility.UnloadPrefabContents(prefabContents);
-                }
-
-                return AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
-            }
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath) != null)
+                AssetDatabase.DeleteAsset(BlockiverseProject.XrRigPrefabPath);
 
             GameObject rig = CreateXrRigInstance();
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(rig, BlockiverseProject.XrRigPrefabPath);

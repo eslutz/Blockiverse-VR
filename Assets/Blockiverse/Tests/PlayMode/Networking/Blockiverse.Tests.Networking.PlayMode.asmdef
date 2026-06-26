@@ -10,8 +10,6 @@
     "Blockiverse.UI",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
-    "Unity.TextMeshPro",
-    "UnityEngine.UI",
     "Unity.InputSystem",
     "UnityEngine.TestRunner",
     "Unity.Netcode.Runtime",

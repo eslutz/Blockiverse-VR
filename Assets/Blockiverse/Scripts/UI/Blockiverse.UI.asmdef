@@ -13,8 +13,6 @@
     "Blockiverse.VR",
     "Blockiverse.WorldGen",
     "Unity.XR.Interaction.Toolkit",
-    "UnityEngine.UI",
-    "Unity.TextMeshPro",
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],

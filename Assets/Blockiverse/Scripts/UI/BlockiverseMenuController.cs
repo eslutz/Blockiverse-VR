@@ -8,69 +8,37 @@ using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.VR;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.UI
 {
-    // Owns the UiScreenRouter and coordinates panel visibility for the first-playable menu set
+    // Owns the UiScreenRouter and coordinates the UI Toolkit menu surface
     // (voxel_survival_menus §2/§8.1). The menu button cycles between gameplay and the pause screen;
-    // all other transitions are triggered by action ids dispatched from BlockiverseActionMenu.
+    // all menu transitions are triggered by action ids dispatched from BlockiverseUiToolkitMenuSurface.
     public sealed class BlockiverseMenuController : MonoBehaviour
     {
-        const string TitleMenuName = "Title Menu";
-        const string PauseMenuName = "Pause Menu";
-        const string DeathScreenName = "Death Screen";
-        const string ConfirmDialogName = "Confirm Dialog";
-        const string NewWorldPanelName = "New World Panel";
-        const string LoadWorldPanelName = "Load World Panel";
-        const string SettingsPanelName = "Settings Panel";
-        const string ComfortSettingsPanelName = "Comfort Settings Menu";
-        const string AudioSettingsPanelName = "Audio Settings Panel";
-        const string ControlsPanelName = "Controls Panel";
-        const string WorldDetailsPanelName = "World Details Panel";
-        const string CreativeToolsPanelName = "Creative Tools Panel";
-        const string StationPanelName = "Station Panel";
-        const string ControllerMappingPopupName = "Controller Mapping Popup";
-        const string StartupLoadingOverlayName = "Startup Loading Overlay";
+        const string CreativeToolsMenuStateName = "Creative Tools Menu State";
+        const string StationMenuStateName = "Station Menu State";
         const string SurvivalHudName = "Survival HUD";
-        const string BlockMenuName = "Block Menu";
         const string UiToolkitMenuSurfaceName = "UI Toolkit Menu Surface";
         const int UiToolkitLoadWorldMaxEntries = 6;
-        const float GameplayHudScale = 0.00105f;
-        const float ControllerMappingCloseFallbackMaxDistanceMeters = 3.0f;
 
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] BlockiverseUiToolkitMenuSurface uiToolkitMenuSurface;
-        [SerializeField] bool useUiToolkitRuntimeMenus = true;
         BlockiverseUiToolkitMenuSurface wiredUiToolkitMenuSurface;
 
-        [SerializeField] BlockiverseActionMenu titleMenu;
-        [SerializeField] BlockiverseActionMenu pauseMenu;
-        [SerializeField] BlockiverseActionMenu deathMenu;
-        [SerializeField] BlockiverseActionMenu confirmMenu;
-        [SerializeField] BlockiverseActionMenu settingsMenu;
-        [SerializeField] BlockiverseNewWorldPanel newWorldPanel;
-        [SerializeField] BlockiverseLoadWorldPanel loadWorldPanel;
-        [SerializeField] BlockiverseWorldDetailsPanel worldDetailsPanel;
-        [SerializeField] BlockiverseActionMenu worldDetailsMenu;
-        [SerializeField] BlockiverseComfortMenu comfortMenu;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
-        [SerializeField] BlockiverseStationPanel stationPanel;
-        [SerializeField] BlockiverseCreativeToolsPanel creativeToolsPanel;
+        [SerializeField] BlockiverseStationInteractionState stationInteractionState;
+        [SerializeField] BlockiverseCreativeToolsInteractionState creativeToolsInteractionState;
         [SerializeField] BlockiverseNetworkSession lanSession;
         [SerializeField] BlockiverseWorldSessionController worldSessionController;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
         [SerializeField] SurvivalHudController survivalHudController;
+        [SerializeField] BlockiverseHudToolkitSurface hudToolkitSurface;
         [SerializeField] CreativeHotbar creativeHotbar;
-        [SerializeField] BlockiverseWorldSpacePanelPresenter controllerMappingPresenter;
-        [SerializeField] BlockiverseWorldSpacePanelPresenter worldLoadingPresenter;
-        [SerializeField] BlockiverseWorldSpacePanelPresenter blockMenuPresenter;
-        [SerializeField] Button controllerMappingCloseButton;
 
-        readonly List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)> screenPresenters = new();
         Action<bool> confirmCallback;
         IReadOnlyList<MenuAction> confirmActions = MenuActions.Confirm();
         string confirmPrompt = string.Empty;
@@ -120,109 +88,40 @@ namespace Blockiverse.UI
 
         void RefreshTitleMenu()
         {
-            if (titleMenu == null)
-                ResolveRuntimeReferences();
-            titleMenu?.SetMenu(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleBlockiverse),
-                MenuActions.Title(hasLatestSave, hasAnySave, CanQuit()));
+            ApplyRouterState();
         }
 
         void RefreshPauseMenu()
         {
-            if (pauseMenu == null || survivalSync == null)
+            if (survivalSync == null)
                 ResolveRuntimeReferences();
 
-            bool canToggleMode = survivalSync != null && survivalSync.CanToggleMode;
-            bool canOpenCreativeTools = survivalSync != null && survivalSync.CanUseCreativeMode;
-            pauseMenu?.SetMenu(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused),
-                MenuActions.PauseMenu(canToggleMode, canOpenCreativeTools, CanQuit()));
             ApplyRouterState();
         }
 
-        public void Configure(
-            BlockiverseInputRig rig,
-            BlockiverseActionMenu title,
-            BlockiverseActionMenu pause,
-            BlockiverseActionMenu death,
-            BlockiverseActionMenu confirm,
-            BlockiverseNewWorldPanel newWorld,
-            BlockiverseLoadWorldPanel loadWorld,
-            BlockiverseActionMenu settings = null,
-            BlockiverseWorldDetailsPanel worldDetails = null,
-            BlockiverseActionMenu worldDetailsActions = null)
+        public void Configure(BlockiverseInputRig rig)
         {
             inputRig = rig;
-            titleMenu = title;
-            pauseMenu = pause;
-            deathMenu = death;
-            confirmMenu = confirm;
-            settingsMenu = settings;
-            newWorldPanel = newWorld;
-            loadWorldPanel = loadWorld;
-            worldDetailsPanel = worldDetails;
-            worldDetailsMenu = worldDetailsActions;
         }
 
-        public void ConfigureUiToolkitMenuSurface(BlockiverseUiToolkitMenuSurface surface, bool useRuntimeMenus = true)
+        public void ConfigureUiToolkitMenuSurface(BlockiverseUiToolkitMenuSurface surface)
         {
             uiToolkitMenuSurface = surface;
-            useUiToolkitRuntimeMenus = useRuntimeMenus;
             WireUiToolkitMenuSurface();
         }
 
-        public void ConfigurePresenters(
-            BlockiverseWorldSpacePanelPresenter title,
-            BlockiverseWorldSpacePanelPresenter pause,
-            BlockiverseWorldSpacePanelPresenter death,
-            BlockiverseWorldSpacePanelPresenter confirm,
-            BlockiverseWorldSpacePanelPresenter newWorld,
-            BlockiverseWorldSpacePanelPresenter loadWorld,
-            BlockiverseWorldSpacePanelPresenter settings,
-            BlockiverseWorldSpacePanelPresenter station = null,
-            BlockiverseWorldSpacePanelPresenter lanMultiplayer = null,
-            BlockiverseWorldSpacePanelPresenter audioSettings = null,
-            BlockiverseWorldSpacePanelPresenter controls = null,
-            BlockiverseWorldSpacePanelPresenter worldDetails = null,
-            BlockiverseWorldSpacePanelPresenter creativeTools = null,
-            BlockiverseWorldSpacePanelPresenter gameplayHud = null,
-            BlockiverseWorldSpacePanelPresenter comfortSettings = null,
-            BlockiverseWorldSpacePanelPresenter controllerMapping = null,
-            BlockiverseWorldSpacePanelPresenter worldLoading = null)
+        public void ConfigureHudToolkitSurface(BlockiverseHudToolkitSurface surface)
         {
-            controllerMappingPresenter = controllerMapping;
-            worldLoadingPresenter = worldLoading;
-            screenPresenters.Clear();
-            AddPresenter(MenuActions.ControllerMappingScreen, controllerMappingPresenter);
-            AddPresenter(MenuActions.WorldLoadingScreen, worldLoadingPresenter);
-            AddPresenter(MenuActions.GameplayHudScreen, gameplayHud);
-            AddPresenter(MenuActions.TitleScreen, title);
-            AddPresenter(MenuActions.PauseScreen, pause);
-            AddPresenter(MenuActions.DeathScreen, death);
-            AddPresenter(MenuActions.ConfirmModal, confirm);
-            AddPresenter(MenuActions.NewWorldScreen, newWorld);
-            AddPresenter(MenuActions.LoadWorldScreen, loadWorld);
-            AddPresenter(MenuActions.SettingsScreen, settings);
-            if (comfortSettings != null)
-                AddPresenter(MenuActions.ComfortSettingsScreen, comfortSettings);
-            if (station != null)
-                AddPresenter(MenuActions.StationMenuScreen, station);
-            if (lanMultiplayer != null)
-                AddPresenter(MenuActions.LanMultiplayerScreen, lanMultiplayer);
-            if (audioSettings != null)
-                AddPresenter(MenuActions.AudioSettingsScreen, audioSettings);
-            if (controls != null)
-                AddPresenter(MenuActions.ControlsScreen, controls);
-            if (worldDetails != null)
-                AddPresenter(MenuActions.WorldDetailsScreen, worldDetails);
-            if (creativeTools != null)
-                AddPresenter(MenuActions.CreativeToolsScreen, creativeTools);
+            hudToolkitSurface = surface;
+            if (survivalHudController != null)
+                survivalHudController.Configure(targetHudSurface: hudToolkitSurface);
+            creativeHotbar?.ConfigureHudSurface(hudToolkitSurface);
         }
 
-        // Wires the smelting-station panel so a "use" on a kiln/forge block opens it (§8.4).
-        public void ConfigureStationPanel(BlockiverseStationPanel panel)
+        // Wires the smelting-station state so a "use" on a kiln/forge block opens its UITK menu (§8.4).
+        public void ConfigureStationInteractionState(BlockiverseStationInteractionState state)
         {
-            stationPanel = panel;
+            stationInteractionState = state;
         }
 
         public void ConfigureLanSession(
@@ -247,24 +146,14 @@ namespace Blockiverse.UI
                     ?? GetComponentInChildren<BlockiverseInputRig>(true)
                     ?? BlockiverseSceneLookup.Find<BlockiverseInputRig>(FindObjectsInactive.Include);
 
-            titleMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(TitleMenuName);
-            pauseMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(PauseMenuName);
-            deathMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(DeathScreenName);
-            confirmMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(ConfirmDialogName);
-            settingsMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(SettingsPanelName);
-            comfortMenu ??= FindGeneratedComponent<BlockiverseComfortMenu>(ComfortSettingsPanelName);
             comfortSettings ??= GetComponent<BlockiverseComfortSettings>()
                 ?? BlockiverseSceneLookup.Find<BlockiverseComfortSettings>(FindObjectsInactive.Include);
             heightReset ??= GetComponent<BlockiverseHeightReset>()
                 ?? BlockiverseSceneLookup.Find<BlockiverseHeightReset>(FindObjectsInactive.Include);
             feedbackSettings ??= GetComponent<BlockiverseFeedbackSettings>()
                 ?? BlockiverseSceneLookup.Find<BlockiverseFeedbackSettings>(FindObjectsInactive.Include);
-            newWorldPanel ??= FindGeneratedComponent<BlockiverseNewWorldPanel>(NewWorldPanelName);
-            loadWorldPanel ??= FindGeneratedComponent<BlockiverseLoadWorldPanel>(LoadWorldPanelName);
-            worldDetailsPanel ??= FindGeneratedComponent<BlockiverseWorldDetailsPanel>(WorldDetailsPanelName);
-            worldDetailsMenu ??= FindGeneratedComponent<BlockiverseActionMenu>(WorldDetailsPanelName);
-            stationPanel ??= FindGeneratedComponent<BlockiverseStationPanel>(StationPanelName);
-            creativeToolsPanel ??= FindGeneratedComponent<BlockiverseCreativeToolsPanel>(CreativeToolsPanelName);
+            stationInteractionState ??= FindGeneratedComponent<BlockiverseStationInteractionState>(StationMenuStateName);
+            creativeToolsInteractionState ??= FindGeneratedComponent<BlockiverseCreativeToolsInteractionState>(CreativeToolsMenuStateName);
             lanSession ??= BlockiverseSceneLookup.Find<BlockiverseNetworkSession>(FindObjectsInactive.Include);
             worldSessionController ??= BlockiverseSceneLookup.Find<BlockiverseWorldSessionController>(FindObjectsInactive.Include);
             uiToolkitMenuSurface ??= FindGeneratedComponent<BlockiverseUiToolkitMenuSurface>(UiToolkitMenuSurfaceName);
@@ -276,84 +165,16 @@ namespace Blockiverse.UI
             if (survivalHudController == null)
                 survivalHudController = FindGeneratedComponent<SurvivalHudController>(SurvivalHudName)
                     ?? BlockiverseSceneLookup.Find<SurvivalHudController>(FindObjectsInactive.Include);
+            if (hudToolkitSurface == null)
+                hudToolkitSurface = FindGeneratedComponent<BlockiverseHudToolkitSurface>(SurvivalHudName)
+                    ?? BlockiverseSceneLookup.Find<BlockiverseHudToolkitSurface>(FindObjectsInactive.Include);
             if (creativeHotbar == null)
                 creativeHotbar = BlockiverseSceneLookup.Find<CreativeHotbar>(FindObjectsInactive.Include);
+            if (hudToolkitSurface != null)
+                ConfigureHudToolkitSurface(hudToolkitSurface);
+            creativeHotbar?.EnsureConfigured();
 
-            titleMenu?.ResolveRuntimeReferences();
-            pauseMenu?.ResolveRuntimeReferences();
-            deathMenu?.ResolveRuntimeReferences();
-            confirmMenu?.ResolveRuntimeReferences();
-            settingsMenu?.ResolveRuntimeReferences();
-            worldDetailsMenu?.ResolveRuntimeReferences();
-            newWorldPanel?.ResolveRuntimeReferences();
-            loadWorldPanel?.ResolveRuntimeReferences();
-            stationPanel?.ResolveRuntimeReferences();
-
-            BlockiverseWorldSpacePanelPresenter titlePresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(TitleMenuName);
-            BlockiverseWorldSpacePanelPresenter pausePresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(PauseMenuName);
-            BlockiverseWorldSpacePanelPresenter deathPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(DeathScreenName);
-            BlockiverseWorldSpacePanelPresenter confirmPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ConfirmDialogName);
-            BlockiverseWorldSpacePanelPresenter newWorldPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(NewWorldPanelName);
-            BlockiverseWorldSpacePanelPresenter loadWorldPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(LoadWorldPanelName);
-            BlockiverseWorldSpacePanelPresenter settingsPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(SettingsPanelName);
-            BlockiverseWorldSpacePanelPresenter comfortSettingsPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ComfortSettingsPanelName);
-            BlockiverseWorldSpacePanelPresenter stationPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StationPanelName);
-            BlockiverseWorldSpacePanelPresenter audioPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(AudioSettingsPanelName);
-            BlockiverseWorldSpacePanelPresenter controlsPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ControlsPanelName);
-            BlockiverseWorldSpacePanelPresenter worldDetailsPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(WorldDetailsPanelName);
-            BlockiverseWorldSpacePanelPresenter creativeToolsPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(CreativeToolsPanelName);
-            BlockiverseWorldSpacePanelPresenter gameplayHudPresenter =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(SurvivalHudName)
-                ?? EnsureGameplayHudPresenter();
-            BlockiverseWorldSpacePanelPresenter controllerMapping =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(ControllerMappingPopupName);
-            BlockiverseWorldSpacePanelPresenter worldLoading =
-                FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(StartupLoadingOverlayName);
-            blockMenuPresenter ??= FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
-            controllerMappingCloseButton ??= controllerMapping != null
-                ? controllerMapping.transform.Find("Panel/Close Button")?.GetComponent<Button>()
-                : null;
-
-            if (screenPresenters.Count == 0 ||
-                titlePresenter != null || pausePresenter != null || deathPresenter != null ||
-                confirmPresenter != null || newWorldPresenter != null || loadWorldPresenter != null ||
-                settingsPresenter != null || comfortSettingsPresenter != null || stationPresenter != null ||
-                audioPresenter != null || controlsPresenter != null || worldDetailsPresenter != null ||
-                creativeToolsPresenter != null || gameplayHudPresenter != null || controllerMapping != null ||
-                worldLoading != null)
-            {
-                ConfigurePresenters(
-                    titlePresenter,
-                    pausePresenter,
-                    deathPresenter,
-                    confirmPresenter,
-                    newWorldPresenter,
-                    loadWorldPresenter,
-                    settingsPresenter,
-                    stationPresenter,
-                    null,
-                    audioPresenter,
-                    controlsPresenter,
-                    worldDetailsPresenter,
-                    creativeToolsPresenter,
-                    gameplayHudPresenter,
-                    comfortSettingsPresenter,
-                    controllerMapping,
-                    worldLoading);
-            }
+            stationInteractionState?.ResolveRuntimeReferences();
         }
 
         // Called by the bootstrapper after building the XR rig; also subscribed at runtime via Start.
@@ -402,12 +223,6 @@ namespace Blockiverse.UI
         public void ShowDeathScreen(bool hasBedrollSpawn)
         {
             deathHasBedrollSpawn = hasBedrollSpawn;
-            if (deathMenu == null)
-                ResolveRuntimeReferences();
-
-            deathMenu?.SetMenu(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleDeath),
-                MenuActions.Death(hasBedrollSpawn));
             if (router == null)
                 return;
 
@@ -420,7 +235,6 @@ namespace Blockiverse.UI
         {
             confirmPrompt = prompt ?? string.Empty;
             confirmActions = MenuActions.Confirm(confirmLabel, cancelLabel);
-            confirmMenu?.SetMenu(prompt, confirmActions);
             confirmCallback = callback;
             router?.PushModal(MenuActions.ConfirmModal);
         }
@@ -432,18 +246,12 @@ namespace Blockiverse.UI
             uiToolkitSaveList.SetSaves(saveList);
             uiToolkitLoadWorldPageIndex = 0;
 
-            if (loadWorldPanel == null)
-                ResolveRuntimeReferences();
-            loadWorldPanel?.SetSaves(saveList);
             ApplyRouterState();
         }
 
         public void SetLoadWorldStatus(string message)
         {
             uiToolkitLoadWorldStatus = message ?? string.Empty;
-            if (loadWorldPanel == null)
-                ResolveRuntimeReferences();
-            loadWorldPanel?.SetStatus(message);
             ApplyRouterState();
         }
 
@@ -457,12 +265,7 @@ namespace Blockiverse.UI
         {
             get
             {
-                if (CanReadUiToolkitPendingState(MenuActions.NewWorldScreen) && uiToolkitNewWorldConfig != null)
-                    return uiToolkitNewWorldConfig;
-
-                if (newWorldPanel == null)
-                    ResolveRuntimeReferences();
-                return newWorldPanel?.Config;
+                return uiToolkitNewWorldConfig;
             }
         }
 
@@ -471,12 +274,7 @@ namespace Blockiverse.UI
         {
             get
             {
-                if (CanReadUiToolkitPendingState(MenuActions.LoadWorldScreen) && uiToolkitSaveList.SelectedSave.HasValue)
-                    return uiToolkitSaveList.SelectedSave;
-
-                if (loadWorldPanel == null)
-                    ResolveRuntimeReferences();
-                return loadWorldPanel?.SelectedSave;
+                return uiToolkitSaveList.SelectedSave;
             }
         }
 
@@ -485,12 +283,7 @@ namespace Blockiverse.UI
         {
             get
             {
-                if (uiToolkitDetailsSave.HasValue)
-                    return uiToolkitDetailsSave;
-
-                if (worldDetailsPanel == null)
-                    ResolveRuntimeReferences();
-                return worldDetailsPanel?.CurrentSave;
+                return uiToolkitDetailsSave;
             }
         }
 
@@ -498,12 +291,7 @@ namespace Blockiverse.UI
         {
             get
             {
-                if (uiToolkitDetailsSave.HasValue)
-                    return uiToolkitDetailsRenameText;
-
-                if (worldDetailsPanel == null)
-                    ResolveRuntimeReferences();
-                return worldDetailsPanel?.PendingRenameText ?? string.Empty;
+                return uiToolkitDetailsRenameText;
             }
         }
 
@@ -513,9 +301,6 @@ namespace Blockiverse.UI
             uiToolkitDetailsSave = save;
             uiToolkitDetailsRenameText = save.Name;
 
-            if (worldDetailsPanel == null)
-                ResolveRuntimeReferences();
-            worldDetailsPanel?.ShowSave(save);
             ApplyRouterState();
         }
 
@@ -537,9 +322,6 @@ namespace Blockiverse.UI
                     BlockiverseLocalization.Keys.ConfirmOk,
                     "OK"),
             };
-            confirmMenu?.SetMenu(
-                message,
-                confirmActions);
             confirmCallback = null;
             router?.PushModal(MenuActions.ConfirmModal);
         }
@@ -554,22 +336,14 @@ namespace Blockiverse.UI
             {
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
                 inputRig.QuickMenuPressed.AddListener(OnQuickMenuPressed);
-                inputRig.BreakPressed.AddListener(OnControllerMappingCloseFallbackPressed);
             }
 
             WireMenus();
-            WireStationPanel();
+            WireStationInteractionState();
             WireVitalsRuntime();
 
             RefreshTitleMenu();
             RefreshPauseMenu();
-            deathMenu?.SetMenu(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleDeath), MenuActions.Death(false));
-            confirmMenu?.SetMenu(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleConfirm), MenuActions.Confirm());
-            settingsMenu?.SetMenu(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleSettings), MenuActions.Settings);
-            worldDetailsMenu?.SetMenu(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleWorldDetails), MenuActions.WorldDetails);
-
-            if (comfortMenu == null)
-                comfortMenu = BlockiverseSceneLookup.Find<BlockiverseComfortMenu>(FindObjectsInactive.Include);
 
             ApplyRouterState();
         }
@@ -593,7 +367,7 @@ namespace Blockiverse.UI
             if (router == null)
                 return;
 
-            if (useUiToolkitRuntimeMenus && uiToolkitMenuSurface != null)
+            if (uiToolkitMenuSurface != null)
             {
                 if (string.Equals(router.ActiveScreen.ScreenId, MenuActions.BlockCatalogScreen, StringComparison.Ordinal))
                 {
@@ -601,40 +375,29 @@ namespace Blockiverse.UI
                     return;
                 }
 
-                if (CanUseQuickBlockMenu())
+                if (!router.HasModal &&
+                    string.Equals(router.ActiveScreen.ScreenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal))
                 {
                     uiToolkitCatalogPageIndex = 0;
                     router.PushScreen(new ScreenRoute(MenuActions.BlockCatalogScreen));
                     return;
                 }
             }
-
-            if (blockMenuPresenter == null)
-                blockMenuPresenter = FindGeneratedComponent<BlockiverseWorldSpacePanelPresenter>(BlockMenuName);
-
-            if (!CanUseQuickBlockMenu())
-            {
-                HideQuickBlockMenu();
-                return;
-            }
-
-            blockMenuPresenter?.ToggleVisible();
-            SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
         }
 
         ScreenRoute ResolveInitialRoute()
         {
-            return controllerMappingPresenter != null && ShouldShowControllerMappingOnStart()
+            return ShouldShowControllerMappingOnStart()
                 ? new ScreenRoute(MenuActions.ControllerMappingScreen, pauseGame: true)
                 : new ScreenRoute(MenuActions.TitleScreen, pauseGame: true);
         }
 
         static bool ShouldShowControllerMappingOnStart() =>
-            PlayerPrefs.GetInt(BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey, 0) == 0;
+            PlayerPrefs.GetInt(BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey, 0) == 0;
 
         public void CloseControllerMappingScreen()
         {
-            PlayerPrefs.SetInt(BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey, 1);
+            PlayerPrefs.SetInt(BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey, 1);
             PlayerPrefs.Save();
 
             if (router != null && router.ActiveScreen.ScreenId == MenuActions.ControllerMappingScreen)
@@ -644,18 +407,12 @@ namespace Blockiverse.UI
                 return;
             }
 
-            controllerMappingPresenter?.Hide();
         }
 
         // Close hook for the current LAN multiplayer route.
         public void CloseLanMultiplayerScreen()
         {
             HandleAction(MenuActions.LanMultiplayerClose);
-        }
-
-        public void CloseComfortSettingsScreen()
-        {
-            HandleAction(MenuActions.ComfortSettingsClose);
         }
 
         public bool ShowLanMultiplayerScreen()
@@ -682,7 +439,6 @@ namespace Blockiverse.UI
         public void SetTitleStatus(string message)
         {
             titleStatus = message ?? string.Empty;
-            titleMenu?.SetStatus(message ?? string.Empty);
             ApplyRouterState();
         }
 
@@ -690,7 +446,6 @@ namespace Blockiverse.UI
         public void SetPauseStatus(string message)
         {
             pauseStatus = message ?? string.Empty;
-            pauseMenu?.SetStatus(message ?? string.Empty);
             ApplyRouterState();
         }
 
@@ -701,9 +456,8 @@ namespace Blockiverse.UI
             BlockiverseRuntimeState.Reset();
             inputRig?.MenuPressed.RemoveListener(OnMenuPressed);
             inputRig?.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
-            inputRig?.BreakPressed.RemoveListener(OnControllerMappingCloseFallbackPressed);
             UnwireMenus();
-            UnwireStationPanel();
+            UnwireStationInteractionState();
             UnwireVitalsRuntime();
         }
 
@@ -729,15 +483,15 @@ namespace Blockiverse.UI
             if (router == null)
                 return;
 
-            if (stationPanel != null && stationPanel.IsOpen)
-                stationPanel.Close();
+            if (stationInteractionState != null && stationInteractionState.IsOpen)
+                stationInteractionState.Close();
 
             ShowDeathScreen(vitalsRuntime != null && vitalsRuntime.HasBedrollSpawn);
         }
 
-        // ── Smelting-station panel (§8.4) ───────────────────────────────────────────────────────
+        // ── Smelting-station interaction state (§8.4) ───────────────────────────────────────────
 
-        void WireStationPanel()
+        void WireStationInteractionState()
         {
             if (survivalSync == null)
                 survivalSync = BlockiverseSceneLookup.Find<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
@@ -748,14 +502,13 @@ namespace Blockiverse.UI
                 survivalSync.StationRemoved += HandleStationRemoved;
             }
 
-            if (stationPanel != null)
+            if (stationInteractionState != null)
             {
-                stationPanel.ConfigureSurvivalSync(survivalSync);
-                stationPanel.CloseRequested += HandleStationCloseRequested;
+                stationInteractionState.ConfigureSurvivalSync(survivalSync);
             }
         }
 
-        void UnwireStationPanel()
+        void UnwireStationInteractionState()
         {
             if (survivalSync != null)
             {
@@ -763,20 +516,18 @@ namespace Blockiverse.UI
                 survivalSync.StationRemoved -= HandleStationRemoved;
             }
 
-            if (stationPanel != null)
-                stationPanel.CloseRequested -= HandleStationCloseRequested;
         }
 
         void HandleStationOpenRequested(BlockPosition position, CraftingStation stationType)
         {
-            if (router == null || stationPanel == null || survivalSync == null)
+            if (router == null || stationInteractionState == null || survivalSync == null)
                 return;
 
             if (router.ActiveScreen.ScreenId != MenuActions.GameplayHudScreen)
                 return;
 
             SmeltingStationModel model = survivalSync.GetOrCreateStationModel(position, stationType);
-            stationPanel.Open(model, position);
+            stationInteractionState.Open(model, position);
             // Pulls the authoritative state onto remote-client mirrors; a no-op validation on the host.
             survivalSync.TrySubmitStationOpen(position, out _);
             router.PushScreen(new ScreenRoute(MenuActions.StationMenuScreen));
@@ -785,8 +536,8 @@ namespace Blockiverse.UI
 
         void HandleStationCloseRequested()
         {
-            bool wasOpen = stationPanel != null && stationPanel.IsOpen;
-            stationPanel?.Close();
+            bool wasOpen = stationInteractionState != null && stationInteractionState.IsOpen;
+            stationInteractionState?.Close();
 
             if (router != null && router.ActiveScreen.ScreenId == MenuActions.StationMenuScreen)
                 router.PopScreen();
@@ -797,7 +548,7 @@ namespace Blockiverse.UI
 
         void HandleStationRemoved(BlockPosition position)
         {
-            if (stationPanel == null || !stationPanel.IsOpen || stationPanel.OpenPosition != position)
+            if (stationInteractionState == null || !stationInteractionState.IsOpen || stationInteractionState.OpenPosition != position)
                 return;
 
             HandleStationCloseRequested();
@@ -826,7 +577,6 @@ namespace Blockiverse.UI
                     uiToolkitNewWorldConfig.SetName(NewWorldConfig.DefaultName);
                     uiToolkitNewWorldConfig.RandomizeSeed(null);
                     uiToolkitNewWorldStatus = string.Empty;
-                    newWorldPanel?.ResetForNewWorld();
                     router.PushScreen(new ScreenRoute(MenuActions.NewWorldScreen, pauseGame: true));
                     break;
                 case MenuActions.TitleLoadWorld:
@@ -909,9 +659,7 @@ namespace Blockiverse.UI
 
                 case MenuActions.PlayerHubInventory:
                     ResolveRuntimeReferences();
-                    uiToolkitInventoryFirstSlot = survivalHudController?.InventoryPanel != null
-                        ? survivalHudController.InventoryPanel.FirstVisibleSlotIndex
-                        : 0;
+                    uiToolkitInventoryFirstSlot = 0;
                     router.PushScreen(new ScreenRoute(MenuActions.InventoryScreen, pauseGame: true));
                     break;
                 case MenuActions.PlayerHubVitals:
@@ -955,7 +703,7 @@ namespace Blockiverse.UI
                 case MenuActions.CraftingCraftSelected:
                     ResolveRuntimeReferences();
                     if (uiToolkitSelectedCraftingRecipe >= 0)
-                        survivalHudController?.CraftingPanel?.TryCraftAtIndex(uiToolkitSelectedCraftingRecipe);
+                        survivalHudController?.TryCraftAtIndex(uiToolkitSelectedCraftingRecipe);
                     ApplyRouterState();
                     break;
                 case MenuActions.CraftingPinSelected:
@@ -965,7 +713,7 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.CraftingRepair:
                     ResolveRuntimeReferences();
-                    survivalHudController?.CraftingPanel?.TryRepairHeldTool();
+                    survivalHudController?.TryRepairHeldTool();
                     ApplyRouterState();
                     break;
                 case MenuActions.RecipePinClear:
@@ -1008,27 +756,27 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.ContainerDepositHeld:
                     ResolveRuntimeReferences();
-                    survivalHudController?.CratePanel?.DepositHeld();
+                    survivalHudController?.DepositHeldToCrate();
                     ApplyRouterState();
                     break;
                 case MenuActions.StationDepositInput:
-                    stationPanel?.DepositHeldInput();
+                    stationInteractionState?.DepositHeldInput();
                     ApplyRouterState();
                     break;
                 case MenuActions.StationDepositFuel:
-                    stationPanel?.DepositHeldFuel();
+                    stationInteractionState?.DepositHeldFuel();
                     ApplyRouterState();
                     break;
                 case MenuActions.StationCollectOutput:
-                    stationPanel?.CollectOutput();
+                    stationInteractionState?.CollectOutput();
                     ApplyRouterState();
                     break;
                 case MenuActions.StationWithdrawInput:
-                    stationPanel?.WithdrawInput();
+                    stationInteractionState?.WithdrawInput();
                     ApplyRouterState();
                     break;
                 case MenuActions.StationWithdrawFuel:
-                    stationPanel?.WithdrawFuel();
+                    stationInteractionState?.WithdrawFuel();
                     ApplyRouterState();
                     break;
                 case MenuActions.StationBack:
@@ -1052,59 +800,59 @@ namespace Blockiverse.UI
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsSetA:
-                    creativeToolsPanel?.SetCornerA();
+                    creativeToolsInteractionState?.SetCornerA();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsSetB:
-                    creativeToolsPanel?.SetCornerB();
+                    creativeToolsInteractionState?.SetCornerB();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsPickBlock:
-                    creativeToolsPanel?.PickBlock();
+                    creativeToolsInteractionState?.PickBlock();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsFill:
-                    creativeToolsPanel?.FillRegion();
+                    creativeToolsInteractionState?.FillRegion();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsReplace:
-                    creativeToolsPanel?.ReplaceRegion();
+                    creativeToolsInteractionState?.ReplaceRegion();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsDelete:
-                    creativeToolsPanel?.DeleteRegion();
+                    creativeToolsInteractionState?.DeleteRegion();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsCopy:
-                    creativeToolsPanel?.CopyRegion();
+                    creativeToolsInteractionState?.CopyRegion();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsPaste:
-                    creativeToolsPanel?.PasteRegion();
+                    creativeToolsInteractionState?.PasteRegion();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsUndo:
-                    creativeToolsPanel?.UndoEdit();
+                    creativeToolsInteractionState?.UndoEdit();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsRedo:
-                    creativeToolsPanel?.RedoEdit();
+                    creativeToolsInteractionState?.RedoEdit();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsSpawnTree:
-                    creativeToolsPanel?.SpawnTree();
+                    creativeToolsInteractionState?.SpawnTree();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsSpawnRuin:
-                    creativeToolsPanel?.SpawnRuin();
+                    creativeToolsInteractionState?.SpawnRuin();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsToggleCycle:
-                    creativeToolsPanel?.ToggleDayNightCycle();
+                    creativeToolsInteractionState?.ToggleDayNightCycle();
                     ApplyRouterState();
                     break;
                 case MenuActions.CreativeToolsCycleWeather:
-                    creativeToolsPanel?.CycleWeather();
+                    creativeToolsInteractionState?.CycleWeather();
                     ApplyRouterState();
                     break;
 
@@ -1227,73 +975,43 @@ namespace Blockiverse.UI
         {
             if (router == null) return;
 
-            BlockiverseRuntimeState.SetRouterState(router.IsGamePaused, router.AllowWorldInput);
             string activeId = router.ActiveScreen.ScreenId;
             string inputTarget = router.InputTarget;
+            bool menuInputActive = !string.Equals(inputTarget, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
+            BlockiverseRuntimeState.SetRouterState(router.IsGamePaused, router.AllowWorldInput, menuInputActive);
             if (!HasConfirmModalOpen())
                 confirmCallback = null;
 
-            bool uiToolkitVisible = TryShowUiToolkitSurface(activeId, inputTarget);
+            bool menuSurfaceVisible = ShowCurrentMenuSurface(activeId, inputTarget);
 
-            foreach (var (screenId, presenter) in screenPresenters)
-            {
-                bool isModal = screenId == MenuActions.ConfirmModal;
-                bool visible = isModal
-                    ? router.HasModal && inputTarget == screenId
-                    : screenId == activeId;
-                if (visible &&
-                    uiToolkitVisible &&
-                    BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(screenId))
-                    visible = false;
+            bool showGameplayHud = string.Equals(activeId, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
+            hudToolkitSurface?.SetVisible(showGameplayHud);
 
-                if (string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal))
-                    presenter.GetComponent<BlockiverseStartupOverlay>()?.SetAutomaticHide(!visible);
-
-                if (visible)
-                    presenter.Show();
-                else if (presenter.IsVisible)
-                    presenter.Hide();
-
-                bool acceptsInput = visible &&
-                    !string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal) &&
-                    string.Equals(screenId, inputTarget, StringComparison.Ordinal);
-                SetPresenterInputEnabled(presenter, acceptsInput);
-            }
-
-            if (!CanUseQuickBlockMenu())
-                HideQuickBlockMenu();
-            else
-                SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
-
-            if (!uiToolkitVisible)
+            if (!menuSurfaceVisible)
             {
                 uiToolkitMenuSurface?.Hide();
-                uiToolkitMenuSurface?.GetComponent<BlockiverseWorldSpacePanelPresenter>()?.Hide();
+                uiToolkitMenuSurface?.GetComponent<BlockiverseUiToolkitMenuPresenter>()?.Hide();
             }
         }
 
-        bool TryShowUiToolkitSurface(string activeId, string inputTarget)
+        bool ShowCurrentMenuSurface(string activeId, string inputTarget)
         {
-            if (!useUiToolkitRuntimeMenus || uiToolkitMenuSurface == null)
+            string candidate = router.HasModal ? inputTarget : activeId;
+            if (!BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(candidate))
                 return false;
 
-            string candidate = router.HasModal ? inputTarget : activeId;
-            if (!BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(candidate))
-                return false;
+            if (uiToolkitMenuSurface == null)
+            {
+                throw new InvalidOperationException(
+                    $"UI Toolkit menu surface is required for menu screen '{candidate}'. " +
+                    "Configure the generated UI Toolkit surface before routing menu screens.");
+            }
 
             bool acceptsInput = !string.Equals(candidate, MenuActions.WorldLoadingScreen, StringComparison.Ordinal) &&
                 string.Equals(candidate, inputTarget, StringComparison.Ordinal);
-            uiToolkitMenuSurface.GetComponent<BlockiverseWorldSpacePanelPresenter>()?.Show();
+            uiToolkitMenuSurface.GetComponent<BlockiverseUiToolkitMenuPresenter>()?.Show();
             uiToolkitMenuSurface.Show(CreateUiToolkitMenuView(candidate), acceptsInput);
             return true;
-        }
-
-        bool CanReadUiToolkitPendingState(string screenId)
-        {
-            if (!useUiToolkitRuntimeMenus || uiToolkitMenuSurface == null || !uiToolkitMenuSurface.IsVisible)
-                return false;
-
-            return router != null && string.Equals(router.ActiveScreen.ScreenId, screenId, StringComparison.Ordinal);
         }
 
         void StartUiToolkitLanHost()
@@ -1621,8 +1339,8 @@ namespace Blockiverse.UI
             {
                 ResolveRuntimeReferences();
                 return BlockiverseUiToolkitMenuCatalog.CreateContextHubView(
-                    survivalHudController?.CratePanel != null,
-                    stationPanel != null && stationPanel.IsOpen,
+                    survivalHudController != null && survivalHudController.HasSharedCrate,
+                    stationInteractionState != null && stationInteractionState.IsOpen,
                     survivalSync != null && survivalSync.CanUseCreativeMode);
             }
 
@@ -1632,10 +1350,7 @@ namespace Blockiverse.UI
             if (string.Equals(screenId, MenuActions.InventoryScreen, StringComparison.Ordinal))
             {
                 ResolveRuntimeReferences();
-                SurvivalInventoryPanel inventoryPanel = survivalHudController != null
-                    ? survivalHudController.InventoryPanel
-                    : null;
-                int selectedHotbar = inventoryPanel != null ? inventoryPanel.SelectedHotbarSlotIndex : 0;
+                int selectedHotbar = survivalHudController != null ? survivalHudController.SelectedHotbarSlotIndex : 0;
                 return BlockiverseUiToolkitMenuCatalog.CreateInventoryView(
                     survivalHudController?.Inventory,
                     ItemRegistry.Default,
@@ -1704,27 +1419,12 @@ namespace Blockiverse.UI
             if (string.Equals(screenId, MenuActions.StationMenuScreen, StringComparison.Ordinal))
             {
                 ResolveRuntimeReferences();
-                stationPanel?.ResolveRuntimeReferences();
+                stationInteractionState?.ResolveRuntimeReferences();
                 return BlockiverseUiToolkitMenuCatalog.CreateStationView(
-                    stationPanel?.CurrentStation,
-                    stationPanel?.CurrentStatusText ?? string.Empty,
+                    stationInteractionState?.CurrentStation,
+                    stationInteractionState?.CurrentStatusText ?? string.Empty,
                     ItemRegistry.Default);
             }
-
-            if (string.Equals(screenId, MenuActions.CampfireStationScreen, StringComparison.Ordinal))
-                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.Campfire);
-
-            if (string.Equals(screenId, MenuActions.ClayKilnStationScreen, StringComparison.Ordinal))
-                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.ClayKiln);
-
-            if (string.Equals(screenId, MenuActions.BellowsForgeStationScreen, StringComparison.Ordinal))
-                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.BellowsForge);
-
-            if (string.Equals(screenId, MenuActions.PrepBoardStationScreen, StringComparison.Ordinal))
-                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.PrepBoard);
-
-            if (string.Equals(screenId, MenuActions.MendBenchStationScreen, StringComparison.Ordinal))
-                return BlockiverseUiToolkitMenuCatalog.CreateStationPlaceholderView(screenId, CraftingStation.MendBench);
 
             if (string.Equals(screenId, MenuActions.BlockCatalogScreen, StringComparison.Ordinal))
             {
@@ -1741,7 +1441,7 @@ namespace Blockiverse.UI
             if (string.Equals(screenId, MenuActions.CreativeToolsScreen, StringComparison.Ordinal))
             {
                 ResolveRuntimeReferences();
-                return BlockiverseUiToolkitMenuCatalog.CreateCreativeToolsView(creativeToolsPanel, creativeHotbar);
+                return BlockiverseUiToolkitMenuCatalog.CreateCreativeToolsView(creativeToolsInteractionState, creativeHotbar);
             }
 
             if (string.Equals(screenId, MenuActions.MapWayflagScreen, StringComparison.Ordinal))
@@ -1851,89 +1551,6 @@ namespace Blockiverse.UI
                 uiToolkitSaveList.Select(page[0].Name);
         }
 
-        bool CanUseQuickBlockMenu()
-        {
-            return router != null &&
-                !router.HasModal &&
-                string.Equals(router.ActiveScreen.ScreenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
-        }
-
-        void HideQuickBlockMenu()
-        {
-            if (blockMenuPresenter == null)
-                return;
-
-            if (blockMenuPresenter.IsVisible)
-                blockMenuPresenter.Hide();
-
-            SetPresenterInputEnabled(blockMenuPresenter, false);
-        }
-
-        void OnControllerMappingCloseFallbackPressed()
-        {
-            if (router == null ||
-                router.HasModal ||
-                !string.Equals(router.ActiveScreen.ScreenId, MenuActions.ControllerMappingScreen, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            if (controllerMappingCloseButton == null)
-                ResolveRuntimeReferences();
-
-            RectTransform closeRect = controllerMappingCloseButton != null
-                ? controllerMappingCloseButton.GetComponent<RectTransform>()
-                : null;
-            if (closeRect == null ||
-                inputRig == null ||
-                !AnyInteractionRayIntersectsRect(closeRect))
-            {
-                return;
-            }
-
-            CloseControllerMappingScreen();
-        }
-
-        bool AnyInteractionRayIntersectsRect(RectTransform target)
-        {
-            if (inputRig.TryGetActiveInteractionRayPose(out Vector3 rayOrigin, out Vector3 rayDirection) &&
-                RayIntersectsRect(rayOrigin, rayDirection, target))
-            {
-                return true;
-            }
-
-            return TryControllerRayIntersectsRect(BlockiverseControllerRole.Left, target) ||
-                   TryControllerRayIntersectsRect(BlockiverseControllerRole.Right, target);
-        }
-
-        bool TryControllerRayIntersectsRect(BlockiverseControllerRole hand, RectTransform target)
-        {
-            return inputRig.TryGetInteractionRayPose(hand, out Vector3 rayOrigin, out Vector3 rayDirection) &&
-                   RayIntersectsRect(rayOrigin, rayDirection, target);
-        }
-
-        static bool RayIntersectsRect(Vector3 rayOrigin, Vector3 rayDirection, RectTransform target)
-        {
-            if (rayDirection.sqrMagnitude <= Mathf.Epsilon || target == null)
-                return false;
-
-            var ray = new Ray(rayOrigin, rayDirection.normalized);
-            var plane = new Plane(target.forward, target.position);
-            if (!plane.Raycast(ray, out float distance) ||
-                distance < 0.0f ||
-                distance > ControllerMappingCloseFallbackMaxDistanceMeters)
-            {
-                return false;
-            }
-
-            Vector3 localHit = target.InverseTransformPoint(ray.GetPoint(distance));
-            Rect rect = target.rect;
-            return localHit.x >= rect.xMin &&
-                   localHit.x <= rect.xMax &&
-                   localHit.y >= rect.yMin &&
-                   localHit.y <= rect.yMax;
-        }
-
         bool HasConfirmModalOpen()
         {
             if (router == null)
@@ -1946,71 +1563,14 @@ namespace Blockiverse.UI
             return false;
         }
 
-        void AddPresenter(string screenId, BlockiverseWorldSpacePanelPresenter presenter)
-        {
-            if (presenter != null)
-                screenPresenters.Add((screenId, presenter));
-        }
-
-        BlockiverseWorldSpacePanelPresenter EnsureGameplayHudPresenter()
-        {
-            Canvas hudCanvas = FindGeneratedComponent<Canvas>(SurvivalHudName);
-            if (hudCanvas == null)
-                return null;
-
-            hudCanvas.enabled = false;
-            BlockiverseWorldSpacePanelPresenter presenter =
-                hudCanvas.GetComponent<BlockiverseWorldSpacePanelPresenter>() ??
-                hudCanvas.gameObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-            presenter.Configure(
-                hudCanvas,
-                Camera.main != null ? Camera.main.transform : null,
-                distance: 1.15f,
-                horizontalOffset: 0f,
-                verticalOffset: -0.30f,
-                pitch: 12f,
-                scale: GameplayHudScale,
-                recenterWhenShown: false);
-            return presenter;
-        }
-
-        static void SetPresenterInputEnabled(BlockiverseWorldSpacePanelPresenter presenter, bool acceptsInput)
-        {
-            if (presenter == null)
-                return;
-
-            CanvasGroup group = presenter.GetComponent<CanvasGroup>();
-            if (group == null)
-                group = presenter.gameObject.AddComponent<CanvasGroup>();
-
-            group.interactable = acceptsInput;
-            group.blocksRaycasts = acceptsInput;
-        }
-
         void WireMenus()
         {
             WireUiToolkitMenuSurface();
-            if (titleMenu != null) titleMenu.ActionInvoked += HandleAction;
-            if (pauseMenu != null) pauseMenu.ActionInvoked += HandleAction;
-            if (deathMenu != null) deathMenu.ActionInvoked += HandleAction;
-            if (confirmMenu != null) confirmMenu.ActionInvoked += HandleAction;
-            if (settingsMenu != null) settingsMenu.ActionInvoked += HandleAction;
-            if (worldDetailsMenu != null) worldDetailsMenu.ActionInvoked += HandleAction;
-            if (newWorldPanel != null) newWorldPanel.ActionRequested += HandleAction;
-            if (loadWorldPanel != null) loadWorldPanel.ActionRequested += HandleAction;
         }
 
         void UnwireMenus()
         {
             UnwireUiToolkitMenuSurface();
-            if (titleMenu != null) titleMenu.ActionInvoked -= HandleAction;
-            if (pauseMenu != null) pauseMenu.ActionInvoked -= HandleAction;
-            if (deathMenu != null) deathMenu.ActionInvoked -= HandleAction;
-            if (confirmMenu != null) confirmMenu.ActionInvoked -= HandleAction;
-            if (settingsMenu != null) settingsMenu.ActionInvoked -= HandleAction;
-            if (worldDetailsMenu != null) worldDetailsMenu.ActionInvoked -= HandleAction;
-            if (newWorldPanel != null) newWorldPanel.ActionRequested -= HandleAction;
-            if (loadWorldPanel != null) loadWorldPanel.ActionRequested -= HandleAction;
         }
 
         void WireUiToolkitMenuSurface()
@@ -2152,22 +1712,11 @@ namespace Blockiverse.UI
                 return true;
 
             Inventory inventory = survivalHudController?.Inventory;
-            SurvivalInventoryPanel inventoryPanel = survivalHudController?.InventoryPanel;
             if (inventory == null || slotIndex < 0 || slotIndex >= inventory.SlotCount)
                 return true;
 
             uiToolkitSelectedInventorySlot = slotIndex;
-            int selectedHotbar = inventoryPanel != null ? inventoryPanel.SelectedHotbarSlotIndex : 0;
-            if (slotIndex < inventory.HotbarSlotCount)
-            {
-                inventoryPanel?.SetSelectedHotbarSlotIndex(slotIndex);
-            }
-            else if (inventory.HotbarSlotCount > 0)
-            {
-                inventory.SwapSlots(selectedHotbar, slotIndex);
-                inventoryPanel?.Refresh();
-                survivalHudController?.CraftingPanel?.Refresh();
-            }
+            survivalHudController?.HandleSlotSelection(slotIndex);
 
             ApplyRouterState();
             return true;
@@ -2199,7 +1748,7 @@ namespace Blockiverse.UI
 
             ResolveRuntimeReferences();
             if (int.TryParse(valueId.Substring(BlockiverseUiToolkitMenuCatalog.ContainerSlotSelectionPrefix.Length), out int slotIndex))
-                survivalHudController?.CratePanel?.WithdrawSlot(slotIndex);
+                survivalHudController?.WithdrawCrateSlot(slotIndex);
 
             ApplyRouterState();
             return true;
@@ -2399,12 +1948,6 @@ namespace Blockiverse.UI
 
             return null;
         }
-
-        // Close hooks for panels whose Close buttons are wired as persistent listeners by the
-        // bootstrapper (same pattern as CloseLanMultiplayerScreen).
-        public void CloseAudioSettingsScreen() => HandleAction(MenuActions.AudioSettingsClose);
-        public void CloseControlsScreen() => HandleAction(MenuActions.ControlsClose);
-        public void CloseCreativeToolsScreen() => HandleAction(MenuActions.CreativeToolsClose);
 
         void RequestQuitConfirmation(string saveActionId, string confirmLabel)
         {

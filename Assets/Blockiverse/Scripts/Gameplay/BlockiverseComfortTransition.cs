@@ -1,6 +1,6 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Gameplay
 {
@@ -10,18 +10,18 @@ namespace Blockiverse.Gameplay
         public const float DefaultFadeSeconds = 0.12f;
         public const float DefaultHoldSeconds = 0.04f;
 
-        [SerializeField] CanvasGroup fadeGroup;
+        [SerializeField] BlockiverseHudToolkitSurface hudSurface;
         [SerializeField] float fadeSeconds = DefaultFadeSeconds;
         [SerializeField] float holdSeconds = DefaultHoldSeconds;
 
         Coroutine transitionRoutine;
 
         public bool IsTransitioning => transitionRoutine != null;
-        public CanvasGroup FadeGroup => fadeGroup;
+        public BlockiverseHudToolkitSurface HudSurface => hudSurface;
 
-        public void Configure(CanvasGroup targetFadeGroup, float targetFadeSeconds = DefaultFadeSeconds, float targetHoldSeconds = DefaultHoldSeconds)
+        public void Configure(BlockiverseHudToolkitSurface targetHudSurface, float targetFadeSeconds = DefaultFadeSeconds, float targetHoldSeconds = DefaultHoldSeconds)
         {
-            fadeGroup = targetFadeGroup;
+            hudSurface = targetHudSurface;
             fadeSeconds = Mathf.Max(0.0f, targetFadeSeconds);
             holdSeconds = Mathf.Max(0.0f, targetHoldSeconds);
         }
@@ -59,32 +59,31 @@ namespace Blockiverse.Gameplay
 
         IEnumerator MoveRigRoutine(Transform rig, Vector3 position, float yawDegrees)
         {
-            CanvasGroup group = EnsureFadeGroup();
-            if (group == null)
+            BlockiverseHudToolkitSurface surface = EnsureFadeSurface();
+            if (surface == null)
             {
                 ApplyRigMove(rig, position, yawDegrees);
                 transitionRoutine = null;
                 yield break;
             }
 
-            group.gameObject.SetActive(true);
-            yield return FadeTo(group, 1.0f);
+            surface.SetVisible(true);
+            yield return FadeTo(surface, 1.0f);
             ApplyRigMove(rig, position, yawDegrees);
 
             if (holdSeconds > 0.0f)
                 yield return new WaitForSecondsRealtime(holdSeconds);
 
-            yield return FadeTo(group, 0.0f);
-            group.gameObject.SetActive(false);
+            yield return FadeTo(surface, 0.0f);
             transitionRoutine = null;
         }
 
-        IEnumerator FadeTo(CanvasGroup group, float targetAlpha)
+        IEnumerator FadeTo(BlockiverseHudToolkitSurface surface, float targetAlpha)
         {
-            float startAlpha = group.alpha;
+            float startAlpha = targetAlpha > 0.5f ? 0.0f : 1.0f;
             if (fadeSeconds <= 0.0f)
             {
-                group.alpha = targetAlpha;
+                surface.SetComfortFade(targetAlpha);
                 yield break;
             }
 
@@ -92,53 +91,29 @@ namespace Blockiverse.Gameplay
             while (elapsed < fadeSeconds)
             {
                 elapsed += Time.unscaledDeltaTime;
-                group.alpha = Mathf.Lerp(startAlpha, targetAlpha, Mathf.Clamp01(elapsed / fadeSeconds));
+                surface.SetComfortFade(Mathf.Lerp(startAlpha, targetAlpha, Mathf.Clamp01(elapsed / fadeSeconds)));
                 yield return null;
             }
 
-            group.alpha = targetAlpha;
+            surface.SetComfortFade(targetAlpha);
         }
 
-        CanvasGroup EnsureFadeGroup()
+        BlockiverseHudToolkitSurface EnsureFadeSurface()
         {
-            if (fadeGroup != null)
-                return fadeGroup;
+            if (hudSurface != null)
+                return hudSurface;
 
-            Camera targetCamera = Camera.main;
-            GameObject canvasObject = new("Comfort Fade Overlay");
-            Canvas canvas = canvasObject.AddComponent<Canvas>();
-            if (targetCamera != null)
-            {
-                canvas.renderMode = RenderMode.ScreenSpaceCamera;
-                canvas.worldCamera = targetCamera;
-                canvas.planeDistance = 0.05f;
-            }
-            else
-            {
-                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            }
+            hudSurface = FindAnyObjectByType<BlockiverseHudToolkitSurface>(FindObjectsInactive.Include);
+            if (hudSurface != null)
+                return hudSurface;
 
-            canvas.sortingOrder = short.MaxValue;
-
-            CanvasGroup group = canvasObject.AddComponent<CanvasGroup>();
-            group.alpha = 0.0f;
-            group.interactable = false;
-            group.blocksRaycasts = false;
-
-            GameObject imageObject = new("Fade");
-            imageObject.transform.SetParent(canvasObject.transform, false);
-            RectTransform imageRect = imageObject.AddComponent<RectTransform>();
-            imageRect.anchorMin = Vector2.zero;
-            imageRect.anchorMax = Vector2.one;
-            imageRect.offsetMin = Vector2.zero;
-            imageRect.offsetMax = Vector2.zero;
-            Image image = imageObject.AddComponent<Image>();
-            image.color = Color.black;
-            image.raycastTarget = false;
-
-            canvasObject.SetActive(false);
-            fadeGroup = group;
-            return fadeGroup;
+            GameObject surfaceObject = new("Comfort Fade UI Toolkit Surface");
+            UIDocument document = surfaceObject.AddComponent<UIDocument>();
+            hudSurface = surfaceObject.AddComponent<BlockiverseHudToolkitSurface>();
+            hudSurface.Configure(document);
+            hudSurface.SetVisible(true);
+            hudSurface.SetComfortFade(0.0f);
+            return hudSurface;
         }
 
         static void ApplyRigMove(Transform rig, Vector3 position, float yawDegrees)

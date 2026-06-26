@@ -214,7 +214,7 @@ namespace Blockiverse.UI
         public const string ContainerSlotSelectionPrefix = "container.slot.";
         public const string BlockCatalogSelectionPrefix = "block_catalog.block.";
 
-        static readonly string[] RuntimeReplacementScreens =
+        static readonly string[] RuntimeMenuScreens =
         {
             MenuActions.TitleScreen,
             MenuActions.NewWorldScreen,
@@ -234,11 +234,6 @@ namespace Blockiverse.UI
             MenuActions.CraftingScreen,
             MenuActions.ContainerScreen,
             MenuActions.StationMenuScreen,
-            MenuActions.CampfireStationScreen,
-            MenuActions.ClayKilnStationScreen,
-            MenuActions.BellowsForgeStationScreen,
-            MenuActions.PrepBoardStationScreen,
-            MenuActions.MendBenchStationScreen,
             MenuActions.MapWayflagScreen,
             MenuActions.ItemDetailsPopover,
             MenuActions.RecipePinOverlay,
@@ -277,23 +272,18 @@ namespace Blockiverse.UI
             Informational(MenuActions.VitalsStatusScreen, "Vitals / Status", "Shows health, hunger, thirst, stamina, effects, and survival state."),
             Informational(MenuActions.CraftingScreen, "Crafting", "Browses recipes, craftability, ingredients, craft count, pinning, craft, and cancel."),
             Informational(MenuActions.ContainerScreen, "Container", "Transfers items between player and world containers."),
-            Informational(MenuActions.StationMenuScreen, "Station Shell", "Common input, fuel, output, progress, recipe, and transfer frame for stations."),
-            Informational(MenuActions.CampfireStationScreen, "Campfire", "Station variant for cooking, light, and fuel handling."),
-            Informational(MenuActions.ClayKilnStationScreen, "Clay Kiln", "Station variant for clay and ceramic smelting."),
-            Informational(MenuActions.BellowsForgeStationScreen, "Bellows Forge", "Station variant for forge and smelting recipes."),
-            Informational(MenuActions.PrepBoardStationScreen, "Prep Board", "Station variant for food preparation."),
-            Informational(MenuActions.MendBenchStationScreen, "Mend Bench", "Station variant for repair and mending."),
+            Informational(MenuActions.StationMenuScreen, "Station", "Manages input, fuel, output, progress, recipe, and transfer actions for the open station model."),
             Informational(MenuActions.MapWayflagScreen, "Map / Wayflag", "Shows map, marker, wayflag, waypoint, and close actions."),
             Informational(MenuActions.ItemDetailsPopover, "Item Details Popover", "Reusable item stats, actions, and context hints."),
             Informational(MenuActions.RecipePinOverlay, "Recipe Pin Overlay", "Tracks pinned recipe ingredients while playing."),
-            Informational(MenuActions.BlockCatalogScreen, "Block Menu / Block Catalog", "Searches, filters, pages, and selects creative block entries."),
+            Informational(MenuActions.BlockCatalogScreen, "Block Catalog", "Searches, filters, pages, and selects creative block entries."),
             Informational(MenuActions.CreativeToolsScreen, "Creative Tools", "Manages region edit, copy/paste, undo/redo, structures, time, and weather."),
             Informational(MenuActions.DeathScreen, "Death", "Blocks gameplay until respawn at bedroll/world spawn or return to title."),
             Informational(MenuActions.PlayerHubScreen, "Player Hub", "Fast access to inventory, vitals, crafting, context, and status."),
             Informational(MenuActions.ContextHubScreen, "Context Hub", "Groups container, farming, station, and creative context actions."),
             Informational(MenuActions.FarmingSummaryScreen, "Farming Summary", "Summarizes crop, soil, seed, and ready-state context."),
             Informational(MenuActions.FarmingActionPopup, "Farming Action Popup", "Presents till, plant, harvest, and close actions for farming targets."),
-            Informational(MenuActions.AvatarStatusScreen, "Avatar Status", "Shows local/remote avatar session and fallback state."),
+            Informational(MenuActions.AvatarStatusScreen, "Avatar Status", "Shows local/remote avatar session and availability state."),
             Informational(MenuActions.MetaPolicyStatusScreen, "Meta Policy Status", "Shows platform, social, and avatar policy decisions."),
             Informational(MenuActions.DiagnosticsScreen, "Diagnostics", "Shows trace, networking, scene/session, and performance evidence."),
             Informational(MenuActions.NetworkCommandStatusScreen, "Network Command Status", "Shows accepted, duplicate, and rejected network command status."),
@@ -302,9 +292,9 @@ namespace Blockiverse.UI
 
         public static IReadOnlyList<BlockiverseUiToolkitMenuView> AllTargetMenus => TargetMenuInventory;
 
-        public static bool SupportsRuntimeReplacement(string screenId)
+        public static bool SupportsRuntimeMenu(string screenId)
         {
-            return RuntimeReplacementScreens.Any(id => string.Equals(id, screenId, StringComparison.Ordinal));
+            return RuntimeMenuScreens.Any(id => string.Equals(id, screenId, StringComparison.Ordinal));
         }
 
         public static BlockiverseUiToolkitMenuView CreateRuntimeView(
@@ -413,7 +403,10 @@ namespace Blockiverse.UI
                     },
                     new[] { "Loading" }),
 
-                _ => Informational(screenId, screenId, "This route is not yet mapped to the UI Toolkit runtime replacement surface."),
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(screenId),
+                    screenId,
+                    "Every runtime menu route must have a concrete UI Toolkit view."),
             };
         }
 
@@ -522,7 +515,7 @@ namespace Blockiverse.UI
                 new[]
                 {
                     new MenuDetailRow("Name", value.Name),
-                    new MenuDetailRow("Metadata", BlockiverseWorldDetailsPanel.BuildMetadataText(value)),
+                    new MenuDetailRow("Metadata", WorldDetailsMetadataFormatter.BuildMetadataText(value)),
                 },
                 new[] { "Save management", "Destructive actions confirm" },
                 textInputs: new[]
@@ -1004,21 +997,6 @@ namespace Blockiverse.UI
                 status);
         }
 
-        public static BlockiverseUiToolkitMenuView CreateStationPlaceholderView(string screenId, CraftingStation station)
-        {
-            return new BlockiverseUiToolkitMenuView(
-                screenId,
-                BlockiverseLocalization.DisplayName(station),
-                "This station route is present for ruleset parity. Runtime behavior uses crafting proximity or the timed station shell when the placed block supports a station model.",
-                new[] { new MenuAction(MenuActions.StationBack, "Back") },
-                new[]
-                {
-                    new MenuDetailRow("Station", BlockiverseLocalization.DisplayName(station)),
-                    new MenuDetailRow("Runtime state", "No open station model"),
-                },
-                new[] { "Station", "Ruleset route" });
-        }
-
         public static BlockiverseUiToolkitMenuView CreateContextHubView(bool hasContainer, bool hasStation, bool canUseCreativeTools)
         {
             var actions = new List<MenuAction>
@@ -1119,7 +1097,7 @@ namespace Blockiverse.UI
         }
 
         public static BlockiverseUiToolkitMenuView CreateCreativeToolsView(
-            BlockiverseCreativeToolsPanel panel,
+            BlockiverseCreativeToolsInteractionState state,
             CreativeHotbar hotbar)
         {
             BlockRegistry registry = BlockRegistry.Default;
@@ -1148,10 +1126,13 @@ namespace Blockiverse.UI
                 new[]
                 {
                     new MenuDetailRow("Selected block", hotbar != null ? registry.Get(hotbar.SelectedBlockId).Name : "Unavailable"),
-                    new MenuDetailRow("Undo steps", panel != null ? panel.WorldEditUndoCount.ToString() : "Unavailable"),
-                    new MenuDetailRow("Clipboard", panel != null && panel.HasWorldEditClipboard ? "Available" : "Empty"),
+                    new MenuDetailRow("Undo steps", state != null ? state.WorldEditUndoCount.ToString() : "Unavailable"),
+                    new MenuDetailRow("Clipboard", state != null && state.HasWorldEditClipboard ? "Available" : "Empty"),
+                    new MenuDetailRow("Corners", state != null ? state.CornersText : "Unavailable"),
+                    new MenuDetailRow("Weather", state != null ? state.WeatherText : "Unavailable"),
                 },
-                new[] { "Creative", "World edit" });
+                new[] { "Creative", "World edit" },
+                state != null ? state.StatusText : string.Empty);
         }
 
         public static BlockiverseUiToolkitMenuView CreateMapWayflagView()

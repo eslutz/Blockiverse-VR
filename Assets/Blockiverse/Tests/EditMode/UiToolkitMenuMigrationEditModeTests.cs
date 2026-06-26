@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
@@ -11,13 +12,41 @@ using Blockiverse.Voxel;
 using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit.Interactors.Casters;
 
 namespace Blockiverse.Tests.EditMode
 {
     public sealed class UiToolkitMenuMigrationEditModeTests
     {
+        static readonly string[] RemovedUguiMenuComponents =
+        {
+            "BlockiverseActionMenu",
+            "BlockiverseAudioSettingsPanel",
+            "BlockiverseCatalogBrowserPanel",
+            "BlockiverseComfortMenu",
+            "BlockiverseCreativeToolsPanel",
+            "BlockiverseLoadWorldPanel",
+            "BlockiverseNewWorldPanel",
+            "BlockiverseStartupOverlay",
+            "BlockiverseStationPanel",
+            "BlockiverseWorldDetailsPanel",
+            "SurvivalCraftingPanel",
+            "SurvivalCratePanel",
+            "SurvivalHealthPanel",
+            "SurvivalInventoryPanel",
+        };
+
+        static readonly string[] RemovedVrMenuComponents =
+        {
+            "BlockiverseCompositionLayerRenderScale",
+            "BlockiverseCompositionMenuCursor",
+            "BlockiverseKeyboardHandVisibilityController",
+            "BlockiverseSystemKeyboardField",
+            "BlockiverseWorldSpacePanelPresenter",
+        };
+
         [Test]
-        public void TargetMenuInventoryIncludesCurrentRulesetAndLegacySurfaces()
+        public void TargetMenuInventoryIncludesCurrentRulesetAndCurrentMenuSurfaces()
         {
             var ids = new HashSet<string>(
                 BlockiverseUiToolkitMenuCatalog.AllTargetMenus.Select(menu => menu.ScreenId));
@@ -35,11 +64,6 @@ namespace Blockiverse.Tests.EditMode
                 MenuActions.CraftingScreen,
                 MenuActions.ContainerScreen,
                 MenuActions.StationMenuScreen,
-                MenuActions.CampfireStationScreen,
-                MenuActions.ClayKilnStationScreen,
-                MenuActions.BellowsForgeStationScreen,
-                MenuActions.PrepBoardStationScreen,
-                MenuActions.MendBenchStationScreen,
                 MenuActions.MapWayflagScreen,
                 MenuActions.ItemDetailsPopover,
                 MenuActions.RecipePinOverlay,
@@ -59,47 +83,42 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void RuntimeReplacementScopeIncludesStatefulAppShellScreens()
+        public void RuntimeMenuScopeIncludesStatefulAppShellScreens()
         {
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.TitleScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.NewWorldScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.LoadWorldScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.WorldDetailsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.PauseScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.DeathScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ConfirmModal), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.SettingsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ComfortSettingsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.AudioSettingsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ControlsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.LanMultiplayerScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.PlayerHubScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.InventoryScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.VitalsStatusScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.CraftingScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ContainerScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.StationMenuScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.CampfireStationScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ClayKilnStationScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.BellowsForgeStationScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.PrepBoardStationScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.MendBenchStationScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.MapWayflagScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ItemDetailsPopover), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.RecipePinOverlay), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.BlockCatalogScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.CreativeToolsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ContextHubScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.StatusHubScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.FarmingSummaryScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.FarmingActionPopup), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.AvatarStatusScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.MetaPolicyStatusScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.DiagnosticsScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.NetworkCommandStatusScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.SurvivalRejectionScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.ControllerMappingScreen), Is.True);
-            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeReplacement(MenuActions.WorldLoadingScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.TitleScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.NewWorldScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.LoadWorldScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.WorldDetailsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.PauseScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.DeathScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ConfirmModal), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.SettingsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ComfortSettingsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.AudioSettingsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ControlsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.LanMultiplayerScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.PlayerHubScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.InventoryScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.VitalsStatusScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.CraftingScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ContainerScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.StationMenuScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.MapWayflagScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ItemDetailsPopover), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.RecipePinOverlay), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.BlockCatalogScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.CreativeToolsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ContextHubScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.StatusHubScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.FarmingSummaryScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.FarmingActionPopup), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.AvatarStatusScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.MetaPolicyStatusScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.DiagnosticsScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.NetworkCommandStatusScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.SurvivalRejectionScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.ControllerMappingScreen), Is.True);
+            Assert.That(BlockiverseUiToolkitMenuCatalog.SupportsRuntimeMenu(MenuActions.WorldLoadingScreen), Is.True);
         }
 
         [Test]
@@ -326,7 +345,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void RuntimePlayerContextAndStatusRoutesExposeLegacyUsefulSurfaces()
+        public void RuntimePlayerContextAndStatusRoutesExposeCurrentUsefulSurfaces()
         {
             BlockiverseUiToolkitMenuView context =
                 BlockiverseUiToolkitMenuCatalog.CreateContextHubView(
@@ -389,6 +408,131 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void UnsupportedRuntimeRouteCannotRenderCurrentMenu()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                BlockiverseUiToolkitMenuCatalog.CreateRuntimeView(
+                    "unmapped_runtime_menu",
+                    hasLatestSave: false,
+                    hasAnySave: false,
+                    canQuit: false,
+                    canToggleMode: false,
+                    canOpenCreativeTools: false,
+                    hasBedrollSpawn: false,
+                    titleStatus: string.Empty,
+                    pauseStatus: string.Empty,
+                    confirmPrompt: string.Empty,
+                    confirmActions: null));
+        }
+
+        [Test]
+        public void RemovedUguiMenuComponentsAreNotReferencedByCurrentMenuSources()
+        {
+            string[] currentMenuSources =
+            {
+                "Assets/Blockiverse/Scripts/UI/BlockiverseMenuController.cs",
+                "Assets/Blockiverse/Scripts/UI/Toolkit/BlockiverseUiToolkitMenuSurface.cs",
+                "Assets/Blockiverse/Scripts/UI/Toolkit/BlockiverseUiToolkitMenuView.cs",
+                "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.GameMenus.cs",
+                "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.UiToolkitMenus.cs",
+            };
+
+            foreach (string sourcePath in currentMenuSources)
+            {
+                string source = File.ReadAllText(sourcePath);
+                foreach (string componentName in RemovedUguiMenuComponents.Concat(RemovedVrMenuComponents))
+                    Assert.That(source, Does.Not.Contain(componentName), $"{sourcePath} still references removed menu UI component {componentName}.");
+            }
+        }
+
+        [Test]
+        public void GeneratedMenuAssetsDoNotReferenceRemovedUguiComponents()
+        {
+            string[] generatedMenuAssets =
+            {
+                "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab",
+                "Assets/Blockiverse/Scenes/Boot.unity",
+            };
+
+            foreach (string assetPath in generatedMenuAssets)
+            {
+                string yaml = File.ReadAllText(assetPath);
+                foreach (string componentName in RemovedUguiMenuComponents)
+                {
+                    Assert.That(
+                        yaml,
+                        Does.Not.Contain($"Blockiverse.UI::Blockiverse.UI.{componentName}"),
+                        $"{assetPath} still references removed UGUI menu component {componentName}.");
+                }
+
+                foreach (string componentName in RemovedVrMenuComponents)
+                {
+                    Assert.That(
+                        yaml,
+                        Does.Not.Contain($"Blockiverse.VR::Blockiverse.VR.{componentName}"),
+                        $"{assetPath} still references removed VR menu component {componentName}.");
+                }
+            }
+        }
+
+        [Test]
+        public void UiToolkitMenusRequireGeneratedSurface()
+        {
+            string source = File.ReadAllText("Assets/Blockiverse/Scripts/UI/BlockiverseMenuController.cs");
+
+            StringAssert.Contains("UI Toolkit menu surface is required for menu screen", source);
+            StringAssert.Contains("Configure the generated UI Toolkit surface before routing menu screens.", source);
+            string[] removedRouteTerms =
+            {
+                "useUi" + "ToolkitRuntimeMenus",
+                "SupportsRuntime" + "Replacement",
+                "Runtime" + "ReplacementScreens",
+                "TryShow" + "CanvasMenu",
+            };
+
+            foreach (string term in removedRouteTerms)
+                Assert.That(source, Does.Not.Contain(term));
+        }
+
+        [Test]
+        public void UiToolkitPointerBridgeCanUseNearFarCasterOriginWhenSamplesAreMissing()
+        {
+            GameObject surfaceObject = new("UI Toolkit Surface");
+            GameObject casterObject = new("UI Toolkit Caster");
+            GameObject originObject = new("UI Toolkit Caster Origin");
+            try
+            {
+                BlockiverseUiToolkitMenuSurface surface =
+                    surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
+                originObject.transform.SetPositionAndRotation(
+                    new Vector3(0.0f, 0.0f, -1.0f),
+                    Quaternion.identity);
+                CurveInteractionCaster caster = casterObject.AddComponent<CurveInteractionCaster>();
+                caster.castOrigin = originObject.transform;
+                caster.castDistance = 2.0f;
+
+                MethodInfo method = typeof(BlockiverseUiToolkitMenuSurface).GetMethod(
+                    "TryGetPanelPositionFromCasterOrigin",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null);
+
+                object[] args = { caster, default(Vector2) };
+                bool hit = (bool)method.Invoke(surface, args);
+                Vector2 panelPosition = (Vector2)args[1];
+
+                Assert.That(hit, Is.True);
+                Assert.That(panelPosition.x, Is.EqualTo(640.0f).Within(0.1f));
+                Assert.That(panelPosition.y, Is.EqualTo(360.0f).Within(0.1f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(originObject);
+                UnityEngine.Object.DestroyImmediate(casterObject);
+                UnityEngine.Object.DestroyImmediate(surfaceObject);
+            }
+        }
+
+        [Test]
         public void UiToolkitMenuAssetsUseSupportedReadableStyleRules()
         {
             string uxml = File.ReadAllText(BlockiverseProject.UiToolkitMenuShellPath);
@@ -440,7 +584,7 @@ namespace Blockiverse.Tests.EditMode
                 "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.UiToolkitMenus.cs");
 
             StringAssert.Contains("EnsureComponent<XRUIToolkitManager>", source);
-            StringAssert.Contains("EnsureComponent<BlockiverseWorldSpacePanelPresenter>", source);
+            StringAssert.Contains("EnsureComponent<BlockiverseUiToolkitMenuPresenter>", source);
             StringAssert.Contains("ConfigureWorldSpaceTarget", source);
             StringAssert.Contains("ConfigureWorldSpacePanelSettings", source);
             StringAssert.Contains("m_RenderMode", source);

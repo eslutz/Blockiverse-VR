@@ -18,7 +18,6 @@
     "Unity.Netcode.Runtime",
     "Unity.XR.CoreUtils",
     "Unity.XR.Interaction.Toolkit",
-    "Unity.TextMeshPro",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner",
     "Unity.XR.CompositionLayers",

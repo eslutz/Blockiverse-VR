@@ -2,8 +2,8 @@ using System.Collections.Generic;
 
 namespace Blockiverse.UI
 {
-    // Canonical screen ids and action ids for the menu system (voxel_survival_menus §3, §6, §7),
-    // plus factories for the button-list menus driven by BlockiverseActionMenu.
+    // Canonical screen ids and action ids for the UI Toolkit menu system
+    // (voxel_survival_menus §3, §6, §7).
     public static class MenuActions
     {
         // ── Screen ids (§3) ──────────────────────────────────────────────────
@@ -28,11 +28,6 @@ namespace Blockiverse.UI
         public const string VitalsStatusScreen = "vitals_status";
         public const string CraftingScreen = "crafting";
         public const string ContainerScreen = "container";
-        public const string CampfireStationScreen = "station_campfire";
-        public const string ClayKilnStationScreen = "station_clay_kiln";
-        public const string BellowsForgeStationScreen = "station_bellows_forge";
-        public const string PrepBoardStationScreen = "station_prep_board";
-        public const string MendBenchStationScreen = "station_mend_bench";
         public const string MapWayflagScreen = "map_wayflag";
         public const string ItemDetailsPopover = "item_details_popover";
         public const string RecipePinOverlay = "recipe_pin_overlay";
@@ -260,7 +255,7 @@ namespace Blockiverse.UI
             Localized(WorldDetailsBack, BlockiverseLocalization.Keys.WorldDetailsBack, "Back"),
         };
 
-        static MenuAction Localized(string actionId, string labelKey, string fallbackLabel) =>
-            new(actionId, labelKey, fallbackLabel);
+        static MenuAction Localized(string actionId, string labelKey, string defaultLabel) =>
+            new(actionId, labelKey, defaultLabel);
     }
 }

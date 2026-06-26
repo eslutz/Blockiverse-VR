@@ -28,8 +28,6 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
-using TMPro;
-using UnityEngine.UI;
 using UIDocument = UnityEngine.UIElements.UIDocument;
 
 namespace Blockiverse.Tests.EditMode
@@ -159,7 +157,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void XrRigPrefabUsesUiToolkitMenusWithoutGeneratedComfortCanvas()
+        public void XrRigPrefabUsesUiToolkitMenusWithoutGeneratedComfortSurface()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
@@ -169,7 +167,6 @@ namespace Blockiverse.Tests.EditMode
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
             BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
-            Transform uiToolkitSurface = prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface");
 
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
@@ -179,20 +176,19 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f), "Generated rig should start with a fully open vignette strength.");
             Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f), "Generated rig should leave the title/menu view unobscured.");
             Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
-            Assert.That(uiToolkitSurface, Is.Not.Null);
-            Assert.That(uiToolkitSurface.GetComponent<BlockiverseUiToolkitMenuSurface>(), Is.Not.Null);
+            Assert.That(prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface"), Is.Null,
+                "The title/menu surface is a fixed Boot-scene menu-world object, not a child of the XR rig.");
             Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(0),
                 "Hardware Menu is routed by BlockiverseMenuController at runtime; persistent comfort toggles double-handle pause/back.");
         }
 
         [Test]
-        public void XrRigPrefabHasReadableUiToolkitMenuPhysicalSize()
+        public void GeneratedUiToolkitMenuHasReadablePhysicalSize()
         {
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
-            Assert.That(prefab, Is.Not.Null);
-
-            Transform surface = prefab.transform.Find("Camera Offset/UI Toolkit Menu Surface");
-            Assert.That(surface, Is.Not.Null, "Runtime UI Toolkit menu surface should be generated under Camera Offset.");
+            Scene scene = EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single);
+            GameObject menuRoot = scene.GetRootGameObjects().FirstOrDefault(root => root.name == "Menu World UI");
+            Transform surface = menuRoot != null ? menuRoot.transform.Find("UI Toolkit Menu Surface") : null;
+            Assert.That(surface, Is.Not.Null, "Runtime UI Toolkit menu surface should be generated under the fixed menu-world root.");
             Assert.That(surface.localScale.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f),
                 "UI Toolkit menu uses a pixel layout with a small world transform scale so it renders at a readable VR size.");
             Assert.That(surface.localScale.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
@@ -223,7 +219,7 @@ namespace Blockiverse.Tests.EditMode
                 .GetField("panelScale", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.That(panelScaleField, Is.Not.Null);
             Assert.That((float)panelScaleField.GetValue(presenter), Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f),
-                "Presenter scale should match the generated transform scale so recentered menus keep the intended physical size.");
+                "Presenter scale should match the fixed generated menu transform scale.");
 
             BoxCollider worldSpaceCollider = surface.GetComponent<BoxCollider>();
             Assert.That(worldSpaceCollider, Is.Not.Null,
@@ -1186,13 +1182,13 @@ namespace Blockiverse.Tests.EditMode
             Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
 
             BlockiverseMenuController menuController = prefab.GetComponent<BlockiverseMenuController>();
-            Assert.That(uiToolkitSurface, Is.Not.Null);
-            Assert.That(uiToolkitSurface.GetComponent<BlockiverseUiToolkitMenuSurface>(), Is.Not.Null);
+            Assert.That(uiToolkitSurface, Is.Null,
+                "The title/menu UI Toolkit surface is fixed in the Boot scene's menu world instead of following the XR rig.");
             Assert.That(menuController, Is.Not.Null);
 
             Assert.That(survivalHud, Is.Not.Null);
-            Assert.That(survivalHud.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.EqualTo(0));
             Assert.That(survivalHud.GetComponent<SurvivalHudController>(), Is.Not.Null);
+            Assert.That(survivalHud.GetComponent<BlockiverseHudToolkitSurface>(), Is.Not.Null);
 
             string prefabYaml = File.ReadAllText(BlockiverseProject.XrRigPrefabPath);
             Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Inventory" + "Panel"));
@@ -1200,11 +1196,11 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Crate" + "Panel"));
             Assert.That(prefabYaml, Does.Not.Contain("Survival" + "Health" + "Panel"));
 
-            RectTransform survivalHudRect = survivalHud.GetComponent<RectTransform>();
-            Assert.That(survivalHudRect, Is.Not.Null);
-            Assert.That(survivalHudRect.rect.width, Is.LessThanOrEqualTo(600.0f),
+            UIDocument survivalHudDocument = survivalHud.GetComponent<UIDocument>();
+            Assert.That(survivalHudDocument, Is.Not.Null);
+            Assert.That(survivalHudDocument.worldSpaceSize.x, Is.LessThanOrEqualTo(600.0f),
                 "Gameplay HUD should be a compact overlay, not the full survival menu.");
-            Assert.That(survivalHudRect.rect.height, Is.LessThanOrEqualTo(220.0f),
+            Assert.That(survivalHudDocument.worldSpaceSize.y, Is.LessThanOrEqualTo(220.0f),
                 "Gameplay HUD should not occupy the player's central field of view.");
             Assert.That(survivalHud.Find("Panel/Inventory"), Is.Null,
                 "Inventory menu rendering belongs to the UI Toolkit runtime surface, not hidden HUD children.");

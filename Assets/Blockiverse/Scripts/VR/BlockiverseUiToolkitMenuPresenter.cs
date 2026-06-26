@@ -1,15 +1,12 @@
-using System;
 using Blockiverse.Gameplay;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.VR
 {
-    public sealed class BlockiverseWorldSpacePanelPresenter : MonoBehaviour
+    public sealed class BlockiverseUiToolkitMenuPresenter : MonoBehaviour
     {
         public const string ControllerMappingPopupSeenPrefKey = "Blockiverse.ControllerMappingPopupSeen";
 
-        [SerializeField] Canvas targetCanvas;
         [SerializeField] GameObject targetRoot;
         [SerializeField] Transform placementRoot;
         [SerializeField] Transform headset;
@@ -34,19 +31,14 @@ namespace Blockiverse.VR
         CreativeHotbar hotbar;
         bool subscribedToHotbarSelection;
         bool hasVisibilityCommand;
-        [SerializeField] bool usesSharedCompositionRoot;
         float lastAppliedPanelScale = -1.0f;
 
-        public Canvas TargetCanvas => targetCanvas;
         public GameObject TargetRoot => ResolveTargetRoot();
         public Transform PlacementRoot => placementRoot != null ? placementRoot : transform;
         public bool IsVisible
         {
             get
             {
-                if (targetCanvas != null)
-                    return targetCanvas.enabled;
-
                 GameObject root = ResolveTargetRoot();
                 return root != null && root.activeSelf;
             }
@@ -57,60 +49,16 @@ namespace Blockiverse.VR
         public BlockiverseAudioCue ShowFeedbackCue => showFeedbackCue;
         public BlockiverseAudioCue HideFeedbackCue => hideFeedbackCue;
         public string ShowOnStartPlayerPrefsKey => showOnStartPlayerPrefsKey;
-        public bool UsesSharedCompositionRoot => usesSharedCompositionRoot;
 
         public void EnsurePanelScale(float scale)
         {
-            if (usesSharedCompositionRoot)
-                return;
-
             float clampedScale = Mathf.Max(0.0001f, scale);
             if (Mathf.Approximately(panelScale, clampedScale))
                 return;
 
             panelScale = clampedScale;
-            if (IsVisible)
-                Recenter();
-        }
-
-        public void Configure(
-            Canvas canvas,
-            Transform targetHeadset,
-            float distance,
-            float horizontalOffset,
-            float verticalOffset,
-            float pitch,
-            float scale = 0.002f,
-            bool recenterWhenShown = true,
-            bool showWhenStarted = false,
-            string showWhenStartedPlayerPrefsKey = null)
-        {
-            targetCanvas = canvas;
-            targetRoot = canvas != null ? canvas.gameObject : gameObject;
-            placementRoot = transform;
-            headset = targetHeadset;
-            distanceMeters = distance;
-            horizontalOffsetMeters = horizontalOffset;
-            verticalOffsetMeters = verticalOffset;
-            pitchDegrees = pitch;
-            panelScale = scale;
-            recenterOnShow = recenterWhenShown;
-            showOnStart = showWhenStarted;
-            showOnStartPlayerPrefsKey = showWhenStartedPlayerPrefsKey;
-            usesSharedCompositionRoot = false;
-            DiscoverHotbarSelection();
-            SubscribeHotbarSelectionFeedback();
-        }
-
-
-        public void ConfigureSharedCompositionTarget(GameObject root, Transform sharedPlacementRoot)
-        {
-            targetCanvas = null;
-            targetRoot = root != null ? root : gameObject;
-            placementRoot = sharedPlacementRoot != null ? sharedPlacementRoot : transform;
-            usesSharedCompositionRoot = sharedPlacementRoot != null && placementRoot != transform;
-            DiscoverHotbarSelection();
-            SubscribeHotbarSelectionFeedback();
+            PlacementRoot.localScale = Vector3.one * ResolvePanelScale();
+            lastAppliedPanelScale = ResolvePanelScale();
         }
 
         public void ConfigureWorldSpaceTarget(
@@ -125,7 +73,6 @@ namespace Blockiverse.VR
             bool showWhenStarted = false,
             string showWhenStartedPlayerPrefsKey = null)
         {
-            targetCanvas = null;
             targetRoot = root != null ? root : gameObject;
             placementRoot = transform;
             headset = targetHeadset;
@@ -137,7 +84,6 @@ namespace Blockiverse.VR
             recenterOnShow = recenterWhenShown;
             showOnStart = showWhenStarted;
             showOnStartPlayerPrefsKey = showWhenStartedPlayerPrefsKey;
-            usesSharedCompositionRoot = false;
             DiscoverHotbarSelection();
             SubscribeHotbarSelectionFeedback();
         }
@@ -174,20 +120,12 @@ namespace Blockiverse.VR
 
         public void Show()
         {
-            EnsureCanvas();
+            EnsureTargetRoot();
             hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
-            if (recenterOnShow)
-                Recenter();
-
             GameObject root = ResolveTargetRoot();
             if (root != null && !root.activeSelf)
-                root.SetActive(true);
-
-            if (targetCanvas != null)
-                targetCanvas.enabled = true;
-            else if (root != null)
                 root.SetActive(true);
 
             if (!wasVisible && IsVisible)
@@ -196,14 +134,12 @@ namespace Blockiverse.VR
 
         public void Hide()
         {
-            EnsureCanvas();
+            EnsureTargetRoot();
             hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
             GameObject root = ResolveTargetRoot();
-            if (targetCanvas != null)
-                targetCanvas.enabled = false;
-            else if (root != null)
+            if (root != null)
                 root.SetActive(false);
 
             if (wasVisible)
@@ -215,7 +151,7 @@ namespace Blockiverse.VR
 
         public void ToggleVisible()
         {
-            EnsureCanvas();
+            EnsureTargetRoot();
 
             if (IsVisible)
                 Hide();
@@ -256,8 +192,7 @@ namespace Blockiverse.VR
 
         void Awake()
         {
-            ApplyDefaultStartGateKey();
-            EnsureCanvas();
+            EnsureTargetRoot();
             DiscoverHotbarSelection();
             DiscoverComfortSettings();
         }
@@ -276,7 +211,6 @@ namespace Blockiverse.VR
 
         void Start()
         {
-            ApplyDefaultStartGateKey();
             if (showOnStart && ShouldShowOnStart())
             {
                 Show();
@@ -292,20 +226,18 @@ namespace Blockiverse.VR
             if (!IsVisible)
                 return;
 
-            if (!recenterOnShow)
-                return;
-
             if (!Mathf.Approximately(lastAppliedPanelScale, ResolvePanelScale()))
-                Recenter();
+            {
+                float resolvedScale = ResolvePanelScale();
+                PlacementRoot.localScale = Vector3.one * resolvedScale;
+                lastAppliedPanelScale = resolvedScale;
+            }
         }
 
-        void EnsureCanvas()
+        void EnsureTargetRoot()
         {
-            if (targetCanvas == null && targetRoot == null)
-                targetCanvas = GetComponent<Canvas>();
-
             if (targetRoot == null)
-                targetRoot = targetCanvas != null ? targetCanvas.gameObject : gameObject;
+                targetRoot = gameObject;
 
             if (placementRoot == null)
                 placementRoot = transform;
@@ -316,19 +248,14 @@ namespace Blockiverse.VR
             if (targetRoot != null)
                 return targetRoot;
 
-            return targetCanvas != null ? targetCanvas.gameObject : gameObject;
+            return gameObject;
         }
 
         void HideTargetWithoutFeedback()
         {
-            if (targetCanvas != null)
-                targetCanvas.enabled = false;
-            else
-            {
-                GameObject root = ResolveTargetRoot();
-                if (root != null)
-                    root.SetActive(false);
-            }
+            GameObject root = ResolveTargetRoot();
+            if (root != null)
+                root.SetActive(false);
         }
 
         void DiscoverHotbarSelection()
@@ -345,9 +272,6 @@ namespace Blockiverse.VR
 
         float ResolvePanelScale()
         {
-            if (usesSharedCompositionRoot)
-                return 1.0f;
-
             DiscoverComfortSettings();
             return panelScale * (comfortSettings != null ? comfortSettings.UiScale : 1.0f);
         }
@@ -356,15 +280,6 @@ namespace Blockiverse.VR
         {
             return string.IsNullOrEmpty(showOnStartPlayerPrefsKey) ||
                    PlayerPrefs.GetInt(showOnStartPlayerPrefsKey, 0) == 0;
-        }
-
-        void ApplyDefaultStartGateKey()
-        {
-            if (!string.IsNullOrEmpty(showOnStartPlayerPrefsKey))
-                return;
-
-            if (string.Equals(gameObject.name, "Controller Mapping Popup", StringComparison.Ordinal))
-                showOnStartPlayerPrefsKey = ControllerMappingPopupSeenPrefKey;
         }
 
         void MarkShowOnStartSeen()

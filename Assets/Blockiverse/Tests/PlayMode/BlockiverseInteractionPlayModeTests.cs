@@ -182,58 +182,6 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
-        {
-            GameObject rigObject = new("Test Input Rig");
-            GameObject comfortMenuObject = new("Comfort Menu");
-            GameObject blockMenuObject = new("Block Menu Placeholder");
-            InputActionAsset actions = CreateTestActions();
-            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
-
-            try
-            {
-                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
-                inputRig.Configure(actions);
-
-                var comfortSettings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var comfortCanvas = comfortMenuObject.AddComponent<Canvas>();
-                var comfortMenu = comfortMenuObject.AddComponent<BlockiverseComfortMenu>();
-                comfortMenu.Configure(comfortCanvas, comfortSettings);
-                inputRig.MenuPressed.AddListener(comfortMenu.ToggleVisible);
-
-                // Use the real quick-menu presenter (the component the bootstrapper wires to
-                // QuickMenuPressed) rather than a placeholder, starting hidden like the runtime menu.
-                var blockCanvas = blockMenuObject.AddComponent<Canvas>();
-                var blockMenu = blockMenuObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-                blockMenu.Configure(blockCanvas, rigObject.transform, 1.12f, -0.34f, -0.18f, 0.0f);
-                blockCanvas.enabled = false;
-
-                inputRig.QuickMenuPressed.AddListener(blockMenu.ToggleVisible);
-
-                Press(gamepad.leftShoulder);
-                yield return null;
-
-                Assert.That(blockMenu.IsVisible, Is.True);
-                Assert.That(comfortMenu.IsVisible, Is.False);
-
-                Release(gamepad.leftShoulder);
-                yield return null;
-                Press(gamepad.startButton);
-                yield return null;
-
-                Assert.That(blockMenu.IsVisible, Is.True);
-                Assert.That(comfortMenu.IsVisible, Is.True);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(blockMenuObject);
-                UnityEngine.Object.DestroyImmediate(comfortMenuObject);
-                UnityEngine.Object.DestroyImmediate(rigObject);
-                UnityEngine.Object.DestroyImmediate(actions);
-            }
-        }
-
-        [UnityTest]
         public IEnumerator RightSelectAndRightActivateRaiseCreativeEvents()
         {
             GameObject rigObject = new("Test Input Rig");
@@ -298,10 +246,10 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
 
                 Assert.That(breakPresses, Is.EqualTo(1),
-                    "Menu-specific trigger fallbacks need the dominant trigger event even while world editing is suppressed.");
+                    "Menu-mode trigger capture needs the dominant trigger event even while world editing is suppressed.");
                 Assert.That(breakReleases, Is.EqualTo(1));
                 Assert.That(placePresses, Is.EqualTo(0),
-                    "World edit/use actions should remain suppressed while routed menus are active.");
+                    "World edit/use actions should remain suppressed while UI Toolkit menus are active.");
             }
             finally
             {

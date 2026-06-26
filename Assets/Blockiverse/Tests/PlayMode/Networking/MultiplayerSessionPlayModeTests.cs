@@ -2589,7 +2589,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator SurvivalHudPanelsRouteCraftAndCrateThroughAuthoritativeSync()
+        public IEnumerator SurvivalHudMenuActionsRouteCraftAndCrateThroughAuthoritativeSync()
         {
             yield return LoadMultiplayerTestScene();
 
@@ -2613,36 +2613,34 @@ namespace Blockiverse.Tests.Networking.PlayMode
             hostSurvivalSync.LocalInventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2));
             hostSurvivalSync.SelectedHotbarSlotIndex = 0;
 
-            // Crafting panel → authoritative TrySubmitCraft (Work Plank: branchwood_log ×1 → ×6, §9.1).
-            var craftingObject = new GameObject("Test Crafting Panel");
-            SurvivalCraftingPanel craftingPanel = craftingObject.AddComponent<SurvivalCraftingPanel>();
-            craftingPanel.ConfigureSurvivalSync(hostSurvivalSync);
-            craftingPanel.Bind(CraftingRecipeBook.CreateDefault(itemRegistry), hostSurvivalSync.LocalInventory, itemRegistry, CraftingStation.BuildTable);
-            craftingPanel.TryCraftByOutput(ItemId.WorkPlank);
+            // UI Toolkit menu state → authoritative TrySubmitCraft (Work Plank: branchwood_log ×1 → ×6, §9.1).
+            var hudObject = new GameObject("Test Survival HUD Menu State");
+            SurvivalHudController survivalHud = hudObject.AddComponent<SurvivalHudController>();
+            survivalHud.BindMenuState(
+                hostSurvivalSync.LocalInventory,
+                CraftingRecipeBook.CreateDefault(itemRegistry),
+                itemRegistry,
+                CraftingStationSet.Of(CraftingStation.BuildTable));
+            survivalHud.TryCraftByOutput(ItemId.WorkPlank);
 
             Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6),
                 "Crafting panel should craft through the authoritative sync into the shared inventory.");
             Assert.That(hostSurvivalSync.Diagnostics.AcceptedCraftCount, Is.EqualTo(1));
 
-            // Crate panel → authoritative deposit/withdraw of the held item (the remaining branchwood_log).
-            var crateObject = new GameObject("Test Crate Panel");
-            SurvivalCratePanel cratePanel = crateObject.AddComponent<SurvivalCratePanel>();
-            cratePanel.Bind(hostSurvivalSync, itemRegistry);
-
-            cratePanel.DepositHeld();
+            // UI Toolkit crate actions → authoritative deposit/withdraw of the held item (the remaining branchwood_log).
+            survivalHud.DepositHeldToCrate();
             Assert.That(hostSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1),
-                "Crate panel deposit should move the held item into the shared crate.");
+                "UI Toolkit crate action should move the held item into the shared crate.");
             Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(0));
 
             int crateSlot = FindSlotWith(hostSurvivalSync.SharedCrateInventory, ItemId.BranchwoodLog);
             Assert.That(crateSlot, Is.GreaterThanOrEqualTo(0));
-            cratePanel.WithdrawSlot(crateSlot);
+            survivalHud.WithdrawCrateSlot(crateSlot);
             Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1),
-                "Crate panel withdraw should return the item to the player inventory.");
+                "UI Toolkit crate action should return the item to the player inventory.");
             Assert.That(hostSurvivalSync.Diagnostics.AcceptedCrateTransferCount, Is.EqualTo(2));
 
-            UnityEngine.Object.Destroy(craftingObject);
-            UnityEngine.Object.Destroy(crateObject);
+            UnityEngine.Object.Destroy(hudObject);
         }
 
         static int FindSlotWith(Inventory inventory, ItemId itemId)

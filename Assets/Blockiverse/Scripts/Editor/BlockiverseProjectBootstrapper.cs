@@ -12,7 +12,6 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -32,7 +31,6 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -86,44 +84,20 @@ namespace Blockiverse.Editor
             "com.meta.openxr.feature.foveation"
         };
 
-        // ── Game menu panel names ────────────────────────────────────────────────
-        const string TitleMenuName = "Title Menu";
-        const string PauseMenuName = "Pause Menu";
-        const string DeathScreenName = "Death Screen";
-        const string ConfirmDialogName = "Confirm Dialog";
-        const string NewWorldPanelName = "New World Panel";
-        const string LoadWorldPanelName = "Load World Panel";
-        const string SettingsPanelName = "Settings Panel";
-        const string AudioSettingsPanelName = "Audio Settings Panel";
-        const string ControlsPanelName = "Controls Panel";
-        const string WorldDetailsPanelName = "World Details Panel";
-        const string CreativeToolsPanelName = "Creative Tools Panel";
-        const string StationPanelName = "Station Panel";
-        const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
-        const float GameMenuScale = 0.0013f;
+        // ── Game menu state and HUD names ────────────────────────────────────────
+        const string CreativeToolsMenuStateName = "Creative Tools Menu State";
+        const string StationMenuStateName = "Station Menu State";
         const float UiToolkitMenuScale = BlockiverseUiToolkitMenuSurface.ReadableTransformScale;
         const float GameMenuDistanceMeters = 0.95f;
         const float GameMenuVerticalOffsetMeters = -0.38f;
         const float GameMenuPitchDegrees = 10.0f;
-        // All game menu panels share one world-space position; only one is visible at a time.
+        const string MenuWorldUiRootName = "Menu World UI";
+        // The title/menu surface is fixed in the menu world's scene space, not parented to the XR rig.
         static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.05f, GameMenuDistanceMeters);
         static readonly Vector2 UiToolkitMenuWorldSpaceSize = BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize;
-        static readonly Vector2 ActionMenuSize = new(440.0f, 540.0f);
-        static readonly Vector2 ConfirmDialogSize = new(440.0f, 320.0f);
-        static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
-        static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
-        static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
-        static readonly Vector2 StationPanelSize = new(540.0f, 620.0f);
 
-        const string ComfortMenuName = "Comfort Settings Menu";
-        const string BlockMenuName = "Block Menu";
         const string SurvivalHudName = "Survival HUD";
-        const string ControllerMappingPopupName = "Controller Mapping Popup";
-        const string StartupLoadingOverlayName = "Startup Loading Overlay";
         const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
-        const string MenuCompositionSurfaceName = "Blockiverse Menu Composition Surface";
-        const string MenuCompositionCanvasName = "Blockiverse Menu Canvas";
-        const string MenuCompositionCursorName = "Composition Menu Cursor";
         const string XrVisualProjectionRigName = "Blockiverse XR Visual Projection Rig";
         const string BootEventSystemName = "Boot Event System";
         const string MultiplayerEventSystemName = "Multiplayer Event System";
@@ -146,23 +120,11 @@ namespace Blockiverse.Editor
         const string StickDeadzoneProcessor = "stickDeadzone(min=0.2,max=0.95)";
         const string InteractionTestBlockName = "Interaction Test Block";
         const float JumpHeightMeters = 1.3f;
-        const int CompositionLayerOrderHud = 5;
-        const int CompositionLayerOrderMenu = 10;
-        const int CompositionLayerOrderModal = 20;
-        const float CompositionUiRenderScale = 2.0f;
-        const float MenuPanelInset = 28.0f;
-        static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
-        static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
-        static readonly Vector2 ComfortMenuCompositionSize = ComfortMenuSize * GameMenuScale;
-        // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
-        static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
         const float SurvivalHudScale = 0.00105f;
         static readonly Vector2 SurvivalHudSize = new(560.0f, 180.0f);
-        static readonly Vector2 ControllerMappingPopupSize = new(620.0f, 420.0f);
-        static readonly Vector2 StartupLoadingOverlaySize = new(980.0f, 552.0f);
         // --- Dark-glass theme palette -------------------------------------------------------
         // All panels share a deep charcoal-glass base with a single teal accent. Controls use
-        // a lighter tinted surface with hover/pressed tints via Button.ColorBlock.
+        // a lighter tinted surface with hover/pressed tints in UI Toolkit styles.
         static readonly Color PanelBaseColor       = new(0.06f, 0.07f, 0.09f, 0.99f);
         static readonly Color PanelHeaderColor     = new(0.09f, 0.11f, 0.14f, 1.00f);
         static readonly Color ControlNormalColor   = new(0.16f, 0.20f, 0.24f, 1.00f);
@@ -175,16 +137,10 @@ namespace Blockiverse.Editor
         static readonly Color TextDimColor         = new(0.65f, 0.70f, 0.75f, 1.00f);
         static readonly Color DividerColor         = new(0.22f, 0.28f, 0.34f, 0.80f);
 
-        // Legacy per-panel aliases used by a few callers that haven't been refactored yet.
-        static readonly Color ComfortMenuPanelColor    = PanelBaseColor;
-        static readonly Color ComfortMenuControlColor  = ControlNormalColor;
-        static readonly Color ComfortMenuAccentColor   = AccentColor;
-        static readonly Color BlockMenuPanelColor      = new(0.05f, 0.09f, 0.13f, 0.96f);
-        static readonly Color SurvivalHudPanelColor    = PanelBaseColor;
-        static readonly Color SurvivalHudSectionColor  = PanelHeaderColor;
-        static readonly Color SurvivalHudAccentColor   = AccentColor;
-        static readonly Color StartupOverlayPanelColor = new(0.02f, 0.03f, 0.04f, 0.97f);
-        static readonly Color MultiplayerMenuInputColor= ControlNormalColor;
+        static readonly Color SurvivalHudPanelColor = PanelBaseColor;
+        static readonly Color SurvivalHudSectionColor = PanelHeaderColor;
+        static readonly Color SurvivalHudControlColor = ControlNormalColor;
+        static readonly Color SurvivalHudAccentColor = AccentColor;
         // --- end palette --------------------------------------------------------------------
         static readonly Color PointerLineColor = new(0.36f, 0.82f, 1.0f, 0.92f);
         static readonly Color TestBlockColor = new(0.22f, 0.56f, 0.43f, 1.0f);
@@ -227,7 +183,6 @@ namespace Blockiverse.Editor
         public static void Run()
         {
             EnsureFolders();
-            EnsureTmpEssentialResources();
             ConfigureEditorSerialization();
             ConfigureAndroidPlayer();
             ConfigureAppBranding();
@@ -240,6 +195,7 @@ namespace Blockiverse.Editor
             EnsureInteractionLayer();
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
+            EnsureVrUiLayer();
             EnsureInteractionMaterials();
             EnsureInputActions();
             EnsureXrRigPrefab();
@@ -247,6 +203,7 @@ namespace Blockiverse.Editor
             EnsureBootScene();
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
+            EnsureVrUiLayer();
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -264,14 +221,6 @@ namespace Blockiverse.Editor
             EnsureBuildScenes();
             RemoveGeneratedDefaultNetworkPrefabs();
 
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-        }
-
-        [MenuItem("Blockiverse/Import TMP Essential Resources")]
-        public static void ImportTmpEssentialResources()
-        {
-            EnsureTmpEssentialResources();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -734,42 +683,6 @@ namespace Blockiverse.Editor
                 property.objectReferenceValue = value;
         }
 
-        static void EnsureTmpEssentialResources()
-        {
-            const string projectSettingsPath = "Assets/TextMesh Pro/Resources/TMP Settings.asset";
-
-            if (File.Exists(projectSettingsPath))
-                return;
-
-            string packageFullPath = Path.GetFullPath("Packages/com.unity.ugui");
-
-            if (!Directory.Exists(packageFullPath))
-            {
-                // Fall back to the cached package location.
-                string[] candidates = Directory.GetDirectories(
-                    Path.GetFullPath("Library/PackageCache"),
-                    "com.unity.ugui*",
-                    SearchOption.TopDirectoryOnly);
-
-                if (candidates.Length > 0)
-                    packageFullPath = candidates[0];
-            }
-
-            string resourcePackage = Path.Combine(packageFullPath, "Package Resources", "TMP Essential Resources.unitypackage");
-
-            if (!File.Exists(resourcePackage))
-            {
-                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"TMP Essential Resources package not found at '{resourcePackage}'; TMP labels will use the default fallback font.");
-                return;
-            }
-
-            // Silent import (false = no dialog). This copies fonts, settings and shaders into
-            // Assets/TextMesh Pro/ and makes TMP_Settings.defaultFontAsset available.
-            AssetDatabase.ImportPackage(resourcePackage, false);
-            AssetDatabase.Refresh();
-            BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Imported TMP Essential Resources.");
-        }
-
         // Migration helper: drop a stale binding (e.g. the old A-button Height Reset that is now Jump) so a
         // regenerated asset does not double-bind the control. No-op when the action/binding is already gone.
         static void RemoveActionBinding(InputActionMap map, string actionName, string bindingPath)
@@ -832,6 +745,104 @@ namespace Blockiverse.Editor
             return EnsureUnityLayer(BlockiverseProject.XrVisualProjectionLayerName, BlockiverseProject.XrVisualProjectionLayerIndex);
         }
 
+        static int EnsureVrUiLayer()
+        {
+            return EnsureUnityLayer(BlockiverseProject.VrUiLayerName, BlockiverseProject.VrUiLayerIndex);
+        }
+
+        static int EnsureUnityLayer(string layerName)
+        {
+            if (layerName == BlockiverseProject.InteractionLayerName)
+                return EnsureUnityLayer(layerName, BlockiverseProject.InteractionLayerIndex);
+
+            if (layerName == BlockiverseProject.XrVisualProjectionLayerName)
+                return EnsureUnityLayer(layerName, BlockiverseProject.XrVisualProjectionLayerIndex);
+
+            if (layerName == BlockiverseProject.VrUiLayerName)
+                return EnsureUnityLayer(layerName, BlockiverseProject.VrUiLayerIndex);
+
+            const string tagManagerPath = "ProjectSettings/TagManager.asset";
+            UnityEngine.Object[] tagManagerAssets = AssetDatabase.LoadAllAssetsAtPath(tagManagerPath);
+            if (tagManagerAssets == null || tagManagerAssets.Length == 0)
+                throw new InvalidOperationException("Unity TagManager settings asset could not be loaded.");
+
+            var tagManager = new SerializedObject(tagManagerAssets[0]);
+            tagManager.UpdateIfRequiredOrScript();
+            SerializedProperty layers = tagManager.FindProperty("layers");
+
+            for (int index = 0; index < layers.arraySize; index++)
+            {
+                SerializedProperty layer = layers.GetArrayElementAtIndex(index);
+                if (layer.stringValue == layerName)
+                    return index;
+            }
+
+            for (int index = 8; index < layers.arraySize; index++)
+            {
+                SerializedProperty layer = layers.GetArrayElementAtIndex(index);
+                if (!string.IsNullOrEmpty(layer.stringValue))
+                    continue;
+
+                layer.stringValue = layerName;
+                tagManager.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(tagManager.targetObject);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(tagManagerPath, ImportAssetOptions.ForceUpdate);
+                return index;
+            }
+
+            throw new InvalidOperationException($"No free Unity layer slot is available for {layerName}.");
+        }
+
+        static int EnsureUnityLayer(string layerName, int layerIndex)
+        {
+            const string tagManagerPath = "ProjectSettings/TagManager.asset";
+            UnityEngine.Object[] tagManagerAssets = AssetDatabase.LoadAllAssetsAtPath(tagManagerPath);
+            if (tagManagerAssets == null || tagManagerAssets.Length == 0)
+                throw new InvalidOperationException("Unity TagManager settings asset could not be loaded.");
+
+            var tagManager = new SerializedObject(tagManagerAssets[0]);
+            tagManager.UpdateIfRequiredOrScript();
+            SerializedProperty layers = tagManager.FindProperty("layers");
+            if (layerIndex < 0 || layerIndex >= layers.arraySize)
+                throw new InvalidOperationException($"Unity layer index {layerIndex} is outside the TagManager layer array.");
+
+            SerializedProperty targetLayer = layers.GetArrayElementAtIndex(layerIndex);
+            if (!string.IsNullOrEmpty(targetLayer.stringValue) && targetLayer.stringValue != layerName)
+                throw new InvalidOperationException(
+                    $"Unity layer {layerIndex} is already assigned to {targetLayer.stringValue}; expected {layerName}.");
+
+            bool changed = false;
+            for (int index = 8; index < layers.arraySize; index++)
+            {
+                if (index == layerIndex)
+                    continue;
+
+                SerializedProperty layer = layers.GetArrayElementAtIndex(index);
+                if (layer.stringValue != layerName)
+                    continue;
+
+                layer.stringValue = string.Empty;
+                changed = true;
+            }
+
+            if (targetLayer.stringValue != layerName)
+            {
+                targetLayer.stringValue = layerName;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                tagManager.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(tagManager.targetObject);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(tagManagerPath, ImportAssetOptions.ForceUpdate);
+            }
+
+            return layerIndex;
+        }
+
         static LayerMask GetInteractionLayerMask()
         {
             return (LayerMask)BlockiverseProject.InteractionLayerMask;
@@ -852,6 +863,12 @@ namespace Blockiverse.Editor
         {
             int layer = LayerMask.NameToLayer(BlockiverseProject.CompositionUiLayerName);
             return layer >= 0 ? layer : BlockiverseProject.CompositionUiLayerIndex;
+        }
+
+        static int GetVrUiLayerIndex()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.VrUiLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.VrUiLayerIndex;
         }
 
         static int GetXrVisualProjectionLayerIndex()

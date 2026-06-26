@@ -13,7 +13,6 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -28,12 +27,10 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using UnityEngine.UIElements;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
@@ -66,7 +63,8 @@ namespace Blockiverse.Editor
                 ? EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single)
                 : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            EnsureBootSceneRig(scene, rigPrefab);
+            GameObject rig = EnsureBootSceneRig(scene, rigPrefab);
+            EnsureBootSceneMenuSurface(scene, rig);
             EnsureBootSceneLight(scene);
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
@@ -76,7 +74,6 @@ namespace Blockiverse.Editor
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
-            RemoveStaleRootCompositionLayerSceneDocuments(BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
         }
 
@@ -279,10 +276,15 @@ namespace Blockiverse.Editor
                 AssetDatabase.DeleteAsset(DefaultNetworkPrefabsPath);
         }
 
-        static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
+        static GameObject EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
         {
-            RemoveStaleRootCompositionLayers(scene);
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
+
+            if (rig != null && PrefabUtility.GetCorrespondingObjectFromSource(rig) == rigPrefab)
+            {
+                EditorUtility.SetDirty(rig);
+                return rig;
+            }
 
             if (rig != null)
                 UnityEngine.Object.DestroyImmediate(rig);
@@ -291,164 +293,35 @@ namespace Blockiverse.Editor
             if (rigInstance != null)
             {
                 rigInstance.name = BlockiverseProject.XrRigRootName;
-                RemoveGeneratedCompositionLayerSceneOverrides(rigInstance);
                 EditorUtility.SetDirty(rigInstance);
             }
+
+            return rigInstance;
         }
 
-        static void RemoveStaleRootCompositionLayers(Scene scene)
+        static void EnsureBootSceneMenuSurface(Scene scene, GameObject rig)
         {
-            foreach (GameObject root in scene.GetRootGameObjects())
+            GameObject menuRoot = FindRootGameObject(scene, MenuWorldUiRootName);
+            if (menuRoot == null)
             {
-                if (root == null || root.name == BlockiverseProject.XrRigRootName)
-                    continue;
-
-                if (root.name == "Composition Render Scale Surface" ||
-                    root.GetComponent<CompositionLayer>() != null)
-                {
-                    root.SetActive(false);
-                    EditorUtility.SetDirty(root);
-                }
-            }
-        }
-
-        static void RemoveStaleRootCompositionLayerSceneDocuments(string scenePath)
-        {
-            if (!File.Exists(scenePath))
-                return;
-
-            string sceneYaml = File.ReadAllText(scenePath);
-            IReadOnlyList<string> sceneDocuments = SplitUnityYamlDocuments(sceneYaml);
-            var gameObjectIdsToRemove = new HashSet<string>();
-            var objectIdsToRemove = new HashSet<string>();
-            var rootTransformIdsToRemove = new HashSet<string>();
-
-            foreach (string document in sceneDocuments)
-            {
-                if (!TryGetUnityYamlDocumentId(document, out string gameObjectId) ||
-                    !document.StartsWith("--- !u!1 ", StringComparison.Ordinal) ||
-                    !IsStaleRootCompositionLayerGameObjectDocument(document))
-                {
-                    continue;
-                }
-
-                gameObjectIdsToRemove.Add(gameObjectId);
-                objectIdsToRemove.Add(gameObjectId);
-
-                foreach (Match componentMatch in Regex.Matches(document, @"component:\s*\{fileID:\s*(-?\d+)\}"))
-                {
-                    string componentId = componentMatch.Groups[1].Value;
-                    objectIdsToRemove.Add(componentId);
-                    if (!rootTransformIdsToRemove.Contains(componentId))
-                        rootTransformIdsToRemove.Add(componentId);
-                }
+                menuRoot = new GameObject(MenuWorldUiRootName);
+                SceneManager.MoveGameObjectToScene(menuRoot, scene);
             }
 
-            if (objectIdsToRemove.Count == 0)
-                return;
+            menuRoot.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            menuRoot.transform.localScale = Vector3.one;
 
-            var keptDocuments = sceneDocuments
-                .Where(document =>
-                {
-                    if (!TryGetUnityYamlDocumentId(document, out string documentId))
-                        return true;
-
-                    return !objectIdsToRemove.Contains(documentId);
-                })
-                .ToList();
-
-            string cleanedSceneYaml = string.Concat(keptDocuments);
-            foreach (string transformId in rootTransformIdsToRemove)
+            BlockiverseUiToolkitMenuSurface surface = EnsureUiToolkitMenuSurface(menuRoot.transform, null);
+            BlockiverseMenuController controller = rig != null
+                ? rig.GetComponent<BlockiverseMenuController>()
+                : FindRootGameObject(scene, BlockiverseProject.XrRigRootName)?.GetComponent<BlockiverseMenuController>();
+            if (controller != null)
             {
-                cleanedSceneYaml = Regex.Replace(
-                    cleanedSceneYaml,
-                    $@"(?m)^\s*-\s*\{{fileID:\s*{Regex.Escape(transformId)}\}}\r?\n",
-                    string.Empty);
+                controller.ConfigureUiToolkitMenuSurface(surface);
+                EditorUtility.SetDirty(controller);
             }
 
-            if (cleanedSceneYaml == sceneYaml)
-                return;
-
-            File.WriteAllText(scenePath, cleanedSceneYaml);
-            AssetDatabase.ImportAsset(scenePath, ImportAssetOptions.ForceUpdate);
-        }
-
-        static IReadOnlyList<string> SplitUnityYamlDocuments(string yaml)
-        {
-            var documents = new List<string>();
-            int firstDocumentIndex = yaml.IndexOf("--- !u!", StringComparison.Ordinal);
-            if (firstDocumentIndex > 0)
-                documents.Add(yaml[..firstDocumentIndex]);
-
-            foreach (Match match in Regex.Matches(yaml, @"(?ms)^--- !u!.*?(?=^--- !u!|\z)"))
-                documents.Add(match.Value);
-
-            return documents.Count > 0 ? documents : new[] { yaml };
-        }
-
-        static bool TryGetUnityYamlDocumentId(string document, out string documentId)
-        {
-            Match match = Regex.Match(document, @"^--- !u!\d+ &(-?\d+)", RegexOptions.Multiline);
-            documentId = match.Success ? match.Groups[1].Value : string.Empty;
-            return match.Success;
-        }
-
-        static bool IsStaleRootCompositionLayerGameObjectDocument(string document)
-        {
-            return document.Contains("m_Name: Composition Render Scale Surface", StringComparison.Ordinal) ||
-                   document.Contains("m_Name: Composition Layer Plane", StringComparison.Ordinal);
-        }
-
-        static void RemoveGeneratedCompositionLayerSceneOverrides(GameObject rigInstance)
-        {
-            if (rigInstance == null)
-                return;
-
-            Transform cameraOffset = rigInstance.transform.Find("Camera Offset");
-            Transform surface = cameraOffset != null ? cameraOffset.Find(MenuCompositionSurfaceName) : null;
-            if (surface == null)
-                return;
-
-            MeshCollider meshCollider = surface.GetComponent<MeshCollider>();
-            RevertPrefabObjectOverride(meshCollider);
-            if (meshCollider != null && meshCollider.sharedMesh != null)
-            {
-                meshCollider.sharedMesh = null;
-                EditorUtility.SetDirty(meshCollider);
-            }
-
-            TexturesExtension texturesExtension = surface.GetComponent<TexturesExtension>();
-            RevertPrefabObjectOverride(texturesExtension);
-            if (texturesExtension != null)
-            {
-                texturesExtension.LeftTexture = null;
-                texturesExtension.RightTexture = null;
-                EditorUtility.SetDirty(texturesExtension);
-            }
-
-            InteractableUIMirror mirror = surface.GetComponent<InteractableUIMirror>();
-            RevertPrefabObjectOverride(mirror);
-
-            Camera canvasCamera = surface.Find($"{MenuCompositionCanvasName}/CanvasCamera")?.GetComponent<Camera>();
-            RevertPrefabObjectOverride(canvasCamera);
-            if (canvasCamera != null)
-            {
-                canvasCamera.targetTexture = null;
-                canvasCamera.enabled = false;
-                canvasCamera.nearClipPlane = 0.01f;
-                canvasCamera.clearFlags = CameraClearFlags.SolidColor;
-                canvasCamera.backgroundColor = Color.clear;
-                canvasCamera.cullingMask = 1 << GetCompositionUiLayerIndex();
-                EditorUtility.SetDirty(canvasCamera);
-            }
-        }
-
-        static void RevertPrefabObjectOverride(UnityEngine.Object target)
-        {
-            if (target == null || !PrefabUtility.IsPartOfPrefabInstance(target))
-                return;
-
-            PrefabUtility.RevertObjectOverride(target, InteractionMode.AutomatedAction);
+            EditorUtility.SetDirty(menuRoot);
         }
 
         static void EnsureBootSceneLight(Scene scene)
@@ -484,7 +357,7 @@ namespace Blockiverse.Editor
             EnsureEventSystem(scene, BootEventSystemName);
         }
 
-        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any legacy scene
+        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any editor-authored scene
         // manager inactive in editor-authored scenes so macOS/headless PlayMode tests do not
         // load avatar native libraries; MetaHorizonAvatarProvider creates the singleton on Quest.
         static void EnsureOvrAvatarManager(Scene scene)
@@ -568,20 +441,7 @@ namespace Blockiverse.Editor
             EventSystem eventSystem = EnsureComponent<EventSystem>(eventSystemObject);
             eventSystem.sendNavigationEvents = true;
 
-            StandaloneInputModule legacyInputModule = eventSystemObject.GetComponent<StandaloneInputModule>();
-
-            if (legacyInputModule != null)
-                UnityEngine.Object.DestroyImmediate(legacyInputModule);
-
-            // VR UI is driven by tracked-device rays, so replace the plain Input System module with
-            // XRI's module which understands tracked-device pointer events from XRRayInteractors.
-            // XRUIInputModule does not derive from InputSystemUIInputModule, so a legacy module found
-            // here is always the screen-space one and is removed before adding the XR module.
-            InputSystemUIInputModule legacyUiModule = eventSystemObject.GetComponent<InputSystemUIInputModule>();
-
-            if (legacyUiModule != null)
-                UnityEngine.Object.DestroyImmediate(legacyUiModule);
-
+            // Menus are authored as world-space UI Toolkit panels driven by XRI tracked-device input.
             XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
             EnsureInputActions();
             BlockiverseXrUiInputConfigurator.Configure(
@@ -659,8 +519,7 @@ namespace Blockiverse.Editor
         static CreativeHotbar FindBootSceneHotbar(Scene scene)
         {
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
-            Transform hotbarTransform = rig != null ? rig.transform.Find("Camera Offset/" + BlockMenuName) : null;
-            return hotbarTransform != null ? hotbarTransform.GetComponent<CreativeHotbar>() : null;
+            return rig != null ? rig.GetComponentInChildren<CreativeHotbar>(includeInactive: true) : null;
         }
 
         static void EnsureCreativeInputBridge(Scene scene, CreativeInteractionController controller)

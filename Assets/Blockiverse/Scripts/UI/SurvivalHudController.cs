@@ -3,39 +3,30 @@ using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.VR;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.UI
 {
     public sealed class SurvivalHudController : MonoBehaviour
     {
-        [SerializeField] SurvivalInventoryPanel inventoryPanel;
-        [SerializeField] SurvivalCraftingPanel craftingPanel;
-        [SerializeField] SurvivalHealthPanel healthPanel;
-        [SerializeField] SurvivalCratePanel cratePanel;
-        [SerializeField] TMP_Text statusLabel;
-        [SerializeField] Slider miningProgressSlider;
+        [SerializeField] BlockiverseHudToolkitSurface hudSurface;
         [SerializeField] int selectedHotbarSlotIndex;
         [SerializeField] float statusMessageSeconds = 2.5f;
+        [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
 
-        // Station proximity scan cadence: cheap cube scan around the player to unlock
-        // station-gated recipes (voxel_survival_ruleset §8) without per-frame world reads.
         const float StationScanIntervalSeconds = 0.5f;
-
-        // Vitals display refresh cadence: SurvivalVitals has no change events, so the health
-        // panel is refreshed periodically while the vitals runtime is active.
         const float VitalsRefreshIntervalSeconds = 0.5f;
 
         public Inventory Inventory { get; private set; }
         public CraftingRecipeBook RecipeBook { get; private set; }
         public PlayerVitals Vitals { get; private set; }
         public SurvivalVitalsRuntime VitalsRuntime => vitalsRuntime;
-        public SurvivalInventoryPanel InventoryPanel => inventoryPanel;
-        public SurvivalCraftingPanel CraftingPanel => craftingPanel;
-        public SurvivalCratePanel CratePanel => cratePanel;
-        public string CurrentStatusText => statusLabel != null ? statusLabel.text : string.Empty;
+        public int SelectedHotbarSlotIndex => selectedHotbarSlotIndex;
+        public string CurrentStatusText => hudSurface != null ? hudSurface.CurrentStatusText : string.Empty;
+        public string CurrentCraftingStatusText => currentCraftingStatusText;
+        public string CurrentCrateStatusText => currentCrateStatusText;
+        public bool HasSharedCrate => survivalSync != null && survivalSync.SharedCrateInventory != null;
 
         CreativeWorldManager worldManager;
         SurvivalVitalsRuntime vitalsRuntime;
@@ -47,27 +38,58 @@ namespace Blockiverse.UI
         float statusVisibleUntil;
         bool showingMiningProgress;
         CraftingStationSet lastScannedStations;
-        // The exact SelectionChanged subscription, stored so a later bind (which may discover a
-        // different sync instance) detaches the previous handler instead of leaking it.
-        SurvivalInventoryPanel selectionChangedSource;
-        Action<int> selectionChangedHandler;
+        string currentCraftingStatusText = string.Empty;
+        string currentCrateStatusText = string.Empty;
+        int lastHealth = int.MinValue;
+        int lastMaxHealth = int.MinValue;
+        int lastHunger = int.MinValue;
+        int lastThirst = int.MinValue;
+        int lastStamina = int.MinValue;
+        string lastBaseState;
 
         public void Configure(
-            SurvivalInventoryPanel targetInventoryPanel,
-            SurvivalCraftingPanel targetCraftingPanel,
-            SurvivalHealthPanel targetHealthPanel,
-            SurvivalCratePanel targetCratePanel = null,
             int targetSelectedHotbarSlotIndex = 0,
-            TMP_Text targetStatusLabel = null,
-            Slider targetMiningProgressSlider = null)
+            BlockiverseHudToolkitSurface targetHudSurface = null)
         {
-            inventoryPanel = targetInventoryPanel;
-            craftingPanel = targetCraftingPanel;
-            healthPanel = targetHealthPanel;
-            cratePanel = targetCratePanel;
             selectedHotbarSlotIndex = targetSelectedHotbarSlotIndex;
-            statusLabel = targetStatusLabel;
-            miningProgressSlider = targetMiningProgressSlider;
+            hudSurface = targetHudSurface;
+        }
+
+        public void ConfigureFeedback(
+            BlockiverseAudioCuePlayer targetAudioCuePlayer,
+            BlockiverseInteractionHaptics targetInteractionHaptics)
+        {
+            audioCuePlayer = targetAudioCuePlayer;
+            interactionHaptics = targetInteractionHaptics;
+        }
+
+        public void BindMenuState(
+            Inventory targetInventory,
+            CraftingRecipeBook targetRecipeBook,
+            ItemRegistry targetItemRegistry,
+            CraftingStationSet availableStations = default)
+        {
+            itemRegistry = targetItemRegistry ?? ItemRegistry.Default;
+            Inventory = targetInventory ?? new Inventory(itemRegistry);
+            RecipeBook = targetRecipeBook ?? CraftingRecipeBook.CreateDefault(itemRegistry);
+            lastScannedStations = availableStations;
+
+            if (worldManager != null)
+                worldManager.SetActivePlayerInventory(Inventory);
+
+            ApplySelectedHotbarSlot(selectedHotbarSlotIndex, playFeedback: false);
+            RefreshVitalsDisplay(force: true);
+        }
+
+        public void BindVitals(PlayerVitals targetVitals)
+        {
+            Vitals = targetVitals ?? new PlayerVitals();
+            RefreshVitalsDisplay(force: true);
+        }
+
+        public void SetAvailableStations(CraftingStationSet availableStations)
+        {
+            lastScannedStations = availableStations;
         }
 
         void Awake()
@@ -77,99 +99,29 @@ namespace Blockiverse.UI
 
         void BindValidationState()
         {
-            if (inventoryPanel == null)
-                inventoryPanel = GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true);
-            if (craftingPanel == null)
-                craftingPanel = GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true);
-            if (healthPanel == null)
-                healthPanel = GetComponentInChildren<SurvivalHealthPanel>(includeInactive: true);
-            if (cratePanel == null)
-                cratePanel = GetComponentInChildren<SurvivalCratePanel>(includeInactive: true);
-            Transform panel = transform.Find("Panel");
-            if (panel != null)
-            {
-                if (statusLabel == null)
-                {
-                    Transform statusTransform = panel.Find("Status");
-                    if (statusTransform != null)
-                        statusLabel = statusTransform.GetComponent<TMP_Text>();
-                }
-
-                if (miningProgressSlider == null)
-                {
-                    Transform progressTransform = panel.Find("Mining Progress");
-                    if (progressTransform != null)
-                        miningProgressSlider = progressTransform.GetComponent<Slider>();
-                }
-            }
-
+            DiscoverHudReferences();
             itemRegistry = ItemRegistry.Default;
             UnsubscribeTransientFeedback();
 
-            // Bind to the authoritative survival inventory when the runtime survival sync is present so
-            // the HUD, harvesting, crafting, and container loot all share one inventory. Falls back to a
-            // standalone inventory for isolated validation/tests.
             survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
             Inventory = survivalSync != null ? survivalSync.LocalInventory : new Inventory(itemRegistry);
             RecipeBook = CraftingRecipeBook.Default;
 
-            // Bind to the runtime-owned vitals (ticked by SurvivalVitalsRuntime) when present so the
-            // HUD shows live health/hunger/thirst/stamina. Falls back to a standalone instance for
-            // isolated validation/tests.
             vitalsRuntime = FindAnyObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
             Vitals = vitalsRuntime != null ? vitalsRuntime.Vitals : new PlayerVitals();
             inputBridge = FindAnyObjectByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include);
 
-            // Register this inventory as the container-loot destination so breaking a crate fills it.
             worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             if (worldManager != null)
                 worldManager.SetActivePlayerInventory(Inventory);
 
-            // Mirror the selected hotbar slot into the survival sync so VR break/place use the held item.
-            UnsubscribeSelectionChanged();
-            if (survivalSync != null && inventoryPanel != null)
-            {
-                survivalSync.SelectedHotbarSlotIndex = selectedHotbarSlotIndex;
-                selectionChangedSource = inventoryPanel;
-                selectionChangedHandler = survivalSync.SetSelectedHotbarSlot;
-                selectionChangedSource.SelectionChanged += selectionChangedHandler;
-            }
+            ApplySelectedHotbarSlot(selectedHotbarSlotIndex, playFeedback: false);
 
-            if (inventoryPanel != null)
-                inventoryPanel.Bind(Inventory, itemRegistry, selectedHotbarSlotIndex);
-            // Route crafting through the authoritative sync (when present) so client crafts are
-            // host-validated, not applied to the local mirror.
-            if (craftingPanel != null)
-            {
-                craftingPanel.ConfigureSurvivalSync(survivalSync);
-                craftingPanel.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
-            }
+            currentCraftingStatusText = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingReady);
+            currentCrateStatusText = survivalSync != null
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateShared)
+                : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateOffline);
 
-            if (healthPanel != null)
-            {
-                healthPanel.Bind(Vitals);
-                if (vitalsRuntime != null)
-                    healthPanel.BindSurvivalVitals(vitalsRuntime.SurvivalVitals);
-            }
-
-            if (cratePanel != null)
-                cratePanel.Bind(survivalSync, itemRegistry);
-
-            if (craftingPanel != null)
-            {
-                craftingPanel.CraftingChanged -= RefreshPanels;
-                craftingPanel.CraftingChanged += RefreshPanels;
-            }
-
-            if (cratePanel != null)
-            {
-                cratePanel.CrateChanged -= RefreshPanels;
-                cratePanel.CrateChanged += RefreshPanels;
-            }
-
-            // Repaint (and re-bind, if the instance was replaced) when the authoritative local
-            // inventory or shared crate changes — host snapshots on clients, host-side command
-            // results, and mode switches all arrive through these signals.
             if (survivalSync != null)
             {
                 survivalSync.LocalInventoryChanged -= OnLocalInventoryChanged;
@@ -188,70 +140,42 @@ namespace Blockiverse.UI
                 inputBridge.MiningProgressCleared += OnMiningProgressCleared;
             }
 
+            RefreshVitalsDisplay(force: true);
             SetMiningProgressVisible(false);
-            if (statusLabel != null && string.IsNullOrEmpty(statusLabel.text))
-                statusLabel.gameObject.SetActive(false);
+        }
+
+        void DiscoverHudReferences()
+        {
+            if (hudSurface == null)
+                hudSurface = GetComponent<BlockiverseHudToolkitSurface>()
+                    ?? GetComponentInChildren<BlockiverseHudToolkitSurface>(true);
         }
 
         void OnDestroy()
         {
-            UnsubscribeSelectionChanged();
             UnsubscribeTransientFeedback();
-
-            if (craftingPanel != null)
-                craftingPanel.CraftingChanged -= RefreshPanels;
-
-            if (cratePanel != null)
-                cratePanel.CrateChanged -= RefreshPanels;
 
             if (survivalSync != null)
             {
                 survivalSync.LocalInventoryChanged -= OnLocalInventoryChanged;
                 survivalSync.SharedCrateChanged -= OnSharedCrateChanged;
+                survivalSync.CommandFeedback -= OnCommandFeedback;
             }
-        }
-
-        // Removes the stored SelectionChanged subscription. `-= survivalSync.SetSelectedHotbarSlot`
-        // against a freshly discovered sync would not remove a previous sync's handler.
-        void UnsubscribeSelectionChanged()
-        {
-            if (selectionChangedSource != null && selectionChangedHandler != null)
-                selectionChangedSource.SelectionChanged -= selectionChangedHandler;
-
-            selectionChangedSource = null;
-            selectionChangedHandler = null;
         }
 
         void OnLocalInventoryChanged()
         {
             if (survivalSync != null && !ReferenceEquals(Inventory, survivalSync.LocalInventory))
             {
-                // The sync replaced its inventory instance (explicit Configure): rebind every
-                // consumer that captured the old reference.
                 Inventory = survivalSync.LocalInventory;
                 if (worldManager != null)
                     worldManager.SetActivePlayerInventory(Inventory);
-                if (inventoryPanel != null)
-                    inventoryPanel.Bind(Inventory, itemRegistry, inventoryPanel.SelectedHotbarSlotIndex);
-                if (craftingPanel != null)
-                    craftingPanel.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
-                // Bind resets the panel's station set to None, and ScanNearbyStations skips its
-                // push while the scan result still equals lastScannedStations — re-apply the
-                // cached set so station-gated recipes stay unlocked across the rebind.
-                if (craftingPanel != null)
-                    craftingPanel.SetAvailableStations(lastScannedStations);
+                ApplySelectedHotbarSlot(selectedHotbarSlotIndex, playFeedback: false);
             }
-
-            if (inventoryPanel != null)
-                inventoryPanel.Refresh();
-            if (craftingPanel != null)
-                craftingPanel.Refresh();
         }
 
         void OnSharedCrateChanged()
         {
-            if (cratePanel != null)
-                cratePanel.Refresh();
         }
 
         void Update()
@@ -261,22 +185,273 @@ namespace Blockiverse.UI
             ClearExpiredStatus();
         }
 
-        // Keeps the hunger/thirst/stamina readout current (those vitals tick without events).
-        void RefreshVitalsDisplay()
+        public void HandleSlotSelection(int slotIndex)
         {
-            if (vitalsRuntime == null || healthPanel == null || Time.time < nextVitalsRefreshTime)
+            if (Inventory == null || slotIndex < 0 || slotIndex >= Inventory.SlotCount)
+                return;
+
+            if (slotIndex < Inventory.HotbarSlotCount)
+            {
+                ApplySelectedHotbarSlot(slotIndex, playFeedback: true);
+                return;
+            }
+
+            if (Inventory.HotbarSlotCount == 0)
+                return;
+
+            Inventory.SwapSlots(selectedHotbarSlotIndex, slotIndex);
+            PlayFeedback(BlockiverseAudioCue.UiSelect);
+        }
+
+        void ApplySelectedHotbarSlot(int slotIndex, bool playFeedback)
+        {
+            if (Inventory != null && !IsValidHotbarSlot(slotIndex, Inventory.HotbarSlotCount))
+                slotIndex = 0;
+
+            selectedHotbarSlotIndex = slotIndex;
+            if (survivalSync != null)
+                survivalSync.SetSelectedHotbarSlot(selectedHotbarSlotIndex);
+            if (playFeedback)
+                PlayFeedback(BlockiverseAudioCue.UiSelect);
+        }
+
+        static bool IsValidHotbarSlot(int slotIndex, int hotbarSlotCount)
+        {
+            if (hotbarSlotCount == 0)
+                return slotIndex == 0;
+
+            return slotIndex >= 0 && slotIndex < hotbarSlotCount;
+        }
+
+        public CraftingResult TryCraftAtIndex(int index)
+        {
+            EnsureCraftingBound();
+
+            if (!BlockiverseUiToolkitMenuCatalog.TryGetInstantRecipe(RecipeBook, index, out CraftingRecipe recipe))
+            {
+                SetCraftingStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingRecipeUnavailable));
+                PlayFeedback(BlockiverseAudioCue.CraftFail);
+                return CraftingResult.Failure(CraftingFailureReason.MissingIngredient);
+            }
+
+            return TryCraft(recipe);
+        }
+
+        public CraftingResult TryCraftByOutput(ItemId outputItemId)
+        {
+            EnsureCraftingBound();
+
+            if (!RecipeBook.TryGetByOutput(outputItemId, out CraftingRecipe recipe))
+            {
+                SetCraftingStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingRecipeUnavailable));
+                PlayFeedback(BlockiverseAudioCue.CraftFail);
+                return CraftingResult.Failure(CraftingFailureReason.MissingIngredient, outputItemId);
+            }
+
+            return TryCraft(recipe);
+        }
+
+        CraftingResult TryCraft(CraftingRecipe recipe)
+        {
+            if (survivalSync != null)
+                return TryCraftAuthoritative(recipe);
+
+            CraftingResult result = CraftingService.TryCraft(Inventory, recipe, EffectiveStationFor(recipe));
+            SetCraftingStatus(result.Succeeded
+                ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CraftingCrafted, FormatStack(recipe.Output))
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CraftingCannotCraft,
+                    itemRegistry.Get(recipe.Output.ItemId).Name,
+                    BlockiverseLocalization.DisplayName(result.FailureReason)));
+            PlayFeedback(result.Succeeded ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+            return result;
+        }
+
+        CraftingResult TryCraftAuthoritative(CraftingRecipe recipe)
+        {
+            SurvivalCommandResult command = survivalSync.TrySubmitCraft(recipe.Output.ItemId, EffectiveStationFor(recipe), out bool sentToHost);
+            bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
+
+            SetCraftingStatus(command.Accepted
+                ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CraftingCrafted, FormatStack(recipe.Output))
+                : sentToHost
+                    ? BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.CraftingPending,
+                        itemRegistry.Get(recipe.Output.ItemId).Name)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.CraftingCannotCraft,
+                        itemRegistry.Get(recipe.Output.ItemId).Name,
+                        BlockiverseLocalization.DisplayName(command.CraftingFailureReason)));
+            PlayFeedback(acceptedOrPending ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+
+            return acceptedOrPending
+                ? CraftingResult.Success()
+                : CraftingResult.Failure(command.CraftingFailureReason, recipe.Output.ItemId);
+        }
+
+        public bool TryRepairHeldTool(int toolSlotIndex = -1)
+        {
+            EnsureCraftingBound();
+
+            if (survivalSync != null)
+            {
+                SurvivalCommandResult command = survivalSync.TrySubmitRepair(out bool sentToHost, toolSlotIndex);
+                bool acceptedOrPending = command.Accepted || command.PendingHostValidation || sentToHost;
+
+                SetCraftingStatus(command.Accepted
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingToolRepaired)
+                    : sentToHost
+                        ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingRepairing)
+                        : BlockiverseLocalization.Format(
+                            BlockiverseLocalization.Keys.CraftingCannotRepair,
+                            BlockiverseLocalization.DisplayName(command.FailureReason)));
+                PlayFeedback(acceptedOrPending ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+                return acceptedOrPending;
+            }
+
+            CraftingStation station = lastScannedStations.Contains(CraftingStation.MendBench)
+                ? CraftingStation.MendBench
+                : CraftingStation.None;
+            RepairResult result = MendBenchRepair.TryRepair(itemRegistry, Inventory, Math.Max(0, toolSlotIndex), station);
+
+            SetCraftingStatus(result.Succeeded
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CraftingToolRepaired)
+                : BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.CraftingCannotRepair,
+                    BlockiverseLocalization.DisplayName(result.FailureReason)));
+            PlayFeedback(result.Succeeded ? BlockiverseAudioCue.CraftSuccess : BlockiverseAudioCue.CraftFail);
+            return result.Succeeded;
+        }
+
+        CraftingStation EffectiveStationFor(CraftingRecipe recipe) =>
+            lastScannedStations.Contains(recipe.RequiredStation) ? recipe.RequiredStation : CraftingStation.None;
+
+        public SurvivalCommandResult DepositHeldToCrate()
+        {
+            if (survivalSync == null)
+            {
+                SetCrateStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateOffline));
+                return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateDeposit, SurvivalCommandFailureReason.InvalidTransfer);
+            }
+
+            ItemStack held = survivalSync.EquippedItem;
+            if (held.IsEmpty)
+            {
+                SetCrateStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateNothingHeld));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateDeposit, SurvivalCommandFailureReason.InvalidTransfer);
+            }
+
+            SurvivalCommandResult result = survivalSync.TrySubmitCrateDeposit(held.ItemId, held.Count, out bool sentToHost);
+            ReportCrateTransfer(
+                result,
+                sentToHost,
+                BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CrateDeposited, FormatStack(held)));
+            return result;
+        }
+
+        public SurvivalCommandResult WithdrawCrateSlot(int slotIndex)
+        {
+            if (survivalSync == null)
+            {
+                SetCrateStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateOffline));
+                return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateWithdraw, SurvivalCommandFailureReason.InvalidTransfer);
+            }
+
+            Inventory crate = survivalSync.SharedCrateInventory;
+            if (slotIndex < 0 || slotIndex >= crate.SlotCount)
+                return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateWithdraw, SurvivalCommandFailureReason.InvalidTransfer);
+
+            ItemStack stack = crate.GetSlot(slotIndex);
+            if (stack.IsEmpty)
+            {
+                SetCrateStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateEmptySlot));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                return SurvivalCommandResult.Reject(SurvivalCommandKind.SharedCrateWithdraw, SurvivalCommandFailureReason.SharedCrateEmpty);
+            }
+
+            SurvivalCommandResult result = survivalSync.TrySubmitCrateWithdraw(stack.ItemId, stack.Count, out bool sentToHost);
+            ReportCrateTransfer(
+                result,
+                sentToHost,
+                BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CrateWithdrew, FormatStack(stack)));
+            return result;
+        }
+
+        void ReportCrateTransfer(SurvivalCommandResult result, bool sentToHost, string successText)
+        {
+            bool ok = result.Accepted || result.PendingHostValidation || sentToHost;
+            SetCrateStatus(result.Accepted
+                ? successText
+                : sentToHost
+                    ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateTransferring)
+                    : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CrateTransferRejected));
+            PlayFeedback(ok ? BlockiverseAudioCue.UiSelect : BlockiverseAudioCue.UiCancel);
+        }
+
+        void RefreshVitalsDisplay(bool force = false)
+        {
+            if (!force && (vitalsRuntime == null || Time.time < nextVitalsRefreshTime))
                 return;
 
             nextVitalsRefreshTime = Time.time + VitalsRefreshIntervalSeconds;
-            healthPanel.Refresh();
+            if (Vitals == null)
+                return;
+
+            if (force || Vitals.CurrentHealth != lastHealth || Vitals.MaxHealth != lastMaxHealth)
+            {
+                lastHealth = Vitals.CurrentHealth;
+                lastMaxHealth = Vitals.MaxHealth;
+
+                ApplyVitalsDisplay();
+            }
+
+            string baseState = GetHealthState(Vitals);
+            SurvivalVitals survivalVitals = vitalsRuntime != null ? vitalsRuntime.SurvivalVitals : null;
+            int hunger = survivalVitals != null ? survivalVitals.Hunger : int.MinValue;
+            int thirst = survivalVitals != null ? survivalVitals.Thirst : int.MinValue;
+            int stamina = survivalVitals != null ? survivalVitals.Stamina : int.MinValue;
+
+            if (force || baseState != lastBaseState || hunger != lastHunger || thirst != lastThirst || stamina != lastStamina)
+            {
+                lastBaseState = baseState;
+                lastHunger = hunger;
+                lastThirst = thirst;
+                lastStamina = stamina;
+
+                string state = survivalVitals != null
+                    ? BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.HealthVitals,
+                        baseState,
+                        hunger,
+                        thirst,
+                        stamina)
+                    : baseState;
+                hudSurface?.SetHealth(Vitals.CurrentHealth, Vitals.MaxHealth, state);
+            }
         }
 
-        // Periodically scans the blocks around the player and feeds the stations in reach to the
-        // crafting panel, so station-gated recipes (kiln, forge, mend bench, …) become craftable
-        // when the player stands at the placed station.
+        void ApplyVitalsDisplay()
+        {
+            if (Vitals == null)
+                return;
+
+            hudSurface?.SetHealth(Vitals.CurrentHealth, Vitals.MaxHealth, lastBaseState ?? GetHealthState(Vitals));
+        }
+
+        static string GetHealthState(PlayerVitals playerVitals)
+        {
+            if (playerVitals.IsDead)
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthDown);
+
+            return playerVitals.CurrentHealth <= playerVitals.MaxHealth / 4
+                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthCritical)
+                : BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthStable);
+        }
+
         void ScanNearbyStations()
         {
-            if (craftingPanel == null || worldManager == null || worldManager.World == null)
+            if (worldManager == null || worldManager.World == null)
                 return;
 
             if (Time.time < nextStationScanTime)
@@ -286,25 +461,7 @@ namespace Blockiverse.UI
 
             Transform origin = Camera.main != null ? Camera.main.transform : transform;
             BlockPosition center = CreativeInteractionController.ToBlockPosition(origin.position);
-
-            CraftingStationSet stations = StationProximity.ScanNearby(worldManager.World, center);
-            if (stations.Equals(lastScannedStations))
-                return;
-
-            lastScannedStations = stations;
-            craftingPanel.SetAvailableStations(stations);
-        }
-
-        void RefreshPanels()
-        {
-            if (inventoryPanel != null)
-                inventoryPanel.Refresh();
-            if (craftingPanel != null)
-                craftingPanel.Refresh();
-            if (healthPanel != null)
-                healthPanel.Refresh();
-            if (cratePanel != null)
-                cratePanel.Refresh();
+            lastScannedStations = StationProximity.ScanNearby(worldManager.World, center);
         }
 
         void OnMiningProgressChanged(BlockPosition position, float elapsedSeconds, float requiredSeconds)
@@ -320,13 +477,7 @@ namespace Blockiverse.UI
                 BlockiverseLocalization.Keys.SurvivalHudMiningProgress,
                 percent));
 
-            if (miningProgressSlider != null)
-            {
-                miningProgressSlider.minValue = 0f;
-                miningProgressSlider.maxValue = 1f;
-                miningProgressSlider.value = progress;
-                SetMiningProgressVisible(true);
-            }
+            hudSurface?.SetMiningProgress(progress, true);
         }
 
         void OnMiningProgressCleared()
@@ -379,17 +530,22 @@ namespace Blockiverse.UI
 
         void SetStatusText(string message)
         {
-            if (statusLabel == null)
-                return;
+            hudSurface?.SetStatus(message ?? string.Empty);
+        }
 
-            statusLabel.text = message ?? string.Empty;
-            statusLabel.gameObject.SetActive(!string.IsNullOrEmpty(statusLabel.text));
+        void SetCraftingStatus(string status)
+        {
+            currentCraftingStatusText = status ?? string.Empty;
+        }
+
+        void SetCrateStatus(string status)
+        {
+            currentCrateStatusText = status ?? string.Empty;
         }
 
         void SetMiningProgressVisible(bool visible)
         {
-            if (miningProgressSlider != null)
-                miningProgressSlider.gameObject.SetActive(visible);
+            hudSurface?.SetMiningProgress(hudSurface != null ? hudSurface.CurrentMiningProgress : 0.0f, visible);
         }
 
         void UnsubscribeTransientFeedback()
@@ -402,6 +558,26 @@ namespace Blockiverse.UI
                 inputBridge.MiningProgressChanged -= OnMiningProgressChanged;
                 inputBridge.MiningProgressCleared -= OnMiningProgressCleared;
             }
+        }
+
+        void EnsureCraftingBound()
+        {
+            if (RecipeBook == null || Inventory == null)
+                throw new InvalidOperationException("Survival HUD menu state has not been bound.");
+        }
+
+        string FormatStack(ItemStack stack)
+        {
+            if (stack.IsEmpty)
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonEmpty);
+
+            ItemDefinition definition = (itemRegistry ?? ItemRegistry.Default).Get(stack.ItemId);
+            return BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CommonStack, definition.Name, stack.Count);
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue)
+        {
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
         }
     }
 }

@@ -21,7 +21,6 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
 using InputTrackingState = UnityEngine.XR.InputTrackingState;
 
 namespace Blockiverse.Tests.PlayMode

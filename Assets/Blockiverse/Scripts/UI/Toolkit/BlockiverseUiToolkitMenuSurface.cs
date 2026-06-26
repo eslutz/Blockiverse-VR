@@ -1,7 +1,10 @@
 #pragma warning disable 0618
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Text;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.VR;
 using UnityEngine;
@@ -18,11 +21,12 @@ namespace Blockiverse.UI
         const float ReferencePanelWidthPixels = 1280.0f;
         const float ReferencePanelHeightPixels = 720.0f;
         const float ReferencePixelsPerUnit = 100.0f;
-        const int RecenterFramesAfterShow = 90;
-        const float MinimumReadableDistanceMeters = 0.55f;
-        const float MaximumReadableDistanceMeters = 1.8f;
+        const float PointerDiagnosticIntervalSeconds = 1.0f;
+        const int MenuInteractionSmokeDelayFrames = 20;
         const string FeedbackHoverClass = "bv-interactive--hovered";
         const string FeedbackPressedClass = "bv-interactive--pressed";
+        const string MenuInteractionSmokeMarkerFileName = "run-menu-interaction-smoke";
+        const string MenuInteractionSmokePlayerPrefsKey = "Blockiverse.Diagnostics.RunMenuInteractionSmoke";
         public const float ReadableTransformScale = 0.1f;
         public static readonly Vector2 ReadableWorldSpaceSize = new(ReferencePanelWidthPixels, ReferencePanelHeightPixels);
         public static readonly Vector3 ReadableWorldSpaceColliderSize = new(
@@ -50,20 +54,25 @@ namespace Blockiverse.UI
         bool pendingAcceptsInput;
         bool wantsVisible;
         bool warnedMissingWorldSpaceColliderField;
-        int recenterFramesRemaining;
         readonly List<Button> buttons = new();
-        readonly HashSet<VisualElement> fallbackInteractiveElements = new();
-        readonly Dictionary<Button, Action> fallbackButtonActions = new();
-        readonly List<Collider> fallbackColliderTargets = new();
-        readonly List<RaycastHit> fallbackRaycastHits = new();
-        XRInteractionManager fallbackInteractionManager;
-        NearFarInteractor[] fallbackNearFarInteractors = Array.Empty<NearFarInteractor>();
-        CurveInteractionCaster[] fallbackCasters = Array.Empty<CurveInteractionCaster>();
-        VisualElement fallbackHoveredElement;
-        VisualElement fallbackPressedElement;
-        Vector2 fallbackPointerPanelPosition;
-        bool fallbackWasPressed;
-        float nextFallbackReferenceRefreshTime;
+        readonly HashSet<VisualElement> xriInteractiveElements = new();
+        readonly Dictionary<Button, Action> xriButtonActions = new();
+        readonly List<Collider> xriColliderTargets = new();
+        readonly List<RaycastHit> xriRaycastHits = new();
+        Vector3[] xriRayLinePoints = Array.Empty<Vector3>();
+        XRInteractionManager xriInteractionManager;
+        BlockiverseInputRig xriInputRig;
+        NearFarInteractor[] xriNearFarInteractors = Array.Empty<NearFarInteractor>();
+        XRRayInteractor[] xriRayInteractors = Array.Empty<XRRayInteractor>();
+        VisualElement xriHoveredElement;
+        VisualElement xriPressedElement;
+        Vector2 xriPointerPanelPosition;
+        bool xriWasPressed;
+        bool menuInteractionSmokeRequested;
+        bool menuInteractionSmokeCompleted;
+        int menuInteractionSmokeFramesRemaining = -1;
+        float nextXriReferenceRefreshTime;
+        float nextPointerDiagnosticTime;
 
         public event Action<string> ActionInvoked;
         public event Action<string, string> TextInputChanged;
@@ -112,10 +121,10 @@ namespace Blockiverse.UI
         void LateUpdate()
         {
             EnsureReadableWorldSpaceSizing();
-            EnsureReadablePlacement();
             if (wantsVisible && pendingView != null)
                 TryApplyPendingView();
-            UpdateXRPointerFallback();
+            UpdateXriPointerBridge();
+            UpdateMenuInteractionSmoke();
         }
 
         public void Show(BlockiverseUiToolkitMenuView view, bool acceptsInput)
@@ -126,7 +135,6 @@ namespace Blockiverse.UI
             wantsVisible = true;
             pendingView = view;
             pendingAcceptsInput = acceptsInput;
-            recenterFramesRemaining = RecenterFramesAfterShow;
             TryApplyPendingView();
         }
 
@@ -138,7 +146,7 @@ namespace Blockiverse.UI
             if (root == null)
                 return;
 
-            ClearXRPointerFallbackState();
+            ClearXriPointerBridgeState();
             root.style.display = DisplayStyle.None;
         }
 
@@ -195,9 +203,9 @@ namespace Blockiverse.UI
                 detailsRoot = null;
                 statusLabel = null;
                 buttons.Clear();
-                fallbackInteractiveElements.Clear();
-                fallbackButtonActions.Clear();
-                ClearXRPointerFallbackState();
+                xriInteractiveElements.Clear();
+                xriButtonActions.Clear();
+                ClearXriPointerBridgeState();
             }
 
             root = documentRoot.Q<VisualElement>("blockiverse-menu-root");
@@ -242,7 +250,7 @@ namespace Blockiverse.UI
             document.worldSpaceSize = ReadableWorldSpaceSize;
             EnsureWorldSpaceCollider();
 
-            if (TryGetComponent(out BlockiverseWorldSpacePanelPresenter presenter))
+            if (TryGetComponent(out BlockiverseUiToolkitMenuPresenter presenter))
                 presenter.EnsurePanelScale(ReadableTransformScale);
         }
 
@@ -255,38 +263,15 @@ namespace Blockiverse.UI
 #endif
         }
 
-        void EnsureReadablePlacement()
-        {
-            if (!wantsVisible || !IsVisible)
-                return;
-
-            if (!TryGetComponent(out BlockiverseWorldSpacePanelPresenter presenter))
-                return;
-
-            Transform head = Camera.main != null ? Camera.main.transform : null;
-            bool shouldRecenter = recenterFramesRemaining > 0;
-            if (recenterFramesRemaining > 0)
-                recenterFramesRemaining--;
-
-            if (head != null)
-            {
-                Vector3 toPanel = transform.position - head.position;
-                float distance = toPanel.magnitude;
-                float forwardDistance = Vector3.Dot(head.forward, toPanel);
-                shouldRecenter |= distance < MinimumReadableDistanceMeters ||
-                    distance > MaximumReadableDistanceMeters ||
-                    forwardDistance < MinimumReadableDistanceMeters;
-            }
-
-            if (shouldRecenter)
-                presenter.Recenter();
-        }
-
         void EnsureWorldSpaceCollider()
         {
             if (!TryGetComponent(out BoxCollider worldSpaceCollider))
                 worldSpaceCollider = gameObject.AddComponent<BoxCollider>();
 
+            int vrUiLayer = LayerMask.NameToLayer(BlockiverseProject.VrUiLayerName);
+            gameObject.layer = vrUiLayer >= 0
+                ? vrUiLayer
+                : BlockiverseProject.VrUiLayerIndex;
             worldSpaceCollider.isTrigger = true;
             worldSpaceCollider.center = Vector3.zero;
             worldSpaceCollider.size = ReadableWorldSpaceColliderSize;
@@ -320,8 +305,8 @@ namespace Blockiverse.UI
 
             actionsRoot.Clear();
             buttons.Clear();
-            fallbackInteractiveElements.Clear();
-            fallbackButtonActions.Clear();
+            xriInteractiveElements.Clear();
+            xriButtonActions.Clear();
 
             if (actions == null || actions.Count == 0)
             {
@@ -349,7 +334,7 @@ namespace Blockiverse.UI
                 RegisterInteractiveFeedback(button);
                 Action invokeAction = () => ActionInvoked?.Invoke(actionId);
                 button.clicked += invokeAction;
-                RegisterXRPointerFallbackAction(button, invokeAction);
+                RegisterXriPointerAction(button, invokeAction);
                 actionsRoot.Add(button);
                 buttons.Add(button);
             }
@@ -360,7 +345,7 @@ namespace Blockiverse.UI
             if (element == null)
                 return;
 
-            fallbackInteractiveElements.Add(element);
+            xriInteractiveElements.Add(element);
             element.RegisterCallback<PointerEnterEvent>(_ => ApplyInteractiveHover(element));
             element.RegisterCallback<PointerOverEvent>(_ => ApplyInteractiveHover(element));
             element.RegisterCallback<PointerLeaveEvent>(_ => ClearInteractiveHover(element));
@@ -531,7 +516,7 @@ namespace Blockiverse.UI
                 RegisterInteractiveFeedback(back);
                 Action invokePrevious = () => CycleInvoked?.Invoke(fieldId, false);
                 back.clicked += invokePrevious;
-                RegisterXRPointerFallbackAction(back, invokePrevious);
+                RegisterXriPointerAction(back, invokePrevious);
                 row.Add(back);
 
                 var value = new Label(cycle.Value);
@@ -544,7 +529,7 @@ namespace Blockiverse.UI
                 RegisterInteractiveFeedback(next);
                 Action invokeNext = () => CycleInvoked?.Invoke(fieldId, true);
                 next.clicked += invokeNext;
-                RegisterXRPointerFallbackAction(next, invokeNext);
+                RegisterXriPointerAction(next, invokeNext);
                 row.Add(next);
 
                 detailsRoot.Add(row);
@@ -568,7 +553,7 @@ namespace Blockiverse.UI
                 RegisterInteractiveFeedback(button);
                 Action invokeSelection = () => SelectionInvoked?.Invoke(valueId);
                 button.clicked += invokeSelection;
-                RegisterXRPointerFallbackAction(button, invokeSelection);
+                RegisterXriPointerAction(button, invokeSelection);
 
                 var label = new Label(selection.Label);
                 label.AddToClassList("bv-selection-label");
@@ -600,7 +585,7 @@ namespace Blockiverse.UI
             RegisterInteractiveFeedback(previous);
             Action invokePrevious = () => PageInvoked?.Invoke(-1);
             previous.clicked += invokePrevious;
-            RegisterXRPointerFallbackAction(previous, invokePrevious);
+            RegisterXriPointerAction(previous, invokePrevious);
             row.Add(previous);
 
             var label = new Label(value.DisplayText);
@@ -613,7 +598,7 @@ namespace Blockiverse.UI
             RegisterInteractiveFeedback(next);
             Action invokeNext = () => PageInvoked?.Invoke(1);
             next.clicked += invokeNext;
-            RegisterXRPointerFallbackAction(next, invokeNext);
+            RegisterXriPointerAction(next, invokeNext);
             row.Add(next);
 
             detailsRoot.Add(row);
@@ -698,74 +683,74 @@ namespace Blockiverse.UI
             }
         }
 
-        void RegisterXRPointerFallbackAction(Button button, Action action)
+        void RegisterXriPointerAction(Button button, Action action)
         {
             if (button == null || action == null)
                 return;
 
-            fallbackButtonActions[button] = action;
+            xriButtonActions[button] = action;
         }
 
-        void UpdateXRPointerFallback()
+        void UpdateXriPointerBridge()
         {
             if (!IsVisible || root == null || document == null)
             {
-                ClearXRPointerFallbackState();
+                ClearXriPointerBridgeState();
                 return;
             }
 
             if (!TryGetXRPointerTarget(out VisualElement target, out Vector2 panelPosition, out bool pressed))
             {
-                ClearXRPointerFallbackState();
+                ClearXriPointerBridgeState();
                 return;
             }
 
-            fallbackPointerPanelPosition = panelPosition;
-            if (!ReferenceEquals(target, fallbackHoveredElement))
+            xriPointerPanelPosition = panelPosition;
+            if (!ReferenceEquals(target, xriHoveredElement))
             {
-                ClearInteractiveHover(fallbackHoveredElement);
-                fallbackHoveredElement = target;
-                ApplyInteractiveHover(fallbackHoveredElement);
+                ClearInteractiveHover(xriHoveredElement);
+                xriHoveredElement = target;
+                ApplyInteractiveHover(xriHoveredElement);
             }
 
-            if (pressed && !fallbackWasPressed)
+            if (pressed && !xriWasPressed)
             {
-                fallbackPressedElement = target;
-                if (CanPlayInteractiveFeedback(fallbackPressedElement))
+                xriPressedElement = target;
+                if (CanPlayInteractiveFeedback(xriPressedElement))
                 {
-                    fallbackPressedElement.AddToClassList(FeedbackPressedClass);
-                    if (fallbackPressedElement is not Button)
+                    xriPressedElement.AddToClassList(FeedbackPressedClass);
+                    if (xriPressedElement is not Button)
                         PlayUiClickFeedback();
                 }
             }
 
-            if (pressed && fallbackPressedElement is Slider slider)
-                ApplySliderPointerValue(slider, fallbackPointerPanelPosition);
+            if (pressed && xriPressedElement is Slider slider)
+                ApplySliderPointerValue(slider, xriPointerPanelPosition);
 
-            if (!pressed && fallbackWasPressed)
+            if (!pressed && xriWasPressed)
             {
-                VisualElement pressedElement = fallbackPressedElement;
+                VisualElement pressedElement = xriPressedElement;
                 ClearInteractiveHover(pressedElement);
                 if (ReferenceEquals(pressedElement, target))
-                    ActivateFallbackElement(pressedElement, fallbackPointerPanelPosition);
+                    ActivateXriElement(pressedElement, xriPointerPanelPosition);
 
-                fallbackPressedElement = null;
-                if (fallbackHoveredElement != null)
-                    ApplyInteractiveHover(fallbackHoveredElement);
+                xriPressedElement = null;
+                if (xriHoveredElement != null)
+                    ApplyInteractiveHover(xriHoveredElement);
             }
 
-            fallbackWasPressed = pressed;
+            xriWasPressed = pressed;
         }
 
-        void ClearXRPointerFallbackState()
+        void ClearXriPointerBridgeState()
         {
-            ClearInteractiveHover(fallbackPressedElement);
-            if (!ReferenceEquals(fallbackPressedElement, fallbackHoveredElement))
-                ClearInteractiveHover(fallbackHoveredElement);
+            ClearInteractiveHover(xriPressedElement);
+            if (!ReferenceEquals(xriPressedElement, xriHoveredElement))
+                ClearInteractiveHover(xriHoveredElement);
 
-            fallbackHoveredElement = null;
-            fallbackPressedElement = null;
-            fallbackWasPressed = false;
+            xriHoveredElement = null;
+            xriPressedElement = null;
+            xriWasPressed = false;
         }
 
         bool TryGetXRPointerTarget(out VisualElement target, out Vector2 panelPosition, out bool pressed)
@@ -774,73 +759,624 @@ namespace Blockiverse.UI
             panelPosition = default;
             pressed = false;
 
-            RefreshXRPointerFallbackReferences();
+            RefreshXriPointerBridgeReferences();
 
-            if (fallbackInteractionManager == null)
-                return false;
-
-            foreach (NearFarInteractor interactor in fallbackNearFarInteractors)
+            if (xriInteractionManager == null)
             {
-                if (interactor == null || !interactor.isActiveAndEnabled || !interactor.enableUIInteraction)
-                    continue;
+                LogPointerDiagnostic("no-interaction-manager", "XRInteractionManager not found.");
+                return false;
+            }
 
-                if (interactor.farInteractionCaster is not CurveInteractionCaster caster)
-                    continue;
+            VisualElement bestTarget = null;
+            Vector2 bestPanelPosition = default;
+            bool bestPressed = false;
+            string bestDiagnosticName = null;
+            string bestDiagnosticDetails = null;
 
-                if (TryGetTargetFromCaster(caster, out target, out panelPosition))
+            if (TryGetTargetFromInputRigRays(
+                    out VisualElement inputRigTarget,
+                    out Vector2 inputRigPanelPosition,
+                    out bool inputRigPressed,
+                    out string inputRigSource))
+            {
+                bestTarget = inputRigTarget;
+                bestPanelPosition = inputRigPanelPosition;
+                bestPressed = inputRigPressed;
+                bestDiagnosticName = "input-rig-hit";
+                bestDiagnosticDetails = $"target={inputRigTarget.name} pressed={inputRigPressed} source={inputRigSource}";
+            }
+
+            if (!bestPressed)
+            {
+                foreach (XRRayInteractor rayInteractor in xriRayInteractors)
                 {
-                    pressed = interactor.uiPressInput != null && interactor.uiPressInput.ReadIsPerformed();
-                    return true;
+                    if (!ShouldConsiderXriRayInteractor(rayInteractor))
+                        continue;
+
+                    if (TryGetTargetFromRayInteractor(rayInteractor, out VisualElement candidateTarget, out Vector2 candidatePanelPosition, out string raySource))
+                    {
+                        bool candidatePressed = rayInteractor.uiPressInput != null && rayInteractor.uiPressInput.ReadIsPerformed();
+                        if (ShouldPreferPointerCandidate(bestTarget != null, bestPressed, candidatePressed))
+                        {
+                            bestTarget = candidateTarget;
+                            bestPanelPosition = candidatePanelPosition;
+                            bestPressed = candidatePressed;
+                            bestDiagnosticName = "xrray-hit";
+                            bestDiagnosticDetails = $"target={candidateTarget.name} pressed={candidatePressed} source={raySource}";
+                        }
+
+                        if (candidatePressed)
+                            break;
+                    }
                 }
             }
 
-            foreach (CurveInteractionCaster caster in fallbackCasters)
+            if (!bestPressed)
             {
-                if (caster == null || !caster.isActiveAndEnabled)
-                    continue;
+                foreach (NearFarInteractor interactor in xriNearFarInteractors)
+                {
+                    if (!ShouldConsiderNearFarInteractor(interactor))
+                        continue;
 
-                if (TryGetTargetFromCaster(caster, out target, out panelPosition))
-                    return true;
+                    if (interactor.farInteractionCaster is not CurveInteractionCaster caster)
+                        continue;
+
+                    if (TryGetTargetFromCaster(caster, out VisualElement candidateTarget, out Vector2 candidatePanelPosition))
+                    {
+                        bool candidatePressed = interactor.uiPressInput != null && interactor.uiPressInput.ReadIsPerformed();
+                        if (ShouldPreferPointerCandidate(bestTarget != null, bestPressed, candidatePressed))
+                        {
+                            bestTarget = candidateTarget;
+                            bestPanelPosition = candidatePanelPosition;
+                            bestPressed = candidatePressed;
+                            bestDiagnosticName = "near-far-hit";
+                            bestDiagnosticDetails = $"target={candidateTarget.name} pressed={candidatePressed}";
+                        }
+
+                        if (candidatePressed)
+                            break;
+                    }
+                }
             }
 
+            if (bestTarget != null)
+            {
+                target = bestTarget;
+                panelPosition = bestPanelPosition;
+                pressed = bestPressed;
+                LogPointerDiagnostic(bestDiagnosticName, bestDiagnosticDetails);
+                return true;
+            }
+
+            LogPointerDiagnostic(
+                "no-target",
+                $"nearFar={xriNearFarInteractors.Length} xrRays={xriRayInteractors.Length} layer={gameObject.layer} {DescribePointerCandidates()}");
             return false;
         }
 
-        void RefreshXRPointerFallbackReferences()
+        void RefreshXriPointerBridgeReferences()
         {
-            if (fallbackInteractionManager != null && Time.unscaledTime < nextFallbackReferenceRefreshTime)
+            if (xriInteractionManager != null && Time.unscaledTime < nextXriReferenceRefreshTime)
                 return;
 
-            fallbackInteractionManager = FindAnyObjectByType<XRInteractionManager>();
-            fallbackNearFarInteractors = FindObjectsByType<NearFarInteractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            fallbackCasters = FindObjectsByType<CurveInteractionCaster>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            nextFallbackReferenceRefreshTime = Time.unscaledTime + 1.0f;
+            xriInteractionManager = FindAnyObjectByType<XRInteractionManager>();
+            xriInputRig = FindAnyObjectByType<BlockiverseInputRig>();
+            xriNearFarInteractors = FindObjectsByType<NearFarInteractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            xriRayInteractors = FindObjectsByType<XRRayInteractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            nextXriReferenceRefreshTime = Time.unscaledTime + 1.0f;
+        }
+
+        internal static bool ShouldConsiderNearFarInteractor(NearFarInteractor interactor) =>
+            interactor != null && interactor.isActiveAndEnabled && interactor.enableUIInteraction;
+
+        internal static bool ShouldConsiderXriRayInteractor(XRRayInteractor rayInteractor) =>
+            rayInteractor != null && rayInteractor.isActiveAndEnabled && rayInteractor.enableUIInteraction;
+
+        internal static bool ShouldConsiderInputRigRayInteractor(XRRayInteractor rayInteractor) =>
+            rayInteractor != null &&
+            rayInteractor.enableUIInteraction &&
+            BlockiverseRuntimeState.MenuInputActive;
+
+        internal static bool ShouldPreferPointerCandidate(bool hasCurrentCandidate, bool currentPressed, bool candidatePressed) =>
+            !hasCurrentCandidate || (!currentPressed && candidatePressed);
+
+        bool TryGetTargetFromInputRigRays(
+            out VisualElement target,
+            out Vector2 panelPosition,
+            out bool pressed,
+            out string source)
+        {
+            target = null;
+            panelPosition = default;
+            pressed = false;
+            source = "none";
+
+            if (xriInputRig == null)
+                return false;
+
+            bool hasTarget = false;
+
+            if (TryGetTargetFromInputRigRay(
+                    xriInputRig.RightInteractionRay,
+                    BlockiverseControllerRole.Right,
+                    out VisualElement rightTarget,
+                    out Vector2 rightPanelPosition,
+                    out bool rightPressed,
+                    out string rightSource))
+            {
+                target = rightTarget;
+                panelPosition = rightPanelPosition;
+                pressed = rightPressed;
+                source = rightSource;
+                hasTarget = true;
+            }
+
+            if (TryGetTargetFromInputRigRay(
+                    xriInputRig.LeftInteractionRay,
+                    BlockiverseControllerRole.Left,
+                    out VisualElement leftTarget,
+                    out Vector2 leftPanelPosition,
+                    out bool leftPressed,
+                    out string leftSource) &&
+                ShouldPreferPointerCandidate(hasTarget, pressed, leftPressed))
+            {
+                target = leftTarget;
+                panelPosition = leftPanelPosition;
+                pressed = leftPressed;
+                source = leftSource;
+                hasTarget = true;
+            }
+
+            return hasTarget;
+        }
+
+        bool TryGetTargetFromInputRigRay(
+            XRRayInteractor rayInteractor,
+            BlockiverseControllerRole hand,
+            out VisualElement target,
+            out Vector2 panelPosition,
+            out bool pressed,
+            out string source)
+        {
+            target = null;
+            panelPosition = default;
+            pressed = false;
+            source = hand.ToString();
+
+            if (!ShouldConsiderInputRigRayInteractor(rayInteractor))
+                return false;
+
+            if (!xriInputRig.TryGetInteractionRayPose(hand, out Vector3 origin, out Vector3 direction))
+                return false;
+
+            if (direction.sqrMagnitude <= Mathf.Epsilon)
+                return false;
+
+            float distance = rayInteractor.maxRaycastDistance > Mathf.Epsilon
+                ? rayInteractor.maxRaycastDistance
+                : CreativeInteractionController.MaxBlockInteractionReachMeters;
+            if (!TryGetTargetFromWorldRay(new Ray(origin, direction.normalized), distance, out target, out panelPosition))
+                return false;
+
+            pressed = rayInteractor.uiPressInput != null && rayInteractor.uiPressInput.ReadIsPerformed();
+            source = $"{hand.ToString().ToLowerInvariant()}-pose";
+            return true;
         }
 
         bool TryGetTargetFromCaster(CurveInteractionCaster caster, out VisualElement target, out Vector2 panelPosition)
         {
             target = null;
             panelPosition = default;
-            fallbackColliderTargets.Clear();
-            fallbackRaycastHits.Clear();
+            xriColliderTargets.Clear();
+            xriRaycastHits.Clear();
 
-            if (!caster.TryGetColliderTargets(fallbackInteractionManager, fallbackColliderTargets, fallbackRaycastHits))
-                return false;
+            bool hasCasterHits = caster.TryGetColliderTargets(xriInteractionManager, xriColliderTargets, xriRaycastHits);
 
-            for (int i = 0; i < fallbackRaycastHits.Count; i++)
+            if (hasCasterHits && TryGetTargetFromRaycastHits(xriRaycastHits, out target, out panelPosition))
+                return true;
+
+            return TryGetTargetFromCasterSampleRay(caster, out target, out panelPosition);
+        }
+
+        string DescribePointerCandidates()
+        {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            var builder = new StringBuilder();
+            builder.Append("candidates=");
+
+            int described = 0;
+            foreach (NearFarInteractor interactor in xriNearFarInteractors)
             {
-                RaycastHit hit = fallbackRaycastHits[i];
-                if (hit.collider == null || hit.collider.gameObject != gameObject)
+                if (!ShouldConsiderNearFarInteractor(interactor))
                     continue;
 
-                Vector3 localPoint = transform.InverseTransformPoint(hit.point);
-                panelPosition = LocalPointToPanelPosition(localPoint);
-                VisualElement picked = document.rootVisualElement.panel?.Pick(panelPosition);
-                target = FindFallbackInteractiveElement(picked);
-                return target != null;
+                builder.Append(described++ == 0 ? string.Empty : " | ");
+                builder.Append("nearFar:");
+                builder.Append(interactor.name);
+                builder.Append(' ');
+
+                if (interactor.farInteractionCaster is CurveInteractionCaster caster)
+                    AppendCasterDiagnostic(builder, caster);
+                else
+                    builder.Append("caster=none");
+            }
+
+            foreach (XRRayInteractor rayInteractor in xriRayInteractors)
+            {
+                if (!ShouldConsiderXriRayInteractor(rayInteractor))
+                    continue;
+
+                builder.Append(described++ == 0 ? string.Empty : " | ");
+                builder.Append("xrRay:");
+                builder.Append(rayInteractor.name);
+                builder.Append(' ');
+                AppendRayInteractorDiagnostic(builder, rayInteractor);
+            }
+
+            if (xriInputRig != null)
+            {
+                AppendInputRigRayDiagnostic(builder, BlockiverseControllerRole.Right, xriInputRig.RightInteractionRay, ref described);
+                AppendInputRigRayDiagnostic(builder, BlockiverseControllerRole.Left, xriInputRig.LeftInteractionRay, ref described);
+            }
+
+            if (described == 0)
+                builder.Append("none-active");
+
+            return builder.ToString();
+#else
+            return string.Empty;
+#endif
+        }
+
+        void AppendInputRigRayDiagnostic(
+            StringBuilder builder,
+            BlockiverseControllerRole hand,
+            XRRayInteractor rayInteractor,
+            ref int described)
+        {
+            if (rayInteractor == null || !rayInteractor.enableUIInteraction)
+                return;
+
+            builder.Append(described++ == 0 ? string.Empty : " | ");
+            builder.Append("inputRig:");
+            builder.Append(hand);
+            builder.Append(' ');
+
+            if (xriInputRig != null &&
+                xriInputRig.TryGetInteractionRayPose(hand, out Vector3 origin, out Vector3 direction) &&
+                direction.sqrMagnitude > Mathf.Epsilon)
+            {
+                float distance = rayInteractor.maxRaycastDistance > Mathf.Epsilon
+                    ? rayInteractor.maxRaycastDistance
+                    : CreativeInteractionController.MaxBlockInteractionReachMeters;
+                if (TryGetPanelPositionFromWorldRay(new Ray(origin, direction.normalized), distance, out Vector2 panelPosition))
+                    AppendPanelPickDiagnostic(builder, panelPosition, "pose");
+                else
+                    builder.Append("pose=plane-miss");
+            }
+            else
+            {
+                builder.Append("pose=missing");
+            }
+        }
+
+        void AppendCasterDiagnostic(StringBuilder builder, CurveInteractionCaster caster)
+        {
+            if (caster == null)
+            {
+                builder.Append("caster=null");
+                return;
+            }
+
+            if (!caster.samplePoints.IsCreated || caster.samplePoints.Length < 2)
+            {
+                builder.Append("casterLine=missing ");
+                AppendCasterOriginDiagnostic(builder, caster);
+                return;
+            }
+
+            Vector3 from = caster.samplePoints[0];
+            Vector3 to = caster.samplePoints[caster.samplePoints.Length - 1];
+            Vector3 rayVector = to - from;
+            float distance = rayVector.magnitude;
+            if (distance <= Mathf.Epsilon)
+            {
+                builder.Append("casterLine=zero ");
+                AppendCasterOriginDiagnostic(builder, caster);
+                return;
+            }
+
+            if (TryGetPanelPositionFromWorldRay(new Ray(from, rayVector / distance), distance, out Vector2 panelPosition))
+                AppendPanelPickDiagnostic(builder, panelPosition, $"casterLine[{caster.samplePoints.Length}]");
+            else
+                builder.Append($"casterLine[{caster.samplePoints.Length}]=plane-miss");
+        }
+
+        void AppendRayInteractorDiagnostic(StringBuilder builder, XRRayInteractor rayInteractor)
+        {
+            if (rayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit hit))
+            {
+                builder.Append("currentHit=");
+                builder.Append(hit.collider != null ? hit.collider.name : "null");
+                builder.Append(' ');
+                if (TryGetTargetFromRaycastHit(hit, out VisualElement hitTarget, out Vector2 hitPanelPosition))
+                    builder.Append($"hitTarget={DescribeElement(hitTarget)} hitPanel=({hitPanelPosition.x:0},{hitPanelPosition.y:0}) ");
+            }
+            else
+            {
+                builder.Append("currentHit=none ");
+            }
+
+            if (rayInteractor.GetLinePoints(ref xriRayLinePoints, out int linePointCount))
+            {
+                if (TryGetPanelPositionFromLinePoints(xriRayLinePoints, linePointCount, out Vector2 linePanelPosition))
+                    AppendPanelPickDiagnostic(builder, linePanelPosition, $"line[{linePointCount}]");
+                else
+                    builder.Append($"line[{linePointCount}]=plane-miss ");
+            }
+            else
+            {
+                builder.Append("line=unavailable ");
+            }
+
+            Transform rayOrigin = rayInteractor.rayOriginTransform != null
+                ? rayInteractor.rayOriginTransform
+                : rayInteractor.transform;
+            float distance = rayInteractor.maxRaycastDistance > Mathf.Epsilon
+                ? rayInteractor.maxRaycastDistance
+                : CreativeInteractionController.MaxBlockInteractionReachMeters;
+            if (TryGetPanelPositionFromWorldRay(new Ray(rayOrigin.position, rayOrigin.forward), distance, out Vector2 originPanelPosition))
+                AppendPanelPickDiagnostic(builder, originPanelPosition, "origin");
+            else
+                builder.Append("origin=plane-miss");
+        }
+
+        void AppendCasterOriginDiagnostic(StringBuilder builder, CurveInteractionCaster caster)
+        {
+            if (TryGetPanelPositionFromCasterOrigin(caster, out Vector2 originPanelPosition))
+                AppendPanelPickDiagnostic(builder, originPanelPosition, "origin");
+            else
+                builder.Append("origin=plane-miss");
+        }
+
+        void AppendPanelPickDiagnostic(StringBuilder builder, Vector2 panelPosition, string source)
+        {
+            VisualElement picked = document?.rootVisualElement?.panel?.Pick(panelPosition);
+            VisualElement target = FindXriInteractiveElementAt(panelPosition);
+            builder.Append(source);
+            builder.Append("=panel(");
+            builder.Append(panelPosition.x.ToString("0"));
+            builder.Append(',');
+            builder.Append(panelPosition.y.ToString("0"));
+            builder.Append(") picked=");
+            builder.Append(DescribeElement(picked));
+            builder.Append(" target=");
+            builder.Append(DescribeElement(target));
+            builder.Append(' ');
+        }
+
+        static string DescribeElement(VisualElement element)
+        {
+            if (element == null)
+                return "null";
+
+            return string.IsNullOrEmpty(element.name)
+                ? element.GetType().Name
+                : $"{element.GetType().Name}:{element.name}";
+        }
+
+        bool TryGetTargetFromRayInteractor(
+            XRRayInteractor rayInteractor,
+            out VisualElement target,
+            out Vector2 panelPosition,
+            out string raySource)
+        {
+            target = null;
+            panelPosition = default;
+            raySource = "none";
+
+            if (rayInteractor.TryGetCurrent3DRaycastHit(out RaycastHit hit) &&
+                TryGetTargetFromRaycastHit(hit, out target, out panelPosition))
+            {
+                raySource = "current-hit";
+                return true;
+            }
+
+            if (rayInteractor.GetLinePoints(ref xriRayLinePoints, out int linePointCount) &&
+                TryGetTargetFromLinePoints(xriRayLinePoints, linePointCount, out target, out panelPosition))
+            {
+                raySource = "line-points";
+                return true;
+            }
+
+            Transform rayOrigin = rayInteractor.rayOriginTransform != null
+                ? rayInteractor.rayOriginTransform
+                : rayInteractor.transform;
+            float distance = rayInteractor.maxRaycastDistance > Mathf.Epsilon
+                ? rayInteractor.maxRaycastDistance
+                : CreativeInteractionController.MaxBlockInteractionReachMeters;
+            bool hitFromOrigin = TryGetTargetFromWorldRay(
+                new Ray(rayOrigin.position, rayOrigin.forward),
+                distance,
+                out target,
+                out panelPosition);
+            raySource = hitFromOrigin ? "origin-forward" : "none";
+            return hitFromOrigin;
+        }
+
+        bool TryGetTargetFromLinePoints(
+            IReadOnlyList<Vector3> linePoints,
+            int linePointCount,
+            out VisualElement target,
+            out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            if (!TryGetPanelPositionFromLinePoints(linePoints, linePointCount, out panelPosition))
+                return false;
+
+            VisualElement picked = document.rootVisualElement.panel?.Pick(panelPosition);
+            target = FindXriInteractiveElementAt(panelPosition);
+            return target != null;
+        }
+
+        internal bool TryGetPanelPositionFromLinePoints(
+            IReadOnlyList<Vector3> linePoints,
+            int linePointCount,
+            out Vector2 panelPosition)
+        {
+            panelPosition = default;
+            if (linePoints == null || linePointCount < 2)
+                return false;
+
+            int count = Mathf.Min(linePointCount, linePoints.Count);
+            for (int i = 1; i < count; i++)
+            {
+                Vector3 from = linePoints[i - 1];
+                Vector3 to = linePoints[i];
+                Vector3 rayVector = to - from;
+                float distance = rayVector.magnitude;
+                if (distance <= Mathf.Epsilon)
+                    continue;
+
+                if (TryGetPanelPositionFromWorldRay(
+                        new Ray(from, rayVector / distance),
+                        distance,
+                        out panelPosition))
+                {
+                    return true;
+                }
             }
 
             return false;
+        }
+
+        bool TryGetTargetFromCasterSampleRay(CurveInteractionCaster caster, out VisualElement target, out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            if (!caster.samplePoints.IsCreated || caster.samplePoints.Length < 2)
+                return TryGetTargetFromCasterOriginRay(caster, out target, out panelPosition);
+
+            Vector3 from = caster.samplePoints[0];
+            Vector3 to = caster.samplePoints[caster.samplePoints.Length - 1];
+            Vector3 rayVector = to - from;
+            float distance = rayVector.magnitude;
+            if (distance <= Mathf.Epsilon)
+                return TryGetTargetFromCasterOriginRay(caster, out target, out panelPosition);
+
+            return TryGetTargetFromWorldRay(
+                new Ray(from, rayVector / distance),
+                distance,
+                out target,
+                out panelPosition);
+        }
+
+        bool TryGetTargetFromCasterOriginRay(CurveInteractionCaster caster, out VisualElement target, out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            if (!TryGetPanelPositionFromCasterOrigin(caster, out panelPosition))
+                return false;
+
+            target = FindXriInteractiveElementAt(panelPosition);
+            return target != null;
+        }
+
+        internal bool TryGetPanelPositionFromCasterOrigin(CurveInteractionCaster caster, out Vector2 panelPosition)
+        {
+            panelPosition = default;
+
+            if (caster == null)
+                return false;
+
+            Transform castOrigin = caster.castOrigin != null ? caster.castOrigin : caster.transform;
+            if (castOrigin == null)
+                return false;
+
+            float castDistance = caster.castDistance > Mathf.Epsilon
+                ? caster.castDistance
+                : CreativeInteractionController.MaxBlockInteractionReachMeters;
+            return TryGetPanelPositionFromWorldRay(
+                new Ray(castOrigin.position, castOrigin.forward),
+                castDistance,
+                out panelPosition);
+        }
+
+        bool TryGetTargetFromWorldRay(Ray ray, float distance, out VisualElement target, out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            if (Physics.Raycast(
+                    ray,
+                    out RaycastHit hit,
+                    distance,
+                    BlockiverseProject.VrUiRaycastLayerMask,
+                    QueryTriggerInteraction.Collide) &&
+                TryGetTargetFromRaycastHit(hit, out target, out panelPosition))
+            {
+                return true;
+            }
+
+            return TryGetTargetFromPanelPlaneRay(ray, distance, out target, out panelPosition);
+        }
+
+        bool TryGetTargetFromPanelPlaneRay(Ray ray, float distance, out VisualElement target, out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            if (!TryGetPanelPositionFromWorldRay(ray, distance, out panelPosition))
+                return false;
+
+            VisualElement picked = document.rootVisualElement.panel?.Pick(panelPosition);
+            target = FindXriInteractiveElementAt(panelPosition);
+            return target != null;
+        }
+
+        bool TryGetTargetFromRaycastHits(
+            IReadOnlyList<RaycastHit> raycastHits,
+            out VisualElement target,
+            out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            for (int i = 0; i < raycastHits.Count; i++)
+                if (TryGetTargetFromRaycastHit(raycastHits[i], out target, out panelPosition))
+                    return true;
+
+            return false;
+        }
+
+        bool TryGetTargetFromRaycastHit(RaycastHit hit, out VisualElement target, out Vector2 panelPosition)
+        {
+            target = null;
+            panelPosition = default;
+
+            if (!IsOwnWorldSpaceCollider(hit.collider))
+                return false;
+
+            Vector3 localPoint = transform.InverseTransformPoint(hit.point);
+            panelPosition = LocalPointToPanelPosition(localPoint);
+            VisualElement picked = document.rootVisualElement.panel?.Pick(panelPosition);
+            target = FindXriInteractiveElementAt(panelPosition);
+            return target != null;
+        }
+
+        bool IsOwnWorldSpaceCollider(Collider hitCollider)
+        {
+            if (hitCollider == null)
+                return false;
+
+            if (hitCollider.gameObject == gameObject)
+                return true;
+
+            return hitCollider.transform.IsChildOf(transform);
         }
 
         internal static Vector2 LocalPointToPanelPosition(Vector3 localPoint)
@@ -859,31 +1395,124 @@ namespace Blockiverse.UI
                 Mathf.Clamp01(normalizedY) * ReferencePanelHeightPixels);
         }
 
-        VisualElement FindFallbackInteractiveElement(VisualElement picked)
+        internal static Vector3 PanelPositionToLocalPoint(Vector2 panelPosition)
+        {
+            float normalizedX = Mathf.Clamp01(panelPosition.x / ReferencePanelWidthPixels);
+            float normalizedY = Mathf.Clamp01(panelPosition.y / ReferencePanelHeightPixels);
+
+            return new Vector3(
+                Mathf.Lerp(
+                    -ReadableWorldSpaceColliderSize.x * 0.5f,
+                    ReadableWorldSpaceColliderSize.x * 0.5f,
+                    normalizedX),
+                Mathf.Lerp(
+                    ReadableWorldSpaceColliderSize.y * 0.5f,
+                    -ReadableWorldSpaceColliderSize.y * 0.5f,
+                    normalizedY),
+                0.0f);
+        }
+
+        internal bool TryGetPanelPositionFromWorldRay(Ray ray, float distance, out Vector2 panelPosition)
+        {
+            panelPosition = default;
+            if (distance <= Mathf.Epsilon)
+                return false;
+
+            Vector3 localOrigin = transform.InverseTransformPoint(ray.origin);
+            Vector3 localEnd = transform.InverseTransformPoint(ray.GetPoint(distance));
+            Vector3 localDelta = localEnd - localOrigin;
+            if (Mathf.Abs(localDelta.z) <= Mathf.Epsilon)
+                return false;
+
+            float intersection = -localOrigin.z / localDelta.z;
+            if (intersection < 0.0f || intersection > 1.0f)
+                return false;
+
+            Vector3 localPoint = localOrigin + localDelta * intersection;
+            float halfWidth = ReadableWorldSpaceColliderSize.x * 0.5f;
+            float halfHeight = ReadableWorldSpaceColliderSize.y * 0.5f;
+            if (localPoint.x < -halfWidth || localPoint.x > halfWidth ||
+                localPoint.y < -halfHeight || localPoint.y > halfHeight)
+            {
+                return false;
+            }
+
+            panelPosition = LocalPointToPanelPosition(localPoint);
+            return true;
+        }
+
+        VisualElement FindXriInteractiveElement(VisualElement picked)
         {
             for (VisualElement current = picked; current != null; current = current.parent)
             {
-                if (fallbackInteractiveElements.Contains(current) || IsFallbackInteractiveElement(current))
+                if (xriInteractiveElements.Contains(current) || IsXriInteractiveElement(current))
                     return current;
             }
 
             return null;
         }
 
-        static bool IsFallbackInteractiveElement(VisualElement element) =>
+        VisualElement FindXriInteractiveElementAt(Vector2 panelPosition)
+        {
+            VisualElement picked = document?.rootVisualElement?.panel?.Pick(panelPosition);
+            VisualElement target = FindXriInteractiveElement(picked);
+            if (target != null)
+                return target;
+
+            return FindXriInteractiveElementByBounds(panelPosition);
+        }
+
+        VisualElement FindXriInteractiveElementByBounds(Vector2 panelPosition)
+        {
+            VisualElement best = null;
+            float bestArea = float.PositiveInfinity;
+
+            foreach (VisualElement candidate in xriInteractiveElements)
+            {
+                if (!IsXriBoundsCandidate(candidate, panelPosition, out Rect bounds))
+                    continue;
+
+                float area = bounds.width * bounds.height;
+                if (area < bestArea)
+                {
+                    best = candidate;
+                    bestArea = area;
+                }
+            }
+
+            return best;
+        }
+
+        static bool IsXriBoundsCandidate(VisualElement candidate, Vector2 panelPosition, out Rect bounds)
+        {
+            bounds = default;
+            if (!CanPlayInteractiveFeedback(candidate))
+                return false;
+
+            IResolvedStyle style = candidate.resolvedStyle;
+            if (style.display == DisplayStyle.None || style.visibility != Visibility.Visible)
+                return false;
+
+            bounds = candidate.worldBound;
+            return bounds.width > Mathf.Epsilon &&
+                bounds.height > Mathf.Epsilon &&
+                bounds.Contains(panelPosition);
+        }
+
+        static bool IsXriInteractiveElement(VisualElement element) =>
             element is Button ||
             element is Toggle ||
             element is Slider ||
             element is TextField;
 
-        void ActivateFallbackElement(VisualElement element, Vector2 panelPosition)
+        void ActivateXriElement(VisualElement element, Vector2 panelPosition)
         {
             if (!CanPlayInteractiveFeedback(element))
                 return;
 
             switch (element)
             {
-                case Button button when fallbackButtonActions.TryGetValue(button, out Action action):
+                case Button button when xriButtonActions.TryGetValue(button, out Action action):
                     PlayUiClickFeedback();
                     action.Invoke();
                     break;
@@ -897,6 +1526,157 @@ namespace Blockiverse.UI
                     textField.Focus();
                     break;
             }
+        }
+
+        void UpdateMenuInteractionSmoke()
+        {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            if (menuInteractionSmokeCompleted)
+                return;
+
+            if (!menuInteractionSmokeRequested)
+                menuInteractionSmokeRequested = IsMenuInteractionSmokeRequested();
+
+            if (!menuInteractionSmokeRequested)
+                return;
+
+            if (!IsVisible || root == null || document?.rootVisualElement?.panel == null || buttons.Count == 0)
+            {
+                LogSmokeDiagnostic("WAIT", "Menu surface is not ready for smoke validation.");
+                return;
+            }
+
+            if (menuInteractionSmokeFramesRemaining < 0)
+            {
+                menuInteractionSmokeFramesRemaining = MenuInteractionSmokeDelayFrames;
+                LogSmokeDiagnostic("START", $"actions={buttons.Count} layer={gameObject.layer}");
+                return;
+            }
+
+            if (menuInteractionSmokeFramesRemaining-- > 0)
+                return;
+
+            menuInteractionSmokeCompleted = true;
+            RunMenuInteractionSmoke();
+#endif
+        }
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+        bool IsMenuInteractionSmokeRequested()
+        {
+            if (PlayerPrefs.GetInt(MenuInteractionSmokePlayerPrefsKey, 0) == 1)
+                return true;
+
+            return File.Exists(MenuInteractionSmokeMarkerPath);
+        }
+
+        void RunMenuInteractionSmoke()
+        {
+            Button button = buttons.Find(candidate => candidate != null && candidate.enabledSelf);
+            if (button == null)
+            {
+                LogSmokeDiagnostic("FAIL", "No enabled action button was available.");
+                return;
+            }
+
+            Rect buttonBounds = button.worldBound;
+            if (buttonBounds.width <= Mathf.Epsilon || buttonBounds.height <= Mathf.Epsilon)
+            {
+                LogSmokeDiagnostic("FAIL", $"Button {button.name} had empty worldBound {buttonBounds}.");
+                return;
+            }
+
+            Vector2 targetPanelPosition = buttonBounds.center;
+            Vector3 targetWorldPosition = transform.TransformPoint(PanelPositionToLocalPoint(targetPanelPosition));
+            Vector3 rayOrigin = Camera.main != null
+                ? Camera.main.transform.position
+                : transform.position - transform.forward;
+            Vector3 rayVector = targetWorldPosition - rayOrigin;
+            float distance = rayVector.magnitude + 0.25f;
+            bool sawAction = false;
+            string invokedAction = null;
+            void OnSmokeActionInvoked(string actionId)
+            {
+                sawAction = true;
+                invokedAction = actionId;
+            }
+
+            ActionInvoked += OnSmokeActionInvoked;
+            try
+            {
+                if (rayVector.sqrMagnitude <= Mathf.Epsilon ||
+                    !TryGetTargetFromWorldRay(new Ray(rayOrigin, rayVector.normalized), distance, out VisualElement target, out Vector2 pickedPanelPosition))
+                {
+                    LogSmokeDiagnostic(
+                        "FAIL",
+                        $"Physics ray did not resolve a UI target. button={button.name} origin={rayOrigin} target={targetWorldPosition} layer={gameObject.layer}");
+                    return;
+                }
+
+                ApplyInteractiveHover(target);
+                ActivateXriElement(target, pickedPanelPosition);
+                if (!sawAction)
+                {
+                    LogSmokeDiagnostic("FAIL", $"Target {target.name} activated without dispatching an action.");
+                    return;
+                }
+
+                LogSmokeDiagnostic(
+                    "PASS",
+                    $"button={button.name} target={target.name} action={invokedAction} panel={pickedPanelPosition}");
+                ClearMenuInteractionSmokeRequest();
+            }
+            finally
+            {
+                ActionInvoked -= OnSmokeActionInvoked;
+            }
+        }
+
+        void ClearMenuInteractionSmokeRequest()
+        {
+            PlayerPrefs.SetInt(MenuInteractionSmokePlayerPrefsKey, 0);
+            try
+            {
+                if (File.Exists(MenuInteractionSmokeMarkerPath))
+                    File.Delete(MenuInteractionSmokeMarkerPath);
+            }
+            catch (Exception ex)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Trace,
+                    $"BV_UI_SMOKE WARN failed to clear marker: {ex.Message}",
+                    this);
+            }
+        }
+
+        static string MenuInteractionSmokeMarkerPath =>
+            Path.Combine(BlockiverseTrace.DiagnosticsDirectoryPath, MenuInteractionSmokeMarkerFileName);
+
+        void LogSmokeDiagnostic(string result, string details)
+        {
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Trace,
+                $"BV_UI_SMOKE {result} {details}",
+                this);
+        }
+#endif
+
+        void LogPointerDiagnostic(string eventName, string details)
+        {
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            if (Time.unscaledTime < nextPointerDiagnosticTime)
+                return;
+
+            nextPointerDiagnosticTime = Time.unscaledTime + PointerDiagnosticIntervalSeconds;
+            Collider worldCollider = GetComponent<BoxCollider>();
+            string colliderState = worldCollider != null
+                ? $"colliderLayer={worldCollider.gameObject.layer} colliderEnabled={worldCollider.enabled} trigger={worldCollider.isTrigger} size={worldCollider.bounds.size}"
+                : "collider=missing";
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Trace,
+                $"BV_UI_POINTER {eventName} visible={IsVisible} {colliderState} mask={BlockiverseProject.VrUiRaycastLayerMask} {details}",
+                this);
+#endif
         }
 
         static void ApplySliderPointerValue(Slider slider, Vector2 panelPosition)

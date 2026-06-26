@@ -245,7 +245,7 @@ namespace Blockiverse.Tests.EditMode
             string bootstrapperSource = string.Join("\n", bootstrapperFiles.Select(File.ReadAllText));
 
             Assert.That(bootstrapperSource, Does.Not.Contain("Resources.GetBuiltinResource<Sprite>(\"UI/Skin/"),
-                "Unity 6000.3 no longer ships the legacy UI/Skin PSD sprites used by old UGUI examples.");
+                "Generated UI must use project-owned sprites instead of removed Unity builtin UI/Skin PSD sprites.");
             StringAssert.Contains("checkbox_check", bootstrapperSource);
             StringAssert.Contains("slider_knob", bootstrapperSource);
         }

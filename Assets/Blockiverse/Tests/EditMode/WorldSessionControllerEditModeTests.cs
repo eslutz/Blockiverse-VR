@@ -12,7 +12,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -194,10 +194,11 @@ namespace Blockiverse.Tests.EditMode
             CreativeWorldManager worldManager = CreateWorldManager();
             CreativeInteractionController interactionController = worldManager.GetComponent<CreativeInteractionController>();
             BlockiverseMenuController menuController = CreateMenuController();
-            Canvas gameplayHudCanvas = new GameObject("Gameplay HUD").AddComponent<Canvas>();
-            gameplayHudCanvas.transform.SetParent(menuObject.transform, worldPositionStays: false);
-            gameplayHudCanvas.enabled = true;
-            menuController.ConfigureGameplayHudCanvas(gameplayHudCanvas);
+            BlockiverseHudToolkitSurface hudSurface = new GameObject("Gameplay HUD").AddComponent<BlockiverseHudToolkitSurface>();
+            hudSurface.transform.SetParent(menuObject.transform, worldPositionStays: false);
+            hudSurface.Configure(hudSurface.gameObject.AddComponent<UIDocument>());
+            hudSurface.SetVisible(true);
+            menuController.ConfigureHudToolkitSurface(hudSurface);
             menuController.ShowTitleScreen();
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
 
@@ -210,7 +211,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller.HasActiveSession, Is.False);
             Assert.That(interactionController.BlockEditingEnabled, Is.False);
             Assert.That(menuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
-            Assert.That(gameplayHudCanvas.enabled, Is.False);
+            Assert.That(hudSurface.IsVisible, Is.False);
         }
 
         [Test]
