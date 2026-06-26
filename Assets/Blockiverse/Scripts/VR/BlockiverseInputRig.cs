@@ -987,16 +987,22 @@ namespace Blockiverse.VR
                 return null;
 
             const string uiToolkitRayInputName = "UI Toolkit Ray Input";
-            Transform uiToolkitRayTransform = interactionRay.transform.Find(uiToolkitRayInputName);
+            Transform parent = interactionRay.transform.parent != null
+                ? interactionRay.transform.parent
+                : interactionRay.transform;
+            Transform uiToolkitRayTransform = parent.Find(uiToolkitRayInputName);
+            if (uiToolkitRayTransform == null)
+                uiToolkitRayTransform = interactionRay.transform.Find(uiToolkitRayInputName);
             GameObject rayObject;
             if (uiToolkitRayTransform == null)
             {
                 rayObject = new GameObject(uiToolkitRayInputName);
-                rayObject.transform.SetParent(interactionRay.transform, false);
+                rayObject.transform.SetParent(parent, false);
             }
             else
             {
                 rayObject = uiToolkitRayTransform.gameObject;
+                rayObject.transform.SetParent(parent, worldPositionStays: false);
             }
 
             rayObject.layer = interactionRay.gameObject.layer;
@@ -1100,7 +1106,10 @@ namespace Blockiverse.VR
 
         static LayerMask GetVrUiRaycastLayerMask()
         {
-            return GetVoxelTerrainLayerMask();
+            int vrUiLayer = LayerMask.NameToLayer(BlockiverseProject.VrUiLayerName);
+            return vrUiLayer >= 0
+                ? (LayerMask)(1 << vrUiLayer)
+                : (LayerMask)BlockiverseProject.VrUiRaycastLayerMask;
         }
 
         public static void ConfigureCharacterController(CharacterController controller)
