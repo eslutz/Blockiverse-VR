@@ -1,11 +1,10 @@
 using Blockiverse.Gameplay;
-using Blockiverse.MetaPlatform;
 using Blockiverse.Networking;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using Blockiverse.Core;
 
 namespace Blockiverse.UI
 {
@@ -14,19 +13,23 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseNetworkSession session;
         [SerializeField] Button hostButton;
         [SerializeField] Button joinButton;
+        [SerializeField] Button reconnectButton;
         [SerializeField] Button stopButton;
         [SerializeField] TMP_InputField addressInput;
         [SerializeField] TMP_Text statusText;
+        [SerializeField] Image statusBadge;
         [SerializeField] BlockiverseWorldSessionController worldSessionController;
         [SerializeField] BlockiverseMenuController menuController;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
-        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        IBlockiverseInteractionHaptics interactionHaptics;
 
         UnityAction hostClicked;
         UnityAction joinClicked;
+        UnityAction reconnectClicked;
         UnityAction stopClicked;
         Button registeredHostButton;
         Button registeredJoinButton;
+        Button registeredReconnectButton;
         Button registeredStopButton;
         BlockiverseConnectionState lastDisplayedState;
         NetworkSessionMode lastDisplayedMode;
@@ -37,6 +40,7 @@ namespace Blockiverse.UI
         bool sessionEndedRouteRequested;
 
         public BlockiverseNetworkSession Session => session;
+        public string LastJoinAddress { get; private set; }
         public TMP_Text StatusText => statusText;
         public TMP_InputField AddressInput => addressInput;
         public Button HostButton => hostButton;
@@ -60,7 +64,7 @@ namespace Blockiverse.UI
 
         public void ConfigureFeedback(
             BlockiverseAudioCuePlayer targetAudioCuePlayer,
-            BlockiverseInteractionHaptics targetInteractionHaptics)
+            IBlockiverseInteractionHaptics targetInteractionHaptics)
         {
             audioCuePlayer = targetAudioCuePlayer;
             interactionHaptics = targetInteractionHaptics;
@@ -76,15 +80,23 @@ namespace Blockiverse.UI
             menuController = controller;
         }
 
+        public void ConfigureStatusBadge(Image badge)
+        {
+            statusBadge = badge;
+            UpdateStatusBadge();
+        }
+
         public void ConfigureControls(
             Button targetHostButton,
             Button targetJoinButton,
+            Button targetReconnectButton,
             Button targetStopButton,
             TMP_InputField targetAddressInput,
             TMP_Text targetStatusText)
         {
             hostButton = targetHostButton;
             joinButton = targetJoinButton;
+            reconnectButton = targetReconnectButton;
             stopButton = targetStopButton;
             addressInput = targetAddressInput;
             statusText = targetStatusText;
@@ -123,6 +135,31 @@ namespace Blockiverse.UI
             }
 
             string address = ResolveJoinAddress();
+            LastJoinAddress = address;
+            JoinSessionInternal(address);
+        }
+
+        public void ReconnectLanSession()
+        {
+            if (session == null)
+            {
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(LastJoinAddress))
+            {
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                return;
+            }
+
+            JoinSessionInternal(LastJoinAddress);
+        }
+
+        void JoinSessionInternal(string address)
+        {
             if (!TrySuspendSinglePlayerSessionForMultiplayer())
                 return;
 
@@ -442,12 +479,52 @@ namespace Blockiverse.UI
         {
             if (statusText != null)
                 statusText.text = AppendAgePolicyNotice(message);
+
+            UpdateStatusBadge();
+        }
+
+        // Connection-state colors for the LAN status badge. Green = live session, amber =
+        // transitioning, red = failed/disconnected, grey = idle/unavailable. The badge gives a
+        // glanceable indicator next to the verbose status text.
+        static readonly Color BadgeConnectedColor = new(0.30f, 0.78f, 0.36f, 1.0f);
+        static readonly Color BadgeTransitionColor = new(0.95f, 0.74f, 0.24f, 1.0f);
+        static readonly Color BadgeFailedColor = new(0.90f, 0.32f, 0.28f, 1.0f);
+        static readonly Color BadgeIdleColor = new(0.55f, 0.58f, 0.62f, 1.0f);
+
+        void UpdateStatusBadge()
+        {
+            if (statusBadge == null)
+                return;
+
+            statusBadge.color = ResolveStatusBadgeColor();
+        }
+
+        Color ResolveStatusBadgeColor()
+        {
+            if (session == null)
+                return BadgeIdleColor;
+
+            switch (session.CurrentState)
+            {
+                case BlockiverseConnectionState.Hosting:
+                case BlockiverseConnectionState.ConnectedClient:
+                    return BadgeConnectedColor;
+                case BlockiverseConnectionState.StartingHost:
+                case BlockiverseConnectionState.StartingClient:
+                case BlockiverseConnectionState.Disconnecting:
+                    return BadgeTransitionColor;
+                case BlockiverseConnectionState.Failed:
+                    return BadgeFailedColor;
+                case BlockiverseConnectionState.Disconnected:
+                    return IsShowingSessionEndedMessage ? BadgeFailedColor : BadgeIdleColor;
+                default:
+                    return BadgeIdleColor;
+            }
         }
 
         static string AppendAgePolicyNotice(string message)
         {
-            BlockiverseUserAgeCategoryState ageState = BlockiverseUserAgeCategoryService.Current;
-            if (BlockiversePlatformFeaturePolicy.CanUseMetaSocialFeature(ageState.Category))
+            if (BlockiverseMetaSocialPolicy.CanUseMetaSocialFeature)
                 return message;
 
             return $"{message}\nMeta social features use fallback identity and avatar behavior for this account.";
@@ -474,6 +551,9 @@ namespace Blockiverse.UI
             if (joinButton != null)
                 joinButton.interactable = canStart;
 
+            if (reconnectButton != null)
+                reconnectButton.interactable = canStart && !string.IsNullOrWhiteSpace(LastJoinAddress);
+
             if (stopButton != null)
                 stopButton.interactable = canStop;
 
@@ -489,8 +569,21 @@ namespace Blockiverse.UI
                 return;
 
             DiscoverMenuController();
-            if (menuController != null && menuController.ShowLanMultiplayerScreen())
+            
+            if (enteredGameplayForCurrentSession)
+            {
+                if (menuController != null)
+                {
+                    menuController.ShowTitleScreen();
+                    sessionEndedRouteRequested = true;
+                    if (worldSessionController != null)
+                        worldSessionController.TrySuspendActiveSessionForMultiplayer(out _);
+                }
+            }
+            else if (menuController != null && menuController.ShowLanMultiplayerScreen())
+            {
                 sessionEndedRouteRequested = true;
+            }
 
             RestoreInteractableMenuSurface();
         }
@@ -513,10 +606,12 @@ namespace Blockiverse.UI
         {
             hostClicked ??= StartLanHost;
             joinClicked ??= JoinLanSession;
+            reconnectClicked ??= ReconnectLanSession;
             stopClicked ??= StopSession;
 
             RegisterButtonCallback(hostButton, ref registeredHostButton, hostClicked);
             RegisterButtonCallback(joinButton, ref registeredJoinButton, joinClicked);
+            RegisterButtonCallback(reconnectButton, ref registeredReconnectButton, reconnectClicked);
             RegisterButtonCallback(stopButton, ref registeredStopButton, stopClicked);
         }
 
@@ -542,11 +637,15 @@ namespace Blockiverse.UI
             if (registeredJoinButton != null)
                 registeredJoinButton.onClick.RemoveListener(joinClicked);
 
+            if (registeredReconnectButton != null)
+                registeredReconnectButton.onClick.RemoveListener(reconnectClicked);
+
             if (registeredStopButton != null)
                 registeredStopButton.onClick.RemoveListener(stopClicked);
 
             registeredHostButton = null;
             registeredJoinButton = null;
+            registeredReconnectButton = null;
             registeredStopButton = null;
         }
 

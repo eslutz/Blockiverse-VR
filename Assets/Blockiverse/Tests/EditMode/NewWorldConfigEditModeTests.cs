@@ -39,7 +39,10 @@ namespace Blockiverse.Tests.EditMode
 
             config.CycleWorldSize();
             Assert.That(config.WorldSize, Is.EqualTo("medium"));
-            Assert.That(BlockiverseLocalization.DisplayNameForCanonicalId("infinite"), Is.EqualTo("Infinite Preview (256x256)"));
+            Assert.That(config.WorldSize, Is.Not.EqualTo("large"), "The large/infinite world sizes were dropped (R4b).");
+            Assert.That(BlockiverseLocalization.DisplayNameForCanonicalId("medium"), Is.EqualTo("Medium (192x192)"));
+            config.CycleWorldSize();
+            Assert.That(config.WorldSize, Is.EqualTo("small"), "World size should wrap small→medium→small (no large option).");
             config.CycleWorldPreset();
             Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
             config.CycleWorldPreset();

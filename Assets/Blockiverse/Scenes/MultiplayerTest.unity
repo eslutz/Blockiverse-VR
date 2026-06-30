@@ -908,19 +908,79 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2707583939126641716, guid: 3db25745f21144b0e844798dbf3ffc93, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 370030343}
+    - targetCorrespondingSourceObject: {fileID: 2707583939126641716, guid: 3db25745f21144b0e844798dbf3ffc93, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 370030342}
+    - targetCorrespondingSourceObject: {fileID: 2707583939126641716, guid: 3db25745f21144b0e844798dbf3ffc93, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 370030341}
   m_SourcePrefab: {fileID: 100100000, guid: 3db25745f21144b0e844798dbf3ffc93, type: 3}
 --- !u!114 &370030339 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 9132188728343531670, guid: 3db25745f21144b0e844798dbf3ffc93, type: 3}
   m_PrefabInstance: {fileID: 370030338}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 370030340}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7541dcdec6da1447bb0bc4f50f3e5ef1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseNetworkSession
+--- !u!1 &370030340 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2707583939126641716, guid: 3db25745f21144b0e844798dbf3ffc93, type: 3}
+  m_PrefabInstance: {fileID: 370030338}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &370030341
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 370030340}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21195eb6b1dc448e1ad1afad067fbb6d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerWorldPersistence
+  session: {fileID: 0}
+  worldManagerObject: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}
+  survivalSync: {fileID: 0}
+  vitalsRuntimeObject: {fileID: 0}
+  saveFileName: multiplayer-world.vxlworld
+  worldName: Multiplayer World
+--- !u!114 &370030342
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 370030340}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8844f0be637444a2aab888c0cf0b357d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerSurvivalSync
+  session: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}
+--- !u!114 &370030343
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 370030340}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da27c9816fee7406abf6558b7aeec55a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerChunkAuthoritySync
+  session: {fileID: 0}
 --- !u!1 &477340627
 GameObject:
   m_ObjectHideFlags: 0
@@ -1722,6 +1782,7 @@ RectTransform:
   - {fileID: 543566526}
   - {fileID: 681260476}
   - {fileID: 270811747}
+  - {fileID: 1141035282}
   m_Father: {fileID: 2058886985}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -2041,6 +2102,81 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!1 &1141035279
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1141035282}
+  - component: {fileID: 1141035281}
+  - component: {fileID: 1141035280}
+  m_Layer: 10
+  m_Name: Status Badge
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1141035280
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1141035279}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.55, g: 0.58, b: 0.62, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 21300000, guid: f8e7ff4af8e7ff4af8e7ff4af8e7ff4a, type: 3}
+  m_Type: 1
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!222 &1141035281
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1141035279}
+  m_CullTransparentMesh: 1
+--- !u!224 &1141035282
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1141035279}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1040312988}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 470, y: -30}
+  m_SizeDelta: {x: 32, y: 32}
+  m_Pivot: {x: 0, y: 1}
 --- !u!1 &1162482370
 GameObject:
   m_ObjectHideFlags: 0
@@ -2363,8 +2499,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1797789708}
   - component: {fileID: 1797789707}
-  - component: {fileID: 1797789710}
   - component: {fileID: 1797789709}
+  - component: {fileID: 1797789711}
   m_Layer: 0
   m_Name: Blockiverse Sun
   m_TagString: Untagged
@@ -2464,10 +2600,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 534ab3f30ade94c94b13931f1bd0b4cc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.BlockiverseLightingCycleController
-  worldTimeClock: {fileID: 1797789710}
+  worldTimeClock: {fileID: 1797789711}
   sunLight: {fileID: 1797789707}
   environmentSource: {fileID: 0}
---- !u!114 &1797789710
+--- !u!114 &1797789711
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2476,9 +2612,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1797789706}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9406921a9e6ff4e63b355ebb1cfb4aad, type: 3}
+  m_Script: {fileID: 11500000, guid: 9d4c1b06c5557474d9423efdec259c87, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.WorldTimeClock
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.WorldTimeClock
   dayLengthSeconds: 1200
   normalizedTime: 0.22
   timeScale: 1
@@ -2518,13 +2654,14 @@ MonoBehaviour:
   session: {fileID: 370030339}
   hostButton: {fileID: 367609779}
   joinButton: {fileID: 543566529}
+  reconnectButton: {fileID: 0}
   stopButton: {fileID: 681260479}
   addressInput: {fileID: 477340633}
   statusText: {fileID: 270811748}
+  statusBadge: {fileID: 1141035280}
   worldSessionController: {fileID: 0}
   menuController: {fileID: 0}
   audioCuePlayer: {fileID: 0}
-  interactionHaptics: {fileID: 0}
 --- !u!114 &2058886983
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -6,13 +6,14 @@ using System.IO;
 using System.Threading.Tasks;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
-using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using UnityEngine;
 using Unity.Profiling;
+using ProfilerMarker = Unity.Profiling.ProfilerMarker;
 
 namespace Blockiverse.UI
 {
@@ -29,7 +30,8 @@ namespace Blockiverse.UI
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
         [SerializeField] SurvivalVitalsRuntime vitalsRuntime;
-        [SerializeField] BlockiverseInputRig inputRig;
+        [SerializeField] MonoBehaviour serializedInputRig;
+        IBlockiverseInputRig inputRig;
 
         string currentSavePath;
         string currentWorldName;
@@ -104,7 +106,24 @@ namespace Blockiverse.UI
                 vitalsRuntime = BlockiverseSceneLookup.Find<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
 
             if (inputRig == null)
-                inputRig = BlockiverseSceneLookup.Find<BlockiverseInputRig>(FindObjectsInactive.Include);
+            {
+                if (serializedInputRig is IBlockiverseInputRig rig)
+                {
+                    inputRig = rig;
+                }
+                else
+                {
+                    var behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    foreach (var behaviour in behaviours)
+                    {
+                        if (behaviour is IBlockiverseInputRig inputRigBehaviour)
+                        {
+                            inputRig = inputRigBehaviour;
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         // Autosave: while a session is active, save on the WorldSaveService cadence (§6.7).
@@ -371,10 +390,10 @@ namespace Blockiverse.UI
             var extras = new WorldSaveExtras();
             worldManager.FillSaveExtras(extras);
 
-            if (worldManager.Settings != null)
+            if (worldManager.SpawnPosition.Y > 0)
             {
                 extras.HasSpawnPosition = true;
-                extras.SpawnPosition = worldManager.Settings.SpawnPosition;
+                extras.SpawnPosition = worldManager.SpawnPosition;
             }
 
             if (survivalSync != null)
@@ -455,11 +474,15 @@ namespace Blockiverse.UI
             while (!generationTask.IsCompleted)
                 yield return null;
 
+            bool entered = false;
             try
             {
                 if (generationTask.IsFaulted)
                     throw generationTask.Exception?.GetBaseException() ?? new InvalidOperationException("World generation failed.");
 
+                // Play Mode has a per-frame pump, so defer the giant synchronous RebuildAll and let
+                // the world fill in incrementally; the spawn region is eager-baked inside
+                // InitializeGeneratedWorld so the player still lands on solid ground.
                 EnterGeneratedNewWorld(
                     name,
                     gameMode,
@@ -467,7 +490,8 @@ namespace Blockiverse.UI
                     worldPreset,
                     textureSet,
                     generationTask.Result,
-                    deferRendererRebuild: false);
+                    deferRendererRebuild: true);
+                entered = true;
             }
             catch (Exception exception)
             {
@@ -478,11 +502,17 @@ namespace Blockiverse.UI
                 menuController?.ShowTitleScreen();
                 menuController?.SetTitleStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusCreateWorldFailed));
             }
-            finally
-            {
-                SetTransitionLocomotionBlocked(false);
-                worldTransitionInProgress = false;
-            }
+
+            // World-ready gate: only when entry succeeded, hold until the renderer reports the spawn
+            // area is meshed and collidable before unblocking locomotion. The eager bake during entry
+            // is synchronous, so this normally passes on the first check; the loop honours the gate
+            // contract and guards against any future async spawn-region bake. Skipped on failure so a
+            // half-entered world can never soft-lock locomotion.
+            while (entered && Application.isPlaying && worldManager?.Renderer != null && !worldManager.Renderer.SpawnRegionReady)
+                yield return null;
+
+            SetTransitionLocomotionBlocked(false);
+            worldTransitionInProgress = false;
         }
 
         void EnterGeneratedNewWorld(NewWorldConfig config, GeneratedCreativeWorld generated, bool deferRendererRebuild)
@@ -712,7 +742,7 @@ namespace Blockiverse.UI
                     info.Manifest.Seed.ToString(),
                     info.Manifest.GameMode,
                     info.Manifest.Difficulty,
-                    dayCount: (int)(info.WorldTimeTicks / WorldConstants.TicksPerDay) + 1,
+                    dayCount: (int)(info.WorldTimeTicks / SimulationTime.TicksPerDay) + 1,
                     lastPlayedUtc: ParseUtc(info.Manifest.ModifiedAtUtc),
                     createdUtc: ParseUtc(info.Manifest.CreatedAtUtc)));
                 return;
@@ -755,12 +785,17 @@ namespace Blockiverse.UI
             while (!regenerationTask.IsCompleted)
                 yield return null;
 
+            bool entered = false;
             try
             {
                 if (regenerationTask.IsFaulted)
                     throw regenerationTask.Exception?.GetBaseException() ?? new InvalidOperationException("World regeneration failed.");
 
-                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: false);
+                // Play Mode has a per-frame pump, so defer the giant synchronous RebuildAll and let
+                // the world fill in incrementally; ApplyLoadedWorld eager-bakes the spawn region
+                // (including any loaded edits there) so the player still lands on solid ground.
+                ApplyLoadedWorld(path, result, regenerationTask.Result, deferRendererRebuild: true);
+                entered = true;
             }
             catch (Exception exception)
             {
@@ -771,11 +806,16 @@ namespace Blockiverse.UI
                 menuController?.ShowTitleScreen();
                 ReportLoadStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.StatusLoadWorldFailed), isFailure: true);
             }
-            finally
-            {
-                SetTransitionLocomotionBlocked(false);
-                worldTransitionInProgress = false;
-            }
+
+            // World-ready gate: only when entry succeeded, hold until the spawn area is meshed and
+            // collidable before unblocking locomotion. The eager bake is synchronous so this normally
+            // passes immediately; the loop honours the gate contract and guards against any future
+            // async bake. Skipped on failure so a half-entered world can never soft-lock locomotion.
+            while (entered && Application.isPlaying && worldManager?.Renderer != null && !worldManager.Renderer.SpawnRegionReady)
+                yield return null;
+
+            SetTransitionLocomotionBlocked(false);
+            worldTransitionInProgress = false;
         }
 
         void SetTransitionLocomotionBlocked(bool blocked)
@@ -878,7 +918,19 @@ namespace Blockiverse.UI
             }
 
             if (!deferRendererRebuild)
+            {
                 worldManager.Renderer?.RebuildAll();
+            }
+            else
+            {
+                // InitializeGeneratedWorld already eager-baked the spawn region off the regenerated
+                // baseline, but the saved block deltas applied above (via result.ApplyTo) re-marked
+                // any edited spawn chunks dirty. Re-bake the spawn neighbourhood so loaded edits at
+                // spawn are solid before the player lands; the rest of the dirty world keeps
+                // draining incrementally under the per-frame budgets (no unbounded RebuildAll here).
+                worldManager.Renderer?.RebuildSpawnRegion(ResolveSpawnPosition());
+            }
+
             RestoreInventory(result, data);
             ApplyPlayerMode();
             RestorePlayer(data.PlayerState);
@@ -956,13 +1008,14 @@ namespace Blockiverse.UI
 
         BlockPosition ResolveSpawnPosition()
         {
-            if (worldManager.Settings != null)
-                return worldManager.Settings.SpawnPosition;
+            BlockPosition spawn = worldManager.SpawnPosition;
+            if (spawn.Y > 0)
+                return spawn;
 
             VoxelWorld world = worldManager.World;
             int x = world.Bounds.Width / 2;
             int z = world.Bounds.Depth / 2;
-            int surfaceY = StructureService.FindSurfaceY(world, x, z);
+            int surfaceY = worldManager.FindSurfaceY(world, x, z);
             return new BlockPosition(x, surfaceY >= 0 ? surfaceY + 1 : 1, z);
         }
 
@@ -983,7 +1036,7 @@ namespace Blockiverse.UI
                     info.Manifest.Seed.ToString(),
                     info.Manifest.GameMode,
                     info.Manifest.Difficulty,
-                    dayCount: (int)(info.WorldTimeTicks / WorldConstants.TicksPerDay) + 1,
+                    dayCount: (int)(info.WorldTimeTicks / SimulationTime.TicksPerDay) + 1,
                     lastPlayedUtc: ParseUtc(info.Manifest.ModifiedAtUtc),
                     createdUtc: ParseUtc(info.Manifest.CreatedAtUtc));
                 summaries.Add(summary);

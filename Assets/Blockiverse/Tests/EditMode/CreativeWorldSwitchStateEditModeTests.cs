@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;

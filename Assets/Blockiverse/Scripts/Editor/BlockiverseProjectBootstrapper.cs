@@ -89,6 +89,7 @@ namespace Blockiverse.Editor
         const string PauseMenuName = "Pause Menu";
         const string DeathScreenName = "Death Screen";
         const string ConfirmDialogName = "Confirm Dialog";
+        const string ErrorDialogName = "Error Dialog";
         const string NewWorldPanelName = "New World Panel";
         const string LoadWorldPanelName = "Load World Panel";
         const string SettingsPanelName = "Settings Panel";
@@ -98,26 +99,36 @@ namespace Blockiverse.Editor
         const string CreativeToolsPanelName = "Creative Tools Panel";
         const string StationPanelName = "Station Panel";
         const string LanMultiplayerPanelName = "LAN Multiplayer Panel";
+        const string InventoryPanelName = "Inventory Panel";
+        const string CraftingPanelName = "Crafting Panel";
+        const string CatalogPanelName = "Catalog Panel";
+        const string CratePanelName = "Crate Panel";
         const float GameMenuScale = 0.0013f;
-        const float GameMenuDistanceMeters = 0.95f;
+const float GameMenuDistanceMeters = 0.95f;
         const float GameMenuVerticalOffsetMeters = -0.38f;
         const float GameMenuPitchDegrees = 10.0f;
         // All game menu panels share one world-space position; only one is visible at a time.
         static readonly Vector3 GameMenuLocalPosition = new(0.0f, 1.05f, GameMenuDistanceMeters);
         static readonly Vector2 ActionMenuSize = new(440.0f, 540.0f);
         static readonly Vector2 ConfirmDialogSize = new(440.0f, 320.0f);
+        static readonly Vector2 ErrorDialogSize = new(440.0f, 320.0f);
         static readonly Vector2 NewWorldPanelSize = new(620.0f, 720.0f);
         static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
         static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
         static readonly Vector2 StationPanelSize = new(540.0f, 620.0f);
         static readonly Vector2 LanMultiplayerPanelSize = new(620.0f, 520.0f);
+        static readonly Vector2 InventoryPanelSize = new(480.0f, 600.0f);
+        static readonly Vector2 CraftingPanelSize = new(480.0f, 600.0f);
+        static readonly Vector2 CatalogPanelSize = new(560.0f, 600.0f);
+        static readonly Vector2 CratePanelSize = new(480.0f, 500.0f);
 
         const string ComfortMenuName = "Comfort Settings Menu";
         const string BlockMenuName = "Block Menu";
         const string SurvivalHudName = "Survival HUD";
         const string ControllerMappingPopupName = "Controller Mapping Popup";
+        const string ItemIconLibraryPath = "Assets/Blockiverse/Settings/BlockiverseItemIconLibrary.asset";
         const string StartupLoadingOverlayName = "Startup Loading Overlay";
-        const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
+const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         const string MenuCompositionSurfaceName = "Blockiverse Menu Composition Surface";
         const string MenuCompositionCanvasName = "Blockiverse Menu Canvas";
         const string MenuCompositionCursorName = "Composition Menu Cursor";
@@ -247,8 +258,14 @@ namespace Blockiverse.Editor
             EnsureCompositionUiLayer();
 
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-            BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Blockiverse Unity/Quest bootstrap complete.");
+            
+            // Defer Refresh to allow XR subsystems and other async Editor processes to settle.
+            // This helps avoid the "StopSubsystems without an initialized manager" warning.
+            EditorApplication.delayCall += () =>
+            {
+                AssetDatabase.Refresh();
+                BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Blockiverse Unity/Quest bootstrap complete.");
+            };
         }
 
         [MenuItem("Blockiverse/Bootstrap M5 Network Foundation")]
@@ -263,7 +280,7 @@ namespace Blockiverse.Editor
             RemoveGeneratedDefaultNetworkPrefabs();
 
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
+            // AssetDatabase.Refresh(); // Redundant when called from Bootstrap() which has a deferred refresh.
         }
 
         [MenuItem("Blockiverse/Import TMP Essential Resources")]
@@ -271,7 +288,7 @@ namespace Blockiverse.Editor
         {
             EnsureTmpEssentialResources();
             AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
+            // AssetDatabase.Refresh(); // Redundant when called from Bootstrap() which has a deferred refresh.
         }
 
         static void DisableNetcodeDefaultNetworkPrefabs()
@@ -581,7 +598,9 @@ namespace Blockiverse.Editor
             SetSerializedBool(serializedAsset, "m_RequireDepthTexture", false);
             SetSerializedBool(serializedAsset, "m_RequireOpaqueTexture", false);
             SetSerializedBool(serializedAsset, "m_SupportsHDR", false);
-            SetSerializedInt(serializedAsset, "m_MSAA", 2);
+            // MSAA 4x is the Meta-recommended level for Quest (OVRPlugin.recommendedMSAALevel == 4);
+            // MSAA is cheap on the tiled mobile GPU and improves VR edge clarity for the voxel art.
+            SetSerializedInt(serializedAsset, "m_MSAA", 4);
             SetSerializedFloat(serializedAsset, "m_RenderScale", 1f);
             SetSerializedBool(serializedAsset, "m_MainLightShadowsSupported", false);
             SetSerializedInt(serializedAsset, "m_MainLightShadowmapResolution", 512);
@@ -620,27 +639,51 @@ namespace Blockiverse.Editor
             if (androidSettings?.Manager == null)
                 throw new InvalidOperationException("Unable to create Android XR manager settings.");
 
-            if (!XRPackageMetadataStore.AssignLoader(
+            bool changed = false;
+            if (XRPackageMetadataStore.AssignLoader(
                     androidSettings.Manager,
                     "UnityEngine.XR.OpenXR.OpenXRLoader",
                     BuildTargetGroup.Android))
             {
-                BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, "OpenXR loader was already assigned or could not be reassigned for Android.");
+                changed = true;
             }
 
-            androidSettings.Manager.automaticLoading = true;
-            androidSettings.Manager.automaticRunning = true;
-            EditorUtility.SetDirty(androidSettings.Manager);
+            if (androidSettings.Manager.automaticLoading != true)
+            {
+                androidSettings.Manager.automaticLoading = true;
+                changed = true;
+            }
+
+            if (androidSettings.Manager.automaticRunning != false)
+            {
+                androidSettings.Manager.automaticRunning = false;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(androidSettings.Manager);
+            }
 
             FeatureHelpers.RefreshFeatures(BuildTargetGroup.Android);
 
             OpenXRSettings openXrSettings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
-            openXrSettings.renderMode = OpenXRSettings.RenderMode.SinglePassInstanced;
-            openXrSettings.depthSubmissionMode = OpenXRSettings.DepthSubmissionMode.None;
+            if (openXrSettings != null)
+            {
+                if (openXrSettings.renderMode != OpenXRSettings.RenderMode.SinglePassInstanced ||
+                    openXrSettings.depthSubmissionMode != OpenXRSettings.DepthSubmissionMode.None ||
+                    openXrSettings.latencyOptimization != OpenXRSettings.LatencyOptimization.PrioritizeInputPolling)
+                {
+                    openXrSettings.renderMode = OpenXRSettings.RenderMode.SinglePassInstanced;
+                    openXrSettings.depthSubmissionMode = OpenXRSettings.DepthSubmissionMode.None;
+                    openXrSettings.latencyOptimization = OpenXRSettings.LatencyOptimization.PrioritizeInputPolling;
+                    EditorUtility.SetDirty(openXrSettings);
+                }
+            }
 
             foreach (string featureId in AndroidOpenXrFeatureIds)
             {
-                UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
+UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
                     FeatureHelpers.GetFeatureWithIdForBuildTarget(BuildTargetGroup.Android, featureId);
 
                 if (feature == null)
@@ -756,7 +799,7 @@ namespace Blockiverse.Editor
             // Silent import (false = no dialog). This copies fonts, settings and shaders into
             // Assets/TextMesh Pro/ and makes TMP_Settings.defaultFontAsset available.
             AssetDatabase.ImportPackage(resourcePackage, false);
-            AssetDatabase.Refresh();
+            // AssetDatabase.Refresh();
             BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Imported TMP Essential Resources.");
         }
 

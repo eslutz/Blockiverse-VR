@@ -1,7 +1,8 @@
 using System;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -22,7 +23,7 @@ namespace Blockiverse.UI
         [SerializeField] Button depositButton;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
-        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        IBlockiverseInteractionHaptics interactionHaptics;
 
         ItemRegistry itemRegistry;
 
@@ -39,7 +40,7 @@ namespace Blockiverse.UI
             Refresh();
         }
 
-        public void ConfigureFeedback(BlockiverseAudioCuePlayer targetAudioCuePlayer, BlockiverseInteractionHaptics targetInteractionHaptics)
+        public void ConfigureFeedback(BlockiverseAudioCuePlayer targetAudioCuePlayer, IBlockiverseInteractionHaptics targetInteractionHaptics)
         {
             audioCuePlayer = targetAudioCuePlayer;
             interactionHaptics = targetInteractionHaptics;

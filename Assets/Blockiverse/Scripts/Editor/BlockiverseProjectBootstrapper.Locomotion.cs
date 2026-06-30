@@ -61,13 +61,19 @@ namespace Blockiverse.Editor
             if (settings == null)
                 settings = rig.AddComponent<BlockiverseComfortSettings>();
 
-            // Regenerated rigs should always start with a readable title/menu view. Players can
-            // opt into motion tunneling from the comfort menu after startup.
-            settings.VignetteEnabled = false;
-            settings.VignetteStrength = 0.0f;
+            // Comfort-first baseline. The motion tunneling vignette only renders during locomotion,
+            // so the title/menu stays readable while every regenerated rig ships nausea reduction on
+            // at a low strength for players who never open the comfort menu.
+            settings.VignetteEnabled = true;
+            settings.VignetteStrength = 0.3f;
 
             if (origin != null)
                 origin.CameraYOffset = settings.StandingEyeHeight;
+
+            BlockiverseGlideBobController bobController = rig.GetComponent<BlockiverseGlideBobController>();
+
+            if (bobController == null)
+                bobController = rig.AddComponent<BlockiverseGlideBobController>();
 
             // Collision capsule so gravity/jumping land on the voxel terrain. Added before the body
             // transformer so it auto-binds a CharacterControllerBodyManipulator when it initializes.

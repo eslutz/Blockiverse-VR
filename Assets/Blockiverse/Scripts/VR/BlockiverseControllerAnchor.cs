@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.XR;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {

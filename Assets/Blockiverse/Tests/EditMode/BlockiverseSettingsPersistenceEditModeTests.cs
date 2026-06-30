@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Blockiverse.VR;
+using Blockiverse.Core;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -9,7 +10,7 @@ namespace Blockiverse.Tests.EditMode
     public sealed class BlockiverseSettingsPersistenceEditModeTests
     {
         const string KeyPrefix = "Blockiverse.Settings.";
-        const int VignettePrefsVersion = 2;
+        const int VignettePrefsVersion = 3;
 
         readonly List<GameObject> objectsToDestroy = new();
 
@@ -40,9 +41,9 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseComfortSettings settings = CreateSettingsWithPersistence();
 
             Assert.That(settings.ContinuousMoveSpeed, Is.EqualTo(2.4f).Within(0.001f));
-            Assert.That(settings.VignetteEnabled, Is.False);
-            Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f));
-            Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f));
+            Assert.That(settings.VignetteEnabled, Is.True);
+            Assert.That(settings.VignetteStrength, Is.EqualTo(0.3f).Within(0.001f));
+            Assert.That(settings.VignetteAperture, Is.EqualTo(0.88f).Within(0.001f));
             Assert.That(PlayerPrefs.HasKey(KeyPrefix + "VignetteEnabled"), Is.False);
             Assert.That(PlayerPrefs.HasKey(KeyPrefix + "VignetteStrength"), Is.False);
             Assert.That(PlayerPrefs.GetInt(KeyPrefix + "VignettePrefsVersion", 0), Is.EqualTo(VignettePrefsVersion));

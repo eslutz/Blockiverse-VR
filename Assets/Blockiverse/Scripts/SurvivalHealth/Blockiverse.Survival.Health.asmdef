@@ -2,6 +2,7 @@
   "name": "Blockiverse.Survival.Health",
   "rootNamespace": "Blockiverse.Survival",
   "references": [
+    "Blockiverse.Core",
     "Blockiverse.Voxel"
   ],
   "includePlatforms": [],

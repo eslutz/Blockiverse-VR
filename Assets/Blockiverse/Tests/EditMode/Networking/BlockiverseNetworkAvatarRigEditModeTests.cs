@@ -145,7 +145,7 @@ namespace Blockiverse.Tests.Networking.EditMode
                 new Pose(new Vector3(0.4f, 1.2f, 0.3f), Quaternion.identity));
 
             Assert.That(
-                EnvironmentDynamicsController.TryResolvePlayerHeadWorldPosition(playerObject, out Vector3 resolvedHead),
+                BlockiverseNetworkAvatarRig.TryResolvePlayerHeadWorldPosition(playerObject, out Vector3 resolvedHead),
                 Is.True);
             AssertVector3Approximately(resolvedHead, headPose.position);
             Assert.That(resolvedHead, Is.Not.EqualTo(avatarRig.transform.position));

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
@@ -21,10 +22,64 @@ namespace Blockiverse.Tests.EditMode
 
             WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed);
 
-            Assert.That(settings.Bounds, Is.EqualTo(new WorldBounds(128, 256, 128)));
+            Assert.That(settings.Bounds, Is.EqualTo(new WorldBounds(128, WorldConstants.WorldMaxY + 1, 128)));
             Assert.That(settings.ChunkSize, Is.EqualTo(WorldConstants.ChunkSize));
             Assert.That(settings.Seed, Is.EqualTo(seed));
             Assert.That(settings.Bounds.Contains(settings.SpawnPosition), Is.True);
+        }
+
+        [Test]
+        public void GeneratedWorldsFitUnderCanonicalHeightWithAirHeadroom()
+        {
+            // R4b: the world is capped at WorldMaxY (127). Terrain peaks plus everything authored on
+            // top of them (trees, surface ruins, surface nodes) must stay strictly under the ceiling
+            // so the topmost layer is always air — no clamped plateaus pressed against the lid.
+            foreach (int seed in new[] { 6401, 112358, 424242, 97531, EasterEggSeed })
+            {
+                VoxelWorld world = GenerateSurvivalWorld(seed);
+                int highestNonAir = HighestNonAirY(world);
+
+                Assert.That(highestNonAir, Is.LessThan(WorldConstants.WorldMaxY),
+                    $"Seed {seed}: generated content reached the world ceiling (y={highestNonAir}); expected air headroom under WorldMaxY ({WorldConstants.WorldMaxY}).");
+            }
+        }
+
+        [Test]
+        public void BuilderPresetsFitWellUnderCanonicalHeight()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(
+                width: 64,
+                height: WorldConstants.WorldMaxY + 1,
+                depth: 64,
+                chunkSize: WorldConstants.ChunkSize,
+                seed: 1001,
+                groundHeight: WorldConstants.SeaLevel);
+
+            VoxelWorld flat = new FlatBuilderPreset(registry, settings).Generate();
+            VoxelWorld voidWorld = new VoidBuilderPreset(registry, settings).Generate();
+
+            Assert.That(HighestNonAirY(flat), Is.LessThan(WorldConstants.WorldMaxY),
+                "Flat builder ground must sit well under the world ceiling.");
+            Assert.That(HighestNonAirY(voidWorld), Is.LessThan(WorldConstants.WorldMaxY),
+                "Void builder platform must sit well under the world ceiling.");
+        }
+
+        static int HighestNonAirY(VoxelWorld world)
+        {
+            for (int y = world.Bounds.Height - 1; y >= 0; y--)
+            {
+                for (int x = 0; x < world.Bounds.Width; x++)
+                {
+                    for (int z = 0; z < world.Bounds.Depth; z++)
+                    {
+                        if (world.GetBlock(new BlockPosition(x, y, z)) != BlockRegistry.Air)
+                            return y;
+                    }
+                }
+            }
+
+            return -1;
         }
 
         [Test]
@@ -436,7 +491,7 @@ namespace Blockiverse.Tests.EditMode
             GeneratedCreativeWorld generatedWorld = CreativeWorldManager.CreateDefaultGeneratedWorld(seed: 97531);
             VoxelWorld world = generatedWorld.World;
 
-            Assert.That(generatedWorld.Settings.Bounds, Is.EqualTo(new WorldBounds(128, 256, 128)));
+            Assert.That(generatedWorld.Settings.Bounds, Is.EqualTo(new WorldBounds(128, WorldConstants.WorldMaxY + 1, 128)));
             Assert.That(world.Bounds, Is.EqualTo(generatedWorld.Settings.Bounds));
 
             int[] sampledSurfaceHeights = Enumerable.Range(0, world.Bounds.Width / 8)

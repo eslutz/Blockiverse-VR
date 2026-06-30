@@ -24,6 +24,11 @@ namespace Blockiverse.UI
         public const string LanMultiplayerScreen = "lan_multiplayer";
         public const string StationMenuScreen = "station_menu";
         public const string ConfirmModal = "confirm_dialog";
+        public const string ErrorModal = "error_dialog";
+        public const string InventoryScreen = "inventory";
+        public const string CraftingScreen = "crafting";
+        public const string CatalogScreen = "catalog";
+        public const string StationCrateScreen = "station_crate";
 
         // ── Title actions (§6.2) ─────────────────────────────────────────────
         public const string TitleContinue = "title.continue_latest_save";
@@ -35,6 +40,7 @@ namespace Blockiverse.UI
 
         // ── LAN multiplayer actions (§6) ─────────────────────────────────────
         public const string LanMultiplayerClose = "lan_multiplayer.close";
+        public const string LanReconnect = "lan_multiplayer.reconnect";
 
         // ── Pause actions (§6.7) ─────────────────────────────────────────────
         public const string PauseResume = "pause.resume";
@@ -81,6 +87,7 @@ namespace Blockiverse.UI
         // ── Confirmation actions (§6.22) ─────────────────────────────────────
         public const string ConfirmAccept = "confirm.accept";
         public const string ConfirmCancel = "confirm.cancel";
+        public const string ErrorClose = "error_dialog.close";
 
         // Title menu, filtered by what the player can currently do (§6.2 "Enabled When").
         public static IReadOnlyList<MenuAction> Title(bool hasLatestSave, bool hasAnySave, bool canQuit)
@@ -140,8 +147,25 @@ namespace Blockiverse.UI
             };
         }
 
+        public static IReadOnlyList<MenuAction> Error()
+        {
+            return new List<MenuAction>(1)
+            {
+                Localized(ErrorClose, BlockiverseLocalization.Keys.ErrorClose, "Close"),
+            };
+        }
+
+        public static IReadOnlyList<MenuAction> LanMultiplayer(bool canReconnect)
+        {
+            var actions = new List<MenuAction>(2);
+            if (canReconnect)
+                actions.Add(Localized(LanReconnect, BlockiverseLocalization.Keys.LanReconnect, "Join (Reconnect)"));
+            actions.Add(Localized(LanMultiplayerClose, BlockiverseLocalization.Keys.CommonClose, "Close"));
+            return actions;
+        }
+
         // Settings hub (§6.19, adapted to the VR action-menu layout): comfort, audio, and the
-        // controls reference are their own screens/panels.
+// controls reference are their own screens/panels.
         public static readonly IReadOnlyList<MenuAction> Settings = new[]
         {
             Localized(SettingsOpenComfort, BlockiverseLocalization.Keys.SettingsComfort, "Comfort"),

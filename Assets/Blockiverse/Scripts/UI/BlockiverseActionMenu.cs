@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -46,7 +46,7 @@ namespace Blockiverse.UI
         [SerializeField] Button[] actionButtons;
         [SerializeField] TMP_Text[] actionLabels;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
-        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        IBlockiverseInteractionHaptics interactionHaptics;
 
         readonly List<string> actionIds = new();
         bool wired;
@@ -65,7 +65,7 @@ namespace Blockiverse.UI
             WireButtons();
         }
 
-        public void ConfigureFeedback(BlockiverseAudioCuePlayer cuePlayer, BlockiverseInteractionHaptics haptics)
+        public void ConfigureFeedback(BlockiverseAudioCuePlayer cuePlayer, IBlockiverseInteractionHaptics haptics)
         {
             audioCuePlayer = cuePlayer;
             interactionHaptics = haptics;

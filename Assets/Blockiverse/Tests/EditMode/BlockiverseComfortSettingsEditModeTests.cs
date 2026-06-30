@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Blockiverse.UI;
 using Blockiverse.VR;
+using Blockiverse.Core;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,14 +22,24 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void DefaultVignetteStartsOpenForReadableTitleMenu()
+        public void DefaultVignetteIsComfortFirstLowStrength()
         {
             BlockiverseComfortSettings settings = CreateSettings();
 
-            Assert.That(settings.VignetteEnabled, Is.False);
-            Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f));
+            // Comfort-first baseline: the motion vignette ships on at a low strength. It only renders
+            // during locomotion, so a static title/menu remains readable while nausea is reduced.
+            Assert.That(settings.VignetteEnabled, Is.True);
+            Assert.That(settings.VignetteStrength, Is.EqualTo(0.3f).Within(0.001f));
             Assert.That(settings.SnapTurnAroundEnabled, Is.True);
-            Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f));
+            Assert.That(settings.VignetteAperture, Is.EqualTo(0.88f).Within(0.001f));
+        }
+
+        [Test]
+        public void DefaultGlideStyleIsSmooth()
+        {
+            BlockiverseComfortSettings settings = CreateSettings();
+
+            Assert.That(settings.GlideStyle, Is.EqualTo(GlideStyle.Smooth));
         }
 
         [Test]

@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
@@ -293,7 +294,9 @@ namespace Blockiverse.Tests.EditMode
         {
             Assert.That(WorldSaveGeneration.FoldSeed(0x0000000100000002UL), Is.EqualTo(3));
             Assert.That(WorldSaveGeneration.SizeFor("medium"), Is.EqualTo((192, 192)));
-            Assert.That(WorldSaveGeneration.SizeFor("infinite"), Is.EqualTo((256, 256)));
+            // R4b: the large/infinite presets were dropped; any non-medium value falls back to the
+            // bounded default footprint.
+            Assert.That(WorldSaveGeneration.SizeFor("large"), Is.EqualTo((128, 128)));
             Assert.That(WorldSaveGeneration.SizeFor("unknown"), Is.EqualTo((128, 128)));
         }
 
@@ -350,7 +353,7 @@ namespace Blockiverse.Tests.EditMode
             pauseMenu.Configure(null, null, null, pauseStatus);
 
             BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.Configure(null, null, pauseMenu, null, null, null, null);
+            controller.Configure(null, null, pauseMenu, null, null, null, null, null);
             return controller;
         }
 
@@ -365,7 +368,7 @@ namespace Blockiverse.Tests.EditMode
             loadWorldPanel.Configure(null, null, null, null, loadWorldStatus);
 
             BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.Configure(null, null, null, null, null, null, loadWorldPanel);
+            controller.Configure(null, null, null, null, null, null, null, loadWorldPanel);
             InvokeUnityMessage(controller, "Start");
             return controller;
         }

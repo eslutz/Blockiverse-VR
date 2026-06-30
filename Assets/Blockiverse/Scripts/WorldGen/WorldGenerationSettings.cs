@@ -22,7 +22,7 @@ namespace Blockiverse.WorldGen
         {
             return new WorldGenerationSettings(
                 width: 128,
-                height: 256,
+                height: WorldConstants.WorldMaxY + 1,
                 depth: 128,
                 chunkSize: WorldConstants.ChunkSize,
                 seed: seed,

@@ -1,7 +1,6 @@
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
-using Unity.Netcode;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -21,7 +20,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseSubtitleToastPanel toastPanel;
 
         BlockiverseNetworkSession session;
-        NetworkManager subscribedNetworkManager;
+        bool subscribedToNetworking;
         bool subscribedToSync;
         bool subscribedToLoot;
         bool subscribedToVitals;
@@ -95,12 +94,11 @@ namespace Blockiverse.Gameplay
 
             SubscribeVitals();
 
-            NetworkManager networkManager = session != null ? session.NetworkManager : null;
-            if (networkManager != null && subscribedNetworkManager != networkManager)
+            if (session != null && !subscribedToNetworking)
             {
-                subscribedNetworkManager = networkManager;
-                subscribedNetworkManager.OnClientConnectedCallback += OnClientConnected;
-                subscribedNetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
+                session.ClientConnected += OnClientConnected;
+                session.ClientDisconnected += OnClientDisconnected;
+                subscribedToNetworking = true;
             }
         }
 
@@ -116,11 +114,11 @@ namespace Blockiverse.Gameplay
 
             UnsubscribeVitals();
 
-            if (subscribedNetworkManager != null)
+            if (session != null && subscribedToNetworking)
             {
-                subscribedNetworkManager.OnClientConnectedCallback -= OnClientConnected;
-                subscribedNetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
-                subscribedNetworkManager = null;
+                session.ClientConnected -= OnClientConnected;
+                session.ClientDisconnected -= OnClientDisconnected;
+                subscribedToNetworking = false;
             }
         }
 
@@ -207,7 +205,7 @@ namespace Blockiverse.Gameplay
 
         void OnClientConnected(ulong clientId)
         {
-            if (subscribedNetworkManager == null || clientId == subscribedNetworkManager.LocalClientId)
+            if (session == null || clientId == session.LocalClientId)
                 return;
 
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerJoin);
@@ -216,7 +214,7 @@ namespace Blockiverse.Gameplay
 
         void OnClientDisconnected(ulong clientId)
         {
-            if (subscribedNetworkManager == null || clientId == subscribedNetworkManager.LocalClientId)
+            if (session == null || clientId == session.LocalClientId)
                 return;
 
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerLeave);

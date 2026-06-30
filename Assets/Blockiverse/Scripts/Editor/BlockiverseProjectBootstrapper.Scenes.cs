@@ -124,6 +124,7 @@ namespace Blockiverse.Editor
 
         static void ConfigureNetworkPlayerObject(GameObject playerObject)
         {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(playerObject);
             playerObject.name = NetworkPlayerPrefabName;
             playerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             playerObject.transform.localScale = Vector3.one;
@@ -181,6 +182,7 @@ namespace Blockiverse.Editor
 
         static void ConfigureNetworkManagerObject(GameObject managerObject, GameObject playerPrefab)
         {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(managerObject);
             managerObject.name = NetworkManagerRootName;
             managerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             managerObject.transform.localScale = Vector3.one;
@@ -317,57 +319,26 @@ namespace Blockiverse.Editor
                 return;
 
             string sceneYaml = File.ReadAllText(scenePath);
-            IReadOnlyList<string> sceneDocuments = SplitUnityYamlDocuments(sceneYaml);
-            var gameObjectIdsToRemove = new HashSet<string>();
-            var objectIdsToRemove = new HashSet<string>();
-            var rootTransformIdsToRemove = new HashSet<string>();
+            string[] rawDocuments = sceneYaml.Split(new[] { "--- !u!" }, StringSplitOptions.None);
+            List<string> keptDocuments = new List<string>();
+            keptDocuments.Add(rawDocuments[0]); // Header segment
 
-            foreach (string document in sceneDocuments)
+            int removedCount = 0;
+            for (int i = 1; i < rawDocuments.Length; i++)
             {
-                if (!TryGetUnityYamlDocumentId(document, out string gameObjectId) ||
-                    !document.StartsWith("--- !u!1 ", StringComparison.Ordinal) ||
-                    !IsStaleRootCompositionLayerGameObjectDocument(document))
+                string document = rawDocuments[i];
+                if (IsStaleRootCompositionLayerGameObjectDocument(document))
                 {
+                    removedCount++;
                     continue;
                 }
-
-                gameObjectIdsToRemove.Add(gameObjectId);
-                objectIdsToRemove.Add(gameObjectId);
-
-                foreach (Match componentMatch in Regex.Matches(document, @"component:\s*\{fileID:\s*(-?\d+)\}"))
-                {
-                    string componentId = componentMatch.Groups[1].Value;
-                    objectIdsToRemove.Add(componentId);
-                    if (!rootTransformIdsToRemove.Contains(componentId))
-                        rootTransformIdsToRemove.Add(componentId);
-                }
+                keptDocuments.Add("--- !u!" + document);
             }
 
-            if (objectIdsToRemove.Count == 0)
+            if (removedCount == 0)
                 return;
-
-            var keptDocuments = sceneDocuments
-                .Where(document =>
-                {
-                    if (!TryGetUnityYamlDocumentId(document, out string documentId))
-                        return true;
-
-                    return !objectIdsToRemove.Contains(documentId);
-                })
-                .ToList();
 
             string cleanedSceneYaml = string.Concat(keptDocuments);
-            foreach (string transformId in rootTransformIdsToRemove)
-            {
-                cleanedSceneYaml = Regex.Replace(
-                    cleanedSceneYaml,
-                    $@"(?m)^\s*-\s*\{{fileID:\s*{Regex.Escape(transformId)}\}}\r?\n",
-                    string.Empty);
-            }
-
-            if (cleanedSceneYaml == sceneYaml)
-                return;
-
             File.WriteAllText(scenePath, cleanedSceneYaml);
             AssetDatabase.ImportAsset(scenePath, ImportAssetOptions.ForceUpdate);
         }
@@ -709,9 +680,16 @@ namespace Blockiverse.Editor
                 new Vector2(500.0f, 88.0f),
                 TextDimColor);
 
+            GameObject badgeObject = EnsureRectChild(panelObject.transform, "Status Badge");
+            ConfigureTopLeftRect(badgeObject.GetComponent<RectTransform>(), new Vector2(470.0f, -30.0f), new Vector2(32.0f, 32.0f));
+            Image statusBadge = EnsureComponent<Image>(badgeObject);
+            ApplySlicedSprite(statusBadge, GetUiSprite("multiplayer_status_badge"));
+            statusBadge.color = new Color(0.55f, 0.58f, 0.62f, 1.0f);
+
             BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(menuObject);
             menu.Configure(managerObject != null ? managerObject.GetComponent<BlockiverseNetworkSession>() : null);
-            menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
+            menu.ConfigureControls(hostButton, joinButton, null, stopButton, addressInput, statusText);
+            menu.ConfigureStatusBadge(statusBadge);
 
             EditorUtility.SetDirty(menu);
             EditorUtility.SetDirty(menuObject);
@@ -741,7 +719,7 @@ namespace Blockiverse.Editor
             CreativeWorldManager manager = EnsureComponent<CreativeWorldManager>(worldObject);
             CreativeHotbar hotbar = FindBootSceneHotbar(scene);
             performanceOverlay.Configure(renderer);
-            manager.InitializeDefaultWorldOnAwake = false;
+            manager.InitializeDefaultWorldOnAwake = true;
             manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
             manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
 

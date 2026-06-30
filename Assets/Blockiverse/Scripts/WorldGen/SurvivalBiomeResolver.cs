@@ -45,7 +45,11 @@ namespace Blockiverse.WorldGen
             double hills      = (ValueNoise2D(x, z, scale: 67,  seed, salt: 211) - 0.5) * 2.0;
             double detail     = (ValueNoise2D(x, z, scale: 17,  seed, salt: 323) - 0.5) * 2.0;
 
-            int height = (int)Math.Round(WorldConstants.SeaLevel + continent * 42 + hills * 18 + detail * 5);
+            // R4b: amplitude scaled down for the 128-tall world (was 42/18/5 for the old 256-tall
+            // world). Peak relief is SeaLevel + 48, so with SeaLevel = 64 the tallest natural column
+            // is ~112 — leaving headroom under WorldMaxY (127) for trees and surface structures
+            // without clamping peaks into flat plateaus.
+            int height = (int)Math.Round(WorldConstants.SeaLevel + continent * 30 + hills * 14 + detail * 4);
             return Clamp(height, 40, worldHeight - 1);
         }
 
@@ -94,12 +98,16 @@ namespace Blockiverse.WorldGen
 
         internal TerrainBiome Classify(int x, int z, int surfaceY)
         {
-            if (surfaceY >= 130)
+            // R4b: thresholds scaled to the 128-tall world. The original 256-tall world used
+            // SeaLevel + 34 (130) for the highlands gate and SeaLevel + 24 (120) for altitude
+            // cooling; preserve those offsets above the (now lower) sea level so highlands terrain
+            // still occurs on the tallest columns.
+            if (surfaceY >= WorldConstants.SeaLevel + 34)
                 return TerrainBiome.Highlands;
 
             double temperature = ValueNoise2D(x, z, scale: 250, seed + 11, salt: 511);
             double moisture    = ValueNoise2D(x, z, scale: 250, seed + 23, salt: 737);
-            temperature -= Math.Max(0, surfaceY - 120) * 0.006;
+            temperature -= Math.Max(0, surfaceY - (WorldConstants.SeaLevel + 24)) * 0.006;
 
             if (temperature < 0.25)
                 return TerrainBiome.Tundra;

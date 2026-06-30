@@ -13,7 +13,7 @@ namespace Blockiverse.UI
 
         static readonly string[] GameModeOptions = { "survival", "creative" };
         static readonly string[] DifficultyOptions = { "easy", "normal", "hard" };
-        static readonly string[] WorldSizeOptions = { "small", "medium", "large", "infinite" };
+        static readonly string[] WorldSizeOptions = { "small", "medium" };
         static readonly string[] WorldPresetOptions = WorldPresetIds.MenuOptions;
         static readonly string[] TextureSetOptions = BlockTextureSetIds.MenuOptions;
         static readonly string[] StartingBiomeOptions =

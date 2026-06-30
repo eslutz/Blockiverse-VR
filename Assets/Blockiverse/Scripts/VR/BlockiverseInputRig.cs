@@ -20,7 +20,7 @@ using Unity.XR.CoreUtils;
 namespace Blockiverse.VR
 {
     [DefaultExecutionOrder(XRInteractionUpdateOrder.k_LocomotionProviders - 1)]
-    public sealed class BlockiverseInputRig : MonoBehaviour
+    public sealed class BlockiverseInputRig : MonoBehaviour, IBlockiverseInputRig
     {
         const float DefaultContinuousMoveSpeed = 1.8f;
         const float SprintMoveMultiplier = 2.2f;

@@ -29,15 +29,15 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TorchbudLightManagerCreatesRealtimePointLightsForPlacedEmitters()
+        public IEnumerator GlowwickLightManagerCreatesRealtimePointLightsForPlacedEmitters()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 1);
-            var host = new GameObject("Torchbud Light Manager");
+            var host = new GameObject("Glowwick Light Manager");
 
             try
             {
-                TorchbudLightManager manager = host.AddComponent<TorchbudLightManager>();
+                GlowwickLightManager manager = host.AddComponent<GlowwickLightManager>();
                 manager.Configure(world, registry);
 
                 var torchPosition = new BlockPosition(3, 2, 3);

@@ -47,6 +47,11 @@ namespace Blockiverse.Tests.EditMode
             "Station Panel",
             "Controller Mapping Popup",
             "Confirm Dialog",
+            "Error Dialog",
+            "Inventory Panel",
+            "Crafting Panel",
+            "Catalog Panel",
+            "Crate Panel",
         };
 
         [SetUp]
@@ -126,27 +131,31 @@ namespace Blockiverse.Tests.EditMode
 
             Transform cameraOffset = prefab.transform.Find("Camera Offset");
             Assert.That(cameraOffset, Is.Not.Null);
-            Assert.That(cameraOffset.Find(MenuCompositionSurfaceName), Is.Null,
-                "Interactive menus should not be rendered through a shared composition layer surface.");
-            Assert.That(cameraOffset.Find(MenuCompositionCanvasName), Is.Null);
-            Assert.That(prefab.GetComponentsInChildren<CompositionLayer>(includeInactive: true), Is.Empty,
-                "The generated rig should not contain interactive composition layers.");
-            Assert.That(prefab.GetComponentsInChildren<InteractableUIMirror>(includeInactive: true), Is.Empty,
-                "The generated rig should not proxy menu input through composition-layer UI mirroring.");
-            Assert.That(prefab.GetComponentsInChildren<BlockiverseCompositionLayerRenderScale>(includeInactive: true), Is.Empty);
-            Assert.That(prefab.GetComponentsInChildren<BlockiverseCompositionMenuCursor>(includeInactive: true), Is.Empty);
+            
+            Transform menuSurface = cameraOffset.Find(MenuCompositionSurfaceName);
+            Assert.That(menuSurface, Is.Not.Null, "Expected composition layer menu surface.");
+            
+            Transform menuCanvas = menuSurface.Find(MenuCompositionCanvasName);
+            Assert.That(menuCanvas, Is.Not.Null, "Expected composition layer menu canvas.");
 
-            int interactionLayer = LayerMask.NameToLayer(InteractionLayerName);
-            Assert.That(interactionLayer, Is.EqualTo(InteractionLayerIndex));
+            Assert.That(prefab.GetComponentInChildren<CompositionLayer>(includeInactive: true), Is.Not.Null,
+                "The generated rig should contain interactive composition layers.");
+            Assert.That(prefab.GetComponentInChildren<InteractableUIMirror>(includeInactive: true), Is.Not.Null,
+                "The generated rig should proxy menu input through composition-layer UI mirroring.");
+            Assert.That(prefab.GetComponentInChildren<BlockiverseCompositionLayerRenderScale>(includeInactive: true), Is.Not.Null);
+            Assert.That(prefab.GetComponentInChildren<BlockiverseCompositionMenuCursor>(includeInactive: true), Is.Not.Null);
+
+            int compositionLayerIndex = LayerMask.NameToLayer(VrUiLayerName);
+            Assert.That(compositionLayerIndex, Is.EqualTo(VrUiLayerIndex));
 
             foreach (string name in RoutedMenuPanels)
             {
-                Transform panel = cameraOffset.Find(name);
-                Assert.That(panel, Is.Not.Null, $"{name} should be a direct world-space child of Camera Offset.");
-                AssertWorldSpaceXrMenuPanel(panel, interactionLayer, name);
+                Transform panel = menuCanvas.Find(name);
+                Assert.That(panel, Is.Not.Null, $"{name} should be a child of Menu Canvas.");
+                AssertRoutedMenuPanel(panel, compositionLayerIndex, name, menuSurface);
             }
 
-            Transform controllerMap = cameraOffset.Find("Controller Mapping Popup");
+            Transform controllerMap = menuCanvas.Find("Controller Mapping Popup");
             Button closeButton = controllerMap?.Find("Panel/Close Button")?.GetComponent<Button>();
             Assert.That(closeButton, Is.Not.Null, "The Controller Map close button must be a real UGUI Button.");
             Assert.That(closeButton.interactable, Is.True);
@@ -154,6 +163,37 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(closeImage, Is.Not.Null);
             Assert.That(closeImage.raycastTarget, Is.True,
                 "The close button must be reachable by XRI tracked-device UI raycasts.");
+        }
+
+        static void AssertRoutedMenuPanel(Transform panel, int expectedLayer, string panelName, Transform menuSurface)
+        {
+            Assert.That(panel.gameObject.layer, Is.EqualTo(expectedLayer), $"{panelName} should render through the composition layer.");
+            Assert.That(panel.gameObject.activeSelf, Is.False,
+                $"{panelName} should start inactive because visibility is controlled at runtime.");
+            
+            Assert.That(panel.GetComponent<Canvas>(), Is.Null, $"{panelName} should not have its own Canvas.");
+            Assert.That(panel.GetComponent<GraphicRaycaster>(), Is.Null);
+            Assert.That(panel.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null);
+            Assert.That(panel.GetComponent<CanvasScaler>(), Is.Null);
+
+            BlockiverseWorldSpacePanelPresenter presenter = panel.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(presenter, Is.Not.Null, $"{panelName} should keep presenter-based visibility.");
+            Assert.That(presenter.TargetCanvas, Is.Null);
+            Assert.That(presenter.TargetRoot, Is.SameAs(panel.gameObject));
+            Assert.That(presenter.PlacementRoot, Is.SameAs(menuSurface));
+            Assert.That(presenter.UsesSharedCompositionRoot, Is.True);
+
+            var serializedPresenter = new SerializedObject(presenter);
+            Assert.That(serializedPresenter.FindProperty("distanceMeters").floatValue,
+                Is.EqualTo(ExpectedMenuDistanceMeters).Within(0.001f));
+            Assert.That(serializedPresenter.FindProperty("verticalOffsetMeters").floatValue,
+                Is.EqualTo(ExpectedMenuVerticalOffsetMeters).Within(0.001f));
+            Assert.That(serializedPresenter.FindProperty("pitchDegrees").floatValue,
+                Is.EqualTo(ExpectedMenuPitchDegrees).Within(0.001f));
+
+            foreach (Graphic graphic in panel.GetComponentsInChildren<Graphic>(includeInactive: true))
+                Assert.That(graphic.gameObject.layer, Is.EqualTo(expectedLayer),
+                    $"{panelName}/{graphic.name} should stay on the composition UI layer.");
         }
 
         [Test]
@@ -166,8 +206,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(cameraOffset.Find("Blockiverse UI Pointer Projection"), Is.Null);
             Assert.That(cameraOffset.Find(XrVisualProjectionRigName), Is.Null,
                 "Controller/ray visuals should not be rendered by a composition ProjectionLayerRigData camera path.");
-            Assert.That(cameraOffset.Find(MenuCompositionSurfaceName), Is.Null,
-                "World-space menus do not need a composition-layer menu cursor or collider.");
+            Assert.That(cameraOffset.Find(MenuCompositionSurfaceName), Is.Not.Null,
+                "The shared quad composition surface is required for routed VR menus.");
 
             int visualLayer = LayerMask.NameToLayer(XrVisualLayerName);
             Assert.That(visualLayer, Is.EqualTo(XrVisualLayerIndex));

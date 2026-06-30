@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using Unity.Netcode;
@@ -61,9 +62,31 @@ namespace Blockiverse.Networking
         public BlockiverseNetworkConfig Config => config;
         public bool IsTransportEncryptionRequested => useEncryptedTransport;
         public bool IsTransportEncryptionConfigured => HasTransportEncryptionSecrets();
+        public ulong LocalClientId => networkManager != null ? networkManager.LocalClientId : 0;
+        public bool IsServer => networkManager != null && networkManager.IsServer;
+
+        public bool TryResolvePlayerHeadWorldPosition(ulong clientId, out Vector3 position)
+        {
+            position = default;
+            if (networkManager == null || !networkManager.ConnectedClients.TryGetValue(clientId, out NetworkClient client))
+                return false;
+
+            NetworkObject playerObject = client.PlayerObject;
+            if (playerObject == null)
+                return false;
+
+            BlockiverseNetworkAvatarRig avatarRig = playerObject.GetComponent<BlockiverseNetworkAvatarRig>();
+            Transform headTransform = avatarRig?.HeadAnchor != null ? avatarRig.HeadAnchor : playerObject.transform;
+            position = headTransform.position;
+            return true;
+        }
+
+        public IEnumerable<ulong> ConnectedClientIds => networkManager != null ? networkManager.ConnectedClientsIds : Array.Empty<ulong>();
 
         public event BlockiverseNetworkSessionPreparationHandler HostStartPreparing;
         public event BlockiverseNetworkSessionPreparationHandler HostShutdownPreparing;
+        public Action<ulong> ClientConnected;
+        public Action<ulong> ClientDisconnected;
 
         void Awake()
         {
@@ -356,6 +379,8 @@ namespace Blockiverse.Networking
 
         void HandleClientConnected(ulong clientId)
         {
+            ClientConnected?.Invoke(clientId);
+
             if (networkManager == null || clientId != networkManager.LocalClientId)
                 return;
 
@@ -371,6 +396,8 @@ namespace Blockiverse.Networking
 
         void HandleClientDisconnected(ulong clientId)
         {
+            ClientDisconnected?.Invoke(clientId);
+
             if (networkManager == null || (networkManager.IsServer && clientId != networkManager.LocalClientId))
                 return;
 

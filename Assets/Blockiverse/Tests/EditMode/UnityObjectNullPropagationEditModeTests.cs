@@ -16,7 +16,7 @@ namespace Blockiverse.Tests.EditMode
                     @"Shader\.Find\([^\r\n]+\)\s*\?\?",
                 }),
             (
-                "Assets/Blockiverse/Scripts/Gameplay/MultiplayerChunkAuthoritySync.cs",
+                "Assets/Blockiverse/Scripts/Networking/MultiplayerChunkAuthoritySync.cs",
                 new[]
                 {
                     @"\bworldManager\s*\?\.",
@@ -24,7 +24,7 @@ namespace Blockiverse.Tests.EditMode
                     @"ResolveNetworkManagerOrNull\(\)\s*\?\?",
                 }),
             (
-                "Assets/Blockiverse/Scripts/Gameplay/MultiplayerSurvivalSync.cs",
+                "Assets/Blockiverse/Scripts/Networking/MultiplayerSurvivalSync.cs",
                 new[]
                 {
                     @"\bworldManager\s*\?\.",

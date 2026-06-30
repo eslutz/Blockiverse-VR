@@ -1,9 +1,10 @@
 using Unity.XR.CoreUtils;
 using UnityEngine;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {
-    public sealed class BlockiverseHeightReset : MonoBehaviour
+    public sealed class BlockiverseHeightReset : MonoBehaviour, IBlockiverseHeightReset
     {
         const float DefaultStandingEyeHeight = 1.6f;
 

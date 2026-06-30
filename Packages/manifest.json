@@ -9,13 +9,13 @@
     }
   ],
   "dependencies": {
-    "com.besty.unity-skills": "https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity",
-    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main",
     "com.meta.xr.sdk.avatars": "40.0.1",
     "com.meta.xr.sdk.core": "81.0.1",
     "com.meta.xr.sdk.interaction.ovr": "81.0.1",
     "com.meta.xr.sdk.platform": "81.0.1",
     "com.unity.addressables": "3.1.0",
+    "com.unity.ai.assistant": "2.13.0-pre.2",
+    "com.unity.ai.inference": "2.6.1",
     "com.unity.inputsystem": "1.19.0",
     "com.unity.multiplayer.center": "1.0.1",
     "com.unity.netcode.gameobjects": "2.11.2",

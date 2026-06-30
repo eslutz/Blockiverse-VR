@@ -1,8 +1,9 @@
 using System;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -30,12 +31,12 @@ namespace Blockiverse.UI
 
         public Inventory Inventory { get; private set; }
         public CraftingRecipeBook RecipeBook { get; private set; }
-        public PlayerVitals Vitals { get; private set; }
+        public IPlayerVitalsView Vitals { get; private set; }
 
         CreativeWorldManager worldManager;
         SurvivalVitalsRuntime vitalsRuntime;
         MultiplayerSurvivalSync survivalSync;
-        BlockiverseCreativeInputBridge inputBridge;
+        IBlockiverseCreativeInputBridge inputBridge;
         ItemRegistry itemRegistry;
         float nextStationScanTime;
         float nextVitalsRefreshTime;
@@ -112,8 +113,17 @@ namespace Blockiverse.UI
             // HUD shows live health/hunger/thirst/stamina. Falls back to a standalone instance for
             // isolated validation/tests.
             vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
-            Vitals = vitalsRuntime != null ? vitalsRuntime.Vitals : new PlayerVitals();
-            inputBridge = FindFirstObjectByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include);
+            Vitals = vitalsRuntime != null ? vitalsRuntime.HealthView : null;
+            
+            var behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var behaviour in behaviours)
+            {
+                if (behaviour is IBlockiverseCreativeInputBridge bridge)
+                {
+                    inputBridge = bridge;
+                    break;
+                }
+            }
 
             // Register this inventory as the container-loot destination so breaking a crate fills it.
             worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
@@ -140,11 +150,11 @@ namespace Blockiverse.UI
                 craftingPanel.Bind(RecipeBook, Inventory, itemRegistry, CraftingStation.None);
             }
 
-            if (healthPanel != null)
+            if (healthPanel != null && Vitals != null)
             {
                 healthPanel.Bind(Vitals);
                 if (vitalsRuntime != null)
-                    healthPanel.BindSurvivalVitals(vitalsRuntime.SurvivalVitals);
+                    healthPanel.BindSurvivalVitals(vitalsRuntime.SurvivalVitalsView);
             }
 
             if (cratePanel != null)

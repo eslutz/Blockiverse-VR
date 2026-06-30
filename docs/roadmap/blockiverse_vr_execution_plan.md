@@ -286,15 +286,13 @@ Assets/
       Core/
       Voxel/
       WorldGen/
-      Environment/
-      Structures/
-      Vegetation/
       Gameplay/
       Survival/
-      Creative/
+      SurvivalHealth/
       Persistence/
       Networking/
-      AudioVfx/
+      MetaAvatars/
+      MetaPlatform/
       VR/
       UI/
       Editor/
@@ -313,21 +311,53 @@ docs/
 Blockiverse.Core
 Blockiverse.Voxel
 Blockiverse.WorldGen
-Blockiverse.Environment
-Blockiverse.Structures
-Blockiverse.Vegetation
 Blockiverse.Survival
-Blockiverse.Creative
+Blockiverse.Survival.Health
 Blockiverse.Gameplay
 Blockiverse.Persistence
 Blockiverse.Networking
-Blockiverse.AudioVfx
+Blockiverse.MetaAvatars
+Blockiverse.MetaPlatform
 Blockiverse.VR
 Blockiverse.UI
 Blockiverse.Editor
 Blockiverse.Tests.EditMode
 Blockiverse.Tests.PlayMode
 ```
+
+### Ratified architecture decisions (A2)
+
+The following decisions are ratified as the canonical assembly layout. They supersede
+earlier aspirational notes about a more granular assembly split.
+
+- **WorldGen / Gameplay consolidation — ratified.** Environment, Structures, Vegetation,
+  and AudioVfx are **not** separate assemblies. Their code lives within
+  `Blockiverse.WorldGen` and `Blockiverse.Gameplay`. This keeps the assembly graph small
+  and acyclic and avoids premature fragmentation of tightly-coupled gameplay code.
+- **Netcode extraction (A1) — recorded.** The multiplayer netcode
+  (`MultiplayerSurvivalSync`, `MultiplayerChunkAuthoritySync`, `MultiplayerWorldPersistence`,
+  plus supporting wire-codec/mapper types) has been **moved out of `Blockiverse.Gameplay`
+  into `Blockiverse.Networking`**. `Blockiverse.Networking` references
+  `Core, Voxel, WorldGen, Survival, Persistence` (one-directional); nothing it depends on
+  references it back, so the graph remains acyclic.
+- **UI decoupling (A2) — incremental.** `Blockiverse.UI` is being decoupled from gameplay/data
+  assemblies via interface/event seams placed in the dependency-free `Blockiverse.Core`
+  (joining the existing `IBlockiverseInputRig` / `IBlockiverseInteractionHaptics` /
+  `IBlockiverseHeightReset` seams). The thinnest, lowest-risk dependencies
+  (`Blockiverse.MetaPlatform`, `Blockiverse.WorldGen`, `Blockiverse.Survival.Health`) are
+  abstracted first. The deeply-woven foundations (`Gameplay`, `Voxel`, `Survival`,
+  `Networking`, `Persistence`) are intentionally retained as direct references for now —
+  abstracting them would require splitting those assemblies first and carries
+  disproportionate risk.
+
+### Ratified comfort/input decisions
+
+- **Creative-flight toggle (V3) — ratified as double-tap on the jump button.** Flight is
+  toggled by a double-tap of the dominant-hand Primary (jump) button, with single-press
+  reserved for jump and the jump locomotion provider disabled while flying. This was
+  evaluated against moving the toggle to the Secondary button; the double-tap binding is
+  the accepted design because it keeps the Secondary button free and is unambiguous in
+  practice (single vs. double press within the double-click window).
 
 ---
 

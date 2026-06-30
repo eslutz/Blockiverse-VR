@@ -1,10 +1,13 @@
 using Blockiverse.Voxel;
 using UnityEngine;
+using Unity.Profiling;
 
 namespace Blockiverse.Gameplay
 {
     public static class VoxelLightSampler
     {
+        static readonly ProfilerMarker s_SampleAirLightMarker = new ProfilerMarker("VoxelLightSampler.SampleAirLight");
+
         public const float SurfaceLight = 1.0f;
         public const float CaveMinimumLight = 0.2f;
         public const float CaveEntranceLight = 0.72f;
@@ -37,53 +40,58 @@ namespace Blockiverse.Gameplay
             int maxProbeDistance = DefaultProbeDistance,
             VoxelSkyLightMap skyLight = null)
         {
-            if (world == null || registry == null)
-                return SurfaceLight;
-
-            if (!world.Bounds.Contains(airPosition))
-                return SurfaceLight;
-
-            if (!IsLightPassable(world, registry, airPosition))
-                return CaveMinimumLight;
-
-            float emissiveLight = SampleEmissiveLight(world, registry, airPosition, maxProbeDistance);
-
-            if (HasSkyAccess(world, registry, airPosition, skyLight))
-                return Mathf.Max(SurfaceLight, emissiveLight);
-
-            int nearestOpening = maxProbeDistance + 1;
-
-            foreach (BlockPosition direction in ProbeDirections)
+            using (s_SampleAirLightMarker.Auto())
             {
-                for (int step = 1; step <= maxProbeDistance; step++)
+                if (world == null || registry == null)
+                    return SurfaceLight;
+
+                if (!world.Bounds.Contains(airPosition))
+                    return SurfaceLight;
+
+                BlockDefinition[] defs = registry.CachedDefinitions;
+
+                if (!IsLightPassable(world, registry, defs, airPosition))
+                    return CaveMinimumLight;
+
+                float emissiveLight = SampleEmissiveLight(world, registry, defs, airPosition, maxProbeDistance);
+
+                if (HasSkyAccess(world, registry, defs, airPosition, skyLight))
+                    return Mathf.Max(SurfaceLight, emissiveLight);
+
+                int nearestOpening = maxProbeDistance + 1;
+
+                foreach (BlockPosition direction in ProbeDirections)
                 {
-                    BlockPosition probe = new(
-                        airPosition.X + direction.X * step,
-                        airPosition.Y + direction.Y * step,
-                        airPosition.Z + direction.Z * step);
-
-                    if (!world.Bounds.Contains(probe))
+                    for (int step = 1; step <= maxProbeDistance; step++)
                     {
-                        nearestOpening = Mathf.Min(nearestOpening, step);
-                        break;
-                    }
+                        BlockPosition probe = new(
+                            airPosition.X + direction.X * step,
+                            airPosition.Y + direction.Y * step,
+                            airPosition.Z + direction.Z * step);
 
-                    if (!IsLightPassable(world, registry, probe))
-                        break;
+                        if (!world.Bounds.Contains(probe))
+                        {
+                            nearestOpening = Mathf.Min(nearestOpening, step);
+                            break;
+                        }
 
-                    if (HasSkyAccess(world, registry, probe, skyLight))
-                    {
-                        nearestOpening = Mathf.Min(nearestOpening, step);
-                        break;
+                        if (!IsLightPassable(world, registry, defs, probe))
+                            break;
+
+                        if (HasSkyAccess(world, registry, defs, probe, skyLight))
+                        {
+                            nearestOpening = Mathf.Min(nearestOpening, step);
+                            break;
+                        }
                     }
                 }
+
+                if (nearestOpening > maxProbeDistance)
+                    return Mathf.Max(CaveMinimumLight, emissiveLight);
+
+                float openness = 1.0f - (nearestOpening - 1) / (float)maxProbeDistance;
+                return Mathf.Max(Mathf.Lerp(CaveMinimumLight, CaveEntranceLight, openness), emissiveLight);
             }
-
-            if (nearestOpening > maxProbeDistance)
-                return Mathf.Max(CaveMinimumLight, emissiveLight);
-
-            float openness = 1.0f - (nearestOpening - 1) / (float)maxProbeDistance;
-            return Mathf.Max(Mathf.Lerp(CaveMinimumLight, CaveEntranceLight, openness), emissiveLight);
         }
 
         public static Color ToVertexColor(float light)
@@ -92,7 +100,7 @@ namespace Blockiverse.Gameplay
             return new Color(light, light, light, 1.0f);
         }
 
-        static bool HasSkyAccess(VoxelWorld world, BlockRegistry registry, BlockPosition airPosition, VoxelSkyLightMap skyLight)
+        static bool HasSkyAccess(VoxelWorld world, BlockRegistry registry, BlockDefinition[] defs, BlockPosition airPosition, VoxelSkyLightMap skyLight)
         {
             // The sky-light map answers in O(1); the column walk remains as the fallback for
             // callers without one (isolated tests).
@@ -101,7 +109,7 @@ namespace Blockiverse.Gameplay
 
             for (int y = airPosition.Y + 1; y < world.Bounds.Height; y++)
             {
-                if (!IsLightPassable(world, registry, new BlockPosition(airPosition.X, y, airPosition.Z)))
+                if (!IsLightPassable(world, registry, defs, new BlockPosition(airPosition.X, y, airPosition.Z)))
                     return false;
             }
 
@@ -111,6 +119,7 @@ namespace Blockiverse.Gameplay
         static float SampleEmissiveLight(
             VoxelWorld world,
             BlockRegistry registry,
+            BlockDefinition[] defs,
             BlockPosition airPosition,
             int maxProbeDistance)
         {
@@ -129,7 +138,7 @@ namespace Blockiverse.Gameplay
                     if (!world.Bounds.Contains(probe))
                         break;
 
-                    BlockDefinition definition = registry.Get(world.GetBlock(probe));
+                    BlockDefinition definition = GetDefinition(registry, defs, world.GetBlock(probe));
                     if (definition.EmissiveLight > 0)
                     {
                         float normalized = definition.EmissiveLight / 15.0f;
@@ -146,13 +155,25 @@ namespace Blockiverse.Gameplay
             return strongest;
         }
 
-        static bool IsLightPassable(VoxelWorld world, BlockRegistry registry, BlockPosition position)
+        static bool IsLightPassable(VoxelWorld world, BlockRegistry registry, BlockDefinition[] defs, BlockPosition position)
         {
-            BlockDefinition definition = registry.Get(world.GetBlock(position));
+            BlockDefinition definition = GetDefinition(registry, defs, world.GetBlock(position));
             return IsLightPassable(definition);
         }
 
         static bool IsLightPassable(BlockDefinition definition) =>
             !definition.IsRenderable || !definition.IsSolid;
+
+        static BlockDefinition GetDefinition(BlockRegistry registry, BlockDefinition[] defs, BlockId id)
+        {
+            int val = id.Value;
+            if (defs != null && val >= 0 && val < defs.Length)
+            {
+                BlockDefinition def = defs[val];
+                if (def != null)
+                    return def;
+            }
+            return registry.Get(id);
+        }
     }
 }

@@ -37,8 +37,43 @@ namespace Blockiverse.Tests.EditMode
         static readonly Quaternion ControllerRayOriginLocalRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
 
         [Test]
-        public void XrRigPrefabIsWiredForQuestControllerAnchorsAndHaptics()
+        public void RoutedMenusAreChildrenOfSharedCompositionCanvas()
         {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+            Transform cameraOffset = prefab.transform.Find("Camera Offset");
+            Transform menuSurface = cameraOffset.Find("Blockiverse Menu Composition Surface");
+            Transform menuCanvas = menuSurface.Find("Blockiverse Menu Canvas");
+
+            string[] routedPanels = {
+                BlockiverseMenuController.TitleMenuName,
+                BlockiverseMenuController.PauseMenuName,
+                BlockiverseMenuController.InventoryPanelName,
+                BlockiverseMenuController.SettingsPanelName
+            };
+
+            foreach (string panelName in routedPanels)
+            {
+                Transform panel = menuCanvas.Find(panelName);
+                Assert.That(panel, Is.Not.Null, $"Panel '{panelName}' should be under the shared composition canvas.");
+                Assert.That(panel.GetComponent<Canvas>(), Is.Null, $"Panel '{panelName}' should have its own Canvas removed.");
+            }
+        }
+
+        [Test]
+        public void InteractionRaysAreOnMainCameraLayerPath()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+            Transform cameraOffset = prefab.transform.Find("Camera Offset");
+            Transform leftRay = cameraOffset.Find("Left Controller/Interaction Ray");
+            Transform rightRay = cameraOffset.Find("Right Controller/Interaction Ray");
+
+            Assert.That(leftRay.gameObject.layer, Is.EqualTo(0), "Left interaction ray should be on the Default layer (0) for Main Camera culling.");
+            Assert.That(rightRay.gameObject.layer, Is.EqualTo(0), "Right interaction ray should be on the Default layer (0) for Main Camera culling.");
+        }
+
+        [Test]
+        public void XrRigPrefabIsWiredForQuestControllerAnchorsAndHaptics()
+{
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
@@ -166,16 +201,15 @@ namespace Blockiverse.Tests.EditMode
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
             BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
-            Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
+            Transform menuTransform = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Comfort Settings Menu");
             BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
             Assert.That(settings, Is.Not.Null);
             Assert.That(dominantHandResolver, Is.Not.Null);
-            Assert.That(settings.VignetteEnabled, Is.False, "Generated rig should not start with the motion vignette enabled over the title/menu.");
-            Assert.That(settings.VignetteStrength, Is.EqualTo(0.0f).Within(0.001f), "Generated rig should start with a fully open vignette strength.");
-            Assert.That(settings.VignetteAperture, Is.EqualTo(1.0f).Within(0.001f), "Generated rig should leave the title/menu view unobscured.");
+            Assert.That(settings.VignetteEnabled, Is.True, "Generated rig should ship the comfort-first motion vignette on; it only renders during locomotion so the static title/menu stays readable.");
+            Assert.That(settings.VignetteStrength, Is.GreaterThan(0f).And.LessThanOrEqualTo(0.35f), "Generated rig should start with a low, comfort-first vignette strength.");
             Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
             Assert.That(menuTransform, Is.Not.Null);
             Assert.That(menu, Is.Not.Null);
@@ -188,10 +222,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
             Assert.That(presenter.PlaysHideFeedback, Is.True);
             Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
-            Assert.That(presenter.UsesSharedCompositionRoot, Is.False);
-            Assert.That(presenter.TargetCanvas, Is.SameAs(menuTransform.GetComponent<Canvas>()));
-            Assert.That(menuTransform.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
-                "Comfort menu should receive XRI tracked-device UI raycasts directly.");
+            Assert.That(presenter.UsesSharedCompositionRoot, Is.True);
+            Assert.That(presenter.TargetCanvas, Is.Null);
+            Assert.That(menuTransform.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
+                "Comfort menu should not receive XRI tracked-device UI raycasts directly when routed.");
+            Transform canvasTransform = menuTransform.parent;
+            Assert.That(canvasTransform.GetComponent<Canvas>(), Is.Not.Null);
+            Assert.That(canvasTransform.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
 
             Image panelImage = menuTransform.Find("Panel")?.GetComponent<Image>();
             TMP_Text title = menuTransform.Find("Panel/Title")?.GetComponent<TMP_Text>();
@@ -319,6 +356,63 @@ namespace Blockiverse.Tests.EditMode
             finally
             {
                 BlockiverseRuntimeState.Reset();
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void CreativeInputBridgeResolvesInteractionRaysOnceAndCaches()
+        {
+            GameObject root = new("Interaction Ray Cache Test");
+
+            try
+            {
+                GameObject leftRayObject = new("Left Interaction Ray");
+                leftRayObject.transform.SetParent(root.transform, worldPositionStays: false);
+                XRRayInteractor leftRay = leftRayObject.AddComponent<XRRayInteractor>();
+                BlockiverseLocomotionRayMediator leftMediator = leftRayObject.AddComponent<BlockiverseLocomotionRayMediator>();
+
+                GameObject rightRayObject = new("Right Interaction Ray");
+                rightRayObject.transform.SetParent(root.transform, worldPositionStays: false);
+                XRRayInteractor rightRay = rightRayObject.AddComponent<XRRayInteractor>();
+                BlockiverseLocomotionRayMediator rightMediator = rightRayObject.AddComponent<BlockiverseLocomotionRayMediator>();
+
+                leftMediator.Configure(null, null, leftRay, null, BlockiverseControllerRole.Left);
+                rightMediator.Configure(null, null, rightRay, null, BlockiverseControllerRole.Right);
+
+                BlockiverseCreativeInputBridge bridge = root.AddComponent<BlockiverseCreativeInputBridge>();
+
+                MethodInfo refresh = typeof(BlockiverseCreativeInputBridge).GetMethod(
+                    "RefreshActiveInteractionRay",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(refresh, Is.Not.Null, "The bridge should expose its per-frame ray refresh for testing.");
+
+                refresh.Invoke(bridge, null);
+
+                int afterFirstResolve = bridge.InteractionRayDiscoveryCount;
+                Assert.That(afterFirstResolve, Is.EqualTo(1), "The first refresh should resolve the interaction rays exactly once.");
+                Assert.That(bridge.InteractionRay, Is.Not.Null, "A usable interaction ray should be cached after the first resolve.");
+
+                for (int i = 0; i < 10; i++)
+                    refresh.Invoke(bridge, null);
+
+                Assert.That(bridge.InteractionRayDiscoveryCount, Is.EqualTo(afterFirstResolve),
+                    "Per-frame refresh must reuse the cached rays without re-running the allocating discovery scan.");
+
+                bridge.InvalidateInteractionRayCache();
+                refresh.Invoke(bridge, null);
+
+                Assert.That(bridge.InteractionRayDiscoveryCount, Is.EqualTo(afterFirstResolve + 1),
+                    "Invalidating the cache (rig change) should force exactly one more discovery pass.");
+
+                for (int i = 0; i < 5; i++)
+                    refresh.Invoke(bridge, null);
+
+                Assert.That(bridge.InteractionRayDiscoveryCount, Is.EqualTo(afterFirstResolve + 1),
+                    "After re-resolving, the cache should latch again and stop re-scanning every frame.");
+            }
+            finally
+            {
                 Object.DestroyImmediate(root);
             }
         }
@@ -1040,22 +1134,21 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(prefab, Is.Not.Null);
 
-            Transform popup = prefab.transform.Find("Camera Offset/Controller Mapping Popup");
+            Transform popup = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas/Controller Mapping Popup");
             Transform startupOverlay = prefab.transform.Find("Camera Offset/Startup Loading Overlay");
             Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
 
-            Assert.That(popup, Is.Not.Null);
+            Assert.That(popup, Is.Not.Null, "Controller Mapping Popup must be present under Menu Canvas.");
             BlockiverseWorldSpacePanelPresenter popupPresenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
             Assert.That(popupPresenter, Is.Not.Null);
             Assert.That(popupPresenter.ShowOnStart, Is.False,
                 "The title router must own first-frame menu visibility; controls stay available from Settings.");
-            Canvas popupCanvas = popup.GetComponent<Canvas>();
-            Assert.That(popupCanvas, Is.Not.Null, "The routed popup should use its own world-space XR UI canvas.");
-            Assert.That(popupCanvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
-            Assert.That(popup.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
-                "The Controller Map must receive XRI tracked-device UI raycasts directly.");
-            Assert.That(popup.GetComponent<GraphicRaycaster>(), Is.Null,
-                "The Controller Map should not use screen-space GraphicRaycaster input.");
+
+            Transform sharedMenuCanvasTransform = prefab.transform.Find("Camera Offset/Blockiverse Menu Composition Surface/Blockiverse Menu Canvas");
+            Assert.That(sharedMenuCanvasTransform, Is.Not.Null);
+            Canvas sharedCanvas = sharedMenuCanvasTransform.GetComponent<Canvas>();
+            Assert.That(sharedCanvas, Is.Not.Null);
+
             var serializedPopupPresenter = new SerializedObject(popupPresenter);
             Assert.That(serializedPopupPresenter.FindProperty("distanceMeters").floatValue, Is.EqualTo(0.95f).Within(0.001f));
             Assert.That(serializedPopupPresenter.FindProperty("verticalOffsetMeters").floatValue, Is.EqualTo(-0.38f).Within(0.001f),
@@ -1065,8 +1158,6 @@ namespace Blockiverse.Tests.EditMode
                 "The menu router toggles per-panel input through the routed panel's CanvasGroup.");
             Assert.That(popup.gameObject.activeSelf, Is.True,
                 "The routed popup GameObject must stay active so the menu controller can enable its Canvas at runtime.");
-            Assert.That(popupCanvas.enabled, Is.False,
-                "The routed popup should start hidden through Canvas.enabled rather than an inactive root.");
             Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
             Button closeButton = popup.Find("Panel/Close Button")?.GetComponent<Button>();
             BlockiverseMenuController menuController = prefab.GetComponent<BlockiverseMenuController>();
@@ -1105,11 +1196,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
                 "Startup artwork is decorative and must not intercept tracked-device UI rays.");
 
-            Canvas menuCanvas = popup.GetComponent<Canvas>();
             Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
-            Assert.That(menuCanvas, Is.Not.Null);
             Assert.That(startupCanvas, Is.Not.Null);
-            Assert.That(menuCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
+            Assert.That(sharedCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
                 "The first-run controller map must render in front of any startup artwork.");
 
             CanvasGroup startupInputGate = startupOverlay.GetComponent<CanvasGroup>();

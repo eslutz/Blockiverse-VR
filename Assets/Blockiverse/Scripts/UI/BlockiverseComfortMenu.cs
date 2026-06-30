@@ -1,8 +1,8 @@
 using Blockiverse.Gameplay;
-using Blockiverse.VR;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using Blockiverse.Core;
 
 namespace Blockiverse.UI
 {
@@ -21,12 +21,13 @@ namespace Blockiverse.UI
         [SerializeField] Toggle toggleToMineToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
+        [SerializeField] Toggle glideBobToggle;
         [SerializeField] Slider eyeHeightSlider;
         [SerializeField] Slider uiScaleSlider;
         [SerializeField] BlockiverseComfortSettings settings;
-        [SerializeField] BlockiverseHeightReset heightReset;
+        IBlockiverseHeightReset heightReset;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
-        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        IBlockiverseInteractionHaptics interactionHaptics;
 
         // Locomotion mode toggles use dedicated callbacks so each can enforce mutual exclusion.
         UnityAction<bool> onGlideChanged;
@@ -42,6 +43,7 @@ namespace Blockiverse.UI
         Toggle registeredLeftHandToggle;
         Toggle registeredToggleToMineToggle;
         Toggle registeredVignetteToggle;
+        Toggle registeredGlideBobToggle;
         Slider registeredSnapTurnSlider;
         Slider registeredMoveSpeedSlider;
         Slider registeredSmoothTurnSpeedSlider;
@@ -54,7 +56,7 @@ namespace Blockiverse.UI
         public void Configure(
             Canvas targetCanvas,
             BlockiverseComfortSettings comfortSettings,
-            BlockiverseHeightReset targetHeightReset = null)
+            IBlockiverseHeightReset targetHeightReset = null)
         {
             canvas = targetCanvas;
             visibilityRoot = targetCanvas != null ? targetCanvas.gameObject : null;
@@ -83,7 +85,8 @@ namespace Blockiverse.UI
             Slider targetEyeHeightSlider = null,
             Slider targetMoveSpeedSlider = null,
             Slider targetSmoothTurnSpeedSlider = null,
-            Slider targetUiScaleSlider = null)
+            Slider targetUiScaleSlider = null,
+            Toggle targetGlideBobToggle = null)
         {
             glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
@@ -98,13 +101,14 @@ namespace Blockiverse.UI
             toggleToMineToggle = targetToggleToMineToggle;
             eyeHeightSlider = targetEyeHeightSlider;
             uiScaleSlider = targetUiScaleSlider;
+            glideBobToggle = targetGlideBobToggle;
             RegisterControlCallbacks();
             SyncTogglesToSettings();
         }
 
         public void ConfigureFeedback(
             BlockiverseAudioCuePlayer targetAudioCuePlayer,
-            BlockiverseInteractionHaptics targetInteractionHaptics)
+            IBlockiverseInteractionHaptics targetInteractionHaptics)
         {
             audioCuePlayer = targetAudioCuePlayer;
             interactionHaptics = targetInteractionHaptics;
@@ -185,6 +189,7 @@ namespace Blockiverse.UI
             RegisterToggleCallback(leftHandToggle, ref registeredLeftHandToggle);
             RegisterToggleCallback(toggleToMineToggle, ref registeredToggleToMineToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
+            RegisterToggleCallback(glideBobToggle, ref registeredGlideBobToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
             RegisterSliderCallback(moveSpeedSlider, ref registeredMoveSpeedSlider);
             RegisterSliderCallback(smoothTurnSpeedSlider, ref registeredSmoothTurnSpeedSlider);
@@ -258,6 +263,9 @@ namespace Blockiverse.UI
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.isOn;
 
+            if (glideBobToggle != null)
+                settings.GlideStyle = glideBobToggle.isOn ? GlideStyle.Bobbing : GlideStyle.Smooth;
+
             if (vignetteStrengthSlider != null)
                 settings.VignetteStrength = vignetteStrengthSlider.value;
 
@@ -299,6 +307,7 @@ namespace Blockiverse.UI
                 smoothTurnSpeedSlider.SetValueWithoutNotify(settings.ContinuousTurnSpeed);
 
             vignetteToggle?.SetIsOnWithoutNotify(settings.VignetteEnabled);
+            glideBobToggle?.SetIsOnWithoutNotify(settings.GlideStyle == GlideStyle.Bobbing);
 
             if (vignetteStrengthSlider != null)
                 vignetteStrengthSlider.SetValueWithoutNotify(settings.VignetteStrength);
@@ -342,6 +351,7 @@ namespace Blockiverse.UI
             registeredTurnAroundToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredLeftHandToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredVignetteToggle?.onValueChanged.RemoveListener(toggleChanged);
+            registeredGlideBobToggle?.onValueChanged.RemoveListener(toggleChanged);
             registeredSnapTurnSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredMoveSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredSmoothTurnSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
@@ -355,6 +365,7 @@ namespace Blockiverse.UI
             registeredTurnAroundToggle = null;
             registeredLeftHandToggle = null;
             registeredVignetteToggle = null;
+            registeredGlideBobToggle = null;
             registeredSnapTurnSlider = null;
             registeredMoveSpeedSlider = null;
             registeredSmoothTurnSpeedSlider = null;

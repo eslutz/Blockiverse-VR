@@ -13,11 +13,11 @@ GameObject:
   - component: {fileID: 7599022737421249666}
   - component: {fileID: 9132188728343531670}
   - component: {fileID: 6213910669066858669}
-  - component: {fileID: 2253992077840423001}
-  - component: {fileID: 8842103972451178240}
-  - component: {fileID: 6539620558512076537}
   - component: {fileID: 4340109983338920945}
   - component: {fileID: 2462214665471144563}
+  - component: {fileID: 4217372812379613015}
+  - component: {fileID: 6306791826706361041}
+  - component: {fileID: 7304802037864853859}
   m_Layer: 0
   m_Name: BlockiverseNetworkManager
   m_TagString: Untagged
@@ -150,54 +150,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseNetworkBootstrap
   session: {fileID: 0}
---- !u!114 &2253992077840423001
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2707583939126641716}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2ac3f8d1e4b9477d9f6a74c3b6151a82, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.MultiplayerChunkAuthoritySync
-  session: {fileID: 9132188728343531670}
-  worldManager: {fileID: 0}
---- !u!114 &8842103972451178240
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2707583939126641716}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c8587ef3970646b98e9b127c98e4dcb4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.MultiplayerWorldPersistence
-  session: {fileID: 0}
-  worldManager: {fileID: 0}
-  chunkAuthoritySync: {fileID: 2253992077840423001}
-  survivalSync: {fileID: 0}
-  vitalsRuntime: {fileID: 0}
-  saveFileName: multiplayer-world.vxlworld
-  worldName: Multiplayer World
---- !u!114 &6539620558512076537
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2707583939126641716}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 561d98b12ce2c41e6aba0dd25490ca6e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.MultiplayerSurvivalSync
-  session: {fileID: 0}
-  chunkAuthoritySync: {fileID: 0}
-  worldManager: {fileID: 0}
 --- !u!114 &4340109983338920945
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -227,3 +179,50 @@ MonoBehaviour:
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.EnvironmentDynamicsController
   worldManager: {fileID: 0}
   chunkAuthoritySync: {fileID: 0}
+  environmentRelay: {fileID: 0}
+--- !u!114 &4217372812379613015
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da27c9816fee7406abf6558b7aeec55a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerChunkAuthoritySync
+  session: {fileID: 0}
+--- !u!114 &6306791826706361041
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8844f0be637444a2aab888c0cf0b357d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerSurvivalSync
+  session: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}
+--- !u!114 &7304802037864853859
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21195eb6b1dc448e1ad1afad067fbb6d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerWorldPersistence
+  session: {fileID: 0}
+  worldManagerObject: {fileID: 0}
+  chunkAuthoritySync: {fileID: 0}
+  survivalSync: {fileID: 0}
+  vitalsRuntimeObject: {fileID: 0}
+  saveFileName: multiplayer-world.vxlworld
+  worldName: Multiplayer World

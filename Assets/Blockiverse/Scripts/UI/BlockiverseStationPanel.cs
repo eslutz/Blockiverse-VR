@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using TMPro;

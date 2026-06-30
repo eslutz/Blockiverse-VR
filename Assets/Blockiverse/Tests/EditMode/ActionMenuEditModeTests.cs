@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.WorldGen;
@@ -218,8 +219,30 @@ namespace Blockiverse.Tests.EditMode
                 Is.EqualTo("Station indisponible"));
         }
 
-        T CreateComponent<T>(string name) where T : Component
+        [Test]
+        public void ErrorMenuHasStableIdAndLocalizedLabel()
         {
+            IReadOnlyList<MenuAction> error = MenuActions.Error();
+            Assert.That(error, Has.Count.EqualTo(1));
+            Assert.That(error[0].ActionId, Is.EqualTo(MenuActions.ErrorClose));
+            Assert.That(error[0].Label, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ErrorClose)));
+        }
+
+        [Test]
+        public void LanMultiplayerMenuIncludesReconnectOption()
+        {
+            IReadOnlyList<MenuAction> withoutReconnect = MenuActions.LanMultiplayer(canReconnect: false);
+            Assert.That(withoutReconnect.Select(a => a.ActionId), Does.Not.Contain(MenuActions.LanReconnect));
+
+            IReadOnlyList<MenuAction> withReconnect = MenuActions.LanMultiplayer(canReconnect: true);
+            Assert.That(withReconnect.Select(a => a.ActionId), Contains.Item(MenuActions.LanReconnect));
+
+            MenuAction reconnect = withReconnect.First(a => a.ActionId == MenuActions.LanReconnect);
+            Assert.That(reconnect.Label, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanReconnect)));
+        }
+
+        T CreateComponent<T>(string name) where T : Component
+{
             var gameObject = new GameObject(name);
             objectsToDestroy.Add(gameObject);
             return gameObject.AddComponent<T>();

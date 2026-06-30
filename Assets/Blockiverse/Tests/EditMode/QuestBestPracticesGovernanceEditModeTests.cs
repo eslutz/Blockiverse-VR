@@ -30,7 +30,7 @@ namespace Blockiverse.Tests.EditMode
             string persistence = File.ReadAllText("Assets/Blockiverse/Scripts/Persistence/WorldSaveService.cs");
             string worldSession = File.ReadAllText("Assets/Blockiverse/Scripts/UI/BlockiverseWorldSessionController.cs");
             string uiRouter = File.ReadAllText("Assets/Blockiverse/Scripts/UI/UiScreenRouter.cs");
-            string chunkAuthority = File.ReadAllText("Assets/Blockiverse/Scripts/Gameplay/MultiplayerChunkAuthoritySync.cs");
+            string chunkAuthority = File.ReadAllText("Assets/Blockiverse/Scripts/Networking/MultiplayerChunkAuthoritySync.cs");
 
             StringAssert.Contains("Blockiverse.VoxelWorldRenderer.RebuildDirty", renderer);
             StringAssert.Contains("Blockiverse.VoxelWorldRenderer.RebuildChunk", renderer);

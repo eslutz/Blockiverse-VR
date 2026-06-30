@@ -1,8 +1,9 @@
 using System;
+using Blockiverse.Core;
 using System.Collections.Generic;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,7 +22,7 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseItemIconLibrary iconLibrary;
         [SerializeField] TMP_Text statusLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
-        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        IBlockiverseInteractionHaptics interactionHaptics;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
 
         CraftingRecipeBook recipeBook;
@@ -65,7 +66,7 @@ namespace Blockiverse.UI
 
         public void ConfigureFeedback(
             BlockiverseAudioCuePlayer targetAudioCuePlayer,
-            BlockiverseInteractionHaptics targetInteractionHaptics)
+            IBlockiverseInteractionHaptics targetInteractionHaptics)
         {
             audioCuePlayer = targetAudioCuePlayer;
             interactionHaptics = targetInteractionHaptics;

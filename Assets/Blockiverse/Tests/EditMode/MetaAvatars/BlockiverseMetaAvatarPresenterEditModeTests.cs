@@ -110,13 +110,14 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
                 "ReceiveAvatarStreamClientRpc",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
-            Assert.That(MetaAvatarStreamMessage.MaxPayloadBytes, Is.LessThan(64 * 1024));
+            Assert.That(MetaAvatarStreamMessage.MaxFragmentBytes, Is.LessThan(MetaAvatarStreamMessage.MaxStreamBytes));
+            Assert.That(MetaAvatarStreamMessage.MaxStreamBytes, Is.EqualTo(64 * 1024));
             Assert.That(submit, Is.Not.Null);
             Assert.That(receive, Is.Not.Null);
             Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
             Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
             Assert.That(
-                new MetaAvatarStreamMessage(1, 0.0, new byte[MetaAvatarStreamMessage.MaxPayloadBytes + 1]).HasValidPayload,
+                new MetaAvatarStreamMessage(1, 0.0, 1, 0, 1, new byte[MetaAvatarStreamMessage.MaxFragmentBytes + 1]).HasValidPayload,
                 Is.False);
         }
 
@@ -124,7 +125,7 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
         public void AvatarStreamMessageReusesExistingPayloadBufferWhenLengthMatches()
         {
             byte[] payload = { 1, 2, 3, 4 };
-            var encoded = new MetaAvatarStreamMessage(7, 12.5, payload);
+            var encoded = new MetaAvatarStreamMessage(7, 12.5, 3, 1, 4, payload);
 
             using var writer = new FastBufferWriter(128, Allocator.Temp);
             writer.WriteNetworkSerializable(encoded);
@@ -141,6 +142,9 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             CollectionAssert.AreEqual(payload, decoded.Payload);
             Assert.That(decoded.SenderClientId, Is.EqualTo(7UL));
             Assert.That(decoded.SentTime, Is.EqualTo(12.5));
+            Assert.That(decoded.FrameSequence, Is.EqualTo(3u));
+            Assert.That(decoded.FragmentIndex, Is.EqualTo((ushort)1));
+            Assert.That(decoded.FragmentCount, Is.EqualTo((ushort)4));
         }
 
         [Test]

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {

@@ -100,3 +100,20 @@ Update save/load validation to reject incompatible unmigrated worlds.
 Update UI labels and mockups to use canonical names only.
 Tag known-good state before and after migration using kg/... tags.
 ```
+
+---
+
+## 7. Assembly alignment (ratified)
+
+The implementation's assembly layout is aligned and ratified as follows (see
+`docs/roadmap/blockiverse_vr_execution_plan.md` → "Ratified architecture decisions"):
+
+| Concern | Canonical assembly | Notes |
+|---|---|---|
+| World generation (terrain, resources, vegetation, structures, weather) | `Blockiverse.WorldGen` | Consolidated — no separate Environment/Structures/Vegetation assemblies. |
+| Gameplay systems (creative tools, vitals runtime, feedback/settings) | `Blockiverse.Gameplay` | Consolidated — no separate AudioVfx assembly. |
+| Multiplayer netcode (survival sync, chunk authority, world persistence sync) | `Blockiverse.Networking` | **Extracted out of `Blockiverse.Gameplay` (A1).** Acyclic: depends on Core/Voxel/WorldGen/Survival/Persistence only. |
+| Cross-cutting seams for UI decoupling | `Blockiverse.Core` | Dependency-free; hosts interface/event seams (A2). |
+
+Networking snapshots and world metadata (matrix rows above) are emitted from
+`Blockiverse.Networking` after the A1 extraction; no behavior changed in the move.

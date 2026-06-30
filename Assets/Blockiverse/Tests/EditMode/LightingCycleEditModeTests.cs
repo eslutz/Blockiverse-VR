@@ -1,5 +1,6 @@
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
@@ -226,16 +227,16 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void TorchbudLightManagerIdentifiesEmissiveBlocksAndEffectPosition()
+        public void GlowwickLightManagerIdentifiesEmissiveBlocksAndEffectPosition()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            Vector3 position = TorchbudLightManager.GetLightPosition(new BlockPosition(2, 4, 6));
+            Vector3 position = GlowwickLightManager.GetLightPosition(new BlockPosition(2, 4, 6));
 
             Assert.That(position.x, Is.EqualTo(2.5f).Within(0.001f));
             Assert.That(position.y, Is.GreaterThan(4.75f));
             Assert.That(position.z, Is.EqualTo(6.5f).Within(0.001f));
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Glowwick,   registry), Is.True);
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.BuildTable, registry), Is.False);
+            Assert.That(GlowwickLightManager.IsLightEmitter(BlockRegistry.Glowwick,   registry), Is.True);
+            Assert.That(GlowwickLightManager.IsLightEmitter(BlockRegistry.BuildTable, registry), Is.False);
         }
 
         [Test]
@@ -261,25 +262,25 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Glowwick,   registry), Is.True);
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.Campfire,   registry), Is.True);
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.LumenLamp,  registry), Is.True);
-            Assert.That(TorchbudLightManager.IsLightEmitter(BlockRegistry.SparkFlare, registry), Is.True);
+            Assert.That(GlowwickLightManager.IsLightEmitter(BlockRegistry.Glowwick,   registry), Is.True);
+            Assert.That(GlowwickLightManager.IsLightEmitter(BlockRegistry.Campfire,   registry), Is.True);
+            Assert.That(GlowwickLightManager.IsLightEmitter(BlockRegistry.LumenLamp,  registry), Is.True);
+            Assert.That(GlowwickLightManager.IsLightEmitter(BlockRegistry.SparkFlare, registry), Is.True);
         }
 
         [Test]
-        public void TorchbudLightManagerCreatesPointLightsForPlacedEmissiveBlocks()
+        public void GlowwickLightManagerCreatesPointLightsForPlacedEmissiveBlocks()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 19);
-            var host = new GameObject("Torchbud Light Manager");
+            var host = new GameObject("Glowwick Light Manager");
             var lightPosition = new BlockPosition(1, 1, 1);
 
             try
             {
                 world.SetBlock(lightPosition, BlockRegistry.LumenLamp, trackChange: false);
 
-                TorchbudLightManager manager = host.AddComponent<TorchbudLightManager>();
+                GlowwickLightManager manager = host.AddComponent<GlowwickLightManager>();
                 manager.Configure(world, registry);
 
                 Assert.That(manager.ActiveEmitterCount, Is.EqualTo(1));

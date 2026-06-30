@@ -8,6 +8,19 @@ namespace Blockiverse.WorldGen
 
     public sealed class SurvivalTerrainPreset
     {
+        static readonly ProfilerMarker s_BuildBiomeMapMarker = new ProfilerMarker("SurvivalTerrain.BuildBiomeMap");
+        static readonly ProfilerMarker s_BuildSurfaceHeightsMarker = new ProfilerMarker("SurvivalTerrain.BuildSurfaceHeights");
+        static readonly ProfilerMarker s_FillTerrainMarker = new ProfilerMarker("SurvivalTerrain.FillTerrain");
+        static readonly ProfilerMarker s_PlaceFluidsMarker = new ProfilerMarker("SurvivalTerrain.PlaceFluids");
+        static readonly ProfilerMarker s_CarveCavesMarker = new ProfilerMarker("SurvivalTerrain.CarveCaves");
+        static readonly ProfilerMarker s_PlaceResourceVeinsMarker = new ProfilerMarker("SurvivalTerrain.PlaceResourceVeins");
+        static readonly ProfilerMarker s_PlaceStructuresMarker = new ProfilerMarker("SurvivalTerrain.PlaceStructures");
+        static readonly ProfilerMarker s_PlaceSparseVegetationMarker = new ProfilerMarker("SurvivalTerrain.PlaceSparseVegetation");
+        static readonly ProfilerMarker s_PlaceWildPlantsMarker = new ProfilerMarker("SurvivalTerrain.PlaceWildPlants");
+        static readonly ProfilerMarker s_PlaceSurfaceResourceNodesMarker = new ProfilerMarker("SurvivalTerrain.PlaceSurfaceResourceNodes");
+        static readonly ProfilerMarker s_ApplySpawnSafetyMarker = new ProfilerMarker("SurvivalTerrain.ApplySpawnSafety");
+        static readonly ProfilerMarker s_PlaceEasterEggWatchpostMarker = new ProfilerMarker("SurvivalTerrain.PlaceEasterEggWatchpost");
+
         const int SpawnClearanceRadius = 3;
         const int SpawnHeadroom = 3;
         const int SpawnProtectedRadius = 4;
@@ -45,20 +58,69 @@ namespace Blockiverse.WorldGen
             ValidateRegistry();
 
             var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
-            TerrainBiome[] biomeMap = BuildBiomeMap();
-            int[] surfaceHeights = BuildSurfaceHeights(biomeMap);
+            
+            TerrainBiome[] biomeMap;
+            using (s_BuildBiomeMapMarker.Auto())
+            {
+                biomeMap = BuildBiomeMap();
+            }
 
-            FillTerrain(world, surfaceHeights, biomeMap);
-            PlaceFluids(world, surfaceHeights, biomeMap);
-            CarveCaves(world, surfaceHeights, biomeMap);
-            PlaceResourceVeins(world, surfaceHeights);
+            int[] surfaceHeights;
+            using (s_BuildSurfaceHeightsMarker.Auto())
+            {
+                surfaceHeights = BuildSurfaceHeights(biomeMap);
+            }
+
+            using (s_FillTerrainMarker.Auto())
+            {
+                FillTerrain(world, surfaceHeights, biomeMap);
+            }
+
+            using (s_PlaceFluidsMarker.Auto())
+            {
+                PlaceFluids(world, surfaceHeights, biomeMap);
+            }
+
+            using (s_CarveCavesMarker.Auto())
+            {
+                CarveCaves(world, surfaceHeights, biomeMap);
+            }
+
+            using (s_PlaceResourceVeinsMarker.Auto())
+            {
+                PlaceResourceVeins(world, surfaceHeights);
+            }
+
             containerLoot.Clear();
-            StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt, containerLoot);
-            PlaceSparseVegetation(world, surfaceHeights, biomeMap);
-            PlaceWildPlants(world, surfaceHeights, biomeMap);
-            PlaceSurfaceResourceNodes(world, surfaceHeights, biomeMap);
-            ApplySpawnSafety(world);
-            PlaceEasterEggWatchpost(world);
+            using (s_PlaceStructuresMarker.Auto())
+            {
+                StructureService.PlaceStructures(world, registry, settings, settings.Seed, biomeResolver.BiomeIndexAt, containerLoot);
+            }
+
+            using (s_PlaceSparseVegetationMarker.Auto())
+            {
+                PlaceSparseVegetation(world, surfaceHeights, biomeMap);
+            }
+
+            using (s_PlaceWildPlantsMarker.Auto())
+            {
+                PlaceWildPlants(world, surfaceHeights, biomeMap);
+            }
+
+            using (s_PlaceSurfaceResourceNodesMarker.Auto())
+            {
+                PlaceSurfaceResourceNodes(world, surfaceHeights, biomeMap);
+            }
+
+            using (s_ApplySpawnSafetyMarker.Auto())
+            {
+                ApplySpawnSafety(world);
+            }
+
+            using (s_PlaceEasterEggWatchpostMarker.Auto())
+            {
+                PlaceEasterEggWatchpost(world);
+            }
 
             return world;
         }

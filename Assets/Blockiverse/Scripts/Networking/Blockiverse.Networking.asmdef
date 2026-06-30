@@ -3,7 +3,12 @@
   "rootNamespace": "Blockiverse.Networking",
   "references": [
     "Unity.Netcode.Runtime",
-    "Unity.Networking.Transport"
+    "Unity.Networking.Transport",
+    "Blockiverse.Core",
+    "Blockiverse.Voxel",
+    "Blockiverse.WorldGen",
+    "Blockiverse.Survival",
+    "Blockiverse.Persistence"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

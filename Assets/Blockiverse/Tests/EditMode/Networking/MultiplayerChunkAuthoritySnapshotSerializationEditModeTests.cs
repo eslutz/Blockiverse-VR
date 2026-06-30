@@ -1,5 +1,6 @@
 using System.Reflection;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
@@ -163,7 +164,7 @@ namespace Blockiverse.Tests.Networking.EditMode
                     writer.Dispose();
                 }
 
-                CreativeWorldManager.WeatherSyncState restored = manager.GetWeatherSyncState();
+                WeatherSyncState restored = manager.GetWeatherSyncState();
                 Assert.That(sync.Diagnostics.AppliedEnvironmentSnapshotCount, Is.EqualTo(1));
                 Assert.That(restored.State, Is.EqualTo(snapshot.WeatherState));
                 Assert.That(restored.Ticks, Is.EqualTo(snapshot.WeatherTicks));
@@ -176,7 +177,7 @@ namespace Blockiverse.Tests.Networking.EditMode
                 AdvanceWorldTicks(manager, 2500);
                 hostWeather.Tick(2500);
 
-                CreativeWorldManager.WeatherSyncState advanced = manager.GetWeatherSyncState();
+                WeatherSyncState advanced = manager.GetWeatherSyncState();
                 Assert.That(advanced.State, Is.EqualTo(hostWeather.CurrentState));
                 Assert.That(advanced.Ticks, Is.EqualTo(hostWeather.TicksInCurrentState));
                 Assert.That(advanced.RngState, Is.EqualTo(hostWeather.RngState));

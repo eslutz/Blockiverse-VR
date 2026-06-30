@@ -1,6 +1,7 @@
 using System;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.UI;
 using Blockiverse.VR;
 using UnityEditor;
 using UnityEngine;
@@ -31,8 +32,13 @@ namespace Blockiverse.Editor
             LanMultiplayerPanelName,
             CreativeToolsPanelName,
             StationPanelName,
-            ControllerMappingPopupName,
             ConfirmDialogName,
+            ErrorDialogName,
+            InventoryPanelName,
+            CraftingPanelName,
+            CatalogPanelName,
+            CratePanelName,
+            ControllerMappingPopupName,
         };
 
         static readonly string[] WorldSpaceVrUiPanelNames =
@@ -49,23 +55,34 @@ namespace Blockiverse.Editor
 
             RemoveStaleChild(cameraOffset, "Blockiverse UI Pointer Projection");
             RemoveStaleChild(cameraOffset, XrVisualProjectionRigName);
-            RemoveStaleChild(cameraOffset, MenuCompositionSurfaceName);
+            
+            Transform head = cameraOffset.Find("Main Camera");
+            GameObject surface = EnsureMenuCompositionSurface(cameraOffset, head);
+            Transform menuSurface = surface.transform;
+            Transform menuCanvas = menuSurface.Find(MenuCompositionCanvasName);
+
             EnsureControllerVisualsUseMainCameraLayer(cameraOffset);
 
             foreach (string panelName in WorldSpaceVrUiPanelNames)
                 EnsureWorldSpaceVrUiPanel(cameraOffset, panelName);
 
             foreach (string panelName in RoutedCompositionMenuPanelNames)
-                EnsureWorldSpaceVrUiPanel(cameraOffset, panelName);
+            {
+                RouteMenuPanelToCompositionSurface(cameraOffset, menuCanvas, menuSurface, panelName);
+            }
         }
 
         static GameObject EnsureMenuCompositionSurface(Transform cameraOffset, Transform head)
         {
             GameObject surface = EnsureChild(cameraOffset, MenuCompositionSurfaceName);
             RemoveStaleCompositionLayerDefaultCanvas(surface.transform);
-            surface.layer = GetCompositionUiLayerIndex();
+            
+            // The composition surface carries the proxy interactable for menu input.
+            // It must reside on the interaction layer so XRI rays can hit it, while
+            // the rendered UI resides on the culled composition layer.
+            surface.layer = GetInteractionLayerIndex();
             surface.transform.localPosition = GameMenuLocalPosition;
-            surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0.0f);
+surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0.0f);
             surface.transform.localScale = Vector3.one;
 
             CompositionLayer layer = EnsureComponent<CompositionLayer>(surface);
@@ -144,9 +161,14 @@ namespace Blockiverse.Editor
             renderScale.Configure(canvas, layer, textures, canvasCamera, CompositionUiRenderScale);
             EnsureCompositionMenuCursor(surface, canvasRect, cameraOffset);
 
-            SetLayerRecursively(surface, GetCompositionUiLayerIndex());
+            // Ensure the canvas and all its routed UI panels are on the composition layer.
+            SetLayerRecursively(canvasObject, GetCompositionUiLayerIndex());
+            
+            // The surface quad itself must stay on the interaction layer to hit rays.
+            surface.layer = GetInteractionLayerIndex();
+
             EditorUtility.SetDirty(canvasGroup);
-            EditorUtility.SetDirty(canvas);
+EditorUtility.SetDirty(canvas);
             EditorUtility.SetDirty(canvasObject);
             EditorUtility.SetDirty(renderScale);
             EditorUtility.SetDirty(surface);
@@ -434,6 +456,9 @@ namespace Blockiverse.Editor
                 return;
 
             target.gameObject.layer = layer;
+            foreach (Transform child in target)
+                SetObjectLayer(child, layer);
+            
             EditorUtility.SetDirty(target.gameObject);
         }
 

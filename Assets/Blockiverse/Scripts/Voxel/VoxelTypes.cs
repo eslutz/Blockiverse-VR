@@ -134,6 +134,9 @@ namespace Blockiverse.Voxel
     {
         readonly Dictionary<BlockId, BlockDefinition> definitionsById = new();
         readonly Dictionary<string, BlockDefinition> definitionsByCanonicalId = new(StringComparer.OrdinalIgnoreCase);
+        private BlockDefinition[] cachedArray = new BlockDefinition[128];
+
+        public BlockDefinition[] CachedDefinitions => cachedArray;
 
         public static readonly BlockId Air                 = new(0);
         public static readonly BlockId MeadowTurf          = new(1);
@@ -373,10 +376,27 @@ namespace Blockiverse.Voxel
 
             definitionsById.Add(definition.Id, definition);
             definitionsByCanonicalId.Add(definition.CanonicalId, definition);
+
+            if (definition.Id.Value >= cachedArray.Length)
+            {
+                int newSize = Math.Max(cachedArray.Length * 2, definition.Id.Value + 1);
+                var newArray = new BlockDefinition[newSize];
+                Array.Copy(cachedArray, newArray, cachedArray.Length);
+                cachedArray = newArray;
+            }
+            cachedArray[definition.Id.Value] = definition;
         }
 
         public BlockDefinition Get(BlockId id)
         {
+            int val = id.Value;
+            if (val >= 0 && val < cachedArray.Length)
+            {
+                BlockDefinition def = cachedArray[val];
+                if (def != null)
+                    return def;
+            }
+
             if (!definitionsById.TryGetValue(id, out BlockDefinition definition))
                 throw new KeyNotFoundException($"Block ID is not registered: {id}");
 
@@ -385,6 +405,13 @@ namespace Blockiverse.Voxel
 
         public bool TryGet(BlockId id, out BlockDefinition definition)
         {
+            int val = id.Value;
+            if (val >= 0 && val < cachedArray.Length)
+            {
+                definition = cachedArray[val];
+                if (definition != null)
+                    return true;
+            }
             return definitionsById.TryGetValue(id, out definition);
         }
 

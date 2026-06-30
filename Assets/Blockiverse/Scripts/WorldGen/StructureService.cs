@@ -335,7 +335,7 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(baseX + 2, baseY, baseZ + 2);
                 if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
-                    PlaceLootCrate(world, lootPos, seed, baseX, baseY, baseZ, def, lootSink, trackChange);
+                    PlaceLootCrate(world, lootPos, BlockRegistry.StorageCrate, seed, baseX, baseY, baseZ, def, lootSink, trackChange);
             }
 
             if (def != null && def.HasStation)
@@ -398,13 +398,14 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(centerX + 1, baseY, centerZ);
                 if (world.Bounds.Contains(lootPos))
-                    PlaceLootCrate(world, lootPos, seed, centerX, baseY, centerZ, def, lootSink);
+                    PlaceLootCrate(world, lootPos, BlockRegistry.StorageCrate, seed, centerX, baseY, centerZ, def, lootSink);
             }
-        }
+}
 
         static void PlaceLootCrate(
             VoxelWorld world,
             BlockPosition lootPos,
+            BlockId containerBlock,
             int seed,
             int anchorX,
             int anchorY,
@@ -418,7 +419,7 @@ namespace Blockiverse.WorldGen
 
             // Worldgen placements are not player changes — keep them out of change tracking so
             // they don't pollute save deltas. Creative/admin structure placement may opt in.
-            world.SetBlock(lootPos, BlockRegistry.StorageCrate, trackChange);
+            world.SetBlock(lootPos, containerBlock, trackChange);
 
             // Roll this structure's loot table deterministically from the anchor position so the
             // host and any client that regenerates the world produce identical contents.
@@ -483,9 +484,9 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        // Compact underground/cave room used by the ruleset's deep structure IDs until authored
-        // templates exist. It cuts a reachable shaft from the surface column, builds a small
-        // themed chamber, and rolls the structure's configured loot table.
+        // Compact underground/cave room templates (Dormitory, Laboratory, Storage) replacing 
+        // the previous procedural fallback logic (technical audit §D4). It cuts a reachable 
+        // shaft from the surface column, builds a themed chamber, and rolls authored loot.
         static bool PlaceUndergroundStructure(
             VoxelWorld world,
             int centerX,
@@ -505,6 +506,7 @@ namespace Blockiverse.WorldGen
             const int radius = 2;
             const int roomHeight = 3;
 
+            // 1. Clear shaft to surface
             for (int y = baseY; y <= surfaceY; y++)
             {
                 var shaft = new BlockPosition(centerX, y, centerZ);
@@ -512,6 +514,7 @@ namespace Blockiverse.WorldGen
                     world.SetBlock(shaft, BlockRegistry.Air, trackChange: false);
             }
 
+            // 2. Build the shell
             for (int dx = -radius; dx <= radius; dx++)
             {
                 for (int dz = -radius; dz <= radius; dz++)
@@ -546,19 +549,38 @@ namespace Blockiverse.WorldGen
                 }
             }
 
-            var lamp = new BlockPosition(centerX, baseY + 1, centerZ);
+            // 3. Place Authored Interior
+            uint roomType = Hash(seed, centerX, baseY, centerZ, salt: 7711) % 3u;
+            
+            // Common light source
+            var lamp = new BlockPosition(centerX, baseY + roomHeight - 1, centerZ);
             if (world.Bounds.Contains(lamp))
                 world.SetBlock(lamp, BlockRegistry.LumenLamp, trackChange: false);
 
-            if (def.HasStation)
+            if (roomType == 0) // Dormitory
             {
-                var station = new BlockPosition(centerX - 1, baseY, centerZ);
-                if (world.Bounds.Contains(station))
-                    world.SetBlock(station, def.StationBlock, trackChange: false);
+                var bed = new BlockPosition(centerX - 1, baseY, centerZ + 1);
+                if (world.Bounds.Contains(bed)) world.SetBlock(bed, BlockRegistry.Bedroll, trackChange: false);
+                
+                if (def.HasLoot)
+                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.ReedBasket, seed, centerX, baseY, centerZ, def, lootSink);
             }
-
-            if (def.HasLoot)
-                PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ), seed, centerX, baseY, centerZ, def, lootSink);
+            else if (roomType == 1) // Laboratory
+            {
+                var station = new BlockPosition(centerX - 1, baseY, centerZ + 1);
+                if (world.Bounds.Contains(station)) world.SetBlock(station, def.StationBlock, trackChange: false);
+                
+                if (def.HasLoot)
+                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.ToolRack, seed, centerX, baseY, centerZ, def, lootSink);
+            }
+            else // Storage
+            {
+                if (def.HasLoot)
+                {
+                    PlaceLootCrate(world, new BlockPosition(centerX - 1, baseY, centerZ + 1), BlockRegistry.StorageCrate, seed, centerX, baseY, centerZ, def, lootSink);
+                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.PantryJar, seed, centerX, baseY, centerZ, def, lootSink);
+                }
+            }
 
             return true;
         }
