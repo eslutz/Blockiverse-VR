@@ -8,7 +8,7 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 namespace Blockiverse.Gameplay
 {
-    public sealed class VoxelWorldRenderer : MonoBehaviour
+    public sealed class VoxelWorldRenderer : MonoBehaviour, Blockiverse.Networking.IVoxelWorldRenderer
     {
         const int LargeDirtyRebuildWarningThreshold = 8;
 
@@ -20,6 +20,11 @@ namespace Blockiverse.Gameplay
         // are rebaked per RebuildDirty call / frame and let the rest catch up over later frames.
         public const int DefaultColliderRebuildBudget = 4;
         public const int DefaultVisualRebuildBudget = 8;
+
+        // How many chunks out from the spawn chunk the deferred initial render eagerly bakes (with
+        // colliders) before the loading screen lifts, so the player lands on solid, collidable
+        // ground while the rest of the world fills in incrementally under the per-frame budgets.
+        public const int DefaultSpawnRegionRadiusChunks = 1;
 
         readonly Dictionary<ChunkCoordinate, GameObject> chunkObjects = new();
         // Per-chunk fluid child: renders fluid faces and carries a contact-excluded collider so
@@ -56,6 +61,12 @@ namespace Blockiverse.Gameplay
         public int ColliderRebuildBudget { get; set; } = DefaultColliderRebuildBudget;
         public int VisualRebuildBudget { get; set; } = DefaultVisualRebuildBudget;
 
+        // World-ready gate: true once the spawn area is meshed and collidable. The synchronous
+        // RebuildAll path sets it when the whole world is built; the deferred path sets it after
+        // RebuildSpawnRegion bakes just the spawn neighbourhood, letting the loading screen lift
+        // before the rest of the world has drained in. Configure resets it for the new world.
+        public bool SpawnRegionReady { get; private set; }
+
         public void Configure(
             VoxelWorld voxelWorld,
             BlockRegistry blockRegistry,
@@ -79,6 +90,10 @@ namespace Blockiverse.Gameplay
             skyLight = new VoxelSkyLightMap(world, registry);
             rebuildQueue = new ChunkRebuildQueue(world, skyLight);
 
+            // The new world is not walkable until either RebuildAll (synchronous) or
+            // RebuildSpawnRegion (deferred) bakes its collision; gate consumers on that.
+            SpawnRegionReady = false;
+
             if (deferInitialRebuild)
                 QueueFullRebuild();
             else
@@ -91,7 +106,6 @@ namespace Blockiverse.Gameplay
 
             using ProfilerMarker.AutoScope scope = RebuildAllMarker.Auto();
 
-            int chunkCount = 0;
             chunkTriangleCounts.Clear();
             totalTriangleCount = 0;
 
@@ -101,21 +115,18 @@ namespace Blockiverse.Gameplay
                 {
                     for (int x = 0; x < ChunkCount(world.Bounds.Width); x++)
                     {
-                        ChunkCoordinate chunk = new(x, y, z);
-                        RebuildChunk(chunk);
-                        chunkCount++;
+                        rebuildQueue.MarkDirty(new ChunkCoordinate(x, y, z));
                     }
                 }
             }
 
-            // A fresh world needs full collision immediately (spawn, teleport, walking), so flush
-            // every queued collider rebuild rather than throttling the initial bake.
-            ProcessPendingColliderRebuilds(int.MaxValue);
+            // A deferred world is not ready until the spawn region is meshed or the queue drains.
+            SpawnRegionReady = false;
+            RefreshStats();
 
-            stats = new VoxelRenderStats(chunkCount, totalTriangleCount, rebuildQueue.Count);
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Renderer,
-                $"Rebuilt all chunks: chunks={stats.ChunkCount} triangles={stats.TriangleCount} queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
+                $"Queued all chunks for incremental rebuild: queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
                 this);
         }
 
@@ -136,6 +147,57 @@ namespace Blockiverse.Gameplay
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Renderer,
                 $"Queued full chunk rebuild: queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
+                this);
+        }
+
+        // Eagerly meshes and collider-bakes just the chunks around the spawn so the deferred
+        // initial render can drop the player onto solid ground immediately, then lift the loading
+        // screen. The rest of the queued world keeps draining incrementally under the per-frame
+        // budgets. Unlike RebuildAll this deliberately never flushes the whole world's colliders —
+        // only the spawn neighbourhood's, which is what PendingColliderRebuildCount counts here.
+        public void RebuildSpawnRegion(BlockPosition spawn, int radiusChunks = DefaultSpawnRegionRadiusChunks)
+        {
+            EnsureConfigured();
+
+            ChunkCoordinate center = ChunkCoordinate.FromBlockPosition(spawn, world.ChunkSize);
+            int maxChunkX = ChunkCount(world.Bounds.Width) - 1;
+            int maxChunkY = ChunkCount(world.Bounds.Height) - 1;
+            int maxChunkZ = ChunkCount(world.Bounds.Depth) - 1;
+
+            int minX = Mathf.Clamp(center.X - radiusChunks, 0, maxChunkX);
+            int maxX = Mathf.Clamp(center.X + radiusChunks, 0, maxChunkX);
+            int minY = Mathf.Clamp(center.Y - radiusChunks, 0, maxChunkY);
+            int maxY = Mathf.Clamp(center.Y + radiusChunks, 0, maxChunkY);
+            int minZ = Mathf.Clamp(center.Z - radiusChunks, 0, maxChunkZ);
+            int maxZ = Mathf.Clamp(center.Z + radiusChunks, 0, maxChunkZ);
+
+            int bakedChunks = 0;
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int z = minZ; z <= maxZ; z++)
+                {
+                    for (int x = minX; x <= maxX; x++)
+                    {
+                        var chunk = new ChunkCoordinate(x, y, z);
+                        // Claim the chunk out of the dirty queue so the later incremental drain
+                        // does not rebuild it a second time.
+                        rebuildQueue.ClearDirty(chunk);
+                        RebuildChunk(chunk);
+                        bakedChunks++;
+                    }
+                }
+            }
+
+            // Bake colliders for exactly the spawn chunks just meshed (a bounded budget equal to
+            // the currently-pending count): a fresh deferred world has no other pending colliders,
+            // and we must never trigger an unbounded world-wide flush on this path.
+            ProcessPendingColliderRebuilds(PendingColliderRebuildCount);
+
+            RefreshStats();
+            SpawnRegionReady = true;
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Renderer,
+                $"Baked spawn region: spawnChunks={bakedChunks} radiusChunks={radiusChunks} queuedRemaining={stats.QueuedRebuildCount} center={center.X},{center.Y},{center.Z}",
                 this);
         }
 
@@ -170,9 +232,27 @@ namespace Blockiverse.Gameplay
         {
             using ProfilerMarker.AutoScope scope = RebuildChunkMarker.Auto();
 
+            if (world.IsChunkEmpty(chunk))
+            {
+                ReleaseChunkObject(chunk);
+                return 0;
+            }
+
             // meshData aliases ChunkMeshBuilder's pooled lists, which the next Build call clears;
             // the Set* calls below copy everything into the Mesh before that can happen.
             ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, out ChunkMeshData fluidData, skyLight);
+
+            // R1: a chunk with no rendered faces is either all-air or fully buried — it has no
+            // visible mesh and no reachable collision surface, so it needs no GameObject. Don't
+            // spawn one (saves memory, culling, scene-graph cost, and a MeshCollider cook), and
+            // release any object a prior state had created (e.g. a chunk just mined out to air),
+            // which also deregisters its runtime TeleportationArea as the object is destroyed.
+            if (meshData.FaceCount == 0 && fluidData.FaceCount == 0)
+            {
+                ReleaseChunkObject(chunk);
+                return 0;
+            }
+
             GameObject chunkObject = GetOrCreateChunkObject(chunk);
 
             // One pooled Mesh per chunk, cleared and refilled on every rebuild: no per-rebuild
@@ -187,7 +267,16 @@ namespace Blockiverse.Gameplay
             }
 
             FillMesh(mesh, meshData);
-            EnqueueColliderRebuild(chunk);
+
+            // The chunk's MeshCollider is fed only by the solid mesh. A fluid-only chunk has an
+            // empty solid mesh, so queuing its solid collider would schedule a no-op recook that
+            // needlessly inflates the throttled backlog (and the pending count tests observe).
+            // Still queue when the collider holds stale geometry that must be cleared (e.g. the
+            // last solid block in the chunk was mined out, leaving only fluid behind).
+            MeshCollider solidCollider = chunkObject.GetComponent<MeshCollider>();
+            if (meshData.FaceCount > 0 || (solidCollider != null && solidCollider.sharedMesh != null))
+                EnqueueColliderRebuild(chunk);
+
             UpdateFluidChunkMesh(chunk, chunkObject, fluidData);
 
             int previousTriangleCount = chunkTriangleCounts.TryGetValue(chunk, out int existingTriangleCount)
@@ -267,10 +356,51 @@ namespace Blockiverse.Gameplay
             // child is deliberately not registered as a TeleportationArea — no teleporting onto
             // water. Block targeting resolves through the parent's VoxelChunkTarget.
             MeshCollider collider = fluidObject.AddComponent<MeshCollider>();
+            collider.cookingOptions = MeshColliderCookingOptions.UseFastMidphase;
             collider.excludeLayers = ~0;
 
             fluidObjects.Add(chunk, fluidObject);
             return fluidObject;
+        }
+
+        // Destroys the chunk's render object (solid + fluid child) and clears all per-chunk
+        // bookkeeping. Used when a chunk has (or has become) no render geometry. Any queued
+        // collider rebake for the chunk becomes a no-op via the missing-object guard in
+        // ProcessNext*ColliderRebuild, and is removed from the pending sets so a later edit can
+        // re-enqueue it cleanly.
+        void ReleaseChunkObject(ChunkCoordinate chunk)
+        {
+            if (chunkTriangleCounts.TryGetValue(chunk, out int previousTriangleCount))
+            {
+                totalTriangleCount -= previousTriangleCount;
+                chunkTriangleCounts.Remove(chunk);
+            }
+
+            if (fluidObjects.TryGetValue(chunk, out GameObject fluidObject))
+            {
+                // The fluid child object itself goes down with its parent below; destroy its
+                // pooled mesh here so it is not leaked.
+                if (fluidObject != null)
+                    DestroyGeneratedObject(fluidObject.GetComponent<MeshFilter>()?.sharedMesh);
+
+                fluidObjects.Remove(chunk);
+            }
+
+            if (chunkObjects.TryGetValue(chunk, out GameObject chunkObject))
+            {
+                if (chunkObject != null)
+                {
+                    // One pooled mesh per chunk, shared by the filter and collider — destroy it
+                    // once, then the object (its fluid child + TeleportationArea go with it).
+                    DestroyGeneratedObject(chunkObject.GetComponent<MeshFilter>()?.sharedMesh);
+                    DestroyGeneratedObject(chunkObject);
+                }
+
+                chunkObjects.Remove(chunk);
+            }
+
+            pendingColliderSet.Remove(chunk);
+            pendingFluidColliderSet.Remove(chunk);
         }
 
         void EnqueueColliderRebuild(ChunkCoordinate chunk)
@@ -379,6 +509,7 @@ namespace Blockiverse.Gameplay
                 renderer.sharedMaterial = chunkMaterial;
 
             MeshCollider chunkCollider = chunkObject.AddComponent<MeshCollider>();
+            chunkCollider.cookingOptions = MeshColliderCookingOptions.UseFastMidphase | MeshColliderCookingOptions.WeldColocatedVertices | MeshColliderCookingOptions.CookForFasterSimulation;
             VoxelChunkTarget target = chunkObject.AddComponent<VoxelChunkTarget>();
             target.Configure(world);
 

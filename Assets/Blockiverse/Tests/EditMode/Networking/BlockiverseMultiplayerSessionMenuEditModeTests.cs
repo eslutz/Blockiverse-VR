@@ -100,6 +100,48 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void HostLeftStatusSurfacesHostDisconnectedCopyWithDisconnectReason()
+        {
+            BlockiverseMultiplayerSessionMenu menu = CreateMenu();
+            BlockiverseNetworkSession session = CreateSession();
+            session.Configure(new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultListenAddress,
+                BlockiverseNetworkConfig.DefaultPort));
+            // Host-left signature: previously connected as client, then dropped involuntarily.
+            SetAutoProperty(session, nameof(BlockiverseNetworkSession.HasConnectedAsClient), true);
+            SetAutoProperty(session, nameof(BlockiverseNetworkSession.CurrentState), BlockiverseConnectionState.Disconnected);
+            SetAutoProperty(session, nameof(BlockiverseNetworkSession.LastDisconnectReason), "host shut down");
+
+            menu.Configure(session);
+            menu.RefreshStatus();
+
+            Assert.That(menu.IsShowingSessionEndedMessage, Is.True);
+            StringAssert.Contains("host disconnected", menu.StatusText.text);
+            StringAssert.Contains("host shut down", menu.StatusText.text);
+        }
+
+        [Test]
+        public void JoinFailureStatusIsDistinctFromHostLeftStatus()
+        {
+            BlockiverseMultiplayerSessionMenu menu = CreateMenu();
+            BlockiverseNetworkSession session = CreateSession();
+            session.Configure(new BlockiverseNetworkConfig(
+                BlockiverseNetworkConfig.DefaultAddress,
+                BlockiverseNetworkConfig.DefaultListenAddress,
+                BlockiverseNetworkConfig.DefaultPort));
+            // Join failure: never connected, so HasConnectedAsClient stays false.
+            SetAutoProperty(session, nameof(BlockiverseNetworkSession.CurrentState), BlockiverseConnectionState.Disconnected);
+
+            menu.Configure(session);
+            menu.RefreshStatus();
+
+            Assert.That(menu.IsShowingSessionEndedMessage, Is.False);
+            StringAssert.Contains("Unable to reach", menu.StatusText.text);
+            Assert.That(menu.StatusText.text, Does.Not.Contain("host disconnected"));
+        }
+
+        [Test]
         public void MissingSessionShowsUnavailableStatusAndDisablesActions()
         {
             BlockiverseMultiplayerSessionMenu menu = CreateMenu();
@@ -120,6 +162,7 @@ namespace Blockiverse.Tests.Networking.EditMode
             menu.ConfigureControls(
                 CreateButton("Host Button"),
                 CreateButton("Join Button"),
+                null,
                 CreateButton("Stop Button"),
                 CreateInputField("Address Input"),
                 CreateText("Status"));

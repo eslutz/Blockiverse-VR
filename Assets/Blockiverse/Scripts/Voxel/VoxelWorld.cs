@@ -151,6 +151,40 @@ namespace Blockiverse.Voxel
             changedBlocks[change.Position] = change;
         }
 
+        public bool IsChunkEmpty(ChunkCoordinate chunk)
+        {
+            int chunkSize = ChunkSize;
+            int startX = chunk.X * chunkSize;
+            int startY = chunk.Y * chunkSize;
+            int startZ = chunk.Z * chunkSize;
+
+            int width = Bounds.Width;
+            int depth = Bounds.Depth;
+            int height = Bounds.Height;
+
+            int endX = Math.Min(startX + chunkSize, width);
+            int endY = Math.Min(startY + chunkSize, height);
+            int endZ = Math.Min(startZ + chunkSize, depth);
+
+            BlockId air = BlockRegistry.Air;
+
+            for (int y = startY; y < endY; y++)
+            {
+                int yOffset = y * depth * width;
+                for (int z = startZ; z < endZ; z++)
+                {
+                    int index = startX + width * z + yOffset;
+                    for (int x = startX; x < endX; x++)
+                    {
+                        if (blocks[index++] != air)
+                            return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         int ToIndex(BlockPosition position)
         {
             return position.X + Bounds.Width * (position.Z + Bounds.Depth * position.Y);

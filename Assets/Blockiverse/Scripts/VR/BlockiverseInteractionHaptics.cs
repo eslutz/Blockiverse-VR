@@ -1,5 +1,7 @@
 using System;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using UnityEngine;
@@ -11,7 +13,7 @@ namespace Blockiverse.VR
     /// mirroring <see cref="BlockiverseAudioCuePlayer"/> so feedback stays decoupled from edit logic.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class BlockiverseInteractionHaptics : MonoBehaviour
+    public sealed class BlockiverseInteractionHaptics : MonoBehaviour, IBlockiverseInteractionHaptics
     {
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
@@ -148,20 +150,20 @@ namespace Blockiverse.VR
 
         // Survival break/place resolve through the host-authoritative command channel rather
         // than the creative controller; mirror the same break/place buzz for them.
-        void OnSurvivalCommandFeedback(Blockiverse.Gameplay.SurvivalCommandResult result, BlockPosition position)
+        void OnSurvivalCommandFeedback(SurvivalCommandResult result, BlockPosition position)
         {
             if (!result.Accepted)
                 return;
 
             switch (result.CommandKind)
             {
-                case Blockiverse.Gameplay.SurvivalCommandKind.HarvestResource:
+                case SurvivalCommandKind.HarvestResource:
                     SendPattern(BlockiverseHapticPattern.BlockBreak);
                     break;
-                case Blockiverse.Gameplay.SurvivalCommandKind.PlaceBlock:
-                case Blockiverse.Gameplay.SurvivalCommandKind.StripLog:
-                case Blockiverse.Gameplay.SurvivalCommandKind.TillSoil:
-                case Blockiverse.Gameplay.SurvivalCommandKind.PlantSeed:
+                case SurvivalCommandKind.PlaceBlock:
+                case SurvivalCommandKind.StripLog:
+                case SurvivalCommandKind.TillSoil:
+                case SurvivalCommandKind.PlantSeed:
                     SendPattern(BlockiverseHapticPattern.BlockPlace);
                     break;
             }

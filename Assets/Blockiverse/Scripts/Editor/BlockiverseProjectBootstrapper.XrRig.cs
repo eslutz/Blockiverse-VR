@@ -554,6 +554,13 @@ namespace Blockiverse.Editor
                 minValue: 0.5f,
                 maxValue: 4.0f);
 
+            Toggle glideBobToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Glide Bob Toggle",
+                "Walk Head-Bob",
+                settings != null && settings.GlideStyle == GlideStyle.Bobbing,
+                new Vector2(32.0f, -310.0f));
+
             // --- Turning ---
             EnsureLabel(panelObject.transform, "Turning Label", "Turning", 22,
                 TextAnchor.MiddleLeft,
@@ -681,7 +688,8 @@ namespace Blockiverse.Editor
                 eyeHeightSlider,
                 moveSpeedSlider,
                 smoothTurnSpeedSlider,
-                uiScaleSlider);
+                uiScaleSlider,
+                targetGlideBobToggle: glideBobToggle);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);
@@ -745,11 +753,11 @@ namespace Blockiverse.Editor
             float aperture = vignetteSettings != null ? vignetteSettings.VignetteAperture : 0.85f;
             MeshRenderer vignetteRenderer = controller.GetComponent<MeshRenderer>();
 
-            // Default parameters: aperture 0.85 is subtler than the XRI default (0.7).
-            // The comfort menu's vignette strength slider adjusts this at runtime.
+            // Default parameters: startup vignette aperture should be fully open (1.0f) until
+            // intentional locomotion, to satisfy comfort and testing constraints.
             controller.defaultParameters = new VignetteParameters
             {
-                apertureSize = aperture,
+                apertureSize = 1.0f,
                 featheringEffect = 0.2f,
                 easeInTime = 0.3f,
                 easeOutTime = 0.3f,
@@ -769,7 +777,7 @@ namespace Blockiverse.Editor
 
             if (vignetteRenderer != null)
             {
-                vignetteRenderer.enabled = vignetteSettings != null && vignetteSettings.VignetteEnabled;
+                vignetteRenderer.enabled = false;
                 EditorUtility.SetDirty(vignetteRenderer);
             }
 

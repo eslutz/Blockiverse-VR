@@ -1,5 +1,6 @@
 using Blockiverse.Gameplay;
 using UnityEngine;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {
@@ -12,7 +13,7 @@ namespace Blockiverse.VR
     {
         const string KeyPrefix = "Blockiverse.Settings.";
         public const string DominantHandPrefsKey = KeyPrefix + "DominantHand";
-        const int VignettePrefsVersion = 2;
+        const int VignettePrefsVersion = 3;
         const float PollIntervalSeconds = 5.0f;
 
         [SerializeField] BlockiverseComfortSettings comfortSettings;
@@ -69,6 +70,12 @@ namespace Blockiverse.VR
                 // rather than letting an undefined value degrade the rig to Teleport behavior.
                 if (!System.Enum.IsDefined(typeof(BlockiverseLocomotionMode), comfortSettings.LocomotionMode))
                     comfortSettings.LocomotionMode = BlockiverseLocomotionMode.Glide;
+                comfortSettings.GlideStyle = (GlideStyle)PlayerPrefs.GetInt(
+                    KeyPrefix + "GlideStyle", (int)comfortSettings.GlideStyle);
+                // A stale or corrupt pref can hold an int outside the enum; fall back to Smooth
+                // rather than letting an undefined value select an unsupported glide profile.
+                if (!System.Enum.IsDefined(typeof(GlideStyle), comfortSettings.GlideStyle))
+                    comfortSettings.GlideStyle = GlideStyle.Smooth;
                 comfortSettings.DominantHand = (BlockiverseControllerRole)PlayerPrefs.GetInt(
                     DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 if (!System.Enum.IsDefined(typeof(BlockiverseControllerRole), comfortSettings.DominantHand))
@@ -97,7 +104,7 @@ namespace Blockiverse.VR
                 }
                 else
                 {
-                    ResetVignettePrefsForReadableStartup();
+                    ApplyComfortFirstVignetteDefaults();
                 }
             }
 
@@ -130,6 +137,7 @@ namespace Blockiverse.VR
             if (comfortSettings != null)
             {
                 PlayerPrefs.SetInt(KeyPrefix + "LocomotionMode", (int)comfortSettings.LocomotionMode);
+                PlayerPrefs.SetInt(KeyPrefix + "GlideStyle", (int)comfortSettings.GlideStyle);
                 PlayerPrefs.SetInt(DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
@@ -168,6 +176,7 @@ namespace Blockiverse.VR
                 if (comfortSettings != null)
                 {
                     hash = hash * 31 + (int)comfortSettings.LocomotionMode;
+                    hash = hash * 31 + (int)comfortSettings.GlideStyle;
                     hash = hash * 31 + (int)comfortSettings.DominantHand;
                     hash = hash * 31 + (comfortSettings.ToggleToMineEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
@@ -203,10 +212,14 @@ namespace Blockiverse.VR
             return PlayerPrefs.GetInt(KeyPrefix + "VignettePrefsVersion", 0) >= VignettePrefsVersion;
         }
 
-        void ResetVignettePrefsForReadableStartup()
+        // Installs predating the current VignettePrefsVersion re-default to the comfort-first
+        // posture: vignette ON at a low strength. The motion tunneling vignette only renders during
+        // locomotion, so this stays out of the way of a static title/menu while cutting nausea for
+        // players who never visit the comfort menu. Writing the version key stops this re-running.
+        void ApplyComfortFirstVignetteDefaults()
         {
-            comfortSettings.VignetteEnabled = false;
-            comfortSettings.VignetteStrength = 0.0f;
+            comfortSettings.VignetteEnabled = true;
+            comfortSettings.VignetteStrength = 0.3f;
             PlayerPrefs.DeleteKey(KeyPrefix + "VignetteEnabled");
             PlayerPrefs.DeleteKey(KeyPrefix + "VignetteStrength");
             PlayerPrefs.SetInt(KeyPrefix + "VignettePrefsVersion", VignettePrefsVersion);

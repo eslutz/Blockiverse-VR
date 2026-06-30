@@ -138,6 +138,8 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void VerboseTraceControllerCanCaptureAPlayerSnapshotOnDemand()
         {
+            Blockiverse.Core.BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+
             GameObject rig = CreateGameObject("Trace Rig");
             rig.transform.position = new Vector3(1.25f, 2.5f, 3.75f);
             rig.transform.rotation = Quaternion.Euler(0f, 45f, 0f);

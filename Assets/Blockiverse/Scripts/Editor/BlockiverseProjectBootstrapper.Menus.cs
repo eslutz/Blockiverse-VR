@@ -1673,6 +1673,13 @@ namespace Blockiverse.Editor
             rectTransform.sizeDelta = size;
         }
 
+        static void SetSinglePersistentListener(UnityEvent unityEvent, UnityAction action)
+        {
+            for (int index = unityEvent.GetPersistentEventCount() - 1; index >= 0; index--)
+                UnityEventTools.RemovePersistentListener(unityEvent, index);
+            UnityEventTools.AddPersistentListener(unityEvent, action);
+        }
+
         static void RemovePersistentListeners(UnityEvent unityEvent, UnityEngine.Object target, string methodName)
         {
             for (int index = unityEvent.GetPersistentEventCount() - 1; index >= 0; index--)

@@ -447,6 +447,7 @@ MonoBehaviour:
   metaAvatarAvailable: 0
   poseSendRateHz: 30
   remotePoseInterpolationSpeed: 18
+  stalenessThreshold: 3
   rootTrackingSource: {fileID: 0}
   headTrackingSource: {fileID: 0}
   leftHandTrackingSource: {fileID: 0}

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.Voxel;

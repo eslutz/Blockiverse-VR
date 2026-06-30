@@ -147,7 +147,7 @@ namespace Blockiverse.Tests.EditMode
                 "Scripts/UI/SurvivalCraftingPanel.cs",
                 "Scripts/UI/BlockiverseComfortMenu.cs",
                 "Scripts/UI/BlockiverseMultiplayerSessionMenu.cs",
-                "Scripts/VR/BlockiverseWorldSpacePanelPresenter.cs",
+                "Scripts/UI/BlockiverseWorldSpacePanelPresenter.cs",
             };
 
             foreach (string sourceFile in sourceFiles)

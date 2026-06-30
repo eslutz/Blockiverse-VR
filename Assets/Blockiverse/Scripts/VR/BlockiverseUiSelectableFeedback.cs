@@ -17,7 +17,7 @@ namespace Blockiverse.VR
 
         Selectable selectable;
         BlockiverseAudioCuePlayer audioCuePlayer;
-        BlockiverseInteractionHaptics interactionHaptics;
+        Blockiverse.Core.IBlockiverseInteractionHaptics interactionHaptics;
 
         public void Configure(
             bool playHoverHaptic = true,

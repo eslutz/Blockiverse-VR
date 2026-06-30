@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.XR;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {

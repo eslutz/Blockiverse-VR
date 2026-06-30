@@ -1,5 +1,6 @@
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using UnityEngine;
 using UnityEngine.InputSystem;

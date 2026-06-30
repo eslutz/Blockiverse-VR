@@ -238,6 +238,11 @@ namespace Blockiverse.Gameplay
             dirtyChunks.Add(chunk);
         }
 
+        // Drops a single chunk from the dirty set without rebuilding it. The eager spawn-region
+        // bake uses this to claim its chunks so the later incremental drain does not rebuild them
+        // again. Returns true if the chunk was queued.
+        public bool ClearDirty(ChunkCoordinate chunk) => dirtyChunks.Remove(chunk);
+
         public IReadOnlyCollection<ChunkCoordinate> DrainDirtyChunks()
         {
             return DrainDirtyChunks(int.MaxValue);

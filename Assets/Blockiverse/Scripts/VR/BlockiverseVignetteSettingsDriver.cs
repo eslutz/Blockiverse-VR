@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {

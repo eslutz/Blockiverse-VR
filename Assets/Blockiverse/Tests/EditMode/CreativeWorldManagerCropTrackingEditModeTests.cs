@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -55,7 +56,7 @@ namespace Blockiverse.Tests.EditMode
                     new FlatBuilderPreset(registry, initialSettings).Generate(),
                     CreativeWorldGenerationPreset.SurvivalLite));
 
-                var networkWeather = new CreativeWorldManager.WeatherSyncState(
+                var networkWeather = new WeatherSyncState(
                     WeatherState.HeavyRain,
                     ticks: 4321,
                     rngState: 0x12345678u);
@@ -74,7 +75,7 @@ namespace Blockiverse.Tests.EditMode
                     new FlatBuilderPreset(registry, authoritativeSettings).Generate(),
                     CreativeWorldGenerationPreset.SurvivalLite));
 
-                CreativeWorldManager.WeatherSyncState restored = manager.GetWeatherSyncState();
+                WeatherSyncState restored = manager.GetWeatherSyncState();
                 Assert.That(restored.State, Is.EqualTo(networkWeather.State));
                 Assert.That(restored.Ticks, Is.EqualTo(networkWeather.Ticks));
                 Assert.That(restored.RngState, Is.EqualTo(networkWeather.RngState));
@@ -328,7 +329,7 @@ namespace Blockiverse.Tests.EditMode
                 world.SetBlock(BerrybushPos, BlockRegistry.Air);
                 AdvanceWorldTicks(manager, 45);
 
-                var weather = new CreativeWorldManager.WeatherSyncState(
+                var weather = new WeatherSyncState(
                     WeatherState.HeavyRain,
                     ticks: 4321,
                     rngState: 0x00ABCDEFu);
@@ -368,7 +369,7 @@ namespace Blockiverse.Tests.EditMode
                     BerrybushRegrowth = extras.BerrybushRegrowth
                 });
 
-                CreativeWorldManager.WeatherSyncState restoredWeather = restored.GetWeatherSyncState();
+                WeatherSyncState restoredWeather = restored.GetWeatherSyncState();
                 Assert.That(restoredWeather.State, Is.EqualTo(weather.State));
                 Assert.That(restoredWeather.Ticks, Is.EqualTo(weather.Ticks));
                 Assert.That(restoredWeather.RngState, Is.EqualTo(weather.RngState));

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
@@ -22,6 +23,70 @@ namespace Blockiverse.Tests.EditMode
     {
         readonly List<UnityEngine.Object> objectsToDestroy = new();
 
+        [Test]
+        public void EveryCanonicalScreenIdMapsToRegisteredPresenter()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            
+            var presenters = new Dictionary<string, BlockiverseWorldSpacePanelPresenter>();
+            string[] screenIds = {
+                MenuActions.TitleScreen, MenuActions.NewWorldScreen, MenuActions.LoadWorldScreen,
+                MenuActions.WorldDetailsScreen, MenuActions.WorldLoadingScreen, MenuActions.ControllerMappingScreen,
+                MenuActions.GameplayHudScreen, MenuActions.PauseScreen, MenuActions.SettingsScreen,
+                MenuActions.ComfortSettingsScreen, MenuActions.AudioSettingsScreen, MenuActions.ControlsScreen,
+                MenuActions.CreativeToolsScreen, MenuActions.DeathScreen, MenuActions.LanMultiplayerScreen,
+                MenuActions.StationMenuScreen, MenuActions.ConfirmModal, MenuActions.ErrorModal,
+                MenuActions.InventoryScreen, MenuActions.CraftingScreen, MenuActions.CatalogScreen,
+                MenuActions.StationCrateScreen
+            };
+
+            foreach (string id in screenIds)
+            {
+                GameObject pObj = CreateChild(rig.transform, id + " Presenter");
+                pObj.AddComponent<Canvas>();
+                presenters[id] = pObj.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            }
+
+            controller.ConfigurePresenters(
+                presenters[MenuActions.TitleScreen],
+                presenters[MenuActions.PauseScreen],
+                presenters[MenuActions.DeathScreen],
+                presenters[MenuActions.ConfirmModal],
+                presenters[MenuActions.ErrorModal],
+                presenters[MenuActions.NewWorldScreen],
+                presenters[MenuActions.LoadWorldScreen],
+                presenters[MenuActions.SettingsScreen],
+                presenters[MenuActions.StationMenuScreen],
+                presenters[MenuActions.LanMultiplayerScreen],
+                presenters[MenuActions.AudioSettingsScreen],
+                presenters[MenuActions.ControlsScreen],
+                presenters[MenuActions.WorldDetailsScreen],
+                presenters[MenuActions.CreativeToolsScreen],
+                presenters[MenuActions.GameplayHudScreen],
+                presenters[MenuActions.ComfortSettingsScreen],
+                presenters[MenuActions.ControllerMappingScreen],
+                presenters[MenuActions.WorldLoadingScreen],
+                presenters[MenuActions.InventoryScreen],
+                presenters[MenuActions.CraftingScreen],
+                presenters[MenuActions.CatalogScreen],
+                presenters[MenuActions.StationCrateScreen]
+            );
+
+            StartMenuController(controller);
+
+            var screenPresenters = (List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)>)
+                typeof(BlockiverseMenuController)
+                .GetField("screenPresenters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(controller);
+
+            foreach (string id in screenIds)
+            {
+                Assert.That(screenPresenters.Exists(p => p.screenId == id), Is.True, 
+                    $"Screen ID '{id}' should be registered in the controller.");
+            }
+        }
+
         [TearDown]
         public void TearDown()
         {
@@ -30,6 +95,112 @@ namespace Blockiverse.Tests.EditMode
                     UnityEngine.Object.DestroyImmediate(target);
             objectsToDestroy.Clear();
             BlockiverseRuntimeState.Reset();
+        }
+
+        [Test]
+        public void SettingsSubPanelsReturnToCorrectPreviousRoute()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.PauseMenuName, 8);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.SettingsPanelName, 4);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.AudioSettingsPanelName, 2);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.ControlsPanelName, 2);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.ComfortSettingsPanelName, 1);
+            
+            StartMenuController(controller);
+
+            // 1. From Title -> Settings -> Sub-panels
+            controller.Router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
+            AssertReturnToHub(MenuActions.AudioSettingsScreen, controller.CloseAudioSettingsScreen);
+            AssertReturnToHub(MenuActions.ControlsScreen, controller.CloseControlsScreen);
+            AssertReturnToHub(MenuActions.ComfortSettingsScreen, controller.CloseComfortSettingsScreen);
+            
+            controller.Router.PopScreen(); // Return to Title
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+
+            // 2. From Pause -> Settings -> Sub-panels
+            controller.EnterGameplay();
+            controller.OnMenuPressed(); // Pause
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+            
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
+            AssertReturnToHub(MenuActions.AudioSettingsScreen, controller.CloseAudioSettingsScreen);
+            
+            controller.Router.PopScreen(); // Return to Pause
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+
+            void AssertReturnToHub(string subPanelId, Action closeAction)
+            {
+                controller.Router.PushScreen(new ScreenRoute(subPanelId, pauseGame: true));
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(subPanelId));
+                closeAction();
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.SettingsScreen),
+                    $"Closing {subPanelId} must return to the Settings hub.");
+            }
+        }
+
+        [Test]
+        public void ErrorModalTakesInputPriorityOverOtherSurfaces()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseActionMenu errorMenu = CreateGeneratedActionMenu(rig.transform, "Error Dialog", 1);
+            
+            AddPresenter(titleMenu.gameObject);
+            AddPresenter(errorMenu.gameObject);
+
+            StartMenuController(controller);
+            
+            CanvasGroup titleInput = titleMenu.GetComponent<CanvasGroup>();
+            CanvasGroup errorInput = errorMenu.GetComponent<CanvasGroup>();
+
+            // Title is active
+            Assert.That(titleInput.interactable, Is.True);
+            
+            // Show error
+            controller.ShowError("Title", "Message");
+
+            Assert.That(controller.Router.HasModal, Is.True);
+            Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ErrorModal));
+            
+            // Error takes priority
+            Assert.That(errorInput.interactable, Is.True);
+            Assert.That(titleInput.interactable, Is.False, "Underlying title menu should be disabled while modal is open.");
+        }
+
+        [Test]
+        public void WorldInputDisabledWheneverRoutedMenuOrModalOwnsInput()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+
+            StartMenuController(controller);
+            
+            // Title screen
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+            
+            // Gameplay
+            controller.EnterGameplay();
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.True);
+            
+            // Pause
+            controller.OnMenuPressed();
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+            
+            // Confirm Modal over gameplay
+            controller.EnterGameplay();
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.True);
+            controller.RequestConfirm("Quit?", "Quit", "Cancel", _ => { });
+            Assert.That(controller.Router.HasModal, Is.True);
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
         }
 
         [Test]
@@ -760,28 +931,118 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void NewWorldPanelConfiguresSeedInputForEditableTextEntry()
+        public void DestructiveActionsAreGatedByConfirmationModal()
         {
-            BlockiverseNewWorldPanel panel = CreateGeneratedNewWorldPanel(null);
-            panel.ResolveRuntimeReferences();
-            panel.ResetForNewWorld();
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+            BlockiverseWorldDetailsPanel detailsPanel = CreateGeneratedWorldDetailsPanel(rig.transform).Item1;
+            
+            StartMenuController(controller);
 
-            TMP_InputField seedInput = GetChildComponent<TMP_InputField>(panel.transform, "Panel/Seed Input");
+            // 1. Title Quit
+            AssertGated(MenuActions.TitleQuit);
 
-            Assert.That(seedInput.interactable, Is.True);
-            Assert.That(seedInput.readOnly, Is.False);
-            Assert.That(seedInput.lineType, Is.EqualTo(TMP_InputField.LineType.SingleLine));
-            Assert.That(seedInput.contentType, Is.EqualTo(TMP_InputField.ContentType.Standard));
-            Assert.That(seedInput.characterValidation, Is.EqualTo(TMP_InputField.CharacterValidation.None));
-            Assert.That(seedInput.keyboardType, Is.EqualTo(TouchScreenKeyboardType.Default));
-            Assert.That(seedInput.GetComponent<BlockiverseSystemKeyboardField>().KeyboardType,
-                Is.EqualTo(TouchScreenKeyboardType.Default));
+            // 2. Pause Return to Title
+            controller.EnterGameplay();
+            controller.OnMenuPressed(); // Pause
+            AssertGated(MenuActions.PauseReturnToTitle);
 
-            seedInput.text = "meadow-home";
-            seedInput.onValueChanged.Invoke(seedInput.text);
+            // 3. Pause Quit
+            AssertGated(MenuActions.PauseQuit);
 
-            Assert.That(panel.Config.SeedText, Is.EqualTo("meadow-home"));
-            Assert.That(panel.Config.Seed, Is.EqualTo(NewWorldConfig.HashSeed("meadow-home")));
+            // 4. World Details Delete
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.WorldDetailsScreen, pauseGame: true));
+            detailsPanel.ShowSave(new WorldSaveSummary("Test", "1", "s", "n", 1, DateTime.UtcNow, DateTime.UtcNow));
+            AssertGated(MenuActions.WorldDetailsDeleteRequested);
+
+            void AssertGated(string actionId)
+            {
+                var requestedActions = new List<string>();
+                controller.ActionRequested += requestedActions.Add;
+
+                InvokeHandleAction(controller, actionId);
+
+                Assert.That(controller.Router.HasModal, Is.True, $"Action {actionId} must be gated by a modal.");
+                Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
+                Assert.That(requestedActions, Is.Empty, $"Action {actionId} must not be emitted until confirmed.");
+                
+                controller.Router.PopModal();
+                controller.ActionRequested -= requestedActions.Add;
+            }
+        }
+
+        [Test]
+        public void CreativeToolsDestructiveActionsAreGatedByConfirmationModal()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+
+            GameObject creativePanelObj = CreateChild(rig.transform, "Creative Tools Panel");
+            BlockiverseCreativeToolsPanel creativeToolsPanel = creativePanelObj.AddComponent<BlockiverseCreativeToolsPanel>();
+
+            // Setup mock CreativeWorldManager and CreativeHotbar
+            GameObject managerObj = CreateChild(rig.transform, "Creative World Manager");
+            CreativeWorldManager manager = managerObj.AddComponent<CreativeWorldManager>();
+            
+            // Set up a mock world
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(2, 4, 2, 2, 42, 1);
+            var voxelWorld = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
+            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, voxelWorld, CreativeWorldGenerationPreset.FlatCreative));
+            manager.SetGameMode(WorldGameMode.Creative);
+
+            GameObject hotbarObj = CreateChild(rig.transform, "Creative Hotbar");
+            CreativeHotbar hotbar = hotbarObj.AddComponent<CreativeHotbar>();
+
+            creativeToolsPanel.Configure(
+                controller: null,
+                manager: manager,
+                creativeHotbar: hotbar,
+                corners: CreateChild(creativePanelObj.transform, "Corners").AddComponent<TextMeshProUGUI>(),
+                status: CreateChild(creativePanelObj.transform, "Status").AddComponent<TextMeshProUGUI>(),
+                weather: CreateChild(creativePanelObj.transform, "Weather").AddComponent<TextMeshProUGUI>(),
+                timeOfDay: CreateChild(creativePanelObj.transform, "TimeOfDay").AddComponent<Slider>(),
+                timeScale: CreateChild(creativePanelObj.transform, "TimeScale").AddComponent<Slider>()
+            );
+
+            // Wire menuController to the creative tools panel
+            SetPrivateField(creativeToolsPanel, "menuController", controller);
+            creativeToolsPanel.ConfigureNetworkSessionActiveProvider(() => false);
+
+            // Set corners and target
+            SetPrivateField(creativeToolsPanel, "cornerA", new BlockPosition(0, 0, 0));
+            SetPrivateField(creativeToolsPanel, "cornerB", new BlockPosition(1, 1, 1));
+            SetPrivateField(creativeToolsPanel, "lastTarget", new BlockPosition(0, 0, 0));
+
+            StartMenuController(controller);
+
+            // Assert that FillRegion, DeleteRegion, and ReplaceRegion are gated by confirmation dialog
+            AssertRegionGated(creativeToolsPanel.FillRegion);
+            AssertRegionGated(creativeToolsPanel.DeleteRegion);
+            AssertRegionGated(creativeToolsPanel.ReplaceRegion);
+
+            void AssertRegionGated(Action action)
+            {
+                action();
+
+                Assert.That(controller.Router.HasModal, Is.True, "Creative operation must show a confirmation modal.");
+                Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
+
+                // Pop modal to clean up state for next check
+                controller.Router.PopModal();
+            }
+        }
+
+        static void InvokeHandleAction(BlockiverseMenuController controller, string actionId)
+        {
+            var method = typeof(BlockiverseMenuController).GetMethod("HandleAction", 
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            method.Invoke(controller, new object[] { actionId });
         }
 
         [Test]

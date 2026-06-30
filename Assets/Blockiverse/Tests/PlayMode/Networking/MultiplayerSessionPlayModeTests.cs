@@ -3018,7 +3018,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             TMP_Text statusText = CreateText("Status", menuObject.transform);
 
             menu.Configure(session);
-            menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
+            menu.ConfigureControls(hostButton, joinButton, null, stopButton, addressInput, statusText);
             return menu;
         }
 

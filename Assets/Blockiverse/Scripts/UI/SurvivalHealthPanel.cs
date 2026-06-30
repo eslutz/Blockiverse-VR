@@ -1,5 +1,5 @@
 using System;
-using Blockiverse.Survival;
+using Blockiverse.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,8 +12,8 @@ namespace Blockiverse.UI
         [SerializeField] Slider healthSlider;
         [SerializeField] TMP_Text stateLabel;
 
-        PlayerVitals vitals;
-        SurvivalVitals survivalVitals;
+        IPlayerVitalsView vitals;
+        ISurvivalVitalsView survivalVitals;
 
         // Last-displayed values; Refresh runs on a 0.5s HUD cadence plus health events, so the
         // TMP string rebuild/assignment is skipped while the inputs are unchanged (the same
@@ -34,7 +34,7 @@ namespace Blockiverse.UI
             Refresh();
         }
 
-        public void Bind(PlayerVitals playerVitals)
+        public void Bind(IPlayerVitalsView playerVitals)
         {
             if (vitals != null)
                 vitals.HealthChanged -= OnHealthChanged;
@@ -47,7 +47,7 @@ namespace Blockiverse.UI
 
         // Optionally binds the hunger/thirst/stamina vitals so the state line shows them. These
         // tick without events, so the HUD controller refreshes the panel on a cadence.
-        public void BindSurvivalVitals(SurvivalVitals playerSurvivalVitals)
+        public void BindSurvivalVitals(ISurvivalVitalsView playerSurvivalVitals)
         {
             survivalVitals = playerSurvivalVitals;
             InvalidateDisplayCache();
@@ -129,12 +129,12 @@ namespace Blockiverse.UI
                 vitals.HealthChanged -= OnHealthChanged;
         }
 
-        void OnHealthChanged(HealthChangeResult result)
+        void OnHealthChanged()
         {
             Refresh();
         }
 
-        static string GetStateTMP_Text(PlayerVitals playerVitals)
+        static string GetStateTMP_Text(IPlayerVitalsView playerVitals)
         {
             if (playerVitals.IsDead)
                 return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.HealthDown);

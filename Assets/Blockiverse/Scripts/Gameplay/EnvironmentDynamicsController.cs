@@ -2,8 +2,6 @@ using System;
 using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
-using Unity.Collections;
-using Unity.Netcode;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -15,7 +13,6 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class EnvironmentDynamicsController : MonoBehaviour
     {
-        const string LightningStrikeMessage = "Blockiverse.Environment.LightningStrike";
         // Lightning cadence/odds: roughly one strike roll every 10 seconds of storm, ~35% each.
         public const int LightningCheckIntervalTicks = 200;
         public const int LightningStrikeChancePercent = 35;
@@ -29,16 +26,16 @@ namespace Blockiverse.Gameplay
 
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] MultiplayerChunkAuthoritySync chunkAuthoritySync;
+        [SerializeField] MultiplayerEnvironmentRelay environmentRelay;
 
         WorldTimeClock worldTimeClock;
+        BlockiverseNetworkSession session;
         int lightningTickAccumulator;
         int snowTickAccumulator;
         System.Random random;
         // Biome lookups are pure seed math; cache the resolver per settings instance.
         SurvivalBiomeResolver biomeResolver;
         WorldGenerationSettings biomeResolverSettings;
-        NetworkManager subscribedNetworkManager;
-        bool messageHandlerRegistered;
 
         // Fired on the local peer when a strike lands (world position of the struck surface block).
         // The host raises it directly and mirrors it to clients as a small presentation event.
@@ -53,7 +50,8 @@ namespace Blockiverse.Gameplay
         void OnEnable()
         {
             ResolveReferences();
-            RegisterMessageHandler();
+            if (environmentRelay != null)
+                environmentRelay.LightningStruck += OnRemoteLightningStruck;
         }
 
         void OnDisable()
@@ -64,7 +62,8 @@ namespace Blockiverse.Gameplay
                 worldTimeClock = null;
             }
 
-            UnregisterMessageHandler();
+            if (environmentRelay != null)
+                environmentRelay.LightningStruck -= OnRemoteLightningStruck;
         }
 
         void Update()
@@ -72,7 +71,6 @@ namespace Blockiverse.Gameplay
             if (worldTimeClock == null)
             {
                 ResolveReferences();
-                RegisterMessageHandler();
                 if (worldManager != null && worldManager.WorldTimeClock != null)
                 {
                     worldTimeClock = worldManager.WorldTimeClock;
@@ -88,6 +86,9 @@ namespace Blockiverse.Gameplay
 
             if (chunkAuthoritySync == null)
                 chunkAuthoritySync = FindFirstObjectByType<MultiplayerChunkAuthoritySync>(FindObjectsInactive.Include);
+
+            if (environmentRelay == null)
+                environmentRelay = FindFirstObjectByType<MultiplayerEnvironmentRelay>(FindObjectsInactive.Include);
         }
 
         void OnWorldTick(int ticks)
@@ -265,94 +266,13 @@ namespace Blockiverse.Gameplay
         {
             LightningStruck?.Invoke(strike);
 
-            if (broadcastToClients)
-                BroadcastLightningStrike(strike);
+            if (broadcastToClients && environmentRelay != null)
+                environmentRelay.BroadcastLightningStrike(strike);
         }
 
-        void BroadcastLightningStrike(BlockPosition strike)
+        void OnRemoteLightningStruck(BlockPosition strike)
         {
-            NetworkManager networkManager = NetworkManager.Singleton;
-            if (networkManager == null ||
-                !networkManager.IsListening ||
-                !networkManager.IsServer ||
-                networkManager.CustomMessagingManager == null)
-            {
-                return;
-            }
-
-            var writer = new FastBufferWriter(sizeof(int) * 3, Allocator.Temp);
-            try
-            {
-                WriteBlockPosition(ref writer, strike);
-                foreach (ulong clientId in networkManager.ConnectedClientsIds)
-                {
-                    if (clientId != networkManager.LocalClientId)
-                        networkManager.CustomMessagingManager.SendNamedMessage(LightningStrikeMessage, clientId, writer);
-                }
-            }
-            finally
-            {
-                writer.Dispose();
-            }
-        }
-
-        void RegisterMessageHandler()
-        {
-            NetworkManager networkManager = NetworkManager.Singleton;
-            if (networkManager == null)
-                return;
-
-            if (subscribedNetworkManager != null && subscribedNetworkManager != networkManager)
-                UnregisterMessageHandler();
-
-            if (messageHandlerRegistered || networkManager.CustomMessagingManager == null)
-                return;
-
-            subscribedNetworkManager = networkManager;
-            subscribedNetworkManager.CustomMessagingManager.RegisterNamedMessageHandler(
-                LightningStrikeMessage,
-                HandleLightningStrikeMessage);
-            messageHandlerRegistered = true;
-        }
-
-        void UnregisterMessageHandler()
-        {
-            if (!messageHandlerRegistered ||
-                subscribedNetworkManager == null ||
-                subscribedNetworkManager.CustomMessagingManager == null)
-            {
-                subscribedNetworkManager = null;
-                messageHandlerRegistered = false;
-                return;
-            }
-
-            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(LightningStrikeMessage);
-            subscribedNetworkManager = null;
-            messageHandlerRegistered = false;
-        }
-
-        void HandleLightningStrikeMessage(ulong senderClientId, FastBufferReader reader)
-        {
-            if (senderClientId != NetworkManager.ServerClientId)
-                return;
-
-            BlockPosition strike = ReadBlockPosition(ref reader);
             RaiseLightningStruck(strike, broadcastToClients: false);
-        }
-
-        static void WriteBlockPosition(ref FastBufferWriter writer, BlockPosition position)
-        {
-            writer.WriteValueSafe(position.X);
-            writer.WriteValueSafe(position.Y);
-            writer.WriteValueSafe(position.Z);
-        }
-
-        static BlockPosition ReadBlockPosition(ref FastBufferReader reader)
-        {
-            reader.ReadValueSafe(out int x);
-            reader.ReadValueSafe(out int y);
-            reader.ReadValueSafe(out int z);
-            return new BlockPosition(x, y, z);
         }
 
         // Horizontal distance check against the local head and every connected player object.
@@ -361,13 +281,12 @@ namespace Blockiverse.Gameplay
             if (IsHeadNear(Camera.main != null ? Camera.main.transform.position : (Vector3?)null, strike))
                 return true;
 
-            NetworkManager networkManager = NetworkManager.Singleton;
-            if (networkManager == null || !networkManager.IsListening)
+            if (session == null)
                 return false;
 
-            foreach (NetworkClient client in networkManager.ConnectedClientsList)
+            foreach (ulong clientId in session.ConnectedClientIds)
             {
-                if (TryResolvePlayerHeadWorldPosition(client.PlayerObject, out Vector3 headPosition) &&
+                if (session.TryResolvePlayerHeadWorldPosition(clientId, out Vector3 headPosition) &&
                     IsHeadNear(headPosition, strike))
                 {
                     return true;
@@ -375,18 +294,6 @@ namespace Blockiverse.Gameplay
             }
 
             return false;
-        }
-
-        public static bool TryResolvePlayerHeadWorldPosition(NetworkObject playerObject, out Vector3 position)
-        {
-            position = default;
-            if (playerObject == null)
-                return false;
-
-            BlockiverseNetworkAvatarRig avatarRig = playerObject.GetComponent<BlockiverseNetworkAvatarRig>();
-            Transform headTransform = avatarRig?.HeadAnchor != null ? avatarRig.HeadAnchor : playerObject.transform;
-            position = headTransform.position;
-            return true;
         }
 
         static bool IsHeadNear(Vector3? head, BlockPosition strike)

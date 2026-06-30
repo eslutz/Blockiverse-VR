@@ -1,5 +1,4 @@
 using System;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -207,7 +206,7 @@ namespace Blockiverse.UI
             if (input.placeholder is Graphic placeholderGraphic)
                 placeholderGraphic.raycastTarget = false;
 
-            BlockiverseSystemKeyboardField keyboardField = input.GetComponent<BlockiverseSystemKeyboardField>();
+            Blockiverse.Gameplay.IBlockiverseSystemKeyboardField keyboardField = input.GetComponent<Blockiverse.Gameplay.IBlockiverseSystemKeyboardField>();
             keyboardField?.Configure(input, TouchScreenKeyboardType.Default);
         }
 

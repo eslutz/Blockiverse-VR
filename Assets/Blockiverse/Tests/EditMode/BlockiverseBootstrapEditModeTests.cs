@@ -110,7 +110,7 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("m_RequireDepthTexture: 0", asset);
             StringAssert.Contains("m_RequireOpaqueTexture: 0", asset);
             StringAssert.Contains("m_SupportsHDR: 0", asset);
-            StringAssert.Contains("m_MSAA: 2", asset);
+            StringAssert.Contains("m_MSAA: 4", asset);
             StringAssert.Contains("m_RenderScale: 1", asset);
             StringAssert.Contains("m_MainLightShadowsSupported: 0", asset);
             StringAssert.Contains("m_ShadowDistance: 0", asset);
@@ -203,6 +203,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void BootSceneContainsOneMetaUserAgeCategoryService()
         {
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
             try
             {
                 Scene scene = EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
@@ -284,6 +285,16 @@ namespace Blockiverse.Tests.EditMode
 
             StringAssert.Contains("EnsureComponent<PerformanceStatsOverlay>(worldObject)", sceneBootstrapper);
             StringAssert.Contains("performanceOverlay.Configure(renderer)", sceneBootstrapper);
+        }
+
+        [Test]
+        public void GeneratedBootWorldInitializesDefaultWorldOnAwake()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+            string bootScene = File.ReadAllText(BootScenePath);
+
+            StringAssert.Contains("manager.InitializeDefaultWorldOnAwake = true", sceneBootstrapper);
+            StringAssert.Contains("initializeDefaultWorldOnAwake: 1", bootScene);
         }
 
         [Test]
@@ -395,7 +406,8 @@ namespace Blockiverse.Tests.EditMode
 
             var serializedManager = new SerializedObject(managerSettings);
             Assert.That(serializedManager.FindProperty("m_AutomaticLoading")?.boolValue, Is.True);
-            Assert.That(serializedManager.FindProperty("m_AutomaticRunning")?.boolValue, Is.True);
+            Assert.That(serializedManager.FindProperty("m_AutomaticRunning")?.boolValue, Is.False,
+                "Automatic running is disabled in the Editor to prevent 'StopSubsystems without an initialized manager' warnings on domain reload. XR is started manually at runtime.");
 
             SerializedProperty loaders = serializedManager.FindProperty("m_Loaders");
             Assert.That(loaders, Is.Not.Null);

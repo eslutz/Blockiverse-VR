@@ -3,7 +3,7 @@ namespace Blockiverse.Core
     public static class BlockiverseRuntimeState
     {
         public static bool IsGamePaused { get; private set; }
-        public static bool AllowWorldInput { get; private set; } = true;
+        public static bool AllowWorldInput { get; private set; } = false;
 
         public static void SetRouterState(bool isGamePaused, bool allowWorldInput)
         {
@@ -14,7 +14,7 @@ namespace Blockiverse.Core
         public static void Reset()
         {
             IsGamePaused = false;
-            AllowWorldInput = true;
+            AllowWorldInput = false;
         }
     }
 }

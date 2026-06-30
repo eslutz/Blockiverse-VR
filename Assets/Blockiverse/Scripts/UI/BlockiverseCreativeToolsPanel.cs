@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using TMPro;
@@ -22,8 +23,9 @@ namespace Blockiverse.UI
         [SerializeField] CreativeInteractionController interactionController;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] CreativeHotbar hotbar;
+        [SerializeField] BlockiverseMenuController menuController;
         [SerializeField] TMP_Text cornersLabel;
-        [SerializeField] TMP_Text statusLabel;
+[SerializeField] TMP_Text statusLabel;
         [SerializeField] TMP_Text weatherLabel;
         [SerializeField] Slider timeOfDaySlider;
         [SerializeField] Slider timeScaleSlider;
@@ -184,9 +186,28 @@ namespace Blockiverse.UI
             if (!TryGetRegion(out BlockPosition min, out BlockPosition max) || !CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsFill),
-                editService.Fill(world, min, max, hotbar.SelectedBlockId));
+            if (menuController != null)
+            {
+                menuController.RequestConfirm(
+                    BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeToolsFill),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmAccept),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmCancel),
+                    accepted =>
+                    {
+                        if (accepted)
+                        {
+                            ReportEdit(
+                                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsFill),
+                                editService.Fill(world, min, max, hotbar.SelectedBlockId));
+                        }
+                    });
+            }
+            else
+            {
+                ReportEdit(
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsFill),
+                    editService.Fill(world, min, max, hotbar.SelectedBlockId));
+            }
         }
 
         public void DeleteRegion()
@@ -194,9 +215,28 @@ namespace Blockiverse.UI
             if (!TryGetRegion(out BlockPosition min, out BlockPosition max) || !CanEdit(out VoxelWorld world))
                 return;
 
-            ReportEdit(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
-                editService.Delete(world, min, max));
+            if (menuController != null)
+            {
+                menuController.RequestConfirm(
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmAccept),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmCancel),
+                    accepted =>
+                    {
+                        if (accepted)
+                        {
+                            ReportEdit(
+                                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
+                                editService.Delete(world, min, max));
+                        }
+                    });
+            }
+            else
+            {
+                ReportEdit(
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
+                    editService.Delete(world, min, max));
+            }
         }
 
         // Replaces every block of the aimed-at type inside the region with the hotbar selection.
@@ -212,9 +252,29 @@ namespace Blockiverse.UI
             }
 
             BlockId targetType = world.GetBlock(lastTarget.Value);
-            ReportEdit(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsReplace),
-                editService.Replace(world, min, max, targetType, hotbar.SelectedBlockId));
+
+            if (menuController != null)
+            {
+                menuController.RequestConfirm(
+                    BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeToolsReplace),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmAccept),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmCancel),
+                    accepted =>
+                    {
+                        if (accepted)
+                        {
+                            ReportEdit(
+                                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsReplace),
+                                editService.Replace(world, min, max, targetType, hotbar.SelectedBlockId));
+                        }
+                    });
+            }
+            else
+            {
+                ReportEdit(
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsReplace),
+                    editService.Replace(world, min, max, targetType, hotbar.SelectedBlockId));
+            }
         }
 
         public void CopyRegion()
@@ -272,7 +332,7 @@ namespace Blockiverse.UI
             if (!CanEdit(out VoxelWorld world) || !TryGetAimAbove(world, out BlockPosition basePos))
                 return;
 
-            new VegetationService().PlaceStandardTree(world, basePos, trackChange: true);
+            worldManager.SpawnStandardTree(world, basePos);
             worldManager.Renderer?.RebuildDirty();
             SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSpawnedTree, basePos));
         }
@@ -282,7 +342,7 @@ namespace Blockiverse.UI
             if (!CanEdit(out VoxelWorld world) || !TryGetAimAbove(world, out BlockPosition basePos))
                 return;
 
-            StructureService.PlaceStructureAt(world, basePos.X, basePos.Y, basePos.Z, world.Seed, trackChange: true);
+            worldManager.SpawnStructure(world, basePos);
             worldManager.Renderer?.RebuildDirty();
             SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSpawnedRuin, basePos));
         }

@@ -35,6 +35,7 @@ namespace Blockiverse.Networking
         [SerializeField] bool metaAvatarAvailable;
         [SerializeField] float poseSendRateHz = 30.0f;
         [SerializeField] float remotePoseInterpolationSpeed = 18.0f;
+        [SerializeField] float stalenessThreshold = 3.0f;
         [SerializeField] Transform rootTrackingSource;
         [SerializeField] Transform headTrackingSource;
         [SerializeField] Transform leftHandTrackingSource;
@@ -66,6 +67,10 @@ namespace Blockiverse.Networking
         public Transform HeadAnchor => headAnchor;
         public Transform LeftHandAnchor => leftHandAnchor;
         public Transform RightHandAnchor => rightHandAnchor;
+        public float LastRemotePoseTime { get; private set; }
+        public bool IsPoseStale { get; private set; }
+        public bool IsStreamStale { get; private set; }
+        public bool IsSpawnedForTest { get; set; }
 
         public void ConfigureTrackingSources(Transform head, Transform leftHand, Transform rightHand)
         {
@@ -93,20 +98,27 @@ namespace Blockiverse.Networking
             ApplyFallbackPalette();
 
             if (IsOwner)
+            {
                 PublishPose();
+            }
             else
+            {
+                LastRemotePoseTime = Time.unscaledTime;
                 ApplySmoothedRemotePose(snap: true);
+            }
         }
 
         void LateUpdate()
         {
-            if (!IsSpawned)
+            bool isSpawned = IsSpawned || IsSpawnedForTest;
+            if (!isSpawned)
             {
                 RefreshLocalTrackingPose();
                 return;
             }
 
-            if (IsOwner)
+            bool isOwner = IsOwner && !IsSpawnedForTest;
+            if (isOwner)
             {
                 ApplyTrackingSources();
                 PublishPose();
@@ -114,6 +126,12 @@ namespace Blockiverse.Networking
             else
             {
                 ApplySmoothedRemotePose();
+                bool poseStale = hasRemotePose && (Time.unscaledTime - LastRemotePoseTime) > stalenessThreshold;
+                if (poseStale != IsPoseStale)
+                {
+                    IsPoseStale = poseStale;
+                    UpdateStalenessVisibility();
+                }
             }
         }
 
@@ -181,10 +199,7 @@ namespace Blockiverse.Networking
             EnsureFallbackProxy();
             IsUsingFallbackProxy = fallbackProxyEnabled && !metaAvatarAvailable;
 
-            if (fallbackRoot != null)
-                fallbackRoot.gameObject.SetActive(IsUsingFallbackProxy);
-
-            ApplyFallbackRendererVisibility();
+            UpdateStalenessVisibility();
         }
 
         void PublishPose()
@@ -212,18 +227,77 @@ namespace Blockiverse.Networking
                 ReceiveAvatarPoseClientRpc(pose, recipients);
         }
 
+        public void ApplyRemotePose(AvatarPose pose)
+        {
+            targetRemotePose = pose;
+            LastRemotePoseTime = Time.unscaledTime;
+            if (IsPoseStale)
+            {
+                IsPoseStale = false;
+                UpdateStalenessVisibility();
+            }
+            if (!hasRemotePose)
+            {
+                smoothedRemotePose = pose;
+                hasRemotePose = true;
+                ApplyPose(smoothedRemotePose);
+            }
+        }
+
         [ClientRpc(Delivery = RpcDelivery.Unreliable)]
         void ReceiveAvatarPoseClientRpc(AvatarPose pose, ClientRpcParams clientRpcParams = default)
         {
             if (IsOwner)
                 return;
 
-            targetRemotePose = pose;
-            if (!hasRemotePose)
+            ApplyRemotePose(pose);
+        }
+
+        public void SetStreamStale(bool stale)
+        {
+            if (IsStreamStale != stale)
             {
-                smoothedRemotePose = pose;
-                hasRemotePose = true;
-                ApplyPose(smoothedRemotePose);
+                IsStreamStale = stale;
+                UpdateStalenessVisibility();
+            }
+        }
+
+        public static bool TryResolvePlayerHeadWorldPosition(NetworkObject playerObject, out Vector3 position)
+        {
+            position = default;
+            if (playerObject == null)
+                return false;
+
+            BlockiverseNetworkAvatarRig avatarRig = playerObject.GetComponent<BlockiverseNetworkAvatarRig>();
+            Transform headTransform = avatarRig?.HeadAnchor != null ? avatarRig.HeadAnchor : playerObject.transform;
+            position = headTransform.position;
+            return true;
+        }
+
+        public void UpdateStalenessVisibility()
+        {
+            bool stale = IsPoseStale || IsStreamStale;
+            bool metaVisible = metaAvatarAvailable && !IsStreamStale && !IsPoseStale;
+            bool fallbackVisible = fallbackProxyEnabled && (IsStreamStale || !metaAvatarAvailable) && !IsPoseStale;
+
+            if (fallbackRoot != null)
+            {
+                fallbackRoot.gameObject.SetActive(fallbackVisible);
+            }
+
+            Transform metaEntityNode = transform.Find("Meta Horizon Avatar Entity");
+            if (metaEntityNode != null)
+            {
+                metaEntityNode.gameObject.SetActive(metaVisible);
+            }
+
+            if (stale)
+            {
+                FallbackRenderersVisible = false;
+            }
+            else
+            {
+                ApplyFallbackRendererVisibility();
             }
         }
 

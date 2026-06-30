@@ -1,10 +1,10 @@
 using System;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
-using Blockiverse.VR;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Blockiverse.Core;
 
 namespace Blockiverse.UI
 {
@@ -22,7 +22,7 @@ namespace Blockiverse.UI
         [SerializeField] Button nextPageButton;
         [SerializeField] TMP_Text pageLabel;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
-        [SerializeField] BlockiverseInteractionHaptics interactionHaptics;
+        IBlockiverseInteractionHaptics interactionHaptics;
 
         Inventory inventory;
         ItemRegistry itemRegistry;
@@ -78,7 +78,7 @@ namespace Blockiverse.UI
 
         public void ConfigureFeedback(
             BlockiverseAudioCuePlayer targetAudioCuePlayer,
-            BlockiverseInteractionHaptics targetInteractionHaptics)
+            IBlockiverseInteractionHaptics targetInteractionHaptics)
         {
             audioCuePlayer = targetAudioCuePlayer;
             interactionHaptics = targetInteractionHaptics;

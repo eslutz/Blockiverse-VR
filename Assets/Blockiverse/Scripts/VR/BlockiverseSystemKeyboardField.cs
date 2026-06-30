@@ -2,6 +2,7 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using Blockiverse.Gameplay;
 
 namespace Blockiverse.VR
 {
@@ -12,7 +13,7 @@ namespace Blockiverse.VR
     /// UI input fields cannot be typed into without a hardware keyboard otherwise.
     /// </summary>
     [RequireComponent(typeof(TMP_InputField))]
-    public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, IPointerDownHandler, ISelectHandler, ISubmitHandler, IDeselectHandler
+    public sealed class BlockiverseSystemKeyboardField : MonoBehaviour, IPointerClickHandler, IPointerDownHandler, ISelectHandler, ISubmitHandler, IDeselectHandler, IBlockiverseSystemKeyboardField
     {
         [SerializeField] TMP_InputField inputField;
         [SerializeField] TouchScreenKeyboardType keyboardType = TouchScreenKeyboardType.Default;

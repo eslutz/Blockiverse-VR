@@ -2,20 +2,6 @@ using System;
 
 namespace Blockiverse.WorldGen
 {
-    public enum WeatherState
-    {
-        Clear,
-        PartlyCloudy,
-        Overcast,
-        LightRain,
-        HeavyRain,
-        Thunderstorm,
-        LightSnow,
-        HeavySnow,
-        Blizzard,
-        Fog,
-    }
-
     public struct EnvironmentState
     {
         public WeatherState Weather;

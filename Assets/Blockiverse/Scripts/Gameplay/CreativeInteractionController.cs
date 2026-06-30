@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
+using Blockiverse.Networking;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
