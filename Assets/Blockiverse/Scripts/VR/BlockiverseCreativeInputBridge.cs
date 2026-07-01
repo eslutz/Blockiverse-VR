@@ -326,6 +326,20 @@ namespace Blockiverse.VR
                 rightInteractionRay ??= inputRig.RightInteractionRay;
             }
 
+            if (leftInteractionRay == null || rightInteractionRay == null)
+            {
+                foreach (BlockiverseLocomotionRayMediator mediator in GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
+                {
+                    if (mediator == null || mediator.InteractionRay == null)
+                        continue;
+
+                    if (mediator.Hand == BlockiverseControllerRole.Left)
+                        leftInteractionRay ??= mediator.InteractionRay;
+                    else
+                        rightInteractionRay ??= mediator.InteractionRay;
+                }
+            }
+
             // Latch only once both hands resolved; otherwise keep retrying so a rig that finishes
             // wiring after the first frame still picks up its rays. No more allocating scans.
             interactionRaysResolved = leftInteractionRay != null && rightInteractionRay != null;

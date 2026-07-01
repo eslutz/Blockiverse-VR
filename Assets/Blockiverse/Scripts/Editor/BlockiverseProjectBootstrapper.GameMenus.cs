@@ -108,13 +108,8 @@ controller.ConfigureStationPanel(stationPanel);
             EditorUtility.SetDirty(controller); EditorUtility.SetDirty(rig);
         }
 
-        // Routed menu panels live inside the composition menu canvas at rest.On regeneration of an
-        // existing prefab they must be migrated back under the camera offset so this authoring pass
-        // can reconfigure the SAME object in place — adding new buttons/content and re-wiring — before
-        // routing returns it to the canvas. Plain EnsureRectChild instead spawns a fresh duplicate
-        // that RouteMenuPanelToCompositionSurface then discards in favor of the stale routed copy,
-        // so authoring changes never reach an already-generated prefab. Using the migrating helper
-        // preserves each panel's object identity across regenerations and lets edits take effect.
+        // Older generated prefabs may still have these panels under the composition menu canvas.
+        // Migrate them back under Camera Offset so this authoring pass updates the same objects.
         static GameObject EnsureRoutedMenuPanelRoot(Transform parent, string name)
         {
             return EnsureWorldSpaceMenuRectChild(parent, null, name);

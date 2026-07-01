@@ -10,6 +10,7 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
+    [DefaultExecutionOrder(-9000)]
     public sealed class CreativeWorldManager : MonoBehaviour, IMultiplayerWorldContext
     {
         [SerializeField] Material chunkMaterial;
