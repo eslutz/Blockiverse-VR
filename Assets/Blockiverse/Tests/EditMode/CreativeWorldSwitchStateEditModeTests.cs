@@ -81,6 +81,24 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void InitializeDefaultWorldBakesSpawnRegionImmediately()
+        {
+            CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();
+            ConfigureWorldManager(manager);
+
+            manager.InitializeDefaultWorld();
+
+            Assert.That(manager.World, Is.Not.Null);
+            Assert.That(manager.Renderer, Is.Not.Null);
+            Assert.That(manager.Renderer.SpawnRegionReady, Is.True,
+                "The title mini-world must have collidable spawn geometry before normal queued chunk draining.");
+            Assert.That(
+                manager.gameObject.GetComponentsInChildren<MeshFilter>(includeInactive: true),
+                Is.Not.Empty,
+                "The title mini-world should generate visible spawn-region meshes immediately.");
+        }
+
+        [Test]
         public void CreativeTimeSlidersAreIgnoredDuringLanSession()
         {
             CreativeWorldManager manager = CreateRoot("World Manager").AddComponent<CreativeWorldManager>();

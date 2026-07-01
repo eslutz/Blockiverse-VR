@@ -377,11 +377,9 @@ namespace Blockiverse.Gameplay
             pendingWorldTimeTicks = 0;
             ConfigureWorldRuntime(settings, authoritySyncOverride, deferInitialRendererRebuild);
 
-            // The deferred path only queued chunks (no geometry yet); eagerly bake the spawn
-            // neighbourhood so the rig lands on solid, collidable ground before it is positioned.
-            // The non-deferred path already built and collider-baked the whole world in
-            // ConfigureWorldRuntime's RebuildAll, so the spawn area is already solid.
-            if (deferInitialRendererRebuild && Renderer != null && settings != null)
+            // ConfigureWorldRuntime queues the full world rebuild; eagerly bake the spawn
+            // neighbourhood so the rig lands on visible, collidable ground before it is positioned.
+            if (Renderer != null && settings != null)
                 Renderer.RebuildSpawnRegion(settings.SpawnPosition);
 
             PositionRigAtSpawn(settings.SpawnPosition);

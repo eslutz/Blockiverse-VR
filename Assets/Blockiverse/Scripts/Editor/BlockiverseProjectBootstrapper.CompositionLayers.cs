@@ -75,34 +75,9 @@ namespace Blockiverse.Editor
         static GameObject EnsureMenuCompositionSurface(Transform cameraOffset, Transform head)
         {
             GameObject surface = EnsureChild(cameraOffset, MenuCompositionSurfaceName);
-            RemoveStaleCompositionLayerDefaultCanvas(surface.transform);
             
-            // The composition surface carries the proxy interactable for menu input.
-            // It must reside on the interaction layer so XRI rays can hit it, while
-            // the rendered UI resides on the culled composition layer.
-            surface.layer = GetInteractionLayerIndex();
-            surface.transform.localPosition = GameMenuLocalPosition;
-surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0.0f);
-            surface.transform.localScale = Vector3.one;
-
-            CompositionLayer layer = EnsureComponent<CompositionLayer>(surface);
-            CompositionOutline outline = EnsureComponent<CompositionOutline>(surface);
-            if (layer.LayerData is not QuadLayerData quadLayerData)
-            {
-                layer.ChangeLayerDataType(typeof(QuadLayerData));
-                quadLayerData = layer.LayerData as QuadLayerData;
-            }
-
-            if (quadLayerData != null)
-            {
-                quadLayerData.Size = ComfortMenuCompositionSize;
-                quadLayerData.ApplyTransformScale = true;
-            }
-
-            layer.Order = CompositionLayerOrderMenu;
-            layer.enabled = false;
-            TexturesExtension textures = EnsureComponent<TexturesExtension>(surface);
-
+            // Reorder: Create canvasObject first so that when we add CompositionLayer/InteractableUIMirror,
+            // they find the existing canvas child instead of auto-generating a default one named "Canvas".
             GameObject canvasObject = EnsureRectChild(surface.transform, MenuCompositionCanvasName);
             canvasObject.layer = GetCompositionUiLayerIndex();
             canvasObject.transform.localPosition = Vector3.zero;
@@ -134,14 +109,45 @@ surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0
             canvasGroup.ignoreParentGroups = false;
 
             Camera canvasCamera = EnsureMenuCompositionCanvasCamera(canvasObject.transform);
+
+            // Now configure the surface itself.
+            surface.layer = GetInteractionLayerIndex();
+            surface.transform.localPosition = GameMenuLocalPosition;
+            surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0.0f);
+            surface.transform.localScale = Vector3.one;
+
+            CompositionLayer layer = EnsureComponent<CompositionLayer>(surface);
+            CompositionOutline outline = EnsureComponent<CompositionOutline>(surface);
+            if (layer.LayerData is not QuadLayerData quadLayerData)
+            {
+                layer.ChangeLayerDataType(typeof(QuadLayerData));
+                quadLayerData = layer.LayerData as QuadLayerData;
+            }
+
+            if (quadLayerData != null)
+            {
+                quadLayerData.Size = ComfortMenuCompositionSize;
+                quadLayerData.ApplyTransformScale = true;
+            }
+
+            layer.Order = CompositionLayerOrderMenu;
+            layer.enabled = false;
+            TexturesExtension textures = EnsureComponent<TexturesExtension>(surface);
+
             InteractableUIMirror mirror = EnsureComponent<InteractableUIMirror>(surface);
             mirror.enabled = true;
             XRSimpleInteractable simpleInteractable = EnsureComponent<XRSimpleInteractable>(surface);
             MeshCollider meshCollider = EnsureComponent<MeshCollider>(surface);
+            simpleInteractable.colliders.Clear();
+            simpleInteractable.colliders.Add(meshCollider);
             EnsureComponent<UIHandle>(surface);
             EnsureComponent<UIFocus>(surface);
             QuadUIScale quadUiScale = EnsureComponent<QuadUIScale>(surface);
             RemoveComponentIfPresent<GraphicRaycaster>(canvasObject);
+
+            // Clean up any default Canvas auto-created by the package components during registration.
+            RemoveStaleCompositionLayerDefaultCanvas(surface.transform);
+
             ConfigureCompositionLayerSerializedReferences(layer, canvas, mirror, outline);
             ConfigureInteractableUIMirrorSerializedReferences(
                 mirror,
@@ -168,7 +174,8 @@ surface.transform.localRotation = Quaternion.Euler(GameMenuPitchDegrees, 0.0f, 0
             surface.layer = GetInteractionLayerIndex();
 
             EditorUtility.SetDirty(canvasGroup);
-EditorUtility.SetDirty(canvas);
+            EditorUtility.SetDirty(canvas);
+            EditorUtility.SetDirty(simpleInteractable);
             EditorUtility.SetDirty(canvasObject);
             EditorUtility.SetDirty(renderScale);
             EditorUtility.SetDirty(surface);
@@ -542,9 +549,13 @@ EditorUtility.SetDirty(canvas);
                 throw new InvalidOperationException($"Unity layer index {layerIndex} is outside the TagManager layer array.");
 
             SerializedProperty targetLayer = layers.GetArrayElementAtIndex(layerIndex);
-            if (!string.IsNullOrEmpty(targetLayer.stringValue) && targetLayer.stringValue != layerName)
+            if (!string.IsNullOrEmpty(targetLayer.stringValue) &&
+                targetLayer.stringValue != layerName &&
+                !IsCompositionLayerGeneratedCanvasLayerName(targetLayer.stringValue))
+            {
                 throw new InvalidOperationException(
                     $"Unity layer {layerIndex} is already assigned to {targetLayer.stringValue}; expected {layerName}.");
+            }
 
             bool changed = false;
             for (int index = 8; index < layers.arraySize; index++)
@@ -576,5 +587,8 @@ EditorUtility.SetDirty(canvas);
 
             return layerIndex;
         }
+
+        static bool IsCompositionLayerGeneratedCanvasLayerName(string layerName) =>
+            layerName.StartsWith("Canvas_", StringComparison.Ordinal);
     }
 }

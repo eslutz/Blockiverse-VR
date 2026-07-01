@@ -75,6 +75,12 @@ namespace Blockiverse.Editor
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
+
+            // Unload the Boot scene from Editor memory before modifying its file content on disk.
+            // This prevents edit-time package components from re-saving generated meshes to disk
+            // when Unity does a domain reload or SaveAssets.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
             RemoveStaleRootCompositionLayerSceneDocuments(BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
         }
@@ -86,7 +92,7 @@ namespace Blockiverse.Editor
         {
             GameObject playerPrefab = EnsureNetworkPlayerPrefab();
             GameObject networkManagerPrefab = EnsureNetworkManagerPrefab(playerPrefab);
-            GameObject managerObject = FindRootGameObject(scene, NetworkManagerRootName);
+            GameObject managerObject = EnsureSingleRootGameObject(scene, NetworkManagerRootName);
 
             if (managerObject == null)
                 managerObject = (GameObject)PrefabUtility.InstantiatePrefab(networkManagerPrefab, scene);
@@ -283,13 +289,20 @@ namespace Blockiverse.Editor
         static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
         {
             RemoveStaleRootCompositionLayers(scene);
-            GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
+            EnsureSingleRootGameObject(scene, MenuCompositionCanvasName);
+            GameObject rig = EnsureSingleRootGameObject(scene, BlockiverseProject.XrRigRootName);
 
             if (rig != null)
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(rig))
+                {
+                    PrefabUtility.UnpackPrefabInstance(rig, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
                 UnityEngine.Object.DestroyImmediate(rig);
+            }
 
             GameObject rigInstance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
-            if (rigInstance != null)
+if (rigInstance != null)
             {
                 rigInstance.name = BlockiverseProject.XrRigRootName;
                 RemoveGeneratedCompositionLayerSceneOverrides(rigInstance);
@@ -307,8 +320,7 @@ namespace Blockiverse.Editor
                 if (root.name == "Composition Render Scale Surface" ||
                     root.GetComponent<CompositionLayer>() != null)
                 {
-                    root.SetActive(false);
-                    EditorUtility.SetDirty(root);
+                    UnityEngine.Object.DestroyImmediate(root);
                 }
             }
         }
@@ -524,7 +536,7 @@ namespace Blockiverse.Editor
 
         static void EnsureEventSystem(Scene scene, string eventSystemName)
         {
-            GameObject eventSystemObject = FindRootGameObject(scene, eventSystemName);
+            GameObject eventSystemObject = EnsureSingleRootGameObject(scene, eventSystemName);
 
             if (eventSystemObject == null)
             {
@@ -697,7 +709,7 @@ namespace Blockiverse.Editor
 
         static void EnsureBootSceneCreativeWorld(Scene scene)
         {
-            GameObject worldObject = FindRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
+            GameObject worldObject = EnsureSingleRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
 
             if (worldObject == null)
             {
@@ -765,10 +777,41 @@ namespace Blockiverse.Editor
 
         static void RemoveRootGameObject(Scene scene, string name)
         {
-            GameObject existing = FindRootGameObject(scene, name);
+            GameObject existing = EnsureSingleRootGameObject(scene, name);
 
             if (existing != null)
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(existing))
+                {
+                    PrefabUtility.UnpackPrefabInstance(existing, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
                 UnityEngine.Object.DestroyImmediate(existing);
+            }
+        }
+
+        static GameObject EnsureSingleRootGameObject(Scene scene, string name)
+        {
+            GameObject retained = null;
+
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+            {
+                if (rootObject.name != name)
+                    continue;
+
+                if (retained == null)
+                {
+                    retained = rootObject;
+                    continue;
+                }
+
+                if (PrefabUtility.IsPartOfPrefabInstance(rootObject))
+                {
+                    PrefabUtility.UnpackPrefabInstance(rootObject, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
+                UnityEngine.Object.DestroyImmediate(rootObject);
+            }
+
+            return retained;
         }
 
         static GameObject FindRootGameObject(Scene scene, string name)

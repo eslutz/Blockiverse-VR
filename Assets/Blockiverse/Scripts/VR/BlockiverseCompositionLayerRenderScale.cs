@@ -130,6 +130,19 @@ namespace Blockiverse.VR
             mirrorCamera.backgroundColor = Color.clear;
             mirrorCamera.cullingMask = 1 << sourceCanvas.gameObject.layer;
 
+            // Disable URP post-processing and anti-aliasing to preserve clean alpha output for Composition Layers
+            var cameraData = mirrorCamera.GetComponent("UniversalAdditionalCameraData");
+            if (cameraData != null)
+            {
+                var renderPostProcessingProp = cameraData.GetType().GetProperty("renderPostProcessing");
+                if (renderPostProcessingProp != null)
+                    renderPostProcessingProp.SetValue(cameraData, false);
+                
+                var antialiasingProp = cameraData.GetType().GetProperty("antialiasing");
+                if (antialiasingProp != null)
+                    antialiasingProp.SetValue(cameraData, 0); // 0 corresponds to AntialiasingMode.None
+            }
+
             Rect rect = rectTransform.rect;
             float canvasWidth = Mathf.Max(0.001f, Mathf.Abs(rect.width * rectTransform.lossyScale.x));
             float canvasHeight = Mathf.Max(0.001f, Mathf.Abs(rect.height * rectTransform.lossyScale.y));

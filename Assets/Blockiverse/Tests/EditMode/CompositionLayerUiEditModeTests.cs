@@ -8,6 +8,7 @@ using Unity.XR.CompositionLayers.UIInteraction;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.OpenXR;
@@ -144,6 +145,14 @@ namespace Blockiverse.Tests.EditMode
                 "The generated rig should proxy menu input through composition-layer UI mirroring.");
             Assert.That(prefab.GetComponentInChildren<BlockiverseCompositionLayerRenderScale>(includeInactive: true), Is.Not.Null);
             Assert.That(prefab.GetComponentInChildren<BlockiverseCompositionMenuCursor>(includeInactive: true), Is.Not.Null);
+
+            XRSimpleInteractable simpleInteractable = menuSurface.GetComponent<XRSimpleInteractable>();
+            MeshCollider meshCollider = menuSurface.GetComponent<MeshCollider>();
+            Assert.That(simpleInteractable, Is.Not.Null);
+            Assert.That(meshCollider, Is.Not.Null);
+            Assert.That(simpleInteractable.colliders, Has.Count.EqualTo(1),
+                "The routed proxy must register its collider explicitly for tracked-device rays.");
+            Assert.That(simpleInteractable.colliders[0], Is.SameAs(meshCollider));
 
             int compositionLayerIndex = LayerMask.NameToLayer(VrUiLayerName);
             Assert.That(compositionLayerIndex, Is.EqualTo(VrUiLayerIndex));
