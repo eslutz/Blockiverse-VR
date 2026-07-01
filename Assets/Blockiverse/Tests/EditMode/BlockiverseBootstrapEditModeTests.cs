@@ -298,6 +298,21 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void BootSceneBootstrapperRemovesDuplicateGeneratedRoots()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+
+            StringAssert.Contains(
+                "EnsureSingleRootGameObject(scene, BlockiverseProject.XrRigRootName)",
+                sceneBootstrapper);
+            StringAssert.Contains(
+                "EnsureSingleRootGameObject(scene, BlockiverseProject.CreativeWorldRootName)",
+                sceneBootstrapper);
+            StringAssert.Contains("EnsureSingleRootGameObject(scene, eventSystemName)", sceneBootstrapper);
+            StringAssert.Contains("EnsureSingleRootGameObject(scene, NetworkManagerRootName)", sceneBootstrapper);
+        }
+
+        [Test]
         public void GeneratedXrRigVignetteExcludesStartupGravityAndJump()
         {
             string xrRigBootstrapper = File.ReadAllText(XrRigBootstrapperPath);

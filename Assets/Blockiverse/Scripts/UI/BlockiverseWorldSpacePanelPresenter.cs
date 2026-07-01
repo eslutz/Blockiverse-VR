@@ -205,6 +205,10 @@ namespace Blockiverse.UI
                 + Vector3.up * verticalOffsetMeters;
 
             Transform root = PlacementRoot;
+            if (Application.isPlaying && root.parent != null)
+            {
+                root.SetParent(null, true);
+            }
             root.SetPositionAndRotation(
                 position,
                 Quaternion.LookRotation(forward, Vector3.up) * Quaternion.Euler(pitchDegrees, 0.0f, 0.0f));

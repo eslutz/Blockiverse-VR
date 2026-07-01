@@ -76,11 +76,41 @@ namespace Blockiverse.VR
                 controllerAnchor = GetComponent<BlockiverseControllerAnchor>();
         }
 
+        MonoBehaviour cachedSessionController;
+        System.Reflection.PropertyInfo hasActiveSessionProp;
+        bool checkedSessionController;
+
         bool IsInTeleportMode()
         {
-            return inputRig != null &&
-                BlockiverseRuntimeState.AllowWorldInput &&
-                !inputRig.LocomotionSuppressed &&
+            if (inputRig == null || inputRig.LocomotionSuppressed)
+                return false;
+
+            bool allowTeleport = BlockiverseRuntimeState.AllowWorldInput;
+            if (!allowTeleport)
+            {
+                if (!checkedSessionController)
+                {
+                    foreach (MonoBehaviour mb in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+                    {
+                        if (mb != null && mb.GetType().Name == "BlockiverseWorldSessionController")
+                        {
+                            cachedSessionController = mb;
+                            hasActiveSessionProp = mb.GetType().GetProperty("HasActiveSession", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                            break;
+                        }
+                    }
+                    checkedSessionController = true;
+                }
+
+                if (cachedSessionController != null && hasActiveSessionProp != null)
+                {
+                    // If we do not have an active session, we are in the title menu world,
+                    // where teleportation should still be allowed.
+                    allowTeleport = !(bool)hasActiveSessionProp.GetValue(cachedSessionController);
+                }
+            }
+
+            return allowTeleport &&
                 comfortSettings != null &&
                 comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Teleport;
         }

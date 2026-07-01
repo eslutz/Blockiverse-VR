@@ -22,6 +22,40 @@ namespace Blockiverse.Editor
         static readonly DateTime AndroidVersionCodeEpochUtc =
             new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+        [MenuItem("Blockiverse/Build/Build and Install Android APK")]
+        public static void BuildAndInstallAndroid()
+        {
+            string outputPath = GetArgumentValue(BuildOutputArgument) ?? DefaultBuildOutputPath;
+            string outputDirectory = Path.GetDirectoryName(outputPath);
+
+            if (!string.IsNullOrEmpty(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+
+            BlockiverseProjectBootstrapper.Run();
+            ConfigureAndroidVersion(allowLocalDevelopmentDefaults: true, requireExplicitVersion: false);
+
+            var options = new BuildPlayerOptions
+            {
+                scenes = new[] { BlockiverseProject.BootScenePath },
+                locationPathName = outputPath,
+                target = BuildTarget.Android,
+                targetGroup = BuildTargetGroup.Android,
+                options = BuildOptions.Development | BuildOptions.CompressWithLz4 | BuildOptions.AutoRunPlayer
+            };
+
+            using (PrepareOptionalMetaAvatarSamplePresets())
+            {
+                BuildReport report = BuildPipeline.BuildPlayer(options);
+                BuildSummary summary = report.summary;
+
+                if (summary.result != BuildResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Android development build and install failed with {summary.result}. Errors: {summary.totalErrors}");
+                }
+            }
+        }
+
         [MenuItem("Blockiverse/Build/Development Android APK")]
         public static void BuildDevelopmentAndroid()
         {

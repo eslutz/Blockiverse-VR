@@ -529,28 +529,28 @@ namespace Blockiverse.Editor
             EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -94.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(32.0f, -100.0f), new Vector2(300.0f, 36.0f));
 
             Toggle glideToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Glide Toggle",
                 "Glide Motion",
                 settings == null || settings.LocomotionMode == BlockiverseLocomotionMode.Glide,
-                new Vector2(32.0f, -134.0f));
+                new Vector2(32.0f, -140.0f));
 
             Toggle teleportToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Teleport Toggle",
                 "Teleport",
                 settings != null && settings.LocomotionMode == BlockiverseLocomotionMode.Teleport,
-                new Vector2(32.0f, -182.0f));
+                new Vector2(32.0f, -188.0f));
 
             Slider moveSpeedSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Move Speed Slider",
                 "Move Speed",
                 settings != null ? settings.ContinuousMoveSpeed : 1.8f,
-                new Vector2(32.0f, -246.0f),
+                new Vector2(32.0f, -252.0f),
                 minValue: 0.5f,
                 maxValue: 4.0f);
 
@@ -559,25 +559,25 @@ namespace Blockiverse.Editor
                 "Glide Bob Toggle",
                 "Walk Head-Bob",
                 settings != null && settings.GlideStyle == GlideStyle.Bobbing,
-                new Vector2(32.0f, -310.0f));
+                new Vector2(32.0f, -316.0f));
 
             // --- Turning ---
             EnsureLabel(panelObject.transform, "Turning Label", "Turning", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(532.0f, -94.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(532.0f, -100.0f), new Vector2(300.0f, 36.0f));
 
             Toggle smoothTurnToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Smooth Turn Toggle",
                 "Smooth Turn",
                 settings != null && settings.SmoothTurnEnabled,
-                new Vector2(532.0f, -134.0f));
+                new Vector2(532.0f, -140.0f));
 
             Slider snapTurnSlider = EnsureSnapTurnSlider(
                 panelObject.transform,
                 settings != null ? settings.SnapTurnDegrees : 45.0f,
-                new Vector2(532.0f, -198.0f));
+                new Vector2(532.0f, -204.0f));
 
             Toggle turnAroundToggle = EnsureToggleControl(
                 panelObject.transform,
@@ -599,21 +599,21 @@ namespace Blockiverse.Editor
             EnsureLabel(panelObject.transform, "Control Options Label", "Control Options", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -380.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(32.0f, -384.0f), new Vector2(300.0f, 36.0f));
 
             Toggle leftHandToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Left Hand Toggle",
                 "Left-Handed",
                 settings != null && settings.DominantHand == BlockiverseControllerRole.Left,
-                new Vector2(32.0f, -420.0f));
+                new Vector2(32.0f, -424.0f));
 
             Toggle toggleToMineToggle = EnsureToggleControl(
                 panelObject.transform,
                 "Toggle To Mine Toggle",
                 "Toggle To Mine",
                 settings != null && settings.ToggleToMineEnabled,
-                new Vector2(32.0f, -468.0f));
+                new Vector2(32.0f, -472.0f));
 
             // --- Vignette ---
             EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
@@ -636,14 +636,14 @@ namespace Blockiverse.Editor
             EnsureLabel(panelObject.transform, "Player View Label", "Player View", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -590.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(32.0f, -524.0f), new Vector2(300.0f, 36.0f));
 
             Slider eyeHeightSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Eye Height Slider",
                 "Eye Height",
                 settings != null ? settings.StandingEyeHeight : 1.6f,
-                new Vector2(32.0f, -632.0f),
+                new Vector2(32.0f, -564.0f),
                 minValue: 1.0f,
                 maxValue: 2.2f);
 
@@ -661,7 +661,7 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Height Reset Button",
                 "Reset Height",
-                new Vector2(32.0f, -742.0f));
+                new Vector2(32.0f, -628.0f));
 
             if (heightReset != null)
             {

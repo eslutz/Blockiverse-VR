@@ -305,7 +305,7 @@ MonoBehaviour:
   hotbar: {fileID: 0}
   placementPreview: {fileID: 0}
   voidSafetyFloor: {fileID: 0}
-  initializeDefaultWorldOnAwake: 0
+  initializeDefaultWorldOnAwake: 1
 --- !u!114 &220185976
 MonoBehaviour:
   m_ObjectHideFlags: 0

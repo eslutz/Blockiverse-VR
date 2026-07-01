@@ -201,14 +201,44 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.PauseReturnToTitle:
                     SaveCurrentWorld();
+                    UnloadActiveSessionToTitleWorld();
                     break;
                 case MenuActions.DeathReturnToTitle:
                     SaveCurrentWorld(respawnDeadPlayer: true);
+                    UnloadActiveSessionToTitleWorld();
                     break;
                 case MenuActions.TitleQuit:
                     SaveCurrentWorld();
                     break;
             }
+        }
+
+        void UnloadActiveSessionToTitleWorld()
+        {
+            currentSavePath = null;
+            currentWorldName = null;
+            currentDifficulty = string.Empty;
+            currentWorldPreset = WorldPresetIds.SurvivalTerrain;
+            currentTextureSet = BlockTextureSetIds.Default;
+            lastSaveTime = 0.0f;
+
+            if (worldManager != null)
+            {
+                try
+                {
+                    worldManager.InitializeDefaultWorld();
+                }
+                catch (Exception exception)
+                {
+                    BlockiverseLog.Error(
+                        BlockiverseLogCategory.Persistence,
+                        $"Failed to initialize title world during unload exception={exception.GetType().Name}",
+                        context: this);
+                }
+            }
+
+            SetTransitionLocomotionBlocked(false);
+            RefreshSaveList();
         }
 
         // ── Save ──────────────────────────────────────────────────────────────

@@ -427,7 +427,9 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             File.WriteAllText(
                 libraryManifestPath,
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
-                "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" />\n");
+                "<manifest>\n" +
+                "    <application />\n" +
+                "</manifest>\n");
             File.WriteAllText(
                 libraryGradlePath,
                 "apply plugin: 'com.android.library'\n\n" +
