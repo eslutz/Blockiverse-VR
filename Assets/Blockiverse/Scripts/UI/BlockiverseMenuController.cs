@@ -68,6 +68,7 @@ namespace Blockiverse.UI
         [SerializeField] Button controllerMappingCloseButton;
 
         UiScreenRouter router;
+        BlockiverseWorldSessionController sessionController;
         SurvivalVitalsRuntime vitalsRuntime;
         MultiplayerSurvivalSync survivalSync;
         Action<bool> confirmCallback;
@@ -298,6 +299,10 @@ namespace Blockiverse.UI
         {
             if (inputRig == null)
                 inputRig = GetComponentInParent<IBlockiverseInputRig>();
+
+            if (sessionController == null)
+                sessionController = GetComponent<BlockiverseWorldSessionController>() ??
+                                    GetComponentInParent<BlockiverseWorldSessionController>();
 
             if (vitalsRuntime == null)
                 vitalsRuntime = GetComponent<SurvivalVitalsRuntime>() ?? 
@@ -664,11 +669,13 @@ namespace Blockiverse.UI
             if (router == null) return;
 
             BlockiverseRuntimeState.SetRouterState(router.IsGamePaused, router.AllowWorldInput);
+            ApplyLocomotionSuppression();
             string activeId = router.ActiveScreen.ScreenId;
             string inputTarget = router.InputTarget;
             if (!HasConfirmModalOpen())
                 confirmCallback = null;
 
+            BlockiverseWorldSpacePanelPresenter anchorPresenter = FindVisibleMenuAnchorPresenter();
             foreach (var (screenId, presenter) in screenPresenters)
             {
                 bool isModal = screenId == MenuActions.ConfirmModal || screenId == MenuActions.ErrorModal;
@@ -680,7 +687,12 @@ namespace Blockiverse.UI
                     presenter.GetComponent<BlockiverseStartupOverlay>()?.SetAutomaticHide(!visible);
 
                 if (visible)
-                    presenter.Show();
+                {
+                    bool preserveAnchor = ShouldPreserveMenuAnchor(screenId, anchorPresenter);
+                    if (preserveAnchor)
+                        presenter.ApplyPlacementFrom(anchorPresenter);
+                    presenter.Show(recenterPlacement: !preserveAnchor);
+                }
                 else if (presenter.IsVisible)
                     presenter.Hide();
 
@@ -694,6 +706,52 @@ namespace Blockiverse.UI
                 HideQuickBlockMenu();
             else
                 SetPresenterInputEnabled(blockMenuPresenter, blockMenuPresenter != null && blockMenuPresenter.IsVisible);
+        }
+
+        void ApplyLocomotionSuppression()
+        {
+            if (inputRig == null || router == null)
+                return;
+
+            ResolveRuntimeReferences();
+            if (sessionController != null && sessionController.HasActiveSession)
+            {
+                bool isTitleMiniWorldRoute = string.Equals(router.ActiveScreen.ScreenId, MenuActions.TitleScreen, StringComparison.Ordinal);
+                inputRig.LocomotionSuppressed = !isTitleMiniWorldRoute && (router.IsGamePaused || !router.AllowWorldInput);
+            }
+            else if (!string.Equals(router.ActiveScreen.ScreenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal))
+            {
+                inputRig.LocomotionSuppressed = false;
+            }
+        }
+
+        BlockiverseWorldSpacePanelPresenter FindVisibleMenuAnchorPresenter()
+        {
+            if (screenPresenters == null)
+                return null;
+
+            foreach (var (screenId, presenter) in screenPresenters)
+            {
+                if (presenter != null &&
+                    presenter.IsVisible &&
+                    IsAnchoredMenuScreen(screenId))
+                {
+                    return presenter;
+                }
+            }
+
+            return null;
+        }
+
+        static bool ShouldPreserveMenuAnchor(string screenId, BlockiverseWorldSpacePanelPresenter anchorPresenter)
+        {
+            return anchorPresenter != null && IsAnchoredMenuScreen(screenId);
+        }
+
+        static bool IsAnchoredMenuScreen(string screenId)
+        {
+            return !string.Equals(screenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal) &&
+                !string.Equals(screenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal);
         }
 
         bool CanUseQuickBlockMenu()

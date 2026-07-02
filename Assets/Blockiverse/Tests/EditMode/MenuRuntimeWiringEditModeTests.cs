@@ -728,6 +728,71 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void RoutedMenusKeepInitialAnchorWhenNavigatingWithinMenuStack()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            GameObject head = CreateRoot("Head");
+            head.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            BlockiverseActionMenu settingsMenu = CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.SettingsPanelName, 4);
+            ReplacePresenter(titleMenu.gameObject, head.transform);
+            ReplacePresenter(settingsMenu.gameObject, head.transform);
+
+            StartMenuController(controller);
+
+            Transform titlePlacement = titleMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>().PlacementRoot;
+            Vector3 initialPosition = titlePlacement.position;
+            Quaternion initialRotation = titlePlacement.rotation;
+            Vector3 initialScale = titlePlacement.localScale;
+
+            head.transform.SetPositionAndRotation(new Vector3(8.0f, 0.0f, -3.0f), Quaternion.Euler(0.0f, 90.0f, 0.0f));
+            GetChildComponent<Button>(titleMenu.transform, "Panel/Action 5").onClick.Invoke();
+
+            Transform settingsPlacement = settingsMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>().PlacementRoot;
+            Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.True);
+            Assert.That(Vector3.Distance(settingsPlacement.position, initialPosition), Is.LessThan(0.001f));
+            Assert.That(Quaternion.Angle(settingsPlacement.rotation, initialRotation), Is.LessThan(0.01f));
+            Assert.That(settingsPlacement.localScale, Is.EqualTo(initialScale));
+        }
+
+        [Test]
+        public void ActiveSessionPauseSuppressesLocomotionButTitleMiniWorldDoesNot()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            var inputRig = new FakeInputRig();
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.PauseMenuName, 8);
+            var session = rig.AddComponent<BlockiverseWorldSessionController>();
+            SetPrivateField(session, "currentSavePath", "/tmp/test-world.vxlworld");
+
+            controller.Configure(
+                inputRig,
+                titleMenu: null,
+                pauseMenu: null,
+                deathMenu: null,
+                confirmMenu: null,
+                errorMenu: null,
+                newWorldPanel: null,
+                loadWorldPanel: null);
+            StartMenuController(controller);
+
+            Assert.That(inputRig.LocomotionSuppressed, Is.False,
+                "The title mini-world remains explorable even though the title route is paused.");
+
+            controller.EnterGameplay();
+            Assert.That(inputRig.LocomotionSuppressed, Is.False);
+
+            controller.OnMenuPressed();
+
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+            Assert.That(inputRig.LocomotionSuppressed, Is.True,
+                "Opening a gameplay menu during an active world session should freeze locomotion.");
+        }
+
+        [Test]
         public void DeathWhileModalIsOpenClearsModalAndRoutesToDeathScreen()
         {
             GameObject rig = CreateRoot("Rig");
@@ -1506,6 +1571,28 @@ namespace Blockiverse.Tests.EditMode
             return presenter;
         }
 
+        BlockiverseWorldSpacePanelPresenter ReplacePresenter(GameObject target, Transform headset)
+        {
+            foreach (BlockiverseWorldSpacePanelPresenter existing in target.GetComponents<BlockiverseWorldSpacePanelPresenter>())
+                UnityEngine.Object.DestroyImmediate(existing);
+
+            Canvas canvas = target.GetComponent<Canvas>();
+            if (canvas == null)
+                canvas = target.AddComponent<Canvas>();
+
+            canvas.enabled = false;
+            var presenter = target.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(
+                canvas,
+                headset,
+                distance: 1.2f,
+                horizontalOffset: 0.0f,
+                verticalOffset: 0.0f,
+                pitch: 0.0f,
+                showWhenStarted: false);
+            return presenter;
+        }
+
         BlockiverseWorldSpacePanelPresenter CreatePresenterWithStartGate(string name, string key, out Canvas canvas)
         {
             GameObject target = CreateRoot(name);
@@ -1580,6 +1667,28 @@ namespace Blockiverse.Tests.EditMode
                 .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose private field '{fieldName}' for this wiring test.");
             field.SetValue(target, value);
+        }
+
+        sealed class FakeInputRig : IBlockiverseInputRig
+        {
+            public bool LocomotionSuppressed { get; set; }
+            public UnityEngine.Events.UnityEvent MenuPressed { get; } = new();
+            public UnityEngine.Events.UnityEvent QuickMenuPressed { get; } = new();
+            public UnityEngine.Events.UnityEvent BreakPressed { get; } = new();
+
+            public bool TryGetActiveInteractionRayPose(out Vector3 rayOrigin, out Vector3 rayDirection)
+            {
+                rayOrigin = default;
+                rayDirection = default;
+                return false;
+            }
+
+            public bool TryGetInteractionRayPose(BlockiverseControllerRole hand, out Vector3 rayOrigin, out Vector3 rayDirection)
+            {
+                rayOrigin = default;
+                rayDirection = default;
+                return false;
+            }
         }
 
         Material CreateTestChunkMaterial()

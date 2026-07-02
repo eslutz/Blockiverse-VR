@@ -133,11 +133,16 @@ namespace Blockiverse.UI
 
         public void Show()
         {
+            Show(recenterPlacement: true);
+        }
+
+        public void Show(bool recenterPlacement)
+        {
             EnsureCanvas();
             hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
-            if (recenterOnShow)
+            if (recenterPlacement && recenterOnShow)
                 Recenter();
 
             GameObject root = ResolveTargetRoot();
@@ -215,6 +220,19 @@ namespace Blockiverse.UI
             float resolvedScale = ResolvePanelScale();
             root.localScale = Vector3.one * resolvedScale;
             lastAppliedPanelScale = resolvedScale;
+        }
+
+        public void ApplyPlacementFrom(BlockiverseWorldSpacePanelPresenter source)
+        {
+            if (source == null)
+                return;
+
+            EnsureCanvas();
+            Transform root = PlacementRoot;
+            Transform sourceRoot = source.PlacementRoot;
+            root.SetPositionAndRotation(sourceRoot.position, sourceRoot.rotation);
+            root.localScale = sourceRoot.localScale;
+            lastAppliedPanelScale = ResolvePanelScale();
         }
 
         void Awake()
