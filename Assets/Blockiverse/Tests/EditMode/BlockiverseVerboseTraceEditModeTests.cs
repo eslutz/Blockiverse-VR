@@ -158,6 +158,8 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void VerboseTraceControllerLogsCreativeBlockMutationEventsWithCanonicalIds()
         {
+            Blockiverse.Core.BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 1234);
             var position = new BlockPosition(1, 1, 1);
             world.SetBlock(position, BlockRegistry.MeadowTurf, trackChange: false);

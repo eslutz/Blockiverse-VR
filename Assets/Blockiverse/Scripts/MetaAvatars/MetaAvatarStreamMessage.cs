@@ -15,7 +15,7 @@ namespace Blockiverse.MetaAvatars
         public const int MaxFragmentBytes = 1024;
 
         /// <summary>Maximum total bytes of a reassembled avatar stream frame.</summary>
-        public const int MaxStreamBytes = 128 * 1024;
+        public const int MaxStreamBytes = 64 * 1024;
 
         public ulong SenderClientId;
         public double SentTime;

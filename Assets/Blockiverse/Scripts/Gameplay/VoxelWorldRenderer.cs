@@ -115,18 +115,22 @@ namespace Blockiverse.Gameplay
                 {
                     for (int x = 0; x < ChunkCount(world.Bounds.Width); x++)
                     {
-                        rebuildQueue.MarkDirty(new ChunkCoordinate(x, y, z));
+                        ChunkCoordinate chunk = new(x, y, z);
+                        RebuildChunk(chunk);
                     }
                 }
             }
 
-            // A deferred world is not ready until the spawn region is meshed or the queue drains.
-            SpawnRegionReady = false;
+            // A fresh world needs full collision immediately (spawn, teleport, walking), so flush
+            // every queued collider rebuild rather than throttling the initial bake.
+            ProcessPendingColliderRebuilds(int.MaxValue);
+
+            SpawnRegionReady = true;
             RefreshStats();
 
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Renderer,
-                $"Queued all chunks for incremental rebuild: queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
+                $"Rebuilt all chunks: chunks={stats.ChunkCount} triangles={stats.TriangleCount} queuedRebuilds={stats.QueuedRebuildCount} bounds={world.Bounds.Width}x{world.Bounds.Height}x{world.Bounds.Depth} chunkSize={world.ChunkSize}",
                 this);
         }
 

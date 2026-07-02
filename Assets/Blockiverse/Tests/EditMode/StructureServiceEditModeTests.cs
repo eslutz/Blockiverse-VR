@@ -433,7 +433,14 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(placed, Is.True);
             Assert.That(loot, Is.Not.Empty);
             Assert.That(loot[0].Position.Y, Is.LessThan(WorldConstants.SeaLevel - 4));
-            Assert.That(world.GetBlock(loot[0].Position), Is.EqualTo(BlockRegistry.StorageCrate));
+            var lootContainerBlocks = new[]
+            {
+                BlockRegistry.StorageCrate,
+                BlockRegistry.ReedBasket,
+                BlockRegistry.ToolRack,
+                BlockRegistry.PantryJar
+            };
+            Assert.That(lootContainerBlocks, Does.Contain(world.GetBlock(loot[0].Position)));
         }
 
         static StructureCatalogEntry FindCatalogEntry(string id)

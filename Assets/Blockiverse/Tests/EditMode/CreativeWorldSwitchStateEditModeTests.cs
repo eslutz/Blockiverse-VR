@@ -38,6 +38,7 @@ namespace Blockiverse.Tests.EditMode
             var pos = new BlockPosition(0, 0, 0);
             firstWorld.SetBlock(pos, BlockRegistry.Graystone);
 
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
             controller.Configure(firstWorld, registry, null, null, null);
             Assert.That(controller.TryBreakBlock(pos), Is.True);
             Assert.That(controller.UndoHistoryCount, Is.EqualTo(1));

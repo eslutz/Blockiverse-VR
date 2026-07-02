@@ -609,7 +609,7 @@ namespace Blockiverse.UI
                     router.PopScreen();
                     break;
                 case MenuActions.AudioSettingsClose:
-                
+                case MenuActions.ControlsClose:
                 case MenuActions.CreativeToolsClose:
                     router.PopScreen();
                     break;

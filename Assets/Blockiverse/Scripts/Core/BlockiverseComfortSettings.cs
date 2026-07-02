@@ -19,8 +19,8 @@ namespace Blockiverse.Core
 
         // Glide is the default: walking/jumping and block climbing are core Blockiverse verbs.
         [SerializeField] BlockiverseLocomotionMode locomotionMode = BlockiverseLocomotionMode.Glide;
-        // Bobbing is the default: provides rhythmic vertical feedback during locomotion.
-        [SerializeField] GlideStyle glideStyle = GlideStyle.Bobbing;
+        // Smooth is the default: first-time VR users should start with stable head-relative motion.
+        [SerializeField] GlideStyle glideStyle = GlideStyle.Smooth;
         [SerializeField] float continuousMoveSpeed = 1.8f;
         [SerializeField] bool smoothTurnEnabled;
         [SerializeField] float continuousTurnSpeed = 60.0f;
@@ -31,9 +31,9 @@ namespace Blockiverse.Core
         // Comfort-first baseline: the motion tunneling vignette only renders during locomotion, so
         // shipping it on at a low strength reduces nausea without obscuring a static title/menu.
         [SerializeField] bool vignetteEnabled = true;
-        // Normalized 0–1: 1 = strongest vignette (narrowest aperture), 0 = open. 0.5 is a medium,
-        // safe default for first-time VR users.
-        [SerializeField] float vignetteStrength = 0.5f;
+        // Normalized 0–1: 1 = strongest vignette (narrowest aperture), 0 = open. 0.3 keeps
+        // the default comfort aid present without making the aperture feel heavy.
+        [SerializeField] float vignetteStrength = 0.3f;
         [SerializeField] BlockiverseControllerRole dominantHand = BlockiverseControllerRole.Right;
         [SerializeField] bool toggleToMineEnabled;
 
