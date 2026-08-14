@@ -8,7 +8,7 @@ namespace Blockiverse.VR
     /// Implements continuous locomotion vertical head-bobbing.
     /// When GlideStyle is set to Bobbing and locomotion is Glide (and not flying),
     /// a subtle vertical camera offset is applied to the Camera Offset object
-    /// based on player movement velocity.
+    /// based on intentional grounded move-stick locomotion.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BlockiverseGlideBobController : MonoBehaviour
@@ -19,12 +19,15 @@ namespace Blockiverse.VR
         [SerializeField] float frequency = 8.0f;
         [SerializeField] float amplitude = 0.015f;
         [SerializeField] float decaySpeed = 0.1f;
+        [SerializeField] float moveIntentDeadzone = 0.1f;
 
         float bobCycle;
         float lastAppliedBobY;
         float? lastExpectedLocalPosY;
 
         public System.Func<float> SpeedOverride { get; set; }
+        public System.Func<float> MoveIntentOverride { get; set; }
+        public System.Func<bool> GroundedOverride { get; set; }
 
         public float Frequency
         {
@@ -87,24 +90,15 @@ namespace Blockiverse.VR
 
             bool isFlying = inputRig != null && inputRig.CreativeFlightLocomotionActive;
 
-            if (isBobbingEnabled && !isFlying)
+            if (isBobbingEnabled &&
+                !isFlying &&
+                BlockiverseRuntimeState.AllowWorldInput &&
+                IsGroundedForBobbing() &&
+                HasMoveIntent())
             {
-                float speed = 0f;
-                bool hasSpeed = false;
+                float speed = ResolveBobSpeed();
 
-                if (SpeedOverride != null)
-                {
-                    speed = SpeedOverride();
-                    hasSpeed = true;
-                }
-                else if (inputRig != null && inputRig.CharacterController != null)
-                {
-                    Vector3 velocity = inputRig.CharacterController.velocity;
-                    speed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
-                    hasSpeed = true;
-                }
-
-                if (hasSpeed && speed > 0.1f)
+                if (speed > moveIntentDeadzone)
                 {
                     bobCycle = (bobCycle + speed * frequency * deltaTime) % (Mathf.PI * 2f);
                     targetBobY = Mathf.Sin(bobCycle) * speed * amplitude;
@@ -132,6 +126,61 @@ namespace Blockiverse.VR
             cameraOffset.localPosition = localPos;
             lastAppliedBobY = newBobY;
             lastExpectedLocalPosY = localPos.y;
+        }
+
+        bool HasMoveIntent()
+        {
+            float intent = ResolveMoveIntent();
+            return intent > moveIntentDeadzone;
+        }
+
+        float ResolveMoveIntent()
+        {
+            if (MoveIntentOverride != null)
+                return Mathf.Clamp01(MoveIntentOverride());
+
+            if (inputRig != null)
+                return Mathf.Clamp01(inputRig.MoveInputMagnitude);
+
+            if (SpeedOverride != null)
+                return SpeedOverride() > moveIntentDeadzone ? 1.0f : 0.0f;
+
+            return 0.0f;
+        }
+
+        float ResolveBobSpeed()
+        {
+            if (SpeedOverride != null)
+                return Mathf.Max(0.0f, SpeedOverride());
+
+            if (inputRig != null && inputRig.CharacterController != null)
+            {
+                Vector3 velocity = inputRig.CharacterController.velocity;
+                float horizontalSpeed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
+                if (horizontalSpeed > moveIntentDeadzone)
+                    return horizontalSpeed;
+            }
+
+            if (inputRig != null && comfortSettings != null)
+            {
+                float moveSpeed = BlockiverseInputRig.ResolveSprintMoveSpeed(
+                    comfortSettings.ContinuousMoveSpeed,
+                    inputRig.SprintActive);
+                return ResolveMoveIntent() * moveSpeed;
+            }
+
+            return 0.0f;
+        }
+
+        bool IsGroundedForBobbing()
+        {
+            if (GroundedOverride != null)
+                return GroundedOverride();
+
+            if (inputRig != null && inputRig.CharacterController != null)
+                return inputRig.CharacterController.isGrounded;
+
+            return true;
         }
     }
 }

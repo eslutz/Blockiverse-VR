@@ -141,6 +141,16 @@ namespace Blockiverse.VR
         public BlockiverseControllerRole ActiveMoveHand => GetMoveHand();
         public BlockiverseControllerRole ActiveTurnHand => GetTurnHand();
         public BlockiverseControllerRole ActiveToolHand => GetToolHand();
+        public float MoveInputMagnitude
+        {
+            get
+            {
+                string mapName = GetControllerMapName(GetMoveHand());
+                return TryFindAction(mapName, BlockiverseInputActionNames.Move, out InputAction moveAction)
+                    ? moveAction.ReadValue<Vector2>().magnitude
+                    : 0.0f;
+            }
+        }
         public bool LocomotionSuppressed
         {
             get => locomotionSuppressed;

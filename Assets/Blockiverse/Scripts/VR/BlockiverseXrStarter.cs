@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.XR.Management;
 
@@ -19,21 +20,50 @@ namespace Blockiverse.VR
                 return;
             }
 
-            if (!settings.Manager.isInitializationComplete)
-            {
-                // Manager is not initialized. Automatic Loading should still be true,
-                // so it might be in progress or failed.
-                return;
-            }
+            // Create a temporary startup helper GameObject to run the coroutine across scenes
+            var go = new GameObject("XR Starter Helper");
+            Object.DontDestroyOnLoad(go);
+            var helper = go.AddComponent<XrStarterHelper>();
+            helper.StartCoroutine(helper.InitializeRoutine(settings.Manager));
+        }
 
-            if (!settings.Manager.activeLoader)
+        private class XrStarterHelper : MonoBehaviour
+        {
+            public IEnumerator InitializeRoutine(XRManagerSettings manager)
             {
-                // No active loader.
-                return;
-            }
+                // Wait until the manager has completed initialization
+                float timeout = Time.realtimeSinceStartup + 10.0f; // 10 second timeout safety net
+                while (!manager.isInitializationComplete && Time.realtimeSinceStartup < timeout)
+                {
+                    yield return null;
+                }
 
-            // Start subsystems manually.
-            settings.Manager.StartSubsystems();
+                if (!manager.isInitializationComplete)
+                {
+                    Debug.LogError("[XR Starter] XR Initialization timed out.");
+                    Destroy(gameObject);
+                    yield break;
+                }
+
+                if (!manager.activeLoader)
+                {
+                    // No active loader, initialize loader manually if automatic loading failed or was not set
+                    Debug.Log("[XR Starter] No active loader found. Initializing loader...");
+                    yield return manager.InitializeLoader();
+                }
+
+                if (manager.activeLoader)
+                {
+                    Debug.Log($"[XR Starter] Starting XR Subsystems with loader: {manager.activeLoader.name}");
+                    manager.StartSubsystems();
+                }
+                else
+                {
+                    Debug.LogError("[XR Starter] Failed to initialize XR loader.");
+                }
+
+                Destroy(gameObject);
+            }
         }
     }
 }

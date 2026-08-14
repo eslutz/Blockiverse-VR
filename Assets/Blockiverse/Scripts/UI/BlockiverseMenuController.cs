@@ -519,8 +519,14 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.PauseSaveGame:
                 case MenuActions.PauseToggleMode:
-                case MenuActions.PauseCreativeTools:
                     ActionRequested?.Invoke(actionId);
+                    break;
+                case MenuActions.PauseCreativeTools:
+                    // The Creative Tools screen has a registered presenter and close
+                    // route but the menu rework dropped its push; restore it so the
+                    // pause-menu entry opens the screen again.
+                    ActionRequested?.Invoke(actionId);
+                    router.PushScreen(new ScreenRoute(MenuActions.CreativeToolsScreen, pauseGame: true));
                     break;
                 case MenuActions.PauseSettings:
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
@@ -993,7 +999,10 @@ public void CloseCraftingScreen() => router.PopScreen();
                         return;
 
                     ActionRequested?.Invoke(saveActionId);
-                    Application.Quit();
+                    if (saveActionId == MenuActions.PauseReturnToTitle)
+                        ShowTitleScreen(); // return to title routes like the death path — it must not quit the app
+                    else
+                        Application.Quit();
                 });
         }
 
