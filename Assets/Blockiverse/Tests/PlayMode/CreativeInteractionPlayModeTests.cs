@@ -14,6 +14,10 @@ namespace Blockiverse.Tests.PlayMode
         public void SetUp()
         {
             BlockiverseRuntimeState.Reset();
+            // Since the M8.5 menu gate, world input starts blocked until the menu
+            // router grants it; simulate the active-session grant the way the
+            // runtime does (BlockiverseMenuController.ApplyRouterState).
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
         }
 
         [TearDown]

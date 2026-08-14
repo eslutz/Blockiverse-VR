@@ -748,7 +748,10 @@ namespace Blockiverse.Tests.EditMode
             Vector3 initialScale = titlePlacement.localScale;
 
             head.transform.SetPositionAndRotation(new Vector3(8.0f, 0.0f, -3.0f), Quaternion.Euler(0.0f, 90.0f, 0.0f));
-            GetChildComponent<Button>(titleMenu.transform, "Panel/Action 5").onClick.Invoke();
+            // Navigate via the router like the settings-hub test: title button indices are
+            // save-state-dependent (no saves in the test environment), so a fixed
+            // "Action N" click can land on an inactive, unbound button.
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
 
             Transform settingsPlacement = settingsMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>().PlacementRoot;
             Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.True);
@@ -765,7 +768,10 @@ namespace Blockiverse.Tests.EditMode
             var inputRig = new FakeInputRig();
             CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
             CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.PauseMenuName, 8);
-            var session = rig.AddComponent<BlockiverseWorldSessionController>();
+            // BlockiverseMenuController's [RequireComponent] already auto-added the
+            // session controller; AddComponent would return null under
+            // [DisallowMultipleComponent].
+            var session = rig.GetComponent<BlockiverseWorldSessionController>();
             SetPrivateField(session, "currentSavePath", "/tmp/test-world.vxlworld");
 
             controller.Configure(

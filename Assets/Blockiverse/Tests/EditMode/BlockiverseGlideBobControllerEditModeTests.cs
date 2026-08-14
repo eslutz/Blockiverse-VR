@@ -11,6 +11,12 @@ namespace Blockiverse.Tests.EditMode
     {
         readonly List<GameObject> objectsToDestroy = new();
 
+        [SetUp]
+        public void SetUp()
+        {
+            BlockiverseRuntimeState.Reset();
+        }
+
         [TearDown]
         public void TearDown()
         {
@@ -18,6 +24,7 @@ namespace Blockiverse.Tests.EditMode
                 if (target != null)
                     Object.DestroyImmediate(target);
             objectsToDestroy.Clear();
+            BlockiverseRuntimeState.Reset();
         }
 
         [Test]
@@ -66,8 +73,11 @@ namespace Blockiverse.Tests.EditMode
 
             settings.LocomotionMode = BlockiverseLocomotionMode.Glide;
             settings.GlideStyle = GlideStyle.Bobbing;
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
 
             bob.SpeedOverride = () => 1.5f; // Moving at 1.5 m/s
+            bob.MoveIntentOverride = () => 1.0f;
+            bob.GroundedOverride = () => true;
 
             // Run one update to advance phase and apply bob
             RunLateUpdate(bob);
@@ -78,21 +88,62 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void BobbingDoesNotApplyWithoutMoveStickIntent()
+        {
+            var (rig, settings, origin, bob) = CreateTestStack();
+
+            settings.LocomotionMode = BlockiverseLocomotionMode.Glide;
+            settings.GlideStyle = GlideStyle.Bobbing;
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+
+            bob.SpeedOverride = () => 1.5f;
+            bob.MoveIntentOverride = () => 0.0f;
+            bob.GroundedOverride = () => true;
+
+            for (int i = 0; i < 5; i++)
+                RunLateUpdate(bob);
+
+            Assert.That(origin.CameraFloorOffsetObject.transform.localPosition.y, Is.EqualTo(0f).Within(0.001f));
+        }
+
+        [Test]
+        public void BobbingDoesNotApplyWhileAirborne()
+        {
+            var (rig, settings, origin, bob) = CreateTestStack();
+
+            settings.LocomotionMode = BlockiverseLocomotionMode.Glide;
+            settings.GlideStyle = GlideStyle.Bobbing;
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+
+            bob.SpeedOverride = () => 1.5f;
+            bob.MoveIntentOverride = () => 1.0f;
+            bob.GroundedOverride = () => false;
+
+            for (int i = 0; i < 5; i++)
+                RunLateUpdate(bob);
+
+            Assert.That(origin.CameraFloorOffsetObject.transform.localPosition.y, Is.EqualTo(0f).Within(0.001f));
+        }
+
+        [Test]
         public void BobbingOffsetDecaysToZeroWhenStopping()
         {
             var (rig, settings, origin, bob) = CreateTestStack();
 
             settings.LocomotionMode = BlockiverseLocomotionMode.Glide;
             settings.GlideStyle = GlideStyle.Bobbing;
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
 
             // First, move to generate non-zero bob
             bob.SpeedOverride = () => 1.5f;
+            bob.MoveIntentOverride = () => 1.0f;
+            bob.GroundedOverride = () => true;
             RunLateUpdate(bob);
             float movingY = origin.CameraFloorOffsetObject.transform.localPosition.y;
             Assert.That(movingY, Is.Not.EqualTo(0f));
 
             // Stop moving
-            bob.SpeedOverride = () => 0.0f;
+            bob.MoveIntentOverride = () => 0.0f;
 
             // Run multiple updates to let it decay
             for (int i = 0; i < 50; i++)
@@ -111,9 +162,12 @@ namespace Blockiverse.Tests.EditMode
 
             settings.LocomotionMode = BlockiverseLocomotionMode.Glide;
             settings.GlideStyle = GlideStyle.Bobbing;
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
 
             // Move to apply non-zero bob offset
             bob.SpeedOverride = () => 1.5f;
+            bob.MoveIntentOverride = () => 1.0f;
+            bob.GroundedOverride = () => true;
             RunLateUpdate(bob);
             float bobYBefore = origin.CameraFloorOffsetObject.transform.localPosition.y;
             Assert.That(bobYBefore, Is.Not.EqualTo(0f));

@@ -2,79 +2,66 @@
 
 ## Purpose
 
-This file is the concise handoff for future Codex/agent work in the original Blockiverse VR project. Use it to avoid rediscovering current project state, local tooling decisions, validation expectations, and known external gates.
+This file is the concise handoff for future agent work in the Blockiverse VR project. Use it to avoid rediscovering current project state, local tooling decisions, validation expectations, and known external gates.
 
 ## Memory Timestamp Policy
 
-- Timestamp: 2026-06-20. Add a concrete date to new memory entries and materially updated decisions. Prefer `Timestamp: YYYY-MM-DD` near the relevant section or bullet.
-- Timestamp: unknown. Existing project history that is not dated here should be treated as legacy context until refreshed from current repo state.
+- Timestamp: 2026-08-13. Add a concrete date to new memory entries and materially updated decisions. Prefer `Timestamp: YYYY-MM-DD` near the relevant section or bullet.
+- Entries not re-dated below survive from the 2026-06-20/21 handoff and were re-verified or left intentionally.
 
 ## Repository And Source Of Truth
 
-- Repository root: `/Users/ericslutz/Developer/Code/Blockiverse/Blockiverse-VR`.
-- Branch observed on 2026-06-21 for the Unity tooling cleanup: `codex/cleanup-unity-tooling-docs`, based on `origin/main`.
-- Remote observed on 2026-06-20: `origin` points to `https://github.com/eslutz/Blockiverse-VR.git`.
-- `CLAUDE.md` is the canonical agent instruction file; `AGENTS.md` intentionally points there.
-- Canonical testing contract: `docs/testing/README.md`.
-- Canonical game design: `docs/rulesets/`.
-- Roadmap: `docs/roadmap/blockiverse_vr_execution_plan.md`.
-- ADRs: `docs/adr/`.
+- Repository root: `/Users/ericslutz/Developer/Code/Side Projects/Blockiverse/Blockiverse-VR` (moved from `.../Code/Blockiverse/` in mid-June; mtimes bulk-stamped 2026-06-15 by the move are not evidence of edit dates).
+- Remote: `https://github.com/eslutz/Blockiverse-VR.git`.
+- Timestamp: 2026-08-13. Checked-out branch: `codex/complete-m85-rendering-menu-gate` (M8.5 rendering/menu gate). Git state needs reconciliation before new PR work: the local `origin/main` ref is stale (fetch first), remote `main` is at #324 (2026-06-26) whose quest-alpha upload FAILED, local `main` carries 3 unpushed commits (which commit `unity-skills`/`unity-mcp` manifest entries against the tooling policy below — strip before pushing), and this branch has 3 unpushed commits plus the working-tree upgrade described below.
+- `CLAUDE.md` is the canonical agent instruction file; `AGENTS.md` points there. Canonical testing contract: `docs/testing/README.md`. Canonical game design: `docs/rulesets/`. Roadmap: `docs/roadmap/blockiverse_vr_execution_plan.md`. ADRs: `docs/adr/` (ADR 0006 was amended 2026-08-13 to record the world-space menu baseline).
 
 ## Current Unity Project Shape
 
-- Unity editor: `6000.3.16f1` (`a56f230f6470`).
-- Target: Meta Quest 3 and Quest 3S.
-- Main scene: `Assets/Blockiverse/Scenes/Boot.unity`; this is the whole game scene, not a scene-switching flow.
-- Generated scene/prefab/input wiring is owned by `BlockiverseProjectBootstrapper.Run()`. Change the bootstrapper and regenerate instead of hand-authoring generated scene and prefab wiring.
-- Timestamp: 2026-06-21. Composition-layer menu routing must create `Blockiverse Menu Canvas` before adding/enabling `InteractableUIMirror`; otherwise the Unity Composition Layers package can auto-create a default child `Canvas` and bind `CompositionLayer.m_UICanvas` to the wrong surface. The generated Boot scene must also remove root-level composition layers such as `Composition Render Scale Surface`; an enabled root composition layer with null/invalid `LayerData` produced Quest-wide repeated black vertical bars and hid the actual menus.
-- Runtime code lives under `Assets/Blockiverse/Scripts`, with key areas including `Core`, `Voxel`, `WorldGen`, `Survival`, `SurvivalHealth`, `Persistence`, `MetaAvatars`, `MetaPlatform`, `Networking`, `Gameplay`, `VR`, `UI`, and `Editor`.
-- Tests live under `Assets/Blockiverse/Tests/EditMode` and `Assets/Blockiverse/Tests/PlayMode`.
-- Art/audio source assets live under `Assets/Blockiverse/Art` and `Assets/Blockiverse/Audio`.
+- Timestamp: 2026-08-13. Unity editor: `6000.5.8f1`. Target: Meta Quest 3 and Quest 3S. Local scripts and the Quest CI/alpha workflows were updated from the old `6000.3.16f1` pins on 2026-08-13.
+- Main scene: `Assets/Blockiverse/Scenes/Boot.unity` — the whole game, no scene switching. Generated scene/prefab/input wiring is owned by `BlockiverseProjectBootstrapper.Run()`; change the bootstrapper and regenerate.
+- Timestamp: 2026-08-13. Menu architecture: routed menus are direct world-space XR canvases (commit `9c6f435c`, headset-verified, tag `quest-menu-good-2026-07-02`); composition layers are used only for the startup splash. ADR 0006's shared-Quad menu decision is superseded (see its Amendment section).
+- Timestamp: 2026-08-13. The July "black screen after splash" regression (`Assets/Plans/diagnostic-black-screen.md`) does NOT reproduce in the Meta XR Simulator on the upgraded stack — verified in-runtime via Meta XR Operator (session FOCUSED, single healthy projection layer, world/UI/hands render). On-device (Quest) confirmation is still outstanding; treat the plan as closed-pending-device-check.
 
 ## Package And Tooling State
 
-- Timestamp: 2026-06-21. Manifest pins on `origin/main` do not include Unity MCP or Unity Skills. Current committed pins include Meta Avatars `40.0.1`, Meta XR Core/Interaction OVR/Platform `81.0.1`, Addressables `3.1.0`, Input System `1.19.0`, Multiplayer Center `1.0.1`, Netcode for GameObjects `2.11.2`, Unity Transport `2.7.3`, URP `17.0.1`, Unity Test Framework `1.4.6`, Composition Layers `2.4.0`, XRI `3.3.2`, XR Management `4.6.0`, Unity OpenXR: Meta `2.5.0`, and OpenXR `1.17.0`.
-- Timestamp: 2026-06-21. MCP for Unity and Unity Skills are documented as local developer tooling only. Do not commit `Packages/manifest.json` or `Packages/packages-lock.json` additions for `com.coplaydev.unity-mcp` or `com.besty.unity-skills` unless Eric explicitly opens a dependency-update task.
-- Timestamp: 2026-06-20. Unity imported Unity Skills `2.0.5` and MCP for Unity `9.7.3` in a local checkout. Unity Skills was verified running at `http://localhost:8090/health`; MCP for Unity was verified running at `http://127.0.0.1:8080/mcp` with the Unity instance `Blockiverse-VR@c7c423ae62cb914c`. If the MCP HTTP process stops, restart it with `uvx --from mcpforunityserver==9.7.3 mcp-for-unity --transport http --http-url http://127.0.0.1:8080 --project-scoped-tools`, then connect the Unity bridge from `Window > MCP For Unity`.
-- MCP for Unity should be treated as the default live Editor bridge for inspection, console reads, scene/object checks, script/asset automation, and test jobs exposed through MCP.
-- Unity Skills should be kept for module-specific REST workflows, advisory docs, XR diagnostics, batch/workflow semantics, console/debug triage, package guidance, and targeted Unity Test Runner jobs.
-- Known local package-cache issue: MCP for Unity and Unity Skills can log a duplicate `package.json.meta` GUID conflict when both are installed locally. Treat it as local-only only if Unity compiles, MCP for Unity works, Unity Skills health is `ok`, `scripts/unity/run-tests.sh` passes, and the committed package manifests remain clean. Fix through upstream or a forked package GUID patch if it starts blocking import or local servers.
+- Timestamp: 2026-08-13. Meta XR SDK family is `205.0.0`: Interaction, Interaction OVR, and Platform from the Meta registry; **Core is embedded** at `Packages/com.meta.xr.sdk.core` because Core 205.0.0 fails to compile on Unity 6000.5 (CS0619 `instanceId` obsolete-as-error in `SceneListenerNGO.cs`; embedded copy carries the two-line `.entityId` fix). Drop the embed when a fixed Meta release ships. Details: `docs/testing/meta-xr-simulator-and-mcp.md`.
+- Timestamp: 2026-08-13. Other pins in the working tree: Netcode for GameObjects `2.13.1`, Transport `6.5.0`, URP `17.5.0`, XRI `3.5.1`, Composition Layers `2.5.0`, Input System `1.20.0`, Meta Avatars `40.0.1`, OpenXR `1.17.1`, test-framework `1.7.0`.
+- Timestamp: 2026-08-13. Pre-upgrade state (patched embedded 203 packages, old manifest/lock, git snapshots) is preserved at `../Blockiverse-VR-local-backups/2026-08-12-pre-operator-sdk205/`.
+- Timestamp: 2026-08-13. Meta XR Operator (experimental) is the runtime in-VR validation bridge: activate once via `Meta > Meta XR Operator > Activate`, activate Meta XR Simulator per editor session, enter Play mode, and connect ONLY through the `meta-xr-operator` MCP proxy (`~/meta-xr-operator/meta-xr-operator-mcp-proxy`, registered in the local Claude config along with the `meta-xr-unity-runtime` Agent Bridge). Never probe `localhost:8720/sse` directly during layer startup — aborted SSE connections double-faulted the layer and crashed the editor twice on 2026-08-13. The AI Tools panel's own `claude mcp add` buttons fail (Unity's PATH lacks `claude`); run those commands from a terminal.
+- MCP for Unity and Unity Skills remain optional local developer tooling only; do not commit their package entries. Note the unpushed local-main commits currently violate this — clean up before pushing.
+- Use `hzdb` for Quest device work (`hzdb --version`, `hzdb device list`); `adb` only when `hzdb` lacks the operation.
 
 ## Validation Source Of Truth
 
-- Required local Unity gate: `scripts/unity/run-tests.sh`.
-- Local validation wrapper: `scripts/unity/run-local-validation.sh`, which runs shell syntax checks, full Unity tests, and a development APK build.
-- Development APK builder: `scripts/unity/build-development-apk.sh`.
-- Docs/repo-only validation tier: `git diff --check` and `bash -n scripts/unity/*.sh`.
-- Use `docs/testing/README.md` for selecting targeted EditMode, PlayMode, APK, Quest, Meta XR Simulator, MCP, and Unity Skills validation.
-- Do not call validation complete from MCP/Unity Skills diagnostics alone. Use those tools to investigate and run targeted jobs; rely on committed scripts and generated test XML/APK/device evidence for acceptance.
-- Timestamp: 2026-06-20. The Unity MCP/Unity Skills setup pass kept the Unity Editor open to host both live automation servers, so `scripts/unity/run-tests.sh` was not run in that pass. Run it before treating the package import/setup as merge-ready.
-- Timestamp: 2026-06-21. When Unity is open for MCP for Unity and Unity Skills, prefer an open-Editor Quest install: build through MCP or `Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()`, then let the running Unity editor spawn `hzdb app install --replace --grant-permissions Builds/Android/BlockiverseVR-development.apk`. This keeps the editor and both local automation servers alive. A `LaunchCheckControllerRequiredDialogActivity` result after install means launch verification is headset-state blocked, not that APK replacement failed.
+- Required local Unity gate: `scripts/unity/run-tests.sh` (EditMode then PlayMode; `UNITY_EDITOR` overrides the editor path). Wrapper: `scripts/unity/run-local-validation.sh`. Dev APK: `scripts/unity/build-development-apk.sh`.
+- Timestamp: 2026-08-13. The full gate is GREEN on the upgraded stack: EditMode 775/775 and PlayMode 105/105 (`TestResults/Unity/EditMode.xml` / `PlayMode.xml`, 2026-08-13). Getting there took 25 test updates for the M8.5 world-input/mini-world/world-space-menu contracts plus two product fixes (pause-menu Creative Tools route restored; Return-to-Title no longer calls `Application.Quit()` — see CHANGELOG). This is the first combined green gate on the post-pivot menu architecture.
+- Do not call validation complete from MCP/Operator diagnostics alone; rely on committed scripts and generated XML/APK/device evidence for acceptance.
+
+## Codebase Review Status (Correcting The Stale STATUS File)
+
+- Timestamp: 2026-08-13. `codebase-review-STATUS.md` (2026-06-11) is stale: dedup (245→184) and adversarial verification (107 confirmed / 2 disputed / 0 refuted / 5 downgraded / 70 pass-through) DID run and are committed (`f14c2945`, PR #314, which also remediated findings; see also PR #312 and the CHANGELOG 131-observation pass). Criticals 1–4 are spot-verified fixed in code. Open items: verify fixes for Critical #5 (single-player save overwritten by LAN session) and #6 (crafting UI exposes ~5 of ~60 recipes), and the final consolidated report was never produced.
 
 ## Release And Companion Docs
 
-- `.github/workflows/quest-ci.yml` validates pull requests with repository checks, Unity Personal activation through GameCI, and Android smoke APK packaging.
-- `.github/workflows/quest-alpha.yml` builds a release-signed Quest APK from `main` or trusted manual refs and uploads to Meta `alpha`.
-- `.github/workflows/quest-promote.yml` promotes an already-tested Meta build ID through `alpha -> beta`, `beta -> rc`, or `rc -> store` without rebuilding.
-- Wiki repo: `/Users/ericslutz/Developer/Code/Blockiverse/Blockiverse-VR.wiki`. Keep user-facing gameplay, controls, rules, save/multiplayer setup, release notes, and known issues aligned with shipped behavior.
-- Website repo: `/Users/ericslutz/Developer/Code/Blockiverse/Blockiverse-VR.website`. Keep public feature lists, store metadata, screenshots, and privacy/support surfaces aligned with shipped behavior.
+- `.github/workflows/quest-ci.yml` (PR validation, smoke APK), `quest-alpha.yml` (release-signed upload to Meta `alpha`), `quest-promote.yml` (promotes tested build IDs `alpha -> beta -> rc -> store`). All Unity pins updated to `6000.5.8f1` on 2026-08-13; no successful alpha upload exists after PR #323 (2026-06-16) — #324's upload failed and needs rerunning once main is reconciled.
+- Timestamp: 2026-08-13. Unresolved product decision: `quest-alpha.yml` defaults `META_AGE_GROUP` to `TEENS_AND_ADULTS` while the runtime implements the Mixed Ages path; set the repo variable or change the default before the next upload.
+- Wiki repo (`../Blockiverse-VR.wiki`): frozen 2026-06-13 and stale (cites deleted workflows/scripts); the local clone has 15 pages deleted-but-uncommitted — an unfinished overhaul that should be completed or reverted. Website repo (`../Blockiverse-VR.website`): frozen 2026-06-21.
 
 ## Source Versus Generated Artifacts
 
-- Treat project source as `Assets/Blockiverse/**`, `Packages/**`, `ProjectSettings/**`, `docs/**`, `scripts/**`, `.github/**`, root policy/docs, and intentionally authored art/audio.
-- Never commit Unity `Library/`, `Temp/`, `Logs/`, local generated folders, device logs, screenshots, recordings, Perfetto traces, APKs, signing material, secrets, `.env` files, or transient validation artifacts unless a tracked artifact is explicitly required.
-- Preserve `.meta` files when moving Unity assets.
-- Do not copy protected third-party identity. Use original names and original assets.
+- Project source: `Assets/Blockiverse/**`, `Packages/**`, `ProjectSettings/**`, `docs/**`, `scripts/**`, `.github/**`, root policy docs, authored art/audio.
+- Never commit Unity `Library/`, `Temp/`, `Logs/`, device logs, screenshots, recordings, APKs, signing material, secrets, or transient validation artifacts. Preserve `.meta` files when moving assets.
 
 ## Dirty Worktree Constraints
 
-- Timestamp: 2026-06-21. Dirty package and Android SDK drift from the Unity tooling setup was intentionally discarded from the cleanup branch. Keep Android target SDK at API 34 unless Eric explicitly opens a separate Android target migration task.
-- Before committing, inspect the diff and stage only files explicitly in scope for the task. Unity MCP/Unity Skills package additions, incidental package bumps, local device logs, and validation artifacts are out of scope unless explicitly requested.
+- Timestamp: 2026-08-13. The working tree intentionally carries the Unity 6000.5.8f1 + Meta XR 205 upgrade (uncommitted). Android target SDK stays at API 34 (held through the upgrade). Cleanup pending before commit: crash-recovery artifacts in `Assets/_Recovery` and stray scenes per `Assets/Plans/scene-cleanup.md`, plus root-level `mono_crash.*.json` and committed test-log files (`TempTestResults.txt`, `editmode_test_results.txt`) that predate this work.
+- Before committing, stage only files explicitly in scope for the task.
 
 ## External Gates
 
-- Quest headset acceptance requires a worn headset and active controllers.
+- Quest headset acceptance requires a worn headset and active controllers (this is where the black-screen close-out finishes).
 - Two-device LAN multiplayer proof remains device-dependent.
 - Account-backed Meta Avatar and policy checks require real account/platform state.
 - Store submission and Meta channel promotion require GitHub Actions secrets/environments and Eric's approval gates.
-- Real Quest performance evidence must come from device runs, OVR Metrics or equivalent captures, and summaries under `docs/testing/performance/`.
+- Real Quest performance evidence must come from device runs with captures summarized under `docs/testing/performance/`.

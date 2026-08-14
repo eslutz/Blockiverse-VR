@@ -122,7 +122,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator BootSceneDefersCreativeWorldGenerationUntilSessionSelection()
+        public IEnumerator BootSceneGeneratesTitleMiniWorldWithoutActiveSession()
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle("Boot");
 
@@ -137,7 +137,6 @@ namespace Blockiverse.Tests.PlayMode
             CreativeWorldManager manager = worldObject.GetComponent<CreativeWorldManager>();
             VoxelWorldRenderer renderer = worldObject.GetComponent<VoxelWorldRenderer>();
             BlockiverseCreativeInputBridge[] bridges = Object.FindObjectsByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            MeshFilter[] chunkFilters = worldObject.GetComponentsInChildren<MeshFilter>();
             int activeSceneBridgeCount = 0;
 
             foreach (BlockiverseCreativeInputBridge bridge in bridges)
@@ -149,10 +148,13 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(manager, Is.Not.Null);
             Assert.That(worldObject.GetComponent<BlockiverseCreativeInputBridge>(), Is.Null);
             Assert.That(activeSceneBridgeCount, Is.EqualTo(1));
-            Assert.That(manager.World, Is.Null);
-            Assert.That(renderer == null || renderer.Stats.ChunkCount == 0, Is.True);
-            Assert.That(chunkFilters, Is.Empty);
-            Assert.That(Object.FindFirstObjectByType<BlockiverseVoidSafetyFloor>(FindObjectsInactive.Include), Is.Null);
+            // Since the M8.5 menu gate, Boot deliberately generates the explorable
+            // title mini-world at startup (InitializeDefaultWorldOnAwake). The
+            // session stays inactive: world input remains blocked until the menu
+            // router grants it after Create/Load/Join.
+            Assert.That(manager.World, Is.Not.Null);
+            Assert.That(renderer, Is.Not.Null);
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
             Assert.That(GameObject.Find("Interaction Test Block"), Is.Null);
         }
 
@@ -245,6 +247,10 @@ namespace Blockiverse.Tests.PlayMode
             {
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
+                // Place events are gated behind the menu router's world-input grant
+                // since the M8.5 menu gate; simulate an active world session. The
+                // sibling suppressed-state test keeps covering the gated behavior.
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
                 inputRig.BreakPressed.AddListener(() => breakPresses++);
                 inputRig.PlacePressed.AddListener(() => placePresses++);
 

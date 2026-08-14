@@ -50,6 +50,7 @@ namespace Blockiverse.Tests.PlayMode
             var config = menu.PendingNewWorldConfig;
             config.SetName("PlayMode Test World");
             config.CycleWorldPreset(true); // From SurvivalTerrain to FlatBuilder
+            config.CycleGameMode(); // survival -> creative: survival worlds reject builder presets (NewWorldConfig.IsValid)
             
             InvokeHandleAction(MenuActions.NewWorldCreate);
             
@@ -132,7 +133,14 @@ namespace Blockiverse.Tests.PlayMode
             InvokeHandleAction(MenuActions.PauseReturnToTitle);
             yield return null;
             InvokeHandleAction(MenuActions.ConfirmAccept); // Confirm quit
-            yield return null;
+            // Returning to title saves the active world through the session
+            // controller, which can span multiple frames — wait like the
+            // gameplay transitions in this file do.
+            float returnTimeout = Time.realtimeSinceStartup + 10f;
+            while (!menu.IsActiveScreen(MenuActions.TitleScreen) && Time.realtimeSinceStartup < returnTimeout)
+            {
+                yield return null;
+            }
             Assert.That(menu.IsActiveScreen(MenuActions.TitleScreen), Is.True);
 
             // 2. Title -> Load World

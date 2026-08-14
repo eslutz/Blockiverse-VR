@@ -413,9 +413,14 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void AndroidXrManagerStartsOpenXrAutomatically()
         {
+            // Select the Android manager explicitly: activating the Meta XR Simulator
+            // adds a Standalone manager sub-asset (with automatic loading off, which is
+            // correct for the desktop editor), so FirstOrDefault over all managers is
+            // order-dependent and can grab the wrong build target.
             Object managerSettings = AssetDatabase
                 .LoadAllAssetsAtPath(XrGeneralSettingsPath)
-                .FirstOrDefault(asset => asset.GetType().Name == "XRManagerSettings");
+                .FirstOrDefault(asset => asset.GetType().Name == "XRManagerSettings"
+                    && asset.name.StartsWith("Android"));
 
             Assert.That(managerSettings, Is.Not.Null);
 

@@ -40,7 +40,20 @@ namespace Blockiverse.Tests.PlayMode
             GameObject worldObject = new GameObject("PlayMode Renderer - " + presetId);
             VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
             
-            Material sourceMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            // BlockVisualAtlas.CreateMaterial requires the source material to carry the
+            // authored atlas texture; synthesize one the way the sibling tests do.
+            Texture2D atlasTexture = new Texture2D(
+                BlockVisualAtlas.AtlasWidthPixels,
+                BlockVisualAtlas.AtlasHeightPixels,
+                TextureFormat.RGBA32,
+                mipChain: false)
+            {
+                name = BlockVisualAtlas.AuthoredAtlasName,
+            };
+            Material sourceMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"))
+            {
+                mainTexture = atlasTexture,
+            };
             renderer.Configure(world, registry, sourceMaterial, layer: 0);
 
             // Rebuild all chunks immediately for the test
@@ -73,6 +86,7 @@ namespace Blockiverse.Tests.PlayMode
             // Cleanup
             Object.DestroyImmediate(worldObject);
             Object.DestroyImmediate(sourceMaterial);
+            Object.DestroyImmediate(atlasTexture);
             yield return null;
         }
     }

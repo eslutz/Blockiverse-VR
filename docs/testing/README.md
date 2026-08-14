@@ -223,10 +223,10 @@ Remove any temporary ray diagnostic scenes or build scripts once the issue is re
 
 Local Unity validation requires globally installed tools on the developer machine:
 
-- Unity Hub installed globally, preferably with Homebrew, and Unity Editor `6000.3.16f1`.
+- Unity Hub installed globally, preferably with Homebrew, and Unity Editor `6000.5.8f1`.
 - Android Build Support, Android SDK/NDK Tools, and OpenJDK installed through Unity Hub for that Editor version.
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
-- `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.16f1/Unity.app/Contents/MacOS/Unity`.
+- `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity`.
 
 Release-signed builds are intentionally not produced by local scripts. Use `.github/workflows/quest-alpha.yml` to build and upload release-signed APKs from `main` or a trusted manual ref so signing material stays centralized in GitHub Actions secrets.
 

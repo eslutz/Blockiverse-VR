@@ -554,6 +554,7 @@ namespace Blockiverse.Tests.PlayMode
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
             InputActionAsset actions = CreateTestActions();
             Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            GameObject floor = null;
 
             try
             {
@@ -573,14 +574,28 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
 
+                // Ground the rig: the rig auto-adds a GravityProvider, and without a floor
+                // the origin falls during the measured frame — XRI 3.5's in-air control
+                // damping then dilutes the horizontal move direction below the threshold.
+                floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                floor.name = "Move Test Floor";
+                floor.layer = BlockiverseProject.InteractionLayerIndex;
+                floor.transform.localScale = new Vector3(20.0f, 1.0f, 20.0f);
+                floor.transform.position = new Vector3(0.0f, -0.5f, 0.0f);
+
                 yield return null;
 
-                Vector3 startPosition = origin.transform.position;
                 Vector3 expectedMoveDirection = Vector3.ProjectOnPlane(origin.Camera.transform.forward, origin.transform.up).normalized;
                 Set(gamepad.leftStick, new Vector2(0.0f, 1.0f));
+
+                // Measure the second frame only (sibling-test pattern): the first frame
+                // after input absorbs gravity snap-down/CharacterController settling from
+                // scene state leaked by earlier tests in the same play session.
+                yield return null;
+                Vector3 positionAfterFirstFrame = origin.transform.position;
                 yield return null;
 
-                Vector3 movement = origin.transform.position - startPosition;
+                Vector3 movement = origin.transform.position - positionAfterFirstFrame;
                 Assert.That(movement.magnitude, Is.GreaterThan(0.0f));
                 Assert.That(Vector3.Dot(movement.normalized, expectedMoveDirection), Is.GreaterThan(0.95f));
 
@@ -589,6 +604,8 @@ namespace Blockiverse.Tests.PlayMode
             }
             finally
             {
+                if (floor != null)
+                    Object.DestroyImmediate(floor);
                 DestroyRigImmediate(rigObject);
                 Object.DestroyImmediate(actions);
             }
@@ -620,6 +637,9 @@ namespace Blockiverse.Tests.PlayMode
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
+                // Sprint/crouch input is gated behind the menu router's world-input grant
+                // since the M8.5 menu gate; simulate an active world session.
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
 
                 int breakPresses = 0;
                 int placePresses = 0;
@@ -736,6 +756,9 @@ namespace Blockiverse.Tests.PlayMode
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer, settings);
+                // Sprint/crouch input is gated behind the menu router's world-input grant
+                // since the M8.5 menu gate; simulate an active world session.
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
 
                 yield return null;
 

@@ -6,13 +6,17 @@ The smoke script below is historical evidence from the earlier temporary validat
 
 ## Installed Tooling
 
+Updated 2026-08-13.
+
 - Meta XR Simulator app: `/Applications/MetaXRSimulator.app`
 - Horizon Debug Bridge npm package: `@meta-quest/hzdb@1.2.1`
-- Verified `hzdb` CLI version: `hzdb 1.2.1.2.140`
-- `hzdb` install prefix: `/Users/ericslutz/.nvm/versions/node/v22.12.0`
-- Meta XR Core SDK package: `com.meta.xr.sdk.core@81.0.1`
-- Meta XR Interaction SDK package: `com.meta.xr.sdk.interaction.ovr@81.0.1`
-- Meta XR Platform SDK package: `com.meta.xr.sdk.platform@81.0.1`
+- Unity editor: `6000.5.8f1`
+- Meta XR Core SDK package: `com.meta.xr.sdk.core@205.0.0`, embedded at
+  `Packages/com.meta.xr.sdk.core` with a local compile fix (see Unity Package Notes)
+- Meta XR Interaction SDK packages: `com.meta.xr.sdk.interaction@205.0.0`,
+  `com.meta.xr.sdk.interaction.ovr@205.0.0` (registry)
+- Meta XR Platform SDK package: `com.meta.xr.sdk.platform@205.0.0` (registry)
+- Meta XR Operator MCP proxy: `/Users/ericslutz/meta-xr-operator/meta-xr-operator-mcp-proxy`
 - Unity MCP relay: `/Users/ericslutz/.unity/relay/relay_mac_arm64.app/Contents/MacOS/relay_mac_arm64`
 
 The stable validation package set does not commit local editor automation packages such as `com.besty.unity-skills`, `com.unity.ai.assistant`, or `com.meta.xr.unity-mcp.extension`. Those editor tooling packages previously produced non-gameplay Unity warnings in batchmode validation: the Meta MCP extension referenced Interaction SDK assemblies when Interaction SDK was absent, and Unity AI Assistant bundled a duplicate `System.Runtime.CompilerServices.Unsafe.dll`. Keep Unity MCP/AI Assistant packages isolated to a local tooling profile or temporary branch when editor MCP work requires them, then re-run clean package validation before treating simulator/headset logs as stable signal.
@@ -61,7 +65,23 @@ Use `hzdb mcp server` to smoke-test Horizon Debug Bridge MCP startup. If run out
 
 ## Unity Package Notes
 
-The committed package set includes Meta XR Interaction SDK because the Meta tooling and simulator validation paths reference its `Oculus.Interaction` assemblies. As of June 14, 2026, the official Meta package registry publishes `203.0.0` for Core, Platform, and Interaction OVR, but Core `203.0.0` contains invalid C# preprocessor placement in `Scripts/RuntimeOptimizer/Core/RuntimeOptimizerPlugin.cs` (`#define` after `using` statements) and fails Unity CI before project tests compile. The next newest `201.0.0` family compiles, but its `OVRProjectConfig` static initializer calls `Enumerable.Range(200, currentSdkVersion - 200 + 1)` even when Linux batchmode reports an unsupported `OVRPlugin.wrapperVersion` of `0.0.0`; this crashes the Linux GameCI editor before tests can complete. Core `83.0.0` through `85.0.0` also fail Linux GameCI compilation in `Editor/MetaXRSimulator/Installer.cs` because `downloadedInstallerPath` is declared only for Windows and macOS editor symbols. Keep Core, Platform, and Interaction OVR on `81.0.1`, the newest official family before those CI regressions, until Meta publishes a Linux-batchmode-compatible successor. Quest CI runs Unity tests in the Android editor image with `-buildTarget Android` so Meta editor assemblies compile with Quest target symbols rather than the runner host's Linux standalone symbols. Meta Avatars remains on `40.0.1`, the current registry version for that package.
+Updated 2026-08-13: the project moved to the Meta XR `205.0.0` family (required by
+Meta XR Operator, which ships in Core `205+`). Core `205.0.0` does not compile on
+Unity `6000.5.x` out of the box: `Editor/BuildingBlocks/BlockData/MultiplayerBlocks/NGO/SceneListenerNGO.cs`
+reads `createGameObjectHierarchyEvent.instanceId` / `changeGameObjectStructure.instanceId`,
+which Unity 6000.5 marks obsolete-as-error (CS0619). The fix is to use `.entityId`
+on both lines. Because a package-cache patch is wiped whenever UPM re-resolves, the
+patched Core package is **embedded** at `Packages/com.meta.xr.sdk.core` so the fix
+survives locally and in CI. Re-check each new Meta `205.x` release and drop the
+embed once Meta ships the fix upstream. Interaction, Interaction OVR, and Platform
+stay on registry `205.0.0`; Meta Avatars remains `40.0.1`.
+
+Historical (superseded): the project previously pinned Core/Platform/Interaction OVR
+at `81.0.1` because, as of June 14, 2026, `203.0.0` had invalid preprocessor placement
+in `RuntimeOptimizerPlugin.cs`, `201.0.0` crashed Linux GameCI via the `OVRProjectConfig`
+static initializer, and `83.0.0`–`85.0.0` failed GameCI compilation in
+`Editor/MetaXRSimulator/Installer.cs`. Quest CI still runs the Android editor image with
+`-buildTarget Android` so Meta editor assemblies compile with Quest target symbols.
 
 If Unity MCP is needed for a local editor automation session, install or restore Unity AI Assistant and the Meta XR Unity MCP Extension outside the clean validation baseline. The Unity MCP package stores a relay payload under `Packages/com.unity.ai.assistant/RelayApp~`. On macOS Apple Silicon the payload is a zip named `relay_mac_arm64`. Unity normally unpacks it into `~/.unity/relay/relay_mac_arm64.app` when the relay service starts. If batchmode only creates `~/.unity/relay/relay.json`, unpack it manually, adjusting the package-cache hash to the locally resolved AI Assistant package:
 
@@ -69,6 +89,49 @@ If Unity MCP is needed for a local editor automation session, install or restore
 ditto -x -k Library/PackageCache/com.unity.ai.assistant@<package-cache-hash>/RelayApp~/relay_mac_arm64 /Users/ericslutz/.unity/relay
 /bin/chmod +x /Users/ericslutz/.unity/relay/relay_mac_arm64.app/Contents/MacOS/relay_mac_arm64
 ```
+
+## Meta XR Operator (Runtime Agent Validation)
+
+Added 2026-08-13. Meta XR Operator (experimental, Core SDK `205+`) runs an MCP
+server inside the app during Play mode, giving agents runtime access to session
+state, frame/composition-layer info, composited eye captures, head/controller
+poses, and input injection. Docs: https://developers.meta.com/horizon/documentation/unity/meta-xr-operator/
+
+Setup on this machine (already done; recorded for recovery):
+
+1. One-time: `Meta > Meta XR Operator > Activate` (persists in EditorPrefs).
+2. Per editor session: `Meta > Meta XR Simulator > Activate`.
+3. Enter Play mode. On macOS the editor sets `XR_API_LAYER_PATH` /
+   `XR_ENABLE_API_LAYERS` automatically at Play entry when activated.
+4. Connect through the proxy `~/meta-xr-operator/meta-xr-operator-mcp-proxy`
+   (stdio MCP; registered with `claude mcp add meta-xr-operator` in the local
+   project config). The editor-side Agent Bridge is registered separately as
+   `meta-xr-unity-runtime`.
+
+Hard-learned constraints:
+
+- **Do not open or probe raw connections to `http://localhost:8720/sse` while the
+  layer is starting.** Aborted/early SSE connections double-faulted
+  `libXrApiLayer_METAX_operator` and crashed the entire editor twice on
+  2026-08-13. Wait for `[MetaXROperator] Registered ... tool` lines in the
+  project `Logs/Editor.log`, then connect via the proxy only.
+- The server exists only during Play mode; it dies with the XR session. If the
+  simulator frontend disconnects, restart the simulator app before re-entering
+  Play.
+- The AI Tools panel's "Run Command" registration buttons fail because Unity's
+  process PATH lacks the `claude` CLI; run the `claude mcp add ...` commands from
+  a terminal instead.
+- Simulator-injected controller input via `openxr_set_controller_input` reaches
+  the OpenXR layer but has not been observed to trigger app-level input actions
+  (e.g. the pause menu). Use simulator keyboard/mouse or on-device input for
+  menu-flow validation.
+
+Validation evidence 2026-08-13: with Unity 6000.5.8f1 + Meta XR 205.0.0 +
+Composition Layers 2.5.0 and the world-space menu baseline, Operator inspection in
+the simulator showed the session reaching `FOCUSED`, a single healthy projection
+layer at frame end (splash layer released, no rogue quad layers), and composited
+captures rendering world, UI, and hands — the July "black screen after splash"
+symptom did not reproduce. On-device validation remains outstanding.
 
 ## Meta XR Simulator Validation Flow
 

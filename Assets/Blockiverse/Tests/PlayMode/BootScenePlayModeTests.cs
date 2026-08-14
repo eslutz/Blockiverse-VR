@@ -39,12 +39,14 @@ namespace Blockiverse.Tests.PlayMode
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-            SurvivalInventoryPanel inventoryPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
-            SurvivalCraftingPanel craftingPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalCraftingPanel>(FindObjectsInactive.Include);
-            SurvivalHealthPanel healthPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalHealthPanel>(FindObjectsInactive.Include);
+            // Bind through the shared Survival HUD root: the menu rework added routed
+            // per-panel "Inventory Panel"/"Crafting Panel" canvases, so a global
+            // FindFirstObjectByType can resolve panels from different canvases.
+            GameObject hudRoot = FindGameObjectIncludingInactive(BlockiverseMenuController.SurvivalHudName);
+            Assert.That(hudRoot, Is.Not.Null);
+            SurvivalInventoryPanel inventoryPanel = hudRoot.GetComponentInChildren<SurvivalInventoryPanel>(true);
+            SurvivalCraftingPanel craftingPanel = hudRoot.GetComponentInChildren<SurvivalCraftingPanel>(true);
+            SurvivalHealthPanel healthPanel = hudRoot.GetComponentInChildren<SurvivalHealthPanel>(true);
 
             Assert.That(inventoryPanel, Is.Not.Null);
             Assert.That(craftingPanel, Is.Not.Null);
@@ -84,7 +86,12 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(presenter, Is.Not.Null);
                 Assert.That(presenter.IsVisible, Is.True);
                 Assert.That(presenter.ShowOnStart, Is.False);
-                Assert.That(titleMenu.activeInHierarchy, Is.False,
+                // Since the world-space menu pivot, routed menus hide by disabling
+                // their Canvas via the presenter; the GameObject stays active.
+                BlockiverseWorldSpacePanelPresenter titlePresenter =
+                    titleMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+                Assert.That(titlePresenter, Is.Not.Null);
+                Assert.That(titlePresenter.IsVisible, Is.False,
                     "The title menu must wait until the first-run controller map is dismissed.");
 
                 Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
@@ -94,7 +101,7 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
 
                 Assert.That(presenter.IsVisible, Is.False);
-                Assert.That(titleMenu.activeInHierarchy, Is.True);
+                Assert.That(titlePresenter.IsVisible, Is.True);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally
@@ -170,7 +177,12 @@ namespace Blockiverse.Tests.PlayMode
 
             CreativeWorldManager worldManager = UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
             Assert.That(worldManager, Is.Not.Null);
-            Assert.That(worldManager.World, Is.Null, "Boot should wait for Create/Load/Join before generating a voxel world.");
+            // Since the M8.5 menu gate, Boot deliberately generates the explorable
+            // title mini-world (InitializeDefaultWorldOnAwake); the session itself
+            // stays inactive with world input blocked until Create/Load/Join.
+            Assert.That(worldManager.World, Is.Not.Null, "Boot generates the title mini-world at startup.");
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False,
+                "World input stays blocked until a session grants it.");
         }
 
         static void AssertUiActionReference(InputActionReference reference, string expectedMap, string expectedAction)
