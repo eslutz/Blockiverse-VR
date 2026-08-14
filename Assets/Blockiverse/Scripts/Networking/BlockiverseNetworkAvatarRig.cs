@@ -276,7 +276,6 @@ namespace Blockiverse.Networking
 
         public void UpdateStalenessVisibility()
         {
-            bool stale = IsPoseStale || IsStreamStale;
             bool metaVisible = metaAvatarAvailable && !IsStreamStale && !IsPoseStale;
             bool fallbackVisible = fallbackProxyEnabled && (IsStreamStale || !metaAvatarAvailable) && !IsPoseStale;
 
@@ -291,8 +290,16 @@ namespace Blockiverse.Networking
                 metaEntityNode.gameObject.SetActive(metaVisible);
             }
 
-            if (stale)
+            // The fallback proxy serves both the never-available and the stale-stream
+            // cases; keep the renderer state in lockstep with the root, otherwise a
+            // stale Meta stream activates a root whose renderers were disabled when
+            // the Meta avatar first became available and the player disappears.
+            IsUsingFallbackProxy = fallbackVisible;
+
+            if (IsPoseStale)
             {
+                // Everything is hidden while the pose itself is stale; the fallback
+                // root is inactive so no renderer state needs to change.
                 FallbackRenderersVisible = false;
             }
             else

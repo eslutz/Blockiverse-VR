@@ -101,6 +101,27 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void StaleStreamSwapsAvailableMetaAvatarBackToFallbackProxy()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            avatarRig.SetMetaAvatarAvailable(true);
+            Assert.That(avatarRig.IsUsingFallbackProxy, Is.False);
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.False);
+
+            avatarRig.SetStreamStale(true);
+
+            Assert.That(avatarRig.IsUsingFallbackProxy, Is.True,
+                "A stale Meta avatar stream must swap back to the fallback proxy so the remote player stays visible.");
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.True);
+
+            avatarRig.SetStreamStale(false);
+
+            Assert.That(avatarRig.IsUsingFallbackProxy, Is.False);
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.False);
+        }
+
+        [Test]
         public void AvatarPoseRpcsUseUnreliableDelivery()
         {
             MethodInfo submit = typeof(BlockiverseNetworkAvatarRig).GetMethod(

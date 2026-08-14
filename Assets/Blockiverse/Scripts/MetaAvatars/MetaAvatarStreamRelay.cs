@@ -143,11 +143,14 @@ namespace Blockiverse.MetaAvatars
             if (IsOwner || (NetworkManager != null && message.SenderClientId == NetworkManager.LocalClientId))
                 return;
 
-            if (!_reassembler.TryReassemble(message, out byte[] complete, out double sentTime))
+            if (!_reassembler.TryReassemble(message, out byte[] complete, out _))
                 return;
 
-            // Stored for Step 12 (staleness/hiding)
-            LastRemoteStreamTime = sentTime;
+            // Stored for Step 12 (staleness/hiding). Stamp receiver-local time: the
+            // message's SentTime is the sender's process clock, which is unrelated to
+            // this peer's clock, so comparing it against our unscaled time would mark
+            // healthy streams stale (or mask stopped ones) by the uptime difference.
+            LastRemoteStreamTime = Time.unscaledTimeAsDouble;
             if (ownerNetworkFallbackRig != null)
             {
                 ownerNetworkFallbackRig.SetStreamStale(false);
