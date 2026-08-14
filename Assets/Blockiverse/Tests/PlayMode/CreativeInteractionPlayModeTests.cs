@@ -2,8 +2,9 @@ using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace Blockiverse.Tests.PlayMode
 {
@@ -424,10 +425,11 @@ namespace Blockiverse.Tests.PlayMode
         public void HotbarSelectionUpdatesSelectedBlockLabel()
         {
             var hotbarObject = new GameObject("Hotbar");
+            var labelObject = new GameObject("Selected Label");
 
             try
             {
-                var label = new Label();
+                TextMeshProUGUI label = labelObject.AddComponent<TextMeshProUGUI>();
                 CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
                 hotbar.Configure(BlockRegistry.CreateDefault(), new[] { BlockRegistry.LooseLoam, BlockRegistry.LumenQuartzCluster }, label);
 
@@ -438,6 +440,7 @@ namespace Blockiverse.Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(labelObject);
                 Object.DestroyImmediate(hotbarObject);
             }
         }

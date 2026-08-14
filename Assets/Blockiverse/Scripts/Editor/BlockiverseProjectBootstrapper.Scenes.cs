@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.MetaAvatars;
@@ -13,6 +12,7 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
+using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -27,11 +27,12 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -46,9 +47,6 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
-using Unity.XR.CompositionLayers;
-using Unity.XR.CompositionLayers.Extensions;
-using Unity.XR.CompositionLayers.UIInteraction;
 using Unity.XR.CoreUtils;
 
 namespace Blockiverse.Editor
@@ -63,8 +61,7 @@ namespace Blockiverse.Editor
                 ? EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single)
                 : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            GameObject rig = EnsureBootSceneRig(scene, rigPrefab);
-            EnsureBootSceneMenuSurface(scene, rig);
+            EnsureBootSceneRig(scene, rigPrefab);
             EnsureBootSceneLight(scene);
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
@@ -230,7 +227,7 @@ namespace Blockiverse.Editor
             EnsureMultiplayerTestCamera(scene);
             EnsureMultiplayerEventSystem(scene);
             EnsureOvrAvatarManager(scene);
-            RemoveRootGameObject(scene, MultiplayerSessionMenuName);
+            EnsureMultiplayerSessionMenu(scene, managerObject);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.MultiplayerTestScenePath);
         }
@@ -276,52 +273,20 @@ namespace Blockiverse.Editor
                 AssetDatabase.DeleteAsset(DefaultNetworkPrefabsPath);
         }
 
-        static GameObject EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
+        static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
         {
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
 
-            if (rig != null && PrefabUtility.GetCorrespondingObjectFromSource(rig) == rigPrefab)
+            if (rig == null)
             {
-                EditorUtility.SetDirty(rig);
-                return rig;
+                PrefabUtility.InstantiatePrefab(rigPrefab, scene);
+                return;
             }
 
-            if (rig != null)
-                UnityEngine.Object.DestroyImmediate(rig);
+            if (rig.GetComponent<BlockiverseXRRigMarker>() == null)
+                rig.AddComponent<BlockiverseXRRigMarker>();
 
-            GameObject rigInstance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
-            if (rigInstance != null)
-            {
-                rigInstance.name = BlockiverseProject.XrRigRootName;
-                EditorUtility.SetDirty(rigInstance);
-            }
-
-            return rigInstance;
-        }
-
-        static void EnsureBootSceneMenuSurface(Scene scene, GameObject rig)
-        {
-            GameObject menuRoot = FindRootGameObject(scene, MenuWorldUiRootName);
-            if (menuRoot == null)
-            {
-                menuRoot = new GameObject(MenuWorldUiRootName);
-                SceneManager.MoveGameObjectToScene(menuRoot, scene);
-            }
-
-            menuRoot.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-            menuRoot.transform.localScale = Vector3.one;
-
-            BlockiverseUiToolkitMenuSurface surface = EnsureUiToolkitMenuSurface(menuRoot.transform, null);
-            BlockiverseMenuController controller = rig != null
-                ? rig.GetComponent<BlockiverseMenuController>()
-                : FindRootGameObject(scene, BlockiverseProject.XrRigRootName)?.GetComponent<BlockiverseMenuController>();
-            if (controller != null)
-            {
-                controller.ConfigureUiToolkitMenuSurface(surface);
-                EditorUtility.SetDirty(controller);
-            }
-
-            EditorUtility.SetDirty(menuRoot);
+            EnsureXrRigControllerBindings(rig);
         }
 
         static void EnsureBootSceneLight(Scene scene)
@@ -357,7 +322,7 @@ namespace Blockiverse.Editor
             EnsureEventSystem(scene, BootEventSystemName);
         }
 
-        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any editor-authored scene
+        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any legacy scene
         // manager inactive in editor-authored scenes so macOS/headless PlayMode tests do not
         // load avatar native libraries; MetaHorizonAvatarProvider creates the singleton on Quest.
         static void EnsureOvrAvatarManager(Scene scene)
@@ -441,21 +406,31 @@ namespace Blockiverse.Editor
             EventSystem eventSystem = EnsureComponent<EventSystem>(eventSystemObject);
             eventSystem.sendNavigationEvents = true;
 
-            // Menus are authored as world-space UI Toolkit panels driven by XRI tracked-device input.
+            StandaloneInputModule legacyInputModule = eventSystemObject.GetComponent<StandaloneInputModule>();
+
+            if (legacyInputModule != null)
+                UnityEngine.Object.DestroyImmediate(legacyInputModule);
+
+            // VR UI is driven by tracked-device rays, so replace the plain Input System module with
+            // XRI's module which understands tracked-device pointer events from XRRayInteractors.
+            // XRUIInputModule does not derive from InputSystemUIInputModule, so a legacy module found
+            // here is always the screen-space one and is removed before adding the XR module.
+            InputSystemUIInputModule legacyUiModule = eventSystemObject.GetComponent<InputSystemUIInputModule>();
+
+            if (legacyUiModule != null)
+                UnityEngine.Object.DestroyImmediate(legacyUiModule);
+
             XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
             EnsureInputActions();
             BlockiverseXrUiInputConfigurator.Configure(
                 inputModule,
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress),
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
-            PanelInputConfiguration panelInputConfiguration = EnsureComponent<PanelInputConfiguration>(eventSystemObject);
-            panelInputConfiguration.panelInputRedirection = PanelInputConfiguration.PanelInputRedirection.Never;
 
             EnsureXrInteractionManager(scene);
 
             EditorUtility.SetDirty(eventSystem);
             EditorUtility.SetDirty(inputModule);
-            EditorUtility.SetDirty(panelInputConfiguration);
             EditorUtility.SetDirty(eventSystemObject);
         }
 
@@ -472,6 +447,113 @@ namespace Blockiverse.Editor
             managerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             EnsureComponent<XRInteractionManager>(managerObject);
             EditorUtility.SetDirty(managerObject);
+        }
+
+        static void EnsureMultiplayerSessionMenu(Scene scene, GameObject managerObject)
+        {
+            GameObject menuObject = FindRootGameObject(scene, MultiplayerSessionMenuName);
+
+            if (menuObject == null)
+            {
+                menuObject = new GameObject(MultiplayerSessionMenuName, typeof(RectTransform));
+                SceneManager.MoveGameObjectToScene(menuObject, scene);
+            }
+
+            menuObject.transform.SetPositionAndRotation(
+                new Vector3(0.0f, 1.4f, 1.8f),
+                Quaternion.Euler(0.0f, 180.0f, 0.0f));
+            menuObject.transform.localScale = Vector3.one * 0.003f;
+
+            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, MultiplayerSessionMenuSize.x);
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, MultiplayerSessionMenuSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(menuObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 20;
+            canvas.enabled = true;
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(menuObject);
+
+            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            Sprite panelSprite = GetRoundedSprite();
+            if (panelSprite != null)
+            {
+                panelImage.sprite = panelSprite;
+                panelImage.type = Image.Type.Sliced;
+            }
+            panelImage.color = MultiplayerMenuPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "LAN Session",
+                36,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(28.0f, -34.0f),
+                new Vector2(500.0f, 52.0f));
+
+            TMP_InputField addressInput = EnsureInputFieldControl(
+                panelObject.transform,
+                "Address Input",
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder),
+                string.Empty,
+                new Vector2(28.0f, -102.0f),
+                new Vector2(500.0f, 58.0f));
+
+            Button hostButton = EnsureButtonControl(
+                panelObject.transform,
+                "Host Button",
+                "Host",
+                new Vector2(28.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Button joinButton = EnsureButtonControl(
+                panelObject.transform,
+                "Join Button",
+                "Join",
+                new Vector2(198.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Button stopButton = EnsureButtonControl(
+                panelObject.transform,
+                "Stop Button",
+                "Stop",
+                new Vector2(368.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            TextMeshProUGUI statusText = EnsureLabel(
+                panelObject.transform,
+                "Status",
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault),
+                22,
+                TextAnchor.UpperLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(28.0f, -258.0f),
+                new Vector2(500.0f, 88.0f),
+                TextDimColor);
+
+            BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(menuObject);
+            menu.Configure(managerObject != null ? managerObject.GetComponent<BlockiverseNetworkSession>() : null);
+            menu.ConfigureControls(hostButton, joinButton, stopButton, addressInput, statusText);
+
+            EditorUtility.SetDirty(menu);
+            EditorUtility.SetDirty(menuObject);
         }
 
         static void EnsureBootSceneCreativeWorld(Scene scene)
@@ -519,7 +601,8 @@ namespace Blockiverse.Editor
         static CreativeHotbar FindBootSceneHotbar(Scene scene)
         {
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
-            return rig != null ? rig.GetComponentInChildren<CreativeHotbar>(includeInactive: true) : null;
+            Transform hotbarTransform = rig != null ? rig.transform.Find("Camera Offset/" + BlockMenuName) : null;
+            return hotbarTransform != null ? hotbarTransform.GetComponent<CreativeHotbar>() : null;
         }
 
         static void EnsureCreativeInputBridge(Scene scene, CreativeInteractionController controller)

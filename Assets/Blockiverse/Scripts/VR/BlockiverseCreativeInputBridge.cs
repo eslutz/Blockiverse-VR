@@ -157,9 +157,9 @@ namespace Blockiverse.VR
         void PlayMineStrikeFeedback()
         {
             if (audioCuePlayer == null)
-                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindAnyObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
 
             var worldCenter = new Vector3(miningTarget.X + 0.5f, miningTarget.Y + 0.5f, miningTarget.Z + 0.5f);
             BlockiverseAudioCue cue = interactionController != null &&
@@ -212,7 +212,7 @@ namespace Blockiverse.VR
         void DiscoverDependencies()
         {
             if (inputRig == null)
-                inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindAnyObjectByType<BlockiverseInputRig>();
+                inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindFirstObjectByType<BlockiverseInputRig>();
 
             DiscoverInteractionRays();
             RefreshActiveInteractionRay();
@@ -223,14 +223,14 @@ namespace Blockiverse.VR
             DiscoverInteractionRayVisuals();
 
             if (interactionController == null && Application.isPlaying)
-                interactionController = FindAnyObjectByType<CreativeInteractionController>();
+                interactionController = FindFirstObjectByType<CreativeInteractionController>();
 
             if (survivalSync == null && Application.isPlaying)
-                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>();
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>();
 
             if (comfortSettings == null)
                 comfortSettings = GetComponentInParent<BlockiverseComfortSettings>() ??
-                    FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                    FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
 
             ApplyPlayerOccupancyPredicate();
         }
@@ -518,18 +518,11 @@ namespace Blockiverse.VR
             interactionLineVisual.lineLength = lineVisualDefaultLength;
         }
 
-        bool IsInteractionRayOverUi()
-        {
-            return interactionRay != null &&
-                interactionRay.isActiveAndEnabled &&
-                interactionRay.IsOverUIGameObject();
-        }
-
         bool CanInteract()
         {
             return interactionRay != null &&
                 interactionRay.isActiveAndEnabled &&
-                !IsInteractionRayOverUi();
+                !interactionRay.IsOverUIGameObject();
         }
     }
 }

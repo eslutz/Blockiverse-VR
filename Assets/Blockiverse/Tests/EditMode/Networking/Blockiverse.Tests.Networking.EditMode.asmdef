@@ -11,6 +11,8 @@
     "Blockiverse.MetaPlatform",
     "Blockiverse.WorldGen",
     "Blockiverse.UI",
+    "Unity.TextMeshPro",
+    "UnityEngine.UI",
     "Unity.Netcode.Runtime",
     "UnityEditor.TestRunner",
     "UnityEngine.TestRunner"

@@ -77,7 +77,6 @@ namespace Blockiverse.UI
         {
             ResolveReferences();
             Wire();
-            EnsureMenuWorldActive();
             RefreshSaveList();
         }
 
@@ -183,11 +182,9 @@ namespace Blockiverse.UI
                     break;
                 case MenuActions.PauseReturnToTitle:
                     SaveCurrentWorld();
-                    ReturnToMenuWorld();
                     break;
                 case MenuActions.DeathReturnToTitle:
                     SaveCurrentWorld(respawnDeadPlayer: true);
-                    ReturnToMenuWorld();
                     break;
                 case MenuActions.TitleQuit:
                     SaveCurrentWorld();
@@ -518,7 +515,6 @@ namespace Blockiverse.UI
                 chunkAuthoritySync,
                 deferInitialRendererRebuild: deferRendererRebuild);
             worldManager.SetGameMode(CreativeWorldManager.ParseGameMode(gameMode));
-            SetBlockEditingEnabled(true);
             ApplyPlayerMode();
 
             currentDifficulty = difficulty;
@@ -862,7 +858,6 @@ namespace Blockiverse.UI
                 generated,
                 chunkAuthoritySync,
                 deferInitialRendererRebuild: deferRendererRebuild);
-            SetBlockEditingEnabled(true);
 
             // Saved state is authoritative over the regenerated baseline: block deltas,
             // weather + simulation queues, world time, game mode, container contents,
@@ -897,40 +892,6 @@ namespace Blockiverse.UI
             lastSaveTime = Time.unscaledTime;
             menuController?.EnterGameplay();
             return true;
-        }
-
-        void EnsureMenuWorldActive()
-        {
-            ResolveReferences();
-
-            if (worldManager == null || HasActiveSession || worldTransitionInProgress)
-                return;
-
-            if (!worldManager.IsMenuWorldActive)
-                worldManager.InitializeMenuWorld();
-
-            SetBlockEditingEnabled(false);
-        }
-
-        void ReturnToMenuWorld()
-        {
-            WaitForAutoSave();
-            currentSavePath = null;
-            currentWorldName = null;
-            currentDifficulty = string.Empty;
-            currentWorldPreset = WorldPresetIds.SurvivalTerrain;
-            currentTextureSet = BlockTextureSetIds.Default;
-            lastSaveTime = 0.0f;
-            EnsureMenuWorldActive();
-            RefreshSaveList();
-        }
-
-        void SetBlockEditingEnabled(bool enabled)
-        {
-            CreativeInteractionController interaction = worldManager != null
-                ? worldManager.GetComponent<CreativeInteractionController>()
-                : null;
-            interaction?.SetBlockEditingEnabled(enabled);
         }
 
         GeneratedCreativeWorld RegenerateBaseWorld(WorldSaveData data)

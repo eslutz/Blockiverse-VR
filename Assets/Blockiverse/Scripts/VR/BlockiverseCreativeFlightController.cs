@@ -135,10 +135,10 @@ namespace Blockiverse.VR
                 return;
 
             if (worldManager == null)
-                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (survivalSync == null)
-                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
         }
 
         bool IsCreativePlayer()

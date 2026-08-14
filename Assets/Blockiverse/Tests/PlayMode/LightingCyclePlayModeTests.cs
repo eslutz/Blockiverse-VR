@@ -17,7 +17,7 @@ namespace Blockiverse.Tests.PlayMode
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
             yield return null;
 
-            BlockiverseLightingCycleController controller = Object.FindAnyObjectByType<BlockiverseLightingCycleController>();
+            BlockiverseLightingCycleController controller = Object.FindFirstObjectByType<BlockiverseLightingCycleController>();
 
             Assert.That(controller, Is.Not.Null);
             Assert.That(controller.Clock, Is.Not.Null);

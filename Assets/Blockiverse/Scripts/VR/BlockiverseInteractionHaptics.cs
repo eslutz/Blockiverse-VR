@@ -82,13 +82,13 @@ namespace Blockiverse.VR
                 feedbackSettings = GetComponent<BlockiverseFeedbackSettings>();
 
             if (interactionController == null && Application.isPlaying)
-                interactionController = FindAnyObjectByType<CreativeInteractionController>();
+                interactionController = FindFirstObjectByType<CreativeInteractionController>();
 
             if (survivalSync == null && Application.isPlaying)
-                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
 
             if (vitalsRuntime == null && Application.isPlaying)
-                vitalsRuntime = FindAnyObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
+                vitalsRuntime = FindFirstObjectByType<SurvivalVitalsRuntime>(FindObjectsInactive.Include);
         }
 
         void Subscribe()

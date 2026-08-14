@@ -1164,7 +1164,7 @@ namespace Blockiverse.Gameplay
         void ResolveWorldManager()
         {
             if (worldManager == null)
-                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (worldManager != null)
                 worldManager.ConfigureAuthoritySync(this);

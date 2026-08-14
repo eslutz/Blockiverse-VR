@@ -52,11 +52,11 @@ namespace Blockiverse.VR
         {
             if (comfortSettings == null)
                 comfortSettings = GetComponent<BlockiverseComfortSettings>() ??
-                    FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                    FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
 
             if (feedbackSettings == null)
                 feedbackSettings = GetComponent<BlockiverseFeedbackSettings>() ??
-                    FindAnyObjectByType<BlockiverseFeedbackSettings>(FindObjectsInactive.Include);
+                    FindFirstObjectByType<BlockiverseFeedbackSettings>(FindObjectsInactive.Include);
         }
 
         void LoadSettings()

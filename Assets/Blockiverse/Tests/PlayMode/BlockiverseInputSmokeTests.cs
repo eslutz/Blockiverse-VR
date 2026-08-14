@@ -1,4 +1,3 @@
-#pragma warning disable 0618
 using System.Collections;
 using Blockiverse.VR;
 using NUnit.Framework;
@@ -17,7 +16,7 @@ namespace Blockiverse.Tests.PlayMode
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-            BlockiverseInputRig inputRig = Object.FindAnyObjectByType<BlockiverseInputRig>();
+            BlockiverseInputRig inputRig = Object.FindFirstObjectByType<BlockiverseInputRig>();
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(inputRig.InputActions, Is.Not.Null);
             Assert.That(inputRig.InputActions.enabled, Is.True);

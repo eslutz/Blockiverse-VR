@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Blockiverse.Voxel;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace Blockiverse.Gameplay
 {
@@ -13,25 +14,18 @@ namespace Blockiverse.Gameplay
         readonly List<BlockId> blockIds = new();
 
         BlockRegistry registry;
-        [SerializeField] BlockiverseHudToolkitSurface hudSurface;
-        [SerializeField] Label selectedBlockLabel;
+        [SerializeField] TMP_Text selectedBlockLabel;
+        [SerializeField] Canvas targetCanvas;
         [SerializeField] GameObject visibilityRoot;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         int selectedIndex;
-        bool visible;
 
         public BlockId SelectedBlockId => blockIds.Count == 0 ? BlockRegistry.Air : blockIds[selectedIndex];
         public IReadOnlyList<BlockId> BlockIds => blockIds;
-        public bool IsVisible => hudSurface != null ? visible : visibilityRoot != null && visibilityRoot.activeSelf;
+        public bool IsVisible => targetCanvas != null ? targetCanvas.enabled : visibilityRoot != null && visibilityRoot.activeSelf;
         public UnityEvent SelectionChanged { get; } = new();
 
-        public void EnsureConfigured()
-        {
-            if (blockIds.Count == 0)
-                ConfigureFromDefaultCatalog(selectedBlockLabel);
-        }
-
-        public void Configure(BlockRegistry blockRegistry, IEnumerable<BlockId> selectableBlocks, Label selectedLabel = null)
+        public void Configure(BlockRegistry blockRegistry, IEnumerable<BlockId> selectableBlocks, TMP_Text selectedLabel)
         {
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             selectedBlockLabel = selectedLabel;
@@ -49,16 +43,16 @@ namespace Blockiverse.Gameplay
             RefreshLabel();
         }
 
-        public void ConfigureHudSurface(BlockiverseHudToolkitSurface surface)
+        public void ConfigureCanvas(Canvas canvas)
         {
-            hudSurface = surface;
-            visibilityRoot = null;
+            targetCanvas = canvas;
+            visibilityRoot = canvas != null ? canvas.gameObject : null;
             Hide(playFeedback: false);
         }
 
         public void ConfigureVisibilityRoot(GameObject root)
         {
-            hudSurface = null;
+            targetCanvas = null;
             visibilityRoot = root;
             Hide(playFeedback: false);
         }
@@ -68,7 +62,7 @@ namespace Blockiverse.Gameplay
             audioCuePlayer = targetAudioCuePlayer;
         }
 
-        public void ConfigureDefault(Label selectedLabel = null)
+        public void ConfigureDefault(TMP_Text selectedLabel)
         {
             BlockRegistry defaultRegistry = BlockRegistry.Default;
             Configure(
@@ -77,7 +71,7 @@ namespace Blockiverse.Gameplay
                 selectedLabel);
         }
 
-        public void ConfigureFromCatalog(CreativeCatalog catalog, BlockRegistry blockRegistry, Label selectedLabel = null)
+        public void ConfigureFromCatalog(CreativeCatalog catalog, BlockRegistry blockRegistry, TMP_Text selectedLabel)
         {
             if (catalog == null)
                 throw new ArgumentNullException(nameof(catalog));
@@ -90,7 +84,7 @@ namespace Blockiverse.Gameplay
 
         // Configures the hotbar from the default creative catalog. Kept registry-free so callers
         // in assemblies that don't reference Voxel (the editor bootstrapper) can use it.
-        public void ConfigureFromDefaultCatalog(Label selectedLabel = null)
+        public void ConfigureFromDefaultCatalog(TMP_Text selectedLabel)
         {
             ConfigureFromCatalog(CreativeCatalog.CreateDefault(), null, selectedLabel);
         }
@@ -140,10 +134,9 @@ namespace Blockiverse.Gameplay
 
         public void Show()
         {
-            visible = true;
-            if (hudSurface != null)
+            if (targetCanvas != null)
             {
-                hudSurface.SetHotbarVisible(true);
+                targetCanvas.enabled = true;
                 PlayFeedback(BlockiverseAudioCue.InventoryOpen);
             }
             else if (visibilityRoot != null)
@@ -160,10 +153,9 @@ namespace Blockiverse.Gameplay
 
         void Hide(bool playFeedback)
         {
-            visible = false;
-            if (hudSurface != null)
+            if (targetCanvas != null)
             {
-                hudSurface.SetHotbarVisible(false);
+                targetCanvas.enabled = false;
                 if (playFeedback)
                     PlayFeedback(BlockiverseAudioCue.InventoryClose);
             }
@@ -177,21 +169,24 @@ namespace Blockiverse.Gameplay
 
         void RefreshLabel()
         {
-            string label = blockIds.Count == 0
+            if (selectedBlockLabel == null)
+                return;
+
+            selectedBlockLabel.text = blockIds.Count == 0
                 ? "No block"
                 : registry.Get(SelectedBlockId).Name;
-            if (selectedBlockLabel != null)
-                selectedBlockLabel.text = label;
-            hudSurface?.SetSelectedBlock(label);
         }
 
         void Awake()
         {
-            if (hudSurface == null)
-                hudSurface = GetComponent<BlockiverseHudToolkitSurface>()
-                    ?? GetComponentInChildren<BlockiverseHudToolkitSurface>(true);
+            if (targetCanvas == null && visibilityRoot == null)
+                targetCanvas = GetComponent<Canvas>();
 
-            EnsureConfigured();
+            if (visibilityRoot == null && targetCanvas != null)
+                visibilityRoot = targetCanvas.gameObject;
+
+            if (registry == null)
+                ConfigureDefault(selectedBlockLabel);
 
             Hide(playFeedback: false);
         }
@@ -208,7 +203,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (audioCuePlayer == null)
-                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
         }
     }
 }

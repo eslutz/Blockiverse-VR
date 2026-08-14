@@ -12,6 +12,8 @@
     "Unity.InputSystem.TestFramework",
     "Unity.XR.CoreUtils",
     "Unity.XR.Interaction.Toolkit",
+    "Unity.TextMeshPro",
+    "UnityEngine.UI",
     "UnityEngine.TestRunner"
   ],
   "includePlatforms": [],

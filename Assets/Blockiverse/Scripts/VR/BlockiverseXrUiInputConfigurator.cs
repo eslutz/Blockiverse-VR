@@ -1,4 +1,3 @@
-#pragma warning disable 0618
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 

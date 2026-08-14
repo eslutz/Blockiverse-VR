@@ -78,7 +78,7 @@ namespace Blockiverse.VR
                 return;
 
             comfortSettings = GetComponent<BlockiverseComfortSettings>() ??
-                FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
         }
     }
 }
