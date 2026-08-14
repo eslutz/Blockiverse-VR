@@ -1,0 +1,26 @@
+{
+    "name": "meta.xr.ai.mcpbridge",
+    "rootNamespace": "",
+    "references": [
+        "meta.xr.json",
+        "Meta.XR.Editor.Callbacks",
+        "Meta.XR.ImmersiveDebugger",
+        "meta.xr.ai.mcpbridge.telemetry",
+        "Oculus.VR"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "define": "OVR_UNITY_PACKAGE_MANAGER",
+            "name": "com.meta.xr.sdk.core",
+            "expression": ""
+        }
+    ],
+    "noEngineReferences": false
+}

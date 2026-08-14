@@ -1,0 +1,32 @@
+{
+    "name": "meta.xr.hand.readiness.tests.editmode",
+    "rootNamespace": "Meta.HandReadinessTool.Editor.Tests",
+    "references": [
+        "Meta.XR.HandReadinessTool.Editor",
+        "Oculus.VR.Editor",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Oculus.VR"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [
+        {
+            "define": "OVR_UNITY_PACKAGE_MANAGER",
+            "name": "com.meta.xr.sdk.core",
+            "expression": ""
+        }
+    ],
+    "noEngineReferences": false
+}

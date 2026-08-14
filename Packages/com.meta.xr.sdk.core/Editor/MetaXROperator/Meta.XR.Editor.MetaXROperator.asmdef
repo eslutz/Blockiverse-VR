@@ -1,0 +1,42 @@
+{
+    "name": "Meta.XR.Editor.MetaXROperator",
+    "rootNamespace": "",
+    "references": [
+        "Oculus.VR",
+        "Oculus.VR.Editor",
+        "meta.xr.ai.agentbridge.editor",
+        "meta.xr.ai.mcpbridge.editor",
+        "meta.xr.json",
+        "Meta.XR.Editor.Id",
+        "Meta.XR.Editor.ToolingSupport",
+        "Meta.XR.Editor.UserInterface",
+        "Meta.XR.Editor.Settings",
+        "Meta.XR.Editor.Callbacks",
+        "Meta.XR.Editor.AIToolsSetup",
+        "Unity.XR.OpenXR",
+        "Unity.XR.OpenXR.Editor",
+        "Unity.XR.OpenXR.Features.MetaQuestSupport"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.xr.openxr",
+            "expression": "1.17.0-pre.2",
+            "define": "UNITY_OPENXR_PLUGIN_1_17_0_OR_NEWER"
+        },
+        {
+            "define": "OVR_UNITY_PACKAGE_MANAGER",
+            "name": "com.meta.xr.sdk.core",
+            "expression": ""
+        }
+    ],
+    "noEngineReferences": false
+}

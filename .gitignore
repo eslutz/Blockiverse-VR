@@ -491,6 +491,15 @@ TestResults/
 .playwright-mcp/
 docs/superpowers/
 
+# Meta XR Dev Agent writes a local access token into this generated asset.
+/[Aa]ssets/[Rr]esources/DevAgentSettings.asset
+/[Aa]ssets/[Rr]esources/DevAgentSettings.asset.meta
+
+# Embedded Meta XR packages must remain complete even when their contents match
+# generic Unity/Visual Studio ignore patterns such as *.obj, Debug/, Win32/, or Samples~/.
+!/[Pp]ackages/com.meta.xr.sdk.core/**
+!/[Pp]ackages/com.meta.xr.sdk.interaction/**
+
 # Local one-off setup scripts kept out of the repository.
 /scripts/ci/repository-foundation.sh
 /scripts/ci/test-repository-foundation.sh
@@ -506,3 +515,6 @@ docs/superpowers/
 /[Aa]ssets/[Cc]omposition[Ll]ayers/[Uu]ser[Ss]ettings/CompositionLayersPreferences.asset.meta
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,csharp,unity
+
+# Meta XR Operator project-level agent skills are local developer tooling.
+/.claude/skills/

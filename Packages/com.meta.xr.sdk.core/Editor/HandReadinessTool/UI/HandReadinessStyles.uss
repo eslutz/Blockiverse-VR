@@ -1,0 +1,426 @@
+/* HandReadinessTool-specific USS.
+ *
+ * Loaded in addition to the RLDS Dark/Light stylesheets; every color here
+ * references a `var(--rlds-*)` token defined in those sheets so the Hand
+ * Readiness overrides track the active editor skin automatically.
+ *
+ * Scope: visuals RLDS does not already cover (cover banner, phase-icon
+ * states, scanning progress, priority/type badges, footer sizing, file
+ * card, checkbox, chat bubbles).
+ */
+
+/* ---------- Cover banner (WelcomeScreen) ---------- */
+
+.hrt-cover {
+    height: 261px;
+    border-radius: var(--rlds-radius-sm);
+    overflow: hidden;
+    padding-left: var(--rlds-spacing-3xl);
+    padding-bottom: var(--rlds-spacing-3xl);
+    justify-content: flex-end;
+    border-width: 2px;
+    border-color: var(--rlds-border-card);
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.hrt-cover-fallback-bg {
+    background-color: var(--rlds-surface-tertiary-background);
+}
+
+/* Cover-image text container. Fixed 522px max-width keeps the title and
+ * subtitle from overflowing onto the watermark icon at the right side of the
+ * cover.
+ */
+.hrt-cover-content {
+    max-width: 522px;
+}
+
+.hrt-cover-headset {
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    right: var(--rlds-spacing-3xl);
+    top: 50%;
+    translate: 0 -50%;
+    opacity: 0.1;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-primary);
+}
+
+/* ---------- Description textarea (ProjectDescriptionScreen) ---------- */
+
+/* Fixed-height scroll box wrapping the multiline description field: the box is
+ * a transparent clip container at a fixed 196px. The field inside carries the
+ * surface + radius and fills the box (so the box surface never shows as a frame
+ * around an inset field), while long descriptions scroll within it via the
+ * ScrollView's scrollbar + mouse wheel rather than growing the whole section. */
+.hrt-description-textarea-box {
+    height: 196px;
+    flex-shrink: 0;
+}
+
+.hrt-description-textarea {
+    flex-grow: 1;
+    background-color: var(--rlds-surface-secondary-background);
+    border-radius: var(--rlds-radius-xs);
+}
+
+.hrt-description-textarea > .unity-text-field__input {
+    flex-grow: 1;
+    flex-shrink: 0;
+    border-width: 0;
+    background-color: transparent;
+    white-space: normal;
+    color: var(--rlds-text-primary);
+}
+
+/* ---------- Phase-status icons (ScanningScreen + Results checkmarks) ----------
+ * Circle glyph with state modifier. Used for scan phases and "fixed" cells.
+ */
+
+.hrt-phase-icon {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: var(--rlds-radius-full);
+    border-width: 2px;
+    align-items: center;
+    justify-content: center;
+}
+
+.hrt-phase-icon--pending {
+    border-color: var(--rlds-icon-disabled);
+    background-color: transparent;
+}
+
+.hrt-phase-icon--active {
+    border-color: var(--rlds-icon-primary);
+    background-color: transparent;
+}
+
+.hrt-phase-icon--complete {
+    border-color: var(--rlds-icon-primary);
+    background-color: var(--rlds-icon-primary);
+}
+
+.hrt-phase-icon--error {
+    border-color: var(--rlds-icon-negative);
+    background-color: var(--rlds-icon-negative);
+}
+
+/* Small variant used in the Results table. */
+.hrt-phase-icon--sm {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    border-width: 1px;
+}
+
+.hrt-phase-icon__check-glyph {
+    font-size: var(--rlds-font-size-md);
+    color: var(--rlds-text-ui-primary);
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+}
+
+/* ---------- Scanning progress bar (ScanningScreen) ----------
+ * 8px-tall variant of the RLDS progress bar with a positive/success fill.
+ */
+
+.hrt-progress-track {
+    height: var(--rlds-spacing-xs);
+    background-color: var(--rlds-divider-secondary);
+    border-radius: var(--rlds-radius-xs);
+    overflow: hidden;
+}
+
+.hrt-progress-fill {
+    height: 100%;
+    background-color: var(--rlds-icon-positive);
+    border-radius: var(--rlds-radius-xs);
+}
+
+/* ---------- On-media text ----------
+ * For text that sits on top of a media background (e.g. the cover banner, which
+ * is a dark image in both skins). `--rlds-text-primary` is theme-dependent and
+ * goes dark in Light mode, so it disappears against the cover; these classes
+ * override to the RLDS `-onmedia` tokens which are white in both themes.
+ */
+
+.hrt-on-media-text {
+    color: var(--rlds-text-primary-onmedia);
+}
+
+.hrt-on-media-text-secondary {
+    color: var(--rlds-text-secondary-onmedia);
+}
+
+/* ---------- Generic tintable icon ----------
+ * Applied to a `VisualElement` whose `backgroundImage` is the texture; tints via
+ * the RLDS `--rlds-icon-primary` token so icons track theme.
+ */
+
+.hrt-themed-icon {
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-primary);
+}
+
+.hrt-themed-icon--secondary {
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-secondary);
+}
+
+.hrt-themed-icon--positive {
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-positive);
+}
+
+.rlds-badge-pill--neutral .hrt-themed-icon--positive {
+    -unity-background-image-tint-color: var(--rlds-icon-positive);
+}
+
+/* ---------- Priority tint icons (ResultsScreen Priority column) ----------
+ * Applied alongside `.hrt-themed-icon` so the priority glyphs (red filled
+ * circle for High, orange triangle for Medium, neutral for Low) follow the
+ * same semantic colors RLDS uses across the editor.
+ */
+
+.hrt-priority-high {
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-negative);
+}
+
+.hrt-priority-medium {
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-warning);
+}
+
+.hrt-priority-low {
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-secondary);
+}
+
+/* ---------- Type badges (AI Assisted / Automated) ----------
+ * RLDS BadgePill variants cover these semantically: Info for AI, Positive for
+ * Automated, Neutral for Manual. No Hand-Readiness-specific classes needed here.
+ */
+
+/* ---------- Hand Readiness footer buttons ----------
+ * Design fixes footer actions at 219x44. RLDS button tokens control background/text.
+ */
+
+.hrt-footer-button {
+    min-width: 219px;
+    height: 44px;
+}
+
+.hrt-footer-back {
+    height: 44px;
+    flex-grow: 1;
+    margin-right: var(--rlds-spacing-sm);
+}
+
+/* ---------- Error banner (ScanningScreen fatal state) ----------
+ * Uses RLDS semantic-negative tokens for the theme to carry through.
+ */
+
+.hrt-error-banner {
+    background-color: var(--rlds-badge-negative-light-background);
+    border-color: var(--rlds-badge-pill-negative-border);
+    border-width: 1px;
+    border-radius: var(--rlds-radius-xs);
+    padding: var(--rlds-spacing-sm);
+}
+
+.hrt-error-banner__title {
+    color: var(--rlds-text-negative);
+}
+
+/* ---------- Todo/Execute cards (TodoListScreen) ----------
+ * Secondary surface with a card-style border; dividers borrow the RLDS
+ * divider-secondary token so they track theme automatically.
+ */
+
+.hrt-card {
+    background-color: var(--rlds-surface-secondary-background);
+    border-radius: var(--rlds-radius-sm);
+    border-width: 1px;
+    border-color: var(--rlds-border-card);
+}
+
+.hrt-card__divider {
+    height: 1px;
+    background-color: var(--rlds-divider-secondary);
+    margin-bottom: var(--rlds-spacing-md);
+}
+
+.hrt-warning-text {
+    color: var(--rlds-text-warning);
+}
+
+.hrt-inline-link-button {
+    background-color: var(--rlds-button-secondary-background-default);
+    border-width: 0;
+    border-radius: var(--rlds-radius-xs);
+    padding: var(--rlds-spacing-3xs) var(--rlds-spacing-xs);
+    color: var(--rlds-text-primary);
+}
+
+/* ---------- Checkbox (ProjectDescriptionScreen) ----------
+ * White box with the checkmark glyph tinted by the RLDS checkbox-icon token.
+ */
+
+.hrt-checkbox {
+    width: 16px;
+    height: 16px;
+    border-radius: var(--rlds-radius-xs);
+    background-color: var(--rlds-button-primary-background-default);
+    align-items: center;
+    justify-content: center;
+}
+
+.hrt-checkbox__glyph {
+    font-size: var(--rlds-font-size-sm);
+    color: var(--rlds-text-ui-primary);
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+}
+
+/* ---------- Upload button (ProjectDescriptionScreen) ----------
+ * Mirrors the RLDS secondary button fill without reaching for the full
+ * `.rlds-button-secondary` padding (the design calls for a compact button).
+ */
+
+.hrt-upload-button {
+    background-color: var(--rlds-button-secondary-background-default);
+    border-radius: var(--rlds-radius-xs);
+    border-width: 0;
+    padding: var(--rlds-spacing-2xs) var(--rlds-spacing-sm);
+    align-items: center;
+    color: var(--rlds-text-primary);
+}
+
+.hrt-upload-button__icon {
+    width: 14px;
+    height: 14px;
+    -unity-background-image-tint-color: var(--rlds-icon-primary);
+}
+
+/* ---------- File card (ProjectDescriptionScreen) ---------- */
+
+.hrt-file-card {
+    background-color: var(--rlds-surface-tertiary-background);
+    border-radius: var(--rlds-radius-xs);
+    padding: var(--rlds-spacing-sm) var(--rlds-spacing-sm);
+}
+
+.hrt-file-card__icon {
+    width: 20px;
+    height: 20px;
+    -unity-background-image-tint-color: var(--rlds-icon-primary);
+}
+
+.hrt-file-card__remove-button {
+    background-color: transparent;
+    border-width: 0;
+    padding: var(--rlds-spacing-3xs);
+    color: var(--rlds-text-secondary);
+}
+
+/* ---------- Issue details popup typography overrides (IssueDetailsPopup) ----------
+ * Section headers and body copy inside the popup render in
+ * `--rlds-text-primary`. The base RLDS classes `.rlds-body2-small-label` and
+ * `.rlds-body2-supporting-text` resolve to `--rlds-text-secondary`, so we add
+ * these utility classes to the headers/body to flip them to primary while
+ * keeping the size/weight from the base typography classes. This sheet loads
+ * after the RLDS sheet so a same-specificity class selector overrides correctly.
+ */
+
+.hrt-text-primary {
+    color: var(--rlds-text-primary);
+}
+
+/* Inline text-link styling for the "Reanalyze project" footer link and any
+ * other text-styled action. Uses the theme-aware --rlds-text-link token
+ * (#64B5FF dark / #0173EC light). `cursor: link` matches the affordance RLDS
+ * uses on `.rlds-menu-header__update-link`.
+ */
+.hrt-text-link {
+    color: var(--rlds-text-link);
+    cursor: link;
+}
+
+/* Vertical variant of the RLDS divider: 1px wide, 20px tall, matched to the
+ * theme-aware divider background. Used in the IssueDetailsPopup header to
+ * separate the priority BadgeTag from the type BadgePill. */
+.hrt-vertical-divider {
+    width: 1px;
+    height: 20px;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* ---------- Check-type option cards (CheckTypeScreen) ----------
+ * Radio-style cards with icon + label + description. Selected state inverts
+ * to the RLDS selected-button fill.
+ */
+
+.hrt-option-card {
+    flex-direction: row;
+    align-items: flex-start;
+    background-color: var(--rlds-button-secondary-background-default);
+    border-radius: var(--rlds-radius-sm);
+    border-width: 2px;
+    border-color: transparent;
+    padding: var(--rlds-spacing-md);
+    cursor: link;
+}
+
+.hrt-option-card:hover {
+    background-color: var(--rlds-button-secondary-background-hover);
+}
+
+.hrt-option-card--selected {
+    background-color: var(--rlds-button-selected-background-default);
+    border-color: var(--rlds-border-color);
+}
+
+.hrt-option-card--selected:hover {
+    background-color: var(--rlds-button-selected-background-hover);
+}
+
+.hrt-option-card__icon {
+    width: var(--rlds-icon-size-lg);
+    height: var(--rlds-icon-size-lg);
+    margin-right: var(--rlds-spacing-sm);
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--rlds-icon-secondary);
+}
+
+.hrt-option-card--selected .hrt-option-card__icon {
+    -unity-background-image-tint-color: var(--rlds-icon-ui-selected);
+}
+
+.hrt-option-card__title {
+    color: var(--rlds-text-primary);
+    cursor: link;
+}
+
+.hrt-option-card__description {
+    color: var(--rlds-text-secondary);
+    white-space: normal;
+    cursor: link;
+}
+
+/* Selected fill is `--rlds-button-selected-background-default` which is white
+ * in Dark mode and dark-grey in Light mode. The text/icon tokens on selected
+ * cards have to flip to the `--rlds-*-ui-selected` palette so they read against
+ * that fill in both themes. */
+.hrt-option-card--selected .hrt-option-card__title {
+    color: var(--rlds-text-ui-selected);
+}
+
+.hrt-option-card--selected .hrt-option-card__description {
+    color: var(--rlds-text-ui-selected);
+}

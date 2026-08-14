@@ -1,0 +1,34 @@
+{
+    "name": "meta.xr.ai.agentbridge.editor",
+    "rootNamespace": "Meta.XR.AI.AgentBridge.Editor",
+    "references": [
+        "meta.xr.ai.agentbridge",
+        "meta.xr.json",
+        "Meta.XR.Editor.Settings",
+        "Meta.XR.Editor.Id",
+        "Meta.XR.Editor.ToolingSupport",
+        "Meta.XR.Editor.UserInterface",
+        "Meta.XR.Editor.PlayCompanion",
+        "meta.xr.ai.agentbridge.telemetry",
+        "Oculus.VR",
+        "Meta.XR.Editor.Callbacks",
+        "Meta.XR.Editor.Reflection"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "define": "OVR_UNITY_PACKAGE_MANAGER",
+            "name": "com.meta.xr.sdk.core",
+            "expression": ""
+        }
+    ],
+    "noEngineReferences": false
+}
