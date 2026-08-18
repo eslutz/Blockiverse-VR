@@ -13,6 +13,7 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
+using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -27,11 +28,12 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -63,8 +65,7 @@ namespace Blockiverse.Editor
                 ? EditorSceneManager.OpenScene(BlockiverseProject.BootScenePath, OpenSceneMode.Single)
                 : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            GameObject rig = EnsureBootSceneRig(scene, rigPrefab);
-            EnsureBootSceneMenuSurface(scene, rig);
+            EnsureBootSceneRig(scene, rigPrefab);
             EnsureBootSceneLight(scene);
             EnsureBootEventSystem(scene);
             EnsureOvrAvatarManager(scene);
@@ -74,6 +75,13 @@ namespace Blockiverse.Editor
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
+
+            // Unload the Boot scene from Editor memory before modifying its file content on disk.
+            // This prevents edit-time package components from re-saving generated meshes to disk
+            // when Unity does a domain reload or SaveAssets.
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            RemoveStaleRootCompositionLayerSceneDocuments(BlockiverseProject.BootScenePath);
             EnsureBuildScenes();
         }
 
@@ -84,7 +92,7 @@ namespace Blockiverse.Editor
         {
             GameObject playerPrefab = EnsureNetworkPlayerPrefab();
             GameObject networkManagerPrefab = EnsureNetworkManagerPrefab(playerPrefab);
-            GameObject managerObject = FindRootGameObject(scene, NetworkManagerRootName);
+            GameObject managerObject = EnsureSingleRootGameObject(scene, NetworkManagerRootName);
 
             if (managerObject == null)
                 managerObject = (GameObject)PrefabUtility.InstantiatePrefab(networkManagerPrefab, scene);
@@ -122,6 +130,7 @@ namespace Blockiverse.Editor
 
         static void ConfigureNetworkPlayerObject(GameObject playerObject)
         {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(playerObject);
             playerObject.name = NetworkPlayerPrefabName;
             playerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             playerObject.transform.localScale = Vector3.one;
@@ -179,6 +188,7 @@ namespace Blockiverse.Editor
 
         static void ConfigureNetworkManagerObject(GameObject managerObject, GameObject playerPrefab)
         {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(managerObject);
             managerObject.name = NetworkManagerRootName;
             managerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             managerObject.transform.localScale = Vector3.one;
@@ -230,7 +240,7 @@ namespace Blockiverse.Editor
             EnsureMultiplayerTestCamera(scene);
             EnsureMultiplayerEventSystem(scene);
             EnsureOvrAvatarManager(scene);
-            RemoveRootGameObject(scene, MultiplayerSessionMenuName);
+            EnsureMultiplayerSessionMenu(scene, managerObject);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.MultiplayerTestScenePath);
         }
@@ -276,52 +286,151 @@ namespace Blockiverse.Editor
                 AssetDatabase.DeleteAsset(DefaultNetworkPrefabsPath);
         }
 
-        static GameObject EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
+        static void EnsureBootSceneRig(Scene scene, GameObject rigPrefab)
         {
-            GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
-
-            if (rig != null && PrefabUtility.GetCorrespondingObjectFromSource(rig) == rigPrefab)
-            {
-                EditorUtility.SetDirty(rig);
-                return rig;
-            }
+            RemoveStaleRootCompositionLayers(scene);
+            EnsureSingleRootGameObject(scene, MenuCompositionCanvasName);
+            GameObject rig = EnsureSingleRootGameObject(scene, BlockiverseProject.XrRigRootName);
 
             if (rig != null)
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(rig))
+                {
+                    PrefabUtility.UnpackPrefabInstance(rig, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
                 UnityEngine.Object.DestroyImmediate(rig);
+            }
 
             GameObject rigInstance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
-            if (rigInstance != null)
+if (rigInstance != null)
             {
                 rigInstance.name = BlockiverseProject.XrRigRootName;
+                RemoveGeneratedCompositionLayerSceneOverrides(rigInstance);
                 EditorUtility.SetDirty(rigInstance);
             }
-
-            return rigInstance;
         }
 
-        static void EnsureBootSceneMenuSurface(Scene scene, GameObject rig)
+        static void RemoveStaleRootCompositionLayers(Scene scene)
         {
-            GameObject menuRoot = FindRootGameObject(scene, MenuWorldUiRootName);
-            if (menuRoot == null)
+            foreach (GameObject root in scene.GetRootGameObjects())
             {
-                menuRoot = new GameObject(MenuWorldUiRootName);
-                SceneManager.MoveGameObjectToScene(menuRoot, scene);
+                if (root == null || root.name == BlockiverseProject.XrRigRootName)
+                    continue;
+
+                if (root.name == "Composition Render Scale Surface" ||
+                    root.GetComponent<CompositionLayer>() != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(root);
+                }
+            }
+        }
+
+        static void RemoveStaleRootCompositionLayerSceneDocuments(string scenePath)
+        {
+            if (!File.Exists(scenePath))
+                return;
+
+            string sceneYaml = File.ReadAllText(scenePath);
+            string[] rawDocuments = sceneYaml.Split(new[] { "--- !u!" }, StringSplitOptions.None);
+            List<string> keptDocuments = new List<string>();
+            keptDocuments.Add(rawDocuments[0]); // Header segment
+
+            int removedCount = 0;
+            for (int i = 1; i < rawDocuments.Length; i++)
+            {
+                string document = rawDocuments[i];
+                if (IsStaleRootCompositionLayerGameObjectDocument(document))
+                {
+                    removedCount++;
+                    continue;
+                }
+                keptDocuments.Add("--- !u!" + document);
             }
 
-            menuRoot.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-            menuRoot.transform.localScale = Vector3.one;
+            if (removedCount == 0)
+                return;
 
-            BlockiverseUiToolkitMenuSurface surface = EnsureUiToolkitMenuSurface(menuRoot.transform, null);
-            BlockiverseMenuController controller = rig != null
-                ? rig.GetComponent<BlockiverseMenuController>()
-                : FindRootGameObject(scene, BlockiverseProject.XrRigRootName)?.GetComponent<BlockiverseMenuController>();
-            if (controller != null)
+            string cleanedSceneYaml = string.Concat(keptDocuments);
+            File.WriteAllText(scenePath, cleanedSceneYaml);
+            AssetDatabase.ImportAsset(scenePath, ImportAssetOptions.ForceUpdate);
+        }
+
+        static IReadOnlyList<string> SplitUnityYamlDocuments(string yaml)
+        {
+            var documents = new List<string>();
+            int firstDocumentIndex = yaml.IndexOf("--- !u!", StringComparison.Ordinal);
+            if (firstDocumentIndex > 0)
+                documents.Add(yaml[..firstDocumentIndex]);
+
+            foreach (Match match in Regex.Matches(yaml, @"(?ms)^--- !u!.*?(?=^--- !u!|\z)"))
+                documents.Add(match.Value);
+
+            return documents.Count > 0 ? documents : new[] { yaml };
+        }
+
+        static bool TryGetUnityYamlDocumentId(string document, out string documentId)
+        {
+            Match match = Regex.Match(document, @"^--- !u!\d+ &(-?\d+)", RegexOptions.Multiline);
+            documentId = match.Success ? match.Groups[1].Value : string.Empty;
+            return match.Success;
+        }
+
+        static bool IsStaleRootCompositionLayerGameObjectDocument(string document)
+        {
+            return document.Contains("m_Name: Composition Render Scale Surface", StringComparison.Ordinal) ||
+                   document.Contains("m_Name: Composition Layer Plane", StringComparison.Ordinal);
+        }
+
+        static void RemoveGeneratedCompositionLayerSceneOverrides(GameObject rigInstance)
+        {
+            if (rigInstance == null)
+                return;
+
+            Transform cameraOffset = rigInstance.transform.Find("Camera Offset");
+            Transform surface = cameraOffset != null ? cameraOffset.Find(MenuCompositionSurfaceName) : null;
+            if (surface == null)
+                return;
+
+            MeshCollider meshCollider = surface.GetComponent<MeshCollider>();
+            RevertPrefabObjectOverride(meshCollider);
+            if (meshCollider != null && meshCollider.sharedMesh != null)
             {
-                controller.ConfigureUiToolkitMenuSurface(surface);
-                EditorUtility.SetDirty(controller);
+                meshCollider.sharedMesh = null;
+                EditorUtility.SetDirty(meshCollider);
             }
 
-            EditorUtility.SetDirty(menuRoot);
+            TexturesExtension texturesExtension = surface.GetComponent<TexturesExtension>();
+            RevertPrefabObjectOverride(texturesExtension);
+            if (texturesExtension != null)
+            {
+                texturesExtension.LeftTexture = null;
+                texturesExtension.RightTexture = null;
+                EditorUtility.SetDirty(texturesExtension);
+            }
+
+            InteractableUIMirror mirror = surface.GetComponent<InteractableUIMirror>();
+            RevertPrefabObjectOverride(mirror);
+
+            Camera canvasCamera = surface.Find($"{MenuCompositionCanvasName}/CanvasCamera")?.GetComponent<Camera>();
+            RevertPrefabObjectOverride(canvasCamera);
+            if (canvasCamera != null)
+            {
+                canvasCamera.targetTexture = null;
+                canvasCamera.enabled = false;
+                canvasCamera.nearClipPlane = 0.01f;
+                canvasCamera.clearFlags = CameraClearFlags.SolidColor;
+                canvasCamera.backgroundColor = Color.clear;
+                canvasCamera.cullingMask = 1 << GetCompositionUiLayerIndex();
+                EditorUtility.SetDirty(canvasCamera);
+            }
+        }
+
+        static void RevertPrefabObjectOverride(UnityEngine.Object target)
+        {
+            if (target == null || !PrefabUtility.IsPartOfPrefabInstance(target))
+                return;
+
+            PrefabUtility.RevertObjectOverride(target, InteractionMode.AutomatedAction);
         }
 
         static void EnsureBootSceneLight(Scene scene)
@@ -357,7 +466,7 @@ namespace Blockiverse.Editor
             EnsureEventSystem(scene, BootEventSystemName);
         }
 
-        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any editor-authored scene
+        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any legacy scene
         // manager inactive in editor-authored scenes so macOS/headless PlayMode tests do not
         // load avatar native libraries; MetaHorizonAvatarProvider creates the singleton on Quest.
         static void EnsureOvrAvatarManager(Scene scene)
@@ -427,7 +536,7 @@ namespace Blockiverse.Editor
 
         static void EnsureEventSystem(Scene scene, string eventSystemName)
         {
-            GameObject eventSystemObject = FindRootGameObject(scene, eventSystemName);
+            GameObject eventSystemObject = EnsureSingleRootGameObject(scene, eventSystemName);
 
             if (eventSystemObject == null)
             {
@@ -441,21 +550,31 @@ namespace Blockiverse.Editor
             EventSystem eventSystem = EnsureComponent<EventSystem>(eventSystemObject);
             eventSystem.sendNavigationEvents = true;
 
-            // Menus are authored as world-space UI Toolkit panels driven by XRI tracked-device input.
+            StandaloneInputModule legacyInputModule = eventSystemObject.GetComponent<StandaloneInputModule>();
+
+            if (legacyInputModule != null)
+                UnityEngine.Object.DestroyImmediate(legacyInputModule);
+
+            // VR UI is driven by tracked-device rays, so replace the plain Input System module with
+            // XRI's module which understands tracked-device pointer events from XRRayInteractors.
+            // XRUIInputModule does not derive from InputSystemUIInputModule, so a legacy module found
+            // here is always the screen-space one and is removed before adding the XR module.
+            InputSystemUIInputModule legacyUiModule = eventSystemObject.GetComponent<InputSystemUIInputModule>();
+
+            if (legacyUiModule != null)
+                UnityEngine.Object.DestroyImmediate(legacyUiModule);
+
             XRUIInputModule inputModule = EnsureComponent<XRUIInputModule>(eventSystemObject);
             EnsureInputActions();
             BlockiverseXrUiInputConfigurator.Configure(
                 inputModule,
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiPress),
                 LoadInputActionReference(BlockiverseInputActionNames.RightHandMap, BlockiverseInputActionNames.UiScroll));
-            PanelInputConfiguration panelInputConfiguration = EnsureComponent<PanelInputConfiguration>(eventSystemObject);
-            panelInputConfiguration.panelInputRedirection = PanelInputConfiguration.PanelInputRedirection.Never;
 
             EnsureXrInteractionManager(scene);
 
             EditorUtility.SetDirty(eventSystem);
             EditorUtility.SetDirty(inputModule);
-            EditorUtility.SetDirty(panelInputConfiguration);
             EditorUtility.SetDirty(eventSystemObject);
         }
 
@@ -474,9 +593,123 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(managerObject);
         }
 
+        static void EnsureMultiplayerSessionMenu(Scene scene, GameObject managerObject)
+        {
+            GameObject menuObject = FindRootGameObject(scene, MultiplayerSessionMenuName);
+
+            if (menuObject == null)
+            {
+                menuObject = new GameObject(MultiplayerSessionMenuName, typeof(RectTransform));
+                SceneManager.MoveGameObjectToScene(menuObject, scene);
+            }
+
+            menuObject.transform.SetPositionAndRotation(
+                new Vector3(0.0f, 1.4f, 1.8f),
+                Quaternion.Euler(0.0f, 180.0f, 0.0f));
+            menuObject.transform.localScale = Vector3.one * 0.003f;
+
+            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, MultiplayerSessionMenuSize.x);
+            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, MultiplayerSessionMenuSize.y);
+
+            Canvas canvas = EnsureComponent<Canvas>(menuObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 20;
+            canvas.enabled = true;
+
+            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.dynamicPixelsPerUnit = 10.0f;
+
+            EnsureTrackedDeviceRaycaster(menuObject);
+
+            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
+            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Image panelImage = EnsureComponent<Image>(panelObject);
+            Sprite panelSprite = GetRoundedSprite();
+            if (panelSprite != null)
+            {
+                panelImage.sprite = panelSprite;
+                panelImage.type = Image.Type.Sliced;
+            }
+            panelImage.color = MultiplayerMenuPanelColor;
+
+            EnsureLabel(
+                panelObject.transform,
+                "Title",
+                "LAN Session",
+                36,
+                TextAnchor.MiddleLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(28.0f, -34.0f),
+                new Vector2(500.0f, 52.0f));
+
+            TMP_InputField addressInput = EnsureInputFieldControl(
+                panelObject.transform,
+                "Address Input",
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder),
+                string.Empty,
+                new Vector2(28.0f, -102.0f),
+                new Vector2(500.0f, 58.0f));
+
+            Button hostButton = EnsureButtonControl(
+                panelObject.transform,
+                "Host Button",
+                "Host",
+                new Vector2(28.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Button joinButton = EnsureButtonControl(
+                panelObject.transform,
+                "Join Button",
+                "Join",
+                new Vector2(198.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            Button stopButton = EnsureButtonControl(
+                panelObject.transform,
+                "Stop Button",
+                "Stop",
+                new Vector2(368.0f, -182.0f),
+                new Vector2(148.0f, 54.0f));
+
+            TextMeshProUGUI statusText = EnsureLabel(
+                panelObject.transform,
+                "Status",
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault),
+                22,
+                TextAnchor.UpperLeft,
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(0.0f, 1.0f),
+                new Vector2(28.0f, -258.0f),
+                new Vector2(500.0f, 88.0f),
+                TextDimColor);
+
+            GameObject badgeObject = EnsureRectChild(panelObject.transform, "Status Badge");
+            ConfigureTopLeftRect(badgeObject.GetComponent<RectTransform>(), new Vector2(470.0f, -30.0f), new Vector2(32.0f, 32.0f));
+            Image statusBadge = EnsureComponent<Image>(badgeObject);
+            ApplySlicedSprite(statusBadge, GetUiSprite("multiplayer_status_badge"));
+            statusBadge.color = new Color(0.55f, 0.58f, 0.62f, 1.0f);
+
+            BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(menuObject);
+            menu.Configure(managerObject != null ? managerObject.GetComponent<BlockiverseNetworkSession>() : null);
+            menu.ConfigureControls(hostButton, joinButton, null, stopButton, addressInput, statusText);
+            menu.ConfigureStatusBadge(statusBadge);
+
+            EditorUtility.SetDirty(menu);
+            EditorUtility.SetDirty(menuObject);
+        }
+
         static void EnsureBootSceneCreativeWorld(Scene scene)
         {
-            GameObject worldObject = FindRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
+            GameObject worldObject = EnsureSingleRootGameObject(scene, BlockiverseProject.CreativeWorldRootName);
 
             if (worldObject == null)
             {
@@ -498,7 +731,7 @@ namespace Blockiverse.Editor
             CreativeWorldManager manager = EnsureComponent<CreativeWorldManager>(worldObject);
             CreativeHotbar hotbar = FindBootSceneHotbar(scene);
             performanceOverlay.Configure(renderer);
-            manager.InitializeDefaultWorldOnAwake = false;
+            manager.InitializeDefaultWorldOnAwake = true;
             manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
             manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
 
@@ -519,7 +752,8 @@ namespace Blockiverse.Editor
         static CreativeHotbar FindBootSceneHotbar(Scene scene)
         {
             GameObject rig = FindRootGameObject(scene, BlockiverseProject.XrRigRootName);
-            return rig != null ? rig.GetComponentInChildren<CreativeHotbar>(includeInactive: true) : null;
+            Transform hotbarTransform = rig != null ? rig.transform.Find("Camera Offset/" + BlockMenuName) : null;
+            return hotbarTransform != null ? hotbarTransform.GetComponent<CreativeHotbar>() : null;
         }
 
         static void EnsureCreativeInputBridge(Scene scene, CreativeInteractionController controller)
@@ -543,10 +777,41 @@ namespace Blockiverse.Editor
 
         static void RemoveRootGameObject(Scene scene, string name)
         {
-            GameObject existing = FindRootGameObject(scene, name);
+            GameObject existing = EnsureSingleRootGameObject(scene, name);
 
             if (existing != null)
+            {
+                if (PrefabUtility.IsPartOfPrefabInstance(existing))
+                {
+                    PrefabUtility.UnpackPrefabInstance(existing, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
                 UnityEngine.Object.DestroyImmediate(existing);
+            }
+        }
+
+        static GameObject EnsureSingleRootGameObject(Scene scene, string name)
+        {
+            GameObject retained = null;
+
+            foreach (GameObject rootObject in scene.GetRootGameObjects())
+            {
+                if (rootObject.name != name)
+                    continue;
+
+                if (retained == null)
+                {
+                    retained = rootObject;
+                    continue;
+                }
+
+                if (PrefabUtility.IsPartOfPrefabInstance(rootObject))
+                {
+                    PrefabUtility.UnpackPrefabInstance(rootObject, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+                }
+                UnityEngine.Object.DestroyImmediate(rootObject);
+            }
+
+            return retained;
         }
 
         static GameObject FindRootGameObject(Scene scene, string name)

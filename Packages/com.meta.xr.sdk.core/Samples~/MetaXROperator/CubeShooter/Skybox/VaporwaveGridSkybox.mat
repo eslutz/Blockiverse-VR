@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: VaporwaveGridSkybox
+  m_Shader: {fileID: 4800000, guid: 6d30ae4d7f5eefc48b7b8a1a45caa5e6, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _GlowFalloff: 25
+    - _GridFadeEnd: 0.3
+    - _GridFadeStart: -0.5
+    - _GridLineWidth: 0.06
+    - _GridScale: 2.5
+    - _GridSpeed: 0.2
+    - _GridThickness: 2
+    - _HorizonHeight: -0.05
+    - _HorizonSharpness: 20
+    m_Colors:
+    - _BottomColor: {r: 0.02, g: 0, b: 0.04, a: 1}
+    - _GlowColor: {r: 0.5, g: 0.02, b: 0.3, a: 1}
+    - _GridColor: {r: 1, g: 0.1, b: 0.7, a: 1}
+    - _HorizonColor: {r: 0.9, g: 0.08, b: 0.5, a: 1}
+    - _MidColor: {r: 0.12, g: 0.02, b: 0.18, a: 1}
+    - _TopColor: {r: 0.02, g: 0, b: 0.08, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

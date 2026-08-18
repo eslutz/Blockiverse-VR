@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Blockiverse.Networking;
 
 namespace Blockiverse.Gameplay
 {
@@ -265,7 +266,7 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (worldManager == null)
-                worldManager = FindAnyObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
+                worldManager = FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include);
 
             if (feedbackSettings == null)
                 feedbackSettings = GetComponent<BlockiverseFeedbackSettings>();

@@ -1,6 +1,7 @@
 using System;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using UnityEngine;
 using UnityEngine.Events;
@@ -15,7 +16,7 @@ namespace Blockiverse.VR
     /// the ray is over UI (native <see cref="XRRayInteractor.IsOverUIGameObject"/>) or while the
     /// interactor is disabled (e.g. teleport aiming), so menus and locomotion never break blocks.
     /// </summary>
-    public sealed class BlockiverseCreativeInputBridge : MonoBehaviour
+    public sealed class BlockiverseCreativeInputBridge : MonoBehaviour, IBlockiverseCreativeInputBridge
     {
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] XRRayInteractor interactionRay;
@@ -38,6 +39,12 @@ namespace Blockiverse.VR
         bool lineVisualDefaultOverrideLineLength;
         float lineVisualDefaultLength;
 
+        // Interaction-ray cache (R3): the left/right rays are resolved once after rig wiring and then
+        // reused every frame. The allocating GetComponentsInChildren scans only run until both hands
+        // resolve (or after an explicit rig change via InvalidateInteractionRayCache), never per-frame.
+        bool interactionRaysResolved;
+        int interactionRayDiscoveryCount;
+
         // Hold-to-mine (§7.3): survival break is a timed hold on a fixed target. ToolHit cues +
         // chip VFX play on a cadence while held; releasing or losing the target cancels; the
         // harvest submits when the block's work time elapses. Creative break stays instant.
@@ -53,6 +60,12 @@ namespace Blockiverse.VR
         float nextMineCueTime;
 
         public XRRayInteractor InteractionRay => interactionRay;
+
+        // Diagnostics/test seam: number of interaction-ray discovery passes that have run. After the
+        // first successful resolve this stays constant until the cache is invalidated, proving the VR
+        // hot path no longer re-scans (and re-allocates) every frame.
+        public int InteractionRayDiscoveryCount => interactionRayDiscoveryCount;
+
         public event Action<BlockPosition, float, float> MiningProgressChanged;
         public event Action MiningProgressCleared;
 
@@ -66,6 +79,7 @@ namespace Blockiverse.VR
             SetInteractionRay(ray);
             leftInteractionRay = null;
             rightInteractionRay = null;
+            InvalidateInteractionRayCache();
             interactionLineRenderer = null;
             interactionLineVisual = null;
             capturedLineRendererDefault = false;
@@ -157,9 +171,9 @@ namespace Blockiverse.VR
         void PlayMineStrikeFeedback()
         {
             if (audioCuePlayer == null)
-                audioCuePlayer = FindAnyObjectByType<BlockiverseAudioCuePlayer>();
+                audioCuePlayer = FindFirstObjectByType<BlockiverseAudioCuePlayer>();
             if (vfxCuePlayer == null)
-                vfxCuePlayer = FindAnyObjectByType<BlockiverseVfxCuePlayer>();
+                vfxCuePlayer = FindFirstObjectByType<BlockiverseVfxCuePlayer>();
 
             var worldCenter = new Vector3(miningTarget.X + 0.5f, miningTarget.Y + 0.5f, miningTarget.Z + 0.5f);
             BlockiverseAudioCue cue = interactionController != null &&
@@ -212,25 +226,22 @@ namespace Blockiverse.VR
         void DiscoverDependencies()
         {
             if (inputRig == null)
-                inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindAnyObjectByType<BlockiverseInputRig>();
+                inputRig = GetComponentInParent<BlockiverseInputRig>() ?? FindFirstObjectByType<BlockiverseInputRig>();
 
             DiscoverInteractionRays();
             RefreshActiveInteractionRay();
 
-            if (interactionRay == null)
-                SetInteractionRay(GetComponentInChildren<XRRayInteractor>(true));
-
             DiscoverInteractionRayVisuals();
 
             if (interactionController == null && Application.isPlaying)
-                interactionController = FindAnyObjectByType<CreativeInteractionController>();
+                interactionController = FindFirstObjectByType<CreativeInteractionController>();
 
             if (survivalSync == null && Application.isPlaying)
-                survivalSync = FindAnyObjectByType<MultiplayerSurvivalSync>();
+                survivalSync = FindFirstObjectByType<MultiplayerSurvivalSync>();
 
             if (comfortSettings == null)
                 comfortSettings = GetComponentInParent<BlockiverseComfortSettings>() ??
-                    FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                    FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
 
             ApplyPlayerOccupancyPredicate();
         }
@@ -294,30 +305,44 @@ namespace Blockiverse.VR
             CaptureLineVisualDefault();
         }
 
+        // Forces the next resolve to re-scan the rig for its interaction rays. Call this whenever the
+        // rig hierarchy changes (controllers added/removed, rays re-wired) so the cache stays correct.
+        public void InvalidateInteractionRayCache()
+        {
+            interactionRaysResolved = false;
+        }
+
         void DiscoverInteractionRays()
         {
+            // Steady state: rays are cached from the rig if not assigned in the inspector.
+            if (interactionRaysResolved)
+                return;
+
+            interactionRayDiscoveryCount++;
+
             if (inputRig != null)
             {
                 leftInteractionRay ??= inputRig.LeftInteractionRay;
                 rightInteractionRay ??= inputRig.RightInteractionRay;
-
-                foreach (BlockiverseLocomotionRayMediator mediator in inputRig.GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
-                    AssignInteractionRay(mediator.Hand, mediator.InteractionRay);
             }
 
-            foreach (BlockiverseLocomotionRayMediator mediator in GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
-                AssignInteractionRay(mediator.Hand, mediator.InteractionRay);
-        }
+            if (leftInteractionRay == null || rightInteractionRay == null)
+            {
+                foreach (BlockiverseLocomotionRayMediator mediator in GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
+                {
+                    if (mediator == null || mediator.InteractionRay == null)
+                        continue;
 
-        void AssignInteractionRay(BlockiverseControllerRole hand, XRRayInteractor ray)
-        {
-            if (ray == null)
-                return;
+                    if (mediator.Hand == BlockiverseControllerRole.Left)
+                        leftInteractionRay ??= mediator.InteractionRay;
+                    else
+                        rightInteractionRay ??= mediator.InteractionRay;
+                }
+            }
 
-            if (hand == BlockiverseControllerRole.Left)
-                leftInteractionRay ??= ray;
-            else
-                rightInteractionRay ??= ray;
+            // Latch only once both hands resolved; otherwise keep retrying so a rig that finishes
+            // wiring after the first frame still picks up its rays. No more allocating scans.
+            interactionRaysResolved = leftInteractionRay != null && rightInteractionRay != null;
         }
 
         void RefreshActiveInteractionRay()

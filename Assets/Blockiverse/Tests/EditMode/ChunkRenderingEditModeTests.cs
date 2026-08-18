@@ -5,7 +5,9 @@ using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Voxel;
+using Blockiverse.WorldGen;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace Blockiverse.Tests.EditMode
@@ -213,12 +215,125 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void VisualAtlasTextureSetManifestIsCompleteAndValid()
+        {
+            foreach (string setId in BlockTextureSetIds.All)
+            {
+                string path = BlockVisualAtlas.AtlasPathForTextureSet(setId);
+                Texture2D atlas = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+
+                Assert.That(atlas, Is.Not.Null, $"Atlas texture for set '{setId}' must exist at {path}");
+                Assert.That(atlas.width, Is.EqualTo(BlockVisualAtlas.AtlasWidthPixels), $"Atlas '{setId}' width mismatch.");
+                Assert.That(atlas.height, Is.EqualTo(BlockVisualAtlas.AtlasHeightPixels), $"Atlas '{setId}' height mismatch.");
+                Assert.That(atlas.filterMode, Is.EqualTo(FilterMode.Point), $"Atlas '{setId}' must be point-filtered.");
+
+                TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+                Assert.That(importer, Is.Not.Null);
+
+                // Repo policy check: uncompressed RGB24 for pixel-art clarity.
+                Assert.That(importer.textureCompression, Is.EqualTo(TextureImporterCompression.Uncompressed),
+                    $"Atlas '{setId}' should be uncompressed to match repo pixel-art policy.");
+
+                // Ensure no ASTC overrides for Android.
+                TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
+                if (androidSettings.overridden)
+                {
+                    Assert.That(androidSettings.format, Is.Not.EqualTo(TextureImporterFormat.ASTC_4x4)
+                        .And.Not.EqualTo(TextureImporterFormat.ASTC_5x5)
+                        .And.Not.EqualTo(TextureImporterFormat.ASTC_6x6)
+                        .And.Not.EqualTo(TextureImporterFormat.ASTC_8x8)
+                        .And.Not.EqualTo(TextureImporterFormat.ASTC_10x10)
+                        .And.Not.EqualTo(TextureImporterFormat.ASTC_12x12),
+                        $"Atlas '{setId}' should not use ASTC compression on Android.");
+                }
+            }
+        }
+
+        [Test]
+        public void VisualRebuildBudgetDrainIsPersistentAcrossMultipleCalls()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 5);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+                renderer.VisualRebuildBudget = 1;
+
+                // Mark 3 chunks dirty (each in a different 16x16 chunk).
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(17, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(33, 1, 1), BlockRegistry.Graystone);
+
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(3));
+
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(2));
+
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(1));
+
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void FluidColliderThrottlingIsSeparateFromVisualRebuild()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 5);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+                
+                renderer.VisualRebuildBudget = 1;
+                renderer.ColliderRebuildBudget = 0;
+
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Freshwater);
+                renderer.RebuildDirty();
+
+                // Visual should be done (1 chunk rebuilt).
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(0));
+                // Fluid collider should be pending (budget was 0).
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
         public void RendererReusesThePooledChunkMeshAcrossDirtyRebuilds()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 16, seed: 5);
             var editedPosition = new BlockPosition(1, 0, 1);
+            // A second block keeps the chunk non-empty across the edit, so it retains its render
+            // object (empty chunks are released — see RendererReleasesChunkObjectWhenEditedToEmpty)
+            // and the pooled-mesh-reuse invariant remains observable.
             world.SetBlock(editedPosition, BlockRegistry.MeadowTurf, trackChange: false);
+            world.SetBlock(new BlockPosition(3, 0, 3), BlockRegistry.MeadowTurf, trackChange: false);
             var worldObject = new GameObject("Chunk Renderer");
             Texture2D atlasTexture = null;
             Material blockMaterial = null;
@@ -234,13 +349,123 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(firstMesh, Is.Not.Null);
                 Assert.That(firstMesh.vertexCount, Is.GreaterThan(0));
 
+                // Edit the chunk (remove one of its two blocks) while it stays non-empty.
                 world.SetBlock(editedPosition, BlockRegistry.Air);
                 renderer.RebuildDirty();
 
                 // One pooled Mesh per chunk: rebuilds refill the same instance (no allocation
-                // churn), and the refilled geometry reflects the edit (block removed → no faces).
+                // churn), and the refilled geometry reflects the edit (one block remains).
                 Assert.That(filter.sharedMesh, Is.SameAs(firstMesh));
-                Assert.That(firstMesh.vertexCount, Is.EqualTo(0), "Expected the pooled mesh to be refilled with the post-edit geometry.");
+                Assert.That(firstMesh.vertexCount, Is.GreaterThan(0), "Expected the pooled mesh to be refilled with the post-edit geometry.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void RendererSkipsObjectsForAllAirChunks()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            // Three 16-wide chunks; put a solid block only in the middle chunk so the outer two
+            // are entirely air.
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(20, 1, 1), BlockRegistry.Graystone, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                // Only the one non-empty chunk creates a GameObject/MeshFilter/MeshCollider; the
+                // two all-air chunks create nothing.
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(1));
+                Assert.That(worldObject.GetComponentsInChildren<MeshCollider>().Length, Is.EqualTo(1));
+                Assert.That(worldObject.GetComponentsInChildren<VoxelChunkTarget>().Length, Is.EqualTo(1));
+                Assert.That(renderer.Stats.ChunkCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void RendererReleasesChunkObjectWhenEditedToEmpty()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 5);
+            var only = new BlockPosition(1, 0, 1);
+            world.SetBlock(only, BlockRegistry.MeadowTurf, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(1));
+                Assert.That(renderer.Stats.ChunkCount, Is.EqualTo(1));
+
+                // Mining out the chunk's only block makes it all-air: its object is released.
+                world.SetBlock(only, BlockRegistry.Air);
+                renderer.RebuildDirty();
+
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.Zero,
+                    "An edited-to-empty chunk should release its render object.");
+                Assert.That(worldObject.GetComponentsInChildren<MeshCollider>().Length, Is.Zero);
+                Assert.That(renderer.Stats.ChunkCount, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void VoidBuilderWorldCreatesObjectsOnlyForThePlatformRegion()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(
+                width: 48,
+                height: 48,
+                depth: 48,
+                chunkSize: 16,
+                seed: 2201,
+                groundHeight: 24);
+            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                // The void world is almost entirely air apart from a single small cutstone
+                // platform, so only the chunk(s) holding the platform create render objects — far
+                // fewer than the 3x3x3 = 27 total chunks.
+                int created = renderer.Stats.ChunkCount;
+                Assert.That(created, Is.GreaterThan(0), "The platform region must render.");
+                Assert.That(created, Is.LessThanOrEqualTo(2),
+                    "A mostly-air void world should create objects only for the platform region.");
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(created));
             }
             finally
             {
@@ -416,6 +641,66 @@ namespace Blockiverse.Tests.EditMode
                 renderer.ProcessPendingColliderRebuilds(int.MaxValue);
 
                 Assert.That(renderer.PendingColliderRebuildCount, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void RebuildSpawnRegionBakesOnlyTheSpawnNeighbourhoodAndLeavesTheRestQueued()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            // 5x1x5 = 25 chunks; a full ground layer makes every chunk carry geometry so the
+            // queued count is the whole world and a bounded spawn bake is clearly a subset.
+            var world = new VoxelWorld(new WorldBounds(80, 16, 80), chunkSize: 16, seed: 5);
+            for (int x = 0; x < world.Bounds.Width; x++)
+            {
+                for (int z = 0; z < world.Bounds.Depth; z++)
+                    world.SetBlock(new BlockPosition(x, 0, z), BlockRegistry.Graystone, trackChange: false);
+            }
+
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1, deferInitialRebuild: true);
+
+                // Deferred Configure only queues; nothing is meshed or ready yet.
+                Assert.That(renderer.SpawnRegionReady, Is.False);
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(25));
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.Zero);
+
+                // Spawn at the centre chunk (2,0,2); radius 1 => a 3x1x3 = 9 chunk neighbourhood.
+                renderer.RebuildSpawnRegion(new BlockPosition(40, 1, 40));
+
+                Assert.That(renderer.SpawnRegionReady, Is.True, "Spawn-region bake must lift the world-ready gate.");
+                // Only the 9 spawn chunks were meshed — the other 16 are still queued. This is the
+                // behavioural proof the deferred path never performs an unbounded world-wide bake.
+                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(9));
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(16));
+                // Spawn colliders are baked within their bounded budget; no world-wide flush leaves
+                // the rest of the world's colliders unbaked (they have no GameObject yet).
+                Assert.That(renderer.PendingColliderRebuildCount, Is.Zero);
+
+                MeshCollider spawnCollider = null;
+                foreach (MeshCollider collider in worldObject.GetComponentsInChildren<MeshCollider>())
+                {
+                    if (collider.gameObject.name == "Chunk 2,0,2")
+                        spawnCollider = collider;
+                }
+
+                Assert.That(spawnCollider, Is.Not.Null, "The spawn chunk must have a render object with a collider.");
+                Assert.That(spawnCollider.sharedMesh, Is.Not.Null);
+                Assert.That(spawnCollider.sharedMesh.vertexCount, Is.GreaterThan(0),
+                    "The spawn chunk's collider must be baked so the player lands on solid ground.");
             }
             finally
             {
@@ -637,6 +922,143 @@ namespace Blockiverse.Tests.EditMode
             }
 
             return false;
+        }
+
+        [Test]
+        public void VisualRebuildBudgetClampedToAtLeastOne()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 5);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+                
+                // Set budget to 0 or negative
+                renderer.VisualRebuildBudget = 0;
+
+                // Mark 3 chunks dirty
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(17, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(33, 1, 1), BlockRegistry.Graystone);
+
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(3));
+
+                // Should rebuild exactly 1 chunk even with 0 budget (clamped to 1)
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(2));
+
+                renderer.VisualRebuildBudget = -5;
+                // Should rebuild exactly 1 chunk even with negative budget
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void VisualRebuildBudgetDrainWithDynamicBudgets()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(64, 16, 16), chunkSize: 16, seed: 5);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+                
+                // Mark 4 chunks dirty
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(17, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(33, 1, 1), BlockRegistry.Graystone);
+                world.SetBlock(new BlockPosition(49, 1, 1), BlockRegistry.Graystone);
+
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(4));
+
+                // Call with budget 1
+                renderer.VisualRebuildBudget = 1;
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(3));
+
+                // Change budget dynamically to 2
+                renderer.VisualRebuildBudget = 2;
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(1));
+
+                // Change budget dynamically to 5
+                renderer.VisualRebuildBudget = 5;
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingVisualRebuildCount, Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void FluidColliderThrottlingDrainsStepByStepUnderPositiveBudget()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 5);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, -1);
+
+                // Clear initial bakes
+                renderer.ProcessPendingColliderRebuilds(int.MaxValue);
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0));
+
+                // Set collider budget to 1, visual budget to 3 (so visual updates happen all at once, but colliders are step-by-step)
+                renderer.VisualRebuildBudget = 3;
+                renderer.ColliderRebuildBudget = 1;
+
+                // Edit blocks in 3 chunks to have fluid
+                world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Freshwater);
+                world.SetBlock(new BlockPosition(17, 1, 1), BlockRegistry.Freshwater);
+                world.SetBlock(new BlockPosition(33, 1, 1), BlockRegistry.Freshwater);
+
+                // This rebuilds all 3 visuals, but only bakes 1 fluid collider due to budget=1
+                renderer.RebuildDirty();
+                
+                Assert.That(renderer.PendingVisualRebuildCount, Is.EqualTo(0));
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(2), "Should have processed 1 and left 2 pending.");
+
+                // RebuildDirty when nothing is visually dirty still pumps colliders
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(1), "Should have processed 1 more and left 1 pending.");
+
+                renderer.RebuildDirty();
+                Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0), "Should have processed the last pending collider.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
         }
 
         static Material CreateBlockAtlasMaterial(out Texture2D atlasTexture)

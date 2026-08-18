@@ -58,10 +58,13 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 ### Tooling Policy
 
 - Prefer reproducible command-line tooling over GUI-only actions when command output is useful validation evidence.
-- Use the Unity IDE built-in MCP server as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; start or restart it from `Project Settings > AI > Unity MCP Server`.
-- Before using Unity MCP, confirm the active project root points at this checkout. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
-- MCP is an investigation and automation aid, not a substitute for committed scripts or test evidence.
-- Do not commit package manifest or lockfile changes for local editor automation tools unless Eric explicitly requests a dependency update.
+- Use MCP for Unity as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.coplaydev.unity-mcp` locally from `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main`, configure it from `Window > MCP For Unity > Local Setup Window`, and start the local server at `http://127.0.0.1:8080/mcp`.
+- Use Meta XR Operator (experimental, Meta XR Core SDK 205+) for runtime in-VR validation: session/frame/composition-layer inspection, composited eye captures, and pose control of the app running in Play mode with the Meta XR Simulator. Activate once via `Meta > Meta XR Operator > Activate`, activate the simulator per editor session, and connect only through the registered `meta-xr-operator` MCP proxy — never probe `localhost:8720/sse` directly during startup (it has crashed the editor). Full runbook: `docs/testing/meta-xr-simulator-and-mcp.md`.
+- Use Unity Skills for module-specific REST workflows, advisory docs, XR diagnostics, batch/workflow operations, console/debug triage, package-aware guidance, and targeted Unity Test Runner jobs. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.besty.unity-skills` locally from `https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity`, start it from `Window > UnitySkills > Start Server`, and verify `http://localhost:8090/health`.
+- Before using Unity Skills, read `/Users/ericslutz/.agents/skills/unity-skills/SKILL.md`, then the relevant module `SKILL.md` from `/Users/ericslutz/.agents/skills/unity-skills/skills/`. Honor `currentMode`, approval grants, and forbidden-skill behavior. Do not add skills to the Allowlist unless Eric explicitly asks.
+- Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
+- Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
+- A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
 - Verify Quest-device tooling before device work with `hzdb --version` and `hzdb device list`.
@@ -71,7 +74,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 ### Unity Licensing Recovery
 
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
-or waits on `LicenseClient-ericslutz-6000.3.18`, reset the local Unity/Hub process state:
+or waits on `LicenseClient-ericslutz-6000.5`, reset the local Unity/Hub process state:
 
 ```sh
 osascript -e 'tell application "Unity Hub" to quit'
@@ -86,14 +89,14 @@ processes running.
 
 ## Commands
 
-Unity 6000.3.18f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
+Unity 6000.5.8f1 (Apple Silicon path is the default; override with `UNITY_EDITOR`).
 
 ```sh
 # Required validation — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
 scripts/unity/run-tests.sh
 
 # Single test / one platform (the script takes no args; invoke Unity directly)
-"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.3.18f1/Unity.app/Contents/MacOS/Unity}" \
+"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity}" \
   -batchmode -nographics -projectPath . -runTests -testPlatform EditMode \
   -testFilter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" \
   -testResults TestResults/Unity/Single.xml -logFile -
@@ -111,7 +114,7 @@ python3 scripts/audio/generate-audio.py           # all SFX
 
 ## Architecture
 
-VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK, XRI, Netcode for GameObjects 2.13.0. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
+VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK 205 (core embedded with a local `entityId` compile fix — see docs/testing/meta-xr-simulator-and-mcp.md), XRI, Netcode for GameObjects 2.13.1. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
 
 ### Assembly layering (Assets/Blockiverse/Scripts/)
 

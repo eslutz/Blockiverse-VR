@@ -1,4 +1,5 @@
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using NUnit.Framework;
 using System.Reflection;
 using UnityEngine;

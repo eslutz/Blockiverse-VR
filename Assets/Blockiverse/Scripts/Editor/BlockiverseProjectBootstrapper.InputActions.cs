@@ -11,6 +11,7 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
+using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -30,6 +31,7 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -491,5 +493,8 @@ namespace Blockiverse.Editor
             public string[] devices;
         }
 
+        // Import TextMeshPro Essential Resources once so the default font asset is available for
+        // procedurally-created TMP labels. The package lives in com.unity.ugui's Package Resources
+        // folder. If TMP Settings are already present the import is skipped.
     }
 }

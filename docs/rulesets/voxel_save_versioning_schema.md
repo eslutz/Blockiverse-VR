@@ -1,11 +1,11 @@
 # Voxel Unified Save and Versioning Schema
 
-Version: 1.0
+Version: 2.0
 Companion documents: `voxel_survival_ruleset.md`, `voxel_creative_ruleset.md`, `voxel_survival_menus.md`, `voxel_world_environment_effects.md`, `voxel_structure_generation_ruleset.md`, `voxel_biome_vegetation_ruleset.md`, `voxel_multiplayer_networking_ruleset.md`, and `voxel_audio_vfx_ruleset.md`
 
-This document defines the unified save format, versioning policy, registry compatibility rules, chunk serialization, player data, inventory data, environment state, structure state, vegetation state, migration rules, and validation behavior for the voxel game rulesets.
+This document defines the unified save format, the single-canonical-schema versioning policy, registry compatibility rules, chunk serialization, player data, inventory data, environment state, structure state, vegetation state, and validation behavior for the voxel game rulesets.
 
-The schema is designed to support Survival and Creative worlds, deterministic generation from a seed, future migrations, and safe loading of older saves.
+The schema is single-canonical with fail-fast loading: there is exactly one supported on-disk schema version at a time, and a save must match it exactly to load. The schema supports Survival and Creative worlds with deterministic generation from a seed in bounded, finite worlds. Saves written by a different schema version are never converted or upgraded — they are refused with a clear, controlled error.
 
 ---
 
@@ -15,46 +15,48 @@ The save system should:
 
 1. Preserve player changes, inventories, containers, stations, environment state, generated structure state, and vegetation growth state.
 2. Avoid saving deterministic data that can be regenerated unless it has changed or needs persistence.
-3. Support infinite worlds through region/chunk files.
-4. Support small finite worlds through the same region/chunk model.
+3. Support bounded, finite worlds through region/chunk files. Worlds have a fixed maximum footprint and height; they never grow or stream without bound.
+4. Use a single canonical on-disk schema version with fail-fast loading: a save must match the current schema exactly or it is refused.
 5. Use stable string IDs for blocks, items, recipes, structures, biomes, and menus.
 6. Never reuse removed IDs for different content.
-7. Provide explicit migrations for renamed fields, block IDs, item IDs, and schema changes.
-8. Fail safely when a save is newer, corrupted, or missing content.
+7. Tolerate registry drift and missing content at load time through warnings and placeholders rather than rewriting saved data.
+8. Fail safely with a clear, controlled error when a save schema does not match, or when a save is corrupted.
+
+World bounds are fixed and finite. The horizontal footprint is selected from two presets: `small` (default, 128×128 blocks) and `medium` (192×192 blocks). World height is 128 blocks (Y 0..127) with sea level at Y 64. These bounds are the maximum extent of any world.
 
 ---
 
 ## 2. Version taxonomy
 
-Use separate versions for save format, game rules, and content registries.
+The save uses a single canonical integer schema version plus informational metadata. Registry compatibility is checked by content hash, not by a version field.
 
 | Version Field | Example | Meaning |
 |---|---|---|
-| `saveFormatVersion` | `1.0.0` | Disk schema and serialization format. |
-| `rulesetVersion` | `0.2.0` | Gameplay rules version across Survival, Creative, Environment, Structures, and Vegetation. |
-| `registryVersion` | `0.2.0` | Block/item/recipe/structure/biome registry definitions. |
-| `engineVersion` | `0.1.0` | Game executable or engine build version. |
-| `contentPackVersion` | `pack-id@1.0.0` | Optional external content pack version. |
+| `schemaVersion` | `4` | The single canonical on-disk save schema version. Must match the engine's `CurrentSchemaVersion` exactly. |
+| `engineVersion` | `0.1.0` | Game executable or engine build version (informational only). |
+| `contentPackVersion` | `pack-id@1.0.0` | Optional external content pack version (informational only). |
 
-### 2.1 Semantic version policy
+The engine defines one supported schema version, `CurrentSchemaVersion` (currently `4`). The manifest stores a single integer `schemaVersion`.
+
+### 2.1 Single-schema load policy
 
 ```txt
-MAJOR: incompatible breaking change requiring explicit migration or load refusal
-MINOR: backward-compatible addition or automatic migration
-PATCH: bug fix or value tuning with no schema change
+schemaVersion is a single integer.
+Load requires manifest.schemaVersion == CurrentSchemaVersion exactly.
+Any other value (older or newer) refuses the load with a controlled error.
+Saves are never converted, upgraded, or loaded in a degraded recovery mode.
 ```
 
 Rules:
 
 ```ts
-if save.major > engine.supportedSaveMajor:
-    refuse to load and show "Save was created by a newer version.";
+if manifest.schemaVersion != engine.CurrentSchemaVersion:
+    refuse to load with: "World save schema {manifest.schemaVersion} is unsupported (expected {engine.CurrentSchemaVersion}).";
 
-if save.major < engine.currentSaveMajor:
-    require migration before play;
-
-if save.minor < engine.currentSaveMinor:
-    run available migrations or mark chunks for lazy migration;
+// Registry compatibility is a separate, non-fatal concern (see Section 7):
+if manifest.blockRegistryHash != engine.currentBlockRegistryHash:
+    log non-fatal warning and continue loading;
+    unknown block/item IDs fall back to missing_block / missing_item placeholders;
 ```
 
 ---
@@ -69,7 +71,6 @@ Recommended folder layout:
   rules.json
   registries/
     registry-manifest.json
-    id-migrations.json
   dimensions/
     main/
       dimension.json
@@ -137,9 +138,9 @@ ore#1               // punctuation-heavy unstable ID
 | Rule | Requirement |
 |---|---|
 | Never reuse IDs | A removed ID cannot be assigned to new content. |
-| Rename through migration | Use `id-migrations.json`, never silently change stored IDs. |
+| Avoid renaming stable IDs | Stored IDs are not rewritten on load. If content is renamed in the registry, old saves keep the old ID and resolve to a placeholder if the old ID no longer exists. |
 | Preserve unknown IDs | Unknown content becomes a missing placeholder with original ID metadata. |
-| Keep display names separate | Display names can change without save migration. |
+| Keep display names separate | Display names can change without rewriting saved data. |
 | Use namespaces only for content packs | Example: `base:branchwood_log`, `skylands:cloud_reed`. |
 
 ---
@@ -148,10 +149,11 @@ ore#1               // punctuation-heavy unstable ID
 
 ```ts
 type SaveManifest = {
-  saveFormatVersion: string;
-  engineVersion: string;
-  rulesetVersion: string;
-  registryVersion: string;
+  schemaVersion: number;            // single canonical integer; must equal CurrentSchemaVersion (4)
+  engineVersion: string;            // informational only
+
+  blockRegistryHash: string;        // content hash of the block registry at save time
+  itemRegistryHash: string;         // content hash of the item registry at save time
 
   saveId: string;
   worldId: string;
@@ -167,7 +169,7 @@ type SaveManifest = {
 
   spawn: Vec3i;
   spawnBiomePreference: string;
-  worldSizePreset: "small" | "medium" | "large" | "infinite";
+  worldSizePreset: "small" | "medium";   // small = 128x128 (default), medium = 192x192
 
   dimensions: DimensionManifest[];
   playerIndex: PlayerIndexEntry[];
@@ -183,7 +185,6 @@ type SaveFlag =
   | "has_creative_edits"
   | "survival_simulation_enabled"
   | "uses_experimental_rules"
-  | "requires_migration"
   | "has_missing_content"
   | "was_recovered_from_backup";
 ```
@@ -192,10 +193,10 @@ Example:
 
 ```json
 {
-  "saveFormatVersion": "1.0.0",
+  "schemaVersion": 4,
   "engineVersion": "0.1.0",
-  "rulesetVersion": "0.2.0",
-  "registryVersion": "0.2.0",
+  "blockRegistryHash": "sha256:9f1c0a3e7b2d4c6f8a1b5d7e9c0f2a4b6d8e0c1f3a5b7d9e1c3f5a7b9d0e2c4f",
+  "itemRegistryHash": "sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
   "saveId": "save_01jz_voxel_meadow_home",
   "worldId": "world_01jz9q2n7qk9m7v8t3qk5b4d2p",
   "worldName": "Meadow Home",
@@ -205,9 +206,9 @@ Example:
   "worldSeed": "1384750923847509238",
   "worldPreset": "survival_terrain",
   "environmentPreset": "normal",
-  "spawn": { "x": 8, "y": 104, "z": -12 },
+  "spawn": { "x": 8, "y": 70, "z": -12 },
   "spawnBiomePreference": "balanced",
-  "worldSizePreset": "infinite",
+  "worldSizePreset": "small",
   "dimensions": [
     { "dimensionId": "main", "folder": "dimensions/main", "enabled": true }
   ],
@@ -256,13 +257,12 @@ Difficulty values are placeholders until the player/entity/combat rulesets defin
 
 ---
 
-## 7. Registry manifest and ID migrations
+## 7. Registry manifest and compatibility
 
 ### 7.1 Registry manifest
 
 ```ts
 type RegistryManifest = {
-  registryVersion: string;
   registries: {
     blocks: RegistrySummary;
     items: RegistrySummary;
@@ -274,34 +274,23 @@ type RegistryManifest = {
 };
 
 type RegistrySummary = {
-  version: string;
   contentHash: string;
   entryCount: number;
 };
 ```
 
-The save does not need to store full registries if the base game registry is bundled with the engine. Store hashes to detect mismatches.
+The save does not need to store full registries if the base game registry is bundled with the engine. Registry compatibility is determined by content hash only. The manifest stores `blockRegistryHash` and `itemRegistryHash` so a hash mismatch can be detected on load.
 
-### 7.2 ID migration file
+### 7.2 Registry compatibility tolerance
+
+Registry compatibility is tolerant. Stored IDs are never rewritten or converted. When the registry has changed since a save was created, loading continues and unresolved content resolves to engine-reserved placeholders.
+
+Block registry hash mismatch (non-fatal):
 
 ```ts
-type IdMigrationFile = {
-  fromRegistryVersion: string;
-  toRegistryVersion: string;
-  blockIdRenames: Record<string, string>;
-  itemIdRenames: Record<string, string>;
-  recipeIdRenames: Record<string, string>;
-  structureIdRenames: Record<string, string>;
-  biomeIdRenames: Record<string, string>;
-  removedIds: RemovedRegistryId[];
-};
-
-type RemovedRegistryId = {
-  registry: "block" | "item" | "recipe" | "structure" | "biome";
-  id: string;
-  replacementId: string;
-  preserveOriginalIdInMetadata: boolean;
-};
+if manifest.blockRegistryHash != engine.currentBlockRegistryHash:
+    log warning: "World save registry hash mismatch ... block registry has changed since this save was created.";
+    continue loading;
 ```
 
 Missing block fallback:
@@ -321,7 +310,7 @@ if itemId not in registry:
     placeholder.metadata.originalItemId = itemId;
 ```
 
-`missing_block` and `missing_item` should be engine-reserved placeholders and not normal Survival items.
+`missing_block` and `missing_item` should be engine-reserved placeholders and not normal Survival items. This placeholder behavior is corruption/compatibility tolerance, not a data-conversion step — the underlying save data is left unchanged unless the world is later modified and re-saved.
 
 ---
 
@@ -388,7 +377,7 @@ Region file contents:
 ```ts
 type RegionFile = {
   format: "vxlr";
-  saveFormatVersion: string;
+  schemaVersion: number;            // must equal the manifest schemaVersion / CurrentSchemaVersion
   dimensionId: string;
   regionX: number;
   regionZ: number;
@@ -434,8 +423,7 @@ type ChunkStatus =
   | "terrain_generated"
   | "features_generated"
   | "fully_generated"
-  | "player_modified"
-  | "needs_migration";
+  | "player_modified";
 
 type GenerationStageFlags = {
   terrain: boolean;
@@ -788,7 +776,7 @@ type StructureRegionClaim = {
 
 Loot containers are stored as block entities in chunks and referenced by `lootContainerIds`.
 
-Do not rebuild already-placed structures automatically when structure definitions change. Use explicit migrations only.
+Do not rebuild already-placed structures automatically when structure definitions change. Saved structure instances keep their stored state; if a structure definition no longer exists, the instance is left as-is and its blocks resolve through the normal missing-content placeholder behavior.
 
 ---
 
@@ -916,15 +904,13 @@ Default LAN save intent:
 Required metadata match before restoring a host save:
 
 ```txt
-saveFormatVersion
-rulesetVersion
-registryVersion
+schemaVersion
 worldPreset
-worldSize
+worldSizePreset (small or medium)
 bounds / dimension limits
 chunkSize
 seed
-registryContentHash
+blockRegistryHash, itemRegistryHash (mismatch is a non-fatal warning, not a join blocker)
 environmentStateHash, when environment state is deterministic
 structureStateHash, when structures are generated
 vegetationStateHash, when vegetation is generated
@@ -992,95 +978,19 @@ Dirty flags should be granular enough to avoid full-world saves.
 
 ---
 
-## 22. Migration system
+## 22. Validation and repair
 
-### 22.1 Migration manifest
-
-```ts
-type MigrationManifest = {
-  migrationId: string;
-  fromSaveFormatVersion: string;
-  toSaveFormatVersion: string;
-  fromRegistryVersion?: string;
-  toRegistryVersion?: string;
-  description: string;
-  steps: MigrationStep[];
-};
-
-type MigrationStep = {
-  stepId: string;
-  target: "manifest" | "rules" | "player" | "environment" | "structures" | "vegetation" | "chunk" | "registry";
-  operation: string;
-  lazyAllowed: boolean;
-};
-```
-
-### 22.2 Migration order
-
-```txt
-1. Backup manifest and modified files.
-2. Validate current save enough to migrate.
-3. Migrate manifest and rules.
-4. Migrate registry ID maps.
-5. Migrate environment, structures, and vegetation metadata.
-6. Migrate player files.
-7. Mark chunks for lazy migration if full chunk migration is expensive.
-8. Update manifest version only after all required non-lazy steps succeed.
-```
-
-### 22.3 Lazy chunk migration
-
-```ts
-if chunk.status == "needs_migration":
-    migrate chunk when loaded;
-    validate palette and block entities;
-    save migrated chunk before unload;
-```
-
-### 22.4 Example migrations
-
-#### Rename block state key
-
-```txt
-Migration: snowpack.depthLevel -> snowpack.depth
-Target: chunk
-Lazy allowed: true
-Rule: if blockId == `snowpack` and state.depthLevel exists, copy to state.depth and remove depthLevel
-```
-
-#### Add new default field to player state
-
-```txt
-Migration: add creativeState.undoStackRefs
-Target: player
-Lazy allowed: false
-Rule: if creativeState exists and undoStackRefs missing, set undoStackRefs = []
-```
-
-#### Rename a structure definition ID
-
-```txt
-Migration: old_trail_camp -> trail_camp
-Target: structures
-Lazy allowed: false
-Rule: update StructureInstanceState.defId and generatedRegionClaims.structureDefId
-```
-
----
-
-## 23. Validation and repair
-
-### 23.1 Load validation
+### 22.1 Load validation
 
 Required checks:
 
 ```txt
 manifest.json exists and parses
-saveFormatVersion is supported or migratable
+schemaVersion matches the current schema (exact match; otherwise refuse load)
 worldSeed exists
 main dimension exists
 player file exists for selected player
-registry hashes are compatible or migrations exist
+registry hashes match, or mismatch is logged as a non-fatal warning
 region files have valid chunk indexes
 chunk coordinates match region coordinates
 block palette IDs exist or can become missing_block
@@ -1089,7 +999,7 @@ block entities point to matching block positions
 container slot counts match container definitions
 ```
 
-### 23.2 Repair behavior
+### 22.2 Repair behavior
 
 | Problem | Repair |
 |---|---|
@@ -1103,7 +1013,7 @@ container slot counts match container definitions
 | Invalid player position | Move player to world spawn or last safe position |
 | Invalid environment value | Clamp to valid range and mark save repaired |
 
-### 23.3 Last safe position
+### 22.3 Last safe position
 
 ```ts
 type LastSafePosition = {
@@ -1125,29 +1035,23 @@ if player is standing on solid block
 
 ---
 
-## 24. Compatibility policy
+## 23. Compatibility policy
 
 | Scenario | Behavior |
 |---|---|
-| Older save, migration available | Offer automatic migration and backup. |
-| Older save, migration unavailable | Refuse load with clear message. |
-| Newer save, same major but higher minor | Load only if marked compatible; otherwise refuse. |
-| Newer save, higher major | Refuse load. |
+| Save schema does not match current schema | Refuse load with: "World save schema {n} is unsupported (expected {m})." |
+| Registry hash mismatch | Log a non-fatal warning and continue loading. |
+| Missing/unknown block or item content | Resolve to `missing_block` / `missing_item` placeholders and warn. |
 | Missing optional content pack | Load with placeholders if content is not required. |
-| Missing required content pack | Refuse load or open read-only recovery mode. |
+| Corrupt generated-only chunk with no player edits | Regenerate from seed. |
+| Corrupt player-modified chunk | Load backup or quarantine the chunk file. |
 | Experimental rules enabled | Show warning in World Details menu. |
 
-Read-only recovery mode:
-
-```ts
-if save has severe missing content but chunks can be inspected:
-    allow load with saving disabled;
-    allow export/copy only;
-```
+There is no save-conversion path and no degraded recovery mode. A save either matches the current schema and loads, or it is refused with a clear, controlled error.
 
 ---
 
-## 25. Checksums and integrity
+## 24. Checksums and integrity
 
 Recommended checksum fields:
 
@@ -1168,7 +1072,7 @@ Use a stable canonical JSON serialization for JSON files, or a binary checksum f
 
 ---
 
-## 26. Save size strategy
+## 25. Save size strategy
 
 | Data Type | Save Strategy |
 |---|---|
@@ -1190,7 +1094,7 @@ Optimize to generated-delta storage later.
 
 ---
 
-## 27. Example player save
+## 26. Example player save
 
 ```json
 {
@@ -1245,7 +1149,7 @@ Optimize to generated-delta storage later.
 
 ---
 
-## 28. Example chunk section
+## 27. Example chunk section
 
 ```json
 {
@@ -1266,7 +1170,7 @@ Optimize to generated-delta storage later.
 
 ---
 
-## 29. Minimal implementation checklist
+## 28. Minimal implementation checklist
 
 Required for first playable save/versioning:
 
@@ -1283,8 +1187,8 @@ Vegetation save file for saplings/regrowth/decay
 Stable registry ID policy
 Missing block/item placeholder policy
 Autosave transaction sequence
-Basic version comparison
-Manual backup before migration
+Exact schemaVersion match check (refuse load on mismatch)
+Registry hash mismatch warning
 Load validation and safe player position repair
 ```
 
@@ -1292,9 +1196,7 @@ Recommended later:
 
 ```txt
 Binary region format
-Lazy chunk migration
 Content pack dependency resolver
-Read-only recovery mode
 Chunk-level checksums
 World diff/export format
 Cloud sync conflict resolution

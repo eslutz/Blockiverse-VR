@@ -1,9 +1,10 @@
 using System;
+using Blockiverse.Core;
 using Blockiverse.Voxel;
 
 namespace Blockiverse.Survival
 {
-    public sealed class PlayerVitals
+    public sealed class PlayerVitals : IPlayerVitalsView
     {
         public const int DefaultMaxHealth = 100;
 
@@ -22,6 +23,17 @@ namespace Blockiverse.Survival
 
         public event Action<HealthChangeResult> HealthChanged;
         public event Action<HealthChangeResult> Died;
+
+        // Parameterless Core read-model signal (IPlayerVitalsView) so UI can refresh on any health
+        // change without referencing Survival.Health's HealthChangeResult. Raised alongside the
+        // typed HealthChanged event in PublishHealthChange.
+        Action healthViewChanged;
+
+        event Action IPlayerVitalsView.HealthChanged
+        {
+            add => healthViewChanged += value;
+            remove => healthViewChanged -= value;
+        }
 
         public int MaxHealth { get; }
         public int CurrentHealth { get; private set; }
@@ -119,6 +131,7 @@ namespace Blockiverse.Survival
                 return;
 
             HealthChanged?.Invoke(result);
+            healthViewChanged?.Invoke();
             if (result.DidDie)
                 Died?.Invoke(result);
         }

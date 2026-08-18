@@ -2,11 +2,33 @@
 
 ## Status
 
-Accepted
+Accepted; menu-surface decision amended 2026-08-13 (see Amendment below)
 
 ## Date
 
-2026-06-16
+2026-06-16 (amended 2026-08-13)
+
+## Amendment 2026-08-13: World-Space Menu Baseline Supersedes The Shared Composition Quad
+
+The shared `Blockiverse Menu Composition Surface` Quad-layer menu model below was
+reversed in practice by commit `9c6f435c` ("Stabilize Quest menus with world-space
+UI baseline", 2026-07-01) after on-headset visual failures with the
+RenderTexture/composition-layer menu path. The current baseline is:
+
+- Routed game menus are direct world-space XR canvases. No shared menu Quad layer,
+  no `InteractableUIMirror`, no hidden `CanvasCamera`, no composition menu cursor.
+- Composition layers are retained only for the startup splash overlay.
+- The controller/ray policy (normal main-camera render path, no
+  `ProjectionLayerRigData` ray rendering) is unchanged and remains in force.
+
+Validation: headset-verified builds tagged `quest-world-space-menus-known-good-2026-07-01`
+and `quest-menu-good-2026-07-02`; runtime-verified again 2026-08-13 via Meta XR
+Operator inspection in the Meta XR Simulator on Unity 6000.5.8f1 + Meta XR SDK
+205.0.0 + Composition Layers 2.5.0 (frame-end layer inventory shows a single
+projection layer; world-space menus render correctly; no stuck splash layer).
+
+The menu-related bullets in the Decision and Consequences sections below are
+retained for history but no longer describe the shipped architecture.
 
 ## Decision
 

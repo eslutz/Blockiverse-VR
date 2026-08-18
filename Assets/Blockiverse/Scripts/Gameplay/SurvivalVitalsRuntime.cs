@@ -5,6 +5,7 @@ using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
+using Blockiverse.Networking;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -19,7 +20,7 @@ namespace Blockiverse.Gameplay
     // Vitals are local-player simulation state (each peer simulates its own player); only the
     // consumable inventory decrement is host-authoritative, via MultiplayerSurvivalSync.
     [DisallowMultipleComponent]
-    public sealed class SurvivalVitalsRuntime : MonoBehaviour
+    public sealed class SurvivalVitalsRuntime : MonoBehaviour, ISurvivalVitalsContext
     {
         // Consumable effect amounts live with the effect table in ConsumableEffects; hazard
         // damage amounts and rates live with the hazard table in BlockHazards.
@@ -51,6 +52,11 @@ namespace Blockiverse.Gameplay
 
         public PlayerVitals Vitals { get; } = new PlayerVitals();
         public SurvivalVitals SurvivalVitals { get; } = new SurvivalVitals();
+
+        // Core read-model seams (IPlayerVitalsView / ISurvivalVitalsView) so UI binds vitals
+        // without referencing the Blockiverse.Survival.Health assembly.
+        public IPlayerVitalsView HealthView => Vitals;
+        public ISurvivalVitalsView SurvivalVitalsView => SurvivalVitals;
 
         // Fired when the local player's health reaches zero; the menu layer shows the death screen.
         public event Action LocalPlayerDied;

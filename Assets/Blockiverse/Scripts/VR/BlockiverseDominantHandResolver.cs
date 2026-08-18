@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using UnityEngine;
+using Blockiverse.Core;
 
 namespace Blockiverse.VR
 {
@@ -78,7 +79,7 @@ namespace Blockiverse.VR
                 return;
 
             comfortSettings = GetComponent<BlockiverseComfortSettings>() ??
-                FindAnyObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
+                FindFirstObjectByType<BlockiverseComfortSettings>(FindObjectsInactive.Include);
         }
     }
 }

@@ -88,7 +88,7 @@ Recommended behavior:
 | Screen Name | Screen ID | Opened From | Pauses Game? | Purpose |
 |---|---|---|---|---|
 | Boot Screen | `boot` | App launch | Yes | Shows logo/loading status |
-| Title Menu | `title_menu` | Boot, Return to Title | Yes | Main entry point over the read-only menu world |
+| Title Menu | `title_menu` | Boot, Return to Title | Yes | Main entry point |
 | New World Menu | `new_world` | Title Menu | Yes | Configure and create world |
 | Load World Menu | `load_world` | Title Menu | Yes | Select existing save |
 | World Details Menu | `world_details` | Load World | Yes | Load, rename, duplicate, delete selected world |
@@ -1214,7 +1214,7 @@ type ConfirmDialogParams = {
 | `world.create` | New world config | Creates save record and generates spawn region |
 | `world.load` | `{ saveId }` | Loads world and player state |
 | `world.save` | `{ saveId }` | Serializes active world |
-| `world.unload` | None | Saves/unloads the active world and returns to the read-only title menu world |
+| `world.unload` | None | Unloads active world and returns to title/menu |
 | `save.rename` | `{ saveId, name }` | Renames save display name |
 | `save.duplicate` | `{ saveId }` | Creates copy of save |
 | `save.delete` | `{ saveId }` | Deletes save after confirmation |
@@ -1376,18 +1376,11 @@ Example:
 
 ## 10. Menu Implementation Notes
 
-### 10.1 Title Menu World
-
-The title/menu route loads a deterministic read-only mini-world with seed `2019`.
-It is small enough to keep the menu visible from its edges, blocks cannot be
-placed or broken while it is active, and gameplay HUD surfaces remain hidden
-until a real saved or newly generated world is entered.
-
-### 10.2 Pause Behavior
+### 10.1 Pause Behavior
 
 | Screen | Pause Game? | Notes |
 |---|---|---|
-| Title/New/Load/Settings | Yes | Menu world only; gameplay HUD and block editing disabled |
+| Title/New/Load/Settings | Yes | No active world simulation |
 | Pause Menu | Yes | Freezes world update loop |
 | Inventory | Yes by default | Optional hardcore mode can keep world running |
 | Container | Yes by default | Safer for item transfer |
@@ -1395,7 +1388,7 @@ until a real saved or newly generated world is entered.
 | Kiln/Forge | Yes by default | Station progress can continue after closing |
 | Death Screen | Yes | World waits for respawn choice |
 
-### 10.3 Autosave Rules
+### 10.2 Autosave Rules
 
 ```ts
 autosaveIntervalSeconds = settings.autosaveMinutes * 60;

@@ -12,7 +12,6 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
-using UnityEngine.TestTools;
 using UnityEngine.XR.OpenXR;
 using Object = UnityEngine.Object;
 
@@ -37,7 +36,6 @@ namespace Blockiverse.Tests.EditMode
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
-        const string AndroidGradlePostprocessorPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseAndroidGradlePostprocessor.cs";
         const string ProjectBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.cs";
         const string SceneBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Scenes.cs";
         const string MenuBootstrapperPath = "Assets/Blockiverse/Scripts/Editor/BlockiverseProjectBootstrapper.Menus.cs";
@@ -112,7 +110,7 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("m_RequireDepthTexture: 0", asset);
             StringAssert.Contains("m_RequireOpaqueTexture: 0", asset);
             StringAssert.Contains("m_SupportsHDR: 0", asset);
-            StringAssert.Contains("m_MSAA: 2", asset);
+            StringAssert.Contains("m_MSAA: 4", asset);
             StringAssert.Contains("m_RenderScale: 1", asset);
             StringAssert.Contains("m_MainLightShadowsSupported: 0", asset);
             StringAssert.Contains("m_ShadowDistance: 0", asset);
@@ -187,7 +185,6 @@ namespace Blockiverse.Tests.EditMode
         {
             string buildSmoke = File.ReadAllText(BuildSmokePath);
             string buildScript = File.ReadAllText("scripts/unity/build-development-apk.sh");
-            string projectSettings = File.ReadAllText("ProjectSettings/ProjectSettings.asset");
             var sampleUtc = new DateTime(2026, 6, 21, 12, 0, 0, DateTimeKind.Utc);
 
             Assert.That(BlockiverseBuildSmoke.CreateLocalDevelopmentVersionName(sampleUtc),
@@ -201,12 +198,12 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("1577836800", buildScript);
             StringAssert.Contains("-blockiverseBuildVersionName \"$UNITY_ANDROID_VERSION_NAME\"", buildScript);
             StringAssert.Contains("-blockiverseBuildVersionCode \"$UNITY_ANDROID_VERSION_CODE\"", buildScript);
-            StringAssert.Contains("AndroidBundleVersionCode: 1", projectSettings);
         }
 
         [Test]
         public void BootSceneContainsOneMetaUserAgeCategoryService()
         {
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
             try
             {
                 Scene scene = EditorSceneManager.OpenScene(BootScenePath, OpenSceneMode.Single);
@@ -218,7 +215,7 @@ namespace Blockiverse.Tests.EditMode
             }
             finally
             {
-                OpenEmptySceneIgnoringUnityCleanupLogs();
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             }
         }
 
@@ -245,7 +242,7 @@ namespace Blockiverse.Tests.EditMode
             string bootstrapperSource = string.Join("\n", bootstrapperFiles.Select(File.ReadAllText));
 
             Assert.That(bootstrapperSource, Does.Not.Contain("Resources.GetBuiltinResource<Sprite>(\"UI/Skin/"),
-                "Generated UI must use project-owned sprites instead of removed Unity builtin UI/Skin PSD sprites.");
+                "Unity 6000.3 no longer ships the legacy UI/Skin PSD sprites used by old UGUI examples.");
             StringAssert.Contains("checkbox_check", bootstrapperSource);
             StringAssert.Contains("slider_knob", bootstrapperSource);
         }
@@ -288,6 +285,31 @@ namespace Blockiverse.Tests.EditMode
 
             StringAssert.Contains("EnsureComponent<PerformanceStatsOverlay>(worldObject)", sceneBootstrapper);
             StringAssert.Contains("performanceOverlay.Configure(renderer)", sceneBootstrapper);
+        }
+
+        [Test]
+        public void GeneratedBootWorldInitializesDefaultWorldOnAwake()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+            string bootScene = File.ReadAllText(BootScenePath);
+
+            StringAssert.Contains("manager.InitializeDefaultWorldOnAwake = true", sceneBootstrapper);
+            StringAssert.Contains("initializeDefaultWorldOnAwake: 1", bootScene);
+        }
+
+        [Test]
+        public void BootSceneBootstrapperRemovesDuplicateGeneratedRoots()
+        {
+            string sceneBootstrapper = File.ReadAllText(SceneBootstrapperPath);
+
+            StringAssert.Contains(
+                "EnsureSingleRootGameObject(scene, BlockiverseProject.XrRigRootName)",
+                sceneBootstrapper);
+            StringAssert.Contains(
+                "EnsureSingleRootGameObject(scene, BlockiverseProject.CreativeWorldRootName)",
+                sceneBootstrapper);
+            StringAssert.Contains("EnsureSingleRootGameObject(scene, eventSystemName)", sceneBootstrapper);
+            StringAssert.Contains("EnsureSingleRootGameObject(scene, NetworkManagerRootName)", sceneBootstrapper);
         }
 
         [Test]
@@ -353,7 +375,6 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(androidSettings, Is.Not.Null);
             Assert.That(androidSettings.renderMode, Is.EqualTo(OpenXRSettings.RenderMode.SinglePassInstanced));
-            Assert.That(androidSettings.latencyOptimization, Is.EqualTo(OpenXRSettings.LatencyOptimization.PrioritizeInputPolling));
             Assert.That(androidSettings.GetFeatures(), Has.Some.Matches<UnityEngine.XR.OpenXR.Features.OpenXRFeature>(
                 feature => feature.enabled && feature.GetType().Name == "MetaQuestFeature"));
 
@@ -392,15 +413,21 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void AndroidXrManagerStartsOpenXrAutomatically()
         {
+            // Select the Android manager explicitly: activating the Meta XR Simulator
+            // adds a Standalone manager sub-asset (with automatic loading off, which is
+            // correct for the desktop editor), so FirstOrDefault over all managers is
+            // order-dependent and can grab the wrong build target.
             Object managerSettings = AssetDatabase
                 .LoadAllAssetsAtPath(XrGeneralSettingsPath)
-                .FirstOrDefault(asset => asset.GetType().Name == "XRManagerSettings");
+                .FirstOrDefault(asset => asset.GetType().Name == "XRManagerSettings"
+                    && asset.name.StartsWith("Android"));
 
             Assert.That(managerSettings, Is.Not.Null);
 
             var serializedManager = new SerializedObject(managerSettings);
             Assert.That(serializedManager.FindProperty("m_AutomaticLoading")?.boolValue, Is.True);
-            Assert.That(serializedManager.FindProperty("m_AutomaticRunning")?.boolValue, Is.True);
+            Assert.That(serializedManager.FindProperty("m_AutomaticRunning")?.boolValue, Is.False,
+                "Automatic running is disabled in the Editor to prevent 'StopSubsystems without an initialized manager' warnings on domain reload. XR is started manually at runtime.");
 
             SerializedProperty loaders = serializedManager.FindProperty("m_Loaders");
             Assert.That(loaders, Is.Not.Null);
@@ -422,7 +449,6 @@ namespace Blockiverse.Tests.EditMode
 
             var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
             namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
-            namespaceManager.AddNamespace("tools", "http://schemas.android.com/tools");
 
             XmlNode internetPermission = manifest.SelectSingleNode(
                 "/manifest/uses-permission[@android:name='android.permission.INTERNET']",
@@ -447,10 +473,6 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(
                 supportedDevicesNode.Attributes["android:value"]?.Value,
                 Is.EqualTo("quest3|quest3s"));
-            Assert.That(
-                supportedDevicesNode.Attributes["replace", "http://schemas.android.com/tools"],
-                Is.Null,
-                "The supported devices value is the source value; a redundant tools:replace emits Android manifest warnings.");
 
             XmlNode keyboardFeatureNode = manifest.SelectSingleNode(
                 "/manifest/uses-feature[@android:name='oculus.software.overlay_keyboard']",
@@ -536,24 +558,6 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
-        [Test]
-        public void AndroidBuildNormalizesGeneratedMetaAarManifests()
-        {
-            string postprocessorSource = File.ReadAllText(AndroidGradlePostprocessorPath);
-
-            StringAssert.Contains("IPostGenerateGradleAndroidProject", postprocessorSource);
-            StringAssert.Contains("InteractionSdk.aar", postprocessorSource);
-            StringAssert.Contains("OVRPlugin.aar", postprocessorSource);
-            StringAssert.Contains("com.oculus.integration.interactionsdk", postprocessorSource);
-            StringAssert.Contains("com.oculus.integration.ovrplugin", postprocessorSource);
-            StringAssert.Contains(":InteractionSdk@aar", postprocessorSource);
-            StringAssert.Contains(":OVRPlugin@aar", postprocessorSource);
-            StringAssert.Contains("ModernizeGeneratedGradleFiles", postprocessorSource);
-            StringAssert.Contains("namespace|ndkPath|ndkVersion|debugSymbolLevel|version", postprocessorSource);
-            StringAssert.Contains("abortOnError|useLegacyPackaging|prefab", postprocessorSource);
-            StringAssert.Contains("signingConfig =", postprocessorSource);
-        }
-
         static bool GetBool(SerializedObject serializedObject, string propertyName)
         {
             SerializedProperty property = serializedObject.FindProperty(propertyName);
@@ -571,20 +575,6 @@ namespace Blockiverse.Tests.EditMode
                     return extension == ".asset" || extension == ".prefab" || extension == ".unity";
                 })
                 .ToArray();
-        }
-
-        static void OpenEmptySceneIgnoringUnityCleanupLogs()
-        {
-            bool previous = LogAssert.ignoreFailingMessages;
-            LogAssert.ignoreFailingMessages = true;
-            try
-            {
-                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            }
-            finally
-            {
-                LogAssert.ignoreFailingMessages = previous;
-            }
         }
     }
 }

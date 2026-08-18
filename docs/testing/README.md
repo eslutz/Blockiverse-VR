@@ -8,7 +8,7 @@ Testing is split into:
 - Full local Unity validation before review or merge for Unity-impacting changes
 - Development APK and Quest-device validation when Android, headset, release, or Quest performance behavior changes
 - Meta XR Simulator and MCP-driven manual validation for canonical ruleset flows
-- Editor-assisted validation through Unity MCP for targeted diagnostics, console review, scene/project inspection, XR triage, and Unity Test Runner jobs
+- Editor-assisted validation through Unity MCP and Unity Skills for targeted diagnostics, console review, scene/project inspection, XR triage, and Unity Test Runner jobs
 - Release channel workflow checks that upload alpha builds and promote selected tested Meta build IDs through beta, RC, and store channels
 - EditMode tests for pure C# logic
 - PlayMode tests for Unity-connected systems
@@ -21,29 +21,29 @@ Performance reports belong in `docs/testing/performance/`.
 
 Meta XR Simulator setup, MCP configuration, and historical smoke-script notes are documented in [Meta XR Simulator And MCP Validation](meta-xr-simulator-and-mcp.md). New smoke scripts should use the canonical world presets and rulesets in `../rulesets/`.
 
-Editor-assisted validation can shorten investigation loops, but it does not replace the scripted gates below. Use the Unity IDE built-in MCP server as the default live Editor bridge when the Unity Editor is open and connected. Treat MCP as local developer tooling unless a separate dependency-update task explicitly adds it to `Packages/manifest.json`.
+Editor-assisted validation can shorten investigation loops, but it does not replace the scripted gates below. Use MCP for Unity as the default live Editor bridge when the Unity Editor is open and connected; use Unity Skills for module-specific REST workflows, advisory guidance, XR diagnostics, batch/workflow operations, debug/console triage, and targeted Unity Test Runner jobs. Treat both as local developer tooling unless a separate dependency-update task explicitly adds them to `Packages/manifest.json`.
 
-Smoke-check Unity MCP:
+Smoke-check MCP for Unity:
 
 ```sh
 codex mcp list
-# Then call Unity_ManageEditor(Action: "GetProjectRoot") and Unity_ReadConsole.
-# Confirm the active project root points at this checkout before mutating assets.
+# Then read mcpforunity://instances and mcpforunity://project/info,
+# confirm the active instance points at this checkout, and call read_console.
 ```
 
+Smoke-check Unity Skills:
+
+```sh
+curl http://localhost:8090/health
+curl -X POST http://localhost:8090/skill/unity_diagnose \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+curl 'http://localhost:8090/skills?category=xr'
+```
+
+If both Unity automation packages are installed locally, Unity may log a duplicate `package.json.meta` GUID warning from the package cache. Do not treat that warning by itself as a validation failure if Unity compiles, MCP for Unity can read the console, Unity Skills health is `ok`, `scripts/unity/run-tests.sh` passes, and the committed package manifests remain clean. Fix the package metadata through an upstream or forked package patch if the warning starts blocking import, test runs, or local server startup.
+
 Unity editor domain reloads can also log `Call to StopSubsystems without an initialized manager` from `XRManagerSettings.OnDisable()` while Android OpenXR automatic loading/running is enabled but no XR loader was initialized in the macOS editor. Keep Android automatic loading/running enabled for Quest builds; treat this editor-domain-reload stack as local editor noise unless the same warning appears in Quest player logs or blocks tests/builds.
-
-## Known Validation Noise
-
-These messages are accepted local editor/package noise when the scripted gates still pass and the APK metadata is valid. Reopen them only if they block import, tests, builds, Quest install, or player runtime behavior.
-
-- `Named pipe socket file not found: /tmp/unity-mcp-...`: the Unity MCP client is visible to Codex, but the live Unity Editor bridge is stale. Restart `Project Settings > AI > Unity MCP Server`; if it remains stale, rely on `scripts/unity/run-tests.sh` and `scripts/unity/build-development-apk.sh` for acceptance evidence.
-- `Call to StopSubsystems without an initialized manager` from `XRManagerSettings.OnDisable()`: Android OpenXR auto loading/running is enabled for Quest, but no XR loader was initialized in that macOS editor lifecycle.
-- Unity AI/Search/Sentis shutdown leak traces from `com.unity.ai.assistant` or `com.unity.ai.inference`: external Unity package/editor shutdown noise observed after successful local tests.
-- `Cannot destroy Component while GameObject is being activated or deactivated` from `UIDocument.RemoveWorldSpaceCollider()`: Unity UI Toolkit world-space teardown during `BuildPipeline.BuildPlayer` shutdown. The runtime UI Toolkit menu uses an explicitly assigned trigger `BoxCollider` with `ColliderUpdateMode.Keep`; keep the menu scale/collider tests passing before changing this area.
-- `Files generated by test without cleanup` for `Assets/StreamingAssets/RuntimeActionBindings.json`: Unity Test Framework cleanup verification can observe this transient file before `BlockiverseRuntimeActionBindingsCleanup` removes it. Treat it as noise when `git status -- Assets/StreamingAssets/RuntimeActionBindings.json` is clean after the run.
-- TextMesh Pro "Method was given it's own cpp file" warnings during IL2CPP: package-generated compile-sharding warnings, not project source warnings.
-- Local Unity licensing service lines such as `Access token is unavailable; failed to update`, `.NET SDKs were found`, `Thread ... may have been prematurely finalized`, or `debugger-agent: Unable to listen`: local editor shutdown/service noise when the command exits successfully.
 
 Historical multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md). New multiplayer validation should follow [Voxel Multiplayer and Networking Ruleset](../rulesets/voxel_multiplayer_networking_ruleset.md).
 
@@ -195,12 +195,12 @@ fall back to `ProjectSettings.asset` versionCode `1`.
 
 `hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`; the expected current executable path is `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`. Prefer `hzdb` for Quest device discovery, APK install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 
-When Unity is already open to keep MCP for Unity alive, prefer
+When Unity is already open to keep MCP for Unity and Unity Skills alive, prefer
 the open-Editor install path instead of closing the project for batchmode. Build
 through MCP or `Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()`,
 then let the running Unity editor spawn `hzdb app install --replace
 --grant-permissions Builds/Android/BlockiverseVR-development.apk`. This keeps
-the editor and MCP bridge alive while still replacing the
+the editor, MCP bridge, and Unity Skills server alive while still replacing the
 APK on the headset. If `hzdb app launch --cold-start --wait-for-idle --verify`
 reports a Quest system dialog such as `LaunchCheckControllerRequiredDialogActivity`,
 treat install as successful but launch verification as blocked by headset state.
@@ -223,10 +223,10 @@ Remove any temporary ray diagnostic scenes or build scripts once the issue is re
 
 Local Unity validation requires globally installed tools on the developer machine:
 
-- Unity Hub installed globally, preferably with Homebrew, and Unity Editor `6000.3.18f1`.
+- Unity Hub installed globally, preferably with Homebrew, and Unity Editor `6000.5.8f1`.
 - Android Build Support, Android SDK/NDK Tools, and OpenJDK installed through Unity Hub for that Editor version.
 - A Unity Personal or higher license accepted in Unity Hub before running batchmode commands.
-- `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.3.18f1/Unity.app/Contents/MacOS/Unity`.
+- `UNITY_EDITOR` set when the executable is not at `/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity`.
 
 Release-signed builds are intentionally not produced by local scripts. Use `.github/workflows/quest-alpha.yml` to build and upload release-signed APKs from `main` or a trusted manual ref so signing material stays centralized in GitHub Actions secrets.
 

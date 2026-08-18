@@ -22,11 +22,6 @@ namespace Blockiverse.Core
         public const string LaunchArtworkPlainPath = BrandingArtFolderPath + "/blockiverse_launch_landscape.png";
         public const string AndroidBrandingLibraryPath = "Assets/Plugins/Android/BlockiverseBranding.androidlib";
         public const string AndroidAppStringsPath = AndroidBrandingLibraryPath + "/res/values/strings.xml";
-        public const string UiFolderPath = "Assets/Blockiverse/UI";
-        public const string UiMenuFolderPath = UiFolderPath + "/Menu";
-        public const string UiToolkitMenuShellPath = UiMenuFolderPath + "/BlockiverseMenuShell.uxml";
-        public const string UiToolkitMenuThemePath = UiMenuFolderPath + "/BlockiverseMenuTheme.uss";
-        public const string UiToolkitMenuPanelSettingsPath = UiMenuFolderPath + "/BlockiverseMenuPanelSettings.asset";
         public const string PointerLineMaterialPath = "Assets/Blockiverse/Materials/BlockiversePointerLine.mat";
         public const string VfxParticleMaterialPath = "Assets/Blockiverse/Materials/BlockiverseVfxParticle.mat";
         public const string ChunkAtlasMaterialPath = "Assets/Blockiverse/Materials/BlockiverseChunkAtlas.mat";
@@ -39,9 +34,6 @@ namespace Blockiverse.Core
         public const string XrVisualProjectionLayerName = "BlockiverseXrVisuals";
         public const int XrVisualProjectionLayerIndex = 12;
         public const int XrVisualProjectionLayerMask = 1 << XrVisualProjectionLayerIndex;
-        public const string VrUiLayerName = "BlockiverseVRUI";
-        public const int VrUiLayerIndex = 13;
-        public const int VrUiLayerMask = 1 << VrUiLayerIndex;
-        public const int VrUiRaycastLayerMask = VrUiLayerMask;
+        public const int VrUiRaycastLayerMask = InteractionLayerMask;
     }
 }

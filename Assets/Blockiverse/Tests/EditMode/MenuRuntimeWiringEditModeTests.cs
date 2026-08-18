@@ -4,19 +4,18 @@ using System.Globalization;
 using System.Reflection;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
 using Blockiverse.VR;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
-using UnityEditor;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.TestTools;
+using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
-using UiDisplayStyle = UnityEngine.UIElements.DisplayStyle;
-using UiVisualElement = UnityEngine.UIElements.VisualElement;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -24,32 +23,195 @@ namespace Blockiverse.Tests.EditMode
     {
         readonly List<UnityEngine.Object> objectsToDestroy = new();
 
+        [Test]
+        public void EveryCanonicalScreenIdMapsToRegisteredPresenter()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            
+            var presenters = new Dictionary<string, BlockiverseWorldSpacePanelPresenter>();
+            string[] screenIds = {
+                MenuActions.TitleScreen, MenuActions.NewWorldScreen, MenuActions.LoadWorldScreen,
+                MenuActions.WorldDetailsScreen, MenuActions.WorldLoadingScreen, MenuActions.ControllerMappingScreen,
+                MenuActions.GameplayHudScreen, MenuActions.PauseScreen, MenuActions.SettingsScreen,
+                MenuActions.ComfortSettingsScreen, MenuActions.AudioSettingsScreen, MenuActions.ControlsScreen,
+                MenuActions.CreativeToolsScreen, MenuActions.DeathScreen, MenuActions.LanMultiplayerScreen,
+                MenuActions.StationMenuScreen, MenuActions.ConfirmModal, MenuActions.ErrorModal,
+                MenuActions.InventoryScreen, MenuActions.CraftingScreen, MenuActions.CatalogScreen,
+                MenuActions.StationCrateScreen
+            };
+
+            foreach (string id in screenIds)
+            {
+                GameObject pObj = CreateChild(rig.transform, id + " Presenter");
+                pObj.AddComponent<Canvas>();
+                presenters[id] = pObj.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            }
+
+            controller.ConfigurePresenters(
+                presenters[MenuActions.TitleScreen],
+                presenters[MenuActions.PauseScreen],
+                presenters[MenuActions.DeathScreen],
+                presenters[MenuActions.ConfirmModal],
+                presenters[MenuActions.ErrorModal],
+                presenters[MenuActions.NewWorldScreen],
+                presenters[MenuActions.LoadWorldScreen],
+                presenters[MenuActions.SettingsScreen],
+                presenters[MenuActions.StationMenuScreen],
+                presenters[MenuActions.LanMultiplayerScreen],
+                presenters[MenuActions.AudioSettingsScreen],
+                presenters[MenuActions.ControlsScreen],
+                presenters[MenuActions.WorldDetailsScreen],
+                presenters[MenuActions.CreativeToolsScreen],
+                presenters[MenuActions.GameplayHudScreen],
+                presenters[MenuActions.ComfortSettingsScreen],
+                presenters[MenuActions.ControllerMappingScreen],
+                presenters[MenuActions.WorldLoadingScreen],
+                presenters[MenuActions.InventoryScreen],
+                presenters[MenuActions.CraftingScreen],
+                presenters[MenuActions.CatalogScreen],
+                presenters[MenuActions.StationCrateScreen]
+            );
+
+            StartMenuController(controller);
+
+            var screenPresenters = (List<(string screenId, BlockiverseWorldSpacePanelPresenter presenter)>)
+                typeof(BlockiverseMenuController)
+                .GetField("screenPresenters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(controller);
+
+            foreach (string id in screenIds)
+            {
+                Assert.That(screenPresenters.Exists(p => p.screenId == id), Is.True, 
+                    $"Screen ID '{id}' should be registered in the controller.");
+            }
+        }
+
         [TearDown]
         public void TearDown()
         {
-            bool previous = LogAssert.ignoreFailingMessages;
-            LogAssert.ignoreFailingMessages = true;
-            try
+            foreach (UnityEngine.Object target in objectsToDestroy)
+                if (target != null)
+                    UnityEngine.Object.DestroyImmediate(target);
+            objectsToDestroy.Clear();
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [Test]
+        public void SettingsSubPanelsReturnToCorrectPreviousRoute()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.PauseMenuName, 8);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.SettingsPanelName, 4);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.AudioSettingsPanelName, 2);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.ControlsPanelName, 2);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.ComfortSettingsPanelName, 1);
+            
+            StartMenuController(controller);
+
+            // 1. From Title -> Settings -> Sub-panels
+            controller.Router.ClearToRoot(new ScreenRoute(MenuActions.TitleScreen, pauseGame: true));
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
+            AssertReturnToHub(MenuActions.AudioSettingsScreen, controller.CloseAudioSettingsScreen);
+            AssertReturnToHub(MenuActions.ControlsScreen, controller.CloseControlsScreen);
+            AssertReturnToHub(MenuActions.ComfortSettingsScreen, controller.CloseComfortSettingsScreen);
+            
+            controller.Router.PopScreen(); // Return to Title
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+
+            // 2. From Pause -> Settings -> Sub-panels
+            controller.EnterGameplay();
+            controller.OnMenuPressed(); // Pause
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+            
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
+            AssertReturnToHub(MenuActions.AudioSettingsScreen, controller.CloseAudioSettingsScreen);
+            
+            controller.Router.PopScreen(); // Return to Pause
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+
+            void AssertReturnToHub(string subPanelId, Action closeAction)
             {
-                foreach (UnityEngine.Object target in objectsToDestroy)
-                    if (target != null)
-                        UnityEngine.Object.DestroyImmediate(target);
-                objectsToDestroy.Clear();
-                BlockiverseRuntimeState.Reset();
-            }
-            finally
-            {
-                LogAssert.ignoreFailingMessages = previous;
+                controller.Router.PushScreen(new ScreenRoute(subPanelId, pauseGame: true));
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(subPanelId));
+                closeAction();
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.SettingsScreen),
+                    $"Closing {subPanelId} must return to the Settings hub.");
             }
         }
 
         [Test]
-        public void WorldSpacePresenterShowActivatesInactiveWorldSpaceRoot()
+        public void ErrorModalTakesInputPriorityOverOtherSurfaces()
         {
-            GameObject panel = CreateRoot("UI Toolkit Menu Presenter");
-            BlockiverseUiToolkitMenuPresenter presenter = panel.AddComponent<BlockiverseUiToolkitMenuPresenter>();
-            presenter.ConfigureWorldSpaceTarget(
-                panel,
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseActionMenu errorMenu = CreateGeneratedActionMenu(rig.transform, "Error Dialog", 1);
+            
+            AddPresenter(titleMenu.gameObject);
+            AddPresenter(errorMenu.gameObject);
+
+            StartMenuController(controller);
+            
+            CanvasGroup titleInput = titleMenu.GetComponent<CanvasGroup>();
+            CanvasGroup errorInput = errorMenu.GetComponent<CanvasGroup>();
+
+            // Title is active
+            Assert.That(titleInput.interactable, Is.True);
+            
+            // Show error
+            controller.ShowError("Title", "Message");
+
+            Assert.That(controller.Router.HasModal, Is.True);
+            Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ErrorModal));
+            
+            // Error takes priority
+            Assert.That(errorInput.interactable, Is.True);
+            Assert.That(titleInput.interactable, Is.False, "Underlying title menu should be disabled while modal is open.");
+        }
+
+        [Test]
+        public void WorldInputDisabledWheneverRoutedMenuOrModalOwnsInput()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+
+            StartMenuController(controller);
+            
+            // Title screen
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+            
+            // Gameplay
+            controller.EnterGameplay();
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.True);
+            
+            // Pause
+            controller.OnMenuPressed();
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+            
+            // Confirm Modal over gameplay
+            controller.EnterGameplay();
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.True);
+            controller.RequestConfirm("Quit?", "Quit", "Cancel", _ => { });
+            Assert.That(controller.Router.HasModal, Is.True);
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+        }
+
+        [Test]
+        public void WorldSpacePresenterShowActivatesInactiveCanvasRoot()
+        {
+            GameObject panel = CreateRoot("Routed Panel");
+            Canvas canvas = panel.AddComponent<Canvas>();
+            canvas.enabled = false;
+            BlockiverseWorldSpacePanelPresenter presenter = panel.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(
+                canvas,
                 targetHeadset: null,
                 distance: 1.2f,
                 horizontalOffset: 0.0f,
@@ -60,434 +222,32 @@ namespace Blockiverse.Tests.EditMode
             presenter.Show();
 
             Assert.That(panel.activeSelf, Is.True,
-                "A world-space UI Toolkit root can be inactive in generated assets; Show must reactivate it.");
+                "A routed menu root can be inactive in generated assets; Show must reactivate it before enabling the Canvas.");
+            Assert.That(canvas.enabled, Is.True);
 
             presenter.Hide();
 
-            Assert.That(panel.activeSelf, Is.False);
+            Assert.That(panel.activeSelf, Is.True,
+                "Hidden routed menus should keep their scripts initialized and hide through Canvas.enabled.");
+            Assert.That(canvas.enabled, Is.False);
         }
 
         [Test]
-        public void UiToolkitPresenterShowPreservesFixedMenuSurfaceTransform()
-        {
-            GameObject headset = CreateRoot("Headset");
-            headset.transform.SetPositionAndRotation(new Vector3(1.0f, 1.4f, 2.0f), Quaternion.identity);
-            GameObject surface = CreateRoot("UI Toolkit Menu Surface");
-            surface.transform.SetPositionAndRotation(new Vector3(0.25f, 1.1f, 0.75f), Quaternion.Euler(4.0f, 12.0f, 0.0f));
-            var presenter = surface.AddComponent<BlockiverseUiToolkitMenuPresenter>();
-            presenter.ConfigureWorldSpaceTarget(
-                surface,
-                headset.transform,
-                distance: 1.25f,
-                horizontalOffset: 0.0f,
-                verticalOffset: -0.2f,
-                pitch: 10.0f,
-                scale: 0.0013f);
-            surface.SetActive(false);
-
-            presenter.Show();
-
-            Assert.That(surface.activeSelf, Is.True);
-            Assert.That(surface.transform.position.x, Is.EqualTo(0.25f).Within(0.001f));
-            Assert.That(surface.transform.position.y, Is.EqualTo(1.1f).Within(0.001f));
-            Assert.That(surface.transform.position.z, Is.EqualTo(0.75f).Within(0.001f));
-            Assert.That(surface.transform.rotation.eulerAngles.y, Is.EqualTo(12.0f).Within(0.001f));
-        }
-
-        [Test]
-        public void MenuControllerRoutesTitleActionsFromUiToolkitRuntime()
-        {
-            string key = BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey;
-            PlayerPrefs.SetInt(key, 1);
-            GameObject rig = CreateRoot("Rig");
-            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-            GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-            controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
-
-            try
-            {
-                StartMenuController(controller);
-
-                InvokeMenuAction(controller, MenuActions.TitleNewWorld);
-
-                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.NewWorldScreen));
-                Assert.That(controller.PendingNewWorldConfig, Is.Not.Null);
-            }
-            finally
-            {
-                PlayerPrefs.DeleteKey(key);
-            }
-        }
-
-        [Test]
-        public void UiToolkitLoadWorldSelectionUsesNamespacedSaveId()
+        public void MenuControllerDiscoversGeneratedMenusAndRoutesTitleActionsAtRuntime()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-            GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            var visibleRoot = new UiVisualElement();
-            visibleRoot.style.display = UiDisplayStyle.Flex;
-            SetPrivateField(surface, "root", visibleRoot);
-            controller.ConfigureUiToolkitMenuSurface(surface);
-            WorldSaveSummary first = CreateSave("First World");
-            WorldSaveSummary colliding = CreateSave("inventory.slot.0");
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseNewWorldPanel newWorldPanel = CreateGeneratedNewWorldPanel(rig.transform);
 
             StartMenuController(controller);
-            controller.SetSaveList(new[] { first, colliding });
-            controller.Router.PushScreen(new ScreenRoute(MenuActions.LoadWorldScreen, pauseGame: true));
 
-            InvokeMenuSelection(
-                controller,
-                BlockiverseUiToolkitMenuCatalog.LoadWorldSaveSelectionPrefix + "inventory.slot.0");
+            Assert.That(titleMenu.ActionIds[0], Is.EqualTo(MenuActions.TitleNewWorld));
 
-            Assert.That(controller.PendingLoadSave?.Name, Is.EqualTo("inventory.slot.0"));
-        }
+            GetChildComponent<Button>(titleMenu.transform, "Panel/Action 1").onClick.Invoke();
 
-        [Test]
-        public void UiToolkitSurfaceAppliesPendingViewAfterVisualTreeResolves()
-        {
-            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            var view = new BlockiverseUiToolkitMenuView(
-                MenuActions.TitleScreen,
-                "Title",
-                "Purpose",
-                new[] { new MenuAction(MenuActions.TitleNewWorld, "New World") });
-
-            surface.Show(view, acceptsInput: true);
-
-            var root = new UiVisualElement();
-            var actions = new UiVisualElement();
-            var details = new UiVisualElement();
-            var title = new UnityEngine.UIElements.Label();
-            SetPrivateField(surface, "root", root);
-            SetPrivateField(surface, "actionsRoot", actions);
-            SetPrivateField(surface, "detailsRoot", details);
-            SetPrivateField(surface, "titleLabel", title);
-
-            EnableBehaviour(surface);
-
-            Assert.That(title.text, Is.EqualTo("Title"));
-            Assert.That(actions.childCount, Is.EqualTo(1));
-            Assert.That(actions[0], Is.TypeOf<UnityEngine.UIElements.Button>());
-            Assert.That(((UnityEngine.UIElements.Button)actions[0]).text, Is.EqualTo("New World"));
-            Assert.That(details.childCount, Is.GreaterThan(0));
-        }
-
-        [Test]
-        public void UiToolkitSurfaceButtonsApplyVisualAndHapticFeedback()
-        {
-            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
-            var haptics = surfaceObject.AddComponent<BlockiverseInteractionHaptics>();
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            SetPrivateField(surface, "interactionHaptics", haptics);
-
-            int tickCount = 0;
-            int clickCount = 0;
-            var requestedPatterns = new List<BlockiverseHapticPattern>();
-            haptics.UiTickRequested += () => tickCount++;
-            haptics.UiClickRequested += () => clickCount++;
-            haptics.PatternRequested += requestedPatterns.Add;
-
-            var view = new BlockiverseUiToolkitMenuView(
-                MenuActions.TitleScreen,
-                "Title",
-                "Purpose",
-                new[] { new MenuAction(MenuActions.TitleNewWorld, "New World") },
-                textInputs: new[] { new MenuTextInputRow("test.name", "Name", "World") },
-                toggleRows: new[] { new MenuToggleRow("test.toggle", "Toggle", true) },
-                sliderRows: new[] { new MenuSliderRow("test.slider", "Slider", 0.5f, 0.0f, 1.0f) });
-
-            surface.Show(view, acceptsInput: true);
-
-            var root = new UiVisualElement();
-            var actions = new UiVisualElement();
-            var details = new UiVisualElement();
-            SetPrivateField(surface, "root", root);
-            SetPrivateField(surface, "actionsRoot", actions);
-            SetPrivateField(surface, "detailsRoot", details);
-
-            EnableBehaviour(surface);
-
-            Assert.That(actions.childCount, Is.EqualTo(1));
-            var button = (UnityEngine.UIElements.Button)actions[0];
-            AssertInteractiveFeedback(surface, button, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: false);
-
-            var textField = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.TextField>(details, "test.name");
-            Assert.That(textField, Is.Not.Null);
-            AssertInteractiveFeedback(surface, textField, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
-
-            var toggle = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Toggle>(details, "test.toggle");
-            Assert.That(toggle, Is.Not.Null);
-            AssertInteractiveFeedback(surface, toggle, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
-
-            var slider = UnityEngine.UIElements.UQueryExtensions.Q<UnityEngine.UIElements.Slider>(details, "test.slider");
-            Assert.That(slider, Is.Not.Null);
-            AssertInteractiveFeedback(surface, slider, ref tickCount, ref clickCount, requestedPatterns, clickOnPointerDown: true);
-        }
-
-        [Test]
-        public void UiToolkitXriPointerConvertsLocalHitsToPanelCoordinates()
-        {
-            MethodInfo converter = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("LocalPointToPanelPosition", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            MethodInfo inverseConverter = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("PanelPositionToLocalPoint", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            MethodInfo xrRayXRIBridge = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("TryGetTargetFromRayInteractor", BindingFlags.Instance | BindingFlags.NonPublic);
-            MethodInfo planeRayXRIBridge = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("TryGetPanelPositionFromWorldRay", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            MethodInfo linePointXRIBridge = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("TryGetPanelPositionFromLinePoints", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            MethodInfo boundsXRIBridge = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("FindXriInteractiveElementAt", BindingFlags.Instance | BindingFlags.NonPublic);
-            MethodInfo inputRigXRIBridge = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("TryGetTargetFromInputRigRays", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(converter, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must expose the XRI pointer coordinate converter for this regression test.");
-            Assert.That(inverseConverter, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must expose the inverse converter so Quest smoke validation can raycast to real button centers.");
-            Assert.That(xrRayXRIBridge, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must support the native XRRayInteractor XRI bridge used by the generated Quest rig.");
-            Assert.That(planeRayXRIBridge, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must convert direct XR rays to panel coordinates when physics misses the UI Toolkit collider.");
-            Assert.That(linePointXRIBridge, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must use XRI line points so XRI bridge hits match the visible controller ray.");
-            Assert.That(boundsXRIBridge, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must resolve registered control bounds when Unity's runtime panel pick returns null on Quest.");
-            Assert.That(inputRigXRIBridge, Is.Not.Null,
-                $"{nameof(BlockiverseUiToolkitMenuSurface)} must resolve targets from the visible BlockiverseInputRig ray pose when XRI hit caches are stale.");
-
-            Vector2 center = (Vector2)converter.Invoke(null, new object[] { Vector3.zero });
-            Vector2 topLeft = (Vector2)converter.Invoke(
-                null,
-                new object[]
-                {
-                    new Vector3(
-                        -BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x * 0.5f,
-                        BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y * 0.5f,
-                        0.0f),
-                });
-            Vector2 bottomRight = (Vector2)converter.Invoke(
-                null,
-                new object[]
-                {
-                    new Vector3(
-                        BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x * 0.5f,
-                        -BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y * 0.5f,
-                        0.0f),
-                });
-
-            Assert.That(center.x, Is.EqualTo(640.0f).Within(0.001f));
-            Assert.That(center.y, Is.EqualTo(360.0f).Within(0.001f));
-            Assert.That(topLeft, Is.EqualTo(Vector2.zero));
-            Assert.That(bottomRight.x, Is.EqualTo(1280.0f).Within(0.001f));
-            Assert.That(bottomRight.y, Is.EqualTo(720.0f).Within(0.001f));
-
-            Vector3 localTopLeft = (Vector3)inverseConverter.Invoke(null, new object[] { Vector2.zero });
-            Vector3 localBottomRight = (Vector3)inverseConverter.Invoke(null, new object[] { new Vector2(1280.0f, 720.0f) });
-
-            Assert.That(localTopLeft.x, Is.EqualTo(-BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x * 0.5f).Within(0.001f));
-            Assert.That(localTopLeft.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y * 0.5f).Within(0.001f));
-            Assert.That(localBottomRight.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x * 0.5f).Within(0.001f));
-            Assert.That(localBottomRight.y, Is.EqualTo(-BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y * 0.5f).Within(0.001f));
-
-            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            object[] centerRayArgs =
-            {
-                new Ray(new Vector3(0.0f, 0.0f, -1.0f), Vector3.forward),
-                2.0f,
-                default(Vector2),
-            };
-            object[] outsideRayArgs =
-            {
-                new Ray(new Vector3(20.0f, 0.0f, -1.0f), Vector3.forward),
-                2.0f,
-                default(Vector2),
-            };
-
-            Assert.That((bool)planeRayXRIBridge.Invoke(surface, centerRayArgs), Is.True);
-            Vector2 rayPanelCenter = (Vector2)centerRayArgs[2];
-            Assert.That(rayPanelCenter.x, Is.EqualTo(640.0f).Within(0.001f));
-            Assert.That(rayPanelCenter.y, Is.EqualTo(360.0f).Within(0.001f));
-            Assert.That((bool)planeRayXRIBridge.Invoke(surface, outsideRayArgs), Is.False);
-
-            Vector3[] centerLinePoints =
-            {
-                new(0.0f, 0.0f, -1.0f),
-                new(0.0f, 0.0f, 1.0f),
-            };
-            Vector3[] outsideLinePoints =
-            {
-                new(20.0f, 0.0f, -1.0f),
-                new(20.0f, 0.0f, 1.0f),
-            };
-            object[] centerLineArgs =
-            {
-                centerLinePoints,
-                centerLinePoints.Length,
-                default(Vector2),
-            };
-            object[] outsideLineArgs =
-            {
-                outsideLinePoints,
-                outsideLinePoints.Length,
-                default(Vector2),
-            };
-
-            Assert.That((bool)linePointXRIBridge.Invoke(surface, centerLineArgs), Is.True);
-            Vector2 linePanelCenter = (Vector2)centerLineArgs[2];
-            Assert.That(linePanelCenter.x, Is.EqualTo(640.0f).Within(0.001f));
-            Assert.That(linePanelCenter.y, Is.EqualTo(360.0f).Within(0.001f));
-            Assert.That((bool)linePointXRIBridge.Invoke(surface, outsideLineArgs), Is.False);
-        }
-
-        [Test]
-        public void UiToolkitXriPointerBridgeRequiresEnabledNativeUiInteraction()
-        {
-            MethodInfo shouldConsiderRay = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("ShouldConsiderXriRayInteractor", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            Assert.That(shouldConsiderRay, Is.Not.Null);
-
-            GameObject rayObject = CreateRoot("XRI Menu Ray");
-            XRRayInteractor rayInteractor = rayObject.AddComponent<XRRayInteractor>();
-            rayInteractor.enableUIInteraction = false;
-
-            Assert.That((bool)shouldConsiderRay.Invoke(null, new object[] { rayInteractor }), Is.False,
-                "Menu interaction must use an enabled XRI UI interactor.");
-
-            rayInteractor.enableUIInteraction = true;
-
-            Assert.That((bool)shouldConsiderRay.Invoke(null, new object[] { rayInteractor }), Is.True);
-
-            rayObject.SetActive(false);
-
-            Assert.That((bool)shouldConsiderRay.Invoke(null, new object[] { rayInteractor }), Is.False);
-        }
-
-        [Test]
-        public void UiToolkitInputRigPointerBridgeUsesConfiguredPoseWhileMenuOwnsInput()
-        {
-            MethodInfo shouldConsiderInputRigRay = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("ShouldConsiderInputRigRayInteractor", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            Assert.That(shouldConsiderInputRigRay, Is.Not.Null);
-
-            GameObject rayObject = CreateRoot("Generated Input Rig Ray");
-            XRRayInteractor rayInteractor = rayObject.AddComponent<XRRayInteractor>();
-            rayInteractor.enableUIInteraction = true;
-
-            Assert.That((bool)shouldConsiderInputRigRay.Invoke(null, new object[] { rayInteractor }), Is.False,
-                "The input-rig pose bridge must stay inactive while gameplay owns input.");
-
-            BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false, menuInputActive: true);
-
-            Assert.That((bool)shouldConsiderInputRigRay.Invoke(null, new object[] { rayInteractor }), Is.True);
-
-            rayObject.SetActive(false);
-
-            Assert.That((bool)shouldConsiderInputRigRay.Invoke(null, new object[] { rayInteractor }), Is.True,
-                "The generated input-rig pose bridge should survive transient XRI ray GameObject deactivation while the UI Toolkit menu owns input.");
-
-            rayInteractor.enableUIInteraction = false;
-
-            Assert.That((bool)shouldConsiderInputRigRay.Invoke(null, new object[] { rayInteractor }), Is.False,
-                "A ray explicitly configured without UI interaction must not drive the menu pose bridge.");
-        }
-
-        [Test]
-        public void UiToolkitXriPointerBridgeDoesNotCacheStandaloneCastersWithoutPressState()
-        {
-            FieldInfo standaloneCasterCache = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetField("xriCasters", BindingFlags.Instance | BindingFlags.NonPublic);
-
-            Assert.That(standaloneCasterCache, Is.Null,
-                "The UI Toolkit menu bridge must not let bare CurveInteractionCaster hits consume the target before a press-aware NearFarInteractor or XRRayInteractor can read the trigger.");
-        }
-
-        [Test]
-        public void UiToolkitXriPointerBridgePrefersPressedInteractorOverEarlierHoverHit()
-        {
-            MethodInfo shouldPreferCandidate = typeof(BlockiverseUiToolkitMenuSurface)
-                .GetMethod("ShouldPreferPointerCandidate", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            Assert.That(shouldPreferCandidate, Is.Not.Null);
-
-            Assert.That((bool)shouldPreferCandidate.Invoke(null, new object[] { false, false, false }), Is.True,
-                "The first hover target should still drive visual feedback when no press is active.");
-            Assert.That((bool)shouldPreferCandidate.Invoke(null, new object[] { true, false, false }), Is.False,
-                "A later hover-only hand should not replace the first hover target.");
-            Assert.That((bool)shouldPreferCandidate.Invoke(null, new object[] { true, false, true }), Is.True,
-                "A pressed hand/ray must replace an earlier unpressed target so trigger release activates the button under the active controller.");
-            Assert.That((bool)shouldPreferCandidate.Invoke(null, new object[] { true, true, false }), Is.False,
-                "An unpressed candidate must never replace the currently pressed target.");
-        }
-
-        [Test]
-        public void UiToolkitSurfaceRestoresRuntimeWorldSpaceColliderReference()
-        {
-            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
-            var document = surfaceObject.AddComponent<UnityEngine.UIElements.UIDocument>();
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-
-            surface.Configure(document);
-
-            BoxCollider worldSpaceCollider = surfaceObject.GetComponent<BoxCollider>();
-            var serializedDocument = new SerializedObject(document);
-            SerializedProperty colliderProperty = serializedDocument.FindProperty("m_WorldSpaceCollider");
-
-            Assert.That(document.worldSpaceSizeMode, Is.EqualTo(UnityEngine.UIElements.UIDocument.WorldSpaceSizeMode.Fixed));
-            Assert.That(document.worldSpaceSize.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.x).Within(0.001f));
-            Assert.That(document.worldSpaceSize.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.y).Within(0.001f));
-            Assert.That(worldSpaceCollider, Is.Not.Null);
-            Assert.That(worldSpaceCollider.isTrigger, Is.True);
-            Assert.That(worldSpaceCollider.size.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.x).Within(0.001f));
-            Assert.That(worldSpaceCollider.size.y, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceColliderSize.y).Within(0.001f));
-            Assert.That(surfaceObject.layer, Is.EqualTo(BlockiverseProject.VrUiLayerIndex),
-                "Runtime Configure must keep the UI Toolkit surface on the layer used by Quest controller UI raycasts.");
-            Assert.That(colliderProperty, Is.Not.Null);
-            Assert.That(colliderProperty.objectReferenceValue, Is.SameAs(worldSpaceCollider),
-                "Runtime Configure must restore UIDocument's private world-space collider reference after UIDocument startup clears it.");
-        }
-
-        [Test]
-        public void UiToolkitSurfaceDoesNotRecenterVisibleFixedMenuPanel()
-        {
-            GameObject cameraObject = CreateRoot("Main Camera");
-            cameraObject.tag = "MainCamera";
-            cameraObject.AddComponent<Camera>();
-            cameraObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-
-            GameObject surfaceObject = CreateRoot("UI Toolkit Menu Surface");
-            surfaceObject.transform.position = new Vector3(0.0f, 0.0f, 10.0f);
-            var presenter = surfaceObject.AddComponent<BlockiverseUiToolkitMenuPresenter>();
-            presenter.ConfigureWorldSpaceTarget(
-                surfaceObject,
-                cameraObject.transform,
-                distance: 1.0f,
-                horizontalOffset: 0.0f,
-                verticalOffset: -0.2f,
-                pitch: 0.0f,
-                scale: BlockiverseUiToolkitMenuSurface.ReadableTransformScale);
-            var document = surfaceObject.AddComponent<UnityEngine.UIElements.UIDocument>();
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            surface.Configure(document);
-            surface.Show(new BlockiverseUiToolkitMenuView(
-                MenuActions.TitleScreen,
-                "Menu",
-                "Choose an option.",
-                new[] { new MenuAction(MenuActions.TitleNewWorld, "New World") }), acceptsInput: true);
-            var visibleRoot = new UiVisualElement();
-            visibleRoot.style.display = UiDisplayStyle.Flex;
-            SetPrivateField(surface, "root", visibleRoot);
-
-            InvokeBehaviourMethod(surface, "LateUpdate");
-
-            Assert.That(surfaceObject.transform.position.x, Is.EqualTo(0.0f).Within(0.001f));
-            Assert.That(surfaceObject.transform.position.y, Is.EqualTo(0.0f).Within(0.001f));
-            Assert.That(surfaceObject.transform.position.z, Is.EqualTo(10.0f).Within(0.001f));
-            Assert.That(surfaceObject.transform.localScale.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableTransformScale).Within(0.00001f));
-            Assert.That(document.worldSpaceSize.x, Is.EqualTo(BlockiverseUiToolkitMenuSurface.ReadableWorldSpaceSize.x).Within(0.001f));
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.NewWorldScreen));
+            Assert.That(newWorldPanel.Config, Is.Not.Null);
         }
 
         [Test]
@@ -497,6 +257,10 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             SurvivalVitalsRuntime vitals = rig.AddComponent<SurvivalVitalsRuntime>();
             EnableBehaviour(vitals);
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             StartMenuController(controller);
             controller.EnterGameplay();
@@ -516,6 +280,8 @@ namespace Blockiverse.Tests.EditMode
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
 
             StartMenuController(controller);
 
@@ -534,81 +300,103 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void WorldLoadingRoutePausesAndUsesUiToolkitSurface()
+        public void WorldLoadingRoutePausesAndKeepsOverlayNonInteractive()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-            GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-            controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            GameObject loading = CreateChild(rig.transform, "Startup Loading Overlay");
+            Canvas loadingCanvas = loading.AddComponent<Canvas>();
+            loadingCanvas.enabled = false;
+            BlockiverseStartupOverlay startupOverlay = loading.AddComponent<BlockiverseStartupOverlay>();
+            BlockiverseWorldSpacePanelPresenter loadingPresenter = loading.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            loadingPresenter.Configure(
+                loadingCanvas,
+                targetHeadset: null,
+                distance: 1.2f,
+                horizontalOffset: 0.0f,
+                verticalOffset: 0.0f,
+                pitch: 0.0f,
+                showWhenStarted: false);
+            startupOverlay.Configure(loadingCanvas, loadingPresenter);
 
             StartMenuController(controller);
             controller.ShowWorldLoadingScreen();
 
+            CanvasGroup loadingInput = loading.GetComponent<CanvasGroup>();
             Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.WorldLoadingScreen));
             Assert.That(BlockiverseRuntimeState.IsGamePaused, Is.True);
             Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+            Assert.That(loadingCanvas.enabled, Is.True);
+            Assert.That(loadingInput.interactable, Is.False);
+            Assert.That(loadingInput.blocksRaycasts, Is.False);
+            Assert.That(startupOverlay.HideAutomatically, Is.False);
 
             controller.EnterGameplay();
 
             Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
+            Assert.That(loadingCanvas.enabled, Is.False);
+            Assert.That(startupOverlay.HideAutomatically, Is.True);
             Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.True);
         }
 
         [Test]
-        public void SurvivalHudToolkitSurfaceFollowsGameplayRoute()
+        public void SurvivalHudPresenterFollowsGameplayRoute()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
 
             GameObject hud = CreateChild(rig.transform, "Survival HUD");
-            var hudSurface = hud.AddComponent<BlockiverseHudToolkitSurface>();
-            hudSurface.Configure(hud.AddComponent<UnityEngine.UIElements.UIDocument>());
-            hudSurface.SetVisible(true);
+            Canvas hudCanvas = hud.AddComponent<Canvas>();
+            hudCanvas.enabled = true;
 
             StartMenuController(controller);
 
-            Assert.That(hudSurface.IsVisible, Is.False, "Title routing must hide the gameplay HUD.");
+            Assert.That(hud.GetComponent<BlockiverseWorldSpacePanelPresenter>(), Is.Not.Null);
+            Assert.That(hudCanvas.enabled, Is.False, "Title routing must hide the gameplay HUD.");
 
             controller.EnterGameplay();
 
-            Assert.That(hudSurface.IsVisible, Is.True);
+            Assert.That(hudCanvas.enabled, Is.True);
 
             controller.OnMenuPressed();
 
             Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
-            Assert.That(hudSurface.IsVisible, Is.False, "Pause routing must hide the gameplay HUD.");
+            Assert.That(hudCanvas.enabled, Is.False, "Pause routing must hide the gameplay HUD.");
         }
 
         [Test]
-        public void ControllerMappingPresenterShowsWorldSpaceRootOnlyUntilDismissed()
+        public void ControllerMappingPresenterShowsOnlyUntilDismissed()
         {
-            string key = BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
             {
-                BlockiverseUiToolkitMenuPresenter firstPresenter = CreatePresenterWithStartGate(
-                    "Start Gate Presenter First",
+                BlockiverseWorldSpacePanelPresenter firstPresenter = CreatePresenterWithStartGate(
+                    "Controller Mapping Popup First",
                     key,
-                    out GameObject firstRoot);
+                    out Canvas firstCanvas);
 
                 StartBehaviour(firstPresenter);
 
-                Assert.That(firstRoot.activeSelf, Is.True);
+                Assert.That(firstCanvas.enabled, Is.True);
 
                 firstPresenter.Hide();
 
-                Assert.That(firstRoot.activeSelf, Is.False);
+                Assert.That(firstCanvas.enabled, Is.False);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
 
-                BlockiverseUiToolkitMenuPresenter secondPresenter = CreatePresenterWithStartGate(
-                    "Start Gate Presenter Second",
+                BlockiverseWorldSpacePanelPresenter secondPresenter = CreatePresenterWithStartGate(
+                    "Controller Mapping Popup Second",
                     key,
-                    out GameObject secondRoot);
+                    out Canvas secondCanvas);
 
                 StartBehaviour(secondPresenter);
 
-                Assert.That(secondRoot.activeSelf, Is.False);
+                Assert.That(secondCanvas.enabled, Is.False);
             }
             finally
             {
@@ -619,24 +407,50 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ControllerMappingRouteOwnsFirstLaunchBeforeTitleMenu()
         {
-            string key = BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
             {
                 GameObject rig = CreateRoot("Rig");
                 BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-                GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-                controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
+                BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+                AddPresenter(titleMenu.gameObject);
+                GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
+                Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
+                mappingCanvas.enabled = false;
+                BlockiverseWorldSpacePanelPresenter mappingPresenter =
+                    controllerMapping.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                mappingPresenter.Configure(
+                    mappingCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false,
+                    showWhenStartedPlayerPrefsKey: key);
 
                 StartMenuController(controller);
 
+                Canvas titleCanvas = titleMenu.GetComponent<Canvas>();
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen));
+                Assert.That(mappingCanvas.enabled, Is.True);
+
+                StartBehaviour(mappingPresenter);
+
+                Assert.That(mappingCanvas.enabled, Is.True,
+                    "Presenter Start must not hide a controller-mapping route already activated by the menu router.");
+                Assert.That(mappingPresenter.GetComponent<CanvasGroup>().interactable, Is.True);
+                Assert.That(mappingPresenter.GetComponent<CanvasGroup>().blocksRaycasts, Is.True);
+                Assert.That(titleCanvas.enabled, Is.False, "The title menu must not sit in front of first-run controls.");
 
                 controller.CloseControllerMappingScreen();
 
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+                Assert.That(mappingCanvas.enabled, Is.False);
+                Assert.That(titleCanvas.enabled, Is.True);
             }
             finally
             {
@@ -645,9 +459,9 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ControllerMappingRouteClosesQuickBlockCatalogAndOwnsRaycasts()
+        public void ControllerMappingRouteClosesQuickBlockMenuAndOwnsRaycasts()
         {
-            string key = BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
@@ -655,29 +469,70 @@ namespace Blockiverse.Tests.EditMode
                 GameObject rig = CreateRoot("Rig");
                 BlockiverseInputRig inputRig = rig.AddComponent<BlockiverseInputRig>();
                 BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-                GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-                controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
+                BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+                AddPresenter(titleMenu.gameObject);
+
+                GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
+                Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
+                mappingCanvas.enabled = false;
+                BlockiverseWorldSpacePanelPresenter mappingPresenter =
+                    controllerMapping.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                mappingPresenter.Configure(
+                    mappingCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false,
+                    showWhenStartedPlayerPrefsKey: key);
+
+                GameObject blockMenu = CreateChild(rig.transform, "Block Menu");
+                Canvas blockMenuCanvas = blockMenu.AddComponent<Canvas>();
+                BlockiverseWorldSpacePanelPresenter blockMenuPresenter =
+                    blockMenu.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                blockMenuPresenter.Configure(
+                    blockMenuCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false);
+                blockMenuPresenter.Show();
 
                 StartMenuController(controller);
 
+                CanvasGroup blockMenuInput = blockMenu.GetComponent<CanvasGroup>();
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen));
+                Assert.That(mappingCanvas.enabled, Is.True);
+                Assert.That(blockMenuCanvas.enabled, Is.False,
+                    "The Blocks quick menu must not remain visible behind the first-run controller map.");
+                Assert.That(blockMenuInput, Is.Not.Null);
+                Assert.That(blockMenuInput.interactable, Is.False);
+                Assert.That(blockMenuInput.blocksRaycasts, Is.False,
+                    "The Blocks quick menu must not steal tracked-device raycasts from the controller-map Close button.");
 
                 inputRig.QuickMenuPressed.Invoke();
 
-                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen),
-                    "Support-grip quick-menu input must be ignored while UI Toolkit menu UI owns input.");
+                Assert.That(blockMenuCanvas.enabled, Is.False,
+                    "Support-grip quick-menu input must be ignored while routed menu UI owns input.");
+                Assert.That(blockMenuInput.blocksRaycasts, Is.False);
 
                 controller.CloseControllerMappingScreen();
                 inputRig.QuickMenuPressed.Invoke();
 
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
-                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen),
-                    "The quick block catalog is gameplay-only and must not open over the title menu.");
+                Assert.That(blockMenuCanvas.enabled, Is.False,
+                    "The quick block menu is gameplay-only and must not open over the title menu.");
 
                 controller.EnterGameplay();
                 inputRig.QuickMenuPressed.Invoke();
 
-                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.BlockCatalogScreen));
+                Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
+                Assert.That(blockMenuCanvas.enabled, Is.True);
+                Assert.That(blockMenuInput.interactable, Is.True);
+                Assert.That(blockMenuInput.blocksRaycasts, Is.True);
             }
             finally
             {
@@ -686,26 +541,72 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ControllerMappingRouteUsesUiToolkitPresenterOnly()
+        public void ControllerMappingCloseFallbackUsesEitherInteractionRay()
         {
-            string key = BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
             {
                 GameObject rig = CreateRoot("Rig");
+                BlockiverseInputRig inputRig = rig.AddComponent<BlockiverseInputRig>();
                 BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-                GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-                controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
+                BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+                AddPresenter(titleMenu.gameObject);
+
+                GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
+                Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
+                mappingCanvas.enabled = false;
+                BlockiverseWorldSpacePanelPresenter mappingPresenter =
+                    controllerMapping.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                mappingPresenter.Configure(
+                    mappingCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false,
+                    showWhenStartedPlayerPrefsKey: key);
+
+                GameObject panel = CreateChild(controllerMapping.transform, "Panel");
+                Button closeButton = AddButton(panel.transform, "Close Button");
+                RectTransform closeRect = closeButton.GetComponent<RectTransform>();
+                closeRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 120.0f);
+                closeRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 48.0f);
+                closeRect.localPosition = Vector3.zero;
+                closeRect.localRotation = Quaternion.identity;
+
+                GameObject rightRayObject = CreateChild(rig.transform, "Right Interaction Ray");
+                XRRayInteractor rightInteractionRay = rightRayObject.AddComponent<XRRayInteractor>();
+                GameObject rightRayOrigin = CreateChild(rightRayObject.transform, "Ray Origin");
+                rightInteractionRay.rayOriginTransform = rightRayOrigin.transform;
+                SetPrivateField(inputRig, "rightInteractionRay", rightInteractionRay);
+
+                GameObject leftRayObject = CreateChild(rig.transform, "Left Interaction Ray");
+                XRRayInteractor leftInteractionRay = leftRayObject.AddComponent<XRRayInteractor>();
+                GameObject leftRayOrigin = CreateChild(leftRayObject.transform, "Ray Origin");
+                leftInteractionRay.rayOriginTransform = leftRayOrigin.transform;
+                SetPrivateField(inputRig, "leftInteractionRay", leftInteractionRay);
+                SetPrivateField(controller, "controllerMappingCloseButton", closeButton);
 
                 StartMenuController(controller);
 
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ControllerMappingScreen));
 
-                controller.CloseControllerMappingScreen();
+                Vector3 closeForward = closeRect.forward;
+                rightRayOrigin.transform.SetPositionAndRotation(
+                    closeRect.position + Vector3.right,
+                    Quaternion.LookRotation(closeForward, Vector3.up));
+                leftRayOrigin.transform.SetPositionAndRotation(
+                    closeRect.position - closeForward,
+                    Quaternion.LookRotation(closeForward, Vector3.up));
+
+                inputRig.BreakPressed.Invoke();
 
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+                Assert.That(mappingCanvas.enabled, Is.False);
             }
             finally
             {
@@ -716,19 +617,40 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ControllerMappingSeenLaunchesTitleMenuDirectly()
         {
-            string key = BlockiverseUiToolkitMenuPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.SetInt(key, 1);
 
             try
             {
                 GameObject rig = CreateRoot("Rig");
                 BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-                GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-                controller.ConfigureUiToolkitMenuSurface(surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>());
+                BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+                BlockiverseWorldSpacePanelPresenter titlePresenter = AddPresenter(titleMenu.gameObject);
+                GameObject controllerMapping = CreateChild(rig.transform, "Controller Mapping Popup");
+                Canvas mappingCanvas = controllerMapping.AddComponent<Canvas>();
+                mappingCanvas.enabled = false;
+                BlockiverseWorldSpacePanelPresenter mappingPresenter =
+                    controllerMapping.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                mappingPresenter.Configure(
+                    mappingCanvas,
+                    targetHeadset: null,
+                    distance: 1.2f,
+                    horizontalOffset: 0.0f,
+                    verticalOffset: 0.0f,
+                    pitch: 0.0f,
+                    showWhenStarted: false,
+                    showWhenStartedPlayerPrefsKey: key);
 
                 StartMenuController(controller);
 
                 Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.TitleScreen));
+                Assert.That(mappingCanvas.enabled, Is.False);
+                Assert.That(titleMenu.GetComponent<Canvas>().enabled, Is.True);
+
+                StartBehaviour(titlePresenter);
+
+                Assert.That(titleMenu.GetComponent<Canvas>().enabled, Is.True,
+                    "Presenter Start must not hide a title route already activated by the menu router.");
             }
             finally
             {
@@ -741,6 +663,10 @@ namespace Blockiverse.Tests.EditMode
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            GameObject lanPanel = CreateChild(rig.transform, "LAN Multiplayer Panel");
+            AddPresenter(lanPanel);
+            lanPanel.AddComponent<BlockiverseMultiplayerSessionMenu>();
 
             StartMenuController(controller);
             controller.EnterGameplay();
@@ -756,42 +682,120 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LanJoinActionDoesNotRequireGeneratedLanPanel()
+        public void SettingsComfortPanelRoutesAndClosesThroughRouter()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-            GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            controller.ConfigureUiToolkitMenuSurface(surface);
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseActionMenu settingsMenu = CreateGeneratedActionMenu(rig.transform, "Settings Panel", 4);
+            AddPresenter(settingsMenu.gameObject);
+
+            GameObject comfortObject = CreateChild(rig.transform, "Comfort Settings Menu");
+            Canvas comfortCanvas = comfortObject.AddComponent<Canvas>();
+            comfortCanvas.enabled = false;
+            BlockiverseComfortMenu comfortMenu = comfortObject.AddComponent<BlockiverseComfortMenu>();
+            comfortMenu.Configure(comfortCanvas, rig.AddComponent<BlockiverseComfortSettings>());
+            BlockiverseWorldSpacePanelPresenter comfortPresenter =
+                comfortObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            comfortPresenter.Configure(
+                comfortCanvas,
+                targetHeadset: null,
+                distance: 1.2f,
+                horizontalOffset: 0.0f,
+                verticalOffset: 0.0f,
+                pitch: 0.0f,
+                showWhenStarted: false);
 
             StartMenuController(controller);
-            controller.ShowLanMultiplayerScreen();
-            SetPrivateField(controller, "uiToolkitLanAddress", "10.0.0.8");
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
 
-            InvokeMenuAction(controller, MenuActions.LanMultiplayerJoin);
+            Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.True);
+            Assert.That(comfortCanvas.enabled, Is.False);
 
-            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.LanMultiplayerScreen));
+            GetChildComponent<Button>(settingsMenu.transform, "Panel/Action 1").onClick.Invoke();
+
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ComfortSettingsScreen));
+            Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.False);
+            Assert.That(comfortCanvas.enabled, Is.True);
+            Assert.That(BlockiverseRuntimeState.IsGamePaused, Is.True);
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
+
+            controller.CloseComfortSettingsScreen();
+
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.SettingsScreen));
+            Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.True);
+            Assert.That(comfortCanvas.enabled, Is.False);
         }
 
         [Test]
-        public void LanJoinActionKeepsCurrentUiToolkitAddressWhenLanSurfaceIsActive()
+        public void RoutedMenusKeepInitialAnchorWhenNavigatingWithinMenuStack()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
-            GameObject surfaceObject = CreateChild(rig.transform, "UI Toolkit Menu Surface");
-            var surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            var visibleRoot = new UiVisualElement();
-            visibleRoot.style.display = UiDisplayStyle.Flex;
-            SetPrivateField(surface, "root", visibleRoot);
-            controller.ConfigureUiToolkitMenuSurface(surface);
+            GameObject head = CreateRoot("Head");
+            head.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            BlockiverseActionMenu settingsMenu = CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.SettingsPanelName, 4);
+            ReplacePresenter(titleMenu.gameObject, head.transform);
+            ReplacePresenter(settingsMenu.gameObject, head.transform);
 
             StartMenuController(controller);
-            controller.ShowLanMultiplayerScreen();
-            SetPrivateField(controller, "uiToolkitLanAddress", "10.0.0.8");
 
-            InvokeMenuAction(controller, MenuActions.LanMultiplayerJoin);
+            Transform titlePlacement = titleMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>().PlacementRoot;
+            Vector3 initialPosition = titlePlacement.position;
+            Quaternion initialRotation = titlePlacement.rotation;
+            Vector3 initialScale = titlePlacement.localScale;
 
-            Assert.That(GetPrivateField<string>(controller, "uiToolkitLanAddress"), Is.EqualTo("10.0.0.8"));
+            head.transform.SetPositionAndRotation(new Vector3(8.0f, 0.0f, -3.0f), Quaternion.Euler(0.0f, 90.0f, 0.0f));
+            // Navigate via the router like the settings-hub test: title button indices are
+            // save-state-dependent (no saves in the test environment), so a fixed
+            // "Action N" click can land on an inactive, unbound button.
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
+
+            Transform settingsPlacement = settingsMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>().PlacementRoot;
+            Assert.That(settingsMenu.GetComponent<Canvas>().enabled, Is.True);
+            Assert.That(Vector3.Distance(settingsPlacement.position, initialPosition), Is.LessThan(0.001f));
+            Assert.That(Quaternion.Angle(settingsPlacement.rotation, initialRotation), Is.LessThan(0.01f));
+            Assert.That(settingsPlacement.localScale, Is.EqualTo(initialScale));
+        }
+
+        [Test]
+        public void ActiveSessionPauseSuppressesLocomotionButTitleMiniWorldDoesNot()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            var inputRig = new FakeInputRig();
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.PauseMenuName, 8);
+            // BlockiverseMenuController's [RequireComponent] already auto-added the
+            // session controller; AddComponent would return null under
+            // [DisallowMultipleComponent].
+            var session = rig.GetComponent<BlockiverseWorldSessionController>();
+            SetPrivateField(session, "currentSavePath", "/tmp/test-world.vxlworld");
+
+            controller.Configure(
+                inputRig,
+                titleMenu: null,
+                pauseMenu: null,
+                deathMenu: null,
+                confirmMenu: null,
+                errorMenu: null,
+                newWorldPanel: null,
+                loadWorldPanel: null);
+            StartMenuController(controller);
+
+            Assert.That(inputRig.LocomotionSuppressed, Is.False,
+                "The title mini-world remains explorable even though the title route is paused.");
+
+            controller.EnterGameplay();
+            Assert.That(inputRig.LocomotionSuppressed, Is.False);
+
+            controller.OnMenuPressed();
+
+            Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
+            Assert.That(inputRig.LocomotionSuppressed, Is.True,
+                "Opening a gameplay menu during an active world session should freeze locomotion.");
         }
 
         [Test]
@@ -801,6 +805,10 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             SurvivalVitalsRuntime vitals = rig.AddComponent<SurvivalVitalsRuntime>();
             EnableBehaviour(vitals);
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             StartMenuController(controller);
             controller.EnterGameplay();
@@ -816,10 +824,40 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ConfirmModalDisablesUnderlyingScreenInput()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseActionMenu pauseMenu = CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+            AddPresenter(pauseMenu.gameObject);
+            AddPresenter(confirmMenu.gameObject);
+
+            StartMenuController(controller);
+            controller.EnterGameplay();
+            controller.OnMenuPressed();
+            controller.RequestConfirm("Quit?", "Quit", "Cancel", _ => { });
+
+            CanvasGroup pauseInput = pauseMenu.GetComponent<CanvasGroup>();
+            CanvasGroup confirmInput = confirmMenu.GetComponent<CanvasGroup>();
+
+            Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
+            Assert.That(pauseMenu.GetComponent<Canvas>().enabled, Is.True, "The underlying screen remains visible.");
+            Assert.That(confirmMenu.GetComponent<Canvas>().enabled, Is.True);
+            Assert.That(pauseInput.interactable, Is.False);
+            Assert.That(pauseInput.blocksRaycasts, Is.False);
+            Assert.That(confirmInput.interactable, Is.True);
+            Assert.That(confirmInput.blocksRaycasts, Is.True);
+        }
+
+        [Test]
         public void TitleQuitOpensConfirmAndCancelSuppressesQuitAction()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             controller.SetSaveAvailability(latestSaveExists: true, anySaveExists: true);
             StartMenuController(controller);
@@ -827,16 +865,18 @@ namespace Blockiverse.Tests.EditMode
             var requestedActions = new List<string>();
             controller.ActionRequested += requestedActions.Add;
 
-            InvokeMenuAction(controller, MenuActions.TitleQuit);
+            int quitIndex = IndexOfAction(titleMenu.ActionIds, MenuActions.TitleQuit);
+            Assert.That(quitIndex, Is.GreaterThanOrEqualTo(0));
+            GetChildComponent<Button>(titleMenu.transform, $"Panel/Action {quitIndex + 1}").onClick.Invoke();
 
             Assert.That(controller.Router.HasModal, Is.True);
             Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
             Assert.That(
-                GetPrivateField<string>(controller, "confirmPrompt"),
+                GetChildComponent<TMP_Text>(confirmMenu.transform, "Panel/Title").text,
                 Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmQuitGame)));
             Assert.That(requestedActions, Is.Empty);
 
-            InvokeMenuAction(controller, MenuActions.ConfirmCancel);
+            GetChildComponent<Button>(confirmMenu.transform, "Panel/Action 2").onClick.Invoke();
 
             Assert.That(controller.Router.HasModal, Is.False);
             Assert.That(requestedActions, Is.Empty);
@@ -847,6 +887,9 @@ namespace Blockiverse.Tests.EditMode
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            BlockiverseActionMenu pauseMenu = CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             StartMenuController(controller);
             controller.EnterGameplay();
@@ -855,16 +898,18 @@ namespace Blockiverse.Tests.EditMode
             var requestedActions = new List<string>();
             controller.ActionRequested += requestedActions.Add;
 
-            InvokeMenuAction(controller, MenuActions.PauseQuit);
+            int quitIndex = IndexOfAction(pauseMenu.ActionIds, MenuActions.PauseQuit);
+            Assert.That(quitIndex, Is.GreaterThanOrEqualTo(0));
+            GetChildComponent<Button>(pauseMenu.transform, $"Panel/Action {quitIndex + 1}").onClick.Invoke();
 
             Assert.That(controller.Router.HasModal, Is.True);
             Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
             Assert.That(
-                GetPrivateField<string>(controller, "confirmPrompt"),
+                GetChildComponent<TMP_Text>(confirmMenu.transform, "Panel/Title").text,
                 Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmQuitGame)));
             Assert.That(requestedActions, Is.Empty);
 
-            InvokeMenuAction(controller, MenuActions.ConfirmCancel);
+            GetChildComponent<Button>(confirmMenu.transform, "Panel/Action 2").onClick.Invoke();
 
             Assert.That(controller.Router.HasModal, Is.False);
             Assert.That(requestedActions, Is.Empty);
@@ -875,6 +920,9 @@ namespace Blockiverse.Tests.EditMode
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            BlockiverseActionMenu confirmMenu = CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             StartMenuController(controller);
 
@@ -882,7 +930,7 @@ namespace Blockiverse.Tests.EditMode
             controller.RequestConfirm("Quit?", "Quit", "Cancel", value => accepted = value);
             controller.EnterGameplay();
 
-            InvokeMenuAction(controller, MenuActions.ConfirmAccept);
+            GetChildComponent<Button>(confirmMenu.transform, "Panel/Action 1").onClick.Invoke();
 
             Assert.That(controller.Router.HasModal, Is.False);
             Assert.That(accepted, Is.False, "A confirm callback from a cleared modal must not survive behind hidden UI.");
@@ -895,6 +943,10 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             SurvivalVitalsRuntime vitals = rig.AddComponent<SurvivalVitalsRuntime>();
             EnableBehaviour(vitals);
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            BlockiverseActionMenu deathMenu = CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
 
             StartMenuController(controller);
             controller.EnterGameplay();
@@ -911,7 +963,7 @@ namespace Blockiverse.Tests.EditMode
                 wasAliveWhenActionRaised = !vitals.Vitals.IsDead;
             };
 
-            InvokeMenuAction(controller, MenuActions.DeathReturnToTitle);
+            GetChildComponent<Button>(deathMenu.transform, "Panel/Action 2").onClick.Invoke();
 
             Assert.That(requestedAction, Is.EqualTo(MenuActions.DeathReturnToTitle));
             Assert.That(wasAliveWhenActionRaised, Is.True,
@@ -921,38 +973,358 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void StationStateRoutesTransfersWithoutGeneratedMenuControls()
+        public void NewWorldPanelDiscoversGeneratedControlsAndEmitsActionsAtRuntime()
         {
-            BlockiverseStationInteractionState state = CreateStationInteractionState(null);
+            BlockiverseNewWorldPanel panel = CreateGeneratedNewWorldPanel(null);
+            panel.ResolveRuntimeReferences();
+            panel.ResetForNewWorld();
+
+            TMP_Text gameModeLabel = GetChildComponent<TMP_Text>(panel.transform, "Panel/Row Game Mode/Value");
+            Assert.That(gameModeLabel.text, Is.EqualTo("Survival"));
+
+            GetChildComponent<Button>(panel.transform, "Panel/Row Game Mode/Next").onClick.Invoke();
+            Assert.That(gameModeLabel.text, Is.EqualTo("Creative"));
+
+            TMP_Text textureSetLabel = GetChildComponent<TMP_Text>(panel.transform, "Panel/Row Texture Set/Value");
+            Assert.That(textureSetLabel.text, Is.EqualTo("Enhanced"));
+
+            GetChildComponent<Button>(panel.transform, "Panel/Row Texture Set/Next").onClick.Invoke();
+            Assert.That(textureSetLabel.text, Is.EqualTo("AI Simplified"));
+
+            string invoked = null;
+            panel.ActionRequested += id => invoked = id;
+
+            GetChildComponent<Button>(panel.transform, "Panel/Create Button").onClick.Invoke();
+            Assert.That(invoked, Is.EqualTo(MenuActions.NewWorldCreate));
+
+            GetChildComponent<Button>(panel.transform, "Panel/Cancel Button").onClick.Invoke();
+            Assert.That(invoked, Is.EqualTo(MenuActions.NewWorldCancel));
+        }
+
+        [Test]
+        public void DestructiveActionsAreGatedByConfirmationModal()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+            BlockiverseWorldDetailsPanel detailsPanel = CreateGeneratedWorldDetailsPanel(rig.transform).Item1;
+            
+            StartMenuController(controller);
+
+            // 1. Title Quit
+            AssertGated(MenuActions.TitleQuit);
+
+            // 2. Pause Return to Title
+            controller.EnterGameplay();
+            controller.OnMenuPressed(); // Pause
+            AssertGated(MenuActions.PauseReturnToTitle);
+
+            // 3. Pause Quit
+            AssertGated(MenuActions.PauseQuit);
+
+            // 4. World Details Delete
+            controller.Router.PushScreen(new ScreenRoute(MenuActions.WorldDetailsScreen, pauseGame: true));
+            detailsPanel.ShowSave(new WorldSaveSummary("Test", "1", "s", "n", 1, DateTime.UtcNow, DateTime.UtcNow));
+            AssertGated(MenuActions.WorldDetailsDeleteRequested);
+
+            void AssertGated(string actionId)
+            {
+                var requestedActions = new List<string>();
+                controller.ActionRequested += requestedActions.Add;
+
+                InvokeHandleAction(controller, actionId);
+
+                Assert.That(controller.Router.HasModal, Is.True, $"Action {actionId} must be gated by a modal.");
+                Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
+                Assert.That(requestedActions, Is.Empty, $"Action {actionId} must not be emitted until confirmed.");
+                
+                controller.Router.PopModal();
+                controller.ActionRequested -= requestedActions.Add;
+            }
+        }
+
+        [Test]
+        public void CreativeToolsDestructiveActionsAreGatedByConfirmationModal()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+
+            GameObject creativePanelObj = CreateChild(rig.transform, "Creative Tools Panel");
+            BlockiverseCreativeToolsPanel creativeToolsPanel = creativePanelObj.AddComponent<BlockiverseCreativeToolsPanel>();
+
+            // Setup mock CreativeWorldManager and CreativeHotbar
+            GameObject managerObj = CreateChild(rig.transform, "Creative World Manager");
+            CreativeWorldManager manager = managerObj.AddComponent<CreativeWorldManager>();
+            
+            // Set up a mock world
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(2, 4, 2, 2, 42, 1);
+            var voxelWorld = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
+            manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, voxelWorld, CreativeWorldGenerationPreset.FlatCreative));
+            manager.SetGameMode(WorldGameMode.Creative);
+
+            GameObject hotbarObj = CreateChild(rig.transform, "Creative Hotbar");
+            CreativeHotbar hotbar = hotbarObj.AddComponent<CreativeHotbar>();
+
+            creativeToolsPanel.Configure(
+                controller: null,
+                manager: manager,
+                creativeHotbar: hotbar,
+                corners: CreateChild(creativePanelObj.transform, "Corners").AddComponent<TextMeshProUGUI>(),
+                status: CreateChild(creativePanelObj.transform, "Status").AddComponent<TextMeshProUGUI>(),
+                weather: CreateChild(creativePanelObj.transform, "Weather").AddComponent<TextMeshProUGUI>(),
+                timeOfDay: CreateChild(creativePanelObj.transform, "TimeOfDay").AddComponent<Slider>(),
+                timeScale: CreateChild(creativePanelObj.transform, "TimeScale").AddComponent<Slider>()
+            );
+
+            // Wire menuController to the creative tools panel
+            SetPrivateField(creativeToolsPanel, "menuController", controller);
+            creativeToolsPanel.ConfigureNetworkSessionActiveProvider(() => false);
+
+            // Set corners and target
+            SetPrivateField(creativeToolsPanel, "cornerA", new BlockPosition(0, 0, 0));
+            SetPrivateField(creativeToolsPanel, "cornerB", new BlockPosition(1, 1, 1));
+            SetPrivateField(creativeToolsPanel, "lastTarget", new BlockPosition(0, 0, 0));
+
+            StartMenuController(controller);
+
+            // Assert that FillRegion, DeleteRegion, and ReplaceRegion are gated by confirmation dialog
+            AssertRegionGated(creativeToolsPanel.FillRegion);
+            AssertRegionGated(creativeToolsPanel.DeleteRegion);
+            AssertRegionGated(creativeToolsPanel.ReplaceRegion);
+
+            void AssertRegionGated(Action action)
+            {
+                action();
+
+                Assert.That(controller.Router.HasModal, Is.True, "Creative operation must show a confirmation modal.");
+                Assert.That(controller.Router.InputTarget, Is.EqualTo(MenuActions.ConfirmModal));
+
+                // Pop modal to clean up state for next check
+                controller.Router.PopModal();
+            }
+        }
+
+        static void InvokeHandleAction(BlockiverseMenuController controller, string actionId)
+        {
+            var method = typeof(BlockiverseMenuController).GetMethod("HandleAction", 
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            method.Invoke(controller, new object[] { actionId });
+        }
+
+        [Test]
+        public void NewWorldTextFieldsAcceptXrPressAndSubmitKeyboardEvents()
+        {
+            BlockiverseNewWorldPanel panel = CreateGeneratedNewWorldPanel(null);
+            panel.ResolveRuntimeReferences();
+            panel.ResetForNewWorld();
+
+            TMP_InputField nameInput = GetChildComponent<TMP_InputField>(panel.transform, "Panel/Name Input");
+            TMP_InputField seedInput = GetChildComponent<TMP_InputField>(panel.transform, "Panel/Seed Input");
+
+            AssertKeyboardFieldAcceptsXrPressEvents(nameInput);
+            AssertKeyboardFieldAcceptsXrPressEvents(seedInput);
+        }
+
+        [Test]
+        public void SystemKeyboardFieldOwnsOnlyOneActiveFieldAtATime()
+        {
+            Type keyboardFieldType = typeof(BlockiverseSystemKeyboardField);
+
+            Assert.That(keyboardFieldType.GetProperty("ActiveField"), Is.Not.Null,
+                "The Quest keyboard bridge must expose the single field that owns streamed keyboard text.");
+            Assert.That(keyboardFieldType.GetProperty("AnyKeyboardVisible"), Is.Not.Null,
+                "Keyboard visibility must be observable so first-person hand visuals can hide while the system keyboard is open.");
+            Assert.That(keyboardFieldType.GetEvent("KeyboardVisibilityChanged"), Is.Not.Null,
+                "Keyboard visibility changes must be broadcast without coupling the keyboard bridge to avatar internals.");
+            Assert.That(typeof(IDeselectHandler).IsAssignableFrom(keyboardFieldType), Is.True,
+                "Losing focus must release ownership so a stale field cannot keep streaming keyboard text.");
+        }
+
+        [Test]
+        public void NewWorldTextFieldsUseInputBackgroundAsOnlyRaycastTarget()
+        {
+            BlockiverseNewWorldPanel panel = CreateGeneratedNewWorldPanel(null);
+            TMP_InputField nameInput = GetChildComponent<TMP_InputField>(panel.transform, "Panel/Name Input");
+            TMP_InputField seedInput = GetChildComponent<TMP_InputField>(panel.transform, "Panel/Seed Input");
+
+            Assert.That(nameInput.textComponent.raycastTarget, Is.True,
+                "Test setup should reproduce generated TMP text that can steal ray hits.");
+            Assert.That(seedInput.textComponent.raycastTarget, Is.True,
+                "Test setup should reproduce generated TMP text that can steal ray hits.");
+
+            panel.ResolveRuntimeReferences();
+
+            AssertInputFieldRaycastSetup(nameInput);
+            AssertInputFieldRaycastSetup(seedInput);
+        }
+
+        [Test]
+        public void NewWorldPanelCycleButtonsUseWholeButtonAsRaycastTarget()
+        {
+            BlockiverseNewWorldPanel panel = CreateGeneratedNewWorldPanel(null);
+            Button backButton = GetChildComponent<Button>(panel.transform, "Panel/Row Game Mode/Back");
+            TMP_Text backLabel = GetChildComponent<TMP_Text>(backButton.transform, "Label");
+
+            Assert.That(backLabel.raycastTarget, Is.True, "Test setup should reproduce generated labels that can steal ray hits.");
+
+            panel.ResolveRuntimeReferences();
+
+            Image buttonImage = backButton.GetComponent<Image>();
+            Assert.That(backButton.targetGraphic, Is.SameAs(buttonImage));
+            Assert.That(buttonImage.raycastTarget, Is.True);
+            Assert.That(backLabel.raycastTarget, Is.False);
+        }
+
+        static void AssertKeyboardFieldAcceptsXrPressEvents(TMP_InputField input)
+        {
+            BlockiverseSystemKeyboardField keyboardField = input.GetComponent<BlockiverseSystemKeyboardField>();
+            Assert.That(keyboardField, Is.Not.Null);
+            Assert.That(keyboardField, Is.InstanceOf<IPointerDownHandler>(),
+                "XR UI sends press feedback through pointer-down; text fields must open the system keyboard on that event.");
+            Assert.That(keyboardField, Is.InstanceOf<ISubmitHandler>(),
+                "Submit events should also open the system keyboard for controller-driven UI activation.");
+        }
+
+        static void AssertInputFieldRaycastSetup(TMP_InputField input)
+        {
+            Image background = input.GetComponent<Image>();
+            Assert.That(background, Is.Not.Null);
+            Assert.That(input.targetGraphic, Is.SameAs(background));
+            Assert.That(background.raycastTarget, Is.True);
+            Assert.That(input.textComponent.raycastTarget, Is.False);
+            Assert.That(((TMP_Text)input.placeholder).raycastTarget, Is.False);
+        }
+
+        [Test]
+        public void LoadWorldPanelDiscoversGeneratedControlsAndEmitsActionsAtRuntime()
+        {
+            BlockiverseLoadWorldPanel panel = CreateGeneratedLoadWorldPanel(null);
+            panel.ResolveRuntimeReferences();
+
+            var save = new WorldSaveSummary(
+                "Meadow Home",
+                "918273645",
+                "survival",
+                "normal",
+                12,
+                new DateTime(2026, 6, 11, 12, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc));
+
+            panel.SetSaves(new[] { save });
+
+            TMP_Text firstEntry = GetChildComponent<TMP_Text>(panel.transform, "Panel/Save 1");
+            Assert.That(firstEntry.text, Does.Contain("Meadow Home"));
+            Assert.That(firstEntry.text, Does.Contain("Day 12"));
+            Assert.That(panel.SelectedSave?.Name, Is.EqualTo("Meadow Home"));
+
+            string invoked = null;
+            panel.ActionRequested += id => invoked = id;
+
+            GetChildComponent<Button>(panel.transform, "Panel/Details Button").onClick.Invoke();
+            Assert.That(invoked, Is.EqualTo(MenuActions.LoadWorldDetails));
+
+            GetChildComponent<Button>(panel.transform, "Panel/Load Button").onClick.Invoke();
+            Assert.That(invoked, Is.EqualTo(MenuActions.LoadWorldLoad));
+
+            GetChildComponent<Button>(panel.transform, "Panel/Cancel Button").onClick.Invoke();
+            Assert.That(invoked, Is.EqualTo(MenuActions.LoadWorldCancel));
+        }
+
+        [Test]
+        public void LoadWorldPanelPagesBeyondGeneratedRows()
+        {
+            BlockiverseLoadWorldPanel panel = CreateGeneratedLoadWorldPanel(null);
+            panel.ResolveRuntimeReferences();
+
+            DateTime created = new(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+            var saves = new List<WorldSaveSummary>();
+            for (int i = 1; i <= 8; i++)
+            {
+                saves.Add(new WorldSaveSummary(
+                    $"World {i}",
+                    i.ToString(),
+                    "survival",
+                    "normal",
+                    i,
+                    created.AddDays(i),
+                    created));
+            }
+
+            panel.SetSaves(saves);
+
+            TMP_Text pageLabel = GetChildComponent<TMP_Text>(panel.transform, "Panel/Page");
+            TMP_Text firstEntry = GetChildComponent<TMP_Text>(panel.transform, "Panel/Save 1");
+            Button previousPage = GetChildComponent<Button>(panel.transform, "Panel/Previous Page Button");
+            Button nextPage = GetChildComponent<Button>(panel.transform, "Panel/Next Page Button");
+
+            Assert.That(panel.PageCount, Is.EqualTo(2));
+            Assert.That(pageLabel.text, Is.EqualTo("Page 1 / 2"));
+            Assert.That(firstEntry.text, Does.Contain("World 8"));
+            Assert.That(previousPage.interactable, Is.False);
+            Assert.That(nextPage.interactable, Is.True);
+
+            nextPage.onClick.Invoke();
+
+            Assert.That(panel.PageIndex, Is.EqualTo(1));
+            Assert.That(pageLabel.text, Is.EqualTo("Page 2 / 2"));
+            Assert.That(firstEntry.text, Does.Contain("World 2"));
+            Assert.That(panel.SelectedSave?.Name, Is.EqualTo("World 2"));
+            Assert.That(previousPage.interactable, Is.True);
+            Assert.That(nextPage.interactable, Is.False);
+        }
+
+        [Test]
+        public void StationPanelDiscoversGeneratedControlsAndRoutesButtonsAtRuntime()
+        {
+            BlockiverseStationPanel panel = CreateGeneratedStationPanel(null);
             GameObject syncObject = CreateRoot("Station Survival Sync");
             MultiplayerSurvivalSync survivalSync = syncObject.AddComponent<MultiplayerSurvivalSync>();
             survivalSync.Configure(null, null, null);
             survivalSync.LocalInventory.SetSlot(0, new ItemStack(ItemId.ClayLump, 1));
-            state.ConfigureSurvivalSync(survivalSync);
+            panel.ConfigureSurvivalSync(survivalSync);
+            panel.ResolveRuntimeReferences();
 
             var station = new SmeltingStationModel(CraftingStation.ClayKiln, inputSlotCount: 1);
             station.TryDepositInput(new ItemStack(ItemId.ClayLump, 2));
-            state.Open(station, new BlockPosition(1, 2, 3));
+            panel.Open(station, new BlockPosition(1, 2, 3));
 
-            state.DepositHeldInput();
-            Assert.That(state.CurrentStatusText, Is.EqualTo("Cannot deposit: Not a Station"));
+            Assert.That(GetChildComponent<TMP_Text>(panel.transform, "Panel/Title").text, Is.EqualTo("Clay Kiln"));
+            Assert.That(GetChildComponent<TMP_Text>(panel.transform, "Panel/Input Slot 1").text, Is.EqualTo("Clay Lump ×2"));
+            Assert.That(GetChildComponent<TMP_Text>(panel.transform, "Panel/Fuel Slot").text, Is.EqualTo("No fuel"));
+            Assert.That(GetChildComponent<TMP_Text>(panel.transform, "Panel/Output Slot").text, Is.EqualTo("—"));
 
-            state.WithdrawInput();
-            Assert.That(state.CurrentStatusText, Is.EqualTo("Cannot withdraw: Not a Station"));
+            GetChildComponent<Button>(panel.transform, "Panel/Deposit Input Button").onClick.Invoke();
+            Assert.That(
+                GetChildComponent<TMP_Text>(panel.transform, "Panel/Status").text,
+                Is.EqualTo("Cannot deposit: Not a Station"));
 
-            state.Close();
-            Assert.That(state.IsOpen, Is.False);
+            GetChildComponent<Button>(panel.transform, "Panel/Withdraw Input Button").onClick.Invoke();
+            Assert.That(
+                GetChildComponent<TMP_Text>(panel.transform, "Panel/Status").text,
+                Is.EqualTo("Cannot withdraw: Not a Station"));
+
+            bool closed = false;
+            panel.CloseRequested += () => closed = true;
+            GetChildComponent<Button>(panel.transform, "Panel/Close Button").onClick.Invoke();
+            Assert.That(closed, Is.True);
         }
 
         [Test]
-        public void StationStateClosesWhenOpenStationIsRemoved()
+        public void StationPanelClosesWhenOpenStationIsRemoved()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             CreativeWorldManager worldManager = rig.AddComponent<CreativeWorldManager>();
             MultiplayerSurvivalSync survivalSync = rig.AddComponent<MultiplayerSurvivalSync>();
             worldManager.Configure(CreateTestChunkMaterial(), BlockiverseProject.InteractionLayerIndex);
-            BlockiverseStationInteractionState state = CreateStationInteractionState(rig.transform);
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            BlockiverseStationPanel panel = CreateGeneratedStationPanel(rig.transform);
             var stationPosition = new BlockPosition(2, 1, 2);
 
             BlockRegistry registry = BlockRegistry.CreateDefault();
@@ -971,30 +1343,45 @@ namespace Blockiverse.Tests.EditMode
 
             StartMenuController(controller);
             controller.EnterGameplay();
-            state.Open(survivalSync.GetOrCreateStationModel(stationPosition, CraftingStation.ClayKiln), stationPosition);
+            panel.Open(survivalSync.GetOrCreateStationModel(stationPosition, CraftingStation.ClayKiln), stationPosition);
 
             world.SetBlock(stationPosition, BlockRegistry.Air, trackChange: false);
             survivalSync.TickStations(1);
 
-            Assert.That(state.IsOpen, Is.False);
+            Assert.That(panel.IsOpen, Is.False);
         }
 
         [Test]
-        public void WorldDetailsUiToolkitViewContainsRuntimeActions()
+        public void WorldDetailsMenuDiscoversGeneratedActionIdsAtRuntime()
         {
-            var view = BlockiverseUiToolkitMenuCatalog.CreateWorldDetailsView(
-                new WorldSaveSummary(
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
+            CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
+            CreateGeneratedActionMenu(rig.transform, "Death Screen", 3);
+            CreateGeneratedActionMenu(rig.transform, "Confirm Dialog", 2);
+            (BlockiverseWorldDetailsPanel detailsPanel, BlockiverseActionMenu detailsMenu) =
+                CreateGeneratedWorldDetailsPanel(rig.transform);
+
+            StartMenuController(controller);
+
+            detailsPanel.ShowSave(new WorldSaveSummary(
                 "Meadow Home",
                 "1234",
                 "survival",
                 "normal",
                 4,
                 new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc),
-                new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc)),
-                "Meadow Home");
+                new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc)));
 
-            Assert.That(view.Actions[0].ActionId, Is.EqualTo(MenuActions.WorldDetailsPlay));
-            Assert.That(view.Actions[0].Label, Is.EqualTo("Play"));
+            Assert.That(detailsMenu.ActionIds[0], Is.EqualTo(MenuActions.WorldDetailsPlay));
+            Assert.That(GetChildComponent<TMP_Text>(detailsMenu.transform, "Panel/Action 1/Label").text, Is.EqualTo("Play"));
+
+            string invoked = null;
+            controller.ActionRequested += id => invoked = id;
+            GetChildComponent<Button>(detailsMenu.transform, "Panel/Action 1").onClick.Invoke();
+
+            Assert.That(invoked, Is.EqualTo(MenuActions.WorldDetailsPlay));
         }
 
         [Test]
@@ -1016,7 +1403,7 @@ namespace Blockiverse.Tests.EditMode
                     lastPlayed,
                     created);
 
-                string metadata = WorldDetailsMetadataFormatter.BuildMetadataText(save);
+                string metadata = BlockiverseWorldDetailsPanel.BuildMetadataText(save);
 
                 Assert.That(metadata, Does.Contain(created.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)));
                 Assert.That(metadata, Does.Contain(lastPlayed.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)));
@@ -1028,29 +1415,198 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
-        BlockiverseStationInteractionState CreateStationInteractionState(Transform parent)
+        BlockiverseActionMenu CreateGeneratedActionMenu(Transform parent, string name, int actionCount)
         {
-            GameObject root = CreateChild(parent, "Station Menu State");
-            return root.AddComponent<BlockiverseStationInteractionState>();
+            GameObject root = CreateChild(parent, name);
+            BlockiverseActionMenu menu = root.AddComponent<BlockiverseActionMenu>();
+            GameObject panel = CreateChild(root.transform, "Panel");
+            AddText(panel.transform, "Title");
+            AddText(panel.transform, "Status");
+
+            for (int i = 0; i < actionCount; i++)
+            {
+                GameObject button = CreateChild(panel.transform, $"Action {i + 1}");
+                button.AddComponent<Button>();
+                AddText(button.transform, "Label");
+            }
+
+            return menu;
         }
 
-        static WorldSaveSummary CreateSave(string name) =>
-            new(
-                name,
-                "1234",
-                "survival",
-                "normal",
-                1,
-                new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc),
-                new DateTime(2026, 6, 1, 12, 0, 0, DateTimeKind.Utc));
-
-        BlockiverseUiToolkitMenuPresenter CreatePresenterWithStartGate(string name, string key, out GameObject root)
+        BlockiverseNewWorldPanel CreateGeneratedNewWorldPanel(Transform parent)
         {
-            root = CreateRoot(name);
-            root.SetActive(false);
-            var presenter = root.AddComponent<BlockiverseUiToolkitMenuPresenter>();
-            presenter.ConfigureWorldSpaceTarget(
-                root,
+            GameObject root = CreateChild(parent, "New World Panel");
+            BlockiverseNewWorldPanel panel = root.AddComponent<BlockiverseNewWorldPanel>();
+            GameObject bg = CreateChild(root.transform, "Panel");
+
+            AddInput(bg.transform, "Name Input");
+            AddInput(bg.transform, "Seed Input");
+
+            string[] rows = { "Game Mode", "Difficulty", "World Size", "World Preset", "Starting Biome", "Texture Set" };
+            foreach (string row in rows)
+            {
+                GameObject rowRoot = CreateChild(bg.transform, $"Row {row}");
+                AddButton(rowRoot.transform, "Back");
+                AddText(rowRoot.transform, "Value");
+                AddButton(rowRoot.transform, "Next");
+            }
+
+            AddButton(bg.transform, "Create Button");
+            AddButton(bg.transform, "Cancel Button");
+            AddText(bg.transform, "Error");
+
+            return panel;
+        }
+
+        BlockiverseLoadWorldPanel CreateGeneratedLoadWorldPanel(Transform parent)
+        {
+            GameObject root = CreateChild(parent, "Load World Panel");
+            BlockiverseLoadWorldPanel panel = root.AddComponent<BlockiverseLoadWorldPanel>();
+            GameObject bg = CreateChild(root.transform, "Panel");
+
+            for (int i = 0; i < 6; i++)
+                AddTextButton(bg.transform, $"Save {i + 1}");
+
+            AddText(bg.transform, "Selection");
+            AddButton(bg.transform, "Previous Page Button");
+            AddText(bg.transform, "Page");
+            AddButton(bg.transform, "Next Page Button");
+            AddButton(bg.transform, "Load Button");
+            AddButton(bg.transform, "Details Button");
+            AddButton(bg.transform, "Cancel Button");
+
+            return panel;
+        }
+
+        (BlockiverseWorldDetailsPanel, BlockiverseActionMenu) CreateGeneratedWorldDetailsPanel(Transform parent)
+        {
+            GameObject root = CreateChild(parent, "World Details Panel");
+            BlockiverseActionMenu menu = root.AddComponent<BlockiverseActionMenu>();
+            BlockiverseWorldDetailsPanel detailsPanel = root.AddComponent<BlockiverseWorldDetailsPanel>();
+            GameObject panel = CreateChild(root.transform, "Panel");
+
+            AddText(panel.transform, "Title");
+            AddText(panel.transform, "Status");
+            TMP_Text metadata = AddText(panel.transform, "Metadata");
+            TMP_InputField rename = AddInput(panel.transform, "Rename Input");
+
+            for (int i = 0; i < 5; i++)
+            {
+                GameObject button = CreateChild(panel.transform, $"Action {i + 1}");
+                button.AddComponent<Button>();
+                AddText(button.transform, "Label");
+            }
+
+            detailsPanel.Configure(metadata, rename);
+            return (detailsPanel, menu);
+        }
+
+        BlockiverseStationPanel CreateGeneratedStationPanel(Transform parent)
+        {
+            GameObject root = CreateChild(parent, "Station Panel");
+            BlockiverseStationPanel panel = root.AddComponent<BlockiverseStationPanel>();
+            GameObject bg = CreateChild(root.transform, "Panel");
+
+            AddText(bg.transform, "Title");
+            AddText(bg.transform, "Input Slot 1");
+            AddText(bg.transform, "Input Slot 2");
+            AddText(bg.transform, "Input Slot 3");
+            AddText(bg.transform, "Fuel Slot");
+            AddText(bg.transform, "Output Slot");
+            AddText(bg.transform, "Status");
+            CreateChild(bg.transform, "Progress").AddComponent<Slider>();
+            AddButton(bg.transform, "Deposit Input Button");
+            AddButton(bg.transform, "Deposit Fuel Button");
+            AddButton(bg.transform, "Collect Output Button");
+            AddButton(bg.transform, "Withdraw Input Button");
+            AddButton(bg.transform, "Withdraw Fuel Button");
+            AddButton(bg.transform, "Close Button");
+
+            return panel;
+        }
+
+        Button AddButton(Transform parent, string name)
+        {
+            GameObject target = CreateChild(parent, name);
+            Image image = target.AddComponent<Image>();
+            image.raycastTarget = false;
+            Button button = target.AddComponent<Button>();
+            button.targetGraphic = image;
+            TMP_Text label = AddText(target.transform, "Label");
+            label.raycastTarget = true;
+            return button;
+        }
+
+        TMP_InputField AddInput(Transform parent, string name)
+        {
+            GameObject target = CreateChild(parent, name);
+            Image image = target.AddComponent<Image>();
+            image.raycastTarget = true;
+            var input = target.AddComponent<TMP_InputField>();
+            input.targetGraphic = image;
+            input.textComponent = AddText(target.transform, "Text");
+            input.placeholder = AddText(target.transform, "Placeholder");
+            target.AddComponent<BlockiverseSystemKeyboardField>().Configure(input);
+            return input;
+        }
+
+        TMP_Text AddText(Transform parent, string name)
+        {
+            GameObject target = CreateChild(parent, name);
+            return target.AddComponent<TextMeshProUGUI>();
+        }
+
+        Button AddTextButton(Transform parent, string name)
+        {
+            TMP_Text label = AddText(parent, name);
+            return label.gameObject.AddComponent<Button>();
+        }
+
+        BlockiverseWorldSpacePanelPresenter AddPresenter(GameObject target)
+        {
+            Canvas canvas = target.AddComponent<Canvas>();
+            var presenter = target.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(
+                canvas,
+                targetHeadset: null,
+                distance: 1.2f,
+                horizontalOffset: 0.0f,
+                verticalOffset: 0.0f,
+                pitch: 0.0f,
+                showWhenStarted: false);
+            return presenter;
+        }
+
+        BlockiverseWorldSpacePanelPresenter ReplacePresenter(GameObject target, Transform headset)
+        {
+            foreach (BlockiverseWorldSpacePanelPresenter existing in target.GetComponents<BlockiverseWorldSpacePanelPresenter>())
+                UnityEngine.Object.DestroyImmediate(existing);
+
+            Canvas canvas = target.GetComponent<Canvas>();
+            if (canvas == null)
+                canvas = target.AddComponent<Canvas>();
+
+            canvas.enabled = false;
+            var presenter = target.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(
+                canvas,
+                headset,
+                distance: 1.2f,
+                horizontalOffset: 0.0f,
+                verticalOffset: 0.0f,
+                pitch: 0.0f,
+                showWhenStarted: false);
+            return presenter;
+        }
+
+        BlockiverseWorldSpacePanelPresenter CreatePresenterWithStartGate(string name, string key, out Canvas canvas)
+        {
+            GameObject target = CreateRoot(name);
+            canvas = target.AddComponent<Canvas>();
+            canvas.enabled = false;
+            var presenter = target.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(
+                canvas,
                 targetHeadset: null,
                 distance: 1.2f,
                 horizontalOffset: 0.0f,
@@ -1078,18 +1634,17 @@ namespace Blockiverse.Tests.EditMode
             return target;
         }
 
+        T GetChildComponent<T>(Transform root, string path) where T : Component
+        {
+            Transform target = root.Find(path);
+            Assert.That(target, Is.Not.Null, $"Missing generated child '{path}'.");
+            T component = target.GetComponent<T>();
+            Assert.That(component, Is.Not.Null, $"Missing {typeof(T).Name} on '{path}'.");
+            return component;
+        }
+
         static void StartMenuController(BlockiverseMenuController controller)
         {
-            BlockiverseUiToolkitMenuSurface surface =
-                controller.GetComponentInChildren<BlockiverseUiToolkitMenuSurface>(includeInactive: true);
-            if (surface == null)
-            {
-                GameObject surfaceObject = new("UI Toolkit Menu Surface");
-                surfaceObject.transform.SetParent(controller.transform, false);
-                surface = surfaceObject.AddComponent<BlockiverseUiToolkitMenuSurface>();
-            }
-
-            controller.ConfigureUiToolkitMenuSurface(surface);
             StartBehaviour(controller);
         }
 
@@ -1104,108 +1659,11 @@ namespace Blockiverse.Tests.EditMode
 
         static void EnableBehaviour(MonoBehaviour behaviour)
         {
-            InvokeBehaviourMethod(behaviour, "OnEnable");
-        }
-
-        static void InvokeBehaviourMethod(MonoBehaviour behaviour, string methodName, params object[] arguments)
-        {
-            MethodInfo method = behaviour
+            MethodInfo onEnable = behaviour
                 .GetType()
-                .GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null, $"{behaviour.GetType().Name} must expose a {methodName} method for this wiring test.");
-            method.Invoke(behaviour, arguments == null || arguments.Length == 0 ? null : arguments);
-        }
-
-        static void SendTargetedEvent(UnityEngine.UIElements.VisualElement target, UnityEngine.UIElements.EventBase evt)
-        {
-            Assert.That(target, Is.Not.Null);
-            try
-            {
-                evt.target = target;
-                target.SendEvent(evt);
-            }
-            finally
-            {
-                evt.Dispose();
-            }
-        }
-
-        static void AssertInteractiveFeedback(
-            BlockiverseUiToolkitMenuSurface surface,
-            UnityEngine.UIElements.VisualElement element,
-            ref int tickCount,
-            ref int clickCount,
-            List<BlockiverseHapticPattern> requestedPatterns,
-            bool clickOnPointerDown)
-        {
-            Assert.That(element, Is.Not.Null);
-            Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.False);
-            Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.False);
-
-            int expectedTicks = tickCount + 1;
-            int expectedPatternCount = requestedPatterns.Count + 1;
-            InvokeBehaviourMethod(surface, "ApplyInteractiveHover", element);
-
-            Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.True,
-                "Pointer enter should apply the visible hover class.");
-            Assert.That(tickCount, Is.EqualTo(expectedTicks),
-                "Crossing onto a UI Toolkit control should trigger the hover haptic.");
-            Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
-            Assert.That(requestedPatterns[requestedPatterns.Count - 1], Is.EqualTo(BlockiverseHapticPattern.UiTick));
-
-            InvokeBehaviourMethod(surface, "ApplyInteractiveHover", element);
-
-            Assert.That(tickCount, Is.EqualTo(expectedTicks),
-                "Staying over the same control should not repeat the boundary-crossing haptic.");
-            Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
-
-            int expectedClicks = clickCount + 1;
-            expectedPatternCount = requestedPatterns.Count + 1;
-            element.AddToClassList("bv-interactive--pressed");
-
-            Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.True,
-                "Pointer-down should apply the visible pressed class.");
-
-            if (!clickOnPointerDown)
-                InvokeButtonClicked((UnityEngine.UIElements.Button)element);
-            else
-                InvokeBehaviourMethod(surface, "PlayUiClickFeedback");
-
-            Assert.That(clickCount, Is.EqualTo(expectedClicks),
-                "Clicking or pressing a UI Toolkit control should trigger the click haptic.");
-            Assert.That(requestedPatterns.Count, Is.EqualTo(expectedPatternCount));
-            Assert.That(requestedPatterns[requestedPatterns.Count - 1], Is.EqualTo(BlockiverseHapticPattern.UiClick));
-
-            element.RemoveFromClassList("bv-interactive--pressed");
-
-            Assert.That(element.ClassListContains("bv-interactive--pressed"), Is.False,
-                "Pointer-up should remove the pressed class.");
-
-            element.RemoveFromClassList("bv-interactive--hovered");
-
-            Assert.That(element.ClassListContains("bv-interactive--hovered"), Is.False,
-                "Pointer-out cleanup should remove the hover class.");
-        }
-
-        static void InvokeButtonClicked(UnityEngine.UIElements.Button button)
-        {
-            Assert.That(button, Is.Not.Null);
-            FieldInfo clickableField = button
-                .GetType()
-                .GetField("m_Clickable", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(clickableField, Is.Not.Null,
-                $"{nameof(UnityEngine.UIElements.Button)} must expose its clickable for this wiring test.");
-            var clickable = clickableField.GetValue(button);
-            Assert.That(clickable, Is.Not.Null);
-
-            FieldInfo clickedField = clickable
-                .GetType()
-                .GetField("clicked", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(clickedField, Is.Not.Null,
-                $"{nameof(UnityEngine.UIElements.Clickable)} must expose its clicked delegate for this wiring test.");
-            var callback = clickedField.GetValue(clickable) as Action;
-            Assert.That(callback, Is.Not.Null);
-            callback.Invoke();
+                .GetMethod("OnEnable", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(onEnable, Is.Not.Null, $"{behaviour.GetType().Name} must expose an OnEnable method for this wiring test.");
+            onEnable.Invoke(behaviour, null);
         }
 
         static void SetPrivateField<T>(object target, string fieldName, T value)
@@ -1217,31 +1675,26 @@ namespace Blockiverse.Tests.EditMode
             field.SetValue(target, value);
         }
 
-        static T GetPrivateField<T>(object target, string fieldName)
+        sealed class FakeInputRig : IBlockiverseInputRig
         {
-            FieldInfo field = target
-                .GetType()
-                .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose private field '{fieldName}' for this wiring test.");
-            return (T)field.GetValue(target);
-        }
+            public bool LocomotionSuppressed { get; set; }
+            public UnityEngine.Events.UnityEvent MenuPressed { get; } = new();
+            public UnityEngine.Events.UnityEvent QuickMenuPressed { get; } = new();
+            public UnityEngine.Events.UnityEvent BreakPressed { get; } = new();
 
-        static void InvokeMenuAction(BlockiverseMenuController controller, string actionId)
-        {
-            MethodInfo handleAction = controller
-                .GetType()
-                .GetMethod("HandleAction", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(handleAction, Is.Not.Null, $"{nameof(BlockiverseMenuController)} must expose HandleAction for this wiring test.");
-            handleAction.Invoke(controller, new object[] { actionId });
-        }
+            public bool TryGetActiveInteractionRayPose(out Vector3 rayOrigin, out Vector3 rayDirection)
+            {
+                rayOrigin = default;
+                rayDirection = default;
+                return false;
+            }
 
-        static void InvokeMenuSelection(BlockiverseMenuController controller, string valueId)
-        {
-            MethodInfo handleSelection = controller
-                .GetType()
-                .GetMethod("HandleUiToolkitSelectionInvoked", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(handleSelection, Is.Not.Null, $"{nameof(BlockiverseMenuController)} must expose HandleUiToolkitSelectionInvoked for this wiring test.");
-            handleSelection.Invoke(controller, new object[] { valueId });
+            public bool TryGetInteractionRayPose(BlockiverseControllerRole hand, out Vector3 rayOrigin, out Vector3 rayDirection)
+            {
+                rayOrigin = default;
+                rayDirection = default;
+                return false;
+            }
         }
 
         Material CreateTestChunkMaterial()

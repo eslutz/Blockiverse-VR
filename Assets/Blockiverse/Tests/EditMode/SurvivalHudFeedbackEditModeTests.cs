@@ -1,12 +1,14 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.Voxel;
 using NUnit.Framework;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -29,7 +31,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void MiningProgressShowsHudStatusAndProgressSlider()
         {
-            SurvivalHudController hud = CreateHud(out BlockiverseHudToolkitSurface surface);
+            SurvivalHudController hud = CreateHud(out TMP_Text statusLabel, out Slider progressSlider);
 
             InvokePrivate(
                 hud,
@@ -38,20 +40,21 @@ namespace Blockiverse.Tests.EditMode
                 0.5f,
                 1.0f);
 
-            Assert.That(surface.CurrentStatusText, Is.EqualTo("Mining 50%"));
-            Assert.That(surface.IsMiningProgressVisible, Is.True);
-            Assert.That(surface.CurrentMiningProgress, Is.EqualTo(0.5f).Within(0.001f));
+            Assert.That(statusLabel.gameObject.activeSelf, Is.True);
+            Assert.That(statusLabel.text, Is.EqualTo("Mining 50%"));
+            Assert.That(progressSlider.gameObject.activeSelf, Is.True);
+            Assert.That(progressSlider.value, Is.EqualTo(0.5f).Within(0.001f));
 
             InvokePrivate(hud, "OnMiningProgressCleared");
 
-            Assert.That(surface.CurrentStatusText, Is.Empty);
-            Assert.That(surface.IsMiningProgressVisible, Is.False);
+            Assert.That(statusLabel.gameObject.activeSelf, Is.False);
+            Assert.That(progressSlider.gameObject.activeSelf, Is.False);
         }
 
         [Test]
         public void InventoryFullHarvestRejectionShowsHudStatus()
         {
-            SurvivalHudController hud = CreateHud(out BlockiverseHudToolkitSurface surface);
+            SurvivalHudController hud = CreateHud(out TMP_Text statusLabel, out Slider progressSlider);
             SurvivalCommandResult result = SurvivalCommandResult.Reject(
                 SurvivalCommandKind.HarvestResource,
                 SurvivalCommandFailureReason.HarvestRejected,
@@ -59,19 +62,33 @@ namespace Blockiverse.Tests.EditMode
 
             InvokePrivate(hud, "OnCommandFeedback", result, new BlockPosition(1, 2, 3));
 
-            Assert.That(surface.CurrentStatusText, Is.EqualTo("Inventory full"));
-            Assert.That(surface.IsMiningProgressVisible, Is.False);
+            Assert.That(statusLabel.gameObject.activeSelf, Is.True);
+            Assert.That(statusLabel.text, Is.EqualTo("Inventory full"));
+            Assert.That(progressSlider.gameObject.activeSelf, Is.False);
         }
 
-        SurvivalHudController CreateHud(out BlockiverseHudToolkitSurface surface)
+        SurvivalHudController CreateHud(out TMP_Text statusLabel, out Slider progressSlider)
         {
             GameObject hudObject = new("Survival HUD");
             objectsToDestroy.Add(hudObject);
-            UIDocument document = hudObject.AddComponent<UIDocument>();
-            surface = hudObject.AddComponent<BlockiverseHudToolkitSurface>();
-            surface.Configure(document);
             SurvivalHudController hud = hudObject.AddComponent<SurvivalHudController>();
-            hud.Configure(targetHudSurface: surface);
+
+            GameObject statusObject = new("Status", typeof(RectTransform));
+            statusObject.transform.SetParent(hudObject.transform, false);
+            statusLabel = statusObject.AddComponent<TextMeshProUGUI>();
+
+            GameObject progressObject = new("Mining Progress", typeof(RectTransform));
+            progressObject.transform.SetParent(hudObject.transform, false);
+            progressSlider = progressObject.AddComponent<Slider>();
+            progressObject.SetActive(false);
+
+            hud.Configure(
+                targetInventoryPanel: null,
+                targetCraftingPanel: null,
+                targetHealthPanel: null,
+                targetCratePanel: null,
+                targetStatusLabel: statusLabel,
+                targetMiningProgressSlider: progressSlider);
 
             return hud;
         }

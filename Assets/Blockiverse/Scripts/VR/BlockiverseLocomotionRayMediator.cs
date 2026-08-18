@@ -10,8 +10,9 @@ namespace Blockiverse.VR
     /// Controls the teleport arc for one controller hand. In <see cref="BlockiverseLocomotionMode.Teleport"/>
     /// mode, pushing the thumbstick forward activates the arc; releasing teleports. In Glide mode
     /// (or whenever the rig is in Glide locomotion) the teleport ray stays inactive so the
-    /// thumbstick forward movement is available for walking. The gameplay interaction ray is
-    /// disabled while the teleport arc is showing so the trigger cannot also break blocks.
+    /// thumbstick forward movement is available for walking. The interaction ray (UI + block
+    /// targeting) is disabled while the teleport arc is showing so the trigger cannot also break
+    /// blocks or click menus.
     /// </summary>
     public sealed class BlockiverseLocomotionRayMediator : MonoBehaviour
     {
@@ -75,11 +76,41 @@ namespace Blockiverse.VR
                 controllerAnchor = GetComponent<BlockiverseControllerAnchor>();
         }
 
+        MonoBehaviour cachedSessionController;
+        System.Reflection.PropertyInfo hasActiveSessionProp;
+        bool checkedSessionController;
+
         bool IsInTeleportMode()
         {
-            return inputRig != null &&
-                BlockiverseRuntimeState.AllowWorldInput &&
-                !inputRig.LocomotionSuppressed &&
+            if (inputRig == null || inputRig.LocomotionSuppressed)
+                return false;
+
+            bool allowTeleport = BlockiverseRuntimeState.AllowWorldInput;
+            if (!allowTeleport)
+            {
+                if (!checkedSessionController)
+                {
+                    foreach (MonoBehaviour mb in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+                    {
+                        if (mb != null && mb.GetType().Name == "BlockiverseWorldSessionController")
+                        {
+                            cachedSessionController = mb;
+                            hasActiveSessionProp = mb.GetType().GetProperty("HasActiveSession", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                            break;
+                        }
+                    }
+                    checkedSessionController = true;
+                }
+
+                if (cachedSessionController != null && hasActiveSessionProp != null)
+                {
+                    // If we do not have an active session, we are in the title menu world,
+                    // where teleportation should still be allowed.
+                    allowTeleport = !(bool)hasActiveSessionProp.GetValue(cachedSessionController);
+                }
+            }
+
+            return allowTeleport &&
                 comfortSettings != null &&
                 comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Teleport;
         }
@@ -143,7 +174,7 @@ namespace Blockiverse.VR
             // SelectExited to the TeleportationArea before regular UI/block interaction resumes.
             bool hasTrackedPose = HasUsableRayPose();
             bool showTeleportRay = active && hasTrackedPose;
-            bool showInteractionRay = enableInteractionRay && hasTrackedPose && CanUseInteractionRay();
+            bool showInteractionRay = enableInteractionRay && hasTrackedPose && IsActiveInteractionHand();
 
             if (teleportRay != null && teleportRay.gameObject.activeSelf != showTeleportRay)
                 teleportRay.gameObject.SetActive(showTeleportRay);
@@ -159,16 +190,6 @@ namespace Blockiverse.VR
 
             ResolveControllerAnchor();
             return controllerAnchor == null || controllerAnchor.IsTracked;
-        }
-
-        bool CanUseInteractionRay()
-        {
-            return IsMenuInputActive() || IsActiveInteractionHand();
-        }
-
-        static bool IsMenuInputActive()
-        {
-            return BlockiverseRuntimeState.MenuInputActive;
         }
 
         bool IsActiveInteractionHand()

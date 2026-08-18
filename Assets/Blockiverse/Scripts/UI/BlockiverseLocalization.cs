@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.WorldGen;
 
 namespace Blockiverse.UI
 {
-    // Lightweight runtime string lookup for UI Toolkit menus. English values remain the fallback
+    // Lightweight runtime string lookup for generated XR menus. English values remain the fallback
     // language, while tests and future locale loaders can override keys without rebuilding menus.
     public static class BlockiverseLocalization
     {
@@ -18,6 +19,7 @@ namespace Blockiverse.UI
             public const string TitlePaused = "ui.title.paused";
             public const string TitleDeath = "ui.title.death";
             public const string TitleConfirm = "ui.title.confirm";
+            public const string TitleError = "ui.title.error";
             public const string TitleSettings = "ui.title.settings";
             public const string TitleWorldDetails = "ui.title.world_details";
 
@@ -25,12 +27,12 @@ namespace Blockiverse.UI
             public const string TitleNewWorld = "ui.action.title.new_world";
             public const string TitleLoadWorld = "ui.action.title.load_world";
             public const string TitleMultiplayer = "ui.action.title.lan_multiplayer";
+            public const string LanReconnect = "ui.action.lan.reconnect";
             public const string TitleSettingsAction = "ui.action.title.settings";
             public const string TitleQuit = "ui.action.title.quit";
 
             public const string PauseResume = "ui.action.pause.resume";
-            public const string PauseSaveGame = "ui.action.pause.save_game";
-            public const string PausePlayerHub = "ui.action.pause.player_hub";
+public const string PauseSaveGame = "ui.action.pause.save_game";
             public const string PauseToggleMode = "ui.action.pause.toggle_mode";
             public const string PauseCreativeTools = "ui.action.pause.creative_tools";
             public const string PauseSettings = "ui.action.pause.settings";
@@ -45,9 +47,10 @@ namespace Blockiverse.UI
             public const string ConfirmCancel = "ui.action.confirm.cancel";
             public const string ConfirmOk = "ui.action.confirm.ok";
             public const string ConfirmQuitGame = "ui.prompt.confirm.quit_game";
+            public const string ErrorClose = "ui.action.error.close";
 
             public const string SettingsComfort = "ui.action.settings.comfort";
-            public const string SettingsAudio = "ui.action.settings.audio";
+public const string SettingsAudio = "ui.action.settings.audio";
             public const string SettingsControls = "ui.action.settings.controls";
             public const string SettingsClose = "ui.action.settings.close";
 
@@ -254,6 +257,7 @@ namespace Blockiverse.UI
             [Keys.TitlePaused] = "Paused",
             [Keys.TitleDeath] = "You Died",
             [Keys.TitleConfirm] = "Confirm?",
+            [Keys.TitleError] = "Error",
             [Keys.TitleSettings] = "Settings",
             [Keys.TitleWorldDetails] = "World Details",
 
@@ -263,10 +267,10 @@ namespace Blockiverse.UI
             [Keys.TitleMultiplayer] = "LAN Multiplayer",
             [Keys.TitleSettingsAction] = "Settings",
             [Keys.TitleQuit] = "Quit",
+            [Keys.LanReconnect] = "Join (Reconnect)",
 
             [Keys.PauseResume] = "Resume",
-            [Keys.PauseSaveGame] = "Save Game",
-            [Keys.PausePlayerHub] = "Player Hub",
+[Keys.PauseSaveGame] = "Save Game",
             [Keys.PauseToggleMode] = "Switch Survival/Creative",
             [Keys.PauseCreativeTools] = "Creative Tools",
             [Keys.PauseSettings] = "Settings",
@@ -281,9 +285,10 @@ namespace Blockiverse.UI
             [Keys.ConfirmCancel] = "Cancel",
             [Keys.ConfirmOk] = "OK",
             [Keys.ConfirmQuitGame] = "Quit game?",
+            [Keys.ErrorClose] = "Close",
 
             [Keys.SettingsComfort] = "Comfort",
-            [Keys.SettingsAudio] = "Audio",
+[Keys.SettingsAudio] = "Audio",
             [Keys.SettingsControls] = "Controls",
             [Keys.SettingsClose] = "Close",
 
@@ -306,8 +311,6 @@ namespace Blockiverse.UI
             [Keys.NewWorldCreate] = "Create World",
             ["ui.value.canonical.small"] = "Small (128x128)",
             ["ui.value.canonical.medium"] = "Medium (192x192)",
-            ["ui.value.canonical.large"] = "Large (256x256)",
-            ["ui.value.canonical.infinite"] = "Infinite Preview (256x256)",
             ["ui.value.canonical.original"] = "Original",
             ["ui.value.canonical.enhanced"] = "Enhanced",
             ["ui.value.canonical.ai_simplified"] = "AI Simplified",

@@ -20,3 +20,10 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.sh text eol=lf
+
+# Embedded Meta XR core SDK ships large prebuilt binaries; keep them in LFS.
+Packages/com.meta.xr.sdk.core/**/*.dylib filter=lfs diff=lfs merge=lfs -text
+Packages/com.meta.xr.sdk.core/**/*.exe filter=lfs diff=lfs merge=lfs -text
+Packages/com.meta.xr.sdk.core/**/*.aar filter=lfs diff=lfs merge=lfs -text
+Packages/com.meta.xr.sdk.core/**/*.so filter=lfs diff=lfs merge=lfs -text
+Packages/com.meta.xr.sdk.core/**/Tools~/** filter=lfs diff=lfs merge=lfs -text

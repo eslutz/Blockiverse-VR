@@ -1,4 +1,3 @@
-#pragma warning disable 0618
 using System.Collections;
 using System.Reflection;
 using Blockiverse.Core;
@@ -123,7 +122,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator BootSceneDefersCreativeWorldGenerationUntilSessionSelection()
+        public IEnumerator BootSceneGeneratesTitleMiniWorldWithoutActiveSession()
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle("Boot");
 
@@ -138,7 +137,6 @@ namespace Blockiverse.Tests.PlayMode
             CreativeWorldManager manager = worldObject.GetComponent<CreativeWorldManager>();
             VoxelWorldRenderer renderer = worldObject.GetComponent<VoxelWorldRenderer>();
             BlockiverseCreativeInputBridge[] bridges = Object.FindObjectsByType<BlockiverseCreativeInputBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            MeshFilter[] chunkFilters = worldObject.GetComponentsInChildren<MeshFilter>();
             int activeSceneBridgeCount = 0;
 
             foreach (BlockiverseCreativeInputBridge bridge in bridges)
@@ -150,10 +148,13 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(manager, Is.Not.Null);
             Assert.That(worldObject.GetComponent<BlockiverseCreativeInputBridge>(), Is.Null);
             Assert.That(activeSceneBridgeCount, Is.EqualTo(1));
-            Assert.That(manager.World, Is.Null);
-            Assert.That(renderer == null || renderer.Stats.ChunkCount == 0, Is.True);
-            Assert.That(chunkFilters, Is.Empty);
-            Assert.That(Object.FindAnyObjectByType<BlockiverseVoidSafetyFloor>(FindObjectsInactive.Include), Is.Null);
+            // Since the M8.5 menu gate, Boot deliberately generates the explorable
+            // title mini-world at startup (InitializeDefaultWorldOnAwake). The
+            // session stays inactive: world input remains blocked until the menu
+            // router grants it after Create/Load/Join.
+            Assert.That(manager.World, Is.Not.Null);
+            Assert.That(renderer, Is.Not.Null);
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False);
             Assert.That(GameObject.Find("Interaction Test Block"), Is.Null);
         }
 
@@ -182,6 +183,58 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
+        {
+            GameObject rigObject = new("Test Input Rig");
+            GameObject comfortMenuObject = new("Comfort Menu");
+            GameObject blockMenuObject = new("Block Menu Placeholder");
+            InputActionAsset actions = CreateTestActions();
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+
+            try
+            {
+                var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+                inputRig.Configure(actions);
+
+                var comfortSettings = rigObject.AddComponent<BlockiverseComfortSettings>();
+                var comfortCanvas = comfortMenuObject.AddComponent<Canvas>();
+                var comfortMenu = comfortMenuObject.AddComponent<BlockiverseComfortMenu>();
+                comfortMenu.Configure(comfortCanvas, comfortSettings);
+                inputRig.MenuPressed.AddListener(comfortMenu.ToggleVisible);
+
+                // Use the real quick-menu presenter (the component the bootstrapper wires to
+                // QuickMenuPressed) rather than a placeholder, starting hidden like the runtime menu.
+                var blockCanvas = blockMenuObject.AddComponent<Canvas>();
+                var blockMenu = blockMenuObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+                blockMenu.Configure(blockCanvas, rigObject.transform, 1.12f, -0.34f, -0.18f, 0.0f);
+                blockCanvas.enabled = false;
+
+                inputRig.QuickMenuPressed.AddListener(blockMenu.ToggleVisible);
+
+                Press(gamepad.leftShoulder);
+                yield return null;
+
+                Assert.That(blockMenu.IsVisible, Is.True);
+                Assert.That(comfortMenu.IsVisible, Is.False);
+
+                Release(gamepad.leftShoulder);
+                yield return null;
+                Press(gamepad.startButton);
+                yield return null;
+
+                Assert.That(blockMenu.IsVisible, Is.True);
+                Assert.That(comfortMenu.IsVisible, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(blockMenuObject);
+                UnityEngine.Object.DestroyImmediate(comfortMenuObject);
+                UnityEngine.Object.DestroyImmediate(rigObject);
+                UnityEngine.Object.DestroyImmediate(actions);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator RightSelectAndRightActivateRaiseCreativeEvents()
         {
             GameObject rigObject = new("Test Input Rig");
@@ -194,6 +247,10 @@ namespace Blockiverse.Tests.PlayMode
             {
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
+                // Place events are gated behind the menu router's world-input grant
+                // since the M8.5 menu gate; simulate an active world session. The
+                // sibling suppressed-state test keeps covering the gated behavior.
+                BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
                 inputRig.BreakPressed.AddListener(() => breakPresses++);
                 inputRig.PlacePressed.AddListener(() => placePresses++);
 
@@ -246,10 +303,10 @@ namespace Blockiverse.Tests.PlayMode
                 yield return null;
 
                 Assert.That(breakPresses, Is.EqualTo(1),
-                    "Menu-mode trigger capture needs the dominant trigger event even while world editing is suppressed.");
+                    "Menu-specific trigger fallbacks need the dominant trigger event even while world editing is suppressed.");
                 Assert.That(breakReleases, Is.EqualTo(1));
                 Assert.That(placePresses, Is.EqualTo(0),
-                    "World edit/use actions should remain suppressed while UI Toolkit menus are active.");
+                    "World edit/use actions should remain suppressed while routed menus are active.");
             }
             finally
             {

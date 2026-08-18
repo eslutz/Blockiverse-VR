@@ -1,4 +1,5 @@
 using System;
+using Blockiverse.Core;
 
 namespace Blockiverse.Survival
 {
@@ -7,7 +8,7 @@ namespace Blockiverse.Survival
     // 0..100 range and persistence fields but not the rates). Hunger/thirst depletion is driven
     // by world ticks; reaching zero applies periodic starvation/dehydration damage that callers
     // route into PlayerVitals. Stamina regenerates over time and is spent by exertion.
-    public sealed class SurvivalVitals
+    public sealed class SurvivalVitals : ISurvivalVitalsView
     {
         public const int DefaultMax = 100;
 

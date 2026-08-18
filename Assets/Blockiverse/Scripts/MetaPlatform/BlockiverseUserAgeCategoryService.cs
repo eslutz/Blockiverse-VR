@@ -1,4 +1,5 @@
 using System;
+using Blockiverse.Core;
 using Oculus.Platform;
 using UnityEngine;
 using OculusCore = Oculus.Platform.Core;
@@ -11,6 +12,16 @@ namespace Blockiverse.MetaPlatform
     {
         static BlockiverseUserAgeCategoryState current =
             BlockiverseUserAgeCategoryState.Unknown(BlockiverseUserAgeCategorySource.None, "Not requested.");
+
+        // Bridges the Meta age policy into the dependency-free Blockiverse.Core seam so UI can
+        // consult CanUseMetaSocialFeature without referencing the MetaPlatform assembly. Wired from
+        // the static constructor so it is registered the first time this type is touched: scene
+        // load in play mode, or SetCurrentForTests/ResetForTests in edit-mode tests.
+        static BlockiverseUserAgeCategoryService()
+        {
+            BlockiverseMetaSocialPolicy.CanUseMetaSocialFeatureCallback = () =>
+                BlockiversePlatformFeaturePolicy.CanUseMetaSocialFeature(current.Category);
+        }
 
         IUserAgeCategoryClient client;
         bool requestedThisSession;

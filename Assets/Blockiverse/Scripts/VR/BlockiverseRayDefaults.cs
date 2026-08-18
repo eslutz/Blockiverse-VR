@@ -22,9 +22,6 @@ namespace Blockiverse.VR
 
             ConfigureCommonRay(ray, rayOrigin, raycastMask);
             ray.lineType = XRRayInteractor.LineType.StraightLine;
-            // UI Toolkit world-space panels use trigger colliders. The visual ray
-            // still needs to hit them so the cyan line stops at the menu surface.
-            ray.raycastTriggerInteraction = QueryTriggerInteraction.Collide;
             ray.enableUIInteraction = true;
             ray.blockUIOnInteractableSelection = false;
             ray.maxRaycastDistance = CreativeInteractionController.MaxBlockInteractionReachMeters;

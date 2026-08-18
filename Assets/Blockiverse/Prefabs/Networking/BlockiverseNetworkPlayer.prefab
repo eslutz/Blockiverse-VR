@@ -421,7 +421,6 @@ MonoBehaviour:
   Ownership: 1
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
-  <InScenePlaced>k__BackingField: 0
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 1
   SpawnWithObservers: 1
@@ -448,6 +447,7 @@ MonoBehaviour:
   metaAvatarAvailable: 0
   poseSendRateHz: 30
   remotePoseInterpolationSpeed: 18
+  stalenessThreshold: 3
   rootTrackingSource: {fileID: 0}
   headTrackingSource: {fileID: 0}
   leftHandTrackingSource: {fileID: 0}

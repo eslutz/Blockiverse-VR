@@ -2,7 +2,7 @@
     "CustomInstructionsGUID": "",
     "CheckpointEnabled": false,
     "GitInstanceTypeValue": 2,
-    "CustomGitPath": "/opt/homebrew/Cellar/git/2.54.0/bin/git",
+    "CustomGitPath": "",
     "CheckpointRetentionWeeks": 2,
     "PlanExecutionPromptDismissed": false
 }

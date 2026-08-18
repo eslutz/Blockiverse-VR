@@ -138,6 +138,8 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void VerboseTraceControllerCanCaptureAPlayerSnapshotOnDemand()
         {
+            Blockiverse.Core.BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+
             GameObject rig = CreateGameObject("Trace Rig");
             rig.transform.position = new Vector3(1.25f, 2.5f, 3.75f);
             rig.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
@@ -156,6 +158,8 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void VerboseTraceControllerLogsCreativeBlockMutationEventsWithCanonicalIds()
         {
+            Blockiverse.Core.BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+
             var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 1234);
             var position = new BlockPosition(1, 1, 1);
             world.SetBlock(position, BlockRegistry.MeadowTurf, trackChange: false);

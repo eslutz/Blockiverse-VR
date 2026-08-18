@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Blockiverse.Core;
+using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -9,47 +10,8 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
-    public enum CreativeWorldGenerationPreset
-    {
-        MenuWorld,
-        SurvivalLite,
-        FlatCreative,
-        VoidBuilder
-    }
-
-    // World-level rules mode (the manifest's "gameMode"): survival worlds accept edits only
-    // through the validated survival command channel; creative worlds allow direct mutations.
-    public enum WorldGameMode
-    {
-        Creative,
-        Survival,
-    }
-
-    public readonly struct GeneratedCreativeWorld
-    {
-        public GeneratedCreativeWorld(
-            BlockRegistry registry,
-            WorldGenerationSettings settings,
-            VoxelWorld world,
-            CreativeWorldGenerationPreset generationPreset,
-            IReadOnlyList<StructureContainerLoot> containerLoot = null)
-        {
-            Registry = registry;
-            Settings = settings;
-            World = world;
-            GenerationPreset = generationPreset;
-            ContainerLoot = containerLoot;
-        }
-
-        public BlockRegistry Registry { get; }
-        public WorldGenerationSettings Settings { get; }
-        public VoxelWorld World { get; }
-        public CreativeWorldGenerationPreset GenerationPreset { get; }
-        // Container loot rolled during generation (null when the preset places none).
-        public IReadOnlyList<StructureContainerLoot> ContainerLoot { get; }
-    }
-
-    public sealed class CreativeWorldManager : MonoBehaviour
+    [DefaultExecutionOrder(-9000)]
+    public sealed class CreativeWorldManager : MonoBehaviour, IMultiplayerWorldContext
     {
         [SerializeField] Material chunkMaterial;
         [SerializeField] string textureSet = BlockTextureSetIds.Default;
@@ -62,7 +24,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
         [SerializeField] bool initializeDefaultWorldOnAwake;
         MultiplayerChunkAuthoritySync authoritySync;
-        TorchbudLightManager torchbudLightManager;
+        GlowwickLightManager glowwickLightManager;
         WeatherService weatherService;
         VegetationService vegetationService;
         FarmingService farmingService;
@@ -90,8 +52,9 @@ namespace Blockiverse.Gameplay
         public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
         public VoxelWorldRenderer Renderer { get; private set; }
+        IVoxelWorldRenderer IMultiplayerWorldContext.Renderer => Renderer;
         public string TextureSet => BlockTextureSetIds.Normalize(textureSet);
-        public bool IsMenuWorldActive { get; private set; }
+        public BlockPosition SpawnPosition => Settings != null ? Settings.SpawnPosition : new BlockPosition(0, 64, 0);
 
         // The world's rules mode. Explicitly initialized sandbox worlds default to Creative; saves
         // and the new-world flow set it from their manifest/config (see SetGameMode/ParseGameMode).
@@ -152,22 +115,6 @@ namespace Blockiverse.Gameplay
             return World.Bounds.Contains(cell) && !skyLight.HasSkyAccess(cell);
         }
 
-        // Full weather snapshot: state + tick accumulator + RNG position. The RNG position is
-        // what keeps a late-joining client in deterministic lockstep with the host's weather.
-        public readonly struct WeatherSyncState
-        {
-            public readonly WeatherState State;
-            public readonly int Ticks;
-            public readonly uint RngState;
-
-            public WeatherSyncState(WeatherState state, int ticks, uint rngState)
-            {
-                State = state;
-                Ticks = ticks;
-                RngState = rngState;
-            }
-        }
-
         // Returns the weather state, accumulated ticks, and RNG position for a network snapshot.
         // Returns a Clear default when the weather service is not yet initialized.
         public WeatherSyncState GetWeatherSyncState() =>
@@ -202,6 +149,34 @@ namespace Blockiverse.Gameplay
                 return;
 
             weatherService.RestoreState(state, ticks: 0, GetWeatherSyncState().RngState);
+        }
+
+        // ── Creative spawn helpers (A2 UI decoupling) ─────────────────────────
+        // These wrap Blockiverse.WorldGen services so Blockiverse.UI can invoke them through the
+        // Gameplay manager it already references, instead of taking a direct WorldGen asmdef ref.
+
+        // Places a procedurally-built standard tree at the given base position (tracked as an edit).
+        public void SpawnStandardTree(VoxelWorld world, BlockPosition basePos)
+        {
+            if (world == null)
+                return;
+
+            new VegetationService().PlaceStandardTree(world, basePos, trackChange: true);
+        }
+
+        // Places a seeded structure at the given base position (tracked as an edit).
+        public void SpawnStructure(VoxelWorld world, BlockPosition basePos)
+        {
+            if (world == null)
+                return;
+
+            StructureService.PlaceStructureAt(world, basePos.X, basePos.Y, basePos.Z, world.Seed, trackChange: true);
+        }
+
+        // Returns the highest solid surface Y at the given column, or a negative value if none.
+        public int FindSurfaceY(VoxelWorld world, int x, int z)
+        {
+            return StructureService.FindSurfaceY(world, x, z);
         }
 
         // Restores the world-time clock from a host snapshot, buffering if the clock is not ready.
@@ -373,6 +348,16 @@ namespace Blockiverse.Gameplay
         }
 
         public void InitializeGeneratedWorld(
+            BlockRegistry registry,
+            WorldGenerationSettings settings,
+            VoxelWorld world,
+            CreativeWorldGenerationPreset generationPreset,
+            IReadOnlyList<StructureContainerLoot> containerLoot = null)
+        {
+            InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, generationPreset, containerLoot));
+        }
+
+        public void InitializeGeneratedWorld(
             GeneratedCreativeWorld generatedWorld,
             MultiplayerChunkAuthoritySync authoritySyncOverride = null,
             bool deferInitialRendererRebuild = false)
@@ -388,12 +373,16 @@ namespace Blockiverse.Gameplay
             WorldGenerationSettings settings = generatedWorld.Settings;
             Settings = settings;
             GenerationPreset = generatedWorld.GenerationPreset;
-            IsMenuWorldActive = generatedWorld.GenerationPreset == CreativeWorldGenerationPreset.MenuWorld;
             World = generatedWorld.World;
             pendingContainerLoot = generatedWorld.ContainerLoot;
             pendingWorldTimeTicks = 0;
             ConfigureWorldRuntime(settings, authoritySyncOverride, deferInitialRendererRebuild);
-            interactionController?.SetBlockEditingEnabled(!IsMenuWorldActive);
+
+            // ConfigureWorldRuntime queues the full world rebuild; eagerly bake the spawn
+            // neighbourhood so the rig lands on visible, collidable ground before it is positioned.
+            if (Renderer != null && settings != null)
+                Renderer.RebuildSpawnRegion(settings.SpawnPosition);
+
             PositionRigAtSpawn(settings.SpawnPosition);
         }
 
@@ -431,7 +420,7 @@ namespace Blockiverse.Gameplay
                 TextureSet,
                 deferInitialRendererRebuild);
 
-            ConfigureTorchbudLights();
+            ConfigureGlowwickLights();
             ConfigureEnvironmentServices(settings);
             ConfigureVoidSafetyFloor();
 
@@ -441,21 +430,15 @@ namespace Blockiverse.Gameplay
             ConfigureInteractionController(settings);
         }
 
-        public void InitializeMenuWorld()
+        void ConfigureGlowwickLights()
         {
-            InitializeGeneratedWorld(WorldSaveGeneration.GenerateMenuWorld());
-            SetGameMode(WorldGameMode.Creative);
-        }
+            if (glowwickLightManager == null)
+                glowwickLightManager = GetComponent<GlowwickLightManager>();
 
-        void ConfigureTorchbudLights()
-        {
-            if (torchbudLightManager == null)
-                torchbudLightManager = GetComponent<TorchbudLightManager>();
+            if (glowwickLightManager == null)
+                glowwickLightManager = gameObject.AddComponent<GlowwickLightManager>();
 
-            if (torchbudLightManager == null)
-                torchbudLightManager = gameObject.AddComponent<TorchbudLightManager>();
-
-            torchbudLightManager.Configure(World, Registry);
+            glowwickLightManager.Configure(World, Registry);
         }
 
         void ConfigureEnvironmentServices(WorldGenerationSettings settings)
@@ -489,9 +472,7 @@ namespace Blockiverse.Gameplay
                 subscribedWorld = World;
             }
 
-            worldTimeClock = GetComponent<WorldTimeClock>();
-            if (worldTimeClock == null)
-                worldTimeClock = FindAnyObjectByType<WorldTimeClock>();
+            worldTimeClock = FindFirstObjectByType<WorldTimeClock>();
             if (worldTimeClock == null)
                 return;
 
@@ -733,10 +714,10 @@ namespace Blockiverse.Gameplay
                 return;
 
             if (hotbar == null)
-                hotbar = FindAnyObjectByType<CreativeHotbar>();
+                hotbar = FindFirstObjectByType<CreativeHotbar>();
 
             if (placementPreview == null)
-                placementPreview = FindAnyObjectByType<PlacementPreview>();
+                placementPreview = FindFirstObjectByType<PlacementPreview>();
 
             if (placementPreview == null)
                 placementPreview = CreatePlacementPreview();
