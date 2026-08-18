@@ -36,8 +36,13 @@ namespace Blockiverse.VR
 
             inputModule.leftClickAction = GetOrCreateReference(inputModule.leftClickAction, uiPress);
             inputModule.scrollWheelAction = GetOrCreateReference(inputModule.scrollWheelAction, uiScroll);
-            inputModule.navigateAction = GetOrCreateReference(inputModule.navigateAction, uiScroll);
-            inputModule.submitAction = GetOrCreateReference(inputModule.submitAction, uiPress);
+            // The ray interactor already dispatches pointer click from UI Press. Binding the
+            // same action to Submit made one trigger pull fire the hovered (auto-selected)
+            // Button twice: OnSubmit on press, OnPointerClick on release — selector arrows
+            // advanced two options per click on device. Navigation is likewise left unbound
+            // so the thumbstick cannot move uGUI selection under the ray.
+            inputModule.navigateAction = null;
+            inputModule.submitAction = null;
         }
 
         public static void Configure(
@@ -52,8 +57,10 @@ namespace Blockiverse.VR
 
             inputModule.leftClickAction = uiPressReference;
             inputModule.scrollWheelAction = uiScrollReference;
-            inputModule.navigateAction = uiScrollReference;
-            inputModule.submitAction = uiPressReference;
+            // See the overload above: Submit/Navigate stay unbound so UI Press produces
+            // exactly one click per trigger pull.
+            inputModule.navigateAction = null;
+            inputModule.submitAction = null;
         }
 
         static void ConfigureInputModuleFlags(XRUIInputModule inputModule)

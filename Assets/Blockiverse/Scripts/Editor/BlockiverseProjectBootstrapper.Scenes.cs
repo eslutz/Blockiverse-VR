@@ -548,7 +548,9 @@ if (rigInstance != null)
             eventSystemObject.transform.localScale = Vector3.one;
 
             EventSystem eventSystem = EnsureComponent<EventSystem>(eventSystemObject);
-            eventSystem.sendNavigationEvents = true;
+            // Ray-driven world-space UI: pointer events only. Navigation/Submit events
+            // would let the UI Press action fire the auto-selected Button a second time.
+            eventSystem.sendNavigationEvents = false;
 
             StandaloneInputModule legacyInputModule = eventSystemObject.GetComponent<StandaloneInputModule>();
 

@@ -7,6 +7,7 @@ using Blockiverse.VR;
 using TMPro;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -146,14 +147,17 @@ namespace Blockiverse.Tests.PlayMode
                 uiInputModule.scrollWheelAction,
                 BlockiverseInputActionNames.RightHandMap,
                 BlockiverseInputActionNames.UiScroll);
-            AssertUiActionReference(
-                uiInputModule.navigateAction,
-                BlockiverseInputActionNames.RightHandMap,
-                BlockiverseInputActionNames.UiScroll);
-            AssertUiActionReference(
-                uiInputModule.submitAction,
-                BlockiverseInputActionNames.RightHandMap,
-                BlockiverseInputActionNames.UiPress);
+            // Submit and Navigate must stay unbound: the ray interactor already turns UI Press
+            // into a pointer click, and routing the same action through Submit fired the
+            // auto-selected Button twice per trigger pull (selector arrows advanced two options).
+            Assert.That(uiInputModule.submitAction, Is.Null,
+                "UI Press must not also drive Submit or every click double-fires.");
+            Assert.That(uiInputModule.navigateAction, Is.Null,
+                "UI Scroll must not move uGUI selection under the ray.");
+            EventSystem eventSystem = uiInputModule.GetComponent<EventSystem>();
+            Assert.That(eventSystem, Is.Not.Null);
+            Assert.That(eventSystem.sendNavigationEvents, Is.False,
+                "Ray-driven UI must not dispatch navigation/submit events.");
 
             // World-space menus are raycast by the tracked-device raycaster, not the screen raycaster.
             SurvivalInventoryPanel inventoryPanel =

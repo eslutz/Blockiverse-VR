@@ -966,8 +966,10 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(inputModule, Is.Not.Null);
                 AssertGeneratedReference(inputModule.leftClickAction, "Boot XRUIInputModule left click");
                 AssertGeneratedReference(inputModule.scrollWheelAction, "Boot XRUIInputModule scroll");
-                AssertGeneratedReference(inputModule.navigateAction, "Boot XRUIInputModule navigate");
-                AssertGeneratedReference(inputModule.submitAction, "Boot XRUIInputModule submit");
+                Assert.That(inputModule.navigateAction, Is.Null,
+                    "Boot XRUIInputModule must not bind Navigate: the ray owns UI selection.");
+                Assert.That(inputModule.submitAction, Is.Null,
+                    "Boot XRUIInputModule must not bind Submit: UI Press already produces the pointer click and Submit double-fires the selected Button.");
             }
             finally
             {
