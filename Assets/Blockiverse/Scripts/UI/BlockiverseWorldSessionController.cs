@@ -80,6 +80,25 @@ namespace Blockiverse.UI
             ResolveReferences();
             Wire();
             RefreshSaveList();
+            ApplyTitleMenuPose();
+        }
+
+        // Title-state menus are fixtures of the mini-world: pinned at a spawn-relative pose
+        // (in front of spawn along the rig's spawn heading, at standing eye height) that never
+        // derives from the headset. Recomputed whenever the title world is (re)initialized.
+        public void ApplyTitleMenuPose()
+        {
+            if (menuController == null || worldManager == null)
+                return;
+
+            BlockPosition spawn = worldManager.SpawnPosition;
+            var spawnBase = new Vector3(spawn.X + 0.5f, spawn.Y, spawn.Z + 0.5f);
+            float yaw = BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig) ? rig.eulerAngles.y : 0.0f;
+            menuController.SetTitleMenuPose(BlockiversePanelPlacement.SpawnRelativePose(
+                spawnBase,
+                yaw,
+                BlockiversePanelPlacement.DefaultTitlePanelDistanceMeters,
+                BlockiversePanelPlacement.DefaultTitlePanelHeightMeters));
         }
 
         void OnDestroy()
@@ -239,6 +258,7 @@ namespace Blockiverse.UI
 
             SetTransitionLocomotionBlocked(false);
             RefreshSaveList();
+            ApplyTitleMenuPose();
         }
 
         // ── Save ──────────────────────────────────────────────────────────────

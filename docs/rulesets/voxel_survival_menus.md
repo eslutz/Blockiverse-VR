@@ -1388,6 +1388,35 @@ Example:
 | Kiln/Forge | Yes by default | Station progress can continue after closing |
 | Death Screen | Yes | World waits for respawn choice |
 
+"Pause Game" freezes the world clock, vitals, and station progress **only while no LAN
+session is live**. A host-authoritative shared world cannot pause for one player's menu,
+so in a multiplayer session pause routes leave the shared clock running and menus are
+per-peer. Menus never suppress locomotion in either case: the player keeps free
+movement with a menu open, and only block editing stays gated (`AllowWorldInput`) while a
+menu has focus. The world-loading transition is the one route that blocks locomotion,
+because the rig is being repositioned.
+
+### 10.1a Menu Placement
+
+Routed world-space menus place themselves by game state, not per panel:
+
+- **Title state (mini-world):** menus are fixtures of the world. Every title-route panel
+  (title, new/load world, settings, LAN, controller map, world details) shares one
+  spawn-relative pose: `titlePanelDistance` (2.0 m) out from the spawn block along the
+  rig's spawn heading, `titlePanelHeight` (1.4 m — standing eye level) above the block
+  base, facing back toward spawn. The pose is computed whenever the title world is
+  (re)initialized and **never derives from the headset**, so head pitch, seated/standing
+  height, and where the player has walked cannot move it. Walk away and it stays put,
+  like a sign at spawn.
+- **Session state (in-world play):** pause, inventory, settings and other routed menus
+  use a **lazy follow**: they open in front of the player at head height with no pitch,
+  hold that pose while the head stays within a `followYawThreshold` (30°) cone and the
+  player stays within `followDistanceThreshold` (1.5 m), then glide (exponential
+  smoothing, `followSmoothing` 0.35 s) to a fresh pose in front of the player. Never
+  gaze-locked; navigating within a menu stack keeps the current pose.
+- The gameplay HUD and quick block menu keep their own hand/head attachment and are not
+  routed through this model.
+
 ### 10.2 Autosave Rules
 
 ```ts

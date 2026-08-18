@@ -71,6 +71,12 @@ namespace Blockiverse.UI
         BlockiverseWorldSessionController sessionController;
         SurvivalVitalsRuntime vitalsRuntime;
         MultiplayerSurvivalSync survivalSync;
+        BlockiverseNetworkSession networkSession;
+
+        // A pause route freezes the world clock only when no LAN session is live: a
+        // host-authoritative shared world cannot pause for one player's menu.
+        public bool IsMultiplayerSessionLive =>
+            networkSession != null && networkSession.CurrentMode != NetworkSessionMode.Offline;
         Action<bool> confirmCallback;
 
         bool latestSaveExists;
@@ -318,6 +324,9 @@ namespace Blockiverse.UI
                     survivalSync.StationRemoved += OnStationRemoved;
                 }
             }
+
+            if (networkSession == null)
+                networkSession = BlockiverseSceneLookup.Find<BlockiverseNetworkSession>(FindObjectsInactive.Include);
 
             if (titleMenu == null) titleMenu = FindGeneratedComponent<BlockiverseActionMenu>("Title Menu");
             if (pauseMenu == null) pauseMenu = FindGeneratedComponent<BlockiverseActionMenu>("Pause Menu");
@@ -674,7 +683,9 @@ namespace Blockiverse.UI
         {
             if (router == null) return;
 
-            BlockiverseRuntimeState.SetRouterState(router.IsGamePaused, router.AllowWorldInput);
+            ResolveRuntimeReferences();
+            bool effectivePause = router.IsGamePaused && !IsMultiplayerSessionLive;
+            BlockiverseRuntimeState.SetRouterState(effectivePause, router.AllowWorldInput);
             ApplyLocomotionSuppression();
             string activeId = router.ActiveScreen.ScreenId;
             string inputTarget = router.InputTarget;
@@ -694,7 +705,12 @@ namespace Blockiverse.UI
 
                 if (visible)
                 {
-                    bool preserveAnchor = ShouldPreserveMenuAnchor(screenId, anchorPresenter);
+                    ApplyPlacementModeFor(screenId, presenter);
+                    // A world-fixed panel with a fixture pose places itself; otherwise keep the
+                    // stack's shared anchor so navigating within a menu never jumps the panel.
+                    bool hasFixture = presenter.PlacementMode == BlockiversePanelPlacementMode.WorldFixed &&
+                        presenter.HasWorldFixedPose;
+                    bool preserveAnchor = !hasFixture && ShouldPreserveMenuAnchor(screenId, anchorPresenter);
                     if (preserveAnchor)
                         presenter.ApplyPlacementFrom(anchorPresenter);
                     presenter.Show(recenterPlacement: !preserveAnchor);
@@ -720,14 +736,55 @@ namespace Blockiverse.UI
                 return;
 
             ResolveRuntimeReferences();
-            if (sessionController != null && sessionController.HasActiveSession)
-            {
-                bool isTitleMiniWorldRoute = string.Equals(router.ActiveScreen.ScreenId, MenuActions.TitleScreen, StringComparison.Ordinal);
-                inputRig.LocomotionSuppressed = !isTitleMiniWorldRoute && (router.IsGamePaused || !router.AllowWorldInput);
-            }
-            else if (!string.Equals(router.ActiveScreen.ScreenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal))
-            {
+            // Menus no longer freeze the player: routed menus lazily follow the player in a
+            // session and are world fixtures in the title mini-world, so movement stays free
+            // in both. Block editing remains gated by AllowWorldInput while a menu has focus.
+            // Only the world-loading transition (rig being repositioned) blocks locomotion.
+            bool isWorldLoading = string.Equals(router.ActiveScreen.ScreenId, MenuActions.WorldLoadingScreen, StringComparison.Ordinal);
+            if (!isWorldLoading)
                 inputRig.LocomotionSuppressed = false;
+        }
+
+        // Title-state menus are fixtures of the mini-world (world-fixed, spawn-relative pose);
+        // in-session menus lazily follow the player. HUD/loading surfaces keep their own
+        // presenter-configured behavior.
+        void ApplyPlacementModeFor(string screenId, BlockiverseWorldSpacePanelPresenter presenter)
+        {
+            if (presenter == null || !IsAnchoredMenuScreen(screenId))
+                return;
+
+            bool inSession = sessionController != null && sessionController.HasActiveSession;
+            var mode = inSession
+                ? BlockiversePanelPlacementMode.LazyFollow
+                : BlockiversePanelPlacementMode.WorldFixed;
+            if (presenter.PlacementMode != mode)
+                presenter.SetPlacementMode(mode);
+
+            if (mode == BlockiversePanelPlacementMode.WorldFixed && hasTitleMenuPose && !presenter.HasWorldFixedPose)
+                presenter.SetWorldFixedPose(titleMenuPose);
+        }
+
+        Pose titleMenuPose;
+        bool hasTitleMenuPose;
+
+        public bool HasTitleMenuPose => hasTitleMenuPose;
+        public Pose TitleMenuPose => titleMenuPose;
+
+        // Sets the world-fixed pose every title-state menu uses. Called when the title
+        // mini-world is (re)initialized so the pose is spawn-relative, never head-relative.
+        public void SetTitleMenuPose(Pose pose)
+        {
+            titleMenuPose = pose;
+            hasTitleMenuPose = true;
+
+            if (screenPresenters == null)
+                return;
+
+            foreach (var (screenId, presenter) in screenPresenters)
+            {
+                if (presenter == null || !IsAnchoredMenuScreen(screenId))
+                    continue;
+                presenter.SetWorldFixedPose(pose);
             }
         }
 

@@ -761,7 +761,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ActiveSessionPauseSuppressesLocomotionButTitleMiniWorldDoesNot()
+        public void MenusNeverSuppressLocomotionButPauseRoutesStillPauseSinglePlayerClock()
         {
             GameObject rig = CreateRoot("Rig");
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
@@ -790,12 +790,55 @@ namespace Blockiverse.Tests.EditMode
 
             controller.EnterGameplay();
             Assert.That(inputRig.LocomotionSuppressed, Is.False);
+            Assert.That(BlockiverseRuntimeState.IsGamePaused, Is.False);
 
             controller.OnMenuPressed();
 
             Assert.That(controller.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.PauseScreen));
-            Assert.That(inputRig.LocomotionSuppressed, Is.True,
-                "Opening a gameplay menu during an active world session should freeze locomotion.");
+            Assert.That(inputRig.LocomotionSuppressed, Is.False,
+                "In-session menus lazily follow the player; movement stays free while a menu is open.");
+            Assert.That(BlockiverseRuntimeState.AllowWorldInput, Is.False,
+                "Block editing stays gated while a menu has focus.");
+            Assert.That(BlockiverseRuntimeState.IsGamePaused, Is.True,
+                "With no LAN session live, a pause route still freezes the single-player world clock.");
+        }
+
+        [Test]
+        public void TitleRoutesUseWorldFixedPlacementAndSessionRoutesLazilyFollow()
+        {
+            GameObject rig = CreateRoot("Rig");
+            BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
+            GameObject head = CreateRoot("Head");
+            BlockiverseActionMenu titleMenu = CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.TitleMenuName, 6);
+            BlockiverseActionMenu pauseMenu = CreateGeneratedActionMenu(rig.transform, BlockiverseMenuController.PauseMenuName, 8);
+            ReplacePresenter(titleMenu.gameObject, head.transform);
+            ReplacePresenter(pauseMenu.gameObject, head.transform);
+            var session = rig.GetComponent<BlockiverseWorldSessionController>();
+
+            StartMenuController(controller);
+            var fixturePose = new Pose(new Vector3(10.5f, 65.4f, 12.5f), Quaternion.Euler(0.0f, 90.0f, 0.0f));
+            controller.SetTitleMenuPose(fixturePose);
+            controller.ShowTitleScreen();
+
+            BlockiverseWorldSpacePanelPresenter titlePresenter = titleMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(titlePresenter.PlacementMode, Is.EqualTo(BlockiversePanelPlacementMode.WorldFixed),
+                "Title-state menus are fixtures of the mini-world.");
+            Assert.That(Vector3.Distance(titlePresenter.PlacementRoot.position, fixturePose.position), Is.LessThan(0.001f));
+            Assert.That(Quaternion.Angle(titlePresenter.PlacementRoot.rotation, fixturePose.rotation), Is.LessThan(0.01f));
+
+            // Moving the head must not move a world-fixed menu.
+            head.transform.SetPositionAndRotation(new Vector3(-4.0f, 1.0f, 3.0f), Quaternion.Euler(0.0f, 180.0f, 0.0f));
+            controller.ShowTitleScreen();
+            Assert.That(Vector3.Distance(titlePresenter.PlacementRoot.position, fixturePose.position), Is.LessThan(0.001f),
+                "World-fixed menus never derive their pose from the headset.");
+
+            SetPrivateField(session, "currentSavePath", "/tmp/test-world.vxlworld");
+            controller.EnterGameplay();
+            controller.OnMenuPressed();
+
+            BlockiverseWorldSpacePanelPresenter pausePresenter = pauseMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>();
+            Assert.That(pausePresenter.PlacementMode, Is.EqualTo(BlockiversePanelPlacementMode.LazyFollow),
+                "In-session menus lazily follow the player.");
         }
 
         [Test]

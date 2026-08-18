@@ -3955,6 +3955,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -5833,6 +5837,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -9986,6 +9994,30 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: FillRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: FillRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &3429007266748144869
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12140,6 +12172,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -15415,6 +15451,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -22535,6 +22575,30 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: ReplaceRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: ReplaceRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &3881114037255850419
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25270,6 +25334,30 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: SetCornerB
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: SetCornerB
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &5864063464582467915
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -27137,6 +27225,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -30577,6 +30669,10 @@ MonoBehaviour:
   panelScale: 0.00105
   comfortSettings: {fileID: 0}
   recenterOnShow: 0
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -33130,6 +33226,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -38749,6 +38849,10 @@ MonoBehaviour:
   panelScale: 0.002
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 1
   showFeedbackCue: 6
@@ -38874,6 +38978,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -40531,6 +40639,30 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: DeleteRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: DeleteRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1508743113843968383
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -41025,6 +41157,30 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: RedoEdit
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: RedoEdit
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
       - m_Target: {fileID: 4098103433958757901}
         m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
         m_MethodName: RedoEdit
@@ -45962,6 +46118,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -49683,6 +49843,30 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: UndoEdit
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: UndoEdit
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
       - m_Target: {fileID: 4098103433958757901}
         m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
         m_MethodName: UndoEdit
@@ -56077,6 +56261,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -59305,6 +59493,10 @@ MonoBehaviour:
   panelScale: 0.00165
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -61897,6 +62089,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -63082,6 +63278,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -64107,6 +64307,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -64579,6 +64783,30 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: CopyRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: CopyRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
       - m_Target: {fileID: 4098103433958757901}
         m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
         m_MethodName: CopyRegion
@@ -66363,6 +66591,30 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: PasteRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: PasteRegion
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &5453072655162836280
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -66878,6 +67130,30 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: SetCornerA
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: SetCornerA
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
       - m_Target: {fileID: 4098103433958757901}
         m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
         m_MethodName: SetCornerA
@@ -69508,6 +69784,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 1
   showFeedbackCue: 3
@@ -71168,6 +71448,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -79355,6 +79639,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 1
   showFeedbackCue: 3
@@ -82542,6 +82830,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -86457,6 +86749,10 @@ MonoBehaviour:
   panelScale: 0.00105
   comfortSettings: {fileID: 7830425733673505590}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 1
   showFeedbackCue: 3
@@ -90047,6 +90343,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -91195,6 +91495,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 0
   showFeedbackCue: 3
@@ -93766,6 +94070,10 @@ MonoBehaviour:
   panelScale: 0.0013
   comfortSettings: {fileID: 0}
   recenterOnShow: 1
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
   showOnStart: 0
   playShowFeedback: 1
   showFeedbackCue: 14
@@ -96758,6 +97066,30 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: CycleWeather
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 4098103433958757901}
+        m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
+        m_MethodName: CycleWeather
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
       - m_Target: {fileID: 4098103433958757901}
         m_TargetAssemblyTypeName: Blockiverse.UI.BlockiverseCreativeToolsPanel, Blockiverse.UI
         m_MethodName: CycleWeather

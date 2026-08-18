@@ -21,6 +21,13 @@ namespace Blockiverse.UI
         [SerializeField] float panelScale = 0.002f;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] bool recenterOnShow = true;
+        [SerializeField] BlockiversePanelPlacementMode placementMode = BlockiversePanelPlacementMode.RecenterOnShow;
+        [SerializeField] float followYawThresholdDegrees = BlockiversePanelPlacement.DefaultFollowYawThresholdDegrees;
+        [SerializeField] float followDistanceThresholdMeters = BlockiversePanelPlacement.DefaultFollowDistanceThresholdMeters;
+        [SerializeField] float followSmoothingSeconds = BlockiversePanelPlacement.DefaultFollowSmoothingSeconds;
+        Pose worldFixedPose;
+        bool hasWorldFixedPose;
+        bool followGliding;
         [SerializeField] bool showOnStart;
         [SerializeField] bool playShowFeedback;
         [SerializeField] BlockiverseAudioCue showFeedbackCue = BlockiverseAudioCue.UiConfirm;
@@ -60,6 +67,36 @@ namespace Blockiverse.UI
         public BlockiverseAudioCue HideFeedbackCue => hideFeedbackCue;
         public string ShowOnStartPlayerPrefsKey => showOnStartPlayerPrefsKey;
         public bool UsesSharedCompositionRoot => usesSharedCompositionRoot;
+        public BlockiversePanelPlacementMode PlacementMode => placementMode;
+        public bool HasWorldFixedPose => hasWorldFixedPose;
+        public Pose WorldFixedPose => worldFixedPose;
+        // True while a lazy follow is still gliding toward its target.
+        public bool IsFollowGliding => followGliding;
+
+        // Selects how this panel is placed. WorldFixed requires a pose via SetWorldFixedPose;
+        // LazyFollow drives placement from LateUpdate while visible.
+        public void SetPlacementMode(BlockiversePanelPlacementMode mode)
+        {
+            placementMode = mode;
+            followGliding = false;
+        }
+
+        // Pins the panel to an explicit world pose (title mini-world fixture). Applies
+        // immediately if the panel is visible; otherwise on the next Show.
+        public void SetWorldFixedPose(Pose pose)
+        {
+            worldFixedPose = pose;
+            hasWorldFixedPose = true;
+            if (placementMode == BlockiversePanelPlacementMode.WorldFixed && IsVisible)
+                ApplyWorldFixedPose();
+        }
+
+        public void ConfigureFollow(float yawThresholdDegrees, float distanceThresholdMeters, float smoothingSeconds)
+        {
+            followYawThresholdDegrees = Mathf.Max(0.0f, yawThresholdDegrees);
+            followDistanceThresholdMeters = Mathf.Max(0.0f, distanceThresholdMeters);
+            followSmoothingSeconds = Mathf.Max(0.0f, smoothingSeconds);
+        }
 
         public void Configure(
             Canvas canvas,
@@ -142,8 +179,30 @@ namespace Blockiverse.UI
             hasVisibilityCommand = true;
             bool wasVisible = IsVisible;
 
-            if (recenterPlacement && recenterOnShow)
-                Recenter();
+            switch (placementMode)
+            {
+                case BlockiversePanelPlacementMode.WorldFixed:
+                    // Fixture pose: never derived from the headset. Fall back to a one-time
+                    // recenter only when no fixture pose has been supplied yet.
+                    if (hasWorldFixedPose)
+                        ApplyWorldFixedPose();
+                    else if (recenterPlacement && recenterOnShow)
+                        Recenter();
+                    break;
+                case BlockiversePanelPlacementMode.LazyFollow:
+                    // Snap to the follow target on first show so the panel opens in front of
+                    // the player; subsequent navigation keeps the pose and LateUpdate glides.
+                    if (recenterPlacement && recenterOnShow)
+                    {
+                        Recenter();
+                        followGliding = false;
+                    }
+                    break;
+                default:
+                    if (recenterPlacement && recenterOnShow)
+                        Recenter();
+                    break;
+            }
 
             GameObject root = ResolveTargetRoot();
             if (root != null && !root.activeSelf)
@@ -189,7 +248,7 @@ namespace Blockiverse.UI
 
         public void Recenter()
         {
-            Transform target = headset != null ? headset : Camera.main != null ? Camera.main.transform : null;
+            Transform target = ResolveHeadTarget();
 
             if (target == null)
                 return;
@@ -275,12 +334,71 @@ namespace Blockiverse.UI
             if (!IsVisible)
                 return;
 
+            if (placementMode == BlockiversePanelPlacementMode.WorldFixed)
+            {
+                // Comfort scale changes still apply, but at the fixture pose.
+                if (hasWorldFixedPose && !Mathf.Approximately(lastAppliedPanelScale, ResolvePanelScale()))
+                    ApplyWorldFixedPose();
+                return;
+            }
+
             if (!recenterOnShow)
                 return;
 
             if (!Mathf.Approximately(lastAppliedPanelScale, ResolvePanelScale()))
                 Recenter();
         }
+
+        void LateUpdate()
+        {
+            if (placementMode != BlockiversePanelPlacementMode.LazyFollow || !IsVisible)
+                return;
+
+            Transform target = ResolveHeadTarget();
+            if (target == null)
+                return;
+
+            Transform root = PlacementRoot;
+            var current = new Pose(root.position, root.rotation);
+            Pose followTarget = BlockiversePanelPlacement.FollowTargetPose(
+                target.position, target.forward, distanceMeters, horizontalOffsetMeters, verticalOffsetMeters);
+
+            if (!followGliding && BlockiversePanelPlacement.ShouldRecenter(
+                    current, target.position, target.forward, distanceMeters,
+                    followYawThresholdDegrees, followDistanceThresholdMeters))
+            {
+                followGliding = true;
+            }
+
+            if (!followGliding)
+                return;
+
+            Pose next = BlockiversePanelPlacement.SmoothToward(current, followTarget, followSmoothingSeconds, Time.deltaTime);
+            root.SetPositionAndRotation(next.position, next.rotation);
+
+            if (Vector3.Distance(next.position, followTarget.position) < 0.01f &&
+                Quaternion.Angle(next.rotation, followTarget.rotation) < 0.5f)
+            {
+                root.SetPositionAndRotation(followTarget.position, followTarget.rotation);
+                followGliding = false;
+            }
+        }
+
+        // Places the panel at its fixture pose (WorldFixed mode).
+        void ApplyWorldFixedPose()
+        {
+            EnsureCanvas();
+            Transform root = PlacementRoot;
+            if (Application.isPlaying && root.parent != null)
+                root.SetParent(null, true);
+            root.SetPositionAndRotation(worldFixedPose.position, worldFixedPose.rotation);
+            float resolvedScale = ResolvePanelScale();
+            root.localScale = Vector3.one * resolvedScale;
+            lastAppliedPanelScale = resolvedScale;
+        }
+
+        Transform ResolveHeadTarget() =>
+            headset != null ? headset : Camera.main != null ? Camera.main.transform : null;
 
         void EnsureCanvas()
         {
