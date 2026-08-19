@@ -165,7 +165,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
   interactionLayer: 10
   interactionController: {fileID: 597296392}
-  hotbar: {fileID: 1427458567}
+  hotbar: {fileID: 1257104393}
   placementPreview: {fileID: 0}
   voidSafetyFloor: {fileID: 0}
   initializeDefaultWorldOnAwake: 1
@@ -476,51 +476,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.MultiplayerChunkAuthoritySync
   session: {fileID: 0}
---- !u!1 &1411919005
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1411919007}
-  - component: {fileID: 1411919006}
-  m_Layer: 0
-  m_Name: Meta Platform Compliance
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1411919006
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1411919005}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3200a915c7a454a4b92619f5ecfab448, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Blockiverse.MetaPlatform::Blockiverse.MetaPlatform.BlockiverseUserAgeCategoryService
---- !u!4 &1411919007
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1411919005}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &1427458566
+--- !u!1001 &1257104392
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -621,10 +577,10 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
---- !u!114 &1427458567 stripped
+--- !u!114 &1257104393 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3110682427877720823, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
-  m_PrefabInstance: {fileID: 1427458566}
+  m_PrefabInstance: {fileID: 1257104392}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
@@ -632,6 +588,50 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 917fc1f9e1f244dab3d301e086932df2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeHotbar
+--- !u!1 &1411919005
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1411919007}
+  - component: {fileID: 1411919006}
+  m_Layer: 0
+  m_Name: Meta Platform Compliance
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1411919006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1411919005}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3200a915c7a454a4b92619f5ecfab448, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.MetaPlatform::Blockiverse.MetaPlatform.BlockiverseUserAgeCategoryService
+--- !u!4 &1411919007
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1411919005}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1590357433
 GameObject:
   m_ObjectHideFlags: 0
@@ -771,4 +771,4 @@ SceneRoots:
   - {fileID: 597296395}
   - {fileID: 974660987}
   - {fileID: 1411919007}
-  - {fileID: 1427458566}
+  - {fileID: 1257104392}

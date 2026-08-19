@@ -82,6 +82,8 @@ namespace Blockiverse.VR
                     comfortSettings.DominantHand = BlockiverseControllerRole.Right;
                 comfortSettings.ToggleToMineEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0) != 0;
+                comfortSettings.RealPlayerHeightEnabled = PlayerPrefs.GetInt(
+                    KeyPrefix + "RealPlayerHeight", comfortSettings.RealPlayerHeightEnabled ? 1 : 0) != 0;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
                     KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 comfortSettings.SmoothTurnEnabled = PlayerPrefs.GetInt(
@@ -90,8 +92,6 @@ namespace Blockiverse.VR
                     KeyPrefix + "ContinuousTurnSpeed", comfortSettings.ContinuousTurnSpeed);
                 comfortSettings.SnapTurnDegrees = PlayerPrefs.GetFloat(
                     KeyPrefix + "SnapTurnDegrees", comfortSettings.SnapTurnDegrees);
-                comfortSettings.StandingEyeHeight = PlayerPrefs.GetFloat(
-                    KeyPrefix + "StandingEyeHeight", comfortSettings.StandingEyeHeight);
                 comfortSettings.UiScale = PlayerPrefs.GetFloat(
                     KeyPrefix + "UiScale", comfortSettings.UiScale);
 
@@ -140,11 +140,11 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetInt(KeyPrefix + "GlideStyle", (int)comfortSettings.GlideStyle);
                 PlayerPrefs.SetInt(DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "RealPlayerHeight", comfortSettings.RealPlayerHeightEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "ContinuousTurnSpeed", comfortSettings.ContinuousTurnSpeed);
                 PlayerPrefs.SetFloat(KeyPrefix + "SnapTurnDegrees", comfortSettings.SnapTurnDegrees);
-                PlayerPrefs.SetFloat(KeyPrefix + "StandingEyeHeight", comfortSettings.StandingEyeHeight);
                 PlayerPrefs.SetFloat(KeyPrefix + "UiScale", comfortSettings.UiScale);
                 PlayerPrefs.SetInt(KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
@@ -179,11 +179,11 @@ namespace Blockiverse.VR
                     hash = hash * 31 + (int)comfortSettings.GlideStyle;
                     hash = hash * 31 + (int)comfortSettings.DominantHand;
                     hash = hash * 31 + (comfortSettings.ToggleToMineEnabled ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.RealPlayerHeightEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
                     hash = hash * 31 + (comfortSettings.SmoothTurnEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousTurnSpeed.GetHashCode();
                     hash = hash * 31 + comfortSettings.SnapTurnDegrees.GetHashCode();
-                    hash = hash * 31 + comfortSettings.StandingEyeHeight.GetHashCode();
                     hash = hash * 31 + comfortSettings.UiScale.GetHashCode();
                     hash = hash * 31 + (comfortSettings.VignetteEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.VignetteStrength.GetHashCode();

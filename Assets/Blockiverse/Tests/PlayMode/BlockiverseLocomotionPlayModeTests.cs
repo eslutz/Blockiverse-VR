@@ -273,15 +273,16 @@ namespace Blockiverse.Tests.PlayMode
                 origin.Camera.transform.localPosition = new Vector3(0.0f, 1.05f, 0.0f);
 
                 var settings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                settings.StandingEyeHeight = 1.65f;
                 var heightReset = rigObject.AddComponent<BlockiverseHeightReset>();
                 heightReset.Configure(origin, settings);
 
                 heightReset.ResetHeight();
 
+                // Fixed mode normalizes the view to the constant eye height (1.6) regardless of
+                // the tracked camera height (1.05 here): 1.6 - 1.05 = 0.55.
                 Assert.That(
                     origin.CameraFloorOffsetObject.transform.localPosition.y,
-                    Is.EqualTo(0.60f).Within(0.01f));
+                    Is.EqualTo(0.55f).Within(0.01f));
             }
             finally
             {

@@ -12,6 +12,8 @@ namespace Blockiverse.VR
         const float FlightSpeedBlocksPerTick = 0.10f;
         const float SprintFlightSpeedBlocksPerTick = 0.22f;
         const float DoubleClickWindowSeconds = 0.35f;
+        // A press longer than this is a flight hold, not a tap.
+        const float TapMaxDurationSeconds = 0.25f;
 
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] CreativeWorldManager worldManager;
@@ -26,7 +28,10 @@ namespace Blockiverse.VR
         bool requestedFlightActive;
         bool providerStateInitialized;
         bool lastProviderActive;
-        float lastJumpPressTime = -10.0f;
+        bool jumpHeldLastFrame;
+        float jumpPressStartedAt = -1.0f;
+        float lastTapEndedAt = -10.0f;
+        bool lastPressWasTap;
 
         public BlockiverseInputRig InputRig => inputRig;
         public bool IsFlightActive { get; private set; }
@@ -103,6 +108,19 @@ namespace Blockiverse.VR
             IsFlightActive = active;
         }
 
+        /// <summary>A press short enough to count as a tap; anything longer is a flight hold.</summary>
+        public static bool IsTapPress(float pressDurationSeconds) =>
+            pressDurationSeconds >= 0.0f && pressDurationSeconds <= TapMaxDurationSeconds;
+
+        /// <summary>
+        /// A new press completes a double-tap only when the previous press was itself a tap, so
+        /// holding the button to fly can never toggle flight off mid-air.
+        /// </summary>
+        public static bool CompletesDoubleTap(bool previousPressWasTap, float secondsSincePreviousPress) =>
+            previousPressWasTap &&
+            secondsSincePreviousPress >= 0.0f &&
+            secondsSincePreviousPress <= DoubleClickWindowSeconds;
+
         public static Vector3 ComputeFlightDisplacement(Vector3 aimForward, bool moveHeld, float deltaSeconds)
         {
             return ComputeFlightDisplacement(aimForward, moveHeld, sprintActive: false, deltaSeconds);
@@ -161,18 +179,42 @@ namespace Blockiverse.VR
                 return;
 
             InputAction jump = ResolveJumpAction();
-            if (jump == null || !jump.WasPressedThisFrame())
-                return;
-
-            float now = Time.unscaledTime;
-            if (now - lastJumpPressTime <= DoubleClickWindowSeconds)
+            if (jump == null)
             {
-                ToggleFlightMode();
-                lastJumpPressTime = -10.0f;
+                jumpHeldLastFrame = false;
                 return;
             }
 
-            lastJumpPressTime = now;
+            // Edges are derived from IsPressed() polling rather than WasPressedThisFrame /
+            // WasReleasedThisFrame: IsPressed is the reading that reliably drives hold-to-fly on
+            // device, and depending on the edge helpers here left flight untoggleable.
+            float now = Time.unscaledTime;
+            bool held = jump.IsPressed();
+
+            if (held && !jumpHeldLastFrame)
+            {
+                // Toggle on the second press of a double-tap. The previous press must have been a
+                // quick tap, so holding the button to fly can never complete a double-tap and
+                // switch flight off mid-air. Taps count in both directions, so a double-tap
+                // enters flight and a second double-tap exits it (gravity then takes over).
+                if (CompletesDoubleTap(lastPressWasTap, now - lastTapEndedAt))
+                {
+                    ToggleFlightMode();
+                    lastPressWasTap = false;
+                    lastTapEndedAt = -10.0f;
+                }
+
+                jumpPressStartedAt = now;
+            }
+            else if (!held && jumpHeldLastFrame)
+            {
+                float pressDuration = jumpPressStartedAt >= 0.0f ? now - jumpPressStartedAt : float.MaxValue;
+                jumpPressStartedAt = -1.0f;
+                lastPressWasTap = IsTapPress(pressDuration);
+                lastTapEndedAt = now;
+            }
+
+            jumpHeldLastFrame = held;
         }
 
         void TickFlightMotion(float deltaSeconds)
@@ -233,17 +275,19 @@ namespace Blockiverse.VR
             return cachedRightHandAimSource;
         }
 
+        // Flight travels along where the controller POINTS, which is the ray origin the pointer
+        // rays use — NOT the controller transform, whose forward is the OpenXR grip pose running
+        // up the handle (holding the controller level would fly the player straight up).
+        //
+        // Returns null until the rig has built the ray origin; ResolveFlightForward falls back to
+        // the rig forward for that frame rather than caching a grip-posed source, which would
+        // leave flight 90 degrees off for the rest of the session.
         Transform ResolveControllerAimSource(string controllerName)
         {
             Transform root = inputRig != null ? inputRig.transform : transform;
             Transform cameraOffset = root.Find("Camera Offset");
-            Transform aimSource = cameraOffset != null ? cameraOffset.Find(controllerName) : null;
-            if (aimSource == null)
-                aimSource = root.Find(controllerName);
-            if (aimSource == null)
-                aimSource = root;
-
-            return aimSource;
+            Transform controller = cameraOffset != null ? cameraOffset.Find(controllerName) : null;
+            return controller != null ? controller.Find("Ray Origin") : null;
         }
 
         void ClearCachedAimSources()

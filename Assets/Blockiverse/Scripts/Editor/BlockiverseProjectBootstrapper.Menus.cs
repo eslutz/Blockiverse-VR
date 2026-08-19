@@ -1334,6 +1334,9 @@ namespace Blockiverse.Editor
             input.contentType = contentType;
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.keyboardType = TouchScreenKeyboardType.Default;
+            // This component's BlockiverseSystemKeyboardField owns the system keyboard;
+            // TMP must not open (and then dismiss) a competing one.
+            input.shouldHideSoftKeyboard = true;
             input.characterValidation = contentType == TMP_InputField.ContentType.IntegerNumber
                 ? TMP_InputField.CharacterValidation.Integer
                 : TMP_InputField.CharacterValidation.None;

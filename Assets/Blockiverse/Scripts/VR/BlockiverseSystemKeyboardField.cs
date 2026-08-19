@@ -38,6 +38,19 @@ namespace Blockiverse.VR
         {
             inputField = field;
             this.keyboardType = SupportedKeyboardType(keyboardType);
+            TakeSoftKeyboardOwnership();
+        }
+
+        // TMP_InputField opens its OWN system keyboard from ActivateInputField and then closes it
+        // again from LateUpdate/DeactivateInputField. Racing it meant a click fired several
+        // competing TouchScreenKeyboard.Open calls against the single native keyboard and TMP
+        // promptly dismissed the winner: hands hid (we had latched "keyboard shown") but no
+        // keyboard ever appeared. Setting shouldHideSoftKeyboard makes this component the sole
+        // owner of the keyboard for the field.
+        void TakeSoftKeyboardOwnership()
+        {
+            if (inputField != null)
+                inputField.shouldHideSoftKeyboard = true;
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -71,6 +84,7 @@ namespace Blockiverse.VR
             if (inputField == null)
                 inputField = GetComponent<TMP_InputField>();
             keyboardType = SupportedKeyboardType(inputField != null ? inputField.keyboardType : keyboardType);
+            TakeSoftKeyboardOwnership();
         }
 
         void OpenKeyboard()
@@ -78,7 +92,7 @@ namespace Blockiverse.VR
             if (inputField == null || !TouchScreenKeyboard.isSupported)
                 return;
 
-            if (activeField == this && keyboard != null && keyboard.active)
+            if (activeField == this && keyboard != null)
                 return;
 
             if (activeField != null && activeField != this)
@@ -87,7 +101,6 @@ namespace Blockiverse.VR
             textBeforeEdit = inputField.text;
             keyboard = TouchScreenKeyboard.Open(inputField.text, keyboardType);
             SetActiveField(this);
-            inputField.ActivateInputField();
         }
 
         static TouchScreenKeyboardType SupportedKeyboardType(TouchScreenKeyboardType requestedType)

@@ -68,7 +68,7 @@ namespace Blockiverse.Editor
             settings.VignetteStrength = 0.3f;
 
             if (origin != null)
-                origin.CameraYOffset = settings.StandingEyeHeight;
+                origin.CameraYOffset = BlockiverseComfortSettings.FixedStandingEyeHeight;
 
             BlockiverseGlideBobController bobController = rig.GetComponent<BlockiverseGlideBobController>();
 

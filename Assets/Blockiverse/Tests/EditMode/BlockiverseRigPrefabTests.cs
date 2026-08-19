@@ -234,7 +234,7 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(dominantHandResolver, Is.Not.Null);
             Assert.That(settings.VignetteEnabled, Is.True, "Generated rig should ship the comfort-first motion vignette on; it only renders during locomotion so the static title/menu stays readable.");
             Assert.That(settings.VignetteStrength, Is.GreaterThan(0f).And.LessThanOrEqualTo(0.35f), "Generated rig should start with a low, comfort-first vignette strength.");
-            Assert.That(origin.CameraYOffset, Is.EqualTo(settings.StandingEyeHeight).Within(0.01f));
+            Assert.That(origin.CameraYOffset, Is.EqualTo(BlockiverseComfortSettings.FixedStandingEyeHeight).Within(0.01f));
             Assert.That(menuTransform, Is.Not.Null);
             Assert.That(menu, Is.Not.Null);
             Assert.That(menu.IsVisible, Is.False);
@@ -794,13 +794,24 @@ namespace Blockiverse.Tests.EditMode
                 Transform cameraOffset = new GameObject("Camera Offset").transform;
                 cameraOffset.SetParent(rigObject.transform, false);
 
+                // Flight travels along the ray origin (the pointing axis the rays use), not the
+                // grip-posed controller transform. Controllers point elsewhere so a regression
+                // that reads the controller transform fails this test.
                 Transform leftController = new GameObject("Left Controller").transform;
                 leftController.SetParent(cameraOffset, false);
-                leftController.rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+                leftController.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
 
                 Transform rightController = new GameObject("Right Controller").transform;
                 rightController.SetParent(cameraOffset, false);
-                rightController.rotation = Quaternion.LookRotation(Vector3.right, Vector3.up);
+                rightController.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+
+                Transform leftRayOrigin = new GameObject("Ray Origin").transform;
+                leftRayOrigin.SetParent(leftController, false);
+                leftRayOrigin.rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+
+                Transform rightRayOrigin = new GameObject("Ray Origin").transform;
+                rightRayOrigin.SetParent(rightController, false);
+                rightRayOrigin.rotation = Quaternion.LookRotation(Vector3.right, Vector3.up);
 
                 var comfortSettings = settingsObject.AddComponent<BlockiverseComfortSettings>();
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
@@ -1033,9 +1044,9 @@ namespace Blockiverse.Tests.EditMode
             AssertInteractionRayDefaults(rightInteractionRay);
             AssertInteractionRayDefaults(leftInteractionRay);
             Assert.That(prefab.transform.Find("Camera Offset/Right Aim Pose"), Is.Null,
-                "The interaction ray should not use a separately tracked aim pose that can diverge from the visible controller.");
+                "Rays must not use a separately tracked aim pose that can diverge from the visible controller.");
             Assert.That(prefab.transform.Find("Camera Offset/Left Aim Pose"), Is.Null,
-                "The teleport ray should not use a separately tracked aim pose that can diverge from the visible controller.");
+                "Rays must not use a separately tracked aim pose that can diverge from the visible controller.");
             Assert.That(rightRayOrigin, Is.Null,
                 "The interaction ray must not use a separately tracked pointer-pose ray origin that can diverge from the visible controller.");
             Assert.That(leftRayOrigin, Is.Null,
@@ -1293,9 +1304,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(rayOrigin, Is.Not.Null, $"{controller?.name} should carry a controller-local ray origin.");
             Assert.That(rayOrigin.parent, Is.SameAs(controller));
             Assert.That(Vector3.Distance(rayOrigin.localPosition, Vector3.zero), Is.LessThan(0.0001f),
-                "The ray should originate at the tracked controller, not a separate pointer-pose transform.");
+                "The ray should originate at the tracked controller.");
             Assert.That(Quaternion.Angle(rayOrigin.localRotation, ControllerRayOriginLocalRotation), Is.LessThan(0.001f),
-                "Quest grip-pose forward points up like a stick; the child origin flips XRI forward onto the physical pointing axis.");
+                "Quest grip-pose forward points up like a stick; the child origin turns XRI forward onto the pointing axis.");
         }
 
         static void AssertInteractionRayDefaults(XRRayInteractor ray)

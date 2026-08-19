@@ -262,6 +262,9 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(haptics);
         }
 
+        // NOTE: rays currently emit from a controller-local origin carrying a fixed grip->aim
+        // correction. This does not match Meta's per-SKU aim pose (see the aim-pose experiment in
+        // git history), but it is stable and hand-attached. Revisit with live pose inspection.
         static Transform EnsureControllerRayOrigin(Transform controller)
         {
             GameObject rayOrigin = EnsureChild(controller, ControllerRayOriginName);
@@ -638,14 +641,20 @@ namespace Blockiverse.Editor
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
                 new Vector2(32.0f, -524.0f), new Vector2(300.0f, 36.0f));
 
-            Slider eyeHeightSlider = EnsureSettingsSlider(
+
+            // Off by default: everyone is the same size in the world. On, the player's own
+            // height drives collision and view, so tall players duck where short players walk.
+            Toggle realPlayerHeightToggle = EnsureToggleControl(
                 panelObject.transform,
-                "Eye Height Slider",
-                "Eye Height",
-                settings != null ? settings.StandingEyeHeight : 1.6f,
-                new Vector2(32.0f, -564.0f),
-                minValue: 1.0f,
-                maxValue: 2.2f);
+                "Real Player Height Toggle",
+                "Use My Real Height",
+                settings != null && settings.RealPlayerHeightEnabled,
+                new Vector2(32.0f, -676.0f));
+
+            // The eye-height slider was removed: letting players dial the view height independently
+            // of the collision capsule is what made them feel too tall. Height is now one choice —
+            // the fixed player size, or "Use My Real Height".
+            RemoveStaleChild(panelObject.transform, "Eye Height Slider");
 
             Slider uiScaleSlider = EnsureSettingsSlider(
                 panelObject.transform,
@@ -685,11 +694,11 @@ namespace Blockiverse.Editor
                 vignetteSlider,
                 leftHandToggle,
                 toggleToMineToggle,
-                eyeHeightSlider,
                 moveSpeedSlider,
                 smoothTurnSpeedSlider,
                 uiScaleSlider,
-                targetGlideBobToggle: glideBobToggle);
+                targetGlideBobToggle: glideBobToggle,
+                targetRealPlayerHeightToggle: realPlayerHeightToggle);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);

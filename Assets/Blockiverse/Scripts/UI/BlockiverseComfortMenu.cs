@@ -19,10 +19,10 @@ namespace Blockiverse.UI
         [SerializeField] Slider smoothTurnSpeedSlider;
         [SerializeField] Toggle leftHandToggle;
         [SerializeField] Toggle toggleToMineToggle;
+        [SerializeField] Toggle realPlayerHeightToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
         [SerializeField] Toggle glideBobToggle;
-        [SerializeField] Slider eyeHeightSlider;
         [SerializeField] Slider uiScaleSlider;
         [SerializeField] BlockiverseComfortSettings settings;
         IBlockiverseHeightReset heightReset;
@@ -42,13 +42,13 @@ namespace Blockiverse.UI
         Toggle registeredTurnAroundToggle;
         Toggle registeredLeftHandToggle;
         Toggle registeredToggleToMineToggle;
+        Toggle registeredRealPlayerHeightToggle;
         Toggle registeredVignetteToggle;
         Toggle registeredGlideBobToggle;
         Slider registeredSnapTurnSlider;
         Slider registeredMoveSpeedSlider;
         Slider registeredSmoothTurnSpeedSlider;
         Slider registeredVignetteStrengthSlider;
-        Slider registeredEyeHeightSlider;
         Slider registeredUiScaleSlider;
 
         public bool IsVisible => canvas != null ? canvas.enabled : visibilityRoot != null && visibilityRoot.activeSelf;
@@ -82,11 +82,11 @@ namespace Blockiverse.UI
             Slider targetVignetteStrengthSlider = null,
             Toggle targetLeftHandToggle = null,
             Toggle targetToggleToMineToggle = null,
-            Slider targetEyeHeightSlider = null,
             Slider targetMoveSpeedSlider = null,
             Slider targetSmoothTurnSpeedSlider = null,
             Slider targetUiScaleSlider = null,
-            Toggle targetGlideBobToggle = null)
+            Toggle targetGlideBobToggle = null,
+            Toggle targetRealPlayerHeightToggle = null)
         {
             glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
@@ -99,7 +99,7 @@ namespace Blockiverse.UI
             vignetteStrengthSlider = targetVignetteStrengthSlider;
             leftHandToggle = targetLeftHandToggle;
             toggleToMineToggle = targetToggleToMineToggle;
-            eyeHeightSlider = targetEyeHeightSlider;
+            realPlayerHeightToggle = targetRealPlayerHeightToggle;
             uiScaleSlider = targetUiScaleSlider;
             glideBobToggle = targetGlideBobToggle;
             RegisterControlCallbacks();
@@ -188,13 +188,13 @@ namespace Blockiverse.UI
             RegisterToggleCallback(turnAroundToggle, ref registeredTurnAroundToggle);
             RegisterToggleCallback(leftHandToggle, ref registeredLeftHandToggle);
             RegisterToggleCallback(toggleToMineToggle, ref registeredToggleToMineToggle);
+            RegisterToggleCallback(realPlayerHeightToggle, ref registeredRealPlayerHeightToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterToggleCallback(glideBobToggle, ref registeredGlideBobToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
             RegisterSliderCallback(moveSpeedSlider, ref registeredMoveSpeedSlider);
             RegisterSliderCallback(smoothTurnSpeedSlider, ref registeredSmoothTurnSpeedSlider);
             RegisterSliderCallback(vignetteStrengthSlider, ref registeredVignetteStrengthSlider);
-            RegisterSliderCallback(eyeHeightSlider, ref registeredEyeHeightSlider);
             RegisterSliderCallback(uiScaleSlider, ref registeredUiScaleSlider);
         }
 
@@ -260,6 +260,9 @@ namespace Blockiverse.UI
             if (toggleToMineToggle != null)
                 settings.ToggleToMineEnabled = toggleToMineToggle.isOn;
 
+            if (realPlayerHeightToggle != null)
+                settings.RealPlayerHeightEnabled = realPlayerHeightToggle.isOn;
+
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.isOn;
 
@@ -269,11 +272,6 @@ namespace Blockiverse.UI
             if (vignetteStrengthSlider != null)
                 settings.VignetteStrength = vignetteStrengthSlider.value;
 
-            if (eyeHeightSlider != null)
-            {
-                settings.StandingEyeHeight = eyeHeightSlider.value;
-                heightReset?.ApplyStandingEyeHeight(settings.StandingEyeHeight);
-            }
 
             if (uiScaleSlider != null)
                 settings.UiScale = uiScaleSlider.value;
@@ -294,6 +292,7 @@ namespace Blockiverse.UI
             turnAroundToggle?.SetIsOnWithoutNotify(settings.SnapTurnAroundEnabled);
             leftHandToggle?.SetIsOnWithoutNotify(settings.DominantHand == BlockiverseControllerRole.Left);
             toggleToMineToggle?.SetIsOnWithoutNotify(settings.ToggleToMineEnabled);
+            realPlayerHeightToggle?.SetIsOnWithoutNotify(settings.RealPlayerHeightEnabled);
 
             if (snapTurnSlider != null)
             {
@@ -311,9 +310,6 @@ namespace Blockiverse.UI
 
             if (vignetteStrengthSlider != null)
                 vignetteStrengthSlider.SetValueWithoutNotify(settings.VignetteStrength);
-
-            if (eyeHeightSlider != null)
-                eyeHeightSlider.SetValueWithoutNotify(settings.StandingEyeHeight);
 
             if (uiScaleSlider != null)
                 uiScaleSlider.SetValueWithoutNotify(settings.UiScale);
@@ -356,7 +352,6 @@ namespace Blockiverse.UI
             registeredMoveSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredSmoothTurnSpeedSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredVignetteStrengthSlider?.onValueChanged.RemoveListener(sliderChanged);
-            registeredEyeHeightSlider?.onValueChanged.RemoveListener(sliderChanged);
             registeredUiScaleSlider?.onValueChanged.RemoveListener(sliderChanged);
 
             registeredGlideToggle = null;
@@ -370,7 +365,6 @@ namespace Blockiverse.UI
             registeredMoveSpeedSlider = null;
             registeredSmoothTurnSpeedSlider = null;
             registeredVignetteStrengthSlider = null;
-            registeredEyeHeightSlider = null;
             registeredUiScaleSlider = null;
         }
 

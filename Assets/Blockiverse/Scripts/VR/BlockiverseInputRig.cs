@@ -26,6 +26,7 @@ namespace Blockiverse.VR
         const float SprintMoveMultiplier = 2.2f;
         const float SprintClickToggleMaxSeconds = 0.25f;
         const float CrouchClickToggleMaxSeconds = 0.25f;
+        const float CrouchCameraDropMetersPerSecond = 3.0f;
         const float DefaultSnapTurnDegrees = 45.0f;
         const float DefaultContinuousTurnSpeed = 60.0f;
         const float DefaultJumpHeightMeters = 1.3f;
@@ -56,6 +57,8 @@ namespace Blockiverse.VR
         [SerializeField] GravityProvider gravityProvider;
         [SerializeField] JumpProvider jumpProvider;
         [SerializeField] CharacterController characterController;
+        BlockiversePlayerBodyManipulator playerBodyManipulator;
+        float appliedCrouchCameraDrop;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] BlockiverseHeightReset heightReset;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -442,6 +445,7 @@ namespace Blockiverse.VR
             RefreshCachedActions();
             UpdateSprintInput(Time.unscaledTime);
             UpdateCrouchInput(Time.unscaledTime);
+            ApplyCrouchState();
             ApplyComfortSettingsToProviders();
             UpdateTurnProviderEnabledState();
             UpdateMenu();
@@ -536,6 +540,51 @@ namespace Blockiverse.VR
                 if (ShouldToggleCrouch(pressDuration))
                     crouchToggled = !crouchToggled;
             }
+        }
+
+        // Crouch has to be physically real: shrink the collision capsule so the player fits a
+        // one-block opening, and lower the view by the same amount so it reads as crouching.
+        // Without this the crouch toggle changed only block-placement rules and looked broken.
+        void ApplyCrouchState()
+        {
+            bool crouching = CrouchActive;
+            bool realHeight = comfortSettings != null && comfortSettings.RealPlayerHeightEnabled;
+
+            if (playerBodyManipulator != null)
+            {
+                playerBodyManipulator.Crouching = crouching;
+                // Picked up live so the settings toggle applies without a restart.
+                playerBodyManipulator.UseRealPlayerHeight = realHeight;
+            }
+
+            XROrigin origin = GetComponent<XROrigin>();
+            Transform cameraOffset = origin != null && origin.CameraFloorOffsetObject != null
+                ? origin.CameraFloorOffsetObject.transform
+                : null;
+            if (cameraOffset == null)
+                return;
+
+            float standingHeight = playerBodyManipulator != null
+                ? playerBodyManipulator.StandingCapsuleHeightMeters
+                : BlockiversePlayerBodyManipulator.DefaultStandingCapsuleHeight;
+            float crouchHeight = playerBodyManipulator != null
+                ? playerBodyManipulator.CrouchCapsuleHeightMeters
+                : BlockiversePlayerBodyManipulator.DefaultCrouchCapsuleHeight;
+            float targetDrop = crouching ? Mathf.Max(0.0f, standingHeight - crouchHeight) : 0.0f;
+
+            if (Mathf.Approximately(targetDrop, appliedCrouchCameraDrop))
+                return;
+
+            // Ease the view change; an instant vertical jump is uncomfortable in VR.
+            float smoothed = Mathf.MoveTowards(
+                appliedCrouchCameraDrop,
+                targetDrop,
+                Mathf.Max(0.01f, Time.deltaTime) * CrouchCameraDropMetersPerSecond);
+
+            Vector3 localPosition = cameraOffset.localPosition;
+            localPosition.y += appliedCrouchCameraDrop - smoothed;
+            cameraOffset.localPosition = localPosition;
+            appliedCrouchCameraDrop = smoothed;
         }
 
         void ClearTransientCrouchState()
@@ -745,6 +794,21 @@ namespace Blockiverse.VR
                 characterController = gameObject.AddComponent<CharacterController>();
 
             ConfigureCharacterController(characterController);
+
+            // Own the collision capsule: XRI's stock manipulator would resize it to the tracked
+            // camera height every move, making the player's size depend on who is wearing the
+            // headset and silently undoing crouch.
+            if (playerBodyManipulator == null)
+            {
+                playerBodyManipulator = ScriptableObject.CreateInstance<BlockiversePlayerBodyManipulator>();
+                playerBodyManipulator.name = "Blockiverse Player Body Manipulator";
+            }
+
+            playerBodyManipulator.Configure(
+                BlockiversePlayerBodyManipulator.DefaultStandingCapsuleHeight,
+                BlockiversePlayerBodyManipulator.DefaultCrouchCapsuleHeight);
+            playerBodyManipulator.UseRealPlayerHeight = comfortSettings != null && comfortSettings.RealPlayerHeightEnabled;
+            bodyTransformer.constrainedBodyManipulator = playerBodyManipulator;
 
             if (gravityProvider == null)
                 gravityProvider = GetComponent<GravityProvider>();

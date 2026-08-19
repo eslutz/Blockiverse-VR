@@ -62,25 +62,16 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ComfortMenuEyeHeightSliderUpdatesStandingEyeHeight()
+        public void FixedStandingEyeHeightIsAGameConstantNotAUserSetting()
         {
-            BlockiverseComfortSettings settings = CreateSettings();
-            BlockiverseComfortMenu menu = CreateObject("Comfort Menu").AddComponent<BlockiverseComfortMenu>();
-            Slider eyeHeightSlider = CreateObject("Eye Height Slider").AddComponent<Slider>();
-            eyeHeightSlider.minValue = 1.0f;
-            eyeHeightSlider.maxValue = 2.2f;
-
-            menu.Configure(null, settings);
-            menu.ConfigureControls(
-                targetGlideToggle: null,
-                targetTeleportToggle: null,
-                targetSmoothTurnToggle: null,
-                targetSnapTurnSlider: null,
-                targetEyeHeightSlider: eyeHeightSlider);
-
-            eyeHeightSlider.value = 1.75f;
-
-            Assert.That(settings.StandingEyeHeight, Is.EqualTo(1.75f).Within(0.001f));
+            // The eye-height slider was removed: dialing the view height independently of the
+            // collision capsule is what made the player feel too tall. Height is now a single
+            // choice between the fixed player size and the player's real height.
+            Assert.That(BlockiverseComfortSettings.FixedStandingEyeHeight, Is.EqualTo(1.6f).Within(0.001f));
+            Assert.That(
+                typeof(BlockiverseComfortSettings).GetProperty("StandingEyeHeight"),
+                Is.Null,
+                "Eye height must not be a user-adjustable comfort setting.");
         }
 
         [Test]

@@ -191,6 +191,9 @@ namespace Blockiverse.UI
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.contentType = TMP_InputField.ContentType.Standard;
             input.keyboardType = TouchScreenKeyboardType.Default;
+            // This component's BlockiverseSystemKeyboardField owns the system keyboard;
+            // TMP must not open (and then dismiss) a competing one.
+            input.shouldHideSoftKeyboard = true;
             input.characterValidation = TMP_InputField.CharacterValidation.None;
             input.inputType = TMP_InputField.InputType.Standard;
 

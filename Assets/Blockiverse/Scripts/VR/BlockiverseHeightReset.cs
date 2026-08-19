@@ -6,7 +6,7 @@ namespace Blockiverse.VR
 {
     public sealed class BlockiverseHeightReset : MonoBehaviour, IBlockiverseHeightReset
     {
-        const float DefaultStandingEyeHeight = 1.6f;
+        const float DefaultStandingEyeHeight = BlockiverseComfortSettings.FixedStandingEyeHeight;
 
         [SerializeField] XROrigin origin;
         [SerializeField] BlockiverseComfortSettings settings;
@@ -22,9 +22,32 @@ namespace Blockiverse.VR
             if (origin == null)
                 return;
 
-            ApplyStandingEyeHeight(settings != null
-                ? settings.StandingEyeHeight
-                : DefaultStandingEyeHeight);
+            // Real-height mode intentionally keeps the player's own tracked height: normalizing
+            // the view to a standard eye height would defeat the point of the setting. Reset
+            // then just clears any accumulated offset so the raw tracked height drives the view.
+            if (settings != null && settings.RealPlayerHeightEnabled)
+            {
+                ClearCameraOffset();
+                return;
+            }
+
+            ApplyStandingEyeHeight(DefaultStandingEyeHeight);
+        }
+
+        void ClearCameraOffset()
+        {
+            if (origin.RequestedTrackingOriginMode != XROrigin.TrackingOriginMode.Floor)
+                return;
+
+            Transform cameraOffset = origin.CameraFloorOffsetObject != null
+                ? origin.CameraFloorOffsetObject.transform
+                : null;
+            if (cameraOffset == null)
+                return;
+
+            Vector3 offset = cameraOffset.localPosition;
+            offset.y = 0.0f;
+            cameraOffset.localPosition = offset;
         }
 
         public void ApplyStandingEyeHeight(float standingEyeHeight)

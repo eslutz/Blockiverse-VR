@@ -1058,7 +1058,7 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 
 | Section | Settings |
 |---|---|
-| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, height reset |
+| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, UI scale, left-handed, toggle-to-mine, **use my real height**, height reset |
 | Audio | Master, effects, UI, and weather volume; haptic strength; mute all; haptics toggle; reduced flash; reduced particles |
 | Controls | Read-only controller mapping reference (shared with the first-launch popup) |
 
@@ -1395,6 +1395,29 @@ per-peer. Menus never suppress locomotion in either case: the player keeps free
 movement with a menu open, and only block editing stays gated (`AllowWorldInput`) while a
 menu has focus. The world-loading transition is the one route that blocks locomotion,
 because the rig is being repositioned.
+
+### 10.0 Player Size And Crouch
+
+The player's collision volume is a game rule, not a property of whoever is wearing the
+headset. Two modes, selected by the **Use My Real Height** comfort setting:
+
+There is deliberately no eye-height slider: letting the view height be dialed independently of
+the collision capsule made the player feel too tall and detached from their body. Fixed mode uses
+the `FixedStandingEyeHeight` constant (1.6 m); real-height mode uses the tracked height as-is.
+
+| Mode | Setting | Standing capsule | Crouched capsule | Effect |
+|---|---|---|---|---|
+| Fixed size | **default** (off) | 1.8 m (fits a 2-block opening) | 0.9 m (fits a 1-block opening) | Every player occupies the same volume, so the same gaps fit everyone and level design is predictable. The view is normalized to the standing-eye-height setting. |
+| Real height | on | player's tracked height (clamped 0.4–2.4 m) | tracked height, or the crouch height if that is lower | Collision and view follow the player's real height: tall players must physically duck or use crouch to fit where shorter players walk through. Height reset clears the offset instead of normalizing. |
+
+Crouch is a physical state in both modes: it shrinks the collision capsule and lowers the
+view by the same amount (eased, never an instant vertical jump), and it feeds block-placement
+rules. It toggles on a **dominant stick click** (a click ≤0.25 s toggles; holding crouches
+for the duration), mirroring sprint on the support stick click.
+
+Implementation note: XRI's stock `CharacterControllerBodyManipulator` resizes the capsule to
+the tracked camera height on every move, which makes fixed-size play impossible and silently
+undoes crouch. `BlockiversePlayerBodyManipulator` replaces it and owns the height.
 
 ### 10.1a Menu Placement
 
