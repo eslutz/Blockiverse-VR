@@ -6,8 +6,10 @@ The smoke script below is historical evidence from the earlier temporary validat
 
 ## Installed Tooling
 
-Updated 2026-08-13.
+Updated 2026-08-19.
 
+- Unity CLI: `~/.unity/bin/unity` (`1.0.0-beta.5`, experimental; `source ~/.unity/env` to add to PATH).
+  Reference: https://docs.unity.com/en-us/unity-cli/unity-cli-reference
 - Meta XR Simulator app: `/Applications/MetaXRSimulator.app`
 - Horizon Debug Bridge npm package: `@meta-quest/hzdb@1.2.1`
 - Unity editor: `6000.5.8f1`
@@ -90,6 +92,54 @@ ditto -x -k Library/PackageCache/com.unity.ai.assistant@<package-cache-hash>/Rel
 /bin/chmod +x /Users/ericslutz/.unity/relay/relay_mac_arm64.app/Contents/MacOS/relay_mac_arm64
 ```
 
+## Unity CLI And Editor MCP Channels
+
+Added 2026-08-19.
+
+**Unity CLI** (`unity`) is Unity's standalone successor to the Hub CLI. The commands that matter here:
+
+- `unity pipeline list` — lists every running editor instance with project path, PID and `Running`,
+  **even without the Pipeline package**. Run it before `scripts/unity/run-tests.sh` or any batchmode
+  command: a GUI editor holding the project makes a second instance fail with
+  "Multiple Unity instances cannot open the same project". (`unity status` only shows editors that
+  have the Pipeline package, so it is not a substitute.)
+- `unity test . --mode EditMode|PlayMode --output <nunit.xml> [--filter <pattern>] [--timeout <s>]` —
+  resolves the editor from `ProjectVersion.txt`, spawns batchmode, writes NUnit XML. Exit `6` =
+  tests failed or editor error, `7` = Unity service unreachable (retry). Still subject to the instance
+  lock. `scripts/unity/run-tests.sh` remains the required acceptance gate; use `unity test` for
+  targeted runs.
+- `unity build . --target Android --execute-method <Editor.Method> -o <path>` — CI-style build with
+  Android signing flags (`--android-keystore-base64`, `--android-keystore-password`,
+  `--android-key-alias`, `--android-export-type apk|aab`). **Refuses a dirty worktree** unless
+  `--allow-dirty-build`. `scripts/unity/build-development-apk.sh` remains the documented path.
+- `unity run . -- <raw editor args>` — generic batchmode with forwarded args.
+- `unity command` / `unity list` / `unity mcp` (stdio MCP server) / `unity job` — drive a **connected**
+  editor. Requires the Unity Pipeline package (`0.5.0-exp.1`, experimental) in the project, which this
+  repo does NOT have. `unity pipeline install` edits `Packages/manifest.json`; per CLAUDE.md treat it
+  like MCP for Unity / Unity Skills — local-only and only with explicit approval.
+- `unity doctor` / `unity env` / `unity editors -i` / `unity license` — diagnostics. `unity skill install
+  claude-code` writes an agent skill to `~/.claude/skills/unity-cli/` (persistent config; ask first).
+
+**Three distinct editor-control channels exist — do not conflate them:**
+
+1. **Meta XR SDK editor MCPBridge** (`meta-xr-unity-runtime`): ships in the embedded Core SDK at
+   `Packages/com.meta.xr.sdk.core/Editor/MCPBridge/`. HTTP MCP at
+   `http://127.0.0.1:<McpBridge_Port>/mcpbridge/` (currently `48736`) with a Bearer token shared with the
+   Agent Bridge. Runs whenever the GUI editor is open and exposes TestRunner (`ListTests`, `RunTests` →
+   runId + `WaitForTestRun`/`GetTestResults`, `RunAllTests`, `CancelTestRun`), Compilation,
+   UIVerification, InteractionTesting, BuildingBlocks and CodeAnalysis tools. **This is how to compile
+   and run tests while a GUI editor holds the project lock** — batchmode cannot. Discovery file:
+   `~/.unity/mcp/connections/bridge-<id>-<editorPid>.json`.
+2. **Unity CLI** `unity mcp` / `unity command` — needs the Pipeline package (above).
+3. **MCP for Unity / Unity Skills** — optional local tooling per CLAUDE.md.
+
+**Registration gotcha (2026-08-19):** `meta-xr-unity-runtime` and `meta-xr-operator` are registered in
+`~/.claude.json` under the project key for the *parent* directory `.../Side Projects/Blockiverse`, not
+`.../Blockiverse/Blockiverse-VR`. Claude Code scopes MCP servers by session cwd, so a session started in
+the repo root sees neither (`claude mcp list` is empty). Re-add them for this cwd from a terminal
+(`claude mcp add ...` — the AI Tools panel's own buttons fail because Unity's PATH lacks `claude`), or
+start the session from the parent directory. The Bearer token is per editor session.
+
 ## Meta XR Operator (Runtime Agent Validation)
 
 Added 2026-08-13. Meta XR Operator (experimental, Core SDK `205+`) runs an MCP
@@ -125,6 +175,27 @@ Hard-learned constraints:
   the OpenXR layer but has not been observed to trigger app-level input actions
   (e.g. the pause menu). Use simulator keyboard/mouse or on-device input for
   menu-flow validation.
+
+- **Controllers only track in the simulator if the Touch Plus/Pro interaction profiles are
+  enabled for the Standalone target.** The simulator presents Touch Plus/Pro controllers and the
+  runtime binds `/interaction_profiles/meta/touch_controller_plus` (or `facebook/touch_controller_pro`);
+  with only the legacy Oculus Touch profile enabled, Unity's `<XRController>{Hand}/...` actions stay
+  unbound — Operator reports tracked poses while the rig's controllers never move. The bootstrapper
+  enables the three Touch profiles for Standalone since 2026-08-19; check with
+  `openxr_get_active_interaction_profile` and by reading a controller transform in Play mode.
+- **Do not leave `adb forward tcp:8720 tcp:8720` active while targeting the editor.** The forward
+  binds `127.0.0.1:8720` on the host and the proxy then reaches the (absent) device server instead of
+  the editor's; the proxy reports `Server unavailable / offline`. Remove it with
+  `adb forward --remove tcp:8720` before editor sessions, add it for on-device sessions.
+- Operator MCP tools are not mounted in every agent session. The proxy is a stdio MCP server that
+  takes the backend URL as its first argument (`meta-xr-operator-mcp-proxy http://127.0.0.1:8720`),
+  so a small JSON-RPC-over-stdio client works when the registered tools are missing. Bundled tools
+  include `openxr_get_controller_pose` with `pose_type: grip|aim` and `base_space`, which is how the
+  grip→aim offset for the pointer ray was measured (see CHANGELOG, 2026-08-19).
+- On-device Operator sessions need a Development build, `adb shell setprop
+  debug.oculus.experimentalEnabled 1`, the forward above, a worn headset (session must reach
+  `FOCUSED`), and — for captures — `adb shell setprop debug.meta_xr_operator.request_capture_permission 1`.
+  `openxr_set_head_pose` is unavailable on a headset. Details: `.claude/skills/meta-xr-operator-unity-meta-quest`.
 
 Validation evidence 2026-08-13: with Unity 6000.5.8f1 + Meta XR 205.0.0 +
 Composition Layers 2.5.0 and the world-space menu baseline, Operator inspection in
@@ -174,6 +245,8 @@ For new gameplay, record the worktree branch, linked issue, affected rulesets, U
 - [Horizon Debug Bridge MCP](https://developers.meta.com/horizon/documentation/unity/ts-mqdh-mcp/)
 - [Meta XR Unity MCP Extension](https://developers.meta.com/horizon/documentation/unity/unity-mcp-extension/)
 - [Meta AI solutions](https://developers.meta.com/horizon/documentation/unity/ai-solutions/)
+- [Unity CLI reference](https://docs.unity.com/en-us/unity-cli/unity-cli-reference)
+- [Meta XR Operator](https://developers.meta.com/horizon/documentation/unity/meta-xr-operator/)
 - [Meta XR Simulator overview](https://developers.meta.com/horizon/documentation/unity/xrsim-intro/)
 - [Meta XR Simulator setup](https://developers.meta.com/horizon/documentation/unity/xrsim-getting-started/)
 - [Meta XR Simulator session capture](https://developers.meta.com/horizon/documentation/unity/xrsim-session-capture/)

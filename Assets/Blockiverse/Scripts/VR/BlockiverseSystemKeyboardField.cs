@@ -2,6 +2,7 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 
 namespace Blockiverse.VR
@@ -18,13 +19,21 @@ namespace Blockiverse.VR
         [SerializeField] TMP_InputField inputField;
         [SerializeField] TouchScreenKeyboardType keyboardType = TouchScreenKeyboardType.Default;
 
+        const float KeyboardAppearTimeoutSeconds = 1.5f;
+
         static BlockiverseSystemKeyboardField activeField;
+        float keyboardOpenRequestedAt;
+        bool reportedKeyboardVisible;
 
         TouchScreenKeyboard keyboard;
         string textBeforeEdit;
 
         public static BlockiverseSystemKeyboardField ActiveField => activeField;
-        public static bool AnyKeyboardVisible => activeField != null;
+        // True only while a system keyboard is genuinely on screen. Deliberately not "a field is
+        // focused": if TouchScreenKeyboard.Open fails to surface an overlay, the player must keep
+        // their hands rather than being left with neither hands nor a keyboard.
+        public static bool AnyKeyboardVisible =>
+            activeField != null && activeField.keyboard != null && activeField.keyboard.active;
         public static event Action<bool> KeyboardVisibilityChanged;
 
         public TouchScreenKeyboardType KeyboardType => keyboardType;
@@ -100,7 +109,17 @@ namespace Blockiverse.VR
 
             textBeforeEdit = inputField.text;
             keyboard = TouchScreenKeyboard.Open(inputField.text, keyboardType);
+            keyboardOpenRequestedAt = Time.unscaledTime;
+            reportedKeyboardVisible = false;
             SetActiveField(this);
+
+            if (keyboard == null)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.General,
+                    "System keyboard open returned no keyboard; text entry is unavailable.",
+                    context: this);
+            }
         }
 
         static TouchScreenKeyboardType SupportedKeyboardType(TouchScreenKeyboardType requestedType)
@@ -125,7 +144,30 @@ namespace Blockiverse.VR
 
             if (keyboard.active)
             {
+                if (!reportedKeyboardVisible)
+                {
+                    reportedKeyboardVisible = true;
+                    KeyboardVisibilityChanged?.Invoke(true);
+                }
+
                 inputField.text = keyboard.text;
+                return;
+            }
+
+            // Opened but never surfaced: release the field so the player keeps their hands, and
+            // leave evidence in the log rather than silently swallowing the failure.
+            if (!reportedKeyboardVisible &&
+                keyboard.status == TouchScreenKeyboard.Status.Visible &&
+                Time.unscaledTime - keyboardOpenRequestedAt > KeyboardAppearTimeoutSeconds)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.General,
+                    $"System keyboard did not appear within {KeyboardAppearTimeoutSeconds:0.#}s " +
+                    $"(supported={TouchScreenKeyboard.isSupported} status={keyboard.status}); releasing the field.",
+                    context: this);
+                inputField.text = textBeforeEdit;
+                keyboard = null;
+                SetActiveField(null);
                 return;
             }
 
@@ -177,12 +219,17 @@ namespace Blockiverse.VR
 
         static void SetActiveField(BlockiverseSystemKeyboardField field)
         {
-            bool wasVisible = activeField != null;
-            activeField = field;
-            bool isVisible = activeField != null;
+            bool wasVisible = AnyKeyboardVisible;
 
-            if (wasVisible != isVisible)
-                KeyboardVisibilityChanged?.Invoke(isVisible);
+            if (activeField != null && activeField != field)
+                activeField.reportedKeyboardVisible = false;
+
+            activeField = field;
+
+            // Only the hidden edge is raised here; the visible edge fires from Update once the
+            // keyboard is really on screen, so the hands never hide for a keyboard that never came.
+            if (wasVisible && !AnyKeyboardVisible)
+                KeyboardVisibilityChanged?.Invoke(false);
         }
     }
 }

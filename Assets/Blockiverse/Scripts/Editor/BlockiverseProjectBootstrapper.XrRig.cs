@@ -254,7 +254,7 @@ namespace Blockiverse.Editor
             BlockiverseControllerHaptics haptics = EnsureComponent<BlockiverseControllerHaptics>(controller);
             haptics.Configure(role);
 
-            Transform rayOrigin = EnsureControllerRayOrigin(controller.transform);
+            Transform rayOrigin = EnsureControllerRayOrigin(controller.transform, role);
             EnsureControllerInteractors(controller, inputRig, role, rayOrigin);
 
             EditorUtility.SetDirty(poseDriver);
@@ -262,16 +262,19 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(haptics);
         }
 
-        // NOTE: rays currently emit from a controller-local origin carrying a fixed grip->aim
-        // correction. This does not match Meta's per-SKU aim pose (see the aim-pose experiment in
-        // git history), but it is stable and hand-attached. Revisit with live pose inspection.
-        static Transform EnsureControllerRayOrigin(Transform controller)
+        // Rays emit from a controller-local origin that BlockiverseAimPoseRayOrigin keeps on the
+        // OpenXR aim pose at runtime (the controller itself rides the grip pose). The serialized
+        // local pose is the fallback offset used until the first tracked aim sample arrives.
+        static Transform EnsureControllerRayOrigin(Transform controller, BlockiverseControllerRole role)
         {
             GameObject rayOrigin = EnsureChild(controller, ControllerRayOriginName);
             rayOrigin.layer = controller != null ? controller.gameObject.layer : 0;
             rayOrigin.transform.SetLocalPositionAndRotation(
-                Vector3.zero,
-                Quaternion.Euler(90.0f, 0.0f, 0.0f));
+                BlockiverseAimPoseRayOrigin.ResolveFallbackLocalPosition(role),
+                BlockiverseAimPoseRayOrigin.ResolveFallbackLocalRotation(role));
+            BlockiverseAimPoseRayOrigin aimOrigin = EnsureComponent<BlockiverseAimPoseRayOrigin>(rayOrigin);
+            aimOrigin.Configure(role);
+            EditorUtility.SetDirty(aimOrigin);
             EditorUtility.SetDirty(rayOrigin);
             return rayOrigin.transform;
         }
@@ -618,6 +621,22 @@ namespace Blockiverse.Editor
                 settings != null && settings.ToggleToMineEnabled,
                 new Vector2(32.0f, -472.0f));
 
+            // Sprint and crouch default to click-and-hold. These opt each one into click-to-toggle
+            // independently, so a player can hold to sprint while crouch stays a toggle.
+            Toggle sprintToggleToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Sprint Toggle Toggle",
+                "Click To Toggle Sprint",
+                settings != null && settings.SprintToggleEnabled,
+                new Vector2(32.0f, -520.0f));
+
+            Toggle crouchToggleToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Crouch Toggle Toggle",
+                "Click To Toggle Crouch",
+                settings != null && settings.CrouchToggleEnabled,
+                new Vector2(32.0f, -568.0f));
+
             // --- Vignette ---
             EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
                 TextAnchor.MiddleLeft,
@@ -639,7 +658,7 @@ namespace Blockiverse.Editor
             EnsureLabel(panelObject.transform, "Player View Label", "Player View", 22,
                 TextAnchor.MiddleLeft,
                 new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -524.0f), new Vector2(300.0f, 36.0f));
+                new Vector2(32.0f, -620.0f), new Vector2(300.0f, 36.0f));
 
 
             // Off by default: everyone is the same size in the world. On, the player's own
@@ -649,7 +668,7 @@ namespace Blockiverse.Editor
                 "Real Player Height Toggle",
                 "Use My Real Height",
                 settings != null && settings.RealPlayerHeightEnabled,
-                new Vector2(32.0f, -676.0f));
+                new Vector2(32.0f, -772.0f));
 
             // The eye-height slider was removed: letting players dial the view height independently
             // of the collision capsule is what made them feel too tall. Height is now one choice —
@@ -670,7 +689,7 @@ namespace Blockiverse.Editor
                 panelObject.transform,
                 "Height Reset Button",
                 "Reset Height",
-                new Vector2(32.0f, -628.0f));
+                new Vector2(32.0f, -724.0f));
 
             if (heightReset != null)
             {
@@ -698,7 +717,9 @@ namespace Blockiverse.Editor
                 smoothTurnSpeedSlider,
                 uiScaleSlider,
                 targetGlideBobToggle: glideBobToggle,
-                targetRealPlayerHeightToggle: realPlayerHeightToggle);
+                targetRealPlayerHeightToggle: realPlayerHeightToggle,
+                targetSprintToggleToggle: sprintToggleToggle,
+                targetCrouchToggleToggle: crouchToggleToggle);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);

@@ -40,8 +40,21 @@ namespace Blockiverse.WorldGen
             return Math.Max(0, Math.Min(15, baseSkyLight - (int)Math.Round(penalty)));
         }
 
+        // Number of distinct moon phases in the lunar cycle (voxel_world_environment_effects.md §4.4).
+        public const int MoonPhaseCount = 8;
+
+        // Brightest moon light level, reached at full moon (phase index 4).
+        public const int FullMoonLightLevel = 4;
+
+        // Moon phase index for an absolute day index; the cycle repeats every 8 game days.
+        public static int MoonPhaseIndexForDay(long dayIndex)
+        {
+            int phase = (int)(dayIndex % MoonPhaseCount);
+            return phase < 0 ? phase + MoonPhaseCount : phase;
+        }
+
         // Moon night-sky light level per 8-day cycle index (voxel_world_environment_effects.md §4.4).
-        static int MoonLightLevel(int moonPhaseIndex) => (moonPhaseIndex & 7) switch
+        public static int MoonLightLevel(int moonPhaseIndex) => (moonPhaseIndex & 7) switch
         {
             0 => 1,
             1 => 2,

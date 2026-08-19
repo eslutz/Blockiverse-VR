@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Linq;
 using System.Reflection;
 using System.Xml;
@@ -107,26 +108,81 @@ namespace Blockiverse.Tests.EditMode
         {
             string asset = File.ReadAllText(AndroidUrpAssetPath);
 
-            StringAssert.Contains("m_RequireDepthTexture: 0", asset);
-            StringAssert.Contains("m_RequireOpaqueTexture: 0", asset);
-            StringAssert.Contains("m_SupportsHDR: 0", asset);
-            StringAssert.Contains("m_MSAA: 4", asset);
-            StringAssert.Contains("m_RenderScale: 1", asset);
-            StringAssert.Contains("m_MainLightShadowsSupported: 0", asset);
-            StringAssert.Contains("m_ShadowDistance: 0", asset);
-            StringAssert.Contains("m_AdditionalLightsRenderingMode: 0", asset);
-            StringAssert.Contains("m_AdditionalLightsPerObjectLimit: 0", asset);
-            StringAssert.Contains("m_UseAdaptivePerformance: 1", asset);
+            AssertUrpValue(asset, "m_RequireDepthTexture", "0");
+            AssertUrpValue(asset, "m_RequireOpaqueTexture", "0");
+            AssertUrpValue(asset, "m_SupportsHDR", "0");
+            AssertUrpValue(asset, "m_MSAA", "4");
+            AssertUrpValue(asset, "m_RenderScale", "1");
+            AssertUrpValue(asset, "m_UseAdaptivePerformance", "1");
         }
 
         [Test]
-        public void VoxelShaderDoesNotCompileRealtimeShadowPasses()
+        public void AndroidUrpAssetEnablesQuestBudgetedShadowsAndAdditionalLights()
+        {
+            string asset = File.ReadAllText(AndroidUrpAssetPath);
+
+            // Placed emitters (glowwick, lumen lamp, campfire, spark flare) only produce light
+            // when the pipeline renders additional lights at all — 0 here means every point light
+            // in the scene is silently discarded.
+            AssertUrpValue(asset, "m_AdditionalLightsRenderingMode", "1");
+            AssertUrpValue(
+                asset,
+                "m_AdditionalLightsPerObjectLimit",
+                BlockiverseProjectBootstrapper.QuestAdditionalLightsPerObject.ToString());
+            AssertUrpValue(asset, "m_AdditionalLightShadowsSupported", "1");
+
+            AssertUrpValue(asset, "m_MainLightShadowsSupported", "1");
+            AssertUrpValue(asset, "m_MainLightShadowmapResolution", "1024");
+            AssertUrpValue(asset, "m_AdditionalLightsShadowmapResolution", "1024");
+
+            // A zero shadow distance disables shadows just as completely as turning them off.
+            AssertUrpValue(
+                asset,
+                "m_ShadowDistance",
+                BlockiverseProjectBootstrapper.QuestShadowDistanceMeters.ToString("0.###"));
+            AssertUrpValue(asset, "m_ShadowCascadeCount", "1");
+
+            // Hard shadows only: Unity flags soft shadows as a significant cost on tile-based
+            // mobile/XR GPUs, and Meta's mobile-VR guidance says hard-or-none.
+            AssertUrpValue(asset, "m_SoftShadowsSupported", "0");
+
+            // Unused atlases that only cost memory and shader variants.
+            AssertUrpValue(asset, "m_SupportsLightCookies", "0");
+            AssertUrpValue(asset, "m_ReflectionProbeAtlas", "0");
+        }
+
+        // Exact-value assertion. StringAssert.Contains("m_ShadowDistance: 0") also matches
+        // "m_ShadowDistance: 0.5", so substring checks cannot guard these numbers.
+        static void AssertUrpValue(string asset, string key, string expected)
+        {
+            Match match = Regex.Match(asset, $@"^\s*{Regex.Escape(key)}:\s*(\S+)\s*$", RegexOptions.Multiline);
+
+            Assert.That(match.Success, Is.True, $"{key} is missing from the generated URP asset.");
+            Assert.That(match.Groups[1].Value, Is.EqualTo(expected), $"{key} has an unexpected value.");
+        }
+
+        [Test]
+        public void VoxelShaderCompilesRealtimeLightAndShadowPasses()
         {
             string shader = File.ReadAllText(VoxelShaderPath);
 
-            Assert.That(shader, Does.Not.Contain("_MAIN_LIGHT_SHADOWS"));
-            Assert.That(shader, Does.Not.Contain("_ADDITIONAL_LIGHTS"));
-            Assert.That(shader, Does.Not.Contain("ShadowCaster"));
+            // Without these keywords URP never compiles the shadow-receiving or additional-light
+            // variants, so torches emit nothing and terrain receives no shadow.
+            Assert.That(shader, Does.Contain("_MAIN_LIGHT_SHADOWS"),
+                "The voxel shader must declare the main-light shadow keywords to receive sun/moon shadows.");
+            Assert.That(shader, Does.Contain("_ADDITIONAL_LIGHTS"),
+                "The voxel shader must declare the additional-light keywords for placed emitters.");
+            Assert.That(shader, Does.Contain("_ADDITIONAL_LIGHT_SHADOWS"),
+                "Placed emitters must be able to cast shadows onto voxel terrain.");
+            Assert.That(shader, Does.Contain("_CLUSTER_LIGHT_LOOP"),
+                "URP 17 replaced _FORWARD_PLUS with _CLUSTER_LIGHT_LOOP; the clustered path must stay supported.");
+
+            // A forward pass alone cannot cast: geometry is only written into a shadow map by a
+            // pass tagged ShadowCaster.
+            Assert.That(shader, Does.Contain("\"LightMode\" = \"ShadowCaster\""),
+                "The voxel shader needs a ShadowCaster pass or chunks never cast shadows.");
+            Assert.That(shader, Does.Contain("GetAdditionalLight"),
+                "The fragment stage must actually loop additional lights, not just declare the keywords.");
         }
 
         [Test]
@@ -460,7 +516,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(activityNodes, Has.Count.EqualTo(1));
 
             string activityName = activityNodes[0].Attributes["android:name"]?.Value;
-            Assert.That(activityName, Is.EqualTo("com.unity3d.player.UnityPlayerGameActivity"));
+            // Classic Activity: GameActivity breaks Unity's soft-keyboard handshake on Quest.
+            Assert.That(activityName, Is.EqualTo("com.unity3d.player.UnityPlayerActivity"));
+            Assert.That(
+                activityNodes[0].Attributes["android:theme"]?.Value,
+                Is.EqualTo("@style/UnityThemeSelector"),
+                "AppCompat themes only link under the GameActivity entry point; a classic Activity "
+                    + "build fails Android resource linking if the theme is left behind.");
             Assert.That(
                 activityNodes[0].Attributes["android:label"]?.Value,
                 Is.EqualTo("@string/app_name"),

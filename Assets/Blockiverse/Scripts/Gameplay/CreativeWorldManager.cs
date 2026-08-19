@@ -818,6 +818,11 @@ namespace Blockiverse.Gameplay
 
             MeshRenderer renderer = previewObject.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = CreatePreviewMaterial();
+            // CreatePrimitive defaults to casting shadows. URP/Unlit happens to ship no ShadowCaster
+            // pass today, so this is belt-and-braces rather than load-bearing — but the aim ghost
+            // must never throw a solid block shadow if this material is ever swapped for a lit one.
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
 
             PlacementPreview preview = previewObject.AddComponent<PlacementPreview>();
             preview.Configure(renderer);

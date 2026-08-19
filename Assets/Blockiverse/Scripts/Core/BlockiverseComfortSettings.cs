@@ -38,6 +38,8 @@ namespace Blockiverse.Core
         // (and view height) follow their real tracked height, so tall players must duck or
         // crouch to fit where shorter players walk through.
         [SerializeField] bool realPlayerHeightEnabled;
+        [SerializeField] bool sprintToggleEnabled;
+        [SerializeField] bool crouchToggleEnabled;
 
         public BlockiverseLocomotionMode LocomotionMode
         {
@@ -87,7 +89,7 @@ namespace Blockiverse.Core
         /// (<see cref="RealPlayerHeightEnabled"/>) rather than dialing in an eye height, which
         /// previously let the view drift away from the collision capsule.
         /// </summary>
-        public const float FixedStandingEyeHeight = 1.6f;
+        public const float FixedStandingEyeHeight = 1.7f;
 
         public float UiScale
         {
@@ -122,6 +124,27 @@ namespace Blockiverse.Core
         {
             get => realPlayerHeightEnabled;
             set => realPlayerHeightEnabled = value;
+        }
+
+        /// <summary>
+        /// When false (default) sprint is click-and-hold: it is active only while the support
+        /// stick click is held. When true the click toggles sprint on and off. Set independently
+        /// of <see cref="CrouchToggleEnabled"/> so each can use the style that suits the player.
+        /// </summary>
+        public bool SprintToggleEnabled
+        {
+            get => sprintToggleEnabled;
+            set => sprintToggleEnabled = value;
+        }
+
+        /// <summary>
+        /// When false (default) crouch is click-and-hold: it is active only while the dominant
+        /// stick click is held. When true the click toggles crouch on and off.
+        /// </summary>
+        public bool CrouchToggleEnabled
+        {
+            get => crouchToggleEnabled;
+            set => crouchToggleEnabled = value;
         }
 
         /// <summary>

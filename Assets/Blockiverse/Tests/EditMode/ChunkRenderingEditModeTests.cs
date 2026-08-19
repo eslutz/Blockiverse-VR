@@ -846,12 +846,108 @@ namespace Blockiverse.Tests.EditMode
 
             ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
 
-            float brightest = mesh.Colors.Max(color => color.grayscale);
-            float darkest = mesh.Colors.Min(color => color.grayscale);
+            // Vertex colour channels are now distinct bakes (R = sky exposure, G = emitter reach,
+            // B = self-emission), so sky darkening is read from R rather than grayscale.
+            float brightest = mesh.Colors.Max(color => color.r);
+            float darkest = mesh.Colors.Min(color => color.r);
 
             Assert.That(mesh.Colors, Has.Count.EqualTo(mesh.Vertices.Count));
             Assert.That(brightest, Is.GreaterThan(darkest));
             Assert.That(darkest, Is.LessThan(0.55f));
+        }
+
+        [Test]
+        public void MeshBuilderBakesSealedCaveFacesToNoSkyLight()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 3);
+
+            for (int x = 0; x < world.Bounds.Width; x++)
+            for (int y = 0; y < world.Bounds.Height; y++)
+            for (int z = 0; z < world.Bounds.Depth; z++)
+                world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Graystone, trackChange: false);
+
+            // A 2x2x2 pocket with no route to the sky.
+            for (int x = 3; x <= 4; x++)
+            for (int y = 3; y <= 4; y++)
+            for (int z = 3; z <= 4; z++)
+                world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Air, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // Every rendered face in this world faces into the pocket (the outer faces face out of
+            // bounds and are treated as sky-lit), so the interior must bake to zero sky and the
+            // boundary faces to full.
+            Assert.That(mesh.Colors.Min(color => color.r), Is.EqualTo(0.0f).Within(0.0001f),
+                "A room with no window must receive no sky light at all.");
+        }
+
+        [Test]
+        public void MeshBuilderBakesEmitterReachOnlyWhereLineOfSightExists()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 8, 8), chunkSize: 16, seed: 5);
+
+            // Floor slab at y=0; open air above; a one-block wall across x=8 from the floor up.
+            for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 8; z++)
+                world.SetBlock(new BlockPosition(x, 0, z), BlockRegistry.Graystone, trackChange: false);
+
+            for (int y = 1; y < 8; y++)
+            for (int z = 0; z < 8; z++)
+                world.SetBlock(new BlockPosition(8, y, z), BlockRegistry.Graystone, trackChange: false);
+
+            // Glowwick (level 9) on the floor at x=4: it reaches x in [-5, 13] by range, so x=12
+            // is inside range but behind the wall, x=3 is inside range with clear sight.
+            world.SetBlock(new BlockPosition(4, 1, 4), BlockRegistry.Glowwick, trackChange: false);
+
+            var emitters = new VoxelEmitterIndex(world, registry);
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0), skyLight: null, emitters: emitters);
+
+            // Up-facing floor vertices at a given block column: y == 1 exactly, and x within the block.
+            float ReachAt(int blockX)
+            {
+                var reach = new List<float>();
+                for (int i = 0; i < mesh.Vertices.Count; i++)
+                {
+                    Vector3 v = mesh.Vertices[i];
+                    if (Mathf.Approximately(v.y, 1.0f) && v.x >= blockX && v.x <= blockX + 1 && v.z >= 4 && v.z <= 5)
+                        reach.Add(mesh.Colors[i].g);
+                }
+                Assert.That(reach, Is.Not.Empty, $"expected floor vertices at x={blockX}");
+                return reach.Max();
+            }
+
+            Assert.That(ReachAt(3), Is.EqualTo(1.0f).Within(0.0001f),
+                "Floor beside the glowwick has clear line of sight and must be reachable.");
+            Assert.That(ReachAt(12), Is.EqualTo(0.0f).Within(0.0001f),
+                "Floor on the far side of the wall is in range but occluded: the realtime light must not reach it.");
+
+            // Knock the wall down and the far floor becomes reachable.
+            for (int y = 1; y < 8; y++)
+            for (int z = 0; z < 8; z++)
+                world.SetBlock(new BlockPosition(8, y, z), BlockRegistry.Air, trackChange: false);
+
+            mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0), skyLight: null, emitters: emitters);
+            Assert.That(ReachAt(12), Is.EqualTo(1.0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void MeshBuilderBakesEmitterBlocksAsSelfEmissive()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 8);
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.LumenLamp, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 1, 1), BlockRegistry.Graystone, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            float lampEmission = mesh.Colors.Max(color => color.b);
+            float stoneEmission = mesh.Colors.Min(color => color.b);
+
+            Assert.That(lampEmission, Is.EqualTo(14.0f / 15.0f).Within(0.001f),
+                "An emitter's own faces carry its emissive level so it stays visible in the dark.");
+            Assert.That(stoneEmission, Is.EqualTo(0.0f).Within(0.0001f));
         }
 
         [Test]

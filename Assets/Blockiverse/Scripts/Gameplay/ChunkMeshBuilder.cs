@@ -45,6 +45,7 @@ namespace Blockiverse.Gameplay
         [ThreadStatic] static List<int> pooledFluidTriangles;
         [ThreadStatic] static List<Vector2> pooledFluidUvs;
         [ThreadStatic] static List<Color> pooledFluidColors;
+        [ThreadStatic] static List<BlockPosition> pooledEmitters;
 
         static readonly BlockPosition[] NeighborOffsets =
         {
@@ -66,15 +67,29 @@ namespace Blockiverse.Gameplay
             { new(0, 0, 0), new(0, 1, 0), new(1, 1, 0), new(1, 0, 0) }
         };
 
-        public static ChunkMeshData Build(VoxelWorld world, BlockRegistry registry, ChunkCoordinate chunk, VoxelSkyLightMap skyLight = null)
+        public static ChunkMeshData Build(
+            VoxelWorld world,
+            BlockRegistry registry,
+            ChunkCoordinate chunk,
+            VoxelSkyLightMap skyLight = null,
+            VoxelEmitterIndex emitters = null)
         {
-            return Build(world, registry, chunk, out _, skyLight);
+            return Build(world, registry, chunk, out _, skyLight, emitters);
         }
 
         // Builds the chunk's render geometry in one walk, split into two meshes: solid faces
         // (rendered and collidable) and fluid faces (rendered, ray-targetable, but excluded from
         // physics contacts so players wade through water instead of walking on it).
-        public static ChunkMeshData Build(VoxelWorld world, BlockRegistry registry, ChunkCoordinate chunk, out ChunkMeshData fluidMesh, VoxelSkyLightMap skyLight = null)
+        // `emitters` drives the per-face line-of-sight bake that stops realtime point lights from
+        // reaching through solids. Without one (isolated tests) no occlusion data exists, so faces
+        // bake as fully reachable rather than silently killing every torch.
+        public static ChunkMeshData Build(
+            VoxelWorld world,
+            BlockRegistry registry,
+            ChunkCoordinate chunk,
+            out ChunkMeshData fluidMesh,
+            VoxelSkyLightMap skyLight = null,
+            VoxelEmitterIndex emitters = null)
         {
             if (world == null)
                 throw new ArgumentNullException(nameof(world));
@@ -110,6 +125,17 @@ namespace Blockiverse.Gameplay
             int endY = Math.Min(startY + world.ChunkSize, world.Bounds.Height);
             int endZ = Math.Min(startZ + world.ChunkSize, world.Bounds.Depth);
 
+            List<BlockPosition> nearbyEmitters = pooledEmitters ??= new();
+            nearbyEmitters.Clear();
+            if (emitters != null)
+            {
+                int reach = VoxelLightSampler.MaxEmitterReachDistance;
+                emitters.CollectInRange(
+                    new BlockPosition(startX - reach, startY - reach, startZ - reach),
+                    new BlockPosition(endX - 1 + reach, endY - 1 + reach, endZ - 1 + reach),
+                    nearbyEmitters);
+            }
+
             for (int y = Math.Max(0, startY); y < endY; y++)
             {
                 for (int z = Math.Max(0, startZ); z < endZ; z++)
@@ -123,6 +149,7 @@ namespace Blockiverse.Gameplay
                             continue;
 
                         bool isFluid = definition.Category == BlockCategory.Fluid;
+                        float selfEmission = definition.EmissiveLight / (float)VoxelLightSampler.MaxEmissiveLevel;
 
                         for (int face = 0; face < NeighborOffsets.Length; face++)
                         {
@@ -131,22 +158,28 @@ namespace Blockiverse.Gameplay
                             if (!ShouldRenderFace(world, registry, definition, neighbor))
                                 continue;
 
-                            float light = VoxelLightSampler.SampleAirLight(world, registry, neighbor, skyLight: skyLight);
+                            float skyExposure = VoxelLightSampler.SampleSkyExposure(world, registry, neighbor, skyLight: skyLight);
+                            float emitterReach = emitters == null
+                                ? 1.0f
+                                : VoxelLightSampler.SampleEmitterReach(world, registry, neighbor, NeighborOffsets[face], nearbyEmitters);
+                            Color vertexColor = VoxelLightSampler.ToVertexColor(skyExposure, emitterReach, selfEmission);
 
                             if (isFluid)
                             {
-                                AddFace(fluidVertices, fluidTriangles, fluidUvs, fluidColors, position, face, definition.Id, light);
+                                AddFace(fluidVertices, fluidTriangles, fluidUvs, fluidColors, position, face, definition.Id, vertexColor);
                                 fluidFaceCount++;
                             }
                             else
                             {
-                                AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, light);
+                                AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, vertexColor);
                                 faceCount++;
                             }
                         }
                     }
                 }
             }
+
+            nearbyEmitters.Clear();
 
             fluidMesh = new ChunkMeshData(fluidVertices, fluidTriangles, fluidUvs, fluidColors, fluidFaceCount);
             return new ChunkMeshData(vertices, triangles, uvs, colors, faceCount);
@@ -172,6 +205,8 @@ namespace Blockiverse.Gameplay
             return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
         }
 
+        // Signature is changed in place rather than overloaded: ChunkRenderingEditModeTests looks
+        // this method up by name via reflection, and a second overload would throw AmbiguousMatch.
         static void AddFace(
             List<Vector3> vertices,
             List<int> triangles,
@@ -180,12 +215,11 @@ namespace Blockiverse.Gameplay
             BlockPosition position,
             int faceIndex,
             BlockId blockId,
-            float light)
+            Color vertexColor)
         {
             int vertexStart = vertices.Count;
             Rect uvRect = BlockVisualAtlas.GetTileRect(blockId);
             var origin = new Vector3(position.X, position.Y, position.Z);
-            Color vertexColor = VoxelLightSampler.ToVertexColor(light);
 
             for (int i = 0; i < 4; i++)
             {
@@ -210,17 +244,26 @@ namespace Blockiverse.Gameplay
 
     public sealed class ChunkRebuildQueue
     {
-        const int LightingProbeInvalidationPadding = VoxelLightSampler.DefaultProbeDistance + 1;
+        // Wide enough for both bakes: the sky-openness probe, and the emitter line-of-sight reach
+        // (placing or removing a block up to 15 cells from a spark flare can change which faces
+        // that flare can see).
+        // Math.Max is not a constant expression; the conditional keeps this a compile-time const.
+        const int LightingProbeInvalidationPadding =
+            (VoxelLightSampler.DefaultProbeDistance > VoxelLightSampler.MaxEmitterReachDistance
+                ? VoxelLightSampler.DefaultProbeDistance
+                : VoxelLightSampler.MaxEmitterReachDistance) + 1;
 
         readonly VoxelWorld world;
         readonly VoxelSkyLightMap skyLight;
+        readonly VoxelEmitterIndex emitters;
         readonly HashSet<ChunkCoordinate> dirtyChunks = new();
         readonly List<ChunkCoordinate> drainSnapshot = new();
 
-        public ChunkRebuildQueue(VoxelWorld world, VoxelSkyLightMap skyLight = null)
+        public ChunkRebuildQueue(VoxelWorld world, VoxelSkyLightMap skyLight = null, VoxelEmitterIndex emitters = null)
         {
             this.world = world ?? throw new ArgumentNullException(nameof(world));
             this.skyLight = skyLight;
+            this.emitters = emitters;
             world.BlockChanged += OnBlockChanged;
         }
 
@@ -294,6 +337,10 @@ namespace Blockiverse.Gameplay
         {
             ChunkCoordinate changedChunk = world.GetChunkCoordinate(change.Position);
             MarkDirty(changedChunk);
+
+            // Keep the emitter index ahead of the deferred rebuild so the rebuilt faces trace
+            // toward the world as it is now, not as it was.
+            emitters?.ApplyChange(change);
 
             if (skyLight == null)
             {

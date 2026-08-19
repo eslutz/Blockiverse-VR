@@ -34,7 +34,6 @@ namespace Blockiverse.Tests.EditMode
     public sealed class BlockiverseRigPrefabTests
     {
         const string ControllerRayOriginName = "Ray Origin";
-        static readonly Quaternion ControllerRayOriginLocalRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
 
         [Test]
         public void GameplayMenusAreDirectWorldSpaceCanvasChildren()
@@ -747,19 +746,29 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SprintClickTogglesAndHoldTemporarilyRaisesMoveSpeed()
+        public void SprintHoldIsDefaultAndToggleModeIgnoresHold()
         {
-            MethodInfo toggleMethod = typeof(BlockiverseInputRig).GetMethod(
-                "ShouldToggleSprint",
-                BindingFlags.Public | BindingFlags.Static);
+            // Click-and-hold (the default): active only while held, never latched by a toggle.
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(false, held: true, toggled: false), Is.True);
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(false, held: false, toggled: false), Is.False);
+            Assert.That(
+                BlockiverseInputRig.ResolveModifierActive(false, held: false, toggled: true),
+                Is.False,
+                "A stale toggle must not sprint the player in click-and-hold mode.");
+
+            // Click-to-toggle: the latched state wins and releasing the button changes nothing.
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(true, held: false, toggled: true), Is.True);
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(true, held: true, toggled: false), Is.False);
+        }
+
+        [Test]
+        public void SprintRaisesMoveSpeed()
+        {
             MethodInfo speedMethod = typeof(BlockiverseInputRig).GetMethod(
                 "ResolveSprintMoveSpeed",
                 BindingFlags.Public | BindingFlags.Static);
 
-            Assert.That(toggleMethod, Is.Not.Null, "Sprint should expose its click-vs-hold threshold for tests.");
             Assert.That(speedMethod, Is.Not.Null, "Sprint should expose move-speed scaling for tests.");
-            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.10f }), Is.True);
-            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.50f }), Is.False);
             Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, false }), Is.EqualTo(1.8f).Within(0.001f));
             Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, true }), Is.EqualTo(3.96f).Within(0.001f));
         }
@@ -1303,10 +1312,22 @@ namespace Blockiverse.Tests.EditMode
         {
             Assert.That(rayOrigin, Is.Not.Null, $"{controller?.name} should carry a controller-local ray origin.");
             Assert.That(rayOrigin.parent, Is.SameAs(controller));
-            Assert.That(Vector3.Distance(rayOrigin.localPosition, Vector3.zero), Is.LessThan(0.0001f),
-                "The ray should originate at the tracked controller.");
-            Assert.That(Quaternion.Angle(rayOrigin.localRotation, ControllerRayOriginLocalRotation), Is.LessThan(0.001f),
-                "Quest grip-pose forward points up like a stick; the child origin turns XRI forward onto the pointing axis.");
+            BlockiverseAimPoseRayOrigin aimOrigin = rayOrigin.GetComponent<BlockiverseAimPoseRayOrigin>();
+            Assert.That(aimOrigin, Is.Not.Null,
+                "The ray origin must follow the OpenXR aim pose so the ray matches Meta's system pointer.");
+            BlockiverseControllerAnchor anchor = controller.GetComponent<BlockiverseControllerAnchor>();
+            if (anchor != null)
+                Assert.That(aimOrigin.Role, Is.EqualTo(anchor.Role), "The aim origin must read the same hand it is mounted on.");
+
+            BlockiverseControllerRole role = aimOrigin.Role;
+            Assert.That(
+                Vector3.Distance(rayOrigin.localPosition, BlockiverseAimPoseRayOrigin.ResolveFallbackLocalPosition(role)),
+                Is.LessThan(0.0001f),
+                "The serialized ray origin should sit at the measured grip->aim fallback offset for its hand.");
+            Assert.That(
+                Quaternion.Angle(rayOrigin.localRotation, BlockiverseAimPoseRayOrigin.ResolveFallbackLocalRotation(role)),
+                Is.LessThan(0.01f),
+                "The serialized ray origin should carry the measured grip->aim fallback rotation; the live aim pose replaces it at runtime.");
         }
 
         static void AssertInteractionRayDefaults(XRRayInteractor ray)

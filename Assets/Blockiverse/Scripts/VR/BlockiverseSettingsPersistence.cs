@@ -84,6 +84,10 @@ namespace Blockiverse.VR
                     KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0) != 0;
                 comfortSettings.RealPlayerHeightEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "RealPlayerHeight", comfortSettings.RealPlayerHeightEnabled ? 1 : 0) != 0;
+                comfortSettings.SprintToggleEnabled = PlayerPrefs.GetInt(
+                    KeyPrefix + "SprintToggle", comfortSettings.SprintToggleEnabled ? 1 : 0) != 0;
+                comfortSettings.CrouchToggleEnabled = PlayerPrefs.GetInt(
+                    KeyPrefix + "CrouchToggle", comfortSettings.CrouchToggleEnabled ? 1 : 0) != 0;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
                     KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 comfortSettings.SmoothTurnEnabled = PlayerPrefs.GetInt(
@@ -141,6 +145,8 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetInt(DominantHandPrefsKey, (int)comfortSettings.DominantHand);
                 PlayerPrefs.SetInt(KeyPrefix + "ToggleToMine", comfortSettings.ToggleToMineEnabled ? 1 : 0);
                 PlayerPrefs.SetInt(KeyPrefix + "RealPlayerHeight", comfortSettings.RealPlayerHeightEnabled ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "SprintToggle", comfortSettings.SprintToggleEnabled ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "CrouchToggle", comfortSettings.CrouchToggleEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "ContinuousTurnSpeed", comfortSettings.ContinuousTurnSpeed);
@@ -180,6 +186,8 @@ namespace Blockiverse.VR
                     hash = hash * 31 + (int)comfortSettings.DominantHand;
                     hash = hash * 31 + (comfortSettings.ToggleToMineEnabled ? 1 : 0);
                     hash = hash * 31 + (comfortSettings.RealPlayerHeightEnabled ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.SprintToggleEnabled ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.CrouchToggleEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
                     hash = hash * 31 + (comfortSettings.SmoothTurnEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousTurnSpeed.GetHashCode();

@@ -84,6 +84,19 @@ namespace Blockiverse.Editor
             "com.meta.openxr.feature.foveation"
         };
 
+        // The editor runs on the Standalone OpenXR settings. The Meta XR Simulator presents Touch
+        // Pro/Plus controllers and the runtime binds whichever profile the app suggested bindings
+        // for, so with only the legacy Oculus Touch profile enabled here Unity's controller actions
+        // stay unbound in Play mode: the runtime tracks the controllers (visible through Meta XR
+        // Operator) while the rig never moves. Enable the same controller profiles as Android so
+        // simulator sessions exercise real controller input and poses.
+        static readonly string[] StandaloneOpenXrControllerProfileIds =
+        {
+            "com.unity.openxr.feature.input.oculustouch",
+            "com.unity.openxr.feature.input.metaquestplus",
+            "com.unity.openxr.feature.input.metaquestpro",
+        };
+
         // ── Game menu panel names ────────────────────────────────────────────────
         const string TitleMenuName = "Title Menu";
         const string PauseMenuName = "Pause Menu";
@@ -159,7 +172,8 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         const float CompositionUiRenderScale = 2.0f;
         const float MenuPanelInset = 28.0f;
         static readonly Vector2 MenuCloseButtonSize = new(160.0f, 48.0f);
-        static readonly Vector2 ComfortMenuSize = new(1040.0f, 860.0f);
+        // Grown from 860 to fit the sprint/crouch control-style checkboxes.
+        static readonly Vector2 ComfortMenuSize = new(1040.0f, 980.0f);
         static readonly Vector2 ComfortMenuCompositionSize = ComfortMenuSize * GameMenuScale;
         // Sized for the catalog browser: category/page controls, search, and a 3×4 pick grid.
         static readonly Vector2 BlockMenuSize = new(560.0f, 470.0f);
@@ -374,7 +388,12 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             SetActiveInputHandlerToInputSystemOnly();
 
 #if UNITY_2023_2_OR_NEWER
-            PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.GameActivity;
+            // Classic Activity rather than GameActivity: Unity 6's soft-keyboard handshake times
+            // out on GameActivity ("Timeout while waiting for keyboard to become visible" with the
+            // Quest IME opening candidates-only), so the system keyboard never surfaces for text
+            // fields. Runtime code reaches the activity through UnityPlayer.currentActivity, which
+            // is entry-point agnostic.
+            PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.Activity;
 #endif
         }
 
@@ -472,13 +491,26 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         static void ConfigureAndroidManifest()
         {
             global::OVRManifestPreprocessor.GenerateOrUpdateAndroidManifest(silentMode: true);
-            EnsureAndroidGameActivityLabel("Assets/Plugins/Android/AndroidManifest.xml");
+            EnsureAndroidPlayerActivity("Assets/Plugins/Android/AndroidManifest.xml");
         }
 
-        static void EnsureAndroidGameActivityLabel(string manifestPath)
+        static void EnsureAndroidPlayerActivity(string manifestPath)
         {
             if (!File.Exists(manifestPath))
                 throw new FileNotFoundException("Android manifest was not generated.", manifestPath);
+
+            bool gameActivity =
+                PlayerSettings.Android.applicationEntry == AndroidApplicationEntry.GameActivity;
+            string activityName = gameActivity
+                ? "com.unity3d.player.UnityPlayerGameActivity"
+                : "com.unity3d.player.UnityPlayerActivity";
+
+            // AppCompat themes only link when the GameActivity entry point pulls androidx.appcompat
+            // into the Gradle project. A classic Activity build that keeps an AppCompat theme fails
+            // resource linking, so the theme has to track the entry point too.
+            string activityTheme = gameActivity
+                ? "@style/Theme.AppCompat.DayNight.NoActionBar"
+                : "@style/UnityThemeSelector";
 
             var manifest = new XmlDocument();
             manifest.Load(manifestPath);
@@ -486,25 +518,42 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             var namespaceManager = new XmlNamespaceManager(manifest.NameTable);
             namespaceManager.AddNamespace("android", "http://schemas.android.com/apk/res/android");
 
-            XmlNode activityNode = manifest.SelectSingleNode(
-                "/manifest/application/activity[@android:name='com.unity3d.player.UnityPlayerGameActivity']",
-                namespaceManager);
+            // Match either entry point so switching applicationEntry does not break this pass.
+            XmlNode activityNode =
+                manifest.SelectSingleNode(
+                    "/manifest/application/activity[@android:name='com.unity3d.player.UnityPlayerActivity']",
+                    namespaceManager)
+                ?? manifest.SelectSingleNode(
+                    "/manifest/application/activity[@android:name='com.unity3d.player.UnityPlayerGameActivity']",
+                    namespaceManager);
 
             if (activityNode == null)
-                throw new InvalidOperationException("Android manifest is missing UnityPlayerGameActivity.");
+                throw new InvalidOperationException("Android manifest is missing the Unity player activity.");
 
-            const string androidNamespace = "http://schemas.android.com/apk/res/android";
-            XmlAttribute labelAttribute = activityNode.Attributes["label", androidNamespace];
+            SetAndroidAttribute(manifest, activityNode, "name", activityName);
+            SetAndroidAttribute(manifest, activityNode, "theme", activityTheme);
+            SetAndroidAttribute(manifest, activityNode, "label", "@string/app_name");
 
-            if (labelAttribute == null)
-            {
-                labelAttribute = manifest.CreateAttribute("android", "label", androidNamespace);
-                activityNode.Attributes.Append(labelAttribute);
-            }
-
-            labelAttribute.Value = "@string/app_name";
             manifest.Save(manifestPath);
             AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        static void SetAndroidAttribute(
+            XmlDocument manifest,
+            XmlNode node,
+            string attributeName,
+            string value)
+        {
+            const string androidNamespace = "http://schemas.android.com/apk/res/android";
+            XmlAttribute attribute = node.Attributes[attributeName, androidNamespace];
+
+            if (attribute == null)
+            {
+                attribute = manifest.CreateAttribute("android", attributeName, androidNamespace);
+                node.Attributes.Append(attribute);
+            }
+
+            attribute.Value = value;
         }
 
         static void ConfigureMetaProjectSettings()
@@ -589,9 +638,38 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             }
 
             ConfigureQuestUrpShadowPolicy(pipelineAsset);
+            ConfigureQuestRendererMode();
             GraphicsSettings.defaultRenderPipeline = pipelineAsset;
             QualitySettings.renderPipeline = pipelineAsset;
             EditorUtility.SetDirty(pipelineAsset);
+        }
+
+        // Shadow distance in metres. Voxel chunks are 16 blocks, so 30 m is roughly a two-chunk
+        // radius — enough that shadows read as grounded without dragging distant terrain into the
+        // shadow pass. Past ~48 m this shadow-casts most of the world and blows the draw budget.
+        public const float QuestShadowDistanceMeters = 30f;
+
+        // URP's per-object additional-light cap (engine maximum is 8). Four lets a player stand in
+        // a lit room corner with several emitters visible while bounding per-fragment cost.
+        public const int QuestAdditionalLightsPerObject = 4;
+
+        // Pins the renderer to plain Forward. Meta measures the Forward/Forward+ crossover at around
+        // five simultaneous lights; this game sits below that (emitters are capped and the player is
+        // near a handful at most), and Forward keeps URP 17.5's Quest-only single-light unroll fast
+        // path, which the clustered loop forfeits. Left unpinned this silently drifts on regenerate.
+        static void ConfigureQuestRendererMode()
+        {
+            var rendererData = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(
+                BlockiverseProject.AndroidUrpRendererPath);
+
+            if (rendererData == null)
+                return;
+
+            var serializedRenderer = new SerializedObject(rendererData);
+            SetSerializedInt(serializedRenderer, "m_RenderingMode", 0);
+            SetSerializedInt(serializedRenderer, "m_IntermediateTextureMode", 0);
+            serializedRenderer.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(rendererData);
         }
 
         static void ConfigureQuestUrpShadowPolicy(UniversalRenderPipelineAsset pipelineAsset)
@@ -604,11 +682,40 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             // MSAA is cheap on the tiled mobile GPU and improves VR edge clarity for the voxel art.
             SetSerializedInt(serializedAsset, "m_MSAA", 4);
             SetSerializedFloat(serializedAsset, "m_RenderScale", 1f);
-            SetSerializedBool(serializedAsset, "m_MainLightShadowsSupported", false);
-            SetSerializedInt(serializedAsset, "m_MainLightShadowmapResolution", 512);
-            SetSerializedFloat(serializedAsset, "m_ShadowDistance", 0f);
-            SetSerializedInt(serializedAsset, "m_AdditionalLightsRenderingMode", 0);
-            SetSerializedInt(serializedAsset, "m_AdditionalLightsPerObjectLimit", 0);
+            // Sun/moon shadows. One cascade over a short distance keeps the shadow pass to a
+            // single extra draw of the chunks actually near the player.
+            SetSerializedBool(serializedAsset, "m_MainLightShadowsSupported", true);
+            SetSerializedInt(serializedAsset, "m_MainLightShadowmapResolution", 1024);
+            SetSerializedFloat(serializedAsset, "m_ShadowDistance", QuestShadowDistanceMeters);
+            SetSerializedInt(serializedAsset, "m_ShadowCascadeCount", 1);
+            SetSerializedInt(serializedAsset, "m_ShadowCascades", 0);
+
+            // Placed emitters (glowwick, lumen lamp, campfire, spark flare) are punctual lights.
+            // Per-pixel is required for them to read as point sources on voxel faces; the
+            // per-object limit is what actually bounds fragment cost, so it stays small.
+            SetSerializedInt(serializedAsset, "m_AdditionalLightsRenderingMode", 1);
+            SetSerializedInt(serializedAsset, "m_AdditionalLightsPerObjectLimit", QuestAdditionalLightsPerObject);
+            SetSerializedBool(serializedAsset, "m_AdditionalLightShadowsSupported", true);
+            SetSerializedInt(serializedAsset, "m_AdditionalLightsShadowmapResolution", 1024);
+
+            // Hard shadows only. Unity warns that soft shadows cost significantly on tile-based
+            // mobile/untethered XR GPUs, and Meta's mobile-VR guidance is "Hard Shadows Only or
+            // Disable Shadows". Hard edges also suit a hard-edged voxel world.
+            SetSerializedBool(serializedAsset, "m_SoftShadowsSupported", false);
+            SetSerializedInt(serializedAsset, "m_SoftShadowQuality", 1);
+
+            // Nothing in the project sets Light.cookie or uses reflection probes, so these only
+            // reserved atlas memory and extra shader variants.
+            SetSerializedBool(serializedAsset, "m_SupportsLightCookies", false);
+            SetSerializedBool(serializedAsset, "m_ReflectionProbeAtlas", false);
+
+            // Shadow bias lives on the pipeline asset, not the light: URP only reads a Light's own
+            // bias when UniversalAdditionalLightData.usePipelineSettings is false, and it defaults
+            // true. Axis-aligned voxel faces are the worst case for acne, and URP hard-codes normal
+            // bias to ZERO for point lights, so the depth bias has to carry the emitters too.
+            SetSerializedFloat(serializedAsset, "m_ShadowDepthBias", 1.4f);
+            SetSerializedFloat(serializedAsset, "m_ShadowNormalBias", 0.6f);
+
             SetSerializedBool(serializedAsset, "m_UseAdaptivePerformance", true);
             serializedAsset.ApplyModifiedPropertiesWithoutUndo();
         }
@@ -717,6 +824,35 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
             }
 
             EditorUtility.SetDirty(openXrSettings);
+
+            ConfigureStandaloneOpenXrControllerProfiles();
+        }
+
+        static void ConfigureStandaloneOpenXrControllerProfiles()
+        {
+            FeatureHelpers.RefreshFeatures(BuildTargetGroup.Standalone);
+
+            foreach (string featureId in StandaloneOpenXrControllerProfileIds)
+            {
+                UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
+                    FeatureHelpers.GetFeatureWithIdForBuildTarget(BuildTargetGroup.Standalone, featureId);
+
+                if (feature == null)
+                {
+                    BlockiverseLog.Warning(BlockiverseLogCategory.Bootstrap, $"OpenXR feature was not found for Standalone: {featureId}");
+                    continue;
+                }
+
+                if (feature.enabled)
+                    continue;
+
+                feature.enabled = true;
+                EditorUtility.SetDirty(feature);
+            }
+
+            OpenXRSettings standaloneSettings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Standalone);
+            if (standaloneSettings != null)
+                EditorUtility.SetDirty(standaloneSettings);
         }
 
         static void ConfigureCompositionLayerSplash()

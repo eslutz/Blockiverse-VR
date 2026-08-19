@@ -30,7 +30,27 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
 - Timestamp: 2026-08-13. Pre-upgrade state (patched embedded 203 packages, old manifest/lock, git snapshots) is preserved at `../Blockiverse-VR-local-backups/2026-08-12-pre-operator-sdk205/`.
 - Timestamp: 2026-08-13. Meta XR Operator (experimental) is the runtime in-VR validation bridge: activate once via `Meta > Meta XR Operator > Activate`, activate Meta XR Simulator per editor session, enter Play mode, and connect ONLY through the `meta-xr-operator` MCP proxy (`~/meta-xr-operator/meta-xr-operator-mcp-proxy`, registered in the local Claude config along with the `meta-xr-unity-runtime` Agent Bridge). Never probe `localhost:8720/sse` directly during layer startup — aborted SSE connections double-faulted the layer and crashed the editor twice on 2026-08-13. The AI Tools panel's own `claude mcp add` buttons fail (Unity's PATH lacks `claude`); run those commands from a terminal.
 - MCP for Unity and Unity Skills remain optional local developer tooling only; do not commit their package entries. Note the unpushed local-main commits currently violate this — clean up before pushing.
+- Timestamp: 2026-08-19. Editor-open workflow: when the Unity editor holds the project lock, build and regenerate through the Meta XR Agent Bridge (`http://127.0.0.1:48736/mcpbridge/`, bearer token in `Assets/Resources/DevAgentSettings.asset`; `IReflectionService.InvokeStaticMethodFromJson` can call `BlockiverseBuildSmoke.BuildDevelopmentAndroid` and `BlockiverseProjectBootstrapper.Run`). Its `TestRunnerTools.GetResults` returns a stale accumulated buffer (identical totals across runs, tests listed as both Passed and Failed) — do not use it as a test verdict; the only trustworthy gate is `scripts/unity/run-tests.sh` with the editor closed. Operator MCP tools are not mounted in every agent session; the stdio proxy (`~/meta-xr-operator/meta-xr-operator-mcp-proxy http://127.0.0.1:8720`) works from a small JSON-RPC client, and an active `adb forward tcp:8720` hijacks that port away from the editor server. Meta's Project Setup Tool flags `applicationEntry = GameActivity` as "Required" — applying it re-breaks the Quest system keyboard (see CHANGELOG); leave it.
 - Use `hzdb` for Quest device work (`hzdb --version`, `hzdb device list`); `adb` only when `hzdb` lacks the operation.
+- Timestamp: 2026-08-19. **Unity CLI** (`~/.unity/bin/unity`, `1.0.0-beta.5`, experimental; not on PATH
+  by default — `source ~/.unity/env`) is installed and signed in as Eric. Run `unity pipeline list` BEFORE
+  any batchmode invocation: it lists every editor instance with PID/Running even without the Pipeline
+  package, and a GUI editor holding the project makes `run-tests.sh`/`unity test` fail with "Multiple
+  Unity instances cannot open the same project". `unity test . --mode EditMode|PlayMode --output <xml>`
+  and `unity build . --target Android --execute-method ... -o <path>` (Android signing flags; refuses a
+  dirty worktree without `--allow-dirty-build`) are alternatives to the committed scripts, which remain
+  the acceptance gate. `unity command`/`unity mcp`/`unity status` need the Unity Pipeline package
+  (`0.5.0-exp.1`) — NOT installed; do not `unity pipeline install` without Eric's approval (same
+  local-only rule as MCP for Unity / Unity Skills). `unity skill install claude-code` is available but
+  is persistent config — ask first.
+- Timestamp: 2026-08-19. **Editor MCP channels are cwd-scoped and currently mis-scoped.** The Meta XR
+  SDK editor MCPBridge (`meta-xr-unity-runtime`, `http://127.0.0.1:48736/mcpbridge/` + Bearer; includes
+  TestRunner/Compilation tools and runs tests INSIDE an already-open editor, sidestepping the instance
+  lock) and the Operator proxy (`meta-xr-operator`) are registered in `~/.claude.json` under the PARENT
+  `.../Side Projects/Blockiverse` directory, not `.../Blockiverse-VR`, so sessions started in the repo
+  root see neither. Re-register for this cwd from a terminal (`claude mcp add ...`; the Unity AI Tools
+  panel buttons fail because Unity's PATH lacks `claude`). Meta XR Simulator + Operator runbook:
+  `docs/testing/meta-xr-simulator-and-mcp.md`.
 
 ## Validation Source Of Truth
 
@@ -42,11 +62,53 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
 
 - Timestamp: 2026-08-13. `codebase-review-STATUS.md` (2026-06-11) is stale: dedup (245→184) and adversarial verification (107 confirmed / 2 disputed / 0 refuted / 5 downgraded / 70 pass-through) DID run and are committed (`f14c2945`, PR #314, which also remediated findings; see also PR #312 and the CHANGELOG 131-observation pass). Criticals 1–4 are spot-verified fixed in code. Open items: verify fixes for Critical #5 (single-player save overwritten by LAN session) and #6 (crafting UI exposes ~5 of ~60 recipes), and the final consolidated report was never produced.
 
+## Lighting And Shadow Baseline
+
+- Timestamp: 2026-08-19. Branch `fix/night-and-emissive-lighting` (off `main`) reverses the old
+  "shadows/additional lights off" Quest rendering baseline. Canonical authority is the 2026-08-19
+  amendment in [ADR 0006](docs/adr/0006-quest-openxr-rendering-and-asset-policy.md) — no ruleset
+  covers shadows.
+- Shipped Quest budget: main-light shadows 1024 / one cascade / 30 m, hard shadows only, additional
+  lights Per Pixel capped at 4 per object, additional-light shadows on at 1024 but only the nearest
+  `GlowwickLightManager.MaxShadowCastingLights` emitters actually cast. Renderer stays Forward
+  (`m_RenderingMode: 0`); Forward+ is the documented escalation if per-chunk light clipping shows up.
+- The URP asset is generated: `BlockiverseProjectBootstrapper.ConfigureQuestUrpShadowPolicy` and
+  `ConfigureQuestRendererMode` own these values. Hand-editing the asset alone silently reverts.
+- Watch the `m_PrefilteringMode*` fields in the URP asset. `0` means Remove, which strips the shadow
+  and additional-light keywords at BUILD time only — the "works in the editor, black on device"
+  trap. They are recomputed by URP's build preprocessor, so the real check is a device run.
+- One directional light serves as both sun and moon; URP promotes only a single directional to the
+  main light, so a second one would become a costly additional light. Moon phase is derived from
+  `WorldTimeClock.TotalElapsedTicks / WorldConstants.TicksPerDay`, which already travels in the
+  environment snapshot and the save file — no wire or save-schema change.
+- OPEN GATE: none of this is profiled on a headset. `docs/testing/performance/` still has no
+  committed capture. The number that most needs measuring is the added ShadowCaster pass over
+  loaded chunks. Emitter shadows are the first thing to reduce (to 0) if the frame budget blows.
+- Timestamp: 2026-08-19. DECIDED (Eric): `lumen_quartz_cluster` and `staropal_geode` now carry their
+  canonical `emissiveLight` of 7 and 5. Underground crystal-lit farming is intended, not an exploit
+  — berries grow directly adjacent to lumen quartz, reeds adjacent to either, grain never (its
+  minimum light is 8, and the level drops to 6 one block out). Saves are unaffected:
+  `WorldSaveService.ComputeBlockRegistryHash` hashes canonical IDs only, not block attributes.
+  Pinned by `CaveCrystalsLightCropsEnoughForReedsAndBerriesButNotGrain`.
+- Occlusion model (2026-08-19): the voxel mesh bakes three channels per face — R sky exposure
+  (floor 0: sealed rooms are black, tunnels fade to 0 by 12 blocks), G emitter reach (a voxel
+  DDA line-of-sight ray from the face to each emitter in range; `VoxelEmitterIndex` supplies the
+  candidates per chunk), B self-emission. The shader gates sun/moon/ambient by R and realtime
+  point lights by G, so emitters cannot shine through walls or the ground even though only the
+  nearest one owns a shadow map. `_BakedLightFloor` on the voxel material is the one knob if true
+  black proves unplayable on device (0.01 is the "eyes adjusted" equivalent). Crop growth still
+  reads `SampleAirLight` (axis-probe max(sky, emissive)) — deliberately NOT the LOS bake, so the
+  berries-adjacent-to-quartz decision is unchanged.
+- Remaining known gaps: baked light is still time-of-day independent (the sun/moon do the
+  darkening, the bake only gates them); the LOS gate is per face, so an occlusion edge lands on a
+  block boundary rather than interpolating across a face; the emitter index and
+  `GlowwickLightManager` each scan the world once on load (consolidation candidate).
+
 ## Release And Companion Docs
 
 - `.github/workflows/quest-ci.yml` (PR validation, smoke APK), `quest-alpha.yml` (release-signed upload to Meta `alpha`), `quest-promote.yml` (promotes tested build IDs `alpha -> beta -> rc -> store`). All Unity pins updated to `6000.5.8f1` on 2026-08-13; no successful alpha upload exists after PR #323 (2026-06-16) — #324's upload failed and needs rerunning once main is reconciled.
 - Timestamp: 2026-08-13. Unresolved product decision: `quest-alpha.yml` defaults `META_AGE_GROUP` to `TEENS_AND_ADULTS` while the runtime implements the Mixed Ages path; set the repo variable or change the default before the next upload.
-- Wiki repo (`../Blockiverse-VR.wiki`): frozen 2026-06-13 and stale (cites deleted workflows/scripts); the local clone has 15 pages deleted-but-uncommitted — an unfinished overhaul that should be completed or reverted. Website repo (`../Blockiverse-VR.website`): frozen 2026-06-21.
+- Timestamp: 2026-08-19. Wiki repo (`../Blockiverse-VR.wiki`, branch `master`) and website repo (`../Blockiverse-VR.website`, branch `main`) are both current and clean: the wiki was refreshed for the player-size/crouch work and then for lighting (moon, Light and Dark section, Lights table, Known Issues), the website homepage gained a day/night/lighting bullet. Both have local commits that are NOT yet pushed — the wiki publishes on push (every `.md` becomes a public page) and the website deploys to blockiversevr.com via GitHub Pages on push to `main`. The wiki `CLAUDE.md` is git-ignored on purpose; never commit it.
 
 ## Source Versus Generated Artifacts
 
