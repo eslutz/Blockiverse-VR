@@ -673,19 +673,24 @@ namespace Blockiverse.Tests.PlayMode
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
 
+                // Sprint and crouch default to click-and-hold (independent control-style
+                // settings landed with the parallel input fixes; toggle is opt-in via
+                // SprintToggleEnabled/CrouchToggleEnabled). Active only while held.
                 Press(gamepad.rightStickButton);
                 yield return null;
                 Assert.That(inputRig.SprintActive, Is.True);
                 Release(gamepad.rightStickButton);
                 yield return null;
-                Assert.That(inputRig.SprintActive, Is.True);
+                Assert.That(inputRig.SprintActive, Is.False,
+                    "Sprint defaults to click-and-hold; releasing the support stick must end it.");
 
                 Press(gamepad.leftStickButton);
                 yield return null;
                 Assert.That(inputRig.CrouchActive, Is.True);
                 Release(gamepad.leftStickButton);
                 yield return null;
-                Assert.That(inputRig.CrouchActive, Is.True);
+                Assert.That(inputRig.CrouchActive, Is.False,
+                    "Crouch defaults to click-and-hold; releasing the dominant stick must end it.");
 
                 Set(gamepad.leftStick, Vector2.right);
                 yield return null;
@@ -775,7 +780,8 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(inputRig.CrouchActive, Is.True);
                 Release(gamepad.rightStickButton);
                 yield return null;
-                Assert.That(inputRig.CrouchActive, Is.True);
+                Assert.That(inputRig.CrouchActive, Is.False,
+                    "Crouch defaults to click-and-hold; releasing the dominant stick must end it.");
             }
             finally
             {
