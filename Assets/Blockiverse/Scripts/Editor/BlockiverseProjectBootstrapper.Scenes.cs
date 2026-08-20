@@ -462,8 +462,14 @@ namespace Blockiverse.Editor
             Light light = EnsureComponent<Light>(lightObject);
             light.type = LightType.Directional;
             light.intensity = 1.0f;
-            light.shadows = LightShadows.None;
-            light.shadowStrength = 0f;
+            // The sun/moon is the scene's only shadow-casting directional light.
+            // BlockiverseLightingCycleController re-applies style and strength every frame.
+            light.shadows = LightShadows.Hard;
+            light.shadowStrength = 0.8f;
+            // Deliberately no per-light shadowBias here: UniversalAdditionalLightData defaults
+            // usePipelineSettings = true, so URP reads m_ShadowDepthBias / m_ShadowNormalBias off
+            // the pipeline asset and per-light values never reach the GPU. They are tuned in
+            // ConfigureQuestUrpShadowPolicy instead.
             light.renderMode = LightRenderMode.ForcePixel;
             lightObject.transform.rotation = Quaternion.Euler(50.0f, -30.0f, 0.0f);
 

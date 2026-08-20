@@ -2,11 +2,44 @@
 
 ## Status
 
-Accepted; menu-surface decision amended 2026-08-13 (see Amendment below)
+Accepted; menu-surface decision amended 2026-08-13 and lighting/shadow policy amended 2026-08-19 (see Amendments below)
 
 ## Date
 
-2026-06-16 (amended 2026-08-13)
+2026-06-16 (amended 2026-08-13 and 2026-08-19)
+
+## Amendment 2026-08-19: Budgeted Realtime Lighting And Shadows Supersede "Shadows And Additional Lights Off"
+
+The original Quest rendering baseline disabled main-light shadows, additional lights, and shadow
+distance entirely in the generated Android URP asset. That baseline was never profiled on device and
+it made two shipped behaviours impossible rather than merely cheap:
+
+- Night rendered at roughly 2% of daylight radiance, against the canonical full-moon target of 4/15
+  (~27%) in `docs/rulesets/voxel_world_environment_effects.md` §4.3/§4.4.
+- Every placed light-emitting block (`glowwick`, `lumen_lamp`, `campfire`, `spark_flare`,
+  `emberflow`) was discarded by the pipeline, so torches and lanterns emitted no light at all.
+
+The rendering baseline is therefore budgeted, not disabled:
+
+- Main-light shadows on, 1024 shadowmap, **one** cascade, 30 m shadow distance.
+- Additional lights per-pixel, capped at **4 per object**, additional-light shadows on at 1024.
+- Hard shadows only. Unity flags soft shadows as a significant cost on tile-based mobile and
+  untethered XR GPUs, and Meta's mobile-VR guidance is "Hard Shadows Only or Disable Shadows".
+- Exactly **one** directional light exists. URP promotes a single directional to the main light, so
+  the sun and the moon share it and whichever body is above the horizon drives it. A second
+  always-on directional light would silently become a costly additional light.
+- Realtime punctual emitters are capped (`GlowwickLightManager.MaxRuntimePointLights`) and the slots
+  are spent on the emitters nearest the viewer, with only the closest one owning a shadow map.
+- Occlusion for every other emitter is baked, not rendered: the chunk mesh bake traces a voxel
+  line-of-sight ray from each face to each emitter in range and the shader gates the realtime
+  term by the result. Light does not pass through solid blocks at any emitter count, and the
+  shadow map budget is spent only on sub-block detail (avatars, props) around the nearest light.
+  Sky light is baked with a floor of zero — enclosed spaces are dark unless something in them emits.
+
+Shadows are not specified by any ruleset; this amendment is the canonical authority for them.
+
+Quest device profiling remains an open gate: the added ShadowCaster pass draws loaded chunks a
+second time, and the frame cost of that pass is the number this amendment most needs measured.
 
 ## Amendment 2026-08-13: World-Space Menu Baseline Supersedes The Shared Composition Quad
 

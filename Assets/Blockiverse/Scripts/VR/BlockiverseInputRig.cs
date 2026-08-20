@@ -24,8 +24,8 @@ namespace Blockiverse.VR
     {
         const float DefaultContinuousMoveSpeed = 1.8f;
         const float SprintMoveMultiplier = 2.2f;
-        const float SprintClickToggleMaxSeconds = 0.25f;
-        const float CrouchClickToggleMaxSeconds = 0.25f;
+
+
         const float CrouchCameraDropMetersPerSecond = 3.0f;
         const float DefaultSnapTurnDegrees = 45.0f;
         const float DefaultContinuousTurnSpeed = 60.0f;
@@ -44,7 +44,6 @@ namespace Blockiverse.VR
         const string LeftRayOriginName = "Left Ray Origin";
         const string RightRayOriginName = "Right Ray Origin";
         const string ControllerRayOriginName = "Ray Origin";
-        static readonly Quaternion ControllerRayOriginLocalRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
 
         [SerializeField] InputActionAsset inputActions;
         [SerializeField] TrackedPoseDriver headPoseDriver;
@@ -105,14 +104,13 @@ namespace Blockiverse.VR
         bool creativeFlightLocomotionActive;
         bool sprintToggled;
         bool sprintHeld;
-        float sprintPressStartedAt = -1.0f;
         bool crouchToggled;
         bool crouchHeld;
-        float crouchPressStartedAt = -1.0f;
         XRRayInteractor leftInteractionRay;
         XRRayInteractor rightInteractionRay;
 
         static LayerMask? cachedTerrainLayerMask;
+        static LayerMask? cachedTargetingLayerMask;
 
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
@@ -123,8 +121,17 @@ namespace Blockiverse.VR
         public bool IsBreakHeld => cachedBreakAction != null && cachedBreakAction.IsPressed();
         public UnityEvent PlacePressed => placePressed;
         public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
-        public bool SprintActive => sprintToggled || sprintHeld;
-        public bool CrouchActive => crouchToggled || crouchHeld;
+        public bool SprintActive => ResolveModifierActive(SprintToggleEnabled, sprintHeld, sprintToggled);
+        public bool CrouchActive => ResolveModifierActive(CrouchToggleEnabled, crouchHeld, crouchToggled);
+
+        bool SprintToggleEnabled => comfortSettings != null && comfortSettings.SprintToggleEnabled;
+        bool CrouchToggleEnabled => comfortSettings != null && comfortSettings.CrouchToggleEnabled;
+
+        // Sprint and crouch are locomotion modifiers, not world-editing actions, so they follow
+        // the same availability rule as movement instead of AllowWorldInput. AllowWorldInput is
+        // false whenever a menu holds focus — which is the entire title mini-world — where the
+        // player can walk but previously could neither sprint nor crouch.
+        bool LocomotionModifiersAllowed => !locomotionSuppressed;
         public TrackedPoseDriver HeadPoseDriver => headPoseDriver;
         public XRBodyTransformer BodyTransformer => bodyTransformer;
         public LocomotionMediator LocomotionMediator => locomotionMediator;
@@ -361,11 +368,14 @@ namespace Blockiverse.VR
             BlockiverseTrackedPoseDriverLifecycle.Ensure(driver);
         }
 
-        public static bool ShouldToggleSprint(float pressDurationSeconds) =>
-            pressDurationSeconds >= 0.0f && pressDurationSeconds <= SprintClickToggleMaxSeconds;
-
-        public static bool ShouldToggleCrouch(float pressDurationSeconds) =>
-            pressDurationSeconds >= 0.0f && pressDurationSeconds <= CrouchClickToggleMaxSeconds;
+        /// <summary>
+        /// Resolves whether a locomotion modifier (sprint or crouch) is active for this frame.
+        /// Click-and-hold is the default and is active only while the button is held; toggle mode
+        /// flips on each click and ignores how long the button is held. The two modes are
+        /// mutually exclusive so a hold can never silently leave the modifier latched on.
+        /// </summary>
+        public static bool ResolveModifierActive(bool toggleModeEnabled, bool held, bool toggled) =>
+            toggleModeEnabled ? toggled : held;
 
         public static float ResolveSprintMoveSpeed(float baseMoveSpeed, bool sprintActive) =>
             sprintActive ? baseMoveSpeed * SprintMoveMultiplier : baseMoveSpeed;
@@ -443,8 +453,8 @@ namespace Blockiverse.VR
         void Update()
         {
             RefreshCachedActions();
-            UpdateSprintInput(Time.unscaledTime);
-            UpdateCrouchInput(Time.unscaledTime);
+            UpdateSprintInput();
+            UpdateCrouchInput();
             ApplyCrouchState();
             ApplyComfortSettingsToProviders();
             UpdateTurnProviderEnabledState();
@@ -478,68 +488,45 @@ namespace Blockiverse.VR
             TryFindAction(supportMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
         }
 
-        void UpdateSprintInput(float now)
+        void UpdateSprintInput()
         {
-            if (!BlockiverseRuntimeState.AllowWorldInput || cachedSprintAction == null)
+            if (!LocomotionModifiersAllowed || cachedSprintAction == null)
             {
                 ClearTransientSprintState();
+                sprintToggled = false;
                 return;
             }
 
-            if (cachedSprintAction.WasPressedThisFrame())
-            {
-                sprintHeld = true;
-                sprintPressStartedAt = now;
-            }
+            // Dropping out of toggle mode must not leave the player latched into a sprint they
+            // can no longer switch off.
+            if (!SprintToggleEnabled)
+                sprintToggled = false;
+            else if (cachedSprintAction.WasPressedThisFrame())
+                sprintToggled = !sprintToggled;
 
-            if (cachedSprintAction.IsPressed())
-                sprintHeld = true;
-
-            if (cachedSprintAction.WasReleasedThisFrame())
-            {
-                float pressDuration = sprintPressStartedAt >= 0.0f
-                    ? now - sprintPressStartedAt
-                    : float.PositiveInfinity;
-
-                ClearTransientSprintState();
-                if (ShouldToggleSprint(pressDuration))
-                    sprintToggled = !sprintToggled;
-            }
+            sprintHeld = cachedSprintAction.IsPressed();
         }
 
         void ClearTransientSprintState()
         {
             sprintHeld = false;
-            sprintPressStartedAt = -1.0f;
         }
 
-        void UpdateCrouchInput(float now)
+        void UpdateCrouchInput()
         {
-            if (!BlockiverseRuntimeState.AllowWorldInput || cachedCrouchAction == null)
+            if (!LocomotionModifiersAllowed || cachedCrouchAction == null)
             {
                 ClearTransientCrouchState();
+                crouchToggled = false;
                 return;
             }
 
-            if (cachedCrouchAction.WasPressedThisFrame())
-            {
-                crouchHeld = true;
-                crouchPressStartedAt = now;
-            }
+            if (!CrouchToggleEnabled)
+                crouchToggled = false;
+            else if (cachedCrouchAction.WasPressedThisFrame())
+                crouchToggled = !crouchToggled;
 
-            if (cachedCrouchAction.IsPressed())
-                crouchHeld = true;
-
-            if (cachedCrouchAction.WasReleasedThisFrame())
-            {
-                float pressDuration = crouchPressStartedAt >= 0.0f
-                    ? now - crouchPressStartedAt
-                    : float.PositiveInfinity;
-
-                ClearTransientCrouchState();
-                if (ShouldToggleCrouch(pressDuration))
-                    crouchToggled = !crouchToggled;
-            }
+            crouchHeld = cachedCrouchAction.IsPressed();
         }
 
         // Crouch has to be physically real: shrink the collision capsule so the player fits a
@@ -590,7 +577,6 @@ namespace Blockiverse.VR
         void ClearTransientCrouchState()
         {
             crouchHeld = false;
-            crouchPressStartedAt = -1.0f;
         }
 
         void UpdateMenu()
@@ -993,7 +979,7 @@ namespace Blockiverse.VR
             foreach (BlockiverseLocomotionRayMediator rayMediator in GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true))
             {
                 string mapName = GetControllerMapName(rayMediator.Hand);
-                Transform rayOrigin = EnsureControllerRayOrigin(rayMediator.transform);
+                Transform rayOrigin = EnsureControllerRayOrigin(rayMediator.transform, rayMediator.Hand, mapName);
                 BlockiverseControllerAnchor anchor = rayMediator.GetComponent<BlockiverseControllerAnchor>();
                 XRRayInteractor interactionRay = rayMediator.InteractionRay;
 
@@ -1023,10 +1009,14 @@ namespace Blockiverse.VR
 
                 if (teleportRay != null)
                 {
+                    // Includes fluid: the teleport ray stops at the water surface and lands the
+                    // player treading, instead of passing through to the seabed. Without water in
+                    // this mask, XRRayInteractor breaks at the first hit with no registered
+                    // interactable and teleporting anywhere near water fails outright.
                     BlockiverseRayDefaults.ConfigureTeleportRay(
                         teleportRay,
                         rayOrigin,
-                        GetVoxelTerrainLayerMask());
+                        GetVoxelTargetingLayerMask());
                     ConfigureRayLineVisual(teleportRay);
                     teleportRay.selectInput = CreateButtonActionReader(
                         teleportRay.selectInput,
@@ -1040,7 +1030,11 @@ namespace Blockiverse.VR
             }
         }
 
-        static Transform EnsureControllerRayOrigin(Transform controller)
+        // The controller transform rides the OpenXR grip pose; Meta's system pointer rides the aim
+        // pose. The ray origin is a controller child that BlockiverseAimPoseRayOrigin keeps on the
+        // aim pose (grip->aim is a rigid per-controller offset), with a fixed fallback offset until
+        // the first tracked sample arrives.
+        Transform EnsureControllerRayOrigin(Transform controller, BlockiverseControllerRole role, string mapName)
         {
             if (controller == null)
                 return null;
@@ -1054,7 +1048,24 @@ namespace Blockiverse.VR
                 rayOrigin = rayOriginObject.transform;
             }
 
-            rayOrigin.SetLocalPositionAndRotation(Vector3.zero, ControllerRayOriginLocalRotation);
+            BlockiverseAimPoseRayOrigin aimOrigin = rayOrigin.GetComponent<BlockiverseAimPoseRayOrigin>();
+
+            if (aimOrigin == null)
+                aimOrigin = rayOrigin.gameObject.AddComponent<BlockiverseAimPoseRayOrigin>();
+
+            if (!aimOrigin.UsingAimPose)
+            {
+                rayOrigin.SetLocalPositionAndRotation(
+                    BlockiverseAimPoseRayOrigin.ResolveFallbackLocalPosition(role),
+                    BlockiverseAimPoseRayOrigin.ResolveFallbackLocalRotation(role));
+            }
+
+            TryFindAction(mapName, BlockiverseInputActionNames.Position, out InputAction gripPosition);
+            TryFindAction(mapName, BlockiverseInputActionNames.Rotation, out InputAction gripRotation);
+            TryFindAction(mapName, BlockiverseInputActionNames.TrackingState, out InputAction trackingState);
+            TryFindAction(mapName, BlockiverseInputActionNames.AimPosition, out InputAction aimPosition);
+            TryFindAction(mapName, BlockiverseInputActionNames.AimRotation, out InputAction aimRotation);
+            aimOrigin.Configure(role, gripPosition, gripRotation, trackingState, aimPosition, aimRotation);
             return rayOrigin;
         }
 
@@ -1096,6 +1107,10 @@ namespace Blockiverse.VR
 
         BlockiverseControllerRole GetToolHand() => GetDominantHand();
 
+        // Solid voxel terrain only — deliberately excludes fluid. This is the mask gravity uses for
+        // its ground sphere-cast, and widening it to include fluid is what made the player walk on
+        // water: GravityProvider resolves "grounded" with a PhysicsScene.SphereCast, and scene
+        // queries ignore Collider.excludeLayers, so a fluid collider in this mask reads as ground.
         static LayerMask GetVoxelTerrainLayerMask()
         {
             if (cachedTerrainLayerMask.HasValue)
@@ -1108,9 +1123,23 @@ namespace Blockiverse.VR
             return cachedTerrainLayerMask.Value;
         }
 
+        // Terrain plus fluid: what rays are allowed to target. Block place/mine and drink/bucket
+        // fill need to hit water, and the teleport ray needs to land on the surface rather than
+        // punch through to the seabed.
+        static LayerMask GetVoxelTargetingLayerMask()
+        {
+            if (cachedTargetingLayerMask.HasValue)
+                return cachedTargetingLayerMask.Value;
+
+            int fluidLayer = LayerMask.NameToLayer(BlockiverseProject.FluidLayerName);
+            int fluidMask = fluidLayer >= 0 ? 1 << fluidLayer : BlockiverseProject.FluidLayerMask;
+            cachedTargetingLayerMask = (LayerMask)(GetVoxelTerrainLayerMask().value | fluidMask);
+            return cachedTargetingLayerMask.Value;
+        }
+
         static LayerMask GetVrUiRaycastLayerMask()
         {
-            return GetVoxelTerrainLayerMask();
+            return GetVoxelTargetingLayerMask();
         }
 
         public static void ConfigureCharacterController(CharacterController controller)

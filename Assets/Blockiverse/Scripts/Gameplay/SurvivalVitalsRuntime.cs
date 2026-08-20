@@ -25,6 +25,16 @@ namespace Blockiverse.Gameplay
         // Consumable effect amounts live with the effect table in ConsumableEffects; hazard
         // damage amounts and rates live with the hazard table in BlockHazards.
         const float HazardScanIntervalSeconds = 0.25f;
+        // Lifted off the capsule base so the sample lands inside the cell the player is standing
+        // in rather than the one below it when the capsule rests exactly on a block boundary.
+        const float FeetSampleHeightMeters = 0.1f;
+        // How far below the capsule base IsControllerLanded probes for solid ground. Must exceed
+        // the hover gap GravityProvider can leave (its grounding sphere-cast reaches 0.04 m below
+        // the rig origin while the capsule base sits skinWidth above it, so the capsule can come
+        // to rest ~0.06 m off the floor with no contact ever reported), and stay below the
+        // per-frame fall step at damaging speeds so a genuinely airborne frame never reads as
+        // grounded (a fall just past the 3 m safe distance already moves ~0.13 m per 60 Hz frame).
+        const float LandingProbeDepthMeters = 0.1f;
         const float ClockSearchIntervalSeconds = 1.0f;
         const float WorldDrinkCooldownSeconds = 1.5f;
         public const int HarvestStaminaCost = 2;
@@ -34,7 +44,6 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] CharacterController characterController;
 
-        readonly BlockiverseGroundedProbe groundedProbe = new();
         WorldTimeClock worldTimeClock;
         Transform cachedRigTransform;
         Transform cachedHeadTransform;
@@ -264,8 +273,11 @@ namespace Blockiverse.Gameplay
                 return 0;
             }
 
-            int altitudeY = CreativeInteractionController.ToBlockPosition(headPosition).Y;
-            if (!worldManager.TryEvaluateEnvironment(altitudeY, out EnvironmentState environment))
+            // Query at the head cell, not just its altitude: cold exposure is what makes the tundra
+            // and the highland peaks dangerous, and both of those are biome/altitude facts about
+            // where the player is standing rather than properties of the sky overhead.
+            BlockPosition headCell = CreativeInteractionController.ToBlockPosition(headPosition);
+            if (!worldManager.TryEvaluateEnvironment(headCell, out EnvironmentState environment))
             {
                 SurvivalVitals.ResetEnvironmentExposure();
                 return 0;
@@ -296,10 +308,23 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            groundedProbe.Configure(controller);
-
             float currentY = controller.transform.position.y;
-            if (!groundedProbe.IsGrounded)
+
+            // Water breaks a fall (voxel_survival_ruleset §5.6): dropping into freshwater or brine
+            // cancels the tracked fall instead of charging impact damage on the seabed. Emberflow
+            // does not — landing in lava hurts, on top of the contact hazard it already applies.
+            // Before the fluid physics layer existed the player could not fall at all, so this
+            // path never ran; it becomes reachable the moment gravity stops treating water as
+            // ground, which is why it ships alongside that fix rather than after it.
+            if (TryGetFeetFluidFamily(controller, out FluidFamily feetFluid) &&
+                feetFluid != FluidFamily.Emberflow)
+            {
+                trackingFall = false;
+                airbornePeakY = currentY;
+                return;
+            }
+
+            if (!IsControllerLanded(controller))
             {
                 if (!trackingFall)
                 {
@@ -323,6 +348,55 @@ namespace Blockiverse.Gameplay
             trackingFall = false;
             airbornePeakY = currentY;
             ApplyFallImpact(fallMeters);
+        }
+
+        // Whether the player's capsule has landed for fall-damage purposes. CharacterController
+        // .isGrounded alone is not enough: it only reflects the latest Move call, and XRI's
+        // GravityProvider stops issuing moves the moment its own head-based grounding sphere-cast
+        // sees solid terrain — a cast whose reach is 0.04 m below the rig origin (radius 0.09,
+        // distance buffer -0.05) while the capsule base sits skinWidth above the origin. A fall
+        // whose last airborne frame ends inside that window stops with the capsule hovering a few
+        // centimetres off the floor: gravity is blocked, no further Move ever runs, isGrounded
+        // stays false forever, and the tracked fall would never be charged. Deterministic at the
+        // water-physics fixture's pinned 60 Hz step; a per-fall frame-phase lottery on device.
+        // So also treat solid ground just below the capsule as landed, probing with the same
+        // solid-terrain-only mask gravity grounds on — fluid must stay invisible to this probe
+        // (water is never a landing surface; the §5.6 feet-fluid check above handles fluids).
+        static bool IsControllerLanded(CharacterController controller)
+        {
+            if (controller.isGrounded)
+                return true;
+
+            Bounds bounds = controller.bounds;
+            float probeRadius = Mathf.Max(0.05f, controller.radius - controller.skinWidth);
+            var probeOrigin = new Vector3(bounds.center.x, bounds.min.y + probeRadius, bounds.center.z);
+            return Physics.SphereCast(
+                new Ray(probeOrigin, Vector3.down),
+                probeRadius,
+                LandingProbeDepthMeters,
+                BlockiverseProject.VoxelGroundLayerMask,
+                QueryTriggerInteraction.Ignore);
+        }
+
+        // The fluid family occupying the player's feet cell, if any. Sampled from the collision
+        // capsule rather than the rig transform so it stays correct while crouching and under
+        // real-player-height tracking, both of which move the capsule relative to the origin.
+        bool TryGetFeetFluidFamily(CharacterController controller, out FluidFamily family)
+        {
+            family = default;
+
+            VoxelWorld world = worldManager != null ? worldManager.World : null;
+            if (world == null)
+                return false;
+
+            Bounds bounds = controller.bounds;
+            var feetPoint = new Vector3(bounds.center.x, bounds.min.y + FeetSampleHeightMeters, bounds.center.z);
+            BlockPosition feetCell = CreativeInteractionController.ToBlockPosition(feetPoint);
+
+            if (!world.Bounds.Contains(feetCell))
+                return false;
+
+            return FluidBlocks.TryGetFamily(world.GetBlock(feetCell), out family);
         }
 
         public int ApplyFallImpact(float fallMeters)

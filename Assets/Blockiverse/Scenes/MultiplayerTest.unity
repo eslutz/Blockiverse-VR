@@ -20,7 +20,7 @@ RenderSettings:
   m_FogDensity: 0.01
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
-  m_AmbientSkyColor: {r: 0.21981862, g: 0.23980467, b: 0.24980932, a: 1}
+  m_AmbientSkyColor: {r: 0.22, g: 0.24, b: 0.25, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
   m_AmbientIntensity: 1
@@ -2521,16 +2521,16 @@ Light:
   serializedVersion: 13
   m_Type: 1
   m_Color: {r: 0.9993024, g: 0.949414, b: 0.81968373, a: 1}
-  m_Intensity: 1.1489536
+  m_Intensity: 1.1489303
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
   m_Shadows:
-    m_Type: 0
+    m_Type: 1
     m_Resolution: -1
     m_CustomResolution: -1
-    m_Strength: 0
+    m_Strength: 0.8
     m_Bias: 0.05
     m_NormalBias: 0.4
     m_NearPlane: 0.2
@@ -2605,6 +2605,9 @@ MonoBehaviour:
   worldTimeClock: {fileID: 1797789711}
   sunLight: {fileID: 1797789707}
   environmentSource: {fileID: 0}
+  directionalShadows: 1
+  daytimeShadowStrength: 0.8
+  nighttimeShadowStrength: 0.45
 --- !u!114 &1797789711
 MonoBehaviour:
   m_ObjectHideFlags: 0

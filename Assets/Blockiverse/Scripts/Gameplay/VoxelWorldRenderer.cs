@@ -41,17 +41,26 @@ namespace Blockiverse.Gameplay
         BlockRegistry registry;
         ChunkRebuildQueue rebuildQueue;
         VoxelSkyLightMap skyLight;
+        VoxelEmitterIndex emitterIndex;
         Material chunkMaterial;
         int interactionLayer = -1;
+        // Fluid geometry sits on its own layer so gravity's ground sphere-cast never sees it.
+        // Resolved by name at Configure time, falling back to the canonical index.
+        int fluidLayer = -1;
         int totalTriangleCount;
         VoxelRenderStats stats;
 
         public VoxelWorld World => world;
         public VoxelRenderStats Stats => stats;
 
+        // The layer fluid chunk children are placed on. Exposed so rig/prefab tests can assert the
+        // gravity mask excludes it and the targeting masks include it.
+        public int FluidLayer => fluidLayer;
+
         // The per-column sky map kept current by the rebuild queue; also consumable by
         // gameplay systems that need cheap "is this cell under open sky" answers.
         public VoxelSkyLightMap SkyLight => skyLight;
+        public VoxelEmitterIndex EmitterIndex => emitterIndex;
 
         // Colliders awaiting a (throttled) rebake. Visual meshes are always current.
         public int PendingColliderRebuildCount => pendingColliderRebuilds.Count + pendingFluidColliderRebuilds.Count;
@@ -87,8 +96,10 @@ namespace Blockiverse.Gameplay
             BlockVisualAtlas.ValidateRenderableBlockCoverage(registry);
             chunkMaterial = BlockVisualAtlas.CreateMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
+            fluidLayer = ResolveFluidLayer();
             skyLight = new VoxelSkyLightMap(world, registry);
-            rebuildQueue = new ChunkRebuildQueue(world, skyLight);
+            emitterIndex = new VoxelEmitterIndex(world, registry);
+            rebuildQueue = new ChunkRebuildQueue(world, skyLight, emitterIndex);
 
             // The new world is not walkable until either RebuildAll (synchronous) or
             // RebuildSpawnRegion (deferred) bakes its collision; gate consumers on that.
@@ -244,7 +255,7 @@ namespace Blockiverse.Gameplay
 
             // meshData aliases ChunkMeshBuilder's pooled lists, which the next Build call clears;
             // the Set* calls below copy everything into the Mesh before that can happen.
-            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, out ChunkMeshData fluidData, skyLight);
+            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, out ChunkMeshData fluidData, skyLight, emitterIndex);
 
             // R1: a chunk with no rendered faces is either all-air or fully buried — it has no
             // visible mesh and no reachable collision surface, so it needs no GameObject. Don't
@@ -339,29 +350,47 @@ namespace Blockiverse.Gameplay
             EnqueueFluidColliderRebuild(chunk);
         }
 
+        // Resolves the dedicated fluid layer by name, falling back to the canonical index when the
+        // project's TagManager has not been regenerated yet (fresh clone before a bootstrapper run).
+        static int ResolveFluidLayer()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.FluidLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.FluidLayerIndex;
+        }
+
         GameObject CreateFluidObject(ChunkCoordinate chunk, GameObject chunkObject)
         {
             var fluidObject = new GameObject("Fluid");
             fluidObject.transform.SetParent(chunkObject.transform, false);
 
-            if (interactionLayer >= 0)
-                fluidObject.layer = interactionLayer;
+            if (fluidLayer >= 0)
+                fluidObject.layer = fluidLayer;
 
             fluidObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = fluidObject.AddComponent<MeshRenderer>();
+            // Fluid never casts: a translucent sheet throwing a solid shadow reads as a bug, and
+            // skipping the cast keeps the shadow pass cheaper. (receiveShadows is set for intent
+            // only — URP gates shadow receipt on the _RECEIVE_SHADOWS_OFF material keyword, which
+            // the voxel shader never declares, so everything using it receives regardless.)
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
+            renderer.receiveShadows = true;
 
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;
 
-            // Contact-excluded: raycast queries (block targeting, drink/fill) still hit the fluid
-            // surface, but the character controller and props never collide with it. The fluid
-            // child is deliberately not registered as a TeleportationArea — no teleporting onto
-            // water. Block targeting resolves through the parent's VoxelChunkTarget.
+            // The fluid layer is what actually keeps players out of water: it is absent from
+            // GravityProvider's ground sphere-cast mask (scene queries ignore excludeLayers, so the
+            // old contact-only approach still read water as ground) and its physics collision-matrix
+            // row is cleared by the bootstrapper. excludeLayers is retained as defence in depth.
+            // Ray queries still hit the surface, so block targeting, drink/fill, and teleport
+            // landing all work. Block targeting resolves through the parent's VoxelChunkTarget.
             MeshCollider collider = fluidObject.AddComponent<MeshCollider>();
             collider.cookingOptions = MeshColliderCookingOptions.UseFastMidphase;
             collider.excludeLayers = ~0;
+
+            // Water is a teleport destination: the ray stops at the surface and the player lands
+            // treading, rather than passing through to the seabed.
+            ConfigureTeleportationArea(fluidObject, collider);
 
             fluidObjects.Add(chunk, fluidObject);
             return fluidObject;
@@ -504,10 +533,12 @@ namespace Blockiverse.Gameplay
 
             chunkObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = chunkObject.AddComponent<MeshRenderer>();
-            // Voxel lighting is baked into vertex colors; Unity shadow passes would only add an
-            // extra render pass per light on Quest (per Meta VRC guidance) for no visual gain.
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
+            // Vertex colours bake only static sky exposure, so terrain still needs real shadow
+            // maps for the sun/moon and for placed emitters to read as light sources. The cost is
+            // bounded by the short shadow distance in the Quest URP asset rather than by disabling
+            // the passes outright.
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            renderer.receiveShadows = true;
 
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;

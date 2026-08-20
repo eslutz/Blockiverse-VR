@@ -9,6 +9,7 @@ using Blockiverse.WorldGen;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -88,13 +89,21 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void DirtyChunkQueueDoesNotMarkNeighborChunksOutsideLightProbeRange()
         {
-            var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
+            // The invalidation halo is max(DefaultProbeDistance 12, MaxEmitterReachDistance 16) + 1
+            // = 17 cells: an edit can occlude or reveal an emitter's line of sight up to the full
+            // emitter reach away, so a change at x = 1 legitimately dirties cells through x = 18 —
+            // into the second chunk. What must stay bounded is the halo itself: the third chunk
+            // (x >= 32) is beyond any light interaction with this edit and must never be marked.
+            // (This expectation once pinned the pre-emitter padding of 13 and a single dirty
+            // chunk; the emitter rework widened the reach deliberately and this test was not
+            // updated with it — it arrived red from the night-lighting merge.)
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
 
             world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
 
             CollectionAssert.AreEquivalent(
-                new[] { new ChunkCoordinate(0, 0, 0) },
+                new[] { new ChunkCoordinate(0, 0, 0), new ChunkCoordinate(1, 0, 0) },
                 queue.DrainDirtyChunks().ToArray());
         }
 
@@ -846,12 +855,108 @@ namespace Blockiverse.Tests.EditMode
 
             ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
 
-            float brightest = mesh.Colors.Max(color => color.grayscale);
-            float darkest = mesh.Colors.Min(color => color.grayscale);
+            // Vertex colour channels are now distinct bakes (R = sky exposure, G = emitter reach,
+            // B = self-emission), so sky darkening is read from R rather than grayscale.
+            float brightest = mesh.Colors.Max(color => color.r);
+            float darkest = mesh.Colors.Min(color => color.r);
 
             Assert.That(mesh.Colors, Has.Count.EqualTo(mesh.Vertices.Count));
             Assert.That(brightest, Is.GreaterThan(darkest));
             Assert.That(darkest, Is.LessThan(0.55f));
+        }
+
+        [Test]
+        public void MeshBuilderBakesSealedCaveFacesToNoSkyLight()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(8, 8, 8), chunkSize: 8, seed: 3);
+
+            for (int x = 0; x < world.Bounds.Width; x++)
+            for (int y = 0; y < world.Bounds.Height; y++)
+            for (int z = 0; z < world.Bounds.Depth; z++)
+                world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Graystone, trackChange: false);
+
+            // A 2x2x2 pocket with no route to the sky.
+            for (int x = 3; x <= 4; x++)
+            for (int y = 3; y <= 4; y++)
+            for (int z = 3; z <= 4; z++)
+                world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Air, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // Every rendered face in this world faces into the pocket (the outer faces face out of
+            // bounds and are treated as sky-lit), so the interior must bake to zero sky and the
+            // boundary faces to full.
+            Assert.That(mesh.Colors.Min(color => color.r), Is.EqualTo(0.0f).Within(0.0001f),
+                "A room with no window must receive no sky light at all.");
+        }
+
+        [Test]
+        public void MeshBuilderBakesEmitterReachOnlyWhereLineOfSightExists()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 8, 8), chunkSize: 16, seed: 5);
+
+            // Floor slab at y=0; open air above; a one-block wall across x=8 from the floor up.
+            for (int x = 0; x < 16; x++)
+            for (int z = 0; z < 8; z++)
+                world.SetBlock(new BlockPosition(x, 0, z), BlockRegistry.Graystone, trackChange: false);
+
+            for (int y = 1; y < 8; y++)
+            for (int z = 0; z < 8; z++)
+                world.SetBlock(new BlockPosition(8, y, z), BlockRegistry.Graystone, trackChange: false);
+
+            // Glowwick (level 9) on the floor at x=4: it reaches x in [-5, 13] by range, so x=12
+            // is inside range but behind the wall, x=3 is inside range with clear sight.
+            world.SetBlock(new BlockPosition(4, 1, 4), BlockRegistry.Glowwick, trackChange: false);
+
+            var emitters = new VoxelEmitterIndex(world, registry);
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0), skyLight: null, emitters: emitters);
+
+            // Up-facing floor vertices at a given block column: y == 1 exactly, and x within the block.
+            float ReachAt(int blockX)
+            {
+                var reach = new List<float>();
+                for (int i = 0; i < mesh.Vertices.Count; i++)
+                {
+                    Vector3 v = mesh.Vertices[i];
+                    if (Mathf.Approximately(v.y, 1.0f) && v.x >= blockX && v.x <= blockX + 1 && v.z >= 4 && v.z <= 5)
+                        reach.Add(mesh.Colors[i].g);
+                }
+                Assert.That(reach, Is.Not.Empty, $"expected floor vertices at x={blockX}");
+                return reach.Max();
+            }
+
+            Assert.That(ReachAt(3), Is.EqualTo(1.0f).Within(0.0001f),
+                "Floor beside the glowwick has clear line of sight and must be reachable.");
+            Assert.That(ReachAt(12), Is.EqualTo(0.0f).Within(0.0001f),
+                "Floor on the far side of the wall is in range but occluded: the realtime light must not reach it.");
+
+            // Knock the wall down and the far floor becomes reachable.
+            for (int y = 1; y < 8; y++)
+            for (int z = 0; z < 8; z++)
+                world.SetBlock(new BlockPosition(8, y, z), BlockRegistry.Air, trackChange: false);
+
+            mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0), skyLight: null, emitters: emitters);
+            Assert.That(ReachAt(12), Is.EqualTo(1.0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void MeshBuilderBakesEmitterBlocksAsSelfEmissive()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 4, seed: 8);
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.LumenLamp, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 1, 1), BlockRegistry.Graystone, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            float lampEmission = mesh.Colors.Max(color => color.b);
+            float stoneEmission = mesh.Colors.Min(color => color.b);
+
+            Assert.That(lampEmission, Is.EqualTo(14.0f / 15.0f).Within(0.001f),
+                "An emitter's own faces carry its emissive level so it stays visible in the dark.");
+            Assert.That(stoneEmission, Is.EqualTo(0.0f).Within(0.0001f));
         }
 
         [Test]
@@ -1052,6 +1157,54 @@ namespace Blockiverse.Tests.EditMode
 
                 renderer.RebuildDirty();
                 Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0), "Should have processed the last pending collider.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void FluidChildIsOnTheDedicatedFluidLayerAndSolidChunksAreNot()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 0, 1), BlockRegistry.Freshwater, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, BlockiverseProject.InteractionLayerIndex);
+
+                GameObject fluidObject = worldObject.GetComponentsInChildren<MeshFilter>()
+                    .Single(filter => filter.gameObject.name == "Fluid")
+                    .gameObject;
+                GameObject chunkObject = fluidObject.transform.parent.gameObject;
+
+                Assert.That(renderer.FluidLayer, Is.EqualTo(BlockiverseProject.FluidLayerIndex),
+                    "The renderer must resolve the canonical fluid layer index so the rig's gravity-mask exclusion addresses the same layer.");
+                Assert.That(fluidObject.layer, Is.EqualTo(renderer.FluidLayer),
+                    "The fluid child must sit on the layer the renderer reports through FluidLayer.");
+                Assert.That(fluidObject.layer, Is.EqualTo(BlockiverseProject.FluidLayerIndex),
+                    "Fluid geometry must live on the dedicated fluid layer so gravity's ground cast and the cleared physics-matrix row ignore it.");
+                Assert.That(chunkObject.layer, Is.EqualTo(BlockiverseProject.InteractionLayerIndex),
+                    "Solid chunk geometry must stay on the interaction layer so it remains walkable ground.");
+
+                MeshCollider fluidCollider = fluidObject.GetComponent<MeshCollider>();
+
+                Assert.That(fluidCollider, Is.Not.Null,
+                    "The fluid child keeps a MeshCollider so rays can stop at the water surface.");
+                Assert.That(fluidCollider.excludeLayers.value, Is.EqualTo(~0),
+                    "excludeLayers stays fully set as contact-pair defence in depth on top of the cleared collision-matrix row.");
+                Assert.That(fluidObject.GetComponent<TeleportationArea>(), Is.Null,
+                    "TeleportationArea wiring is guarded by Application.isPlaying; edit mode must not spawn XRI runtime components.");
             }
             finally
             {

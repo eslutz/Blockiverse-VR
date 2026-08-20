@@ -34,7 +34,6 @@ namespace Blockiverse.Tests.EditMode
     public sealed class BlockiverseRigPrefabTests
     {
         const string ControllerRayOriginName = "Ray Origin";
-        static readonly Quaternion ControllerRayOriginLocalRotation = Quaternion.Euler(90.0f, 0.0f, 0.0f);
 
         [Test]
         public void GameplayMenusAreDirectWorldSpaceCanvasChildren()
@@ -490,6 +489,108 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void GravityGroundCastExcludesTheFluidLayer()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GravityProvider serializedGravity = prefab.GetComponent<GravityProvider>();
+
+            Assert.That(serializedGravity, Is.Not.Null, "Rig should carry a GravityProvider.");
+            Assert.That(serializedGravity.sphereCastLayerMask.value & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                "The serialized gravity ground cast must ignore fluid: scene queries bypass Collider.excludeLayers, so a fluid hit reads as solid ground and the player walks on water.");
+            Assert.That(serializedGravity.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.VoxelGroundLayerMask),
+                "The serialized gravity ground cast must test exactly the voxel ground mask.");
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+
+                GravityProvider repairedGravity = instance.GetComponent<GravityProvider>();
+
+                Assert.That(repairedGravity, Is.Not.Null);
+                Assert.That(repairedGravity.sphereCastLayerMask.value & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                    "Runtime rig repair must keep the gravity ground cast fluid-free; widening it reintroduces walking on water.");
+                Assert.That(repairedGravity.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.VoxelGroundLayerMask),
+                    "Runtime rig repair must restore the same interaction-only grounding mask the bootstrapper serializes.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void InteractionRayTargetsBothTerrainAndFluid()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+            AssertRayTargetsTerrainAndFluid(prefab.transform, "Interaction Ray");
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+                AssertRayTargetsTerrainAndFluid(instance.transform, "Interaction Ray");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void TeleportRayTargetsBothTerrainAndFluid()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+            AssertRayTargetsTerrainAndFluid(prefab.transform, "Teleport Ray");
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+                AssertRayTargetsTerrainAndFluid(instance.transform, "Teleport Ray");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void MainCameraCullingMaskIncludesTheFluidLayer()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            Camera mainCamera = prefab.transform.Find("Camera Offset/Main Camera")?.GetComponent<Camera>();
+
+            Assert.That(mainCamera, Is.Not.Null, "The generated rig should carry the main eye camera.");
+            Assert.That(mainCamera.cullingMask & BlockiverseProject.FluidLayerMask, Is.Not.EqualTo(0),
+                "Water lives on its own physics layer purely for collision; the eye camera must still render it.");
+            Assert.That(mainCamera.cullingMask & BlockiverseProject.InteractionLayerMask, Is.Not.EqualTo(0),
+                "Voxel terrain and world-space interaction UI must remain visible alongside fluid.");
+        }
+
+        [Test]
         public void XrRigPrefabInputBindingsHaveJumpAndThumbstickUpTeleport()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
@@ -747,19 +848,29 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void SprintClickTogglesAndHoldTemporarilyRaisesMoveSpeed()
+        public void SprintHoldIsDefaultAndToggleModeIgnoresHold()
         {
-            MethodInfo toggleMethod = typeof(BlockiverseInputRig).GetMethod(
-                "ShouldToggleSprint",
-                BindingFlags.Public | BindingFlags.Static);
+            // Click-and-hold (the default): active only while held, never latched by a toggle.
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(false, held: true, toggled: false), Is.True);
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(false, held: false, toggled: false), Is.False);
+            Assert.That(
+                BlockiverseInputRig.ResolveModifierActive(false, held: false, toggled: true),
+                Is.False,
+                "A stale toggle must not sprint the player in click-and-hold mode.");
+
+            // Click-to-toggle: the latched state wins and releasing the button changes nothing.
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(true, held: false, toggled: true), Is.True);
+            Assert.That(BlockiverseInputRig.ResolveModifierActive(true, held: true, toggled: false), Is.False);
+        }
+
+        [Test]
+        public void SprintRaisesMoveSpeed()
+        {
             MethodInfo speedMethod = typeof(BlockiverseInputRig).GetMethod(
                 "ResolveSprintMoveSpeed",
                 BindingFlags.Public | BindingFlags.Static);
 
-            Assert.That(toggleMethod, Is.Not.Null, "Sprint should expose its click-vs-hold threshold for tests.");
             Assert.That(speedMethod, Is.Not.Null, "Sprint should expose move-speed scaling for tests.");
-            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.10f }), Is.True);
-            Assert.That((bool)toggleMethod.Invoke(null, new object[] { 0.50f }), Is.False);
             Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, false }), Is.EqualTo(1.8f).Within(0.001f));
             Assert.That((float)speedMethod.Invoke(null, new object[] { 1.8f, true }), Is.EqualTo(3.96f).Within(0.001f));
         }
@@ -1303,10 +1414,22 @@ namespace Blockiverse.Tests.EditMode
         {
             Assert.That(rayOrigin, Is.Not.Null, $"{controller?.name} should carry a controller-local ray origin.");
             Assert.That(rayOrigin.parent, Is.SameAs(controller));
-            Assert.That(Vector3.Distance(rayOrigin.localPosition, Vector3.zero), Is.LessThan(0.0001f),
-                "The ray should originate at the tracked controller.");
-            Assert.That(Quaternion.Angle(rayOrigin.localRotation, ControllerRayOriginLocalRotation), Is.LessThan(0.001f),
-                "Quest grip-pose forward points up like a stick; the child origin turns XRI forward onto the pointing axis.");
+            BlockiverseAimPoseRayOrigin aimOrigin = rayOrigin.GetComponent<BlockiverseAimPoseRayOrigin>();
+            Assert.That(aimOrigin, Is.Not.Null,
+                "The ray origin must follow the OpenXR aim pose so the ray matches Meta's system pointer.");
+            BlockiverseControllerAnchor anchor = controller.GetComponent<BlockiverseControllerAnchor>();
+            if (anchor != null)
+                Assert.That(aimOrigin.Role, Is.EqualTo(anchor.Role), "The aim origin must read the same hand it is mounted on.");
+
+            BlockiverseControllerRole role = aimOrigin.Role;
+            Assert.That(
+                Vector3.Distance(rayOrigin.localPosition, BlockiverseAimPoseRayOrigin.ResolveFallbackLocalPosition(role)),
+                Is.LessThan(0.0001f),
+                "The serialized ray origin should sit at the measured grip->aim fallback offset for its hand.");
+            Assert.That(
+                Quaternion.Angle(rayOrigin.localRotation, BlockiverseAimPoseRayOrigin.ResolveFallbackLocalRotation(role)),
+                Is.LessThan(0.01f),
+                "The serialized ray origin should carry the measured grip->aim fallback rotation; the live aim pose replaces it at runtime.");
         }
 
         static void AssertInteractionRayDefaults(XRRayInteractor ray)
@@ -1461,7 +1584,27 @@ namespace Blockiverse.Tests.EditMode
         {
             Assert.That(gravityProvider.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.InteractionLayerMask),
                 "Gravity grounding must ignore the player CharacterController and only test voxel terrain.");
+            Assert.That(gravityProvider.sphereCastLayerMask.value & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                "Gravity grounding must exclude the fluid layer: scene queries ignore excludeLayers, so a fluid collider in this mask reads as solid ground.");
             Assert.That(gravityProvider.sphereCastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Ignore));
+        }
+
+        static void AssertRayTargetsTerrainAndFluid(Transform rigRoot, string rayName)
+        {
+            foreach (string hand in new[] { "Left", "Right" })
+            {
+                XRRayInteractor ray = rigRoot
+                    .Find($"Camera Offset/{hand} Controller/{rayName}")
+                    ?.GetComponent<XRRayInteractor>();
+
+                Assert.That(ray, Is.Not.Null, $"{hand} Controller/{rayName} should exist on the generated rig.");
+                Assert.That(ray.raycastMask.value & BlockiverseProject.VoxelGroundLayerMask, Is.Not.EqualTo(0),
+                    $"{hand} {rayName} must still hit solid voxel terrain.");
+                Assert.That(ray.raycastMask.value & BlockiverseProject.FluidLayerMask, Is.Not.EqualTo(0),
+                    $"{hand} {rayName} must hit fluid surfaces: block targeting, drink/bucket fill, and teleport landings all stop at the water surface.");
+                Assert.That(ray.raycastMask.value, Is.EqualTo(BlockiverseProject.VrUiRaycastLayerMask),
+                    $"{hand} {rayName} should target exactly the VR UI raycast mask (terrain | fluid).");
+            }
         }
 
         static T GetAvatarProperty<T>(Component avatarRig, string propertyName)

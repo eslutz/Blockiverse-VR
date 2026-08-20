@@ -1058,7 +1058,7 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 
 | Section | Settings |
 |---|---|
-| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, UI scale, left-handed, toggle-to-mine, **use my real height**, height reset |
+| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, UI scale, left-handed, toggle-to-mine, **click to toggle sprint**, **click to toggle crouch**, **use my real height**, height reset |
 | Audio | Master, effects, UI, and weather volume; haptic strength; mute all; haptics toggle; reduced flash; reduced particles |
 | Controls | Read-only controller mapping reference (shared with the first-launch popup) |
 
@@ -1074,6 +1074,16 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 | Controls close | `controls.close` | Returns from the controls screen |
 
 Move-speed and standing-eye-height sliders are deferred; the current comfort panel exposes height reset instead of direct eye-height editing.
+
+**Sprint and crouch control style.** Both default to **click-and-hold**: the modifier is active only
+while the stick click is held. Each has its own checkbox — **Click To Toggle Sprint** and **Click To
+Toggle Crouch** — that switches only that modifier to click-to-toggle, where a click flips it on or
+off and hold duration is ignored. The two are independent, so holding to sprint while crouch is a
+toggle is a valid configuration. The modes are mutually exclusive per modifier: a hold can never
+leave a modifier latched on, and turning a toggle checkbox off clears any latched state.
+
+Sprint and crouch are locomotion modifiers, so they are available wherever movement is — including
+the title mini-world, where menus hold input focus but the player can still walk.
 
 ---
 

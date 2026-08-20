@@ -67,7 +67,7 @@ namespace Blockiverse.Tests.EditMode
             // The eye-height slider was removed: dialing the view height independently of the
             // collision capsule is what made the player feel too tall. Height is now a single
             // choice between the fixed player size and the player's real height.
-            Assert.That(BlockiverseComfortSettings.FixedStandingEyeHeight, Is.EqualTo(1.6f).Within(0.001f));
+            Assert.That(BlockiverseComfortSettings.FixedStandingEyeHeight, Is.EqualTo(1.7f).Within(0.001f));
             Assert.That(
                 typeof(BlockiverseComfortSettings).GetProperty("StandingEyeHeight"),
                 Is.Null,
@@ -126,6 +126,53 @@ namespace Blockiverse.Tests.EditMode
             toggleToMine.isOn = true;
 
             Assert.That(settings.ToggleToMineEnabled, Is.True);
+        }
+
+        [Test]
+        public void SprintAndCrouchDefaultToClickAndHold()
+        {
+            BlockiverseComfortSettings settings = CreateSettings();
+
+            Assert.That(
+                settings.SprintToggleEnabled,
+                Is.False,
+                "Sprint should default to click-and-hold.");
+            Assert.That(
+                settings.CrouchToggleEnabled,
+                Is.False,
+                "Crouch should default to click-and-hold.");
+        }
+
+        [Test]
+        public void ComfortMenuSprintAndCrouchToggleModesAreIndependent()
+        {
+            BlockiverseComfortSettings settings = CreateSettings();
+            BlockiverseComfortMenu menu = CreateObject("Comfort Menu").AddComponent<BlockiverseComfortMenu>();
+            Toggle sprintToggle = CreateObject("Sprint Toggle").AddComponent<Toggle>();
+            Toggle crouchToggle = CreateObject("Crouch Toggle").AddComponent<Toggle>();
+
+            menu.Configure(null, settings);
+            menu.ConfigureControls(
+                targetGlideToggle: null,
+                targetTeleportToggle: null,
+                targetSmoothTurnToggle: null,
+                targetSnapTurnSlider: null,
+                targetSprintToggleToggle: sprintToggle,
+                targetCrouchToggleToggle: crouchToggle);
+
+            // The point of the pair: hold to sprint while crouch stays a click toggle.
+            crouchToggle.isOn = true;
+
+            Assert.That(settings.CrouchToggleEnabled, Is.True);
+            Assert.That(
+                settings.SprintToggleEnabled,
+                Is.False,
+                "Crouch and sprint control styles must be set independently.");
+
+            sprintToggle.isOn = true;
+
+            Assert.That(settings.SprintToggleEnabled, Is.True);
+            Assert.That(settings.CrouchToggleEnabled, Is.True);
         }
 
         [Test]

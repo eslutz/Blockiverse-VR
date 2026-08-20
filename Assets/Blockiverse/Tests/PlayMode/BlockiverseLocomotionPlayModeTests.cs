@@ -254,7 +254,7 @@ namespace Blockiverse.Tests.PlayMode
                 heightReset.Configure(origin, settings);
 
                 heightReset.ResetHeight();
-                Assert.That(origin.CameraYOffset, Is.EqualTo(1.6f).Within(0.01f));
+                Assert.That(origin.CameraYOffset, Is.EqualTo(BlockiverseComfortSettings.FixedStandingEyeHeight).Within(0.01f));
             }
             finally
             {
@@ -278,11 +278,11 @@ namespace Blockiverse.Tests.PlayMode
 
                 heightReset.ResetHeight();
 
-                // Fixed mode normalizes the view to the constant eye height (1.6) regardless of
-                // the tracked camera height (1.05 here): 1.6 - 1.05 = 0.55.
+                // Fixed mode normalizes the view to the eye-height constant regardless of the
+                // tracked camera height (1.05 here).
                 Assert.That(
                     origin.CameraFloorOffsetObject.transform.localPosition.y,
-                    Is.EqualTo(0.55f).Within(0.01f));
+                    Is.EqualTo(BlockiverseComfortSettings.FixedStandingEyeHeight - 1.05f).Within(0.01f));
             }
             finally
             {
@@ -673,19 +673,24 @@ namespace Blockiverse.Tests.PlayMode
                 Set(gamepad.rightStick, Vector2.zero);
                 yield return null;
 
+                // Sprint and crouch default to click-and-hold (independent control-style
+                // settings landed with the parallel input fixes; toggle is opt-in via
+                // SprintToggleEnabled/CrouchToggleEnabled). Active only while held.
                 Press(gamepad.rightStickButton);
                 yield return null;
                 Assert.That(inputRig.SprintActive, Is.True);
                 Release(gamepad.rightStickButton);
                 yield return null;
-                Assert.That(inputRig.SprintActive, Is.True);
+                Assert.That(inputRig.SprintActive, Is.False,
+                    "Sprint defaults to click-and-hold; releasing the support stick must end it.");
 
                 Press(gamepad.leftStickButton);
                 yield return null;
                 Assert.That(inputRig.CrouchActive, Is.True);
                 Release(gamepad.leftStickButton);
                 yield return null;
-                Assert.That(inputRig.CrouchActive, Is.True);
+                Assert.That(inputRig.CrouchActive, Is.False,
+                    "Crouch defaults to click-and-hold; releasing the dominant stick must end it.");
 
                 Set(gamepad.leftStick, Vector2.right);
                 yield return null;
@@ -775,7 +780,8 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(inputRig.CrouchActive, Is.True);
                 Release(gamepad.rightStickButton);
                 yield return null;
-                Assert.That(inputRig.CrouchActive, Is.True);
+                Assert.That(inputRig.CrouchActive, Is.False,
+                    "Crouch defaults to click-and-hold; releasing the dominant stick must end it.");
             }
             finally
             {

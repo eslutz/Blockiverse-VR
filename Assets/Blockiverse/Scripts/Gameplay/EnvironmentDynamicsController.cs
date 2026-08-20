@@ -7,9 +7,14 @@ using UnityEngine;
 namespace Blockiverse.Gameplay
 {
     // Host-only world-environment dynamics driven by the weather machine: thunderstorm lightning
-    // strikes (scorching what they hit) and tundra snow accumulation/melt. Every world edit goes
-    // through the chunk-authority mutation channel, so clients receive the changes as ordinary
-    // authoritative deltas — clients never simulate these locally.
+    // strikes (scorching what they hit) and snowpack accumulation/melt. Accumulation is decided
+    // per sampled column from what is actually falling AND sticking THERE: the precipitation kind
+    // (WeatherService.PrecipitationKind) says what arrives, and the column's own temperature says
+    // whether it settles (§12: at or below freezing), so a rain state lays down snow on a freezing
+    // peak while a blizzard over the warm dunes shows snowfall but lays nothing down — falling is
+    // not settling. Every world edit goes through the chunk-authority
+    // mutation channel, so clients receive the changes as ordinary authoritative deltas — clients
+    // never simulate these locally.
     [DisallowMultipleComponent]
     public sealed class EnvironmentDynamicsController : MonoBehaviour
     {
@@ -20,7 +25,7 @@ namespace Blockiverse.Gameplay
         public const int StrikeSpawnExclusionRadius = 8;
         public const int StrikePlayerExclusionRadius = 8;
 
-        // Snow cadence: a handful of random columns sampled every 5 seconds of snowfall/clear.
+        // Snow cadence: a handful of random columns sampled every 5 seconds of precipitation/clear.
         public const int SnowCheckIntervalTicks = 100;
         public const int SnowColumnsPerCheck = 6;
 
@@ -33,9 +38,6 @@ namespace Blockiverse.Gameplay
         int lightningTickAccumulator;
         int snowTickAccumulator;
         System.Random random;
-        // Biome lookups are pure seed math; cache the resolver per settings instance.
-        SurvivalBiomeResolver biomeResolver;
-        WorldGenerationSettings biomeResolverSettings;
 
         // Fired on the local peer when a strike lands (world position of the struck surface block).
         // The host raises it directly and mirrors it to clients as a small presentation event.
@@ -122,7 +124,10 @@ namespace Blockiverse.Gameplay
             {
                 snowTickAccumulator -= SnowCheckIntervalTicks;
 
-                if (IsSnowing(weather))
+                // Cheap sky-level early-out: with nothing falling anywhere there is no column
+                // worth pricing a temperature for. Rain states get in — whether they land as rain
+                // or as snow is then a per-column question (see TryAccumulateSnowAt).
+                if (WeatherService.IsPrecipitating(weather))
                 {
                     for (int i = 0; i < SnowColumnsPerCheck; i++)
                         TryAccumulateSnowAt(world, random.Next(world.Bounds.Width), random.Next(world.Bounds.Depth));
@@ -135,7 +140,11 @@ namespace Blockiverse.Gameplay
             }
         }
 
-        public static bool IsSnowing(WeatherState weather) =>
+        // Whether a weather state is INHERENTLY snowy — it falls as snow no matter how warm the
+        // location is. Deliberately NOT the accumulation gate: rain states also fall as snow where
+        // the column is at or below freezing, which only a per-column temperature can answer.
+        // Renamed from the old IsSnowing, whose name invited exactly that mistake.
+        public static bool IsInherentlySnowyState(WeatherState weather) =>
             weather == WeatherState.LightSnow || weather == WeatherState.HeavySnow || weather == WeatherState.Blizzard;
 
         // Pure scorch rule: what a struck surface block becomes. Meadow turf chars to dry turf;
@@ -193,29 +202,61 @@ namespace Blockiverse.Gameplay
             return true;
         }
 
-        // Accumulates one Snowpack layer on a tundra column's surface during snowfall. The top
-        // block of a column has sky access by definition; sheltered cells are never the top.
+        // Accumulates one Snowpack layer on a column's surface when what falls AT THAT COLUMN is
+        // snow AND the column is cold enough for it to stick. The weather state only says
+        // something is falling; WeatherService then resolves rain vs. snow from this column's own
+        // biome and surface altitude, so freezing ground under a thunderstorm collects snowpack.
+        // Falling is not settling (§6.3 vs §12): an inherently snowy state over warm ground — a
+        // blizzard blowing across the 30 °C dunes — drifts snow VFX but lays no layer, because
+        // §12 additionally requires the local temperature at or below freezing to accumulate.
+        // The top block of a column has sky access by definition; sheltered cells are never the top.
+        //
+        // The cheap O(1) rejections run first and the environment evaluation (a biome noise
+        // lookup) last, so a column that could never hold a layer never pays for one.
         public bool TryAccumulateSnowAt(VoxelWorld world, int x, int z)
         {
-            if (!OwnsWorldMutations() || world == null || !IsTundraColumn(x, z))
+            if (!OwnsWorldMutations() || world == null || worldManager == null)
                 return false;
 
             int surfaceY = FindTopBlockY(world, x, z);
             if (surfaceY < 0 || surfaceY + 1 >= world.Bounds.Height)
                 return false;
 
-            if (!CanHoldSnowLayer(world.GetBlock(new BlockPosition(x, surfaceY, z))))
+            var surface = new BlockPosition(x, surfaceY, z);
+            if (!CanHoldSnowLayer(world.GetBlock(surface)))
                 return false;
 
             if (IsInsideSpawnExclusion(x, z))
                 return false;
+
+            // Evaluated at this column's own surface block, so the temperature carries its
+            // altitude and biome rather than the player's position or sea level. Returns
+            // false while the world has no weather service yet (a scene without a world clock),
+            // and falls back to the temperate base in the biome-less flat/void presets.
+            //
+            // Two conditions, deliberately: snow must be FALLING here (kind == Snow) and the
+            // ground must be at or below freezing for the layer to STICK (§12's accumulation
+            // rule). The published temperature carries the §6.2 snow modifier, which only ever
+            // pushes it colder, so nothing that would settle is rejected by using it.
+            if (!worldManager.TryEvaluateEnvironment(surface, out EnvironmentState environment) ||
+                environment.Precipitation != PrecipitationKind.Snow ||
+                environment.Temperature > WeatherService.FreezingTemperatureC)
+            {
+                return false;
+            }
 
             SubmitMutation(new BlockPosition(x, surfaceY + 1, z), BlockRegistry.Snowpack);
             return true;
         }
 
         // Melts exposed Snowpack during clear weather (the column's top block always has sky
-        // access; buried/sheltered snow never melts).
+        // access; buried/sheltered snow never melts). Deliberately temperature-blind, unlike
+        // settling in TryAccumulateSnowAt: Clear's ~30% weather-state occupancy against ~27%
+        // total precipitation is the valve that holds always-freezing terrain (tundra qualifies
+        // for accumulation under every precipitating state) at a stable partial snow cover
+        // instead of whitening monotonically to 100%. Do not gate this on temperature without
+        // adding a sublimation path for sub-zero biomes — §12.3 documents the shipped rule and
+        // the trade.
         public bool TryMeltSnowAt(VoxelWorld world, int x, int z)
         {
             if (!OwnsWorldMutations() || world == null)
@@ -304,24 +345,6 @@ namespace Blockiverse.Gameplay
             float dx = head.Value.x - (strike.X + 0.5f);
             float dz = head.Value.z - (strike.Z + 0.5f);
             return dx * dx + dz * dz <= StrikePlayerExclusionRadius * StrikePlayerExclusionRadius;
-        }
-
-        bool IsTundraColumn(int x, int z)
-        {
-            WorldGenerationSettings settings = worldManager != null ? worldManager.Settings : null;
-            if (settings == null ||
-                worldManager.GenerationPreset != CreativeWorldGenerationPreset.SurvivalLite)
-            {
-                return false;
-            }
-
-            if (biomeResolver == null || !ReferenceEquals(biomeResolverSettings, settings))
-            {
-                biomeResolver = new SurvivalBiomeResolver(settings.Seed, settings.Bounds.Height);
-                biomeResolverSettings = settings;
-            }
-
-            return SurvivalBiomeResolver.IsTundraBiomeIndex(biomeResolver.BiomeIndexAt(x, z));
         }
 
         // Topmost non-air cell of a column (-1 for an empty or out-of-range column). The top

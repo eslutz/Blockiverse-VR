@@ -20,6 +20,8 @@ namespace Blockiverse.UI
         [SerializeField] Toggle leftHandToggle;
         [SerializeField] Toggle toggleToMineToggle;
         [SerializeField] Toggle realPlayerHeightToggle;
+        [SerializeField] Toggle sprintToggleToggle;
+        [SerializeField] Toggle crouchToggleToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
         [SerializeField] Toggle glideBobToggle;
@@ -42,6 +44,8 @@ namespace Blockiverse.UI
         Toggle registeredTurnAroundToggle;
         Toggle registeredLeftHandToggle;
         Toggle registeredToggleToMineToggle;
+        Toggle registeredSprintToggleToggle;
+        Toggle registeredCrouchToggleToggle;
         Toggle registeredRealPlayerHeightToggle;
         Toggle registeredVignetteToggle;
         Toggle registeredGlideBobToggle;
@@ -86,7 +90,9 @@ namespace Blockiverse.UI
             Slider targetSmoothTurnSpeedSlider = null,
             Slider targetUiScaleSlider = null,
             Toggle targetGlideBobToggle = null,
-            Toggle targetRealPlayerHeightToggle = null)
+            Toggle targetRealPlayerHeightToggle = null,
+            Toggle targetSprintToggleToggle = null,
+            Toggle targetCrouchToggleToggle = null)
         {
             glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
@@ -100,6 +106,8 @@ namespace Blockiverse.UI
             leftHandToggle = targetLeftHandToggle;
             toggleToMineToggle = targetToggleToMineToggle;
             realPlayerHeightToggle = targetRealPlayerHeightToggle;
+            sprintToggleToggle = targetSprintToggleToggle;
+            crouchToggleToggle = targetCrouchToggleToggle;
             uiScaleSlider = targetUiScaleSlider;
             glideBobToggle = targetGlideBobToggle;
             RegisterControlCallbacks();
@@ -189,6 +197,8 @@ namespace Blockiverse.UI
             RegisterToggleCallback(leftHandToggle, ref registeredLeftHandToggle);
             RegisterToggleCallback(toggleToMineToggle, ref registeredToggleToMineToggle);
             RegisterToggleCallback(realPlayerHeightToggle, ref registeredRealPlayerHeightToggle);
+            RegisterToggleCallback(sprintToggleToggle, ref registeredSprintToggleToggle);
+            RegisterToggleCallback(crouchToggleToggle, ref registeredCrouchToggleToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterToggleCallback(glideBobToggle, ref registeredGlideBobToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
@@ -263,6 +273,12 @@ namespace Blockiverse.UI
             if (realPlayerHeightToggle != null)
                 settings.RealPlayerHeightEnabled = realPlayerHeightToggle.isOn;
 
+            if (sprintToggleToggle != null)
+                settings.SprintToggleEnabled = sprintToggleToggle.isOn;
+
+            if (crouchToggleToggle != null)
+                settings.CrouchToggleEnabled = crouchToggleToggle.isOn;
+
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.isOn;
 
@@ -293,6 +309,8 @@ namespace Blockiverse.UI
             leftHandToggle?.SetIsOnWithoutNotify(settings.DominantHand == BlockiverseControllerRole.Left);
             toggleToMineToggle?.SetIsOnWithoutNotify(settings.ToggleToMineEnabled);
             realPlayerHeightToggle?.SetIsOnWithoutNotify(settings.RealPlayerHeightEnabled);
+            sprintToggleToggle?.SetIsOnWithoutNotify(settings.SprintToggleEnabled);
+            crouchToggleToggle?.SetIsOnWithoutNotify(settings.CrouchToggleEnabled);
 
             if (snapTurnSlider != null)
             {

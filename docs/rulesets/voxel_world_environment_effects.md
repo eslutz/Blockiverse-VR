@@ -28,7 +28,7 @@ TICKS_PER_SECOND = 20;
 TICKS_PER_MINUTE = 1200;
 TICKS_PER_DAY = 24000;        // 20 real minutes
 DAYS_PER_SEASON = 12;         // Optional seasonal layer
-WORLD_SEA_LEVEL = 96;
+WORLD_SEA_LEVEL = 64;        // 128-tall world; see WorldConstants.SeaLevel
 MAX_LIGHT_LEVEL = 15;
 MIN_LIGHT_LEVEL = 0;
 ```
@@ -328,13 +328,15 @@ Temperature determines whether precipitation falls as rain or snow and whether s
 ### 6.2 Temperature modifiers
 
 ```ts
-altitudeModifier = -0.08 * max(0, y - 96);
+altitudeModifier = -0.15 * max(0, y - WORLD_SEA_LEVEL);
 nightModifier = isNight(timeOfDayTicks) ? -5 : 0;
 preDawnModifier = dayPhase == "PRE_DAWN" ? -2 : 0;
 rainModifier = precipitationType == "RAIN" ? -2 * precipitationIntensity : 0;
 snowModifier = precipitationType == "SNOW" ? -4 * precipitationIntensity : 0;
 seasonModifier = getSeasonModifier(dayIndex); // optional
 ```
+
+The lapse rate is `0.15 C` per block above sea level. The playable altitude band is only 0–48 blocks (terrain peaks at `WORLD_SEA_LEVEL + 48`, ~y=112 in the 128-tall world), so `0.15` yields `-7.2 C` at the tallest natural peak — comparable to the night modifier, and enough to push Highlands under the cold-exposure threshold on high ground in clear daylight and below freezing there at night. The earlier `0.08` figure was written for the retired 256-tall world; across the current world it left elevation thermally irrelevant next to the 42 C biome spread.
 
 Final temperature:
 
@@ -358,6 +360,8 @@ Optional season modifiers:
 | Autumn | -2 |
 | Winter | -8 |
 
+Shipped model: `biomeBaseTemperatureC + altitudeModifier + nightModifier + rainModifier + snowModifier`. `preDawnModifier` and `seasonModifier` are not implemented — the world clock exposes normalized time and a day/night split only, with no `PRE_DAWN` day phase and no seasonal layer to key them off.
+
 ### 6.3 Precipitation type
 
 ```ts
@@ -370,6 +374,15 @@ else:
 ```
 
 Mixed precipitation can be ignored for the first implementation. Use either rain or snow per chunk based on local temperature.
+
+Precipitation type is a **per-location derivation, never a weather-state change**. It is recomputed on every environment query from the synced weather state plus the local temperature, so it never enters the weather state machine, the sync payload, or a save: two peers standing in the same place derive the same answer with zero extra network traffic, and one storm can fall as rain in the valley and snow on the peak above it. Two rules refine the table above:
+
+- Inherently cold states (Light Snow, Heavy Snow, Blizzard) always fall as snow, whatever the local temperature.
+- Rain states (Light Rain, Heavy Rain, Thunderstorm) fall as snow at or below freezing and as rain otherwise.
+
+The rain/snow test runs against the temperature computed **without** the rain and snow modifiers, and only then is the chosen modifier applied. Feeding the modifier back into the test would let a location a fraction of a degree above freezing flip to snow, cool by `-4 C`, and flip back on the next query.
+
+Falling is not settling: precipitation type only says what arrives at a location, while laying down a snowpack layer additionally requires the local temperature at or below freezing per §12's accumulation rule — so an inherently cold state over warm ground (a blizzard crossing the dunes) shows snowfall without leaving any snow cover.
 
 ---
 
@@ -919,6 +932,8 @@ if random() < meltChance:
 ```
 
 If depth reaches `0`, remove the `snowpack` block.
+
+Shipped melt rule: the shipped implementation has no depth metadata and removes an exposed `snowpack` block outright, sampled only while the weather state is **Clear**, with none of the temperature, light, or rained-on terms above — a clear sky melts exposed snow even at -24 °C tundra midnight. The temperature blindness is deliberate and load-bearing: Clear holds roughly 30% of the weather-state occupancy against roughly 27% total precipitation, which caps always-freezing terrain (tundra qualifies for accumulation under every precipitating state, day and night) at a stable partial snow cover (~47% at equilibrium) instead of whitening monotonically to 100%. Do not gate the shipped melt on `currentTemperatureC > 0` without pairing it with a sublimation or depth-decay path for sub-zero biomes, or tundra and highlands snowpack becomes permanent. The full model above (depth layers plus temperature/light/rain melt terms) remains the target design.
 
 ### 12.4 Snow effects
 

@@ -216,7 +216,7 @@ namespace Blockiverse.Tests.EditMode.SurvivalHealth
         {
             var warmNight = new SurvivalEnvironmentExposure(temperatureC: 8.0f, skyExposed: true, isNight: true);
             var shelteredCold = new SurvivalEnvironmentExposure(temperatureC: -8.0f, skyExposed: false, isNight: true, precipitationIntensity: 1.0f, stormIntensity: 1.0f);
-            var coldNight = new SurvivalEnvironmentExposure(temperatureC: 4.0f, skyExposed: true, isNight: true);
+            var coldNight = new SurvivalEnvironmentExposure(temperatureC: 2.5f, skyExposed: true, isNight: true);
             var blizzard = new SurvivalEnvironmentExposure(temperatureC: -8.0f, skyExposed: true, isNight: true, precipitationIntensity: 1.0f, stormIntensity: 0.8f);
 
             Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(warmNight), Is.EqualTo(0));
@@ -228,6 +228,52 @@ namespace Blockiverse.Tests.EditMode.SurvivalHealth
             Assert.That(
                 vitals.TickEnvironmentExposure(SurvivalVitals.EnvironmentExposureDamageIntervalTicks, blizzard),
                 Is.EqualTo(SurvivalVitals.EnvironmentExposureDamagePerInterval * 3));
+        }
+
+        [Test]
+        public void ColdPressureNeedsNightOrFallingWeatherNotAmbientDaytimeAir()
+        {
+            // A freezing biome in calm daylight must not drain health. Tundra's base temperature is
+            // -8 C, it is a selectable starting biome, and the spawn search puts the player on one:
+            // without this gate a new world begins killing the player immediately, with a roof as
+            // the only counterplay and no heat source implemented anywhere to offset it.
+            var frozenCalmDay = new SurvivalEnvironmentExposure(temperatureC: -8.0f, skyExposed: true, isNight: false);
+            Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(frozenCalmDay), Is.EqualTo(0),
+                "A tundra spawn in clear daylight must be survivable; ambient cold alone is not damage.");
+
+            // The same place stops being safe the moment snow starts falling on it, or night comes.
+            var frozenSnowfallDay = new SurvivalEnvironmentExposure(
+                temperatureC: -9.2f, skyExposed: true, isNight: false, precipitationIntensity: 0.3f);
+            var frozenCalmNight = new SurvivalEnvironmentExposure(temperatureC: -13.0f, skyExposed: true, isNight: true);
+
+            Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(frozenSnowfallDay), Is.EqualTo(1),
+                "Snowfall on a freezing biome is exactly the exposure the ruleset asks for (section 12.5).");
+            Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(frozenCalmNight), Is.EqualTo(1),
+                "Night restores the danger without needing weather.");
+
+            // Warm biomes never cross the threshold no matter how hard it rains on them.
+            var desertStorm = new SurvivalEnvironmentExposure(
+                temperatureC: 30.0f, skyExposed: true, isNight: true, precipitationIntensity: 1.0f, stormIntensity: 1.0f);
+            Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(desertStorm), Is.EqualTo(0),
+                "The dunes stay warm; a storm there is loud, not lethal.");
+        }
+
+        [Test]
+        public void NightColdThresholdExcludesItsOwnBoundary()
+        {
+            // Whether a place that lands exactly on NightColdPressureThresholdC takes damage
+            // every night must be a decision, not a consequence of which side of the comparison
+            // the boundary falls on (highlands' 8 C base - 5 C night is exactly the 3 C threshold
+            // at hypothetical sea level; its real terrain starts at +34 blocks and sits colder).
+            var onTheBoundary = new SurvivalEnvironmentExposure(
+                temperatureC: SurvivalVitals.NightColdPressureThresholdC, skyExposed: true, isNight: true);
+            var justBelow = new SurvivalEnvironmentExposure(
+                temperatureC: SurvivalVitals.NightColdPressureThresholdC - 0.1f, skyExposed: true, isNight: true);
+
+            Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(onTheBoundary), Is.EqualTo(0),
+                "Sitting exactly on the night-cold threshold is safe; the boundary belongs to the safe side.");
+            Assert.That(SurvivalVitals.ComputeEnvironmentPressureSources(justBelow), Is.EqualTo(1),
+                "Anything genuinely colder than the threshold still applies night-cold pressure.");
         }
 
         [Test]
