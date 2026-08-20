@@ -44,11 +44,18 @@ namespace Blockiverse.Gameplay
         VoxelEmitterIndex emitterIndex;
         Material chunkMaterial;
         int interactionLayer = -1;
+        // Fluid geometry sits on its own layer so gravity's ground sphere-cast never sees it.
+        // Resolved by name at Configure time, falling back to the canonical index.
+        int fluidLayer = -1;
         int totalTriangleCount;
         VoxelRenderStats stats;
 
         public VoxelWorld World => world;
         public VoxelRenderStats Stats => stats;
+
+        // The layer fluid chunk children are placed on. Exposed so rig/prefab tests can assert the
+        // gravity mask excludes it and the targeting masks include it.
+        public int FluidLayer => fluidLayer;
 
         // The per-column sky map kept current by the rebuild queue; also consumable by
         // gameplay systems that need cheap "is this cell under open sky" answers.
@@ -89,6 +96,7 @@ namespace Blockiverse.Gameplay
             BlockVisualAtlas.ValidateRenderableBlockCoverage(registry);
             chunkMaterial = BlockVisualAtlas.CreateMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
+            fluidLayer = ResolveFluidLayer();
             skyLight = new VoxelSkyLightMap(world, registry);
             emitterIndex = new VoxelEmitterIndex(world, registry);
             rebuildQueue = new ChunkRebuildQueue(world, skyLight, emitterIndex);
@@ -342,13 +350,21 @@ namespace Blockiverse.Gameplay
             EnqueueFluidColliderRebuild(chunk);
         }
 
+        // Resolves the dedicated fluid layer by name, falling back to the canonical index when the
+        // project's TagManager has not been regenerated yet (fresh clone before a bootstrapper run).
+        static int ResolveFluidLayer()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.FluidLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.FluidLayerIndex;
+        }
+
         GameObject CreateFluidObject(ChunkCoordinate chunk, GameObject chunkObject)
         {
             var fluidObject = new GameObject("Fluid");
             fluidObject.transform.SetParent(chunkObject.transform, false);
 
-            if (interactionLayer >= 0)
-                fluidObject.layer = interactionLayer;
+            if (fluidLayer >= 0)
+                fluidObject.layer = fluidLayer;
 
             fluidObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = fluidObject.AddComponent<MeshRenderer>();
@@ -362,13 +378,19 @@ namespace Blockiverse.Gameplay
             if (chunkMaterial != null)
                 renderer.sharedMaterial = chunkMaterial;
 
-            // Contact-excluded: raycast queries (block targeting, drink/fill) still hit the fluid
-            // surface, but the character controller and props never collide with it. The fluid
-            // child is deliberately not registered as a TeleportationArea — no teleporting onto
-            // water. Block targeting resolves through the parent's VoxelChunkTarget.
+            // The fluid layer is what actually keeps players out of water: it is absent from
+            // GravityProvider's ground sphere-cast mask (scene queries ignore excludeLayers, so the
+            // old contact-only approach still read water as ground) and its physics collision-matrix
+            // row is cleared by the bootstrapper. excludeLayers is retained as defence in depth.
+            // Ray queries still hit the surface, so block targeting, drink/fill, and teleport
+            // landing all work. Block targeting resolves through the parent's VoxelChunkTarget.
             MeshCollider collider = fluidObject.AddComponent<MeshCollider>();
             collider.cookingOptions = MeshColliderCookingOptions.UseFastMidphase;
             collider.excludeLayers = ~0;
+
+            // Water is a teleport destination: the ray stops at the surface and the player lands
+            // treading, rather than passing through to the seabed.
+            ConfigureTeleportationArea(fluidObject, collider);
 
             fluidObjects.Add(chunk, fluidObject);
             return fluidObject;

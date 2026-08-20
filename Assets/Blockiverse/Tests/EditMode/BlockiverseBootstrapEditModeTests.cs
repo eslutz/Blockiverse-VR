@@ -104,6 +104,72 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void FluidLayerIsPinnedToIndexThirteenWithTheCanonicalName()
+        {
+            Object[] tagManagerAssets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset");
+
+            Assert.That(tagManagerAssets, Is.Not.Null.And.Not.Empty, "TagManager settings asset must be available.");
+
+            var tagManager = new SerializedObject(tagManagerAssets[0]);
+            tagManager.UpdateIfRequiredOrScript();
+            SerializedProperty layers = tagManager.FindProperty("layers");
+
+            Assert.That(layers, Is.Not.Null, "TagManager must expose its layers array.");
+            Assert.That(BlockiverseProject.FluidLayerIndex, Is.InRange(8, layers.arraySize - 1),
+                "The fluid layer must live in the user-assignable layer range.");
+            Assert.That(layers.GetArrayElementAtIndex(BlockiverseProject.FluidLayerIndex).stringValue,
+                Is.EqualTo(BlockiverseProject.FluidLayerName),
+                "The bootstrapper must pin the fluid layer name at the canonical index so name lookups and the cleared collision-matrix row address the same layer.");
+        }
+
+        [Test]
+        public void FluidLayerCollidesWithNothingInThePhysicsMatrix()
+        {
+            Object[] dynamicsAssets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset");
+
+            Assert.That(dynamicsAssets, Is.Not.Null.And.Not.Empty, "DynamicsManager settings asset must be available.");
+
+            var dynamicsManager = new SerializedObject(dynamicsAssets[0]);
+            dynamicsManager.UpdateIfRequiredOrScript();
+            SerializedProperty collisionMatrix = dynamicsManager.FindProperty("m_LayerCollisionMatrix");
+
+            Assert.That(collisionMatrix, Is.Not.Null, "DynamicsManager must expose m_LayerCollisionMatrix.");
+            Assert.That(collisionMatrix.arraySize, Is.GreaterThan(BlockiverseProject.FluidLayerIndex),
+                "The collision matrix must cover the fluid layer's row.");
+
+            uint fluidRow = unchecked((uint)collisionMatrix
+                .GetArrayElementAtIndex(BlockiverseProject.FluidLayerIndex).intValue);
+
+            Assert.That(fluidRow, Is.EqualTo(0u),
+                "The fluid layer's collision row must be empty so the player's CharacterController sweeps through water instead of standing on it.");
+
+            uint fluidBit = 1u << BlockiverseProject.FluidLayerIndex;
+
+            for (int layer = 0; layer < collisionMatrix.arraySize; layer++)
+            {
+                if (layer == BlockiverseProject.FluidLayerIndex)
+                    continue;
+
+                uint mask = unchecked((uint)collisionMatrix.GetArrayElementAtIndex(layer).intValue);
+
+                Assert.That(mask & fluidBit, Is.EqualTo(0u),
+                    $"Layer {layer} keeps a collision pair with the fluid layer; the matrix is symmetric, so any surviving bit re-solidifies water.");
+            }
+        }
+
+        [Test]
+        public void FluidLayerMaskConstantsKeepGroundAndRayTargetingRolesSeparate()
+        {
+            Assert.That(BlockiverseProject.FluidLayerMask, Is.EqualTo(1 << BlockiverseProject.FluidLayerIndex),
+                "The fluid mask must address exactly the pinned fluid layer index.");
+            Assert.That(BlockiverseProject.VrUiRaycastLayerMask,
+                Is.EqualTo(BlockiverseProject.InteractionLayerMask | BlockiverseProject.FluidLayerMask),
+                "Ray targeting must cover terrain plus fluid: block edits, drink/bucket fill, and teleport landing all hit water.");
+            Assert.That(BlockiverseProject.VoxelGroundLayerMask & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                "Ground detection must never include fluid; widening this mask reintroduces walking on water.");
+        }
+
+        [Test]
         public void AndroidUrpAssetUsesQuestMobileRenderDefaults()
         {
             string asset = File.ReadAllText(AndroidUrpAssetPath);

@@ -9,6 +9,7 @@ using Blockiverse.WorldGen;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -1148,6 +1149,54 @@ namespace Blockiverse.Tests.EditMode
 
                 renderer.RebuildDirty();
                 Assert.That(renderer.PendingColliderRebuildCount, Is.EqualTo(0), "Should have processed the last pending collider.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(worldObject);
+                UnityEngine.Object.DestroyImmediate(blockMaterial);
+                UnityEngine.Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void FluidChildIsOnTheDedicatedFluidLayerAndSolidChunksAreNot()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 5);
+            world.SetBlock(new BlockPosition(1, 0, 1), BlockRegistry.MeadowTurf, trackChange: false);
+            world.SetBlock(new BlockPosition(2, 0, 1), BlockRegistry.Freshwater, trackChange: false);
+            var worldObject = new GameObject("Chunk Renderer");
+            Texture2D atlasTexture = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
+                renderer.Configure(world, registry, blockMaterial, BlockiverseProject.InteractionLayerIndex);
+
+                GameObject fluidObject = worldObject.GetComponentsInChildren<MeshFilter>()
+                    .Single(filter => filter.gameObject.name == "Fluid")
+                    .gameObject;
+                GameObject chunkObject = fluidObject.transform.parent.gameObject;
+
+                Assert.That(renderer.FluidLayer, Is.EqualTo(BlockiverseProject.FluidLayerIndex),
+                    "The renderer must resolve the canonical fluid layer index so the rig's gravity-mask exclusion addresses the same layer.");
+                Assert.That(fluidObject.layer, Is.EqualTo(renderer.FluidLayer),
+                    "The fluid child must sit on the layer the renderer reports through FluidLayer.");
+                Assert.That(fluidObject.layer, Is.EqualTo(BlockiverseProject.FluidLayerIndex),
+                    "Fluid geometry must live on the dedicated fluid layer so gravity's ground cast and the cleared physics-matrix row ignore it.");
+                Assert.That(chunkObject.layer, Is.EqualTo(BlockiverseProject.InteractionLayerIndex),
+                    "Solid chunk geometry must stay on the interaction layer so it remains walkable ground.");
+
+                MeshCollider fluidCollider = fluidObject.GetComponent<MeshCollider>();
+
+                Assert.That(fluidCollider, Is.Not.Null,
+                    "The fluid child keeps a MeshCollider so rays can stop at the water surface.");
+                Assert.That(fluidCollider.excludeLayers.value, Is.EqualTo(~0),
+                    "excludeLayers stays fully set as contact-pair defence in depth on top of the cleared collision-matrix row.");
+                Assert.That(fluidObject.GetComponent<TeleportationArea>(), Is.Null,
+                    "TeleportationArea wiring is guarded by Application.isPlaying; edit mode must not spawn XRI runtime components.");
             }
             finally
             {

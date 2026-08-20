@@ -106,6 +106,10 @@ namespace Blockiverse.Editor
             gravityProvider.enabled = true;
             gravityProvider.useGravity = true;
             gravityProvider.useLocalSpaceGravity = true;
+            // Solid terrain only, deliberately excluding the fluid layer. GravityProvider resolves
+            // "grounded" with a PhysicsScene.SphereCast, and scene queries ignore
+            // Collider.excludeLayers — so putting fluid in this mask makes water read as solid
+            // ground and the player walks on lakes. Do not widen this to the targeting mask.
             gravityProvider.sphereCastLayerMask = GetInteractionLayerMask();
             gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
 

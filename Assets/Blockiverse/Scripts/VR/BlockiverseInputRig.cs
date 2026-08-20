@@ -110,6 +110,7 @@ namespace Blockiverse.VR
         XRRayInteractor rightInteractionRay;
 
         static LayerMask? cachedTerrainLayerMask;
+        static LayerMask? cachedTargetingLayerMask;
 
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
@@ -1008,10 +1009,14 @@ namespace Blockiverse.VR
 
                 if (teleportRay != null)
                 {
+                    // Includes fluid: the teleport ray stops at the water surface and lands the
+                    // player treading, instead of passing through to the seabed. Without water in
+                    // this mask, XRRayInteractor breaks at the first hit with no registered
+                    // interactable and teleporting anywhere near water fails outright.
                     BlockiverseRayDefaults.ConfigureTeleportRay(
                         teleportRay,
                         rayOrigin,
-                        GetVoxelTerrainLayerMask());
+                        GetVoxelTargetingLayerMask());
                     ConfigureRayLineVisual(teleportRay);
                     teleportRay.selectInput = CreateButtonActionReader(
                         teleportRay.selectInput,
@@ -1102,6 +1107,10 @@ namespace Blockiverse.VR
 
         BlockiverseControllerRole GetToolHand() => GetDominantHand();
 
+        // Solid voxel terrain only — deliberately excludes fluid. This is the mask gravity uses for
+        // its ground sphere-cast, and widening it to include fluid is what made the player walk on
+        // water: GravityProvider resolves "grounded" with a PhysicsScene.SphereCast, and scene
+        // queries ignore Collider.excludeLayers, so a fluid collider in this mask reads as ground.
         static LayerMask GetVoxelTerrainLayerMask()
         {
             if (cachedTerrainLayerMask.HasValue)
@@ -1114,9 +1123,23 @@ namespace Blockiverse.VR
             return cachedTerrainLayerMask.Value;
         }
 
+        // Terrain plus fluid: what rays are allowed to target. Block place/mine and drink/bucket
+        // fill need to hit water, and the teleport ray needs to land on the surface rather than
+        // punch through to the seabed.
+        static LayerMask GetVoxelTargetingLayerMask()
+        {
+            if (cachedTargetingLayerMask.HasValue)
+                return cachedTargetingLayerMask.Value;
+
+            int fluidLayer = LayerMask.NameToLayer(BlockiverseProject.FluidLayerName);
+            int fluidMask = fluidLayer >= 0 ? 1 << fluidLayer : BlockiverseProject.FluidLayerMask;
+            cachedTargetingLayerMask = (LayerMask)(GetVoxelTerrainLayerMask().value | fluidMask);
+            return cachedTargetingLayerMask.Value;
+        }
+
         static LayerMask GetVrUiRaycastLayerMask()
         {
-            return GetVoxelTerrainLayerMask();
+            return GetVoxelTargetingLayerMask();
         }
 
         public static void ConfigureCharacterController(CharacterController controller)
