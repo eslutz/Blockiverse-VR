@@ -84,6 +84,51 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SnapTurnOriginDisplacementDoesNotAdvanceTheGait()
+        {
+            (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
+            int footfalls = 0;
+            gait.Footfall += () => footfalls++;
+
+            Walk(rig, gait, Mathf.CeilToInt(0.3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            float phaseBefore = gait.BobPhase01;
+            int footfallsBefore = footfalls;
+
+            // A snap turn rotates the XR origin around the camera: a player standing 0.9 m from
+            // play-space centre translates the rig ~0.7 m in one frame — under the 2 m teleport
+            // guard but a physically impossible stride at ~42 m/s.
+            rig.transform.position += new Vector3(0.5f, 0f, 0.5f);
+            gait.Advance(FrameSeconds);
+
+            Assert.That(footfalls, Is.EqualTo(footfallsBefore));
+            Assert.That(gait.IsStepping, Is.False);
+            Assert.That(gait.Speed, Is.Zero);
+            Assert.That(gait.BobPhase01, Is.EqualTo(phaseBefore).Within(0.0001f), "a turn displacement must not advance the phase");
+        }
+
+        [Test]
+        public void OriginMotionWithoutMoveIntentDoesNotStep()
+        {
+            (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
+            int footfalls = 0;
+            gait.Footfall += () => footfalls++;
+
+            // Smooth turn in place translates the origin at plausible walking speeds. With the
+            // move stick centred, that travel must not read as a gait.
+            gait.MoveIntentOverride = () => 0f;
+            Walk(rig, gait, Mathf.CeilToInt(3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+
+            Assert.That(footfalls, Is.Zero);
+            Assert.That(gait.IsStepping, Is.False);
+            Assert.That(gait.BobPhase01, Is.EqualTo(0.5f).Within(0.0001f), "intentless travel must hold the phase");
+
+            // Stick engaged again: walking resumes from the held phase (crossing sits 0.4 steps out).
+            gait.MoveIntentOverride = () => 1f;
+            Walk(rig, gait, Mathf.CeilToInt(0.5f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            Assert.That(footfalls, Is.EqualTo(1));
+        }
+
+        [Test]
         public void GoingAirborneReseedsWithoutSnappingThePhase()
         {
             (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();

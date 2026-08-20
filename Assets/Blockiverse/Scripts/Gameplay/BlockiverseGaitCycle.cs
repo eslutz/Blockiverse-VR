@@ -29,8 +29,16 @@ namespace Blockiverse.Gameplay
         public const float MinFootfallIntervalSeconds = 0.18f;
         // A frame that covers more ground than this is a teleport or a respawn, not a stride.
         public const float TeleportResetMeters = 2.0f;
+        // A frame whose instantaneous speed exceeds this is a displacement, not locomotion: the
+        // fastest legitimate gait is the max move-speed slider under sprint (8.8 m/s). Snap turns
+        // rotate the XR origin around the camera, so a player standing physically offset from
+        // play-space centre translates the rig by up to ~1.5 m in a single frame — under the
+        // teleport distance guard but far above any walking speed. Short teleports land here too.
+        public const float MaxStrideSpeedMetersPerSecond = 10.0f;
         // Below this the player is drifting or being nudged rather than walking.
         public const float MinStepSpeed = 0.1f;
+        // Move-stick magnitude below this is not walking intent (matches the input deadzone).
+        public const float MoveIntentDeadzone = 0.1f;
         // Mid-step, so the very first footfall after spawn is roughly half a step of travel out.
         const float StartPhase = 0.5f;
         const float MinStepLengthMeters = 0.05f;
@@ -55,6 +63,15 @@ namespace Blockiverse.Gameplay
         public event Action Footfall;
 
         public Func<bool> GroundedOverride { get; set; }
+
+        /// <summary>
+        /// Move-stick magnitude source, wired by the input rig at runtime. Smooth turns also rotate
+        /// the origin around the camera, translating the rig at plausible walking speeds while the
+        /// player only turns in place — locomotion the speed guard cannot distinguish from a
+        /// stride. Requiring stick intent filters every origin motion the player did not ask for
+        /// (turns, recenters, external corrections). Null means no source: travel alone decides.
+        /// </summary>
+        public Func<float> MoveIntentOverride { get; set; }
 
         /// <summary>
         /// Set by locomotion modes that move the rig without walking (creative flight). While true
@@ -128,10 +145,12 @@ namespace Blockiverse.Gameplay
             secondsSinceFootfall += deltaTime;
 
             float horizontal = new Vector2(delta.x, delta.z).magnitude;
-            bool teleported = horizontal > TeleportResetMeters;
+            float rawSpeed = deltaTime > 0f ? horizontal / deltaTime : 0f;
+            bool displaced = horizontal > TeleportResetMeters || rawSpeed > MaxStrideSpeedMetersPerSecond;
+            bool hasMoveIntent = MoveIntentOverride == null || MoveIntentOverride() > MoveIntentDeadzone;
 
-            speed = !teleported && deltaTime > 0f ? horizontal / deltaTime : 0f;
-            stepping = grounded && !teleported && !IsSuppressed && speed > MinStepSpeed;
+            speed = displaced ? 0f : rawSpeed;
+            stepping = grounded && !displaced && !IsSuppressed && hasMoveIntent && speed > MinStepSpeed;
 
             if (!seeded)
             {
@@ -147,7 +166,7 @@ namespace Blockiverse.Gameplay
                 // re-seed below is defence in depth: it pins the footfall index back to the phase
                 // in case a future change lets the two drift across a break. Merely stopping keeps
                 // both, so a tapped stick accumulates toward the next footfall.
-                if (!grounded || teleported || IsSuppressed)
+                if (!grounded || displaced || IsSuppressed)
                     ReseedFootfallIndex();
 
                 return;

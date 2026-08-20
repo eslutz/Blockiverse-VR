@@ -56,6 +56,7 @@ namespace Blockiverse.VR
         [SerializeField] GravityProvider gravityProvider;
         [SerializeField] JumpProvider jumpProvider;
         [SerializeField] CharacterController characterController;
+        BlockiverseGaitCycle wiredGaitCycle;
         BlockiversePlayerBodyManipulator playerBodyManipulator;
         float appliedCrouchCameraDrop;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
@@ -453,6 +454,7 @@ namespace Blockiverse.VR
         void Update()
         {
             RefreshCachedActions();
+            WireGaitMoveIntent();
             UpdateSprintInput();
             UpdateCrouchInput();
             ApplyCrouchState();
@@ -461,6 +463,21 @@ namespace Blockiverse.VR
             UpdateMenu();
             UpdateQuickMenu();
             UpdateCreativeBindings();
+        }
+
+        // The gait cycle advances on rig travel, but turns rotate the origin around the camera and
+        // translate the rig without the player walking. Handing it the move-stick magnitude lets it
+        // demand real locomotion intent. Lazy because the gait may be added at runtime by the
+        // feedback components' fallbacks.
+        void WireGaitMoveIntent()
+        {
+            if (wiredGaitCycle != null)
+                return;
+
+            wiredGaitCycle = GetComponent<BlockiverseGaitCycle>();
+
+            if (wiredGaitCycle != null)
+                wiredGaitCycle.MoveIntentOverride = () => MoveInputMagnitude;
         }
 
         void RefreshCachedActions()
