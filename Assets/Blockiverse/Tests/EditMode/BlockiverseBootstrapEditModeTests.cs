@@ -138,7 +138,7 @@ namespace Blockiverse.Tests.EditMode
                 "The collision matrix must cover the fluid layer's row.");
 
             uint fluidRow = unchecked((uint)collisionMatrix
-                .GetArrayElementAtIndex(BlockiverseProject.FluidLayerIndex).intValue);
+                .GetArrayElementAtIndex(BlockiverseProject.FluidLayerIndex).longValue);
 
             Assert.That(fluidRow, Is.EqualTo(0u),
                 "The fluid layer's collision row must be empty so the player's CharacterController sweeps through water instead of standing on it.");
@@ -150,10 +150,19 @@ namespace Blockiverse.Tests.EditMode
                 if (layer == BlockiverseProject.FluidLayerIndex)
                     continue;
 
-                uint mask = unchecked((uint)collisionMatrix.GetArrayElementAtIndex(layer).intValue);
+                uint mask = unchecked((uint)collisionMatrix.GetArrayElementAtIndex(layer).longValue);
 
                 Assert.That(mask & fluidBit, Is.EqualTo(0u),
                     $"Layer {layer} keeps a collision pair with the fluid layer; the matrix is symmetric, so any surviving bit re-solidifies water.");
+
+                // The half this test originally missed (caught in PR review): clearing the fluid
+                // bit must not disturb ANY other pair. An all-zero matrix satisfies the fluid
+                // assertions above while silently letting players walk through walls — the
+                // bootstrapper once produced exactly that when SerializedProperty.intValue
+                // clamped its negative unsigned write to zero. Every non-fluid bit of every
+                // non-fluid row must remain set.
+                Assert.That(mask | fluidBit, Is.EqualTo(uint.MaxValue),
+                    $"Layer {layer} lost non-fluid collision pairs (row 0x{mask:X8}); the fluid clear must leave every other layer pair colliding, or solid terrain stops being solid.");
             }
         }
 
