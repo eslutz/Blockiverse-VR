@@ -2,6 +2,18 @@ using System;
 
 namespace Blockiverse.WorldGen
 {
+    // What is actually falling at one queried location (voxel_world_environment_effects.md §6.3).
+    // This is a LOCAL DERIVATION, never a weather-state change: it is recomputed on every Evaluate
+    // from the synced weather state plus the local temperature, is never stored on the service,
+    // and never appears in WeatherSyncState or a save. Two peers standing in the same spot derive
+    // the same answer from the same synced state with zero extra network traffic.
+    public enum PrecipitationKind
+    {
+        None,
+        Rain,
+        Snow,
+    }
+
     public struct EnvironmentState
     {
         public WeatherState Weather;
@@ -10,10 +22,30 @@ namespace Blockiverse.WorldGen
         public float FogDensity;
         public float StormIntensity;
         public float CloudCoverage;
+        // Rain vs. snow at the queried location — see PrecipitationKind. Decided against the
+        // PRE-modifier temperature, so a published Temperature at or below freezing can
+        // legitimately accompany Rain: Precipitation is authoritative and the pair is allowed to
+        // disagree by design (see Evaluate's two-pass note; pinned by
+        // WeatherServiceEditModeTests.PublishedTemperatureMayDisagreeWithPrecipitationKindByDesign).
+        public PrecipitationKind Precipitation;
     }
 
     public sealed class WeatherService
     {
+        // §6.2 temperature modifiers. The lapse rate is 0.15 °C per block above sea level: the
+        // playable altitude band is only 0–48 blocks (SurvivalBiomeResolver peaks terrain at
+        // SeaLevel + 48, ~y=112 under WorldMaxY 127), so 0.15 yields -7.2 °C at the tallest peak —
+        // comparable to the night modifier (-5) and enough to push Highlands (biome base 8) below
+        // SurvivalVitals.ColdExposureTemperatureThresholdC (2.0) on high ground in clear daylight,
+        // and below freezing there at night. The previous 0.05 produced only -2.4 °C across the
+        // entire world, making elevation thermally irrelevant next to the 42 °C biome spread
+        // (Tundra -8 → Dunes 34).
+        public const float AltitudeLapseRatePerBlockC = 0.15f;
+        public const float NightTemperatureModifierC = -5f;
+        public const float RainTemperatureModifierC = -2f;
+        public const float SnowTemperatureModifierC = -4f;
+        public const float FreezingTemperatureC = 0f;
+
         // Minimum ticks before a transition can occur, per state.
         static readonly int[] MinDurationTicks =
         {
@@ -80,23 +112,91 @@ namespace Blockiverse.WorldGen
         // The runtime weather→light penalty lives in EnvironmentLightComputer.GetAmbientLight, which the
         // lighting controller consumes via EnvironmentLightingSolver; CloudCoverage feeds that path.
 
-        public EnvironmentState Evaluate(float normalizedTimeOfDay, int altitudeY)
+        // Evaluates the environment at one location (voxel_world_environment_effects.md §6.2).
+        //
+        // Temperature is biome-led, not weather-led: the base comes from the column's biome and the
+        // weather contributes only through the typed precipitation modifiers below. `biomeIndex` is
+        // a SurvivalBiomeResolver biome index — the int idiom that keeps the internal TerrainBiome
+        // enum out of other assemblies. SurvivalBiomeResolver.AnyBiomeIndex (or any out-of-range
+        // value) means "unknown" and falls back to Meadow's temperate base, which is what the
+        // positionless global sky query and the biome-less creative presets pass.
+        //
+        // TWO PASSES, deliberately. Rain-vs-snow depends on temperature and the precipitation
+        // modifier depends on rain-vs-snow, so the circularity is broken explicitly: pass 1 builds
+        // the temperature WITHOUT any precipitation term, pass 2 decides the precipitation kind
+        // from that preliminary value and only then applies its modifier. The modifier is excluded
+        // from the rain/snow test on purpose — folding it back in would let a location a fraction
+        // of a degree above freezing flip to snow, drop -4 °C, and then flip back, oscillating
+        // between the two answers on successive queries. Only the published Temperature carries it.
+        //
+        // §6.2 also lists a preDawnModifier keyed off a PRE_DAWN day phase. It is deliberately not
+        // implemented: WorldTimeClock exposes normalized time and IsDay only — there is no day-phase
+        // enum to key it off. Add it here if the clock ever grows one.
+        public EnvironmentState Evaluate(float normalizedTimeOfDay, int altitudeY, int biomeIndex)
         {
-            float baseTemp = ComputeBaseTemperature(currentState);
-            float altitudePenalty = Math.Max(0, altitudeY - WorldConstants.SeaLevel) * 0.05f;
-            float nightPenalty = IsNight(normalizedTimeOfDay) ? 5f : 0f;
-            float precipPenalty = IsPrecipitating(currentState) ? 3f : 0f;
+            float biomeBase = BiomeBaseTemperature(biomeIndex);
+            float altitudeModifier = -AltitudeLapseRatePerBlockC * Math.Max(0, altitudeY - WorldConstants.SeaLevel);
+            float nightModifier = IsNight(normalizedTimeOfDay) ? NightTemperatureModifierC : 0f;
+
+            // Pass 1: the temperature the rain/snow decision is made against.
+            float preliminaryTemperature = biomeBase + altitudeModifier + nightModifier;
+
+            // Pass 2: kind first, then its modifier.
+            float intensity = PrecipitationIntensityFor(currentState);
+            PrecipitationKind precipitation = ResolvePrecipitationKind(currentState, preliminaryTemperature);
+            float precipitationModifier = precipitation switch
+            {
+                PrecipitationKind.Rain => RainTemperatureModifierC * intensity,
+                PrecipitationKind.Snow => SnowTemperatureModifierC * intensity,
+                _                      => 0f,
+            };
 
             return new EnvironmentState
             {
-                Weather              = currentState,
-                Temperature          = baseTemp - altitudePenalty - nightPenalty - precipPenalty,
-                PrecipitationIntensity = PrecipitationIntensityFor(currentState),
-                FogDensity           = FogDensityFor(currentState),
-                StormIntensity       = StormIntensityFor(currentState),
-                CloudCoverage        = CloudCoverage,
+                Weather                = currentState,
+                Temperature            = preliminaryTemperature + precipitationModifier,
+                PrecipitationIntensity = intensity,
+                Precipitation          = precipitation,
+                FogDensity             = FogDensityFor(currentState),
+                StormIntensity         = StormIntensityFor(currentState),
+                CloudCoverage          = CloudCoverage,
             };
         }
+
+        // Rain vs. snow at one location (§6.3, and §8.2's temperature precipitation conversion).
+        // Purely derived — it reads the weather state but never changes it, so the Markov chain,
+        // its transition weights, minimum durations, RNG stream, and the WeatherSyncState payload
+        // are all untouched by snowfall appearing in a cold place.
+        public static PrecipitationKind ResolvePrecipitationKind(WeatherState state, float temperature)
+        {
+            switch (state)
+            {
+                // Inherently cold states always fall as snow regardless of local temperature — a
+                // blizzard blowing over the dunes is still a blizzard.
+                case WeatherState.LightSnow:
+                case WeatherState.HeavySnow:
+                case WeatherState.Blizzard:
+                    return PrecipitationKind.Snow;
+
+                // Rain states freeze into snow at or below freezing. §6.3 notes mixed precipitation
+                // is out of scope: it is either rain or snow per location, from local temperature.
+                case WeatherState.LightRain:
+                case WeatherState.HeavyRain:
+                case WeatherState.Thunderstorm:
+                    return temperature <= FreezingTemperatureC ? PrecipitationKind.Snow : PrecipitationKind.Rain;
+
+                // Clear, PartlyCloudy, Overcast, Fog — nothing falls.
+                default:
+                    return PrecipitationKind.None;
+            }
+        }
+
+        // Whether a weather state drops anything at all, at any temperature. This is the cheap
+        // sky-level gate: a caller that would otherwise resolve a temperature per location (snow
+        // accumulation sampling, precipitation presentation) skips that work entirely while the
+        // sky is clear. Rain-vs-snow still needs a temperature — see ResolvePrecipitationKind.
+        // Derived from the intensity table so the two can never disagree about what is falling.
+        public static bool IsPrecipitating(WeatherState state) => PrecipitationIntensityFor(state) > 0f;
 
         public void Tick(int deltaTicks)
         {
@@ -139,21 +239,21 @@ namespace Blockiverse.WorldGen
             return rngState;
         }
 
-        static float ComputeBaseTemperature(WeatherState state)
+        // §6.1 biome base temperatures. These replaced the old per-weather-state bases: place, not
+        // sky, sets how cold somewhere is, and weather then pushes it around via §6.2's modifiers.
+        // AnyBiomeIndex and any out-of-range index fall back to Meadow's temperate 18 °C.
+        public static float BiomeBaseTemperature(int biomeIndex)
         {
-            return state switch
+            return biomeIndex switch
             {
-                WeatherState.Clear        => 20f,
-                WeatherState.PartlyCloudy => 18f,
-                WeatherState.Overcast     => 14f,
-                WeatherState.LightRain    => 12f,
-                WeatherState.HeavyRain    => 10f,
-                WeatherState.Thunderstorm => 9f,
-                WeatherState.LightSnow    => 0f,
-                WeatherState.HeavySnow    => -4f,
-                WeatherState.Blizzard     => -8f,
-                WeatherState.Fog          => 10f,
-                _                         => 15f,
+                SurvivalBiomeResolver.DunesBiomeIndex     =>  34f,
+                SurvivalBiomeResolver.DrybrushBiomeIndex  =>  26f,
+                SurvivalBiomeResolver.MeadowBiomeIndex    =>  18f,
+                SurvivalBiomeResolver.WetlandBiomeIndex   =>  16f,
+                SurvivalBiomeResolver.PinewildBiomeIndex  =>  10f,
+                SurvivalBiomeResolver.HighlandsBiomeIndex =>   8f,
+                SurvivalBiomeResolver.TundraBiomeIndex    =>  -8f,
+                _                                         =>  18f,
             };
         }
 
@@ -196,16 +296,13 @@ namespace Blockiverse.WorldGen
             };
         }
 
-        static bool IsPrecipitating(WeatherState state)
-        {
-            return state is WeatherState.LightRain or WeatherState.HeavyRain or WeatherState.Thunderstorm
-                       or WeatherState.LightSnow  or WeatherState.HeavySnow  or WeatherState.Blizzard;
-        }
-
-        static bool IsNight(float normalizedTime)
-        {
-            return normalizedTime > 0.6f || normalizedTime < 0.1f;
-        }
+        // Night is WorldConstants' one definition, not a second opinion. This used to read
+        // `t > 0.6 || t < 0.1`, which disagreed with WorldTimeClock.IsDay (0.05 / 0.55) over
+        // [0.05, 0.10) and [0.55, 0.60]. That was harmless while temperature was weather-derived
+        // and never sat near a threshold; once temperature became biome-led it decided whether a
+        // player took cold damage, so the -5 °C modifier and SurvivalVitals' night-cold threshold
+        // were being gated by two predicates that disagreed for 10% of every day.
+        static bool IsNight(float normalizedTime) => WorldConstants.IsNight(normalizedTime);
 
         // Target cloud coverage per state (voxel_world_environment_effects.md §8.3 target values).
         static float TargetCloudCoverage(WeatherState state) => state switch

@@ -13,12 +13,13 @@ namespace Blockiverse.Networking
         public const float DefaultStartNormalizedTime = 0.22f;
 
         // The daylight window over NormalizedTime, shared by the presentation layers (ambience,
-        // music) so they all agree on when night starts.
-        public const float DayStartNormalizedTime = 0.05f;
-        public const float NightStartNormalizedTime = 0.55f;
+        // music), the survival night-cold threshold, and the §6.2 night temperature modifier so
+        // they all agree on when night starts. Aliased to WorldConstants rather than re-declared:
+        // a second literal here is exactly how this drifted out of step with WeatherService before.
+        public const float DayStartNormalizedTime = WorldConstants.DayStartNormalizedTime;
+        public const float NightStartNormalizedTime = WorldConstants.NightStartNormalizedTime;
 
-        public static bool IsDay(float normalizedTime) =>
-            normalizedTime >= DayStartNormalizedTime && normalizedTime < NightStartNormalizedTime;
+        public static bool IsDay(float normalizedTime) => WorldConstants.IsDay(normalizedTime);
 
         [SerializeField] float dayLengthSeconds = DefaultDayLengthSeconds;
         [SerializeField] float normalizedTime = DefaultStartNormalizedTime;

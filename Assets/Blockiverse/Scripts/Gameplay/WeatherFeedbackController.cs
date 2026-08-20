@@ -7,9 +7,11 @@ using UnityEngine;
 namespace Blockiverse.Gameplay
 {
     // Drives the authored weather/ambience audio loops and weather VFX from the live weather
-    // simulation: rain/snow loops per WeatherState, thunder one-shots + lightning flashes during
-    // storms, fog wisps, precipitation particles around the player, day/night/cave ambience, and
-    // the campfire loop at the nearest lit campfire. Pure presentation on a coarse poll.
+    // simulation: rain/snow loops and particles chosen from what is falling at the player's own
+    // cell (WeatherService.PrecipitationKind, so the same storm is rain in the valley and snow on
+    // the peak), thunder one-shots + lightning flashes during storms, fog wisps, day/night/cave
+    // ambience, and the campfire loop at the nearest lit campfire. Pure presentation on a coarse
+    // poll — it reads the environment and never mutates it.
     [DisallowMultipleComponent]
     public sealed class WeatherFeedbackController : MonoBehaviour
     {
@@ -17,6 +19,9 @@ namespace Blockiverse.Gameplay
         const float PrecipitationVfxIntervalSeconds = 0.6f;
         const float FogVfxIntervalSeconds = 2.5f;
         const int CampfireSearchRadius = 8;
+        // Splits the rain loop between the light and heavy cue. Sits between the light-rain
+        // intensity (0.3) and the heavy-rain intensity (0.7) from WeatherService.
+        const float HeavyPrecipitationIntensity = 0.5f;
 
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -29,7 +34,15 @@ namespace Blockiverse.Gameplay
         float nextFogVfxTime;
         float nextThunderTime;
         WeatherState lastWeatherState = WeatherState.Clear;
+        // The cues last selected for what is falling at the PLAYER'S cell, which is not a property
+        // of the sky: the same thunderstorm is rain in the valley and snow on the peak above it.
+        // Change detection compares freshly selected cues against these, which catches every flip:
+        // weather-state changes AND kind flips under an unchanged state (walking up a freezing
+        // peak mid-storm, or the night boundary dragging the local temperature across the freeze
+        // line). Thunder still keys off lastWeatherState, because a storm rumbles across the whole
+        // map either way.
         BlockiverseAudioCue? activePrecipitationLoop;
+        BlockiverseVfxCue? activePrecipitationVfx;
         BlockiverseAudioCue? activeAmbienceLoop;
         EnvironmentDynamicsController subscribedEnvironmentDynamics;
         bool campfireLoopActive;
@@ -111,33 +124,63 @@ namespace Blockiverse.Gameplay
             }
 
             if (worldManager == null || audioCuePlayer == null ||
-                !worldManager.TryEvaluateEnvironment(AltitudeAtPlayer(), out EnvironmentState environment))
+                !TryEvaluateEnvironmentAtPlayer(out EnvironmentState environment))
             {
                 StopLoops();
                 return;
             }
 
-            UpdatePrecipitationLoop(environment.Weather);
+            UpdatePrecipitationLoop(environment);
+            activePrecipitationVfx = SelectPrecipitationVfx(environment);
             UpdateAmbienceLoop();
             UpdateCampfireLoop();
             TickThunder(environment.Weather);
             lastWeatherState = environment.Weather;
         }
 
-        // ── Precipitation loops ───────────────────────────────────────────────
+        // ── Precipitation cue selection (pure, EditMode-testable without a rig) ───────────
 
-        void UpdatePrecipitationLoop(WeatherState state)
+        // The audio loop for what is falling at the queried location, or null under a dry sky.
+        // Driven by PrecipitationKind, not WeatherState: a rain state below freezing is heard as
+        // snow, and all three snow states (plus any converted storm) collapse to the one snow
+        // loop, exactly as the per-state mapping already did. Light vs. heavy stays a
+        // weather-state distinction, expressed through the state-derived intensity, which
+        // reproduces the old mapping bit-for-bit whenever no rain→snow conversion happens
+        // (light rain 0.3 → light loop; heavy rain 0.7 and thunderstorm 1.0 → heavy loop).
+        public static BlockiverseAudioCue? SelectPrecipitationLoop(EnvironmentState environment)
         {
-            BlockiverseAudioCue? desired = state switch
+            return environment.Precipitation switch
             {
-                WeatherState.LightRain => BlockiverseAudioCue.RainLightLoop,
-                WeatherState.HeavyRain => BlockiverseAudioCue.RainHeavyLoop,
-                WeatherState.Thunderstorm => BlockiverseAudioCue.RainHeavyLoop,
-                WeatherState.LightSnow => BlockiverseAudioCue.SnowWindLoop,
-                WeatherState.HeavySnow => BlockiverseAudioCue.SnowWindLoop,
-                WeatherState.Blizzard => BlockiverseAudioCue.SnowWindLoop,
+                PrecipitationKind.Rain => environment.PrecipitationIntensity >= HeavyPrecipitationIntensity
+                    ? BlockiverseAudioCue.RainHeavyLoop
+                    : BlockiverseAudioCue.RainLightLoop,
+                PrecipitationKind.Snow => BlockiverseAudioCue.SnowWindLoop,
                 _ => null,
             };
+        }
+
+        // The scatter particle for what is falling at the queried location, or null when nothing
+        // falls. Fog is deliberately absent here: fog is not precipitation, so fog wisps stay
+        // keyed to WeatherState.Fog in TickPrecipitationVfx, exactly as before.
+        public static BlockiverseVfxCue? SelectPrecipitationVfx(EnvironmentState environment)
+        {
+            return environment.Precipitation switch
+            {
+                PrecipitationKind.Rain => BlockiverseVfxCue.RainSplash,
+                PrecipitationKind.Snow => BlockiverseVfxCue.SnowflakeDrift,
+                _ => null,
+            };
+        }
+
+        // ── Precipitation loops ───────────────────────────────────────────────
+
+        // Driven by what is falling HERE, not by the sky-wide weather state, so a storm that turns
+        // to snow over a freezing peak is heard as snow while the valley below still hears rain.
+        // Comparing the fresh selection against the active loop is the change detection: it reacts
+        // to kind flips even while the weather state itself is unchanged.
+        void UpdatePrecipitationLoop(EnvironmentState environment)
+        {
+            BlockiverseAudioCue? desired = SelectPrecipitationLoop(environment);
 
             if (desired == activePrecipitationLoop)
                 return;
@@ -289,22 +332,19 @@ namespace Blockiverse.Gameplay
             if (vfxCuePlayer == null || worldManager == null)
                 return;
 
-            switch (lastWeatherState)
+            // Particles follow the locally selected cue for the same reason the audio does: a
+            // thunderstorm over a freezing peak has to drift snowflakes, not splash rain. The cue
+            // is re-selected from the freshly polled environment on every poll — never derived
+            // from a stale weather state — so a kind flip under an unchanged state switches the
+            // particles too. Fog is not precipitation, so it stays keyed to the weather state.
+            if (activePrecipitationVfx.HasValue)
             {
-                case WeatherState.LightRain:
-                case WeatherState.HeavyRain:
-                case WeatherState.Thunderstorm:
-                    PlayScatterVfx(BlockiverseVfxCue.RainSplash, ref nextPrecipitationVfxTime, PrecipitationVfxIntervalSeconds);
-                    break;
-                case WeatherState.LightSnow:
-                case WeatherState.HeavySnow:
-                case WeatherState.Blizzard:
-                    PlayScatterVfx(BlockiverseVfxCue.SnowflakeDrift, ref nextPrecipitationVfxTime, PrecipitationVfxIntervalSeconds);
-                    break;
-                case WeatherState.Fog:
-                    PlayScatterVfx(BlockiverseVfxCue.FogWisp, ref nextFogVfxTime, FogVfxIntervalSeconds);
-                    break;
+                PlayScatterVfx(activePrecipitationVfx.Value, ref nextPrecipitationVfxTime, PrecipitationVfxIntervalSeconds);
+                return;
             }
+
+            if (lastWeatherState == WeatherState.Fog)
+                PlayScatterVfx(BlockiverseVfxCue.FogWisp, ref nextFogVfxTime, FogVfxIntervalSeconds);
         }
 
         void PlayScatterVfx(BlockiverseVfxCue cue, ref float nextTime, float interval)
@@ -317,8 +357,21 @@ namespace Blockiverse.Gameplay
             vfxCuePlayer.PlayCue(cue, headPosition + offset);
         }
 
-        int AltitudeAtPlayer() =>
-            TryGetHeadCell(out BlockPosition cell) ? cell.Y : WorldConstants.SeaLevel;
+        // Environment at the player's head cell, so precipitation feedback matches the local biome
+        // and altitude (rain at the shoreline, snow on the same storm up on the peaks). A head
+        // outside world bounds — creative flight above the ceiling, or past an edge — clamps to
+        // the nearest in-bounds cell so biome and altitude continuity survive: a rain-state storm
+        // falling as snow over a freezing biome must not flip to the temperate sea-level rain
+        // default the moment the head crosses the world ceiling, then flip back on descent. Only
+        // a missing camera or world falls back to the positionless sea-level query — biome
+        // unknown, temperate default.
+        bool TryEvaluateEnvironmentAtPlayer(out EnvironmentState environment)
+        {
+            if (TryGetHeadCellClampedIntoBounds(out BlockPosition cell))
+                return worldManager.TryEvaluateEnvironment(cell, out environment);
+
+            return worldManager.TryEvaluateEnvironment(WorldConstants.SeaLevel, out environment);
+        }
 
         // ── Player position helpers ───────────────────────────────────────────
 
@@ -339,8 +392,31 @@ namespace Blockiverse.Gameplay
             return worldManager.World.Bounds.Contains(cell);
         }
 
+        // Head cell for environment queries only: an out-of-bounds head clamps to the nearest
+        // in-bounds cell instead of failing, preserving the local biome and the altitude band.
+        // Deliberately not used by the campfire scan, whose radius search wants a genuinely
+        // in-world anchor.
+        bool TryGetHeadCellClampedIntoBounds(out BlockPosition cell)
+        {
+            cell = default;
+            if (!TryGetHeadWorldPosition(out Vector3 position) || worldManager.World == null)
+                return false;
+
+            BlockPosition raw = CreativeInteractionController.ToBlockPosition(position);
+            WorldBounds bounds = worldManager.World.Bounds;
+            cell = new BlockPosition(
+                Mathf.Clamp(raw.X, 0, bounds.Width - 1),
+                Mathf.Clamp(raw.Y, 0, bounds.Height - 1),
+                Mathf.Clamp(raw.Z, 0, bounds.Depth - 1));
+            return true;
+        }
+
         void StopLoops()
         {
+            // Cleared before the audio-player guard: this drives the particle scatter, which runs
+            // on its own cadence and would otherwise keep raining after the weather query fails.
+            activePrecipitationVfx = null;
+
             if (audioCuePlayer == null)
                 return;
 

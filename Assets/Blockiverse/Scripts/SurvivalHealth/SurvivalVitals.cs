@@ -27,7 +27,20 @@ namespace Blockiverse.Survival
         public const int EnvironmentExposureDamageIntervalTicks = 600;
         public const int EnvironmentExposureDamagePerInterval = 1;
         public const float ColdExposureTemperatureThresholdC = 2.0f;
-        public const float NightColdPressureThresholdC = 5.0f;
+        // Night-cold threshold, chosen against the §6.2 altitude lapse so the temperate starter
+        // biomes stay safe on clear nights across their real terrain, not just at sea level. A
+        // pinewild clear night is 10 - 5 - 0.15 °C per block above sea level: the previous 5.0
+        // threshold was met exactly at sea level but crossed by every column even one block
+        // higher, taxing effectively the whole forest 20 HP per clear night. At 3.0 the pinewild
+        // floor stays safe through +13 blocks and clear-night pressure starts at +14 (2.9 °C),
+        // meadow and wetland cannot reach it inside the 0-48 playable relief band, and highlands
+        // (night terrain at or below -2.1 °C) and tundra stay dangerous. Strictly below, not
+        // at-or-below: whether a place that lands exactly on the threshold bleeds every night
+        // must be a decision, not a float-boundary accident — pinned by
+        // SurvivalVitalsEditModeTests.NightColdThresholdExcludesItsOwnBoundary, and pinned at
+        // representative pinewild altitudes by
+        // WeatherServiceEditModeTests.TemperateForestOnAClearNightIsNotInColdPressure.
+        public const float NightColdPressureThresholdC = 3.0f;
         public const float FallSafeDistanceMeters = 3.0f;
         public const int FallDamagePerMeter = 6;
         public const int FallMaxDamage = 60;
@@ -126,8 +139,23 @@ namespace Blockiverse.Survival
             if (!exposure.SkyExposed)
                 return 0;
 
+            // Cold bites at night or while weather is actually falling on the player — not from
+            // ambient daytime air alone. Without this gate an inherently sub-zero biome deals
+            // continuous damage the instant the world loads: tundra's §6.1 base is -8 °C, "tundra"
+            // is a selectable starting biome, and the spawn search deliberately puts the player on
+            // one, so a clear-daylight spawn would begin draining health with a roof as the only
+            // counterplay and no heat source implemented anywhere to offset it. Gating on night or
+            // precipitation restores real counterplay (shelter, or wait out the weather) and keeps
+            // cold exposure to what the ruleset actually specifies — §12.5 scopes it to being
+            // sky-exposed during a blizzard, and §15.4's "under roof removes weather exposure".
+            // The biome model still decides who suffers: any snowfall is lethal in the tundra and
+            // no storm is ever cold enough in the dunes.
+            bool precipitating = exposure.PrecipitationIntensity > 0.0f;
+            if (!exposure.IsNight && !precipitating)
+                return 0;
+
             bool coldEnough = exposure.TemperatureC <= ColdExposureTemperatureThresholdC;
-            bool nightCold = exposure.IsNight && exposure.TemperatureC <= NightColdPressureThresholdC;
+            bool nightCold = exposure.IsNight && exposure.TemperatureC < NightColdPressureThresholdC;
             if (!coldEnough && !nightCold)
                 return 0;
 
