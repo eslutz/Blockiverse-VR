@@ -2,36 +2,48 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
-    // Glide-locomotion footsteps and landing feedback: stride-timed footstep cues while the
-    // character controller moves on the ground, and a landing cue when it touches down after a
-    // fall. Lives on the XR rig next to the CharacterController.
+    // Glide-locomotion footsteps and landing feedback. Footstep cues come from the shared
+    // BlockiverseGaitCycle so they land on the same walk cycle the camera bob is drawn from; the
+    // landing cue is this component's own, fired when the rig touches down after a fall. Lives on
+    // the XR rig next to the CharacterController.
     [DisallowMultipleComponent]
     public sealed class BlockiverseLocomotionFeedback : MonoBehaviour
     {
-        // One footstep per stride length of horizontal travel (~walking cadence at glide speed).
-        public const float StrideMeters = 1.8f;
         // Falls shorter than this land silently (stepping off a single block stays quiet).
         public const float LandingMinFallSpeed = 3.0f;
 
         [SerializeField] CharacterController characterController;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseGaitCycle gaitCycle;
 
         Vector3 lastPosition;
-        float strideAccumulator;
         bool wasGrounded;
-        float lastVerticalSpeed;
+        float peakFallSpeed;
+        bool subscribed;
 
-        public void Configure(CharacterController controller, BlockiverseAudioCuePlayer cuePlayer)
+        public void Configure(CharacterController controller, BlockiverseAudioCuePlayer cuePlayer, BlockiverseGaitCycle gait = null)
         {
+            Unsubscribe();
             characterController = controller;
             audioCuePlayer = cuePlayer;
+
+            if (gait != null)
+                gaitCycle = gait;
+
+            Subscribe();
         }
 
         void OnEnable()
         {
             ResolveReferences();
             lastPosition = transform.position;
-            wasGrounded = characterController != null && characterController.isGrounded;
+            wasGrounded = gaitCycle != null && gaitCycle.IsGrounded;
+            Subscribe();
+        }
+
+        void OnDisable()
+        {
+            Unsubscribe();
         }
 
         void ResolveReferences()
@@ -41,53 +53,77 @@ namespace Blockiverse.Gameplay
 
             if (audioCuePlayer == null)
                 audioCuePlayer = GetComponent<BlockiverseAudioCuePlayer>() ?? FindFirstObjectByType<BlockiverseAudioCuePlayer>();
+
+            if (gaitCycle == null)
+                gaitCycle = GetComponent<BlockiverseGaitCycle>() ?? GetComponentInParent<BlockiverseGaitCycle>();
+
+            // Rigs generated before the gait cycle existed still need one; the bootstrapper puts it
+            // on the prefab, this only covers a stale prefab at runtime.
+            if (gaitCycle == null && Application.isPlaying)
+            {
+                gaitCycle = gameObject.AddComponent<BlockiverseGaitCycle>();
+                gaitCycle.Configure(characterController);
+            }
+        }
+
+        void Subscribe()
+        {
+            if (subscribed || gaitCycle == null)
+                return;
+
+            gaitCycle.Footfall += OnFootfall;
+            subscribed = true;
+        }
+
+        void Unsubscribe()
+        {
+            if (!subscribed)
+                return;
+
+            // Clear the flag even when the gait is gone (destroyed components read as null), or a
+            // later Configure with a fresh gait would see subscribed still true and silently never
+            // resubscribe.
+            subscribed = false;
+
+            if (gaitCycle != null)
+                gaitCycle.Footfall -= OnFootfall;
+        }
+
+        void OnFootfall()
+        {
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
         }
 
         void Update()
         {
-            if (characterController == null)
+            if (gaitCycle == null)
                 return;
 
             Vector3 position = transform.position;
             Vector3 delta = position - lastPosition;
             lastPosition = position;
 
-            bool grounded = characterController.isGrounded;
+            bool grounded = gaitCycle.IsGrounded;
             float verticalSpeed = Time.deltaTime > 0f ? delta.y / Time.deltaTime : 0f;
 
-            // Landing: grounded after airborne with meaningful downward speed last frame.
-            if (grounded && !wasGrounded && lastVerticalSpeed < -LandingMinFallSpeed)
-            {
-                audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
-                strideAccumulator = 0f;
-            }
+            // Track the fastest downward speed of the whole fall rather than the previous frame's
+            // sample: the impact frame's delta is truncated to the remaining gap above the ground,
+            // and the grounded flag arrives with a frame of lag that depends on unspecified script
+            // order — a single-frame sample misses real landings on both counts.
+            if (!grounded && verticalSpeed < 0f)
+                peakFallSpeed = Mathf.Max(peakFallSpeed, -verticalSpeed);
 
-            // Footsteps: accumulate horizontal travel while grounded; teleports (large frame
-            // jumps) reset instead of machine-gunning steps.
+            // Landing: grounded after airborne with a meaningful fall behind it. The gait
+            // suppression gate keeps creative flight's ground-skimming and menu-focused states
+            // silent; footstep cues need no equivalent check because a suppressed gait raises no
+            // Footfall events at all.
+            if (grounded && !wasGrounded && !gaitCycle.IsSuppressed && peakFallSpeed > LandingMinFallSpeed)
+                audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
+
             if (grounded)
-            {
-                float horizontal = new Vector2(delta.x, delta.z).magnitude;
-                if (horizontal > 2.0f)
-                {
-                    strideAccumulator = 0f;
-                }
-                else if (horizontal > 0.001f)
-                {
-                    strideAccumulator += horizontal;
-                    if (strideAccumulator >= StrideMeters)
-                    {
-                        strideAccumulator -= StrideMeters;
-                        audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
-                    }
-                }
-            }
-            else
-            {
-                strideAccumulator = 0f;
-            }
+                peakFallSpeed = 0f;
 
             wasGrounded = grounded;
-            lastVerticalSpeed = verticalSpeed;
         }
     }
 }

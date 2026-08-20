@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Blockiverse.Core;
 using Blockiverse.Editor;
@@ -30,10 +31,12 @@ namespace Blockiverse.Tests.EditMode
         const string AndroidActivityTitleRuntimePath = "Assets/Blockiverse/Scripts/Core/BlockiverseAndroidActivityTitle.cs";
         const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         const string OculusProjectConfigPath = "Assets/Oculus/OculusProjectConfig.asset";
+        const string BlockiverseXrRigPrefabPath = "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab";
         const string LegacyAndroidResourcePath = "Assets/Plugins/Android/res";
         const string OculusRuntimeSettingsPath = "Assets/Resources/OculusRuntimeSettings.asset";
         const string VersionSettingsPath = "ProjectSettings/ProjectVersion.txt";
         const string NetcodeProjectSettingsPath = "ProjectSettings/NetcodeForGameObjects.asset";
+        const string PlayerProjectSettingsPath = "ProjectSettings/ProjectSettings.asset";
         const string ManifestPath = "Packages/manifest.json";
         const string XrGeneralSettingsPath = "Assets/XR/XRGeneralSettingsPerBuildTarget.asset";
         const string BuildSmokePath = "Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs";
@@ -471,6 +474,94 @@ namespace Blockiverse.Tests.EditMode
             StringAssert.Contains("interactionRay.IsOverUIGameObject()", inputRig);
             StringAssert.Contains("!smoothTurn && !suppressTurnForUi", inputRig);
             StringAssert.Contains("smoothTurn && !suppressTurnForUi", inputRig);
+        }
+
+        [Test]
+        public void ProjectOwnedScriptingDefinesArePresentOnBothTargets()
+        {
+            // The project-owned defines must be present on both build targets. Whichever target is
+            // active when an editor hook runs used to decide where a define landed, so the two lists
+            // drifted and every invocation dirtied ProjectSettings. Package-managed defines
+            // (SENTIS_ANALYTICS_ENABLED, APP_UI_EDITOR_ONLY) are deliberately not asserted: their
+            // owners move them per active target, so the full lists are allowed to differ.
+            Assert.That(File.Exists(PlayerProjectSettingsPath), Is.True);
+            string settings = File.ReadAllText(PlayerProjectSettingsPath);
+
+            // Scoped to the defines block: ProjectSettings has several other "Android:" keys.
+            Match block = Regex.Match(
+                settings,
+                @"^  scriptingDefineSymbols:\r?\n(?<body>(?:    [^\r\n]*\r?\n)+)",
+                RegexOptions.Multiline);
+            Assert.That(block.Success, Is.True, "scriptingDefineSymbols block not found.");
+
+            string body = block.Groups["body"].Value;
+            Match android = Regex.Match(body, @"^    Android: (.*)$", RegexOptions.Multiline);
+            Match standalone = Regex.Match(body, @"^    Standalone: (.*)$", RegexOptions.Multiline);
+
+            Assert.That(android.Success, Is.True, "Android scripting defines not found.");
+            Assert.That(standalone.Success, Is.True, "Standalone scripting defines not found.");
+
+            string[] required =
+            {
+                "OVR_DISABLE_HAND_PINCH_BUTTON_MAPPING",
+                "USE_INPUT_SYSTEM_POSE_CONTROL",
+                "USE_STICK_CONTROL_THUMBSTICKS",
+            };
+
+            // Split-and-compare rather than substring matching, so a symbol mutating into a
+            // superstring (FOO_LEGACY replacing FOO) cannot satisfy the assertion.
+            var androidSymbols = android.Groups[1].Value.Trim().Split(';');
+            var standaloneSymbols = standalone.Groups[1].Value.Trim().Split(';');
+
+            foreach (string symbol in required)
+            {
+                Assert.That(androidSymbols, Does.Contain(symbol));
+                Assert.That(standaloneSymbols, Does.Contain(symbol));
+            }
+        }
+
+        [Test]
+        public void MetaProjectConfigStaysControllersOnly()
+        {
+            // The roadmap targets Quest controllers only for the initial release; hand tracking is a
+            // V2 feature. The bootstrapper asserts ControllersOnly, so a committed 1 here means an
+            // SDK upgrade drifted the asset and the next bootstrap run would revert it.
+            Assert.That(File.Exists(OculusProjectConfigPath), Is.True);
+            string config = File.ReadAllText(OculusProjectConfigPath);
+
+            StringAssert.Contains("handTrackingSupport: 0", config);
+        }
+
+        [Test]
+        public void CreativeToolsButtonsAreWiredExactlyOnce()
+        {
+            // Bare AddPersistentListener over an existing prefab stacked another copy of every
+            // handler on each bootstrap run; the prefab had reached 83 copies, so a single click
+            // ran each region operation 83 times. WireButton clears before it adds.
+            string prefab = File.ReadAllText(BlockiverseXrRigPrefabPath);
+
+            string[] methods =
+            {
+                "SetCornerA", "SetCornerB", "FillRegion", "ReplaceRegion", "DeleteRegion",
+                "CopyRegion", "PasteRegion", "UndoEdit", "RedoEdit", "CycleWeather",
+            };
+
+            foreach (string method in methods)
+            {
+                int count = Regex.Matches(prefab, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count;
+                Assert.That(count, Is.EqualTo(1), $"{method} should be wired exactly once, found {count}.");
+            }
+
+            // All wiring lives in the prefab: a duplicate landing as a prefab-instance override in
+            // the Boot scene would double-fire in the shipped build while the prefab count stays 1.
+            string bootScene = File.ReadAllText("Assets/Blockiverse/Scenes/Boot.unity");
+            foreach (string method in methods)
+            {
+                Assert.That(
+                    Regex.Matches(bootScene, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count,
+                    Is.Zero,
+                    $"{method} must not be wired as a Boot scene override.");
+            }
         }
 
         [Test]

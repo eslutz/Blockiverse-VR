@@ -84,6 +84,15 @@ namespace Blockiverse.Editor
 
             BlockiverseInputRig.ConfigureCharacterController(characterController);
 
+            // The shared walk cycle. Both the camera bob and the footstep cues read this one phase,
+            // so the step always lands on the bob rather than drifting against it.
+            BlockiverseGaitCycle gaitCycle = rig.GetComponent<BlockiverseGaitCycle>();
+
+            if (gaitCycle == null)
+                gaitCycle = rig.AddComponent<BlockiverseGaitCycle>();
+
+            gaitCycle.Configure(characterController);
+
             XRBodyTransformer bodyTransformer = rig.GetComponent<XRBodyTransformer>();
 
             if (bodyTransformer == null)

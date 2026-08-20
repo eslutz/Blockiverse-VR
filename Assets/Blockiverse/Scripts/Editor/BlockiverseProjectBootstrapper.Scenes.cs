@@ -292,6 +292,20 @@ namespace Blockiverse.Editor
             EnsureSingleRootGameObject(scene, MenuCompositionCanvasName);
             GameObject rig = EnsureSingleRootGameObject(scene, BlockiverseProject.XrRigRootName);
 
+            // Reuse an existing instance of the current rig prefab. Destroying and re-instantiating
+            // unconditionally renumbers the scene's PrefabInstance fileID on every run, so a rerun
+            // dirtied Boot.unity by ~230 lines even when nothing had actually changed. A prefab
+            // instance already tracks the asset, so only a foreign or unpacked root needs replacing.
+            if (rig != null &&
+                PrefabUtility.IsPartOfPrefabInstance(rig) &&
+                PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(rig) == AssetDatabase.GetAssetPath(rigPrefab))
+            {
+                rig.name = BlockiverseProject.XrRigRootName;
+                RemoveGeneratedCompositionLayerSceneOverrides(rig);
+                EditorUtility.SetDirty(rig);
+                return;
+            }
+
             if (rig != null)
             {
                 if (PrefabUtility.IsPartOfPrefabInstance(rig))
@@ -302,7 +316,7 @@ namespace Blockiverse.Editor
             }
 
             GameObject rigInstance = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab, scene);
-if (rigInstance != null)
+            if (rigInstance != null)
             {
                 rigInstance.name = BlockiverseProject.XrRigRootName;
                 RemoveGeneratedCompositionLayerSceneOverrides(rigInstance);

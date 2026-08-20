@@ -68,7 +68,7 @@ type FeedbackEvent = {
 | UI buttons | Play UI cues immediately on local selection/confirm/cancel. |
 | Crafting | Play success/fail after local host result or received command result. |
 | Inventory | Play open/close locally when menus open/close. |
-| Footsteps | Play locally from locomotion cadence; remote footsteps use remote pose speed with distance attenuation. |
+| Footsteps | Play locally from the shared gait cycle, which advances on horizontal travel so cues stay locked to the walk bob; remote footsteps use remote pose speed with distance attenuation. |
 | Weather | Weather manager emits ambient audio/VFX state changes from authoritative or saved world environment state. |
 | Multiplayer disconnect | UI status event plays non-spatial cancel/warning cue and optional haptic tick. |
 
@@ -126,8 +126,8 @@ Subtitles/Feedback Toasts toggle
 | `ui_select` | `UiSelect` | Hover/selection tick. | 2D UI. | 0.10s | Medium | `UiTick` optional |
 | `ui_confirm` | `UiConfirm` | Button accepted, session start, menu confirm. | 2D UI. | 0.18s | Medium | `UiTick` |
 | `ui_cancel` | `UiCancel` | Back, failed action, stop session. | 2D UI. | 0.18s | Medium | `UiTick` |
-| `footstep_01` | `Footstep` | Locomotion cadence. | Local 2D low-volume or world-space under feet. | 0.135s | Low | None |
-| `footstep_02` | `Footstep` | Alternate locomotion cadence. | Local 2D low-volume or world-space under feet. | 0.135s | Low | None |
+| `footstep_01` | `Footstep` | Locomotion cadence. Soft granular crunch, noise-dominated so it never reads as a block cue. | Local 2D low-volume or world-space under feet. | 0.155s | Low | None |
+| `footstep_02` | `Footstep` | Alternate locomotion cadence. Brighter crunch variant. | Local 2D low-volume or world-space under feet. | 0.155s | Low | None |
 | `inventory_open` | `InventoryOpen` | Inventory/menu opens. | 2D UI. | 0.18s | Medium | `UiTick` optional |
 | `inventory_close` | `InventoryClose` | Inventory/menu closes. | 2D UI. | 0.16s | Medium | `UiTick` optional |
 | `craft_success` | `CraftSuccess` | Host/local crafting accepted. | 2D UI with optional station world layer. | 0.24s | Medium | Light pulse optional |
@@ -159,7 +159,7 @@ Subtitles/Feedback Toasts toggle
 | Block break/place | 0.03s per source; 0.01s global emergency cap. |
 | UI select | 0.06s per pointer target. |
 | UI confirm/cancel | 0.10s. |
-| Footstep | Driven by locomotion cadence; never faster than 0.18s per footstep by default. |
+| Footstep | One cue per step of horizontal travel (0.79 m), fired a tenth of a step ahead of the walk bob's low point so the cue leads the view drop as a real step does. Rate-capped at 0.18s per footstep: crossings past the cap are swallowed, so sprint cadence thins rather than machine-guns. |
 | Craft success/fail | 0.20s. |
 
 ---

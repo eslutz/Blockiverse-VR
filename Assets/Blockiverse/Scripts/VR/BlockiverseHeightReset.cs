@@ -10,11 +10,24 @@ namespace Blockiverse.VR
 
         [SerializeField] XROrigin origin;
         [SerializeField] BlockiverseComfortSettings settings;
+        [SerializeField] BlockiverseGlideBobController bobController;
 
         public void Configure(XROrigin xrOrigin, BlockiverseComfortSettings comfortSettings)
         {
             origin = xrOrigin;
             settings = comfortSettings;
+        }
+
+        // Both height writes below set an absolute Y, discarding any walk bob currently folded into
+        // it. Telling the bob controller to forget its applied offset keeps it from subtracting that
+        // stale offset from the freshly written base height on the next frame.
+        void ClearBobOffset()
+        {
+            if (bobController == null && origin != null)
+                bobController = origin.GetComponent<BlockiverseGlideBobController>();
+
+            if (bobController != null)
+                bobController.ClearAppliedOffset();
         }
 
         public void ResetHeight()
@@ -48,6 +61,7 @@ namespace Blockiverse.VR
             Vector3 offset = cameraOffset.localPosition;
             offset.y = 0.0f;
             cameraOffset.localPosition = offset;
+            ClearBobOffset();
         }
 
         public void ApplyStandingEyeHeight(float standingEyeHeight)
@@ -72,6 +86,7 @@ namespace Blockiverse.VR
             Vector3 offset = cameraOffset.localPosition;
             offset.y = standingEyeHeight - trackedEyeHeight;
             cameraOffset.localPosition = offset;
+            ClearBobOffset();
         }
     }
 }
