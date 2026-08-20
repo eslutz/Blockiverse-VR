@@ -89,13 +89,21 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void DirtyChunkQueueDoesNotMarkNeighborChunksOutsideLightProbeRange()
         {
-            var world = new VoxelWorld(new WorldBounds(32, 16, 16), chunkSize: 16, seed: 1);
+            // The invalidation halo is max(DefaultProbeDistance 12, MaxEmitterReachDistance 16) + 1
+            // = 17 cells: an edit can occlude or reveal an emitter's line of sight up to the full
+            // emitter reach away, so a change at x = 1 legitimately dirties cells through x = 18 —
+            // into the second chunk. What must stay bounded is the halo itself: the third chunk
+            // (x >= 32) is beyond any light interaction with this edit and must never be marked.
+            // (This expectation once pinned the pre-emitter padding of 13 and a single dirty
+            // chunk; the emitter rework widened the reach deliberately and this test was not
+            // updated with it — it arrived red from the night-lighting merge.)
+            var world = new VoxelWorld(new WorldBounds(48, 16, 16), chunkSize: 16, seed: 1);
             var queue = new ChunkRebuildQueue(world);
 
             world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Graystone);
 
             CollectionAssert.AreEquivalent(
-                new[] { new ChunkCoordinate(0, 0, 0) },
+                new[] { new ChunkCoordinate(0, 0, 0), new ChunkCoordinate(1, 0, 0) },
                 queue.DrainDirtyChunks().ToArray());
         }
 
