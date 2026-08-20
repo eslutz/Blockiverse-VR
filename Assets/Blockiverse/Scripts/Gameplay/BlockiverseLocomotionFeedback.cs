@@ -18,7 +18,7 @@ namespace Blockiverse.Gameplay
 
         Vector3 lastPosition;
         bool wasGrounded;
-        float lastVerticalSpeed;
+        float peakFallSpeed;
         bool subscribed;
 
         public void Configure(CharacterController controller, BlockiverseAudioCuePlayer cuePlayer, BlockiverseGaitCycle gait = null)
@@ -77,11 +77,16 @@ namespace Blockiverse.Gameplay
 
         void Unsubscribe()
         {
-            if (!subscribed || gaitCycle == null)
+            if (!subscribed)
                 return;
 
-            gaitCycle.Footfall -= OnFootfall;
+            // Clear the flag even when the gait is gone (destroyed components read as null), or a
+            // later Configure with a fresh gait would see subscribed still true and silently never
+            // resubscribe.
             subscribed = false;
+
+            if (gaitCycle != null)
+                gaitCycle.Footfall -= OnFootfall;
         }
 
         void OnFootfall()
@@ -101,15 +106,24 @@ namespace Blockiverse.Gameplay
             bool grounded = gaitCycle.IsGrounded;
             float verticalSpeed = Time.deltaTime > 0f ? delta.y / Time.deltaTime : 0f;
 
-            // Landing: grounded after airborne with meaningful downward speed last frame. The gait
+            // Track the fastest downward speed of the whole fall rather than the previous frame's
+            // sample: the impact frame's delta is truncated to the remaining gap above the ground,
+            // and the grounded flag arrives with a frame of lag that depends on unspecified script
+            // order — a single-frame sample misses real landings on both counts.
+            if (!grounded && verticalSpeed < 0f)
+                peakFallSpeed = Mathf.Max(peakFallSpeed, -verticalSpeed);
+
+            // Landing: grounded after airborne with a meaningful fall behind it. The gait
             // suppression gate keeps creative flight's ground-skimming and menu-focused states
             // silent; footstep cues need no equivalent check because a suppressed gait raises no
             // Footfall events at all.
-            if (grounded && !wasGrounded && !gaitCycle.IsSuppressed && lastVerticalSpeed < -LandingMinFallSpeed)
+            if (grounded && !wasGrounded && !gaitCycle.IsSuppressed && peakFallSpeed > LandingMinFallSpeed)
                 audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
 
+            if (grounded)
+                peakFallSpeed = 0f;
+
             wasGrounded = grounded;
-            lastVerticalSpeed = verticalSpeed;
         }
     }
 }

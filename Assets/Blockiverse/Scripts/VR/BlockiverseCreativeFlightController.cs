@@ -52,6 +52,12 @@ namespace Blockiverse.VR
         {
             if (inputRig != rig)
             {
+                // The cached gait belongs to the old rig; leaving it would keep suppressing the old
+                // rig's cycle while the new rig's cycle never learns about flight.
+                if (gaitCycle != null)
+                    gaitCycle.ExternallySuppressed = false;
+
+                gaitCycle = null;
                 inputRig = rig;
                 ClearCachedAimSources();
             }

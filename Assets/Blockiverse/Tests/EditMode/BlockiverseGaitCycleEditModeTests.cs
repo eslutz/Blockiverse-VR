@@ -65,17 +65,22 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void TeleportDoesNotFireFootfalls()
+        public void TeleportDoesNotFireFootfallsOrSnapThePhase()
         {
             (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
             int footfalls = 0;
             gait.Footfall += () => footfalls++;
 
-            rig.transform.position = new Vector3(0f, 0f, 40f);
+            // Walk partway into a step first so the phase sits at a non-trivial value.
+            Walk(rig, gait, Mathf.CeilToInt(0.3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            float phaseBefore = gait.BobPhase01;
+
+            rig.transform.position += new Vector3(0f, 0f, 40f);
             gait.Advance(FrameSeconds);
 
             Assert.That(footfalls, Is.Zero);
             Assert.That(gait.IsStepping, Is.False);
+            Assert.That(gait.BobPhase01, Is.EqualTo(phaseBefore).Within(0.0001f), "a teleport must not snap the bob phase");
         }
 
         [Test]
@@ -110,6 +115,10 @@ namespace Blockiverse.Tests.EditMode
             int footfalls = 0;
             gait.Footfall += () => footfalls++;
 
+            // Walk partway into a step before suppressing so the phase-hold assertion is not
+            // trivially satisfied by the start value.
+            Walk(rig, gait, Mathf.CeilToInt(0.2f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            float phaseBefore = gait.BobPhase01;
             gait.ExternallySuppressed = true;
 
             // Creative flight skimming the ground: grounded, moving, but not walking.
@@ -118,12 +127,13 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(footfalls, Is.Zero);
             Assert.That(gait.IsStepping, Is.False);
             Assert.That(gait.IsSuppressed, Is.True);
+            Assert.That(gait.BobPhase01, Is.EqualTo(phaseBefore).Within(0.0001f), "suppression must hold the phase, not snap it");
 
-            // Landing out of flight and walking again earns a footfall only after real travel.
-            // The phase held at mid-step (0.5) through the suppression, so the next crossing sits
-            // 0.4 steps out: none after 0.3 steps, one shortly after.
+            // Landing out of flight and walking again earns a footfall only after real travel: the
+            // held phase sits ~0.2 steps short of the next crossing... it is at start (0.5) + 0.2
+            // walked, so the crossing at phase 0.9 is ~0.2 steps out. None immediately, one after.
             gait.ExternallySuppressed = false;
-            Walk(rig, gait, Mathf.CeilToInt(0.3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            Walk(rig, gait, Mathf.CeilToInt(0.1f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
             Assert.That(footfalls, Is.Zero);
             Walk(rig, gait, Mathf.CeilToInt(0.3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
             Assert.That(footfalls, Is.EqualTo(1));

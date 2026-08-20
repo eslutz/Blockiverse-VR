@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using Unity.XR.CoreUtils;
 using UnityEngine;
+using UnityEngine.XR;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 
@@ -20,8 +22,12 @@ namespace Blockiverse.VR
         [SerializeField] float amplitude = 0.015f;
         [SerializeField] float speedFollowRate = 6.0f;
 
+        static readonly List<XRInputSubsystem> ScratchInputSubsystems = new();
+
+        readonly List<XRInputSubsystem> subscribedInputSubsystems = new();
         float lastAppliedBobY;
         float followedSpeed;
+        int subsystemRescanCountdown;
 
         public float Amplitude
         {
@@ -30,6 +36,46 @@ namespace Blockiverse.VR
         }
 
         public BlockiverseGaitCycle GaitCycle => gaitCycle;
+
+        void OnEnable()
+        {
+            SubscribeToTrackingOriginUpdates();
+        }
+
+        void OnDisable()
+        {
+            foreach (XRInputSubsystem subsystem in subscribedInputSubsystems)
+            {
+                if (subsystem != null)
+                    subsystem.trackingOriginUpdated -= OnTrackingOriginUpdated;
+            }
+
+            subscribedInputSubsystems.Clear();
+        }
+
+        // A recenter (Meta-button long press) or boundary recalibration makes XROrigin rewrite the
+        // camera offset's Y absolutely, silently discarding any bob folded into it. Forgetting our
+        // applied offset on that signal keeps the next frame from subtracting a bob that the new
+        // base height no longer contains. Subsystems can start after OnEnable, so the scan retries
+        // on a slow cadence from LateUpdate until one is found.
+        void SubscribeToTrackingOriginUpdates()
+        {
+            SubsystemManager.GetSubsystems(ScratchInputSubsystems);
+            foreach (XRInputSubsystem subsystem in ScratchInputSubsystems)
+            {
+                if (subscribedInputSubsystems.Contains(subsystem))
+                    continue;
+
+                subsystem.trackingOriginUpdated -= OnTrackingOriginUpdated;
+                subsystem.trackingOriginUpdated += OnTrackingOriginUpdated;
+                subscribedInputSubsystems.Add(subsystem);
+            }
+        }
+
+        void OnTrackingOriginUpdated(XRInputSubsystem subsystem)
+        {
+            ClearAppliedOffset();
+        }
 
         void Awake()
         {
@@ -56,6 +102,12 @@ namespace Blockiverse.VR
         {
             if (xrOrigin == null || xrOrigin.CameraFloorOffsetObject == null)
                 return;
+
+            if (--subsystemRescanCountdown <= 0)
+            {
+                subsystemRescanCountdown = 60;
+                SubscribeToTrackingOriginUpdates();
+            }
 
             float deltaTime = EffectiveDeltaTime();
             Transform cameraOffset = xrOrigin.CameraFloorOffsetObject.transform;

@@ -142,10 +142,11 @@ namespace Blockiverse.Gameplay
             if (!stepping)
             {
                 // The phase itself is never snapped: the bob reads it every frame, and a jump in
-                // phase is a jump in the camera. Leaving the ground, teleporting, or being
-                // suppressed instead re-seeds the footfall index, so travel from before the break
-                // cannot burst-fire a stale cue when stepping resumes. Merely stopping keeps the
-                // index too, so a tapped stick accumulates toward the next footfall.
+                // phase is a jump in the camera. The frozen phase is what prevents a burst of stale
+                // cues when stepping resumes — travel while not stepping never advances it. The
+                // re-seed below is defence in depth: it pins the footfall index back to the phase
+                // in case a future change lets the two drift across a break. Merely stopping keeps
+                // both, so a tapped stick accumulates toward the next footfall.
                 if (!grounded || teleported || IsSuppressed)
                     ReseedFootfallIndex();
 

@@ -508,10 +508,15 @@ namespace Blockiverse.Tests.EditMode
                 "USE_STICK_CONTROL_THUMBSTICKS",
             };
 
+            // Split-and-compare rather than substring matching, so a symbol mutating into a
+            // superstring (FOO_LEGACY replacing FOO) cannot satisfy the assertion.
+            var androidSymbols = android.Groups[1].Value.Trim().Split(';');
+            var standaloneSymbols = standalone.Groups[1].Value.Trim().Split(';');
+
             foreach (string symbol in required)
             {
-                Assert.That(android.Groups[1].Value, Does.Contain(symbol));
-                Assert.That(standalone.Groups[1].Value, Does.Contain(symbol));
+                Assert.That(androidSymbols, Does.Contain(symbol));
+                Assert.That(standaloneSymbols, Does.Contain(symbol));
             }
         }
 
@@ -545,6 +550,17 @@ namespace Blockiverse.Tests.EditMode
             {
                 int count = Regex.Matches(prefab, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count;
                 Assert.That(count, Is.EqualTo(1), $"{method} should be wired exactly once, found {count}.");
+            }
+
+            // All wiring lives in the prefab: a duplicate landing as a prefab-instance override in
+            // the Boot scene would double-fire in the shipped build while the prefab count stays 1.
+            string bootScene = File.ReadAllText("Assets/Blockiverse/Scenes/Boot.unity");
+            foreach (string method in methods)
+            {
+                Assert.That(
+                    Regex.Matches(bootScene, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count,
+                    Is.Zero,
+                    $"{method} must not be wired as a Boot scene override.");
             }
         }
 
