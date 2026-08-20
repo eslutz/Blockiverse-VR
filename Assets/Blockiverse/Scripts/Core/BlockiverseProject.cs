@@ -34,6 +34,18 @@ namespace Blockiverse.Core
         public const string XrVisualProjectionLayerName = "BlockiverseXrVisuals";
         public const int XrVisualProjectionLayerIndex = 12;
         public const int XrVisualProjectionLayerMask = 1 << XrVisualProjectionLayerIndex;
-        public const int VrUiRaycastLayerMask = InteractionLayerMask;
+        // Fluid chunk geometry lives on its own layer so the player falls through water instead of
+        // standing on it. Contact exclusion alone is not enough: XRI's GravityProvider resolves
+        // "grounded" with a PhysicsScene.SphereCast, and scene queries ignore Collider.excludeLayers,
+        // so a fluid collider on the interaction layer reads as solid ground to gravity.
+        public const string FluidLayerName = "BlockiverseFluid";
+        public const int FluidLayerIndex = 13;
+        public const int FluidLayerMask = 1 << FluidLayerIndex;
+        // Ground detection: solid chunk colliders and the void safety floor only. This is the one
+        // mask that deliberately excludes fluid — widening it reintroduces walking on water.
+        public const int VoxelGroundLayerMask = InteractionLayerMask;
+        // Ray targeting: block interaction (place/mine), drink/bucket fill on water, and teleport
+        // landing. Water is a valid target for all three, so it is included here.
+        public const int VrUiRaycastLayerMask = InteractionLayerMask | FluidLayerMask;
     }
 }

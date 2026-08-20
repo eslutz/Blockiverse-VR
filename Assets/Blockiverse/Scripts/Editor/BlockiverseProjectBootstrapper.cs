@@ -263,6 +263,8 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureInteractionLayer();
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
+            EnsureFluidLayer();
+            ConfigureFluidLayerCollisionMatrix();
             EnsureInteractionMaterials();
             EnsureInputActions();
             EnsureXrRigPrefab();
@@ -270,6 +272,7 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureBootScene();
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
+            EnsureFluidLayer();
 
             AssetDatabase.SaveAssets();
             
@@ -1003,9 +1006,104 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
             return EnsureUnityLayer(BlockiverseProject.XrVisualProjectionLayerName, BlockiverseProject.XrVisualProjectionLayerIndex);
         }
 
+        static int EnsureFluidLayer()
+        {
+            return EnsureUnityLayer(BlockiverseProject.FluidLayerName, BlockiverseProject.FluidLayerIndex);
+        }
+
+        // Clears the fluid layer's row in the physics collision matrix so the player's
+        // CharacterController sweeps straight through water. The fluid MeshCollider also sets
+        // excludeLayers = ~0, but that is contact-pair filtering on the collider; the matrix is the
+        // documented, deterministic mechanism and does not depend on how PhysX treats a character
+        // controller sweep against an excluded collider.
+        static void ConfigureFluidLayerCollisionMatrix()
+        {
+            const string dynamicsManagerPath = "ProjectSettings/DynamicsManager.asset";
+            UnityEngine.Object[] dynamicsAssets = AssetDatabase.LoadAllAssetsAtPath(dynamicsManagerPath);
+            if (dynamicsAssets == null || dynamicsAssets.Length == 0)
+                throw new InvalidOperationException("Unity DynamicsManager settings asset could not be loaded.");
+
+            var dynamicsManager = new SerializedObject(dynamicsAssets[0]);
+            dynamicsManager.UpdateIfRequiredOrScript();
+            SerializedProperty collisionMatrix = dynamicsManager.FindProperty("m_LayerCollisionMatrix");
+            if (collisionMatrix == null)
+                throw new InvalidOperationException("DynamicsManager is missing m_LayerCollisionMatrix.");
+
+            int fluidLayer = BlockiverseProject.FluidLayerIndex;
+            if (fluidLayer < 0 || fluidLayer >= collisionMatrix.arraySize)
+            {
+                throw new InvalidOperationException(
+                    $"Fluid layer index {fluidLayer} is outside the physics collision matrix ({collisionMatrix.arraySize} rows).");
+            }
+
+            // The matrix is symmetric, so the pair is only truly disabled when the fluid bit is
+            // cleared from every other row as well as the fluid row itself.
+            //
+            // Rows MUST be read and written through longValue: the elements serialize as unsigned,
+            // and SerializedProperty.intValue clamps negative writes to zero — writing 0xFFFFDFFF
+            // as a signed int once zeroed the ENTIRE matrix, silently disabling every collision
+            // pair in the game (caught in PR review; the landing tests were masked by gravity's
+            // own grounding cast). The verification pass below makes any regression of this fail
+            // the bootstrap loudly instead of shipping a no-collision world.
+            uint fluidBit = 1u << fluidLayer;
+            bool changed = false;
+            for (int layer = 0; layer < collisionMatrix.arraySize; layer++)
+            {
+                SerializedProperty row = collisionMatrix.GetArrayElementAtIndex(layer);
+                uint mask = unchecked((uint)row.longValue);
+                uint updated = layer == fluidLayer ? 0u : mask & ~fluidBit;
+
+                if (mask == updated)
+                    continue;
+
+                row.longValue = updated;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                dynamicsManager.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(dynamicsManager.targetObject);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(dynamicsManagerPath, ImportAssetOptions.ForceUpdate);
+            }
+
+            // Verify what actually landed in the asset: the fluid row must be empty, the fluid
+            // bit clear everywhere, and every OTHER bit of every other row untouched.
+            var verify = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath(dynamicsManagerPath)[0]);
+            SerializedProperty verifyMatrix = verify.FindProperty("m_LayerCollisionMatrix");
+            for (int layer = 0; layer < verifyMatrix.arraySize; layer++)
+            {
+                uint mask = unchecked((uint)verifyMatrix.GetArrayElementAtIndex(layer).longValue);
+                bool ok = layer == fluidLayer
+                    ? mask == 0u
+                    : (mask & fluidBit) == 0u && (mask | fluidBit) == uint.MaxValue;
+
+                if (!ok)
+                {
+                    throw new InvalidOperationException(
+                        $"Fluid collision-matrix write produced row {layer} = 0x{mask:X8}; expected " +
+                        (layer == fluidLayer
+                            ? "0x00000000 (fluid collides with nothing)."
+                            : $"0x{~fluidBit:X8} (all non-fluid pairs preserved). Refusing to ship a broken matrix."));
+                }
+            }
+        }
+
         static LayerMask GetInteractionLayerMask()
         {
             return (LayerMask)BlockiverseProject.InteractionLayerMask;
+        }
+
+        static int GetFluidLayerIndex()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.FluidLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.FluidLayerIndex;
+        }
+
+        static LayerMask GetFluidLayerMask()
+        {
+            return (LayerMask)BlockiverseProject.FluidLayerMask;
         }
 
         static LayerMask GetVrUiRaycastLayerMask()

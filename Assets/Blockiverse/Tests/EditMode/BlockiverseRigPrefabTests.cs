@@ -489,6 +489,108 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void GravityGroundCastExcludesTheFluidLayer()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            GravityProvider serializedGravity = prefab.GetComponent<GravityProvider>();
+
+            Assert.That(serializedGravity, Is.Not.Null, "Rig should carry a GravityProvider.");
+            Assert.That(serializedGravity.sphereCastLayerMask.value & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                "The serialized gravity ground cast must ignore fluid: scene queries bypass Collider.excludeLayers, so a fluid hit reads as solid ground and the player walks on water.");
+            Assert.That(serializedGravity.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.VoxelGroundLayerMask),
+                "The serialized gravity ground cast must test exactly the voxel ground mask.");
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+
+                GravityProvider repairedGravity = instance.GetComponent<GravityProvider>();
+
+                Assert.That(repairedGravity, Is.Not.Null);
+                Assert.That(repairedGravity.sphereCastLayerMask.value & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                    "Runtime rig repair must keep the gravity ground cast fluid-free; widening it reintroduces walking on water.");
+                Assert.That(repairedGravity.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.VoxelGroundLayerMask),
+                    "Runtime rig repair must restore the same interaction-only grounding mask the bootstrapper serializes.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void InteractionRayTargetsBothTerrainAndFluid()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+            AssertRayTargetsTerrainAndFluid(prefab.transform, "Interaction Ray");
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+                AssertRayTargetsTerrainAndFluid(instance.transform, "Interaction Ray");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void TeleportRayTargetsBothTerrainAndFluid()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+            AssertRayTargetsTerrainAndFluid(prefab.transform, "Teleport Ray");
+
+            GameObject instance = Object.Instantiate(prefab);
+
+            try
+            {
+                BlockiverseInputRig inputRig = instance.GetComponent<BlockiverseInputRig>();
+
+                Assert.That(inputRig, Is.Not.Null);
+                inputRig.RepairRuntimeTracking();
+                AssertRayTargetsTerrainAndFluid(instance.transform, "Teleport Ray");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        [Test]
+        public void MainCameraCullingMaskIncludesTheFluidLayer()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            Camera mainCamera = prefab.transform.Find("Camera Offset/Main Camera")?.GetComponent<Camera>();
+
+            Assert.That(mainCamera, Is.Not.Null, "The generated rig should carry the main eye camera.");
+            Assert.That(mainCamera.cullingMask & BlockiverseProject.FluidLayerMask, Is.Not.EqualTo(0),
+                "Water lives on its own physics layer purely for collision; the eye camera must still render it.");
+            Assert.That(mainCamera.cullingMask & BlockiverseProject.InteractionLayerMask, Is.Not.EqualTo(0),
+                "Voxel terrain and world-space interaction UI must remain visible alongside fluid.");
+        }
+
+        [Test]
         public void XrRigPrefabInputBindingsHaveJumpAndThumbstickUpTeleport()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
@@ -1482,7 +1584,27 @@ namespace Blockiverse.Tests.EditMode
         {
             Assert.That(gravityProvider.sphereCastLayerMask.value, Is.EqualTo(BlockiverseProject.InteractionLayerMask),
                 "Gravity grounding must ignore the player CharacterController and only test voxel terrain.");
+            Assert.That(gravityProvider.sphereCastLayerMask.value & BlockiverseProject.FluidLayerMask, Is.EqualTo(0),
+                "Gravity grounding must exclude the fluid layer: scene queries ignore excludeLayers, so a fluid collider in this mask reads as solid ground.");
             Assert.That(gravityProvider.sphereCastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Ignore));
+        }
+
+        static void AssertRayTargetsTerrainAndFluid(Transform rigRoot, string rayName)
+        {
+            foreach (string hand in new[] { "Left", "Right" })
+            {
+                XRRayInteractor ray = rigRoot
+                    .Find($"Camera Offset/{hand} Controller/{rayName}")
+                    ?.GetComponent<XRRayInteractor>();
+
+                Assert.That(ray, Is.Not.Null, $"{hand} Controller/{rayName} should exist on the generated rig.");
+                Assert.That(ray.raycastMask.value & BlockiverseProject.VoxelGroundLayerMask, Is.Not.EqualTo(0),
+                    $"{hand} {rayName} must still hit solid voxel terrain.");
+                Assert.That(ray.raycastMask.value & BlockiverseProject.FluidLayerMask, Is.Not.EqualTo(0),
+                    $"{hand} {rayName} must hit fluid surfaces: block targeting, drink/bucket fill, and teleport landings all stop at the water surface.");
+                Assert.That(ray.raycastMask.value, Is.EqualTo(BlockiverseProject.VrUiRaycastLayerMask),
+                    $"{hand} {rayName} should target exactly the VR UI raycast mask (terrain | fluid).");
+            }
         }
 
         static T GetAvatarProperty<T>(Component avatarRig, string propertyName)

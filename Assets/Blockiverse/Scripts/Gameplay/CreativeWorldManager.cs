@@ -29,6 +29,11 @@ namespace Blockiverse.Gameplay
         VegetationService vegetationService;
         FarmingService farmingService;
         FluidFlowService fluidFlowService;
+        // Biome lookups for this world, built from the same seed and world height the terrain was
+        // generated with (so it reproduces the generated biomes exactly). Null for presets that
+        // have no biomes (flat creative, void builder) and before the world is configured; every
+        // read goes through BiomeIndexAt, which degrades to AnyBiomeIndex.
+        SurvivalBiomeResolver biomeResolver;
         WorldTimeClock worldTimeClock;
         // The world instance whose BlockChanged event we are currently subscribed to. Tracked
         // separately from `World` so re-configuration unsubscribes from the right instance.
@@ -86,10 +91,21 @@ namespace Blockiverse.Gameplay
         public int CurrentWeatherTicksInState => weatherService?.TicksInCurrentState ?? 0;
         public WorldTimeClock WorldTimeClock => worldTimeClock;
 
-        // Evaluates the current environment (weather-derived temperature, fog, precipitation, storm,
-        // cloud coverage) at the given altitude. Returns false until the weather service exists.
-        // Lets runtime systems (lighting, fog, future VFX/audio) react to live weather.
-        public bool TryEvaluateEnvironment(int altitudeY, out EnvironmentState environment)
+        // Evaluates the current environment (temperature, fog, precipitation kind and intensity,
+        // storm, cloud coverage) at the given altitude but WITHOUT a horizontal position, so the
+        // biome is unknown and temperature falls back to the temperate (Meadow) base. This is the
+        // global sky query the lighting controller uses; anything tied to where the player actually
+        // stands should use a position-aware overload instead. Returns false until the weather
+        // service exists.
+        public bool TryEvaluateEnvironment(int altitudeY, out EnvironmentState environment) =>
+            TryEvaluateEnvironmentAt(altitudeY, SurvivalBiomeResolver.AnyBiomeIndex, out environment);
+
+        // Position-aware evaluation: resolves the column's biome so the temperature — and therefore
+        // the rain/snow decision derived from it — is correct where the player actually is.
+        public bool TryEvaluateEnvironment(BlockPosition position, out EnvironmentState environment) =>
+            TryEvaluateEnvironmentAt(position.Y, BiomeIndexAt(position.X, position.Z), out environment);
+
+        bool TryEvaluateEnvironmentAt(int altitudeY, int biomeIndex, out EnvironmentState environment)
         {
             if (weatherService == null)
             {
@@ -98,9 +114,17 @@ namespace Blockiverse.Gameplay
             }
 
             float normalizedTime = worldTimeClock != null ? worldTimeClock.NormalizedTime : 0.25f;
-            environment = weatherService.Evaluate(normalizedTime, altitudeY);
+            environment = weatherService.Evaluate(normalizedTime, altitudeY, biomeIndex);
             return true;
         }
+
+        // Biome index for a world column, or SurvivalBiomeResolver.AnyBiomeIndex when this world
+        // has no biomes (flat creative / void builder presets) or is not configured yet. Pure seed
+        // math, so host and clients resolve identical biomes without any extra sync traffic.
+        int BiomeIndexAt(int worldX, int worldZ) =>
+            biomeResolver != null
+                ? biomeResolver.BiomeIndexAt(worldX, worldZ)
+                : SurvivalBiomeResolver.AnyBiomeIndex;
 
         // Whether a head/world position sits underground (no sky access above its cell), the O(1)
         // sky-map answer the ambience and music presentation layers share so they agree on when
@@ -451,6 +475,13 @@ namespace Blockiverse.Gameplay
             // of this method once the clock is known).
             fluidFlowService = null;
 
+            // Same reasoning, and cleared here rather than beside its rebuild below because the
+            // rebuild sits under the `worldTimeClock == null` early return: reconfiguring into a
+            // different world in a clock-less scene would otherwise keep answering biome queries
+            // from the previous world's seed and height. SurvivalBiomeResolver.SurfaceHeight does
+            // no bounds checking, so that failure is silently plausible rather than loud.
+            biomeResolver = null;
+
             // Unsubscribe from the world we actually subscribed to — `World` may already point at a
             // replacement (e.g. a multiplayer regeneration), and unsubscribing from the new instance
             // would leak the old world's handler.
@@ -485,12 +516,15 @@ namespace Blockiverse.Gameplay
             // environmental mutations are never broadcast, so host and clients simulate in lockstep.
             farmingService.ConfigureDeterministicGrowth(settings != null ? settings.Seed : World.Seed);
 
-            // Wire biome-aware sapling growth for survival terrain worlds. The resolver is a pure
+            // Wire biome-aware sapling growth for survival terrain worlds, and keep the resolver for
+            // biome-aware environment queries (§6.1 base temperatures). The resolver is a pure
             // function of (seed, worldHeight), so host and late-joining clients (which receive the
             // seed in the generation snapshot) resolve identical biomes and stay in growth lockstep.
-            if (settings != null && GenerationPreset == CreativeWorldGenerationPreset.SurvivalLite)
+            // Only the survival terrain preset has biomes; flat/void worlds keep the null resolver
+            // cleared at the top of this method and fall back to the temperate default.
+            if (settings != null && World != null && GenerationPreset == CreativeWorldGenerationPreset.SurvivalLite)
             {
-                var biomeResolver = new SurvivalBiomeResolver(settings.Seed, World.Bounds.Height);
+                biomeResolver = new SurvivalBiomeResolver(settings.Seed, World.Bounds.Height);
                 vegetationService.Configure(biomeResolver.BiomeIndexAt);
             }
 

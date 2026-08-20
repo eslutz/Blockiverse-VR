@@ -198,7 +198,11 @@ namespace Blockiverse.Editor
             if (camera == null)
                 return;
 
-            camera.cullingMask |= BlockiverseProject.InteractionLayerMask;
+            // Fluid must be here as well as terrain. Water lives on its own layer so gravity's
+            // ground cast cannot see it; if that layer is missing from the culling mask, water
+            // still collides and still raycasts but renders nowhere — invisible in the editor
+            // game view and only obvious on device.
+            camera.cullingMask |= BlockiverseProject.InteractionLayerMask | BlockiverseProject.FluidLayerMask;
             camera.cullingMask &= ~(BlockiverseProject.CompositionUiLayerMask |
                                     BlockiverseProject.XrVisualProjectionLayerMask);
             EditorUtility.SetDirty(camera);
@@ -321,7 +325,9 @@ namespace Blockiverse.Editor
             teleportRayObject.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
 
             XRRayInteractor teleportRay = EnsureComponent<XRRayInteractor>(teleportRayObject);
-            BlockiverseRayDefaults.ConfigureTeleportRay(teleportRay, rayOrigin, GetInteractionLayerMask());
+            // Terrain + fluid: the ray stops at the water surface so the player lands treading,
+            // instead of the ray dying on an unregistered collider and teleport failing near water.
+            BlockiverseRayDefaults.ConfigureTeleportRay(teleportRay, rayOrigin, GetVrUiRaycastLayerMask());
             // Teleport on thumb-release: selectInput = thumbstick/y composite, OnSelectExited fires on release.
             teleportRay.selectInput = MakeButtonReader(
                 teleportRay.selectInput,

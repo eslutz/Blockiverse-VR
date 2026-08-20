@@ -123,7 +123,7 @@ Bottom → top; an assembly may only reference those below it:
 
 - **Core** (logging facade `BlockiverseLog`, canonical paths/constants in `BlockiverseProject`) and **Networking** (thin LAN session over NetworkManager/UnityTransport — no gameplay knowledge)
 - **Voxel** — the data model: `VoxelWorld` (flat `BlockId[]`, `BlockChanged` event, changed-block delta set), `BlockRegistry`, `BlockMutationAuthority` (the single validation gate for world edits), `ChunkDeltaLog`, `DeterministicHash`
-- **Survival.Health** (vitals/hazards; note its rootNamespace is `Blockiverse.Survival`) and **WorldGen** (terrain presets, seed-pure `SurvivalBiomeResolver`, structures/vegetation, Markov `WeatherService`, `WorldConstants`: ChunkSize 16, WorldMaxY 255, SeaLevel 96, 20 ticks/s, 24000-tick day)
+- **Survival.Health** (vitals/hazards; note its rootNamespace is `Blockiverse.Survival`) and **WorldGen** (terrain presets, seed-pure `SurvivalBiomeResolver`, structures/vegetation, Markov `WeatherService`, `WorldConstants`: ChunkSize 16, WorldMaxY 127, SeaLevel 64, 20 ticks/s, 24000-tick day)
 - **Survival** — items/inventory/crafting/stations/harvest/farming; `ItemRegistry`, `ContainerInventoryStore`
 - **Persistence** (`WorldSaveService` — see save format below) and **MetaAvatars** (Meta Avatars streaming over Netcode at 15 Hz)
 - **Gameplay** — the integration hub: `CreativeWorldManager` (central world owner for both modes; `Awake()` generates a default world), `MultiplayerChunkAuthoritySync` (block mutations + late-join world distribution), `MultiplayerSurvivalSync` (the entire survival economy command channel), rendering/lighting (`VoxelWorldRenderer`, `ChunkMeshBuilder`, `VoxelSkyLightMap`, `WorldTimeClock`)
