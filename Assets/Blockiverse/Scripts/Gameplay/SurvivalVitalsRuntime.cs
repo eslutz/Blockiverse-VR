@@ -34,6 +34,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] CharacterController characterController;
 
+        readonly BlockiverseGroundedProbe groundedProbe = new();
         WorldTimeClock worldTimeClock;
         Transform cachedRigTransform;
         Transform cachedHeadTransform;
@@ -295,8 +296,10 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
+            groundedProbe.Configure(controller);
+
             float currentY = controller.transform.position.y;
-            if (!controller.isGrounded)
+            if (!groundedProbe.IsGrounded)
             {
                 if (!trackingFall)
                 {

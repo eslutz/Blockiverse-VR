@@ -169,28 +169,74 @@ def ui_sequence(frequencies, duration=0.18):
     return finalize(samples)
 
 
-def footstep(seed, duration=0.135, base_frequency=118.0):
+def low_pass_alpha(cutoff_hz):
+    rc = 1.0 / (2.0 * math.pi * cutoff_hz)
+    dt = 1.0 / SAMPLE_RATE
+    return dt / (rc + dt)
+
+
+def footstep(seed, duration=0.155, base_frequency=74.0, grain_count=14, grit_cutoff=5200.0):
+    """A soft crunch underfoot rather than a pitched knock.
+
+    The earlier footstep was a sine heel plus a sine toe, which put it in the same
+    register as block_place and made the two read as the same cue. This one is
+    noise-dominated: scattered grit grains over a compressed mid band, with only a
+    quiet sub-bass thud carrying the weight, so it sits clear of the block cues.
+    """
     rng = random.Random(seed)
     total = seconds_to_samples(duration)
+
+    # Grit grains: short bursts scattered through the compression of the step, dense at
+    # heel strike and thinning as the foot settles. Jitter keeps the two variants from
+    # sounding like the same rhythm at different pitches.
+    grains = []
+    for index in range(grain_count):
+        spread = (index / max(1, grain_count - 1)) ** 1.55
+        center = 0.007 + spread * 0.082 + rng.uniform(-0.0035, 0.0035)
+        width = rng.uniform(0.0015, 0.0040)
+        gain = rng.uniform(0.40, 1.0) * (1.0 - spread * 0.55)
+        grains.append((max(0.0015, center), width, gain))
+
+    grit_alpha = low_pass_alpha(grit_cutoff)
+    body_alpha = low_pass_alpha(640.0)
+    sub_alpha = low_pass_alpha(170.0)
+    grit_state = 0.0
+    grit_state_2 = 0.0
+    body_state = 0.0
+    sub_state = 0.0
+
     samples = []
-    noise_state = 0.0
-    heel_time = 0.012
-    toe_time = 0.068
     for i in range(total):
         t = i / SAMPLE_RATE
-        progress = i / total
-        raw_noise, noise_state = filtered_noise(rng, noise_state, 950.0)
-        ground = max(0.0, 1.0 - progress) ** 1.25
-        heel = (
-            tone(base_frequency, t) * 0.42
-            + tone(base_frequency * 1.78, t) * 0.12
-        ) * gaussian(t, heel_time, 0.018)
-        toe = (
-            tone(base_frequency * 1.35, t) * 0.18
-            + (raw_noise - noise_state * 0.45) * 0.16
-        ) * gaussian(t, toe_time, 0.03)
-        cloth = noise_state * 0.08 * ground
-        samples.append(heel + toe + cloth)
+        # One noise source split into three nested bands so the differences are true
+        # band-passes instead of three unrelated noise streams layered on top of each other.
+        raw = rng.uniform(-1.0, 1.0)
+        grit_state += grit_alpha * (raw - grit_state)
+        # Second pole on the grit band: a single pole leaves too much above 10 kHz, which
+        # reads as hiss on the Quest speakers rather than as gravel.
+        grit_state_2 += grit_alpha * (grit_state - grit_state_2)
+        body_state += body_alpha * (raw - body_state)
+        sub_state += sub_alpha * (raw - sub_state)
+
+        grit = grit_state_2 - body_state
+        body = body_state - sub_state
+
+        crunch = 0.0
+        for center, width, gain in grains:
+            crunch += gaussian(t, center, width) * gain
+        crunch *= grit * 0.95
+
+        # Ground compressing under the sole: a short mid-band press just after contact.
+        press = body * gaussian(t, 0.019, 0.015) * 0.60
+
+        # Weight. Deliberately low and quiet so it reads as mass, not as a pitched thunk.
+        thud = tone(base_frequency, t) * math.exp(-t * 36.0) * 0.17
+        thud += sub_state * math.exp(-t * 24.0) * 0.30
+
+        # Scuff tail thinning out as the foot settles.
+        tail = grit * max(0.0, 1.0 - t / duration) ** 2.6 * 0.11
+
+        samples.append(crunch + press + thud + tail)
     return finalize(samples)
 
 
@@ -564,8 +610,8 @@ CLIPS = {
     "ui_select": ui_pluck(659.25, accent=24.0),
     "ui_confirm": ui_sequence([523.25, 783.99]),
     "ui_cancel": ui_sequence([440.0, 329.63]),
-    "footstep_01": footstep(303, base_frequency=112.0),
-    "footstep_02": footstep(404, base_frequency=128.0),
+    "footstep_01": footstep(303, base_frequency=71.0, grain_count=14, grit_cutoff=4900.0),
+    "footstep_02": footstep(404, base_frequency=82.0, grain_count=17, grit_cutoff=6100.0),
     "inventory_open": inventory_open(),
     "inventory_close": inventory_close(),
     "craft_success": craft_success(),

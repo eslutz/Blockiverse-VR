@@ -1,14 +1,14 @@
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 
 namespace Blockiverse.VR
 {
     /// <summary>
-    /// Implements continuous locomotion vertical head-bobbing.
-    /// When GlideStyle is set to Bobbing and locomotion is Glide (and not flying),
-    /// a subtle vertical camera offset is applied to the Camera Offset object
-    /// based on intentional grounded move-stick locomotion.
+    /// Draws the continuous-locomotion walk bob as a vertical offset on the XR Origin's camera
+    /// offset. When GlideStyle is Bobbing and locomotion is Glide (and not flying), the shared
+    /// <see cref="BlockiverseGaitCycle"/> phase is shaped into a subtle vertical oscillation.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BlockiverseGlideBobController : MonoBehaviour
@@ -16,30 +16,20 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] BlockiverseComfortSettings comfortSettings;
         [SerializeField] XROrigin xrOrigin;
-        [SerializeField] float frequency = 8.0f;
+        [SerializeField] BlockiverseGaitCycle gaitCycle;
         [SerializeField] float amplitude = 0.015f;
-        [SerializeField] float decaySpeed = 0.1f;
-        [SerializeField] float moveIntentDeadzone = 0.1f;
+        [SerializeField] float speedFollowRate = 6.0f;
 
-        float bobCycle;
         float lastAppliedBobY;
-        float? lastExpectedLocalPosY;
-
-        public System.Func<float> SpeedOverride { get; set; }
-        public System.Func<float> MoveIntentOverride { get; set; }
-        public System.Func<bool> GroundedOverride { get; set; }
-
-        public float Frequency
-        {
-            get => frequency;
-            set => frequency = value;
-        }
+        float followedSpeed;
 
         public float Amplitude
         {
             get => amplitude;
             set => amplitude = value;
         }
+
+        public BlockiverseGaitCycle GaitCycle => gaitCycle;
 
         void Awake()
         {
@@ -49,11 +39,13 @@ namespace Blockiverse.VR
                 comfortSettings = GetComponent<BlockiverseComfortSettings>();
             if (xrOrigin == null)
                 xrOrigin = GetComponent<XROrigin>();
+            if (gaitCycle == null)
+                gaitCycle = GetComponent<BlockiverseGaitCycle>();
         }
 
-        // Frame delta used to advance the bob phase and decay. Falls back to a fixed step when
+        // Frame delta used to advance the amplitude follower. Falls back to a fixed step when
         // Time.deltaTime is unavailable (EditMode tests invoking LateUpdate directly, or a paused
-        // timescale) so the oscillation remains deterministic and continues to settle to zero.
+        // timescale) so the bob still settles to zero.
         static float EffectiveDeltaTime()
         {
             float dt = Time.deltaTime;
@@ -69,118 +61,72 @@ namespace Blockiverse.VR
             Transform cameraOffset = xrOrigin.CameraFloorOffsetObject.transform;
             Vector3 localPos = cameraOffset.localPosition;
 
-            // Detect external height modification (e.g. height reset / eye height slider)
-            if (lastExpectedLocalPosY.HasValue && !Mathf.Approximately(localPos.y, lastExpectedLocalPosY.Value))
+            // Strip last frame's bob to recover the base height. Other systems (crouch easing, the
+            // height reset, the eye-height slider) also write this Y, but they all write a delta on
+            // top of whatever is there, so subtracting our own offset recovers the base whether or
+            // not they touched it. Absolute writes call ClearAppliedOffset instead.
+            localPos.y -= lastAppliedBobY;
+
+            ResolveGaitCycle();
+
+            bool bobbingEnabled = comfortSettings != null &&
+                                  comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide &&
+                                  comfortSettings.GlideStyle == GlideStyle.Bobbing;
+            bool flying = inputRig != null && inputRig.CreativeFlightLocomotionActive;
+            bool stepping = bobbingEnabled &&
+                            !flying &&
+                            BlockiverseRuntimeState.AllowWorldInput &&
+                            gaitCycle != null &&
+                            gaitCycle.IsStepping;
+
+            // Follow the gait speed instead of reading it raw. Raw speed drops to zero the frame the
+            // stick is released, which would snap the offset to level from wherever the curve was;
+            // ramping the amplitude eases the bob in and out while leaving its shape untouched, and
+            // doubles as a low-pass over the per-frame jitter in a measured speed.
+            float targetSpeed = stepping && gaitCycle != null ? gaitCycle.Speed : 0.0f;
+            followedSpeed = Mathf.MoveTowards(followedSpeed, targetSpeed, speedFollowRate * deltaTime);
+
+            float newBobY = 0.0f;
+            if (followedSpeed > 0.0f && gaitCycle != null)
             {
-                // External script modified localPosition.y. Reset our applied offset so we
-                // treat the new position as the clean base height.
-                lastAppliedBobY = 0f;
-            }
-            else
-            {
-                localPos.y -= lastAppliedBobY;
-            }
-
-            // Calculate target bob offset
-            float targetBobY = 0f;
-
-            bool isBobbingEnabled = comfortSettings != null &&
-                                    comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide &&
-                                    comfortSettings.GlideStyle == GlideStyle.Bobbing;
-
-            bool isFlying = inputRig != null && inputRig.CreativeFlightLocomotionActive;
-
-            if (isBobbingEnabled &&
-                !isFlying &&
-                BlockiverseRuntimeState.AllowWorldInput &&
-                IsGroundedForBobbing() &&
-                HasMoveIntent())
-            {
-                float speed = ResolveBobSpeed();
-
-                if (speed > moveIntentDeadzone)
-                {
-                    bobCycle = (bobCycle + speed * frequency * deltaTime) % (Mathf.PI * 2f);
-                    targetBobY = Mathf.Sin(bobCycle) * speed * amplitude;
-                }
+                // -cos puts the trough exactly on phase 0, which is the point the gait cycle raises
+                // its footfall ahead of, so the step lands as the view drops into the low point.
+                float shape = -Mathf.Cos(2f * Mathf.PI * gaitCycle.BobPhase01);
+                newBobY = shape * followedSpeed * amplitude;
             }
 
-            // Smoothly decay to the target bob offset when stationary or disabled
-            float newBobY;
-            if (targetBobY == 0f)
-            {
-                newBobY = Mathf.MoveTowards(lastAppliedBobY, 0f, decaySpeed * deltaTime);
-                if (Mathf.Approximately(newBobY, 0f))
-                {
-                    newBobY = 0f;
-                    bobCycle = 0f;
-                }
-            }
-            else
-            {
-                newBobY = targetBobY;
-            }
-
-            // Apply the new bob offset
             localPos.y += newBobY;
             cameraOffset.localPosition = localPos;
             lastAppliedBobY = newBobY;
-            lastExpectedLocalPosY = localPos.y;
         }
 
-        bool HasMoveIntent()
+        /// <summary>
+        /// Forgets the currently applied bob offset without touching the transform. Call this right
+        /// after writing an absolute camera-offset height (height reset / eye-height slider) so the
+        /// next frame does not subtract a bob that is no longer part of the new base height.
+        /// </summary>
+        public void ClearAppliedOffset()
         {
-            float intent = ResolveMoveIntent();
-            return intent > moveIntentDeadzone;
+            lastAppliedBobY = 0.0f;
+            followedSpeed = 0.0f;
         }
 
-        float ResolveMoveIntent()
+        void ResolveGaitCycle()
         {
-            if (MoveIntentOverride != null)
-                return Mathf.Clamp01(MoveIntentOverride());
+            if (gaitCycle != null)
+                return;
 
-            if (inputRig != null)
-                return Mathf.Clamp01(inputRig.MoveInputMagnitude);
+            gaitCycle = GetComponent<BlockiverseGaitCycle>();
 
-            if (SpeedOverride != null)
-                return SpeedOverride() > moveIntentDeadzone ? 1.0f : 0.0f;
-
-            return 0.0f;
-        }
-
-        float ResolveBobSpeed()
-        {
-            if (SpeedOverride != null)
-                return Mathf.Max(0.0f, SpeedOverride());
-
-            if (inputRig != null && inputRig.CharacterController != null)
+            // Rigs generated before the gait cycle existed still need one; the bootstrapper puts it
+            // on the prefab, this only covers a stale prefab at runtime.
+            if (gaitCycle == null && Application.isPlaying)
             {
-                Vector3 velocity = inputRig.CharacterController.velocity;
-                float horizontalSpeed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
-                if (horizontalSpeed > moveIntentDeadzone)
-                    return horizontalSpeed;
+                gaitCycle = gameObject.AddComponent<BlockiverseGaitCycle>();
+
+                if (inputRig != null)
+                    gaitCycle.Configure(inputRig.CharacterController);
             }
-
-            if (inputRig != null && comfortSettings != null)
-            {
-                float moveSpeed = BlockiverseInputRig.ResolveSprintMoveSpeed(
-                    comfortSettings.ContinuousMoveSpeed,
-                    inputRig.SprintActive);
-                return ResolveMoveIntent() * moveSpeed;
-            }
-
-            return 0.0f;
-        }
-
-        bool IsGroundedForBobbing()
-        {
-            if (GroundedOverride != null)
-                return GroundedOverride();
-
-            if (inputRig != null && inputRig.CharacterController != null)
-                return inputRig.CharacterController.isGrounded;
-
-            return true;
         }
     }
 }

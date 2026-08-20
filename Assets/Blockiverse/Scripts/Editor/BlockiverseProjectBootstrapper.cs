@@ -256,6 +256,7 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureBootScene();
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
+            ConfigureScriptingDefineSymbols();
 
             AssetDatabase.SaveAssets();
             
@@ -505,6 +506,46 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             labelAttribute.Value = "@string/app_name";
             manifest.Save(manifestPath);
             AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        // Defines this project owns, written to both build targets so the two lists cannot drift
+        // apart depending on which target happened to be active when the editor last ran.
+        //
+        // Package-managed defines are deliberately absent. Sentis, in particular, adds and removes
+        // SENTIS_ANALYTICS_ENABLED on the active target itself, so listing it here would oscillate:
+        // the bootstrapper would force it onto Android and the next editor run would strip it again.
+        // ApplyScriptingDefineSymbols preserves anything already present, so those stay where their
+        // owning package puts them.
+        static readonly string[] BlockiverseScriptingDefineSymbols =
+        {
+            "OVR_DISABLE_HAND_PINCH_BUTTON_MAPPING",
+            "USE_INPUT_SYSTEM_POSE_CONTROL",
+            "USE_STICK_CONTROL_THUMBSTICKS",
+            "APP_UI_EDITOR_ONLY",
+        };
+
+        static void ConfigureScriptingDefineSymbols()
+        {
+            ApplyScriptingDefineSymbols(NamedBuildTarget.Android);
+            ApplyScriptingDefineSymbols(NamedBuildTarget.Standalone);
+        }
+
+        static void ApplyScriptingDefineSymbols(NamedBuildTarget buildTarget)
+        {
+            PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] existing);
+            var symbols = new List<string>(BlockiverseScriptingDefineSymbols);
+
+            // Keep anything a package added that is not ours to own, so this never fights a hook.
+            foreach (string symbol in existing)
+            {
+                if (!string.IsNullOrWhiteSpace(symbol) && !symbols.Contains(symbol))
+                    symbols.Add(symbol);
+            }
+
+            if (existing.Length == symbols.Count && symbols.SequenceEqual(existing))
+                return;
+
+            PlayerSettings.SetScriptingDefineSymbols(buildTarget, symbols.ToArray());
         }
 
         static void ConfigureMetaProjectSettings()

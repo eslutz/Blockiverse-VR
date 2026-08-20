@@ -908,9 +908,14 @@ namespace Blockiverse.Editor
             musicController.ConfigureFeedbackSettings(feedbackSettings);
             EditorUtility.SetDirty(musicController);
 
-            // Glide footsteps + landing thump from the rig's character controller.
+            // Glide footsteps + landing thump. Footsteps come off the shared gait cycle so they land
+            // on the camera bob; the landing cue is the feedback component's own.
+            BlockiverseGaitCycle gaitCycle = EnsureComponent<BlockiverseGaitCycle>(rig);
+            gaitCycle.Configure(rig.GetComponent<CharacterController>());
+            EditorUtility.SetDirty(gaitCycle);
+
             BlockiverseLocomotionFeedback locomotionFeedback = EnsureComponent<BlockiverseLocomotionFeedback>(rig);
-            locomotionFeedback.Configure(rig.GetComponent<CharacterController>(), audioCuePlayer);
+            locomotionFeedback.Configure(rig.GetComponent<CharacterController>(), audioCuePlayer, gaitCycle);
             EditorUtility.SetDirty(locomotionFeedback);
 
             // Comfort + feedback settings persist across launches (PlayerPrefs).

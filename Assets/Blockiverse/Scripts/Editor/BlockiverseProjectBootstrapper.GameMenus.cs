@@ -279,6 +279,10 @@ controller.ConfigureStationPanel(stationPanel);
             EnsureLabel(bg.transform, "Environment Label", "Environment", 22, TextAnchor.MiddleLeft, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(28, -380), new Vector2(200, 32));
             Slider timeSlider = EnsureSettingsSlider(bg.transform, "Time Slider", "Time of Day", 0.5f, new Vector2(28, -420), minValue: 0, maxValue: 1);
             Slider scaleSlider = EnsureSettingsSlider(bg.transform, "Time Scale Slider", "Cycle Speed", 1.0f, new Vector2(28, -480), minValue: 0, maxValue: 10);
+            // "Cycle Weather Button" is the pre-rename node. EnsureButtonControl creates by name, so
+            // the old one survived every regeneration and the panel shipped two weather buttons.
+            Transform staleWeatherButton = bg.transform.Find("Cycle Weather Button");
+            if (staleWeatherButton != null) UnityEngine.Object.DestroyImmediate(staleWeatherButton.gameObject);
             Button weatherButton = EnsureButtonControl(bg.transform, "Weather Button", "Cycle Weather", new Vector2(28, -540), new Vector2(W - 56, 48));
             TMP_Text weatherText = EnsureLabel(bg.transform, "Weather Label", "Weather: Clear", 20, TextAnchor.MiddleLeft, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(28, -600), new Vector2(W - 56, 32));
 
@@ -287,16 +291,19 @@ controller.ConfigureStationPanel(stationPanel);
             BlockiverseCreativeToolsPanel panel = EnsureComponent<BlockiverseCreativeToolsPanel>(panelRoot);
             panel.Configure(null, null, null, cornersLabel, statusLabel, weatherText, timeSlider, scaleSlider);
             
-            UnityEventTools.AddPersistentListener(setAButton.onClick, panel.SetCornerA);
-            UnityEventTools.AddPersistentListener(setBButton.onClick, panel.SetCornerB);
-            UnityEventTools.AddPersistentListener(fillButton.onClick, panel.FillRegion);
-            UnityEventTools.AddPersistentListener(replaceButton.onClick, panel.ReplaceRegion);
-            UnityEventTools.AddPersistentListener(deleteButton.onClick, panel.DeleteRegion);
-            UnityEventTools.AddPersistentListener(copyButton.onClick, panel.CopyRegion);
-            UnityEventTools.AddPersistentListener(pasteButton.onClick, panel.PasteRegion);
-            UnityEventTools.AddPersistentListener(undoButton.onClick, panel.UndoEdit);
-            UnityEventTools.AddPersistentListener(redoButton.onClick, panel.RedoEdit);
-            UnityEventTools.AddPersistentListener(weatherButton.onClick, panel.CycleWeather);
+            // WireButton, not a bare AddPersistentListener: the bootstrapper is rerun over an
+            // existing prefab, so adding without clearing stacks another copy of every handler on
+            // each run and the buttons start firing N times per click.
+            WireButton(setAButton, panel, nameof(BlockiverseCreativeToolsPanel.SetCornerA), panel.SetCornerA);
+            WireButton(setBButton, panel, nameof(BlockiverseCreativeToolsPanel.SetCornerB), panel.SetCornerB);
+            WireButton(fillButton, panel, nameof(BlockiverseCreativeToolsPanel.FillRegion), panel.FillRegion);
+            WireButton(replaceButton, panel, nameof(BlockiverseCreativeToolsPanel.ReplaceRegion), panel.ReplaceRegion);
+            WireButton(deleteButton, panel, nameof(BlockiverseCreativeToolsPanel.DeleteRegion), panel.DeleteRegion);
+            WireButton(copyButton, panel, nameof(BlockiverseCreativeToolsPanel.CopyRegion), panel.CopyRegion);
+            WireButton(pasteButton, panel, nameof(BlockiverseCreativeToolsPanel.PasteRegion), panel.PasteRegion);
+            WireButton(undoButton, panel, nameof(BlockiverseCreativeToolsPanel.UndoEdit), panel.UndoEdit);
+            WireButton(redoButton, panel, nameof(BlockiverseCreativeToolsPanel.RedoEdit), panel.RedoEdit);
+            WireButton(weatherButton, panel, nameof(BlockiverseCreativeToolsPanel.CycleWeather), panel.CycleWeather);
 
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             ConfigureRoutedMenuPresenter(presenter, canvas, head);
