@@ -51,8 +51,6 @@ namespace Blockiverse.Gameplay
     [RequireComponent(typeof(AudioSource))]
     public sealed class BlockiverseAudioCuePlayer : MonoBehaviour
     {
-        public const float FootstepVolumeTrim = 0.55f;
-
         [SerializeField] AudioSource audioSource;
         [SerializeField] BlockiverseFeedbackSettings feedbackSettings;
         [SerializeField] CreativeInteractionController interactionController;
@@ -461,14 +459,7 @@ namespace Blockiverse.Gameplay
             float categoryVolume = feedbackSettings != null
                 ? feedbackSettings.ResolveVolume(GetCategory(cue))
                 : 1.0f;
-            return Mathf.Clamp01(volume * categoryVolume * ResolveCueTrim(cue));
-        }
-
-        // Footsteps fire at walking cadence, so a cue mixed as loud as a one-off block placement
-        // gets fatiguing fast. Everything else plays at the full effects level.
-        static float ResolveCueTrim(BlockiverseAudioCue cue)
-        {
-            return cue == BlockiverseAudioCue.Footstep ? FootstepVolumeTrim : 1.0f;
+            return Mathf.Clamp01(volume * categoryVolume);
         }
 
         bool StartLoopInternal(BlockiverseAudioCue cue, Vector3? worldPosition)

@@ -19,7 +19,6 @@ namespace Blockiverse.Gameplay
     {
         CharacterController characterController;
         GravityProvider gravityProvider;
-        bool searchedGravityProvider;
 
         public void Configure(CharacterController controller)
         {
@@ -28,7 +27,6 @@ namespace Blockiverse.Gameplay
 
             characterController = controller;
             gravityProvider = null;
-            searchedGravityProvider = false;
         }
 
         public bool IsGrounded
@@ -44,12 +42,16 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        // Retries while unresolved instead of caching the first miss: the probe can be queried
+        // before the rig's GravityProvider exists (runtime AddComponent fallbacks, staged setup),
+        // and a cached miss would silently pin the flaky CharacterController fallback forever.
+        // Rigs that genuinely lack a provider pay a per-query component lookup, which only test
+        // rigs and bare setups ever do.
         void ResolveGravityProvider()
         {
-            if (searchedGravityProvider || characterController == null)
+            if (gravityProvider != null || characterController == null)
                 return;
 
-            searchedGravityProvider = true;
             gravityProvider = characterController.GetComponent<GravityProvider>();
 
             if (gravityProvider == null)

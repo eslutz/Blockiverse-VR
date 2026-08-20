@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using NUnit.Framework;
 using UnityEngine;
@@ -13,6 +14,13 @@ namespace Blockiverse.Tests.EditMode
 
         readonly List<GameObject> objectsToDestroy = new();
 
+        [SetUp]
+        public void SetUp()
+        {
+            // The gait gates on AllowWorldInput, which defaults to false outside a running session.
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
+        }
+
         [TearDown]
         public void TearDown()
         {
@@ -20,6 +28,7 @@ namespace Blockiverse.Tests.EditMode
                 if (target != null)
                     Object.DestroyImmediate(target);
             objectsToDestroy.Clear();
+            BlockiverseRuntimeState.Reset();
         }
 
         [Test]
@@ -70,7 +79,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void GoingAirborneResetsTheCycle()
+        public void GoingAirborneReseedsWithoutSnappingThePhase()
         {
             (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
             int footfalls = 0;
@@ -79,15 +88,91 @@ namespace Blockiverse.Tests.EditMode
             // Walk far enough for the first footfall, then leave the ground for a frame.
             Walk(rig, gait, Mathf.CeilToInt(0.8f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
             Assert.That(footfalls, Is.EqualTo(1));
+            float phaseBefore = gait.BobPhase01;
 
             gait.GroundedOverride = () => false;
             gait.Advance(FrameSeconds);
             gait.GroundedOverride = () => true;
 
-            // The cycle restarted mid-step, so a third of a step of travel must not reach a footfall.
+            // The phase must hold — the bob draws it every frame, so a snap here is a camera jump.
+            Assert.That(gait.BobPhase01, Is.EqualTo(phaseBefore).Within(0.0001f));
+
+            // The footfall index re-seeded, so a third of a step of travel must not reach a footfall.
             Walk(rig, gait, Mathf.CeilToInt(0.33f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
 
             Assert.That(footfalls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ExternalSuppressionStopsFootfallsAndStepping()
+        {
+            (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
+            int footfalls = 0;
+            gait.Footfall += () => footfalls++;
+
+            gait.ExternallySuppressed = true;
+
+            // Creative flight skimming the ground: grounded, moving, but not walking.
+            Walk(rig, gait, Mathf.CeilToInt(3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+
+            Assert.That(footfalls, Is.Zero);
+            Assert.That(gait.IsStepping, Is.False);
+            Assert.That(gait.IsSuppressed, Is.True);
+
+            // Landing out of flight and walking again earns a footfall only after real travel.
+            // The phase held at mid-step (0.5) through the suppression, so the next crossing sits
+            // 0.4 steps out: none after 0.3 steps, one shortly after.
+            gait.ExternallySuppressed = false;
+            Walk(rig, gait, Mathf.CeilToInt(0.3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            Assert.That(footfalls, Is.Zero);
+            Walk(rig, gait, Mathf.CeilToInt(0.3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+            Assert.That(footfalls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void BlockedWorldInputSuppressesTheCycle()
+        {
+            (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
+            int footfalls = 0;
+            gait.Footfall += () => footfalls++;
+
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+
+            Walk(rig, gait, Mathf.CeilToInt(3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
+
+            Assert.That(footfalls, Is.Zero);
+            Assert.That(gait.IsStepping, Is.False);
+        }
+
+        [Test]
+        public void FootfallRateIsCappedAtSprintCadence()
+        {
+            (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
+            var footfallTimes = new List<float>();
+            float simTime = 0f;
+
+            // 8.8 m/s: the max move-speed slider under sprint. Crossings arrive every ~90 ms,
+            // faster than the 0.18 s ceiling, so roughly every other one must be swallowed.
+            const float sprintMetersPerFrame = 8.8f * FrameSeconds;
+            gait.Footfall += () => footfallTimes.Add(simTime);
+
+            int crossings = 20;
+            int frames = Mathf.CeilToInt(crossings * BlockiverseGaitCycle.DefaultStepLengthMeters / sprintMetersPerFrame);
+            for (int frame = 0; frame < frames; frame++)
+            {
+                rig.transform.position += new Vector3(0f, 0f, sprintMetersPerFrame);
+                simTime += FrameSeconds;
+                gait.Advance(FrameSeconds);
+            }
+
+            Assert.That(footfallTimes.Count, Is.GreaterThan(0));
+            Assert.That(footfallTimes.Count, Is.LessThan(crossings), "the ceiling should swallow crossings at sprint cadence");
+            for (int i = 1; i < footfallTimes.Count; i++)
+            {
+                Assert.That(
+                    footfallTimes[i] - footfallTimes[i - 1],
+                    Is.GreaterThanOrEqualTo(BlockiverseGaitCycle.MinFootfallIntervalSeconds - 0.0001f));
+            }
         }
 
         [Test]

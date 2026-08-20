@@ -477,12 +477,13 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ScriptingDefineSymbolsMatchAcrossAndroidAndStandalone()
+        public void ProjectOwnedScriptingDefinesArePresentOnBothTargets()
         {
             // The project-owned defines must be present on both build targets. Whichever target is
             // active when an editor hook runs used to decide where a define landed, so the two lists
             // drifted and every invocation dirtied ProjectSettings. Package-managed defines
-            // (SENTIS_ANALYTICS_ENABLED) are deliberately not asserted: their owner moves them.
+            // (SENTIS_ANALYTICS_ENABLED, APP_UI_EDITOR_ONLY) are deliberately not asserted: their
+            // owners move them per active target, so the full lists are allowed to differ.
             Assert.That(File.Exists(PlayerProjectSettingsPath), Is.True);
             string settings = File.ReadAllText(PlayerProjectSettingsPath);
 
@@ -505,7 +506,6 @@ namespace Blockiverse.Tests.EditMode
                 "OVR_DISABLE_HAND_PINCH_BUTTON_MAPPING",
                 "USE_INPUT_SYSTEM_POSE_CONTROL",
                 "USE_STICK_CONTROL_THUMBSTICKS",
-                "APP_UI_EDITOR_ONLY",
             };
 
             foreach (string symbol in required)

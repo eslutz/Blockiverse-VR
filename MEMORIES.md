@@ -116,10 +116,11 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
 
 - Project source: `Assets/Blockiverse/**`, `Packages/**`, `ProjectSettings/**`, `docs/**`, `scripts/**`, `.github/**`, root policy docs, authored art/audio.
 - Never commit Unity `Library/`, `Temp/`, `Logs/`, device logs, screenshots, recordings, APKs, signing material, secrets, or transient validation artifacts. Preserve `.meta` files when moving assets.
+- Timestamp: 2026-08-20. `BlockiverseProjectBootstrapper.Run()` is now actually idempotent: a rerun on a clean tree reproduces `BlockiverseXRRig.prefab`, `Boot.unity`, `OculusProjectConfig.asset`, and `ProjectSettings.asset` byte-identically (repo history before this shows rerun churn — stacked button listeners, renumbered scene fileIDs — so old commits are not evidence that churn is normal). One deliberate exception: `SENTIS_ANALYTICS_ENABLED` and `APP_UI_EDITOR_ONLY` are package-managed defines written to the *active* build target by com.unity.ai.inference (per-machine EditorAnalytics opt-in) and App UI respectively; the bootstrapper's owned-define list must never include them or it oscillates against the packages. A stray one-line ProjectSettings define diff after an editor run is that mechanism, not a bug.
 
 ## Dirty Worktree Constraints
 
-- Timestamp: 2026-08-13. The working tree intentionally carries the Unity 6000.5.8f1 + Meta XR 205 upgrade (uncommitted). Android target SDK stays at API 34 (held through the upgrade). Cleanup pending before commit: crash-recovery artifacts in `Assets/_Recovery` and stray scenes per `Assets/Plans/scene-cleanup.md`, plus root-level `mono_crash.*.json` and committed test-log files (`TempTestResults.txt`, `editmode_test_results.txt`) that predate this work.
+- Timestamp: 2026-08-20. The Unity 6000.5.8f1 + Meta XR 205 upgrade is committed (fe73bdbf); Android target SDK stays at API 34. The crash-recovery artifacts and `mono_crash.*.json` files listed here previously are gone. Remaining tracked cleanup: legacy test-log files (`TempTestResults.txt`, `editmode_test_results.txt`) predating the upgrade.
 - Before committing, stage only files explicitly in scope for the task.
 
 ## External Gates

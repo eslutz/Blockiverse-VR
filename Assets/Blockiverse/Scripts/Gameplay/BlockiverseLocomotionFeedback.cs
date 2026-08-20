@@ -101,8 +101,11 @@ namespace Blockiverse.Gameplay
             bool grounded = gaitCycle.IsGrounded;
             float verticalSpeed = Time.deltaTime > 0f ? delta.y / Time.deltaTime : 0f;
 
-            // Landing: grounded after airborne with meaningful downward speed last frame.
-            if (grounded && !wasGrounded && lastVerticalSpeed < -LandingMinFallSpeed)
+            // Landing: grounded after airborne with meaningful downward speed last frame. The gait
+            // suppression gate keeps creative flight's ground-skimming and menu-focused states
+            // silent; footstep cues need no equivalent check because a suppressed gait raises no
+            // Footfall events at all.
+            if (grounded && !wasGrounded && !gaitCycle.IsSuppressed && lastVerticalSpeed < -LandingMinFallSpeed)
                 audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
 
             wasGrounded = grounded;

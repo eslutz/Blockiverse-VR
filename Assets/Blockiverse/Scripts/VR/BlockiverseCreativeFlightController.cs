@@ -18,6 +18,7 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] MultiplayerSurvivalSync survivalSync;
+        BlockiverseGaitCycle gaitCycle;
         [SerializeField] bool flightEnabledDefault;
         [SerializeField] Transform dominantHandAimSource;
 
@@ -306,6 +307,15 @@ namespace Blockiverse.VR
             lastProviderActive = active;
             inputRig.TurnWithBothHands = active;
             inputRig.CreativeFlightLocomotionActive = active;
+
+            // Flight moves the rig without walking, and its ground-skimming still reads as
+            // grounded to the gravity provider's sphere cast. Suppressing the gait cycle keeps
+            // footstep cues and the walk bob out of flight entirely.
+            if (gaitCycle == null)
+                gaitCycle = inputRig.GetComponent<BlockiverseGaitCycle>();
+
+            if (gaitCycle != null)
+                gaitCycle.ExternallySuppressed = active;
 
             if (inputRig.LocomotionSuppressed)
             {

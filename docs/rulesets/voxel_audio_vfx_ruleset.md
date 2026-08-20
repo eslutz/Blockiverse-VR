@@ -159,7 +159,7 @@ Subtitles/Feedback Toasts toggle
 | Block break/place | 0.03s per source; 0.01s global emergency cap. |
 | UI select | 0.06s per pointer target. |
 | UI confirm/cancel | 0.10s. |
-| Footstep | One cue per step of horizontal travel (0.79 m), fired a tenth of a step ahead of the walk bob's low point so the cue leads the view drop as a real step does. |
+| Footstep | One cue per step of horizontal travel (0.79 m), fired a tenth of a step ahead of the walk bob's low point so the cue leads the view drop as a real step does. Rate-capped at 0.18s per footstep: crossings past the cap are swallowed, so sprint cadence thins rather than machine-guns. |
 | Craft success/fail | 0.20s. |
 
 ---

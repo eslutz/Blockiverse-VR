@@ -545,17 +545,18 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
         // Defines this project owns, written to both build targets so the two lists cannot drift
         // apart depending on which target happened to be active when the editor last ran.
         //
-        // Package-managed defines are deliberately absent. Sentis, in particular, adds and removes
-        // SENTIS_ANALYTICS_ENABLED on the active target itself, so listing it here would oscillate:
-        // the bootstrapper would force it onto Android and the next editor run would strip it again.
-        // ApplyScriptingDefineSymbols preserves anything already present, so those stay where their
-        // owning package puts them.
+        // Package-managed defines are deliberately absent, because their owners add and remove
+        // them on the active build target themselves and listing one here would oscillate: the
+        // bootstrapper would force it onto a target and the owning package's next editor pass
+        // would strip it again. Sentis (com.unity.ai.inference) manages SENTIS_ANALYTICS_ENABLED
+        // from the machine's EditorAnalytics opt-in, and App UI manages APP_UI_EDITOR_ONLY from
+        // its settings asset. ApplyScriptingDefineSymbols preserves anything already present, so
+        // both stay wherever their owner puts them.
         static readonly string[] BlockiverseScriptingDefineSymbols =
         {
             "OVR_DISABLE_HAND_PINCH_BUTTON_MAPPING",
             "USE_INPUT_SYSTEM_POSE_CONTROL",
             "USE_STICK_CONTROL_THUMBSTICKS",
-            "APP_UI_EDITOR_ONLY",
         };
 
         static void ConfigureScriptingDefineSymbols()
