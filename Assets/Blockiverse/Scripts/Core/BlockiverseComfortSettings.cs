@@ -54,6 +54,11 @@ namespace Blockiverse.Core
         // Engages the tunneling vignette during passive descent exactly as it does for driven
         // vertical motion, so the one motion the player did not ask for gets the same aid.
         [SerializeField] bool swimVignetteBoost = true;
+
+        // Defaults ON: without it a swimmer who reaches a low bank is pulled back into the water
+        // by gravity resuming before their feet clear the lip, which reads as the shore being
+        // broken. The switch exists because it is still an automatic vertical translation.
+        [SerializeField] bool swimClimbOutEnabled = true;
         [SerializeField] bool sprintToggleEnabled;
         [SerializeField] bool crouchToggleEnabled;
 
@@ -195,6 +200,12 @@ namespace Blockiverse.Core
         /// When true (default) the tunneling vignette engages during passive descent, not only
         /// during driven motion.
         /// </summary>
+        public bool SwimClimbOutEnabled
+        {
+            get => swimClimbOutEnabled;
+            set => swimClimbOutEnabled = value;
+        }
+
         public bool SwimVignetteBoost
         {
             get => swimVignetteBoost;

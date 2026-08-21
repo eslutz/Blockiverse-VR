@@ -161,14 +161,19 @@ namespace Blockiverse.VR
         public BlockiverseControllerRole ActiveMoveHand => GetMoveHand();
         public BlockiverseControllerRole ActiveTurnHand => GetTurnHand();
         public BlockiverseControllerRole ActiveToolHand => GetToolHand();
-        public float MoveInputMagnitude
+        public float MoveInputMagnitude => MoveInput.magnitude;
+
+        // The raw stick vector, not just its length. The shore-climb assist needs a heading to
+        // know which column to look at, and it only ever fires while the player is actively
+        // pushing toward the bank.
+        public Vector2 MoveInput
         {
             get
             {
                 string mapName = GetControllerMapName(GetMoveHand());
                 return TryFindAction(mapName, BlockiverseInputActionNames.Move, out InputAction moveAction)
-                    ? moveAction.ReadValue<Vector2>().magnitude
-                    : 0.0f;
+                    ? moveAction.ReadValue<Vector2>()
+                    : Vector2.zero;
             }
         }
         public bool LocomotionSuppressed

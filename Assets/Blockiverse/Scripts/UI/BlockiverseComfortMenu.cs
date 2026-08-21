@@ -25,6 +25,7 @@ namespace Blockiverse.UI
         [SerializeField] Toggle swimPassiveSinkToggle;
         [SerializeField] Slider swimSpeedSlider;
         [SerializeField] Toggle swimVignetteToggle;
+        [SerializeField] Toggle swimClimbOutToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
         [SerializeField] Toggle glideBobToggle;
@@ -60,6 +61,7 @@ namespace Blockiverse.UI
         Toggle registeredSwimPassiveSinkToggle;
         Slider registeredSwimSpeedSlider;
         Toggle registeredSwimVignetteToggle;
+        Toggle registeredSwimClimbOutToggle;
 
         public bool IsVisible => canvas != null ? canvas.enabled : visibilityRoot != null && visibilityRoot.activeSelf;
 
@@ -101,7 +103,8 @@ namespace Blockiverse.UI
             Toggle targetCrouchToggleToggle = null,
             Toggle targetSwimPassiveSinkToggle = null,
             Slider targetSwimSpeedSlider = null,
-            Toggle targetSwimVignetteToggle = null)
+            Toggle targetSwimVignetteToggle = null,
+            Toggle targetSwimClimbOutToggle = null)
         {
             glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
@@ -120,6 +123,7 @@ namespace Blockiverse.UI
             swimPassiveSinkToggle = targetSwimPassiveSinkToggle;
             swimSpeedSlider = targetSwimSpeedSlider;
             swimVignetteToggle = targetSwimVignetteToggle;
+            swimClimbOutToggle = targetSwimClimbOutToggle;
             uiScaleSlider = targetUiScaleSlider;
             glideBobToggle = targetGlideBobToggle;
             RegisterControlCallbacks();
@@ -213,6 +217,7 @@ namespace Blockiverse.UI
             RegisterToggleCallback(crouchToggleToggle, ref registeredCrouchToggleToggle);
             RegisterToggleCallback(swimPassiveSinkToggle, ref registeredSwimPassiveSinkToggle);
             RegisterToggleCallback(swimVignetteToggle, ref registeredSwimVignetteToggle);
+            RegisterToggleCallback(swimClimbOutToggle, ref registeredSwimClimbOutToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterToggleCallback(glideBobToggle, ref registeredGlideBobToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
@@ -305,6 +310,9 @@ namespace Blockiverse.UI
             if (swimVignetteToggle != null)
                 settings.SwimVignetteBoost = swimVignetteToggle.isOn;
 
+            if (swimClimbOutToggle != null)
+                settings.SwimClimbOutEnabled = swimClimbOutToggle.isOn;
+
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.isOn;
 
@@ -339,6 +347,7 @@ namespace Blockiverse.UI
             crouchToggleToggle?.SetIsOnWithoutNotify(settings.CrouchToggleEnabled);
             swimPassiveSinkToggle?.SetIsOnWithoutNotify(settings.SwimPassiveSinkEnabled);
             swimVignetteToggle?.SetIsOnWithoutNotify(settings.SwimVignetteBoost);
+            swimClimbOutToggle?.SetIsOnWithoutNotify(settings.SwimClimbOutEnabled);
 
             if (snapTurnSlider != null)
             {

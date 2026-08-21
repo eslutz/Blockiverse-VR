@@ -26,6 +26,13 @@ namespace Blockiverse.VR
         // fraction of the live capsule rather than as a fixed offset.
         const float BodySampleCapsuleFraction = 0.55f;
 
+        // How fast the shore lift travels. Brisk enough not to feel like being winched, slow
+        // enough to read as climbing rather than teleporting.
+        const float ClimbOutSpeedMetersPerSecond = 2.2f;
+
+        // How hard the player must be pushing before a lift is considered a request.
+        const float ClimbOutMoveIntentThreshold = 0.5f;
+
         [SerializeField] BlockiverseInputRig inputRig;
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] GravityProvider gravityProvider;
@@ -74,6 +81,9 @@ namespace Blockiverse.VR
         // to negative buoyancy is defensible at all.
         bool VignetteBoostEnabled =>
             inputRig == null || inputRig.ComfortSettings == null || inputRig.ComfortSettings.SwimVignetteBoost;
+
+        bool ClimbOutEnabled =>
+            inputRig == null || inputRig.ComfortSettings == null || inputRig.ComfortSettings.SwimClimbOutEnabled;
 
         public void ConfigureVignette(TunnelingVignetteController controller)
         {
@@ -161,6 +171,12 @@ namespace Blockiverse.VR
 
             AcquireGravityLock();
 
+            // Checked before the vertical target, and while the gravity lock is still held: the
+            // lift has to complete before ExitSwimming can fire, or the player is dropped halfway
+            // up the bank with gravity back on and slides straight in again.
+            if (TryClimbOut())
+                return;
+
             float target = BlockiverseSwimMotion.ResolveVerticalTarget(
                 riseHeld: ReadRiseHeld(),
                 sinkHeld: ReadSinkHeld(),
@@ -195,6 +211,97 @@ namespace Blockiverse.VR
             UpdateVignette(true);
             transformation.motion = new Vector3(0.0f, verticalVelocity * Time.deltaTime, 0.0f);
             TryQueueTransformation(transformation);
+        }
+
+        // Lifts a swimmer onto a low bank they are actively swimming toward.
+        //
+        // Without this, reaching the shore does not get you out: ResolveState leaves the swim
+        // states the moment the BODY sample goes dry, and that sample sits about a metre above the
+        // capsule base -- so the swim provider hands back control while the player's feet are still
+        // roughly a metre below the bank, gravity resumes, and they fall back in. The character
+        // controller cannot rescue it either: its step offset is a fraction of a metre, its step
+        // assist needs to be grounded and a treading player never is, and jump is disabled while
+        // swimming.
+        //
+        // This reverses ADR 0008's "no ledge-climb assist" decision, which was taken on comfort
+        // grounds. The argument for reversing it: the lift only ever fires while the player is
+        // pushing INTO the bank, so it is redirected requested motion rather than the unrequested
+        // motion that ADR rejected -- and it is capped at two blocks. See the ADR amendment.
+        bool TryClimbOut()
+        {
+            if (!ClimbOutEnabled || inputRig == null)
+                return false;
+
+            VoxelWorld world = worldManager != null ? worldManager.World : null;
+            CharacterController controller = inputRig.CharacterController;
+
+            if (world == null || worldManager.Registry == null || controller == null)
+                return false;
+
+            if (!TryResolveForwardStep(out int forwardX, out int forwardZ))
+                return false;
+
+            Bounds bounds = controller.bounds;
+            BlockPosition feet = CreativeInteractionController.ToBlockPosition(
+                new Vector3(bounds.center.x, bounds.min.y + FeetSampleHeightMeters, bounds.center.z));
+
+            if (!FluidLedge.TryResolveClimbOut(world, worldManager.Registry, feet, forwardX, forwardZ, out BlockPosition landing))
+                return false;
+
+            // Queued through the same transformation path as every other swim motion, so it
+            // inherits collision, the live capsule height and crouch semantics rather than
+            // teleporting the player into geometry.
+            TryStartLocomotionImmediately();
+
+            if (locomotionState != LocomotionState.Moving)
+                return false;
+
+            var destination = new Vector3(landing.X + 0.5f, landing.Y, landing.Z + 0.5f);
+            Vector3 current = new(bounds.center.x, bounds.min.y, bounds.center.z);
+            Vector3 step = Vector3.MoveTowards(current, destination, ClimbOutSpeedMetersPerSecond * Time.deltaTime) - current;
+
+            verticalVelocity = 0.0f;
+            UpdateVignette(true);
+            transformation.motion = step;
+            TryQueueTransformation(transformation);
+            return true;
+        }
+
+        // Quantised to one axis. A diagonal would need both neighbouring columns checked to avoid
+        // pulling the player through a corner, and the dominant axis is what the player means.
+        bool TryResolveForwardStep(out int forwardX, out int forwardZ)
+        {
+            forwardX = 0;
+            forwardZ = 0;
+
+            Vector2 move = inputRig.MoveInput;
+
+            if (move.sqrMagnitude < ClimbOutMoveIntentThreshold * ClimbOutMoveIntentThreshold)
+                return false;
+
+            Transform head = headTransform;
+
+            if (head == null)
+                return false;
+
+            // Stick direction taken into world space through the head's yaw, matching how the move
+            // provider interprets it.
+            Vector3 forward = head.forward;
+            Vector3 right = head.right;
+            forward.y = 0.0f;
+            right.y = 0.0f;
+
+            Vector3 world = (forward.normalized * move.y) + (right.normalized * move.x);
+
+            if (world.sqrMagnitude < 1e-4f)
+                return false;
+
+            if (Mathf.Abs(world.x) >= Mathf.Abs(world.z))
+                forwardX = world.x >= 0.0f ? 1 : -1;
+            else
+                forwardZ = world.z >= 0.0f ? 1 : -1;
+
+            return true;
         }
 
         void UpdateVignette(bool moving)
