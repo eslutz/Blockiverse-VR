@@ -11,10 +11,14 @@ Minimum internal target:
 
 ## Instrumentation
 
-- **In-headset HUD:** the generated World object carries `PerformanceStatsOverlay`
-  (Gameplay), which shows live FPS (avg/min/max), frame time, chunk count, triangle
-  count, and the rebuild queue depth in development builds. It also logs a periodic
-  `Performance` summary through `BlockiverseLog` for Quest log capture.
+- **Frame stats:** the generated World object carries `PerformanceStatsOverlay`
+  (Gameplay), which reports FPS (avg/min), frame time, chunk count, triangle count,
+  and the rebuild queue depth in development builds. It draws through IMGUI
+  (`OnGUI`), which never reaches a VR eye buffer, so **on device the only place these
+  numbers surface is its periodic `Performance sample` log line** — captured
+  automatically by `scripts/perf/capture-gpu-counters.sh`. `queuedRebuilds` is the
+  one to watch for anything that rewrites blocks (settling snow, fluid spread),
+  because chunk remeshing costs CPU that GPU counters cannot see.
 - **ProfilerMarkers:** generation, meshing, save/load, menu routing, world-session
   transitions, and host-authoritative networking are wrapped with named markers for
   the Unity Profiler and OVR Metrics Tool. Watch at least:

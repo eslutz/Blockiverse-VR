@@ -53,10 +53,25 @@ output="$OUTPUT_DIR/gpu-$LABEL-$(date -u +%Y%m%dT%H%M%SZ).log"
 echo "Capturing ${SECONDS_TO_SAMPLE}s of GPU counters -> $output"
 echo "Hold still and keep looking at the same thing until this finishes."
 
+# Cleared first so the frame stats below cover this window and not the whole session.
+hzdb shell "logcat -c" >/dev/null 2>&1 || true
+
 # timeout runs ON THE DEVICE: macOS has no timeout binary.
 hzdb shell "timeout $SECONDS_TO_SAMPLE ovrgpuprofiler -r" >> "$output" 2>&1 || true
 
+# PerformanceStatsOverlay draws through IMGUI, which never reaches a VR eye buffer, so its
+# periodic log line is the only place frame stats actually surface on device. queuedRebuilds is
+# the one to watch for anything that rewrites blocks -- settling snow, fluid spread -- because
+# chunk remeshing costs CPU that GPU counters cannot see.
+{
+  echo
+  echo "# --- frame stats logged during this window (development builds only) ---"
+  hzdb shell "logcat -d" 2>/dev/null | grep "Performance sample" | tail -20 || true
+} >> "$output"
+
 echo
 echo "Wrote $output"
-echo "Headline counters to compare between runs:"
+echo "Headline GPU counters:"
 grep -E "% Shaders Busy|% Time ALUs Working|GPU % Bus Busy|% Texture Fetch Stall|Write Total" "$output" | tail -5 || true
+echo "Frame stats:"
+grep "Performance sample" "$output" | tail -3 || echo "  (none logged -- is this a development build?)"
