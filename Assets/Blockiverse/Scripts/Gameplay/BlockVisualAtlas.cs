@@ -189,10 +189,12 @@ namespace Blockiverse.Gameplay
         {
             Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
 
-            // ZWrite stays ON. It resolves water against water per pixel, which is the only thing
-            // that can order a top face against a far wall inside a single fluid mesh. The cost is
-            // that you no longer see a submerged far bank through the near surface, which for a
-            // stylised voxel lake is not a look worth paying sorting artefacts for.
+            // ZWrite stays ON so a farther fluid fragment can never paint over a nearer one, which
+            // is the sort flip that reads as a far bank sliding on top of the near surface. It does
+            // not make the blending order-independent -- see the render-state comment in
+            // BlockiverseVoxelLit.shader for what remains. The cost is that you mostly no longer
+            // see a submerged far bank through the near surface, which for a stylised voxel lake is
+            // not a look worth paying sorting artefacts for.
             ApplySurfaceState(
                 material,
                 renderType: "Transparent",

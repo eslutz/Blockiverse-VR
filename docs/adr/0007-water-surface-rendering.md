@@ -86,12 +86,28 @@ to `SeaLevel - 1`.
 
 ### 4. `ZWrite On` for transparent water
 
-Water writes depth. This resolves water against water per pixel, which is the only
-thing that can order a top face against a far wall *inside a single fluid mesh*,
-and it removes per-chunk sort flips as the head turns. The cost is that a submerged
-far bank is no longer visible through the near surface. For a stylised voxel lake
-that layering is not worth paying sorting artefacts for. The fallback is a single
-material float, not a shader edit.
+Water writes depth, so a farther fluid fragment can never paint over a nearer one.
+That is the sort flip that reads as a far bank sliding on top of the near surface,
+and it happens both between chunks as the head turns and *inside a single fluid
+mesh*, where a top face and a far wall are submitted in voxel-traversal order
+rather than depth order. The cost is that a submerged far bank is mostly no longer
+visible through the near surface; for a stylised voxel lake that layering is not
+worth paying sorting artefacts for. The fallback is a single material float, not a
+shader edit.
+
+**What this does not buy: order independence.** With blending enabled, `ZWrite`
+decides which fragments survive, not how many blend. When the farther fragment is
+submitted first it blends and writes depth and the nearer one blends over it, so
+that patch carries two layers of tint and reads slightly denser; submitted the
+other way round the far fragment is depth-rejected and one layer lands. Triangle
+order is fixed by the voxel scan rather than by the camera, so which of the two a
+given patch shows depends on where the player is standing — visible where a
+submerged wall sits behind a surface, as a density difference rather than as
+flicker. Making it genuinely order-independent needs a depth-primed second pass
+over fluid geometry (`ColorMask 0` + `ZWrite`, then `ZTest Equal` with `ZWrite`
+off) or per-frame sorted geometry. Both cost an extra pass over water, which is the
+one budget this feature has not measured yet, so both wait on the device capture in
+Consequences.
 
 ### 5. Underwater is fog plus a camera clear — no tint quad
 
@@ -128,6 +144,11 @@ no depth-driven colour ramp, no screen-space refraction.**
   undisplaced mesh and every gameplay query reads voxel data, so nothing crosses
   the determinism boundary and no per-frame `Shader.SetGlobalFloat` is needed.
   Waves keep moving while a menu is open.
+- Residual transparency artefact, deliberately left: the number of blended water
+  layers over a pixel can differ by viewpoint (see 4). The depth-primed pass that
+  would remove it is specified above and is a candidate for the same device session
+  that prices the queue move — it caps blended layers at one per pixel, so it may
+  well pay for its own extra geometry pass.
 - Mesh bounds for fluid meshes are padded downward by
   `VoxelWorldRenderer.MaxWaveDipMeters`; an EditMode test pins the shader's wave
   amplitudes to that padding so a look-dev change cannot silently start popping

@@ -49,9 +49,20 @@ Shader "Blockiverse/Voxel Lit"
             Tags { "LightMode" = "UniversalForward" }
 
             // Opaque by default; the water material drives these to alpha blending. ZWrite stays
-            // ON for water: it resolves water-over-water per pixel, which is the only thing that
-            // fixes ordering INSIDE one fluid mesh (a top face and a far wall in one draw, in
-            // arbitrary order) as well as per-chunk sort flips as the head turns.
+            // ON for water so a FARTHER fluid fragment can never paint over a nearer one -- the
+            // sort flip that reads as a far bank sliding on top of the near surface, both between
+            // chunks as the head turns and inside one fluid mesh, where a top face and a far wall
+            // are submitted in voxel-traversal order rather than depth order.
+            //
+            // It does NOT make the blending order-independent. When the farther fragment happens
+            // to be submitted first it blends and writes depth, and the nearer one then blends
+            // over it, so that patch carries two layers of tint instead of one and reads slightly
+            // denser; submitted the other way round the far fragment is depth-rejected and only
+            // one layer lands. Triangle order is fixed by the voxel scan, so which of the two you
+            // get depends on where you are standing. Removing that residue needs a depth-primed
+            // second pass over fluid geometry (ColorMask 0 + ZWrite, then ZTest Equal with ZWrite
+            // off) or per-frame sorting; both cost an extra pass, so they wait on the device
+            // capture that can actually price them.
             Blend [_SrcBlend] [_DstBlend]
             ZWrite [_ZWrite]
             Cull [_Cull]

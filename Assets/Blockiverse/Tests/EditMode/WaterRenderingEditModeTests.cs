@@ -266,7 +266,7 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(fluidMaterial.GetFloat("_SrcBlend"), Is.EqualTo((float)BlendMode.SrcAlpha).Within(0.001f));
                 Assert.That(fluidMaterial.GetFloat("_DstBlend"), Is.EqualTo((float)BlendMode.OneMinusSrcAlpha).Within(0.001f));
                 Assert.That(fluidMaterial.GetFloat("_ZWrite"), Is.EqualTo(1.0f).Within(0.001f),
-                    "ZWrite stays on: it is the only thing that orders a top face against a far wall inside one fluid mesh.");
+                    "ZWrite stays on so a farther fluid fragment can never paint over a nearer one, between chunks or inside one fluid mesh.");
                 Assert.That(fluidMaterial.IsKeywordEnabled(BlockVisualAtlas.WaterShaderKeyword), Is.True,
                     "Without the keyword the water material renders through the opaque terrain path.");
                 Assert.That(BlockVisualAtlas.TryGetBaseTexture(fluidMaterial, out Texture texture), Is.True);
