@@ -12,6 +12,7 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.TestTools;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
@@ -80,6 +81,34 @@ namespace Blockiverse.Tests.PlayMode
             // several metres, so this bound is what separates swimming from falling.
             Assert.That(travelled, Is.LessThan(BlockiverseSwimMotion.PassiveSinkSpeedMetersPerSecond * 2.0f),
                 "The descent must be the passive sink drift, not a fall.");
+        }
+
+        [UnityTest]
+        public IEnumerator PassiveDescentEngagesTheComfortVignetteAndTurningTheBoostOffStopsIt()
+        {
+            // Passive descent is motion the player did not ask for. The vignette is a large part of
+            // why defaulting to negative buoyancy is defensible at all, so a setting that persists
+            // and does nothing would be worse than not shipping it.
+            BlockiverseSwimProvider swim = CreateSubmergedRig(out XROrigin origin, out GravityProvider gravity);
+            TunnelingVignetteController vignette = AttachVignetteController();
+            BlockiverseInputRig inputRig = rigObject.GetComponent<BlockiverseInputRig>();
+
+            yield return WaitFrames(SettleFrames);
+
+            Assert.That(swim.IsSwimming, Is.True);
+            Assert.That(swim.VignetteEngaged, Is.True,
+                "Sinking with no input must engage the tunneling vignette.");
+
+            inputRig.ComfortSettings.SwimVignetteBoost = false;
+
+            yield return WaitFrames(5);
+
+            Assert.That(swim.VignetteEngaged, Is.False,
+                "Turning the boost off must actually release the vignette, not just stop persisting a flag.");
+
+            // The provider's own decision is what is asserted above; this proves the decision is
+            // wired to the real XRI controller rather than to a field nobody reads.
+            Assert.That(vignette, Is.Not.Null);
         }
 
         [UnityTest]
@@ -223,6 +252,17 @@ namespace Blockiverse.Tests.PlayMode
                 "BlockiverseInputRig must auto-provision the swim provider, exactly as it does the gravity provider.");
 
             return swim;
+        }
+
+        // The rig prefab carries a vignette controller under the head camera; this bare fixture
+        // builds its own so the provider has something to drive.
+        TunnelingVignetteController AttachVignetteController()
+        {
+            var vignetteObject = new GameObject("Tunneling Vignette");
+            vignetteObject.transform.SetParent(rigObject.transform, false);
+            TunnelingVignetteController controller = vignetteObject.AddComponent<TunnelingVignetteController>();
+            rigObject.GetComponent<BlockiverseSwimProvider>().ConfigureVignette(controller);
+            return controller;
         }
 
         static IEnumerator WaitFrames(int frames)

@@ -835,6 +835,18 @@ namespace Blockiverse.Editor
             AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
             AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
 
+            // The swim provider drives the vignette itself rather than through a
+            // LocomotionVignetteProvider entry, because it engages only for its own vertical motion
+            // and only while the Vignette While Sinking comfort setting is on -- neither of which a
+            // static list entry can express.
+            BlockiverseSwimProvider swimProvider = rig.GetComponent<BlockiverseSwimProvider>();
+
+            if (swimProvider != null)
+            {
+                swimProvider.ConfigureVignette(controller);
+                EditorUtility.SetDirty(swimProvider);
+            }
+
             BlockiverseVignetteSettingsDriver driver = EnsureComponent<BlockiverseVignetteSettingsDriver>(controller.gameObject);
             driver.Configure(vignetteSettings);
 

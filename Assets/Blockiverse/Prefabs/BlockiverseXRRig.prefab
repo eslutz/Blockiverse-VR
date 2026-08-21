@@ -67169,6 +67169,7 @@ MonoBehaviour:
   gravityProvider: {fileID: 348202850338572616}
   gaitCycle: {fileID: 2157709069665111210}
   headTransform: {fileID: 96463171583487156}
+  vignetteController: {fileID: 1633517777454594064}
 --- !u!1 &6850496368584314547
 GameObject:
   m_ObjectHideFlags: 0

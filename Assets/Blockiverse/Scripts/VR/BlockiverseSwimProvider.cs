@@ -3,6 +3,7 @@ using Blockiverse.Voxel;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Comfort;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Gravity;
 
 namespace Blockiverse.VR
@@ -15,7 +16,7 @@ namespace Blockiverse.VR
     // Only VERTICAL motion is owned here. Horizontal swimming is the existing move provider with a
     // speed factor applied by the rig, so a swimmer keeps every comfort setting they already have.
     [DisallowMultipleComponent]
-    public sealed class BlockiverseSwimProvider : LocomotionProvider, IGravityController
+    public sealed class BlockiverseSwimProvider : LocomotionProvider, IGravityController, ITunnelingVignetteProvider
     {
         // Sampled a hand's width above the capsule base rather than at it, so standing on a seabed
         // does not read the block below the floor.
@@ -30,10 +31,17 @@ namespace Blockiverse.VR
         [SerializeField] GravityProvider gravityProvider;
         [SerializeField] BlockiverseGaitCycle gaitCycle;
         [SerializeField] Transform headTransform;
+        [SerializeField] TunnelingVignetteController vignetteController;
 
         bool gravityLockHeld;
         bool registeredAsGravityController;
+        bool vignetteEngaged;
         float verticalVelocity;
+
+        // Null means "use the controller's own defaults", which BlockiverseVignetteSettingsDriver
+        // keeps pinned to the player's comfort aperture every frame -- the same contract the move,
+        // turn and teleport providers get through their LocomotionVignetteProvider entries.
+        public VignetteParameters vignetteParameters => null;
 
         public XROriginMovement transformation { get; set; } = new XROriginMovement();
 
@@ -53,13 +61,25 @@ namespace Blockiverse.VR
         // velocity or floating in mid-air, and it is worth being able to assert.
         public bool GravityLockHeld => gravityLockHeld;
 
+        // Whether this provider is currently asking the tunneling vignette to close. Exposed for
+        // the same reason as the gravity lock: it is a decision this component owns, and a comfort
+        // aid that silently stops engaging is invisible until someone feels sick.
+        public bool VignetteEngaged => vignetteEngaged;
+
         bool PassiveSinkEnabled =>
             inputRig == null || inputRig.ComfortSettings == null || inputRig.ComfortSettings.SwimPassiveSinkEnabled;
 
-        float ComfortSpeedFactor =>
-            inputRig != null && inputRig.ComfortSettings != null
-                ? inputRig.ComfortSettings.SwimSpeedFactor
-                : BlockiverseSwimMotion.DefaultSwimSpeedFactor;
+        // Passive descent is motion the player did not ask for, so it gets the same tunneling
+        // vignette that driven vertical motion does -- that aid is a large part of why defaulting
+        // to negative buoyancy is defensible at all.
+        bool VignetteBoostEnabled =>
+            inputRig == null || inputRig.ComfortSettings == null || inputRig.ComfortSettings.SwimVignetteBoost;
+
+        public void ConfigureVignette(TunnelingVignetteController controller)
+        {
+            if (controller != null)
+                vignetteController = controller;
+        }
 
         public void Configure(
             BlockiverseInputRig rig,
@@ -107,6 +127,7 @@ namespace Blockiverse.VR
             // Releasing the lock here is what stops a disabled provider from leaving gravity off
             // forever -- a player would hang motionless in the air with no way to fall.
             ReleaseGravityLock();
+            UpdateVignette(false);
             State = SwimState.Dry;
             verticalVelocity = 0.0f;
 
@@ -153,13 +174,45 @@ namespace Blockiverse.VR
             // failure queues motion on the entry frame and never again -- the player drifts a
             // couple of millimetres and then hangs there. GravityProvider has the same shape:
             // ask to start, then check the state.
+            // Neutral buoyancy with no input is genuinely not moving: ending locomotion there keeps
+            // "Moving" meaning what it says, and stops the vignette engaging around a swimmer who
+            // is holding perfectly still.
+            if (Mathf.Approximately(verticalVelocity, 0.0f))
+            {
+                UpdateVignette(false);
+
+                if (locomotionState == LocomotionState.Moving)
+                    TryEndLocomotion();
+
+                return;
+            }
+
             TryStartLocomotionImmediately();
 
             if (locomotionState != LocomotionState.Moving)
                 return;
 
+            UpdateVignette(true);
             transformation.motion = new Vector3(0.0f, verticalVelocity * Time.deltaTime, 0.0f);
             TryQueueTransformation(transformation);
+        }
+
+        void UpdateVignette(bool moving)
+        {
+            if (vignetteController == null)
+                return;
+
+            bool wanted = moving && VignetteBoostEnabled;
+
+            if (wanted == vignetteEngaged)
+                return;
+
+            if (wanted)
+                vignetteController.BeginTunnelingVignette(this);
+            else
+                vignetteController.EndTunnelingVignette(this);
+
+            vignetteEngaged = wanted;
         }
 
         void ExitSwimming()
@@ -169,6 +222,7 @@ namespace Blockiverse.VR
 
             verticalVelocity = 0.0f;
             ReleaseGravityLock();
+            UpdateVignette(false);
 
             if (locomotionState == LocomotionState.Moving)
                 TryEndLocomotion();
@@ -234,6 +288,9 @@ namespace Blockiverse.VR
 
             if (headTransform == null && Camera.main != null)
                 headTransform = Camera.main.transform;
+
+            if (vignetteController == null)
+                vignetteController = GetComponentInChildren<TunnelingVignetteController>(true);
         }
 
         // GravityProvider only auto-populates its controller list once, from components already
