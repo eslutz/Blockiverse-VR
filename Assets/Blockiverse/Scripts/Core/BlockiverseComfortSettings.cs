@@ -14,6 +14,8 @@ namespace Blockiverse.Core
         const float MaxUiScale = 1.35f;
         const float MinVignetteStrength = 0.0f;
         const float MaxVignetteStrength = 1.0f;
+        const float MinSwimSpeedFactor = 0.30f;
+        const float MaxSwimSpeedFactor = 1.00f;
 
         // Glide is the default: walking/jumping and block climbing are core Blockiverse verbs.
         [SerializeField] BlockiverseLocomotionMode locomotionMode = BlockiverseLocomotionMode.Glide;
@@ -38,6 +40,20 @@ namespace Blockiverse.Core
         // (and view height) follow their real tracked height, so tall players must duck or
         // crouch to fit where shorter players walk through.
         [SerializeField] bool realPlayerHeightEnabled;
+        // On by default, and this is the one place the game deliberately defaults AWAY from the
+        // gentler option: a player who is not actively swimming sinks. Water should read as
+        // something you work against rather than a floor you bob on. Turning this off restores
+        // exact neutral buoyancy -- with no input the app moves the player vertically by zero -- so
+        // loading a save submerged, respawning underwater, or a fluid flowing into your cell
+        // produce no unrequested motion at all. That is why it sits in Comfort beside the vection
+        // controls rather than in gameplay options.
+        [SerializeField] bool swimPassiveSinkEnabled = true;
+        // Horizontal swim speed as a fraction of walking. Slower than walking because swimming is
+        // meant to feel like moving through water, not walking underwater.
+        [SerializeField] float swimSpeedFactor = 0.55f;
+        // Engages the tunneling vignette during passive descent exactly as it does for driven
+        // vertical motion, so the one motion the player did not ask for gets the same aid.
+        [SerializeField] bool swimVignetteBoost = true;
         [SerializeField] bool sprintToggleEnabled;
         [SerializeField] bool crouchToggleEnabled;
 
@@ -157,6 +173,34 @@ namespace Blockiverse.Core
             set => vignetteStrength = Mathf.Clamp(value, MinVignetteStrength, MaxVignetteStrength);
         }
 
+        /// <summary>
+        /// When true (default) the player sinks whenever they are not actively swimming. Turning it
+        /// off restores exact neutral buoyancy, the comfort accommodation for unrequested vertical
+        /// motion.
+        /// </summary>
+        public bool SwimPassiveSinkEnabled
+        {
+            get => swimPassiveSinkEnabled;
+            set => swimPassiveSinkEnabled = value;
+        }
+
+        /// <summary>Horizontal swim speed as a fraction of the walking speed (0.30–1.00).</summary>
+        public float SwimSpeedFactor
+        {
+            get => swimSpeedFactor;
+            set => swimSpeedFactor = Mathf.Clamp(value, MinSwimSpeedFactor, MaxSwimSpeedFactor);
+        }
+
+        /// <summary>
+        /// When true (default) the tunneling vignette engages during passive descent, not only
+        /// during driven motion.
+        /// </summary>
+        public bool SwimVignetteBoost
+        {
+            get => swimVignetteBoost;
+            set => swimVignetteBoost = value;
+        }
+
         /// <summary>Aperture value for TunnelingVignetteController (0.6–1.0).</summary>
         public float VignetteAperture => vignetteEnabled ? 1.0f - vignetteStrength * 0.4f : 1.0f;
 
@@ -167,6 +211,7 @@ namespace Blockiverse.Core
             SnapTurnDegrees = snapTurnDegrees;
             UiScale = uiScale;
             VignetteStrength = vignetteStrength;
+            SwimSpeedFactor = swimSpeedFactor;
         }
     }
 }

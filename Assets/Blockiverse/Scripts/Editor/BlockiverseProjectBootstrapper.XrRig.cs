@@ -707,6 +707,30 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(heightResetButton);
             }
 
+            // Swimming. Placed below the lowest existing rows in each column: the panel is 1040x980
+            // with hand-placed coordinates and no reflow, the left column's lowest row is the
+            // 64-tall toggle at -772 and the right column's is at -724, so these three clear both.
+            Toggle swimPassiveSinkToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Swim Sink Toggle",
+                "Sink When Not Swimming",
+                settings == null || settings.SwimPassiveSinkEnabled,
+                new Vector2(532.0f, -800.0f));
+            Toggle swimVignetteToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Swim Vignette Toggle",
+                "Vignette While Sinking",
+                settings == null || settings.SwimVignetteBoost,
+                new Vector2(532.0f, -864.0f));
+            Slider swimSpeedSlider = EnsureSettingsSlider(
+                panelObject.transform,
+                "Swim Speed Slider",
+                "Swim Speed",
+                settings != null ? settings.SwimSpeedFactor : 0.55f,
+                new Vector2(32.0f, -848.0f),
+                minValue: 0.30f,
+                maxValue: 1.00f);
+
             BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
             menu.Configure(canvas, settings, heightReset);
             menu.ConfigureControls(
@@ -725,7 +749,10 @@ namespace Blockiverse.Editor
                 targetGlideBobToggle: glideBobToggle,
                 targetRealPlayerHeightToggle: realPlayerHeightToggle,
                 targetSprintToggleToggle: sprintToggleToggle,
-                targetCrouchToggleToggle: crouchToggleToggle);
+                targetCrouchToggleToggle: crouchToggleToggle,
+                targetSwimPassiveSinkToggle: swimPassiveSinkToggle,
+                targetSwimSpeedSlider: swimSpeedSlider,
+                targetSwimVignetteToggle: swimVignetteToggle);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);

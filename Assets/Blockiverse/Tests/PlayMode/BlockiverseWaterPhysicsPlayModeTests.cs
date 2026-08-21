@@ -339,7 +339,7 @@ namespace Blockiverse.Tests.PlayMode
                 vitalsRuntime.ResetVitalsToFull();
 
                 // Freshwater dive: an ~7 m fall (well past the 3 m safe distance) into the
-                // water column at (1, 1..5, 1).
+                // wade-depth freshwater at (1, 1, 1).
                 rigObject.transform.position = new Vector3(1.5f, 8.0f, 1.5f);
                 Physics.SyncTransforms();
                 int healthBeforeWaterDive = GetCurrentHealth(vitalsRuntime);
@@ -352,10 +352,9 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(healthAfterWaterDive, Is.EqualTo(healthBeforeWaterDive),
                     "Freshwater at the feet must cancel the tracked fall (ruleset section 5.6): the dive would otherwise charge impact damage on the seabed.");
 
-                // Emberflow dive: an identical fall into the emberflow column at (14, 1..5, 14)
-                // must keep charging fall damage. The column is a permanent source, and the
-                // freshwater corner is beyond spread range, so this cell stays emberflow for the
-                // whole test.
+                // Emberflow dive: an identical fall into the emberflow at (14, 1, 14) must keep
+                // charging fall damage. It is a permanent source, and the freshwater corner is
+                // beyond spread range, so this cell stays emberflow for the whole test.
                 vitalsRuntime.ResetVitalsToFull();
                 rigObject.transform.position = new Vector3(14.5f, 8.0f, 14.5f);
                 Physics.SyncTransforms();
@@ -552,8 +551,8 @@ namespace Blockiverse.Tests.PlayMode
         static CreativeWorldManager CreateSurvivalWorldWithFluidColumns(GameObject managerObject)
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
-            // 16x16 footprint with the two source columns at opposite corners (Manhattan
-            // distance 26): freshwater spreads at most 8 cells horizontally (ruleset section 5.4),
+            // 16x16 footprint with the two sources at opposite corners (Manhattan distance 26):
+            // freshwater spreads at most 8 cells horizontally (ruleset section 5.4),
             // so the live FluidFlowService this manager ticks can flood each corner locally but
             // the fluids can never meet — no quench, and each dive's landing cell is a PERMANENT
             // source block rather than a cell the simulation rewrites mid-test. A 6x6 world made
@@ -566,11 +565,16 @@ namespace Blockiverse.Tests.PlayMode
             for (int x = 0; x < settings.Bounds.Width; x++)
                 world.SetBlock(new BlockPosition(x, 0, z), BlockRegistry.MeadowTurf, trackChange: false);
 
-            for (int y = 1; y <= 5; y++)
-            {
-                world.SetBlock(new BlockPosition(1, y, 1), BlockRegistry.Freshwater, trackChange: false);
-                world.SetBlock(new BlockPosition(14, y, 14), BlockRegistry.Emberflow, trackChange: false);
-            }
+            // ONE cell deep, deliberately. Both dives have to end in a real landing for the fall
+            // damage comparison to mean anything, and since swim locomotion landed a column deep
+            // enough to submerge the body locks gravity off and the player sinks instead of falling
+            // -- correct behaviour, but it turns this test into a 25-second wait for a slow descent.
+            // At one cell the feet sample lands inside fluid while the body sample stays in air, so
+            // the player wades: gravity stays on, the landing is immediate, and the feet-in-fluid
+            // rule this test exists to pin is exercised exactly as before. Deepening these columns
+            // will hang the test rather than fail it cleanly.
+            world.SetBlock(new BlockPosition(1, 1, 1), BlockRegistry.Freshwater, trackChange: false);
+            world.SetBlock(new BlockPosition(14, 1, 14), BlockRegistry.Emberflow, trackChange: false);
 
             CreativeWorldManager manager = managerObject.AddComponent<CreativeWorldManager>();
             manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.FlatCreative));

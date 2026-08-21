@@ -611,6 +611,30 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void RigCarriesTheSwimProviderAndItsComfortRows()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseSwimProvider swimProvider = prefab.GetComponent<BlockiverseSwimProvider>();
+            GravityProvider gravityProvider = prefab.GetComponent<GravityProvider>();
+
+            Assert.That(swimProvider, Is.Not.Null,
+                "Without the provider on the generated rig the player sinks under gravity instead of swimming.");
+            Assert.That(gravityProvider, Is.Not.Null,
+                "The swim provider registers itself against this one; it has to exist on the same rig.");
+
+            Transform panel = prefab.transform.Find("Camera Offset/Comfort Settings Menu/Panel");
+
+            Assert.That(panel, Is.Not.Null);
+            Assert.That(panel.Find("Swim Sink Toggle")?.GetComponent<Toggle>(), Is.Not.Null,
+                "Passive sink is the one comfort default that opts INTO motion, so its off switch has to be in the menu.");
+            Assert.That(panel.Find("Swim Vignette Toggle")?.GetComponent<Toggle>(), Is.Not.Null);
+            Assert.That(panel.Find("Swim Speed Slider/Slider")?.GetComponent<Slider>(), Is.Not.Null);
+        }
+
+        [Test]
         public void XrRigPrefabInputBindingsHaveJumpAndThumbstickUpTeleport()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
