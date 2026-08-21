@@ -89,6 +89,7 @@ namespace Blockiverse.Gameplay
         // prefab for no visible change, and this branch is meant to leave prefabs untouched.
         BlockiverseLightingCycleController lightingCycle;
         LightningBoltView boltView;
+        BlockiverseWeatherVolume weatherVolume;
 
         // A LIST, not a single nextThunderTime like the other timers in this file: strikes can
         // overlap, and a distant one still travelling must not be cancelled by a closer one
@@ -202,6 +203,7 @@ namespace Blockiverse.Gameplay
 
             UpdatePrecipitationLoop(environment);
             activePrecipitationVfx = SelectPrecipitationVfx(environment);
+            UpdateWeatherVolume(environment);
             UpdateAmbienceLoop();
             UpdateCampfireLoop();
             TickThunder(environment.Weather);
@@ -456,6 +458,51 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        // Drives the continuous precipitation volume from what is falling at the PLAYER'S cell,
+        // for the same reason the audio and the old cue selection did: one thunderstorm is rain in
+        // the valley and snow on the peak above it.
+        void UpdateWeatherVolume(EnvironmentState environment)
+        {
+            BlockiverseWeatherVolume volume = EnsureWeatherVolume();
+
+            if (volume == null)
+                return;
+
+            volume.SetPrecipitation(environment.Precipitation, environment.PrecipitationIntensity);
+        }
+
+        BlockiverseWeatherVolume EnsureWeatherVolume()
+        {
+            if (weatherVolume != null)
+                return weatherVolume;
+
+            if (!TryGetHeadTransform(out Transform headTransform))
+                return null;
+
+            // Created at runtime and parented to nothing: it follows the head in POSITION only.
+            // Parenting to the camera would inherit its rotation, which swings the whole volume on
+            // every snap turn -- the artefact the old Local-space burst had.
+            var host = new GameObject("Weather Volume");
+            weatherVolume = host.AddComponent<BlockiverseWeatherVolume>();
+
+            BlockiverseVfxPool pool = vfxCuePlayer != null ? vfxCuePlayer.Pool : null;
+
+            weatherVolume.Configure(
+                headTransform,
+                pool != null ? pool.ParticleMaterial : null,
+                pool != null ? pool.RainSprite : null,
+                pool != null ? pool.SnowSprite : null);
+
+            return weatherVolume;
+        }
+
+        static bool TryGetHeadTransform(out Transform headTransform)
+        {
+            Camera head = Camera.main;
+            headTransform = head != null ? head.transform : null;
+            return headTransform != null;
+        }
+
         LightningBoltView EnsureBoltView()
         {
             if (boltView != null)
@@ -504,18 +551,14 @@ namespace Blockiverse.Gameplay
             if (vfxCuePlayer == null || worldManager == null)
                 return;
 
-            // Particles follow the locally selected cue for the same reason the audio does: a
-            // thunderstorm over a freezing peak has to drift snowflakes, not splash rain. The cue
-            // is re-selected from the freshly polled environment on every poll — never derived
-            // from a stale weather state — so a kind flip under an unchanged state switches the
-            // particles too. Fog is not precipitation, so it stays keyed to the weather state.
-            if (activePrecipitationVfx.HasValue)
-            {
-                PlayScatterVfx(activePrecipitationVfx.Value, ref nextPrecipitationVfxTime, PrecipitationVfxIntervalSeconds);
-                return;
-            }
-
-            if (lastWeatherState == WeatherState.Fog)
+            // Rain and snow no longer come through here. They are a continuous head-locked volume
+            // (BlockiverseWeatherVolume) because the burst path could not physically render them:
+            // two 4.5 cm particles every 0.6 seconds is roughly one drop on screen at a time,
+            // against a spec asking for a couple of hundred.
+            //
+            // Fog wisps stay a scatter cue. They are an accent on top of real distance fog rather
+            // than the fog itself, and they are sparse by design.
+            if (!activePrecipitationVfx.HasValue && lastWeatherState == WeatherState.Fog)
                 PlayScatterVfx(BlockiverseVfxCue.FogWisp, ref nextFogVfxTime, FogVfxIntervalSeconds);
         }
 

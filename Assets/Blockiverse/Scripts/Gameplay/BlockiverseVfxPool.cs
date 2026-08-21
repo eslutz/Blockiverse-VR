@@ -84,6 +84,12 @@ namespace Blockiverse.Gameplay
 
         public bool HasSpriteForCue(BlockiverseVfxCue cue) => SpriteForCue(cue) != null;
 
+        // Exposed for the continuous weather volume, which needs the same authored sprites and the
+        // same shared material but cannot use the one-shot burst path.
+        public Sprite RainSprite => rainSplashParticle;
+
+        public Sprite SnowSprite => snowflakeParticle;
+
         public void Prewarm()
         {
             while (systems.Count < poolSize)
