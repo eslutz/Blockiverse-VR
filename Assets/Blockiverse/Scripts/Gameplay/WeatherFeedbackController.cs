@@ -47,6 +47,10 @@ namespace Blockiverse.Gameplay
         EnvironmentDynamicsController subscribedEnvironmentDynamics;
         bool campfireLoopActive;
 
+        // Deliberately NOT a [SerializeField]: adding one would re-serialize the generated XR rig
+        // prefab for no visible change, and this branch is meant to leave prefabs untouched.
+        BlockiverseLightingCycleController lightingCycle;
+
         void OnEnable()
         {
             DiscoverDependencies();
@@ -85,6 +89,9 @@ namespace Blockiverse.Gameplay
 
             if (environmentDynamics == null)
                 environmentDynamics = BlockiverseSceneLookup.Find<EnvironmentDynamicsController>(FindObjectsInactive.Include);
+
+            if (lightingCycle == null)
+                lightingCycle = BlockiverseSceneLookup.Find<BlockiverseLightingCycleController>(FindObjectsInactive.Include);
 
             SubscribeLightningStrikes();
         }
@@ -300,7 +307,24 @@ namespace Blockiverse.Gameplay
 
             Vector3 strikePosition = new(strike.X + 0.5f, strike.Y + 1.0f, strike.Z + 0.5f);
             audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.ThunderNear, strikePosition);
-            vfxCuePlayer?.PlayCue(BlockiverseVfxCue.LightningFlash, strikePosition + Vector3.up * 6.0f);
+
+            // Every flash the strike produces goes through the same gate. PlayCue enforces it for
+            // its own cue, but the sky flash never touches PlayCue, so the check has to happen
+            // here for it.
+            if (vfxCuePlayer == null || !vfxCuePlayer.AllowFlashEffects)
+                return;
+
+            // The flash is scaled by how far away the bolt was, across the whole ring and down to
+            // exactly nothing at its outer edge: a close strike washes out the sky, a distant one
+            // is a bolt you see with no flash at all. That pairing is what makes distance legible
+            // before the player has finished turning their head.
+            if (lightingCycle != null && TryGetHeadWorldPosition(out Vector3 headPosition))
+            {
+                float distance = Vector3.Distance(headPosition, strikePosition);
+                lightingCycle.PulseSkyFlash(LightningFlashSolver.DistanceStrength(distance));
+            }
+
+            vfxCuePlayer.PlayCue(BlockiverseVfxCue.LightningFlash, strikePosition + Vector3.up * 6.0f);
         }
 
         void TickThunder(WeatherState state)
@@ -313,15 +337,12 @@ namespace Blockiverse.Gameplay
 
             nextThunderTime = Time.time + Random.Range(6.0f, 14.0f);
 
+            // Audio only. This used to also fire a "flash" near the player every 6-14 seconds with
+            // no strike behind it and no relation to LightningStruck -- an effect that pretended
+            // lightning was happening while the real strikes went unseen somewhere else. Distant
+            // rumble with no visible bolt is correct ambience; a flash with no bolt is a lie.
             bool near = Random.value < 0.4f;
             audioCuePlayer.PlayCue(near ? BlockiverseAudioCue.ThunderNear : BlockiverseAudioCue.ThunderFar);
-
-            if (near && vfxCuePlayer != null && TryGetHeadWorldPosition(out Vector3 headPosition))
-            {
-                Vector3 flashPosition = headPosition +
-                    new Vector3(Random.Range(-12.0f, 12.0f), Random.Range(8.0f, 16.0f), Random.Range(-12.0f, 12.0f));
-                vfxCuePlayer.PlayCue(BlockiverseVfxCue.LightningFlash, flashPosition);
-            }
         }
 
         void TickPrecipitationVfx()

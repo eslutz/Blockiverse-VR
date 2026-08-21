@@ -23,7 +23,23 @@ namespace Blockiverse.Gameplay
         // the near-zero twilight window, where a full shadow-caster sweep buys nothing visible.
         public const float MinimumShadowCastingIntensity = 0.05f;
 
+        // Two close strikes must not compound into a strobe, so a flash cannot retrigger inside
+        // this window. It is longer than the flash itself for exactly that reason.
+        public const float MinimumFlashRetriggerSeconds = 0.35f;
+
+        // Once elapsed passes this, both the flash and the retrigger gate are long over; the timer
+        // stops advancing so it cannot drift into float noise over a long session.
+        const float FlashTrackingWindowSeconds = 1.0f;
+
         static readonly Color ClearFogColor = new(0.62f, 0.70f, 0.80f);
+
+        // Sky-flash state lives HERE rather than on the bolt view, and is deliberately not pulled
+        // from anywhere. ApplyCurrentLighting rewrites ambient every LateUpdate, so an external
+        // component poking RenderSettings would be erased within a frame; and the bolt view is
+        // created at runtime, after this component's Awake lookups have already run, so a pull
+        // would find null forever.
+        float skyFlashStrength;
+        float skyFlashElapsed = FlashTrackingWindowSeconds;
 
         public WorldTimeClock Clock => worldTimeClock;
         public Light SunLight => sunLight;
@@ -68,8 +84,26 @@ namespace Blockiverse.Gameplay
 
         void LateUpdate()
         {
+            if (skyFlashElapsed < FlashTrackingWindowSeconds)
+                skyFlashElapsed += Time.deltaTime;
+
             ApplyCurrentLighting();
         }
+
+        // Starts a sky flash at `strength` (0 = nothing, 1 = a strike close enough to wash out the
+        // sky). Ignored while a recent flash is still inside the retrigger window.
+        public void PulseSkyFlash(float strength)
+        {
+            if (strength <= 0.0f || skyFlashElapsed < MinimumFlashRetriggerSeconds)
+                return;
+
+            skyFlashStrength = Mathf.Clamp01(strength);
+            skyFlashElapsed = 0.0f;
+        }
+
+        // What the flash is contributing right now, for tests and for on-device tracing.
+        public float ActiveSkyFlashIntensity =>
+            skyFlashStrength * LightningFlashSolver.Intensity(skyFlashElapsed);
 
         // Moon phase advances once per game day and is derived purely from the clock's absolute
         // elapsed ticks, so every peer and every reloaded save agrees without extra synced state.
@@ -133,8 +167,14 @@ namespace Blockiverse.Gameplay
             sunLight.shadowStrength = Mathf.Clamp01(
                 (state.IsMoonPrimary ? nighttimeShadowStrength : daytimeShadowStrength) * weatherFactor);
 
+            // The flash modulates AMBIENT and never the sun. At night the sun sits below
+            // MinimumShadowCastingIntensity, so raising it for two frames would flip the entire
+            // shadow pass on and off -- a full shadow-caster sweep over every loaded chunk, with
+            // every shadow in the scene snapping in and out. Ambient is Flat, so an additive term
+            // is free and lifts everything uniformly, which is what a flash looks like anyway.
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = state.AmbientColor * weatherFactor;
+            RenderSettings.ambientLight = LightningFlashSolver.AmbientBoost(
+                state.AmbientColor * weatherFactor, skyFlashStrength, skyFlashElapsed);
             RenderSettings.sun = sunLight;
 
             ApplyFog(applyFog, state.AmbientColor * weatherFactor + ClearFogColor * 0.25f, fogDensity, submergedBlend);
