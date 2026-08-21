@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
 using UnityEngine;
+using UnityEngine.Rendering;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -21,6 +22,15 @@ namespace Blockiverse.Gameplay
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png";
         public const string VoxelLitShaderName = "Blockiverse/Voxel Lit";
+
+        // Local multi_compile keyword on the one voxel shader. There is deliberately no second
+        // .shader file: GraphicsSettings' m_AlwaysIncludedShaders lists this shader alone, so a
+        // separate water shader reached only through Shader.Find would be stripped from the
+        // Android player and water would render magenta on device while looking right in editor.
+        public const string WaterShaderKeyword = "_BLOCKIVERSE_WATER";
+
+        public const string BlockMaterialName = "Blockiverse Authored Block Atlas Material";
+        public const string FluidMaterialName = "Blockiverse Authored Fluid Atlas Material";
 
         const float UvInsetPixels = 0.5f;
 
@@ -155,8 +165,70 @@ namespace Blockiverse.Gameplay
             }
 
             SetBaseColor(material, Color.white);
-            material.name = "Blockiverse Authored Block Atlas Material";
+
+            // Re-asserted, not inherited: the material is cloned from the authored URP Lit source
+            // asset, so whatever surface state that asset happens to carry would otherwise ride
+            // along into terrain rendering.
+            ApplySurfaceState(
+                material,
+                renderType: "Opaque",
+                queue: (int)RenderQueue.Geometry,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f);
+            material.DisableKeyword(WaterShaderKeyword);
+
+            material.name = BlockMaterialName;
             return material;
+        }
+
+        // The water material is a runtime clone of the same authored atlas material, built on the
+        // path CreativeWorldManager.ConfigureWorldRuntime already drives, so texture-set switching
+        // and world reload need no extra wiring and no new .mat asset ships.
+        public static Material CreateFluidMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            // ZWrite stays ON. It resolves water against water per pixel, which is the only thing
+            // that can order a top face against a far wall inside a single fluid mesh. The cost is
+            // that you no longer see a submerged far bank through the near surface, which for a
+            // stylised voxel lake is not a look worth paying sorting artefacts for.
+            ApplySurfaceState(
+                material,
+                renderType: "Transparent",
+                queue: (int)RenderQueue.Transparent,
+                srcBlend: BlendMode.SrcAlpha,
+                dstBlend: BlendMode.OneMinusSrcAlpha,
+                zWrite: 1.0f);
+            material.EnableKeyword(WaterShaderKeyword);
+
+            material.name = FluidMaterialName;
+            return material;
+        }
+
+        static void ApplySurfaceState(
+            Material material,
+            string renderType,
+            int queue,
+            BlendMode srcBlend,
+            BlendMode dstBlend,
+            float zWrite)
+        {
+            material.SetOverrideTag("RenderType", renderType);
+            material.renderQueue = queue;
+            SetFloatIfPresent(material, "_SrcBlend", (float)srcBlend);
+            SetFloatIfPresent(material, "_DstBlend", (float)dstBlend);
+            SetFloatIfPresent(material, "_ZWrite", zWrite);
+            SetFloatIfPresent(material, "_Cull", (float)CullMode.Back);
+        }
+
+        // The fallback shaders CreateBaseMaterial can land on (URP Lit, Standard, Sprites/Default)
+        // do not all declare these, and SetFloat on a missing property is a silent no-op that
+        // would leave the state question unanswered.
+        static void SetFloatIfPresent(Material material, string propertyName, float value)
+        {
+            if (material != null && material.HasProperty(propertyName))
+                material.SetFloat(propertyName, value);
         }
 
         public static string AtlasPathForTextureSet(string textureSetId) =>

@@ -11,6 +11,27 @@ Shader "Blockiverse/Voxel Lit"
         _AdditionalLightScale("Additional Light Scale", Range(0, 2)) = 1.0
         // How brightly an emitter block renders its own faces regardless of surrounding light.
         _SelfEmissionStrength("Self Emission Strength", Range(0, 2)) = 1.0
+
+        // Per-family water look, selected per vertex from the fluid mesh's UV1 channel.
+        // Unused by the opaque terrain material.
+        _TintFreshwater("Freshwater Tint", Color) = (0.72, 0.92, 1.00, 0.72)
+        _TintBrine("Brine Tint", Color) = (0.68, 0.92, 0.90, 0.78)
+        _TintEmberflow("Emberflow Tint", Color) = (1.00, 0.86, 0.72, 1.00)
+        // x = dip amplitude (blocks), y = spatial frequency (rad/block),
+        // z = time speed (rad/s), w = normal amplification (visual slope multiplier).
+        // x must never exceed VoxelWorldRenderer.MaxWaveDipMeters * 0.5, or troughs fall outside
+        // the padded mesh bounds and pop at the edge of vision.
+        _WaveFreshwater("Freshwater Wave", Vector) = (0.025, 0.90, 1.10, 8.0)
+        _WaveBrine("Brine Wave", Vector) = (0.020, 1.05, 0.90, 7.0)
+        _WaveEmberflow("Emberflow Wave", Vector) = (0.012, 0.45, 0.22, 3.0)
+        _WaterSpecularStrength("Water Specular Strength", Range(0, 2)) = 0.35
+
+        // Material-driven surface state (the URP Lit pattern). Defaults are OPAQUE, so terrain
+        // is unaffected; BlockVisualAtlas.CreateFluidMaterial overrides them for water.
+        [HideInInspector] _SrcBlend("__src", Float) = 1.0
+        [HideInInspector] _DstBlend("__dst", Float) = 0.0
+        [HideInInspector] _ZWrite("__zw", Float) = 1.0
+        [HideInInspector] _Cull("__cull", Float) = 2.0
     }
 
     SubShader
@@ -26,6 +47,14 @@ Shader "Blockiverse/Voxel Lit"
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+
+            // Opaque by default; the water material drives these to alpha blending. ZWrite stays
+            // ON for water: it resolves water-over-water per pixel, which is the only thing that
+            // fixes ordering INSIDE one fluid mesh (a top face and a far wall in one draw, in
+            // arbitrary order) as well as per-chunk sort flips as the head turns.
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
+            Cull [_Cull]
 
             HLSLPROGRAM
             // 3.5 guarantees the loop/indexing features the clustered light path relies on.
@@ -58,6 +87,12 @@ Shader "Blockiverse/Voxel Lit"
             // matrices and, once additional lights land, the per-eye light cluster.
             #pragma multi_compile_instancing
 
+            // multi_compile_local, NOT shader_feature_local: no material ASSET in the build
+            // references this shader (BlockVisualAtlas swaps it in at runtime), so a
+            // shader_feature variant would be stripped from the Android player and water would
+            // render as opaque terrain on device while looking correct in the editor.
+            #pragma multi_compile_local _ _BLOCKIVERSE_WATER
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "BlockiverseVoxelLitInput.hlsl"
@@ -71,6 +106,12 @@ Shader "Blockiverse/Voxel Lit"
                 float3 normalOS : NORMAL;
                 float2 uv : TEXCOORD0;
                 float4 color : COLOR;
+                #if defined(_BLOCKIVERSE_WATER)
+                    // ChunkMeshBuilder.AddFluidFace: x = surface mask (1 on emitted +Y faces),
+                    // y = FluidFamily index. Declared only in the water variant so terrain never
+                    // pays the extra attribute fetch.
+                    float2 fluidData : TEXCOORD1;
+                #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -84,6 +125,10 @@ Shader "Blockiverse/Voxel Lit"
                 float fogCoord : TEXCOORD3;
                 #if defined(_ADDITIONAL_LIGHTS_VERTEX)
                     half3 vertexLighting : TEXCOORD4;
+                #endif
+                #if defined(_BLOCKIVERSE_WATER)
+                    float4 waterTint : TEXCOORD5;
+                    float surfaceMask : TEXCOORD6;
                 #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
@@ -99,10 +144,70 @@ Shader "Blockiverse/Voxel Lit"
 
                 VertexPositionInputs positionInputs = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs normalInputs = GetVertexNormalInputs(input.normalOS);
+                float3 normalWS = normalInputs.normalWS;
+
+                #if defined(_BLOCKIVERSE_WATER)
+                    float familyIndex = input.fluidData.y;
+                    float isEmberflow = step(1.5, familyIndex);
+                    float isBrine = step(0.5, familyIndex) - isEmberflow;
+                    float isFresh = 1.0 - isBrine - isEmberflow;
+
+                    float4 tint = _TintFreshwater * isFresh + _TintBrine * isBrine + _TintEmberflow * isEmberflow;
+                    float4 wave = _WaveFreshwater * isFresh + _WaveBrine * isBrine + _WaveEmberflow * isEmberflow;
+
+                    float mask = input.fluidData.x;
+                    float amp = wave.x * mask;
+                    float k = wave.y;
+                    float t = _Time.y * wave.z;
+
+                    // Chunk vertices are absolute voxel coordinates and the world root is pinned
+                    // to identity, so a world-space wave is continuous across every chunk border
+                    // with no per-chunk uniform. Writing it against positionWS (rather than
+                    // object space) keeps that true even if the world root ever moves.
+                    float3 positionWS = positionInputs.positionWS;
+                    float sinX, cosX, sinZ, cosZ;
+                    sincos(positionWS.x * k + t, sinX, cosX);
+                    sincos(positionWS.z * k * 0.83 + t * 1.17, sinZ, cosZ);
+
+                    // Strictly non-positive: dy lands in [-2*amp, 0]. The surface only ever dips
+                    // below the voxel face plane, so a crest can never poke above the cell, and a
+                    // wall either stays put or rides the surface it stands on down by exactly the
+                    // same amount -- the displacement is a pure function of x and z.
+                    float s = 0.5 * (sinX + sinZ);
+                    positionWS.y += amp * (s - 1.0);
+
+                    positionInputs.positionWS = positionWS;
+                    positionInputs.positionCS = TransformWorldToHClip(positionWS);
+
+                    // RecalculateNormals baked a flat (0,1,0) that a GPU displacement leaves
+                    // stale, which would light the whole animated surface as one rigid sliding
+                    // sheet. Rebuild it from the wave derivative and amplify by wave.w so the
+                    // shading reads even though the geometry only moves a couple of centimetres.
+                    float slopeScale = amp * 0.5 * wave.w;
+                    float3 waveNormal = normalize(float3(
+                        -slopeScale * k * cosX,
+                        1.0,
+                        -slopeScale * k * 0.83 * cosZ));
+
+                    // Gated on the baked normal as well as the mask: a masked vertex is not always
+                    // part of a surface. The foot of a side wall standing on a lower surface is
+                    // masked so it MOVES with that surface, but it is still part of a vertical
+                    // face, and handing it an upward wave normal would shade the bottom of the
+                    // wall as though it were lying flat.
+                    float upFacing = step(0.5, normalWS.y);
+                    float surfaceMask = mask * upFacing;
+                    normalWS = normalize(lerp(normalWS, waveNormal, surfaceMask));
+
+                    output.waterTint = tint;
+                    // The gated mask, not the raw one: downstream this means "on an animated
+                    // horizontal surface", which is what the highlight wants. A wall foot moves
+                    // but must not glint.
+                    output.surfaceMask = surfaceMask;
+                #endif
 
                 output.positionCS = positionInputs.positionCS;
                 output.positionWS = positionInputs.positionWS;
-                output.normalWS = NormalizeNormalPerVertex(normalInputs.normalWS);
+                output.normalWS = NormalizeNormalPerVertex(normalWS);
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.color = input.color;
                 output.fogCoord = ComputeFogFactor(positionInputs.positionCS.z);
@@ -213,9 +318,33 @@ Shader "Blockiverse/Voxel Lit"
                 // cave would render black inside the pool of light it casts.
                 lighting += selfEmission * half(_SelfEmissionStrength);
 
-                half3 color = sampled.rgb * lighting;
-                color = MixFog(color, input.fogCoord);
-                return half4(color, sampled.a);
+                #if defined(_BLOCKIVERSE_WATER)
+                    // Water keeps the full terrain lighting solve above -- sky gating, the sun or
+                    // moon, clustered punctual lights and self emission -- because a torch-lit
+                    // pool and a glowing emberflow are exactly as load-bearing as a lit wall.
+                    // Only the surface treatment differs.
+                    half3 color = sampled.rgb * input.waterTint.rgb * lighting;
+
+                    // The highlight comes off the wave normal itself, so it is band-limited by the
+                    // one-metre vertex spacing. An independent high-frequency sparkle sine would
+                    // alias past ~20 m -- and alias DIFFERENTLY in each eye, which is binocular
+                    // rivalry: invisible in the flat game view, a comfort defect in the headset.
+                    half3 viewDir = SafeNormalize(GetWorldSpaceViewDir(input.positionWS));
+                    half3 halfDir = SafeNormalize(mainLight.direction + viewDir);
+                    half spec = pow(saturate(dot(normalWS, halfDir)), 32.0) * half(input.surfaceMask);
+                    // Gated by the same shadow and sky terms as the diffuse sun above. Without the
+                    // shadow attenuation the glint burns straight through a cliff's or a bridge's
+                    // shadow, which is the one place the water is obviously not in sunlight.
+                    color += mainLight.color *
+                        (spec * half(_WaterSpecularStrength) * bakedSky * mainLight.shadowAttenuation);
+
+                    color = MixFog(color, input.fogCoord);
+                    return half4(color, input.waterTint.a * sampled.a);
+                #else
+                    half3 color = sampled.rgb * lighting;
+                    color = MixFog(color, input.fogCoord);
+                    return half4(color, sampled.a);
+                #endif
             }
             ENDHLSL
         }
