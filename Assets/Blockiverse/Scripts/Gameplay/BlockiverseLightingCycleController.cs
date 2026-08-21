@@ -33,6 +33,12 @@ namespace Blockiverse.Gameplay
 
         static readonly Color ClearFogColor = new(0.62f, 0.70f, 0.80f);
 
+        // How fast the cloud deck drifts, in shader UV units per second.
+        const float CloudScrollSpeed = 0.004f;
+
+        [SerializeField] Material skyMaterial;
+        Vector2 cloudScroll;
+
         // Sky-flash state lives HERE rather than on the bolt view, and is deliberately not pulled
         // from anywhere. ApplyCurrentLighting rewrites ambient every LateUpdate, so an external
         // component poking RenderSettings would be erased within a frame; and the bolt view is
@@ -78,6 +84,9 @@ namespace Blockiverse.Gameplay
 
             if (waterView == null)
                 waterView = FindFirstObjectByType<BlockiverseWaterView>();
+
+            if (skyMaterial == null)
+                skyMaterial = RenderSettings.skybox;
 
             ApplyCurrentLighting();
         }
@@ -142,12 +151,14 @@ namespace Blockiverse.Gameplay
             float weatherFactor = 1f;
             bool applyFog = false;
             float fogDensity = 0f;
+            float cloudCoverage = 0f;
             if (environmentSource != null &&
                 environmentSource.TryEvaluateEnvironment(WorldConstants.SeaLevel, out EnvironmentState environment))
             {
                 weatherFactor = EnvironmentLightingSolver.WeatherLightFactor(worldTimeClock.NormalizedTime, environment);
                 fogDensity = EnvironmentLightingSolver.FogDensity(environment);
                 applyFog = fogDensity > 0f;
+                cloudCoverage = Mathf.Clamp01(environment.CloudCoverage);
             }
 
             // One directional light serves as both bodies — URP only ever promotes a single
@@ -178,7 +189,53 @@ namespace Blockiverse.Gameplay
             RenderSettings.sun = sunLight;
 
             ApplyFog(applyFog, state.AmbientColor * weatherFactor + ClearFogColor * 0.25f, fogDensity, submergedBlend);
+            ApplySky(worldTimeClock.NormalizedTime, cloudCoverage);
         }
+
+        // Drives the generated sky material. This exists because the stock procedural skybox
+        // derives everything from the direction of RenderSettings.sun, and this project points one
+        // shared light down from overhead at night so the ground stays lit -- so that skybox drew a
+        // full noon sky at midnight behind a correctly dark world. It also had nowhere to put
+        // clouds, which is why every weather state changed the light and left the sky untouched.
+        //
+        // Elevation comes from the CLOCK, never from the light's rotation, for exactly that reason.
+        void ApplySky(float normalizedTime, float cloudCoverage)
+        {
+            if (skyMaterial == null)
+                return;
+
+            float moonPhaseScale = MoonPhaseIndex / (float)EnvironmentLightComputer.FullMoonLightLevel;
+
+            skyMaterial.SetColor(ZenithColorId, SkyGradientSolver.ZenithColor(normalizedTime, cloudCoverage, moonPhaseScale));
+            skyMaterial.SetColor(HorizonColorId, SkyGradientSolver.HorizonColor(normalizedTime, cloudCoverage, moonPhaseScale));
+            skyMaterial.SetColor(GroundColorId, SkyGradientSolver.GroundColor(normalizedTime, cloudCoverage, moonPhaseScale));
+            skyMaterial.SetColor(SunColorId, SkyGradientSolver.SunDiskColor(normalizedTime, moonPhaseScale));
+            skyMaterial.SetColor(CloudColorId, SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage));
+            skyMaterial.SetFloat(CloudCoverageId, cloudCoverage);
+
+            // The disk follows the shared light so it lines up with the shadows it casts, but it
+            // is hidden below the horizon by the colour solver rather than by rotation.
+            if (sunLight != null)
+                skyMaterial.SetVector(SunDirectionId, -sunLight.transform.forward);
+
+            cloudScroll += new Vector2(CloudScrollSpeed, CloudScrollSpeed * 0.6f) * Time.deltaTime;
+            skyMaterial.SetVector(CloudScrollId, cloudScroll);
+        }
+
+        public void ConfigureSky(Material sky)
+        {
+            if (sky != null)
+                skyMaterial = sky;
+        }
+
+        static readonly int ZenithColorId = Shader.PropertyToID("_ZenithColor");
+        static readonly int HorizonColorId = Shader.PropertyToID("_HorizonColor");
+        static readonly int GroundColorId = Shader.PropertyToID("_GroundColor");
+        static readonly int SunColorId = Shader.PropertyToID("_SunColor");
+        static readonly int SunDirectionId = Shader.PropertyToID("_SunDirection");
+        static readonly int CloudColorId = Shader.PropertyToID("_CloudColor");
+        static readonly int CloudCoverageId = Shader.PropertyToID("_CloudCoverage");
+        static readonly int CloudScrollId = Shader.PropertyToID("_CloudScroll");
 
         // The single writer of RenderSettings.fog in the project. Weather and submersion both land
         // here so they cannot fight each other frame to frame.

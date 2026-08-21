@@ -403,6 +403,40 @@ namespace Blockiverse.Editor
         // Attributes.
         const string ParticleShaderName = "Universal Render Pipeline/Particles/Unlit";
 
+        // The generated sky. Its properties are written every LateUpdate by
+        // BlockiverseLightingCycleController, so the authored values here only matter before the
+        // first frame -- but they are set to a plausible midday so the material never looks broken
+        // in the editor's preview.
+        static Material EnsureSkyMaterial()
+        {
+            Shader shader = Shader.Find("Blockiverse/Sky");
+
+            if (shader == null)
+                throw new InvalidOperationException("Blockiverse/Sky shader is missing; the generated sky cannot be built.");
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.SkyMaterialPath);
+
+            if (material == null)
+            {
+                material = new Material(shader) { name = Path.GetFileNameWithoutExtension(BlockiverseProject.SkyMaterialPath) };
+                AssetDatabase.CreateAsset(material, BlockiverseProject.SkyMaterialPath);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+            }
+
+            material.SetColor("_ZenithColor", SkyGradientSolver.DayZenith);
+            material.SetColor("_HorizonColor", SkyGradientSolver.DayHorizon);
+            material.SetColor("_GroundColor", SkyGradientSolver.DayGround);
+            material.SetColor("_SunColor", SkyGradientSolver.DaySunColor);
+            material.SetColor("_CloudColor", SkyGradientSolver.DayCloudColor);
+            material.SetFloat("_CloudCoverage", 0.0f);
+
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         static Material EnsureTransparentVfxParticleMaterial()
         {
             Material material = EnsureMaterial(

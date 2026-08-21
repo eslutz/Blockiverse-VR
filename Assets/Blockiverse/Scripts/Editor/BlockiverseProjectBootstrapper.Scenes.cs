@@ -476,6 +476,14 @@ namespace Blockiverse.Editor
             WorldTimeClock clock = EnsureComponent<WorldTimeClock>(lightObject);
             BlockiverseLightingCycleController controller = EnsureComponent<BlockiverseLightingCycleController>(lightObject);
             controller.Configure(clock, light);
+
+            // Replaces Unity's stock procedural skybox, which had no time-of-day input at all and
+            // rendered a noon sky at midnight because it reads the shared sun/moon light's
+            // DIRECTION -- and that light is deliberately pointed down from overhead at night.
+            Material sky = EnsureSkyMaterial();
+            RenderSettings.skybox = sky;
+            RenderSettings.sun = light;
+            controller.ConfigureSky(sky);
             EditorUtility.SetDirty(lightObject);
             EditorUtility.SetDirty(clock);
             EditorUtility.SetDirty(controller);

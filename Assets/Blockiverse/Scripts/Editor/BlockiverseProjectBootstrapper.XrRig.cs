@@ -452,6 +452,14 @@ namespace Blockiverse.Editor
             Transform leftHand = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
             Transform rightHand = cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
 
+            // Lights the first-person hands from the voxel world's own light, because their
+            // material is unlit and nothing else would give them brightness. Lives on the rig
+            // rather than beside the hands: the avatar rig is in Networking, which cannot reach
+            // VoxelLightSampler in Gameplay.
+            BlockiverseHandLightDriver handLight = EnsureComponent<BlockiverseHandLightDriver>(rig);
+            handLight.Configure(avatarRig, null);
+            EditorUtility.SetDirty(handLight);
+
             avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
             avatarRig.SetMetaAvatarAvailable(false);
             avatarRig.ConfigureFallbackProxy(true);
@@ -722,6 +730,12 @@ namespace Blockiverse.Editor
                 "Vignette While Sinking",
                 settings == null || settings.SwimVignetteBoost,
                 new Vector2(532.0f, -864.0f));
+            Toggle swimClimbOutToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Swim Climb Out Toggle",
+                "Climb Out At Low Banks",
+                settings == null || settings.SwimClimbOutEnabled,
+                new Vector2(532.0f, -928.0f));
             Slider swimSpeedSlider = EnsureSettingsSlider(
                 panelObject.transform,
                 "Swim Speed Slider",
@@ -752,7 +766,8 @@ namespace Blockiverse.Editor
                 targetCrouchToggleToggle: crouchToggleToggle,
                 targetSwimPassiveSinkToggle: swimPassiveSinkToggle,
                 targetSwimSpeedSlider: swimSpeedSlider,
-                targetSwimVignetteToggle: swimVignetteToggle);
+                targetSwimVignetteToggle: swimVignetteToggle,
+                targetSwimClimbOutToggle: swimClimbOutToggle);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);
