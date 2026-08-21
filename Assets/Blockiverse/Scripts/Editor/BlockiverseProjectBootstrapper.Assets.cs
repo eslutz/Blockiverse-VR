@@ -399,12 +399,28 @@ namespace Blockiverse.Editor
             return material;
         }
 
+        // The URP particle shader, which unlike URP/Unlit declares a COLOR semantic in its vertex
+        // Attributes.
+        const string ParticleShaderName = "Universal Render Pipeline/Particles/Unlit";
+
         static Material EnsureTransparentVfxParticleMaterial()
         {
             Material material = EnsureMaterial(
                 BlockiverseProject.VfxParticleMaterialPath,
                 new Color(1.0f, 1.0f, 1.0f, 0.72f),
                 preferUnlit: true);
+
+            // BlockiverseVfxPool writes each cue's tint into main.startColor, which lands in the
+            // particle VERTEX COLOUR stream. URP/Unlit's vertex input declares only POSITION and
+            // TEXCOORD0 -- there is no COLOR semantic -- so that tint has been dropped on the
+            // floor for EVERY cue, not just lightning's. Dust, sparks, embers, rain splash and
+            // snow have all been rendering as the material's flat white times their sprite.
+            //
+            // Reassigned explicitly because EnsureMaterial only picks a shader when it CREATES the
+            // asset; an existing .mat keeps whatever shader it was authored with.
+            Shader particleShader = Shader.Find(ParticleShaderName);
+            if (particleShader != null && material.shader != particleShader)
+                material.shader = particleShader;
 
             material.SetOverrideTag("RenderType", "Transparent");
             material.renderQueue = (int)RenderQueue.Transparent;
