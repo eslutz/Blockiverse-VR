@@ -33,18 +33,43 @@ namespace Blockiverse.Gameplay
             Subscribe();
         }
 
+        // Whether a cue is a full-field brightness event, which is what the Reduced Flash comfort
+        // setting exists to suppress. The single source of truth: the sky flash and the bolt mesh
+        // do not route through PlayCue, so without one shared predicate the setting would be
+        // enforced in three places and drift.
+        public static bool IsFlashCue(BlockiverseVfxCue cue) => cue == BlockiverseVfxCue.LightningFlash;
+
+        // Consulted by anything that produces a flash, cue or not -- see
+        // WeatherFeedbackController.OnLightningStruck, which gates both the bolt and the sky
+        // flash on this.
+        public bool AllowFlashEffects
+        {
+            get
+            {
+                EnsureReferences();
+                return feedbackSettings == null || !feedbackSettings.ReducedFlash;
+            }
+        }
+
+        public float ParticleIntensityScale
+        {
+            get
+            {
+                EnsureReferences();
+                return feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
+            }
+        }
+
         public void PlayCue(BlockiverseVfxCue cue, Vector3 position)
         {
             EnsureReferences();
             if (pool == null)
                 return;
 
-            if (cue == BlockiverseVfxCue.LightningFlash && feedbackSettings != null && feedbackSettings.ReducedFlash)
+            if (IsFlashCue(cue) && !AllowFlashEffects)
                 return;
 
-            float intensity = feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
-
-            pool.Play(cue, position, TintForCue(cue), intensity);
+            pool.Play(cue, position, TintForCue(cue), ParticleIntensityScale);
             CuePlayed?.Invoke(cue, position);
         }
 
