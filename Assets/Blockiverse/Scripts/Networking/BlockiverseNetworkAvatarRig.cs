@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Blockiverse.Networking
 {
@@ -451,7 +452,12 @@ namespace Blockiverse.Networking
             if (fallbackRenderers == null || fallbackRenderers.Length == 0)
                 return;
 
-            Color color = IsSpawned && IsOwner ? ownerFallbackColor : remoteFallbackColor;
+            // IsOwner alone, not IsSpawned && IsOwner. The LOCAL rig's copy of this component is
+            // deliberately never spawned into the network scene, so IsSpawned is false in single
+            // player AND in multiplayer -- which meant your own hands always took
+            // remoteFallbackColor, the orange reserved for OTHER players. Everyone saw their own
+            // hands in someone else's colour.
+            Color color = !IsSpawned || IsOwner ? ownerFallbackColor : remoteFallbackColor;
             fallbackMaterial ??= CreateFallbackMaterial(color);
             ApplyFallbackMaterialColor(fallbackMaterial, color);
 
@@ -607,6 +613,15 @@ namespace Blockiverse.Networking
 
             if (collider != null)
                 DestroyUnityObject(collider);
+
+            // The player has hands and no body, so a cast shadow is two disembodied blobs on the
+            // ground beside them. Every other non-terrain renderer in the project already opts out
+            // (ray visual, placement preview, lightning bolt, chunk fluid); CreatePrimitive just
+            // defaults to On and nobody had turned it off here.
+            Renderer primitiveRenderer = primitive.GetComponent<Renderer>();
+
+            if (primitiveRenderer != null)
+                primitiveRenderer.shadowCastingMode = ShadowCastingMode.Off;
 
             return primitive;
         }

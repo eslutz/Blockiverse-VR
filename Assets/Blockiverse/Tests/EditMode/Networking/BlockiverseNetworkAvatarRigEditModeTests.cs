@@ -1,9 +1,11 @@
+using System.Linq;
 using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using NUnit.Framework;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Blockiverse.Tests.Networking.EditMode
 {
@@ -55,6 +57,66 @@ namespace Blockiverse.Tests.Networking.EditMode
                 renderer.transform.name == "Fallback Head" && renderer.enabled));
             Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
                 renderer.transform.name == "Fallback Body" && renderer.enabled));
+        }
+
+        [Test]
+        public void FallbackProxyRenderersNeverCastShadows()
+        {
+            // The player is a pair of floating hands with no body, so a cast shadow reads as two
+            // disembodied blobs on the ground beside them. CreatePrimitive defaults shadow casting
+            // ON and nothing had turned it off, unlike every other non-terrain renderer in the
+            // project.
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+
+            Assert.That(renderers, Is.Not.Empty, "Fixture guard: the fallback proxy should have renderers.");
+            Assert.That(
+                renderers,
+                Has.All.Matches<Renderer>(renderer => renderer.shadowCastingMode == ShadowCastingMode.Off),
+                "No part of the bodiless player proxy may cast a shadow.");
+        }
+
+        [Test]
+        public void LocalHandsUseTheOwnerColourRatherThanTheRemoteOne()
+        {
+            // The local rig's copy of this component is deliberately never spawned into the
+            // network scene, so an IsSpawned && IsOwner test was false in single player AND in
+            // multiplayer -- every player saw their own hands painted in the colour reserved for
+            // OTHER players.
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            Assert.That(avatarRig.IsSpawned, Is.False, "Fixture guard: an unspawned rig is the local case.");
+
+            Renderer handRenderer = avatarRig.FallbackRoot
+                .GetComponentsInChildren<Renderer>(includeInactive: true)
+                .First(renderer => renderer.transform.name == "Fallback Left Hand");
+
+            Color rendered = handRenderer.sharedMaterial.color;
+            Color owner = OwnerFallbackColor(avatarRig);
+            Color remote = RemoteFallbackColor(avatarRig);
+
+            Assert.That(owner, Is.Not.EqualTo(remote), "Fixture guard: the two palette entries must differ.");
+            Assert.That(rendered.r, Is.EqualTo(owner.r).Within(0.01f));
+            Assert.That(rendered.g, Is.EqualTo(owner.g).Within(0.01f));
+            Assert.That(rendered.b, Is.EqualTo(owner.b).Within(0.01f));
+        }
+
+        static Color OwnerFallbackColor(BlockiverseNetworkAvatarRig rig) => ReadColorField(rig, "ownerFallbackColor");
+
+        static Color RemoteFallbackColor(BlockiverseNetworkAvatarRig rig) => ReadColorField(rig, "remoteFallbackColor");
+
+        static Color ReadColorField(BlockiverseNetworkAvatarRig rig, string fieldName)
+        {
+            FieldInfo field = typeof(BlockiverseNetworkAvatarRig).GetField(
+                fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(field, Is.Not.Null, $"{fieldName} should exist on the avatar rig.");
+            return (Color)field.GetValue(rig);
         }
 
         [Test]
