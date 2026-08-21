@@ -535,6 +535,11 @@ namespace Blockiverse.UI
                     // route but the menu rework dropped its push; restore it so the
                     // pause-menu entry opens the screen again.
                     ActionRequested?.Invoke(actionId);
+                    // Refreshed on every push, not just OnEnable. The presenter shows this screen
+                    // by enabling its canvas, so OnEnable fires once at scene load -- without this
+                    // the time-of-day slider still holds its authored value, and the first touch
+                    // snaps world time to that value instead of nudging from the live clock.
+                    creativeToolsPanel?.RefreshEnvironmentControls();
                     router.PushScreen(new ScreenRoute(MenuActions.CreativeToolsScreen, pauseGame: true));
                     break;
                 case MenuActions.PauseSettings:
