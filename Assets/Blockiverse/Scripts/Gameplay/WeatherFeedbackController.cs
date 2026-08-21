@@ -22,6 +22,9 @@ namespace Blockiverse.Gameplay
         // Splits the rain loop between the light and heavy cue. Sits between the light-rain
         // intensity (0.3) and the heavy-rain intensity (0.7) from WeatherService.
         const float HeavyPrecipitationIntensity = 0.5f;
+        // Distinct from every other DeterministicHash consumer, so a bolt's shape cannot correlate
+        // with terrain or structure rolls at the same column.
+        const int LightningBoltSalt = 0x6017;
 
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -47,9 +50,10 @@ namespace Blockiverse.Gameplay
         EnvironmentDynamicsController subscribedEnvironmentDynamics;
         bool campfireLoopActive;
 
-        // Deliberately NOT a [SerializeField]: adding one would re-serialize the generated XR rig
+        // Deliberately NOT [SerializeField]s: adding one would re-serialize the generated XR rig
         // prefab for no visible change, and this branch is meant to leave prefabs untouched.
         BlockiverseLightingCycleController lightingCycle;
+        LightningBoltView boltView;
 
         void OnEnable()
         {
@@ -314,17 +318,46 @@ namespace Blockiverse.Gameplay
             if (vfxCuePlayer == null || !vfxCuePlayer.AllowFlashEffects)
                 return;
 
-            // The flash is scaled by how far away the bolt was, across the whole ring and down to
-            // exactly nothing at its outer edge: a close strike washes out the sky, a distant one
-            // is a bolt you see with no flash at all. That pairing is what makes distance legible
-            // before the player has finished turning their head.
-            if (lightingCycle != null && TryGetHeadWorldPosition(out Vector3 headPosition))
+            if (TryGetHeadWorldPosition(out Vector3 headPosition))
             {
                 float distance = Vector3.Distance(headPosition, strikePosition);
-                lightingCycle.PulseSkyFlash(LightningFlashSolver.DistanceStrength(distance));
+
+                // The flash is scaled by how far away the bolt was, across the whole ring and down
+                // to exactly nothing at its outer edge: a close strike washes out the sky, a
+                // distant one is a bolt you see with no flash at all. That pairing is what makes
+                // distance legible before the player has finished turning their head.
+                if (lightingCycle != null)
+                    lightingCycle.PulseSkyFlash(LightningFlashSolver.DistanceStrength(distance));
+
+                // Seeded from the struck column so the same strike draws the same bolt on every
+                // peer -- clients receive the strike as a relayed event and build it themselves.
+                EnsureBoltView().Strike(
+                    new Vector3(strike.X + 0.5f, strike.Y + 1.0f, strike.Z + 0.5f),
+                    seed: unchecked((int)DeterministicHash.Hash(0, strike.X, strike.Y, strike.Z, LightningBoltSalt)),
+                    distance,
+                    reducedParticles: vfxCuePlayer.ParticleIntensityScale < 1.0f);
             }
 
             vfxCuePlayer.PlayCue(BlockiverseVfxCue.LightningFlash, strikePosition + Vector3.up * 6.0f);
+            vfxCuePlayer.PlayCue(BlockiverseVfxCue.BlockChipBurst, strikePosition);
+        }
+
+        LightningBoltView EnsureBoltView()
+        {
+            if (boltView != null)
+                return boltView;
+
+            // Created at runtime, following CreativeWorldManager.CreatePlacementPreview. One
+            // instance restarted per strike: the flash refuses to retrigger inside its own window
+            // for comfort reasons, so two visible bolts never overlap and a pool would be
+            // machinery with nothing to hold.
+            var host = new GameObject("Lightning Bolt");
+            boltView = host.AddComponent<LightningBoltView>();
+
+            if (Camera.main != null)
+                boltView.Configure(Camera.main.transform);
+
+            return boltView;
         }
 
         void TickThunder(WeatherState state)
