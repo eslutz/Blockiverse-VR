@@ -143,6 +143,7 @@ namespace Blockiverse.Editor
                 CreateAction(mapName, BlockiverseInputActionNames.Turn, InputActionType.PassThrough, "Vector2"),
                 CreateAction(mapName, BlockiverseInputActionNames.Sprint, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.Crouch, InputActionType.Button, "Button"),
+                CreateAction(mapName, BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "Button"),
                 CreateAction(mapName, BlockiverseInputActionNames.AimPosition, InputActionType.PassThrough, "Vector3"),
@@ -165,7 +166,12 @@ namespace Blockiverse.Editor
                 CreateBinding(mapName, BlockiverseInputActionNames.Move, "move-thumbstick", $"{controllerPath}/thumbstick", StickDeadzoneProcessor),
                 CreateBinding(mapName, BlockiverseInputActionNames.Turn, "turn-thumbstick", $"{controllerPath}/thumbstick", StickDeadzoneProcessor),
                 CreateBinding(mapName, BlockiverseInputActionNames.Sprint, "thumbstick-clicked", $"{controllerPath}/thumbstickClicked"),
-                CreateBinding(mapName, BlockiverseInputActionNames.Crouch, "crouch-thumbstick-clicked", $"{controllerPath}/thumbstickClicked"),
+                // Crouch/swim-down sits on the B/Y button, not the stick click. Both thumbsticks
+                // are also bound to Turn, and clicking a Touch stick almost always deflects it
+                // past the 0.2 deadzone -- so pressing to descend underwater fired a snap turn
+                // instead, which is exactly why swimming down read as broken.
+                CreateBinding(mapName, BlockiverseInputActionNames.Crouch, "crouch-secondary-button", $"{controllerPath}/secondaryButton"),
+                CreateBinding(mapName, BlockiverseInputActionNames.BlockEditingToggle, "block-editing-toggle-thumbstick-clicked", $"{controllerPath}/thumbstickClicked"),
                 CreateBinding(mapName, BlockiverseInputActionNames.AimPosition, "pointer-position", $"{controllerPath}/pointerPosition"),
                 CreateBinding(mapName, BlockiverseInputActionNames.AimRotation, "pointer-rotation", $"{controllerPath}/pointerRotation"),
             };
@@ -382,7 +388,13 @@ namespace Blockiverse.Editor
             EnsureButtonAction(map, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
             EnsureButtonAction(map, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
             EnsureButtonAction(map, BlockiverseInputActionNames.Sprint, $"{controllerPath}/thumbstickClicked");
-            EnsureButtonAction(map, BlockiverseInputActionNames.Crouch, $"{controllerPath}/thumbstickClicked");
+            EnsureButtonAction(map, BlockiverseInputActionNames.Crouch, $"{controllerPath}/secondaryButton");
+            EnsureButtonAction(map, BlockiverseInputActionNames.BlockEditingToggle, $"{controllerPath}/thumbstickClicked");
+
+            // EnsureButtonAction only ever ADDS a missing binding; it never removes a stale one.
+            // Without this the next bootstrapper run would silently re-add the old stick-click
+            // binding and leave crouch firing from BOTH buttons.
+            RemoveActionBindingsContaining(map, BlockiverseInputActionNames.Crouch, "thumbstickClicked");
 
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Move, controllerPath);
             EnsureThumbstickVector2Action(map, BlockiverseInputActionNames.Turn, controllerPath);

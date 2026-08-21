@@ -51730,17 +51730,17 @@ MonoBehaviour:
     Dominant stick: snap turn
 
     Dominant
-    stick click: crouch
+    stick click: toggle block editing
 
-    Dominant primary button: jump
+    Dominant primary button: jump / swim up
 
-    Dominant secondary
-    button: toggle block editing
+    Dominant
+    secondary button: crouch / swim down
 
     Support stick: move
 
-    Support stick click:
-    sprint
+    Support stick
+    click: sprint
 
     Either stick hold up: teleport aim, release to land'
   m_isRightToLeft: 0
@@ -80802,17 +80802,17 @@ MonoBehaviour:
     Dominant stick: snap turn
 
     Dominant
-    stick click: crouch
+    stick click: toggle block editing
 
-    Dominant primary button: jump
+    Dominant primary button: jump / swim up
 
-    Dominant secondary
-    button: toggle block editing
+    Dominant
+    secondary button: crouch / swim down
 
     Support stick: move
 
-    Support stick click:
-    sprint
+    Support stick
+    click: sprint
 
     Either stick hold up: teleport aim, release to land'
   m_isRightToLeft: 0

@@ -1364,9 +1364,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
             Assert.That(popupText, Does.Contain("Menu: pause"));
             Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
-            Assert.That(popupText, Does.Contain("Dominant stick click: crouch"));
-            Assert.That(popupText, Does.Contain("Dominant primary button: jump"));
-            Assert.That(popupText, Does.Contain("Dominant secondary button: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Dominant stick click: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Dominant primary button: jump / swim up"));
+            Assert.That(popupText, Does.Contain("Dominant secondary button: crouch / swim down"));
             Assert.That(popupText, Does.Contain("Support stick: move"));
             Assert.That(popupText, Does.Contain("Support stick click: sprint"));
             Assert.That(popupText, Does.Contain("Either stick hold up: teleport aim, release to land"));
@@ -1555,8 +1555,21 @@ namespace Blockiverse.Tests.EditMode
                 $"{map.name}/Sprint should be bound to {controllerPath}/thumbstickClicked.");
             Assert.That(crouch, Is.Not.Null, $"{map.name}/Crouch should exist.");
             Assert.That(crouch.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/secondaryButton"),
+                $"{map.name}/Crouch should be bound to {controllerPath}/secondaryButton.");
+
+            // The trap this guards: EnsureButtonAction in the schema-repair path only ever ADDS a
+            // missing binding and never removes a stale one, so forgetting the removal would leave
+            // crouch firing from BOTH the B button and the stick click after the next regeneration.
+            Assert.That(crouch.bindings,
+                Has.None.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
+                $"{map.name}/Crouch must not keep its old stick-click binding.");
+
+            InputAction blockEditingToggle = map.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false);
+            Assert.That(blockEditingToggle, Is.Not.Null, $"{map.name}/Block Editing Toggle should exist.");
+            Assert.That(blockEditingToggle.bindings,
                 Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
-                $"{map.name}/Crouch should be bound to {controllerPath}/thumbstickClicked.");
+                $"{map.name}/Block Editing Toggle should be bound to {controllerPath}/thumbstickClicked.");
         }
 
         static void AssertButtonReaderReferencesAction(XRInputButtonReader reader, InputAction action, string message)

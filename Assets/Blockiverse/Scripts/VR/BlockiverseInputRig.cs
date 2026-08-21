@@ -509,7 +509,9 @@ namespace Blockiverse.VR
             TryFindAction(supportMap, BlockiverseInputActionNames.Activate, out cachedQuickMenuAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Select, out cachedBreakAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Activate, out cachedPlaceAction);
-            TryFindAction(dominantMap, BlockiverseInputActionNames.SecondaryButton, out cachedBlockEditingToggleAction);
+            // Its own action now, rather than the raw Secondary Button passthrough: B/Y carries
+            // crouch and swim-down, and the pointer toggle moved to the dominant stick click.
+            TryFindAction(dominantMap, BlockiverseInputActionNames.BlockEditingToggle, out cachedBlockEditingToggleAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Crouch, out cachedCrouchAction);
             TryFindAction(supportMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
         }

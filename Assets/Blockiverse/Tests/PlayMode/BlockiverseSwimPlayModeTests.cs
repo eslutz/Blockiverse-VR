@@ -344,7 +344,7 @@ namespace Blockiverse.Tests.PlayMode
             // Descend. Held crouch has to beat the passive drift, or the input reads as doing
             // nothing at all.
             float beforeSink = origin.transform.position.y;
-            Press(gamepad.rightStickButton);
+            Press(gamepad.buttonEast);
 
             yield return WaitFrames(DriveFrames);
 
@@ -353,7 +353,7 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(sunk, Is.GreaterThan(BlockiverseSwimMotion.PassiveSinkSpeedMetersPerSecond),
                 "One second of held crouch must descend further than one second of passive drift.");
 
-            Release(gamepad.rightStickButton);
+            Release(gamepad.buttonEast);
         }
 
         [UnityTest]
@@ -370,14 +370,14 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(swim.IsSwimming, Is.True);
 
             float standingHeight = controller.height;
-            Press(gamepad.rightStickButton);
+            Press(gamepad.buttonEast);
 
             yield return WaitFrames(SettleFrames);
 
             Assert.That(controller.height, Is.EqualTo(standingHeight).Within(0.01f),
                 "The swimmer's capsule must stay full height while crouch is held as a descend input.");
 
-            Release(gamepad.rightStickButton);
+            Release(gamepad.buttonEast);
         }
 
         [UnityTest]
@@ -450,7 +450,10 @@ namespace Blockiverse.Tests.PlayMode
                 "<Gamepad>/rightStick",
                 expectedControlLayout: "Vector2");
             rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonSouth");
-            rightHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/rightStickPress");
+            // Mirrors the shipped mapping: swim-down is the dominant SECONDARY button. It used to
+            // be the stick click, which also deflects the Turn binding past its deadzone -- so
+            // pressing to descend snap-turned the player instead.
+            rightHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/buttonEast");
 
             return asset;
         }
