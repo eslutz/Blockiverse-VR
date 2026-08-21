@@ -80,43 +80,27 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
-        public void LocalHandsUseTheOwnerColourRatherThanTheRemoteOne()
+        public void EveryPlayerGetsTheSameWarmHandColour()
         {
-            // The local rig's copy of this component is deliberately never spawned into the
-            // network scene, so an IsSpawned && IsOwner test was false in single player AND in
-            // multiplayer -- every player saw their own hands painted in the colour reserved for
-            // OTHER players.
+            // This replaces an owner/remote colour test. The split existed to tell your hands from
+            // someone else's, which it never actually did -- your own hands are always the pair
+            // attached to your view -- and the owner half was a blue that did not read as a hand.
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
             avatarRig.ConfigureFirstPersonFallbackVisuals(true);
             avatarRig.SetMetaAvatarAvailable(false);
 
-            Assert.That(avatarRig.IsSpawned, Is.False, "Fixture guard: an unspawned rig is the local case.");
+            Assert.That(
+                typeof(BlockiverseNetworkAvatarRig).GetField(
+                    "remoteFallbackColor", BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null,
+                "The second colour should be removed, not left as a dead serialized field.");
 
             Renderer handRenderer = avatarRig.FallbackRoot
                 .GetComponentsInChildren<Renderer>(includeInactive: true)
                 .First(renderer => renderer.transform.name == "Fallback Left Hand");
 
             Color rendered = handRenderer.sharedMaterial.color;
-            Color owner = OwnerFallbackColor(avatarRig);
-            Color remote = RemoteFallbackColor(avatarRig);
-
-            Assert.That(owner, Is.Not.EqualTo(remote), "Fixture guard: the two palette entries must differ.");
-            Assert.That(rendered.r, Is.EqualTo(owner.r).Within(0.01f));
-            Assert.That(rendered.g, Is.EqualTo(owner.g).Within(0.01f));
-            Assert.That(rendered.b, Is.EqualTo(owner.b).Within(0.01f));
-        }
-
-        static Color OwnerFallbackColor(BlockiverseNetworkAvatarRig rig) => ReadColorField(rig, "ownerFallbackColor");
-
-        static Color RemoteFallbackColor(BlockiverseNetworkAvatarRig rig) => ReadColorField(rig, "remoteFallbackColor");
-
-        static Color ReadColorField(BlockiverseNetworkAvatarRig rig, string fieldName)
-        {
-            FieldInfo field = typeof(BlockiverseNetworkAvatarRig).GetField(
-                fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-
-            Assert.That(field, Is.Not.Null, $"{fieldName} should exist on the avatar rig.");
-            return (Color)field.GetValue(rig);
+            Assert.That(rendered.r, Is.GreaterThan(rendered.b), "Hands should read warm.");
         }
 
         [Test]

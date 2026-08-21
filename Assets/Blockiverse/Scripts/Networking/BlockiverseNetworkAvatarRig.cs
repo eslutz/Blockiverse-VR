@@ -45,8 +45,11 @@ namespace Blockiverse.Networking
         [SerializeField] Transform headAnchor;
         [SerializeField] Transform leftHandAnchor;
         [SerializeField] Transform rightHandAnchor;
-        [SerializeField] Color ownerFallbackColor = new(0.2f, 0.68f, 0.94f, 1.0f);
-        [SerializeField] Color remoteFallbackColor = new(0.94f, 0.62f, 0.22f, 1.0f);
+        // One colour for every player, deliberately. There used to be an owner/remote split, but
+        // it disambiguated nothing: your own hands are always the pair attached to your view, and
+        // you only ever see someone else's from across the room. A warm tone reads as a hand; the
+        // blue that the owner half used did not.
+        [SerializeField] Color fallbackColor = new(0.94f, 0.62f, 0.22f, 1.0f);
 
         Renderer[] fallbackRenderers = Array.Empty<Renderer>();
         Material fallbackMaterial;
@@ -452,12 +455,7 @@ namespace Blockiverse.Networking
             if (fallbackRenderers == null || fallbackRenderers.Length == 0)
                 return;
 
-            // IsOwner alone, not IsSpawned && IsOwner. The LOCAL rig's copy of this component is
-            // deliberately never spawned into the network scene, so IsSpawned is false in single
-            // player AND in multiplayer -- which meant your own hands always took
-            // remoteFallbackColor, the orange reserved for OTHER players. Everyone saw their own
-            // hands in someone else's colour.
-            Color color = !IsSpawned || IsOwner ? ownerFallbackColor : remoteFallbackColor;
+            Color color = fallbackColor;
             fallbackMaterial ??= CreateFallbackMaterial(color);
             ApplyFallbackMaterialColor(fallbackMaterial, color);
 
@@ -628,18 +626,16 @@ namespace Blockiverse.Networking
 
         static Material CreateFallbackMaterial(Color color)
         {
-            // UNLIT, deliberately. A lit material takes the scene's directional light and ambient
-            // directly, and neither is dimmed for enclosure -- that gating lives in the voxel
-            // shader's baked vertex colour, which these primitives do not have. So lit hands stayed
-            // brightly shaded inside a sealed pitch-black room, complete with a directional
-            // gradient across their top faces.
+            // LIT. An earlier pass moved this to Unlit to kill the directional gradient that gave
+            // away hands being brightly shaded inside a pitch-black cave -- but that gradient is
+            // also what makes them read as objects rather than as flat cut-outs, and losing it was
+            // immediately obvious.
             //
-            // Unlit removes that fake shading; BlockiverseHandLightDriver supplies the real
-            // brightness by sampling the same voxel light the world uses.
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-
-            if (shader == null)
-                shader = Shader.Find("Universal Render Pipeline/Lit");
+            // Keeping Lit is fine now: BlockiverseHandLightDriver scales the ALBEDO by the voxel
+            // light sampled at each hand, so in a sealed room the albedo is near black and the lit
+            // result is dark however bright the scene's directional light happens to be. The
+            // shading survives; the cave gate comes from the multiply.
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
 
             if (shader == null)
                 shader = Shader.Find("Standard");

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using Blockiverse.VR;
@@ -11,6 +12,37 @@ namespace Blockiverse.Tests.EditMode
     // only thing that ignores caves. These pin the tint that replaces that missing gate.
     public sealed class BlockiverseHandLightDriverEditModeTests
     {
+        [Test]
+        public void EveryPlayerSeesTheSameHandColour()
+        {
+            // There used to be an owner/remote split. It disambiguated nothing -- your own hands
+            // are always the pair attached to your view -- and it put the local player's hands in
+            // a blue that did not read as a hand at all.
+            var host = new GameObject("Hand Colour Rig");
+
+            try
+            {
+                BlockiverseNetworkAvatarRig rig = host.AddComponent<BlockiverseNetworkAvatarRig>();
+                rig.ConfigureFirstPersonFallbackVisuals(true);
+                rig.SetMetaAvatarAvailable(false);
+
+                Assert.That(
+                    typeof(BlockiverseNetworkAvatarRig).GetField(
+                        "ownerFallbackColor", BindingFlags.Instance | BindingFlags.NonPublic),
+                    Is.Null,
+                    "The owner/remote colour split should be gone, not merely unused.");
+
+                Renderer handRenderer = rig.LeftHandAnchor.GetComponentInChildren<Renderer>(includeInactive: true);
+                Color rendered = handRenderer.sharedMaterial.color;
+
+                Assert.That(rendered.r, Is.GreaterThan(rendered.b), "Hands should read warm, not blue.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
         [Test]
         public void SealedCellsAreDarkerThanOpenSkyButNeverFullyBlack()
         {
@@ -59,11 +91,11 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void TheFallbackHandMaterialIsUnlit()
+        public void TheFallbackHandMaterialKeepsItsShading()
         {
-            // The whole point: a LIT material takes the scene's directional light and ambient
-            // directly, and neither is dimmed for enclosure. Lit hands stayed brightly shaded
-            // inside a sealed pitch-black room, with a visible gradient across their top faces.
+            // Deliberately LIT. Unlit did fix the cave brightness, but it also flattened the hands
+            // into cut-outs. The cave gate comes from the driver scaling albedo instead, so the
+            // shading can stay.
             var host = new GameObject("Hand Light Driver Rig");
 
             try
@@ -78,8 +110,8 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(handRenderer.sharedMaterial, Is.Not.Null);
                 Assert.That(
                     handRenderer.sharedMaterial.shader.name,
-                    Does.Contain("Unlit"),
-                    "A lit hand material re-introduces the exact bug this fixes.");
+                    Does.Not.Contain("Unlit"),
+                    "Unlit hands read as flat cut-outs; the darkness gate belongs in the albedo.");
             }
             finally
             {

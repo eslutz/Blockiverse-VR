@@ -13,9 +13,11 @@ namespace Blockiverse.VR
     // NOT on the voxel shader ignores caves entirely -- which is why the hands stayed brightly lit,
     // with visible directional shading on their top faces, inside a pitch-black room.
     //
-    // The fix is a tint driven by the same light the voxel world uses. The hands are also moved to
-    // an unlit shader by the avatar rig, so there is no fake N-dot-L gradient left to give them
-    // away; this component supplies the only brightness they have.
+    // The fix is to scale the hands' ALBEDO by the same light the voxel world uses. Multiplying
+    // the albedo rather than replacing the shading keeps the lit material's directional gradient --
+    // which is what makes the hands read as objects rather than flat cut-outs -- while still
+    // driving them dark in a sealed room, because a near-black albedo stays near black however
+    // bright the scene's directional light is.
     //
     // This lives in VR rather than beside the hands because BlockiverseNetworkAvatarRig is in the
     // Networking assembly, which does not reference Gameplay where VoxelLightSampler lives. It
