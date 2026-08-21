@@ -36,6 +36,18 @@ the desktop numbers do not transfer. Horizon OS ships `ovrgpuprofiler` at
 `/system_ext/bin/ovrgpuprofiler`, reachable through `hzdb`:
 
 ```sh
+scripts/perf/capture-gpu-counters.sh <label> [seconds]
+```
+
+The script checks the device is attached and that our package is actually in the
+foreground, then writes a timestamped log to `TestResults/Performance/` with the
+build's version name recorded in the header, so two captures can be diffed
+directly. It refuses to run against the system dashboard rather than producing a
+plausible-looking file full of the wrong numbers.
+
+What it does, if you need to drive it by hand:
+
+```sh
 hzdb device list                                   # confirm the headset is attached
 hzdb app install <path-to.apk>                     # must print "Installation successful"
 hzdb app launch dev.ericslutz.blockiversevr
