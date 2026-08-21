@@ -158,47 +158,18 @@ Shader "Blockiverse/Voxel Lit"
                 float3 normalWS = normalInputs.normalWS;
 
                 #if defined(_BLOCKIVERSE_WATER)
-                    float familyIndex = input.fluidData.y;
-                    float isEmberflow = step(1.5, familyIndex);
-                    float isBrine = step(0.5, familyIndex) - isEmberflow;
-                    float isFresh = 1.0 - isBrine - isEmberflow;
-
-                    float4 tint = _TintFreshwater * isFresh + _TintBrine * isBrine + _TintEmberflow * isEmberflow;
-                    float4 wave = _WaveFreshwater * isFresh + _WaveBrine * isBrine + _WaveEmberflow * isEmberflow;
-
                     float mask = input.fluidData.x;
-                    float amp = wave.x * mask;
-                    float k = wave.y;
-                    float t = _Time.y * wave.z;
+                    float4 wave = BlockiverseSelectFluidWave(input.fluidData.y);
 
-                    // Chunk vertices are absolute voxel coordinates and the world root is pinned
-                    // to identity, so a world-space wave is continuous across every chunk border
-                    // with no per-chunk uniform. Writing it against positionWS (rather than
-                    // object space) keeps that true even if the world root ever moves.
+                    // Displaced through the shared helper, byte for byte the same call the depth
+                    // prime pass makes, so the depth this pass is tested against is the depth that
+                    // pass wrote.
                     float3 positionWS = positionInputs.positionWS;
-                    float sinX, cosX, sinZ, cosZ;
-                    sincos(positionWS.x * k + t, sinX, cosX);
-                    sincos(positionWS.z * k * 0.83 + t * 1.17, sinZ, cosZ);
-
-                    // Strictly non-positive: dy lands in [-2*amp, 0]. The surface only ever dips
-                    // below the voxel face plane, so a crest can never poke above the cell, and a
-                    // wall either stays put or rides the surface it stands on down by exactly the
-                    // same amount -- the displacement is a pure function of x and z.
-                    float s = 0.5 * (sinX + sinZ);
-                    positionWS.y += amp * (s - 1.0);
+                    float3 waveNormal;
+                    BlockiverseApplyFluidWave(mask, wave, positionWS, waveNormal);
 
                     positionInputs.positionWS = positionWS;
                     positionInputs.positionCS = TransformWorldToHClip(positionWS);
-
-                    // RecalculateNormals baked a flat (0,1,0) that a GPU displacement leaves
-                    // stale, which would light the whole animated surface as one rigid sliding
-                    // sheet. Rebuild it from the wave derivative and amplify by wave.w so the
-                    // shading reads even though the geometry only moves a couple of centimetres.
-                    float slopeScale = amp * 0.5 * wave.w;
-                    float3 waveNormal = normalize(float3(
-                        -slopeScale * k * cosX,
-                        1.0,
-                        -slopeScale * k * 0.83 * cosZ));
 
                     // Gated on the baked normal as well as the mask: a masked vertex is not always
                     // part of a surface. The foot of a side wall standing on a lower surface is
@@ -209,7 +180,7 @@ Shader "Blockiverse/Voxel Lit"
                     float surfaceMask = mask * upFacing;
                     normalWS = normalize(lerp(normalWS, waveNormal, surfaceMask));
 
-                    output.waterTint = tint;
+                    output.waterTint = BlockiverseSelectFluidTint(input.fluidData.y);
                     // The gated mask, not the raw one: downstream this means "on an animated
                     // horizontal surface", which is what the highlight wants. A wall foot moves
                     // but must not glint.
@@ -356,6 +327,86 @@ Shader "Blockiverse/Voxel Lit"
                     color = MixFog(color, input.fogCoord);
                     return half4(color, sampled.a);
                 #endif
+            }
+            ENDHLSL
+        }
+
+        // Depth prime for transparent water. Water is drawn as two materials on the one fluid
+        // renderer: this pass first, from a material at a lower render queue, then the shading
+        // pass. It writes ONLY depth, so the nearest water fragment claims each pixel and every
+        // farther one -- a far wall seen through a near surface, another chunk's surface behind
+        // this one -- is depth-rejected before it can blend.
+        //
+        // Why it exists: ZWrite alone does not make alpha blending order-independent. It decides
+        // which fragments survive, not how many blend, so submission order (fixed by the voxel
+        // scan, not by the camera) decided whether a patch of water carried one layer of tint or
+        // two, and that changed as the player walked around a lake. Priming depth first pins it
+        // at exactly one layer from every angle.
+        //
+        // The ordering is guaranteed by the two materials' render queues, not by URP's shader-tag
+        // order, so it does not depend on an internal detail of the pipeline. Terrain and the
+        // water shading material both disable this pass outright, so nothing but the prime
+        // material ever runs it.
+        Pass
+        {
+            Name "WaterDepthPrime"
+            Tags { "LightMode" = "SRPDefaultUnlit" }
+
+            ColorMask 0
+            ZWrite On
+            ZTest LEqual
+            Cull [_Cull]
+            // Pushes the primed depth a hair away from the camera so the shading pass's own
+            // fragment reliably passes ZTest LEqual. The two passes compute the same displaced
+            // position through the same helper, but they are separately compiled programs and an
+            // exact-equality depth test would be at the mercy of the compiler's float scheduling.
+            // One depth unit is far below the metre-scale separation between water layers.
+            Offset 1, 1
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex WaterPrimeVert
+            #pragma fragment WaterPrimeFrag
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "BlockiverseVoxelLitInput.hlsl"
+
+            struct WaterPrimeAttributes
+            {
+                float4 positionOS : POSITION;
+                float2 fluidData : TEXCOORD1;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct WaterPrimeVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            WaterPrimeVaryings WaterPrimeVert(WaterPrimeAttributes input)
+            {
+                WaterPrimeVaryings output = (WaterPrimeVaryings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 waveNormal;
+                BlockiverseApplyFluidWave(
+                    input.fluidData.x, BlockiverseSelectFluidWave(input.fluidData.y), positionWS, waveNormal);
+
+                output.positionCS = TransformWorldToHClip(positionWS);
+                return output;
+            }
+
+            half4 WaterPrimeFrag(WaterPrimeVaryings input) : SV_TARGET
+            {
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                return 0;
             }
             ENDHLSL
         }

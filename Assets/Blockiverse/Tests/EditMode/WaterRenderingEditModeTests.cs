@@ -265,8 +265,10 @@ namespace Blockiverse.Tests.EditMode
                     "The clone inherits the authored material's Opaque override tag unless it is explicitly replaced.");
                 Assert.That(fluidMaterial.GetFloat("_SrcBlend"), Is.EqualTo((float)BlendMode.SrcAlpha).Within(0.001f));
                 Assert.That(fluidMaterial.GetFloat("_DstBlend"), Is.EqualTo((float)BlendMode.OneMinusSrcAlpha).Within(0.001f));
-                Assert.That(fluidMaterial.GetFloat("_ZWrite"), Is.EqualTo(1.0f).Within(0.001f),
-                    "ZWrite stays on so a farther fluid fragment can never paint over a nearer one, between chunks or inside one fluid mesh.");
+                Assert.That(fluidMaterial.GetFloat("_ZWrite"), Is.EqualTo(0.0f).Within(0.001f),
+                    "The depth prime already wrote water's depth; writing it again here would be redundant.");
+                Assert.That(fluidMaterial.GetShaderPassEnabled(BlockVisualAtlas.WaterDepthPrimePassName), Is.False,
+                    "The shading material must not also run the prime pass, or every water pixel is rasterised twice for nothing.");
                 Assert.That(fluidMaterial.IsKeywordEnabled(BlockVisualAtlas.WaterShaderKeyword), Is.True,
                     "Without the keyword the water material renders through the opaque terrain path.");
                 Assert.That(BlockVisualAtlas.TryGetBaseTexture(fluidMaterial, out Texture texture), Is.True);
@@ -312,10 +314,51 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(blockMaterial.GetFloat("_ZWrite"), Is.EqualTo(1.0f).Within(0.001f));
                 Assert.That(blockMaterial.IsKeywordEnabled(BlockVisualAtlas.WaterShaderKeyword), Is.False,
                     "Terrain must never compile through the water variant.");
+                Assert.That(blockMaterial.GetShaderPassEnabled(BlockVisualAtlas.WaterDepthPrimePassName), Is.False,
+                    "Terrain must never run the water depth prime; it would cost an extra pass over every chunk in the world.");
             }
             finally
             {
                 Object.DestroyImmediate(blockMaterial);
+                Object.DestroyImmediate(sourceMaterial);
+                Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
+        public void FluidDepthPrimeMaterialDrawsDepthOnlyBeforeTheShadingMaterial()
+        {
+            // The prime is what makes water blending order-independent: it claims each pixel for
+            // the nearest water fragment, so a far wall seen through a near surface, or another
+            // chunk's surface behind this one, is depth-rejected before it can blend. Without it
+            // the number of blended layers depended on voxel submission order, so a patch of water
+            // changed density as the player walked around it.
+            Texture2D atlasTexture = null;
+            Material sourceMaterial = null;
+            Material primeMaterial = null;
+            Material shadingMaterial = null;
+
+            try
+            {
+                sourceMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                primeMaterial = BlockVisualAtlas.CreateFluidDepthPrimeMaterial(sourceMaterial, atlasTexture, BlockTextureSetIds.Default);
+                shadingMaterial = BlockVisualAtlas.CreateFluidMaterial(sourceMaterial, atlasTexture, BlockTextureSetIds.Default);
+
+                Assert.That(primeMaterial.renderQueue, Is.LessThan(shadingMaterial.renderQueue),
+                    "Render queue is what orders the prime before every water shading draw in the scene; nothing else guarantees it.");
+                Assert.That(primeMaterial.renderQueue, Is.EqualTo(BlockVisualAtlas.FluidDepthPrimeRenderQueue));
+                Assert.That(primeMaterial.GetFloat("_ZWrite"), Is.EqualTo(1.0f).Within(0.001f),
+                    "The prime exists to write depth; without it the pass is a no-op.");
+                Assert.That(primeMaterial.GetShaderPassEnabled(BlockVisualAtlas.WaterDepthPrimePassName), Is.True);
+                Assert.That(primeMaterial.GetShaderPassEnabled("UniversalForward"), Is.False,
+                    "The prime must not also shade, or water would blend twice and the pass would defeat its own purpose.");
+                Assert.That(primeMaterial.IsKeywordEnabled(BlockVisualAtlas.WaterShaderKeyword), Is.True,
+                    "The prime must compile the same water variant, or its vertices land at the undisplaced height and the depth it writes is wrong.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(shadingMaterial);
+                Object.DestroyImmediate(primeMaterial);
                 Object.DestroyImmediate(sourceMaterial);
                 Object.DestroyImmediate(atlasTexture);
             }
@@ -342,12 +385,20 @@ namespace Blockiverse.Tests.EditMode
                     .Single(mesh => mesh.gameObject.name == "Fluid");
                 MeshRenderer chunkRenderer = fluidRenderer.transform.parent.GetComponent<MeshRenderer>();
 
-                Assert.That(fluidRenderer.sharedMaterial.name, Is.EqualTo(BlockVisualAtlas.FluidMaterialName),
+                Assert.That(fluidRenderer.sharedMaterials.Length, Is.EqualTo(2),
+                    "The fluid mesh is drawn twice, once per material: depth prime then shading.");
+                Assert.That(fluidRenderer.sharedMaterials[0].name, Is.EqualTo(BlockVisualAtlas.FluidDepthPrimeMaterialName));
+                Assert.That(fluidRenderer.sharedMaterials[1].name, Is.EqualTo(BlockVisualAtlas.FluidMaterialName),
                     "The fluid child must use the transparent clone; sharing the terrain material is what made water opaque.");
+                Assert.That(fluidRenderer.sharedMaterials[0].renderQueue,
+                    Is.LessThan(fluidRenderer.sharedMaterials[1].renderQueue),
+                    "Queue order, not array order, is what actually sequences the two draws.");
+                Assert.That(chunkRenderer.sharedMaterials.Length, Is.EqualTo(1),
+                    "Terrain is drawn once; only water pays for a second pass.");
                 Assert.That(chunkRenderer.sharedMaterial.name, Is.EqualTo(BlockVisualAtlas.BlockMaterialName),
                     "Solid chunks keep the opaque material.");
                 Assert.That(fluidRenderer.sharedMaterial, Is.Not.SameAs(chunkRenderer.sharedMaterial),
-                    "Two distinct shared materials, so terrain batching is unaffected by the water blend state.");
+                    "Distinct shared materials, so terrain batching is unaffected by the water blend state.");
                 Assert.That(fluidRenderer.shadowCastingMode, Is.EqualTo(ShadowCastingMode.Off),
                     "A translucent sheet casting a solid shadow over the seabed reads as a bug.");
 

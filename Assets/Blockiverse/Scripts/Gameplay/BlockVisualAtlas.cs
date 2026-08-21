@@ -31,6 +31,18 @@ namespace Blockiverse.Gameplay
 
         public const string BlockMaterialName = "Blockiverse Authored Block Atlas Material";
         public const string FluidMaterialName = "Blockiverse Authored Fluid Atlas Material";
+        public const string FluidDepthPrimeMaterialName = "Blockiverse Authored Fluid Depth Prime Material";
+
+        // LightMode tag of the water depth-prime pass. Only the prime material runs it; terrain and
+        // the water shading material both switch it off, so neither pays for a pass it never wants.
+        public const string WaterDepthPrimePassName = "SRPDefaultUnlit";
+        const string ForwardPassName = "UniversalForward";
+
+        // One below the transparent queue, which is what orders the prime before every water
+        // shading draw in the scene -- including other chunks', so the nearest water surface
+        // anywhere claims the pixel. Render queue is the primary sort key, so this ordering does
+        // not depend on the pipeline's internal shader-tag order.
+        public const int FluidDepthPrimeRenderQueue = (int)RenderQueue.Transparent - 1;
 
         const float UvInsetPixels = 0.5f;
 
@@ -177,6 +189,8 @@ namespace Blockiverse.Gameplay
                 dstBlend: BlendMode.Zero,
                 zWrite: 1.0f);
             material.DisableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
 
             material.name = BlockMaterialName;
             return material;
@@ -189,22 +203,46 @@ namespace Blockiverse.Gameplay
         {
             Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
 
-            // ZWrite stays ON so a farther fluid fragment can never paint over a nearer one, which
-            // is the sort flip that reads as a far bank sliding on top of the near surface. It does
-            // not make the blending order-independent -- see the render-state comment in
-            // BlockiverseVoxelLit.shader for what remains. The cost is that you mostly no longer
-            // see a submerged far bank through the near surface, which for a stylised voxel lake is
-            // not a look worth paying sorting artefacts for.
+            // ZWrite is OFF here because CreateFluidDepthPrimeMaterial already wrote the depth:
+            // the nearest water fragment claims each pixel and every farther one is rejected before
+            // it can blend, so exactly one layer of tint lands from every angle. Writing depth here
+            // as well would be redundant, and it was never enough on its own -- ZWrite decides
+            // which fragments survive, not how many blend.
             ApplySurfaceState(
                 material,
                 renderType: "Transparent",
                 queue: (int)RenderQueue.Transparent,
                 srcBlend: BlendMode.SrcAlpha,
                 dstBlend: BlendMode.OneMinusSrcAlpha,
-                zWrite: 1.0f);
+                zWrite: 0.0f);
             material.EnableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
 
             material.name = FluidMaterialName;
+            return material;
+        }
+
+        // The depth half of the water pair. Rendered from the same fluid mesh through a second
+        // entry in the renderer's shared materials, one queue earlier, writing depth and no colour.
+        // It carries the water keyword and the same authored atlas so its vertex program is the
+        // same variant as the shading pass's, which is what keeps the two depths in agreement.
+        public static Material CreateFluidDepthPrimeMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            ApplySurfaceState(
+                material,
+                renderType: "Transparent",
+                queue: FluidDepthPrimeRenderQueue,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f);
+            material.EnableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, true);
+            material.SetShaderPassEnabled(ForwardPassName, false);
+
+            material.name = FluidDepthPrimeMaterialName;
             return material;
         }
 

@@ -43,8 +43,10 @@ namespace Blockiverse.Gameplay
         VoxelSkyLightMap skyLight;
         VoxelEmitterIndex emitterIndex;
         Material chunkMaterial;
-        // Water renders from a second, transparent clone of the same authored atlas material.
+        // Water renders from a second, transparent clone of the same authored atlas material, drawn
+        // after a depth-only prime of the same geometry so exactly one water layer blends per pixel.
         Material fluidMaterial;
+        Material fluidDepthPrimeMaterial;
         int interactionLayer = -1;
         // Fluid geometry sits on its own layer so gravity's ground sphere-cast never sees it.
         // Resolved by name at Configure time, falling back to the canonical index.
@@ -99,6 +101,7 @@ namespace Blockiverse.Gameplay
             DestroyGeneratedChunkContent();
             DestroyGeneratedObject(chunkMaterial);
             DestroyGeneratedObject(fluidMaterial);
+            DestroyGeneratedObject(fluidDepthPrimeMaterial);
 
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
@@ -107,6 +110,7 @@ namespace Blockiverse.Gameplay
             // Both materials are created before any rebuild: CreateFluidObject reads fluidMaterial
             // lazily during the rebuild below, and a null there renders water with no material.
             fluidMaterial = BlockVisualAtlas.CreateFluidMaterial(material, selectedAtlas, textureSetId);
+            fluidDepthPrimeMaterial = BlockVisualAtlas.CreateFluidDepthPrimeMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
             fluidLayer = ResolveFluidLayer();
             skyLight = new VoxelSkyLightMap(world, registry);
@@ -401,7 +405,12 @@ namespace Blockiverse.Gameplay
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = true;
 
-            if (fluidMaterial != null)
+            // Two materials over a single-submesh mesh: Unity draws the mesh once per material, and
+            // the materials' render queues put the depth prime first. Array order here is
+            // documentation -- the queues are what actually sequence the draws.
+            if (fluidMaterial != null && fluidDepthPrimeMaterial != null)
+                renderer.sharedMaterials = new[] { fluidDepthPrimeMaterial, fluidMaterial };
+            else if (fluidMaterial != null)
                 renderer.sharedMaterial = fluidMaterial;
 
             // The fluid layer is what actually keeps players out of water: it is absent from
@@ -625,6 +634,7 @@ namespace Blockiverse.Gameplay
             DestroyGeneratedChunkContent();
             DestroyGeneratedObject(chunkMaterial);
             DestroyGeneratedObject(fluidMaterial);
+            DestroyGeneratedObject(fluidDepthPrimeMaterial);
         }
 
         // Destroys every generated chunk object and mesh and resets the bookkeeping — used on

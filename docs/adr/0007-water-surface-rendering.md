@@ -84,30 +84,51 @@ it opened a 12.5 cm slit on all four sides of any block placed on a lake, and th
 shoreline step it was meant to create already exists, because `PlaceFluids` fills
 to `SeaLevel - 1`.
 
-### 4. `ZWrite On` for transparent water
+### 4. Water is depth-primed, so exactly one layer blends per pixel
 
-Water writes depth, so a farther fluid fragment can never paint over a nearer one.
-That is the sort flip that reads as a far bank sliding on top of the near surface,
-and it happens both between chunks as the head turns and *inside a single fluid
-mesh*, where a top face and a far wall are submitted in voxel-traversal order
-rather than depth order. The cost is that a submerged far bank is mostly no longer
-visible through the near surface; for a stylised voxel lake that layering is not
-worth paying sorting artefacts for. The fallback is a single material float, not a
-shader edit.
+`ZWrite` alone does not make alpha blending order-independent. It decides which
+fragments survive, not how many blend: when the farther fluid fragment is submitted
+first it blends and writes depth and the nearer one then blends over it, so that
+patch carries two layers of tint; submitted the other way round the far one is
+depth-rejected and one layer lands. Submission order is fixed by the voxel scan
+rather than by the camera, so a patch of water changed density depending on where
+the player stood.
 
-**What this does not buy: order independence.** With blending enabled, `ZWrite`
-decides which fragments survive, not how many blend. When the farther fragment is
-submitted first it blends and writes depth and the nearer one blends over it, so
-that patch carries two layers of tint and reads slightly denser; submitted the
-other way round the far fragment is depth-rejected and one layer lands. Triangle
-order is fixed by the voxel scan rather than by the camera, so which of the two a
-given patch shows depends on where the player is standing — visible where a
-submerged wall sits behind a surface, as a density difference rather than as
-flicker. Making it genuinely order-independent needs a depth-primed second pass
-over fluid geometry (`ColorMask 0` + `ZWrite`, then `ZTest Equal` with `ZWrite`
-off) or per-frame sorted geometry. Both cost an extra pass over water, which is the
-one budget this feature has not measured yet, so both wait on the device capture in
-Consequences.
+Water therefore renders as **two materials on the one fluid renderer**:
+
+| | Queue | Pass | State |
+|---|---|---|---|
+| Depth prime | `Transparent − 1` | `WaterDepthPrime` only | `ColorMask 0`, `ZWrite On`, `Offset 1, 1` |
+| Shading | `Transparent` | `ForwardLit` only | blended, `ZWrite Off`, `ZTest LEqual` |
+
+The prime claims each pixel for the nearest water fragment anywhere in the scene,
+so a far wall seen through a near surface — and another chunk's surface behind this
+one — is rejected before it can blend. One layer, from every angle, with no
+per-chunk sort flips left to speak of.
+
+Three details carry it:
+
+- **Render queue orders the two draws, not URP's shader-tag list.** URP 17 happens
+  to declare `SRPDefaultUnlit` before `UniversalForward`, but that is an internal
+  detail; queue is the primary sort key and is the guarantee this relies on.
+- **Both passes displace through the same `BlockiverseApplyFluidWave` helper** in
+  the shared include, and the prime carries the same `_BLOCKIVERSE_WATER` keyword,
+  so it compiles the same variant. A prime that skipped the wave would write depth
+  at the undisplaced height and reject the surface it was supposed to admit.
+- **`Offset 1, 1` on the prime, and `ZTest LEqual` rather than `Equal` on the
+  shading pass.** The two are separately compiled programs, and an exact-equality
+  depth test would be at the mercy of the compiler's float scheduling. One depth
+  unit is far below the metre-scale separation between water layers.
+
+Terrain and the shading material both switch the prime pass off outright
+(`SetShaderPassEnabled`), so nothing but the prime material ever runs it and no
+chunk in the world pays for a pass it does not want.
+
+**Accepted consequence: water occludes transparent objects behind it.** The prime
+writes depth before the transparent queue, so a particle effect *behind* a water
+surface is rejected rather than tinted. Opaque geometry is unaffected — the seabed
+still reads through the surface, which is the whole point of the feature — and this
+is a deliberate trade for deterministic layering, to be confirmed in the headset.
 
 ### 5. Underwater is fog plus a camera clear — no tint quad
 
@@ -138,17 +159,17 @@ no depth-driven colour ramp, no screen-space refraction.**
   fragments over the water's screen area at MSAA 4x. Three staged `ovrgpuprofiler`
   captures on one seed and pose — today, queue-move-only, and the full feature —
   are a required merge gate; the queue-move-only number is the one that decides
-  affordability. Levers, in order: raise alpha, then MSAA 4x → 2x, then keep water
+  affordability. Take a fourth with the depth prime disabled (drop the prime
+  material from the renderer's shared materials) to price the prime on its own. Levers, in order: raise alpha, then MSAA 4x → 2x, then keep water
   in the opaque queue as a last resort.
 - The wave is presentation-only. The fluid `MeshCollider` is cooked from the
   undisplaced mesh and every gameplay query reads voxel data, so nothing crosses
   the determinism boundary and no per-frame `Shader.SetGlobalFloat` is needed.
   Waves keep moving while a menu is open.
-- Residual transparency artefact, deliberately left: the number of blended water
-  layers over a pixel can differ by viewpoint (see 4). The depth-primed pass that
-  would remove it is specified above and is a candidate for the same device session
-  that prices the queue move — it caps blended layers at one per pixel, so it may
-  well pay for its own extra geometry pass.
+- The depth prime costs an extra geometry pass over water and saves blended
+  fragments wherever water overlapped itself, since it caps blending at one layer
+  per pixel. Which way that nets out is a device question, and it is folded into
+  the capture protocol below as a fourth measurement.
 - Mesh bounds for fluid meshes are padded downward by
   `VoxelWorldRenderer.MaxWaveDipMeters`; an EditMode test pins the shader's wave
   amplitudes to that padding so a look-dev change cannot silently start popping
