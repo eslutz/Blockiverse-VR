@@ -628,7 +628,18 @@ namespace Blockiverse.Networking
 
         static Material CreateFallbackMaterial(Color color)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            // UNLIT, deliberately. A lit material takes the scene's directional light and ambient
+            // directly, and neither is dimmed for enclosure -- that gating lives in the voxel
+            // shader's baked vertex colour, which these primitives do not have. So lit hands stayed
+            // brightly shaded inside a sealed pitch-black room, complete with a directional
+            // gradient across their top faces.
+            //
+            // Unlit removes that fake shading; BlockiverseHandLightDriver supplies the real
+            // brightness by sampling the same voxel light the world uses.
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+
+            if (shader == null)
+                shader = Shader.Find("Universal Render Pipeline/Lit");
 
             if (shader == null)
                 shader = Shader.Find("Standard");
