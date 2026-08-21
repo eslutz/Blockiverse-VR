@@ -663,112 +663,179 @@ Thunderstorms occur when:
 weatherState == "THUNDERSTORM"
 ```
 
-Lightning should be rare but impactful.
+Lightning is **atmospheric only**. It scorches two block types and does no damage to players or
+entities. It exists to make a storm feel like a storm.
+
+This section describes what ships. The earlier draft specified a weighted target table, three
+impact zones with damage values, and two new blocks; none of that was ever implemented, and it has
+been removed rather than left as an aspiration that reads like a contract. Where a decision was
+taken deliberately against the obvious answer, the reason is recorded here so it is not "fixed"
+later.
 
 ### 10.1 Lightning attempt rate
 
-Every `100 ticks`, each active thunderstorm climate region may attempt a strike.
+Every `200 ticks` (10 seconds) of thunderstorm, one strike is rolled. The odds of that roll are not
+constant: they come from the storm's own character and from how far through the storm it is.
 
 ```ts
-LIGHTNING_CHECK_INTERVAL = 100;
-baseStrikeChance = 0.015; // per climate region per check
-strikeChance = baseStrikeChance * stormIntensity;
+LIGHTNING_CHECK_INTERVAL_TICKS = 200;
+
+// Per-storm violence, derived from the world seed and the storm's start tick, so every peer
+// computes the same value with nothing extra sent over the wire.
+character = deterministicUnitRoll(worldSeed, stormStartTick);   // 0..1
+peakChance = lerp(12, 70, character);                           // percent
+
+// A build-peak-taper arc across the storm's life. Never reaches zero: a storm that stops
+// striking entirely at its edges reads as broken weather rather than as a storm tapering.
+progress = clamp01(ticksInState / minimumStateDurationTicks(THUNDERSTORM));
+arc = lerp(0.35, 1.0, 4 * progress * (1 - progress));
+
+strikeChancePercent = round(peakChance * arc);
 ```
 
-For a higher-drama setting:
-
-```ts
-strikeChance *= 1.5 if cloudCoverage > 0.95
-strikeChance *= 1.3 during night
-```
+A thunderstorm segment is `1200 ticks`. The weather machine re-rolls its transition at the end of
+each segment and may choose Thunderstorm again, which resets `ticksInState` — so a long storm is a
+sequence of segments, each with its own character and arc. That is intended: a ten-minute storm
+surges and lulls rather than holding one intensity.
 
 ### 10.2 Strike target selection
 
-```ts
-function chooseLightningTarget(region) {
-  let xz = randomColumnInRegion(region);
-  let y = highestSkyExposedBlockY(xz);
-  let candidates = getColumnsWithinRadius(xz, 8);
-  return weightedHighestCandidate(candidates);
-}
-```
-
-Target weighting:
-
-| Target Feature | Weight Multiplier |
-|---|---:|
-| Highest exposed block in local area | ×2.0 |
-| Tree/log/leaf canopy | ×1.8 |
-| Water or brine surface | ×1.4 |
-| Sunmetal block/item, if placed as block | ×3.0 |
-| Lumen Lamp | ×1.4 |
-| Player holding metal tool | ×1.2 if exposed and not Creative |
-| Stormspire Rod, if added | ×8.0 |
-| Underground/covered block | ×0.0 |
-
-Minimum condition:
+Strikes are biased into a **ring around a player**, not drawn from the whole world. A strike nobody
+witnesses is worth nothing, and the previous whole-world draw meant essentially every strike
+happened somewhere unobserved.
 
 ```ts
-if !hasOpenSky(targetPos): reject target
+MIN_RING_RADIUS = 10;
+MAX_RING_RADIUS = 96;
+MAX_SELECTION_ATTEMPTS = 8;
+
+anchor = randomKnownPlayerHead();          // local camera plus every connected player
+angle  = uniform(0, 2 * PI);
+radius = uniform(MIN_RING_RADIUS, MAX_RING_RADIUS);   // uniform in RADIUS, not in area
 ```
+
+Radius is uniform across the band on purpose. Distance is the point — consecutive strikes should
+differ, some close enough to fill the view and some distant silhouettes — and the flash and thunder
+are both scaled from it. Area-uniform sampling (`radius = sqrt(u)`) was rejected: it concentrates
+strikes against the outer edge where storm fog washes them out, which is close to the problem being
+fixed.
+
+`MIN_RING_RADIUS` sits just outside the player exclusion radius below, so the comfort exclusion is
+an invariant of the selection rather than a filter applied after it.
+
+All eight candidates are drawn up front and then walked until one is accepted, so a rejection no
+longer wastes the whole 10-second interval, and the RNG stream advances by a fixed amount however
+the rejections fall. Lightning uses its own stream, separate from snowpack sampling, for that
+reason.
+
+Rejection rules:
+
+```ts
+if !hasOpenSky(targetPos)                              reject   // implicit: the column's top block
+if withinRadius(target, spawn, 8)                      reject
+if withinRadius(target, anyPlayerHead, 8)              reject
+```
+
+Material weighting is **not implemented**. Every valid column is equally likely.
+
+**Determinism, stated plainly.** The cadence, the intensity roll and the RNG stream are
+deterministic. The struck column is not, because the anchor is a live head position. Placement
+already depended on head proximity as a rejection input; ring bias makes that dependence total. An
+invisible deterministic strike is worth less than a visible one.
 
 ### 10.3 Lightning impact
 
-Lightning impact has three zones.
-
-| Zone | Radius | Effect |
-|---|---:|---|
-| Direct hit | 0 blocks | Major damage, ignition, block transformation checks |
-| Shock zone | 1–2 blocks | Medium damage, temporary light, entity knockback |
-| Flash zone | 3–6 blocks | Visual flash, thunder sound, minor fear/status effect if implemented |
-
-Damage values for Survival players/entities:
-
-```ts
-directDamage = 20;
-shockDamage = 8;
-flashDamage = 0;
-```
-
-Creative players take no lightning damage by default.
+**Lightning deals no damage** — not to players, not to entities, in any game mode. There are no
+impact zones and no knockback. It scorches the block it hits (§10.4) and produces the bolt, the sky
+flash and the thunder.
 
 ### 10.4 Block effects
 
 | Block | Lightning Effect |
 |---|---|
-| Branchwood Log | 60% chance to become `charred_log`; 25% chance to ignite adjacent air |
-| Leafmoss | 40% chance to ignite or disappear if dry |
-| Thornbrush | 70% chance to ignite |
-| Pale Sand | 15% chance to become `stormglass` if direct hit |
-| Clearpane Glass | 20% chance to crack into `glass_shard ×1–2` |
-| Freshwater/Brine | Creates splash particles; conducts shock to nearby entities |
-| Lumen Lamp | 5% chance to overload and turn off for 60 seconds if powered state exists |
-| Lumen Quartz Cluster | 15% chance to emit boosted light level `10` for 120 seconds |
-| Campfire | Relights if unlit and fuel exists |
-| Emberflow | No change |
+| Meadow Turf | Becomes `dry_turf` |
+| Leafmoss | Burns away to air |
+| Anything else | Unaffected; the strike still flashes and thunders |
 
-Optional blocks introduced by this ruleset:
+No new blocks are introduced. `charred_log` and `stormglass` were proposed by the earlier draft and
+are deliberately not shipped: a new `BlockId` changes the registry hash recorded in the save format,
+so they are not the cosmetic addition they look like.
 
-| Block | ID | Description | Drops |
-|---|---|---|---|
-| Charred Log | `charred_log` | Lightning-burned wood. Decorative and useful as weak fuel. | `charred_log ×1` |
-| Stormglass | `stormglass` | Rare lightning-fused glassy sand block. Decorative. | `stormglass ×1` with Mallet tier 3+; otherwise `glass_shard ×1–3` |
+### 10.5 Bolt, flash and thunder
 
-### 10.5 Thunder timing
+**The bolt** is a procedural ribbon mesh, not a sprite. A stretched point-filtered tile visibly
+stair-steps over tens of blocks, and any single tall billboard reads as a flat card in stereo,
+swimming as the head translates — fatal for the one effect the player is meant to look at.
 
-Thunder delay is based on distance from camera to strike.
+```ts
+lateralWander   = 0.11 * boltHeight;   // random walk, not an oscillation
+forks           = 3;
+ribbonHalfWidth = 0.38 blocks;         // widened with distance to hold >= 1.5 px on screen
+colour          = white-hot core -> blue edge, via a generated 64x1 alpha ramp across the width
+```
+
+Soft edges come from that ramp rather than from stacked layers, so the whole bolt — main channel,
+forks and impact glow — is one mesh and one draw. Billboarding is **yaw only**; a full look-at
+rotation tilts the bolt when the player looks up and gives away the flat card.
+
+**The sky flash** modulates `RenderSettings.ambientLight` and **never the sun**. At night the sun
+sits below the shadow-casting intensity floor, so raising it for a flash would flip the entire
+shadow pass on and off for two frames — a full shadow-caster sweep over every loaded chunk, with
+every shadow in the scene snapping in and out. Ambient is flat, so an additive term is free and
+lifts everything uniformly, which is what a flash looks like anyway. No point light is created: the
+runtime point-light budget is fully spent on emitters with distance eviction, so a lightning light
+would evict a torch the player is standing next to.
+
+```ts
+flashDurationSeconds = 0.30;    // the old flashDurationTicks = 6, at 20 ticks/second
+attackSeconds        = 0.04;    // not a single-frame pop at 72 Hz
+
+// Quadratic, because real brightness falls with distance squared and a linear ramp reads far too
+// bright out in the middle of the ring. Exactly zero at the ring's outer edge: the term is
+// re-added every frame, so a residual would bleed into ambient permanently.
+distanceStrength(d) = 1.0                                   if d <= 20
+                    = (1 - (d - 20) / (96 - 20))^2          if 20 < d < 96
+                    = 0.0                                   if d >= 96
+```
+
+One flash at a time, with a minimum re-trigger gap, so two close strikes cannot compound into a
+strobe.
+
+**Thunder** plays **2D (global), not positionally**, matching the audio ruleset's "global with
+distance-based delay". Positional playback would route through a shared round-robin source pool that
+moves whichever source it picks — cutting off a clip still ringing — and would apply Unity's own
+distance rolloff on top of the curve below, attenuating twice.
 
 ```ts
 thunderDelaySeconds = distanceBlocks / 34.0;
-thunderVolume = clamp01(1.0 - distanceBlocks / 256.0);
+thunderVolume       = clamp01(1.0 - distanceBlocks / 128.0);
+thunderClip         = distanceBlocks <= 40 ? THUNDER_NEAR : THUNDER_FAR;
 ```
 
-Lightning flash lights the sky briefly.
+`34` is **deliberately about ten times slower than the real speed of sound**. Physically honest
+propagation over a 96-block ring peaks at 0.28 s, which no player perceives as a delay at all; at 34
+the same strike arrives 2.8 s after the flash, and that gap is the single strongest distance cue the
+game has. Do not "correct" this constant. (An earlier `/343.0` appears in
+[voxel_audio_vfx_ruleset.md](voxel_audio_vfx_ruleset.md) history and has been removed there.)
 
-```ts
-flashDurationTicks = 6;
-flashLightBoost = 4;
-```
+The `128` divisor replaces an earlier `256`, which was written for a world where strikes could be
+that far away; against the 96-block ring it left the most distant thunder playing at 62% volume,
+flattening the exact distinction this is built on.
+
+Ambient storm rumble — thunder with no strike behind it — always uses the far clip. It has no
+distance, and a near crack from nowhere fights the real strikes.
+
+### 10.6 Comfort
+
+| Setting | Effect on lightning |
+|---|---|
+| Reduced Flash | Suppresses **both** the bolt and the sky flash. Thunder still plays: the setting suppresses the visuals, not the storm. |
+| Reduced Particles | Fewer bolt segments and a smaller impact glow. |
+| Weather volume / Mute All | Gate thunder like any other weather cue. The per-strike distance volume folds in beneath them and cannot scale past them. |
+
+Two accommodations are **specified but not implemented**: a reduced-thunder audio option and a
+thunder haptic. Both are recorded in
+[voxel_audio_vfx_ruleset.md](voxel_audio_vfx_ruleset.md) and remain open.
 
 ---
 
