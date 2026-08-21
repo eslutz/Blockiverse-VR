@@ -8,6 +8,7 @@ using Blockiverse.WorldGen;
 using NUnit.Framework;
 using Unity.XR.CoreUtils;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.TestTools;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Readers;
@@ -49,7 +50,7 @@ namespace Blockiverse.Tests.PlayMode
             if (seabed != null)
                 Object.DestroyImmediate(seabed);
 
-            DestroyRigImmediate(rigObject);
+            SwimRigFixture.DestroyRigImmediate(rigObject);
 
             if (managerObject != null)
                 Object.DestroyImmediate(managerObject);
@@ -230,7 +231,7 @@ namespace Blockiverse.Tests.PlayMode
         BlockiverseSwimProvider CreateSubmergedRig(out XROrigin origin, out GravityProvider gravity)
         {
             managerObject = new GameObject("Swim World Manager");
-            CreateWorldWithADeepPool(managerObject);
+            SwimRigFixture.CreateWorldWithADeepPool(managerObject);
 
             // A floor under the pool so a sinking player has somewhere to come to rest rather than
             // falling out of the world if anything about the lock goes wrong.
@@ -240,7 +241,7 @@ namespace Blockiverse.Tests.PlayMode
             seabed.transform.localScale = new Vector3(40.0f, 1.0f, 40.0f);
             seabed.transform.position = new Vector3(8.0f, 0.55f, 8.0f);
 
-            rigObject = CreateGravityRig(out origin, out gravity);
+            rigObject = SwimRigFixture.CreateGravityRig(out origin, out gravity);
 
             // Chest-deep inside the pool, which fills cells y = 1..8 at (4, z = 4).
             rigObject.transform.position = new Vector3(4.5f, 4.0f, 4.5f);
@@ -270,8 +271,202 @@ namespace Blockiverse.Tests.PlayMode
             for (int frame = 0; frame < frames; frame++)
                 yield return null;
         }
+    }
 
-        static void CreateWorldWithADeepPool(GameObject managerObject)
+    // Swim locomotion driven by real input actions. Separate from the fixture above because it
+    // needs InputTestFixture as a base class: rise and sink are the primary verbs of the feature,
+    // and asserting on the provider's internal state instead of on real button presses would leave
+    // the whole input path -- action resolution, the mode gate, the crouch suppression -- unproven.
+    public sealed class BlockiverseSwimInputPlayModeTests : InputTestFixture
+    {
+        const int SettleFrames = 30;
+        const int DriveFrames = 60;
+
+        GameObject managerObject;
+        GameObject rigObject;
+        GameObject seabed;
+        InputActionAsset actions;
+
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            Time.captureDeltaTime = 1.0f / 60.0f;
+            BlockiverseRuntimeState.Reset();
+        }
+
+        [TearDown]
+        public override void TearDown()
+        {
+            Time.captureDeltaTime = 0.0f;
+
+            if (seabed != null)
+                Object.DestroyImmediate(seabed);
+
+            SwimRigFixture.DestroyRigImmediate(rigObject);
+
+            if (managerObject != null)
+                Object.DestroyImmediate(managerObject);
+
+            if (actions != null)
+                Object.DestroyImmediate(actions);
+
+            BlockiverseRuntimeState.Reset();
+            base.TearDown();
+        }
+
+        [UnityTest]
+        public IEnumerator HoldingJumpRisesAndHoldingCrouchSinksFasterThanTheDrift()
+        {
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            BlockiverseSwimProvider swim = CreateSubmergedRig(out XROrigin origin);
+
+            yield return WaitFrames(SettleFrames);
+
+            Assert.That(swim.IsSwimming, Is.True, "Fixture precondition: the rig must be submerged.");
+
+            // Rise. This is the verb the whole feature turns on: without it a sinking player has no
+            // way back to the surface.
+            float beforeRise = origin.transform.position.y;
+            Press(gamepad.buttonSouth);
+
+            yield return WaitFrames(DriveFrames);
+
+            float risen = origin.transform.position.y - beforeRise;
+
+            Assert.That(risen, Is.GreaterThan(0.3f),
+                "Holding the jump input must lift the player against the passive sink, not merely slow it.");
+
+            Release(gamepad.buttonSouth);
+
+            yield return WaitFrames(5);
+
+            // Descend. Held crouch has to beat the passive drift, or the input reads as doing
+            // nothing at all.
+            float beforeSink = origin.transform.position.y;
+            Press(gamepad.rightStickButton);
+
+            yield return WaitFrames(DriveFrames);
+
+            float sunk = beforeSink - origin.transform.position.y;
+
+            Assert.That(sunk, Is.GreaterThan(BlockiverseSwimMotion.PassiveSinkSpeedMetersPerSecond),
+                "One second of held crouch must descend further than one second of passive drift.");
+
+            Release(gamepad.rightStickButton);
+        }
+
+        [UnityTest]
+        public IEnumerator HoldingCrouchWhileSwimmingDoesNotShrinkTheCapsule()
+        {
+            // Crouch's only meaning underwater is "descend". Letting it also shrink the capsule and
+            // drop the camera would move the view for an input meant to move the body.
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            BlockiverseSwimProvider swim = CreateSubmergedRig(out XROrigin origin);
+            CharacterController controller = rigObject.GetComponent<CharacterController>();
+
+            yield return WaitFrames(SettleFrames);
+
+            Assert.That(swim.IsSwimming, Is.True);
+
+            float standingHeight = controller.height;
+            Press(gamepad.rightStickButton);
+
+            yield return WaitFrames(SettleFrames);
+
+            Assert.That(controller.height, Is.EqualTo(standingHeight).Within(0.01f),
+                "The swimmer's capsule must stay full height while crouch is held as a descend input.");
+
+            Release(gamepad.rightStickButton);
+        }
+
+        [UnityTest]
+        public IEnumerator ATeleportModeSwimmerCanStillRise()
+        {
+            // The softlock, proven end to end rather than by source inspection: jump is gated by
+            // locomotion mode, so a teleport-mode player who ended up submerged could swim down
+            // (crouch is not mode-gated) and not up, while passive sink pulled them deeper.
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            BlockiverseSwimProvider swim = CreateSubmergedRig(out XROrigin origin);
+            BlockiverseInputRig inputRig = rigObject.GetComponent<BlockiverseInputRig>();
+            inputRig.ComfortSettings.LocomotionMode = BlockiverseLocomotionMode.Teleport;
+
+            yield return WaitFrames(SettleFrames);
+
+            Assert.That(swim.IsSwimming, Is.True);
+            Assert.That(inputRig.JumpProvider.enabled, Is.False,
+                "Fixture precondition: the jump provider is off in teleport mode, which is exactly why the swim provider cannot depend on it.");
+
+            float before = origin.transform.position.y;
+            Press(gamepad.buttonSouth);
+
+            yield return WaitFrames(DriveFrames);
+
+            Assert.That(origin.transform.position.y - before, Is.GreaterThan(0.3f),
+                "A teleport-mode swimmer must be able to rise, or passive sink makes the water inescapable in the comfort locomotion mode.");
+
+            Release(gamepad.buttonSouth);
+        }
+
+        BlockiverseSwimProvider CreateSubmergedRig(out XROrigin origin)
+        {
+            managerObject = new GameObject("Swim Input World Manager");
+            SwimRigFixture.CreateWorldWithADeepPool(managerObject);
+
+            seabed = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            seabed.name = "Swim Input Seabed";
+            seabed.layer = BlockiverseProject.InteractionLayerIndex;
+            seabed.transform.localScale = new Vector3(40.0f, 1.0f, 40.0f);
+            seabed.transform.position = new Vector3(8.0f, 0.55f, 8.0f);
+
+            actions = CreateSwimActions();
+            rigObject = SwimRigFixture.CreateGravityRig(out origin, out GravityProvider _, actions);
+            rigObject.transform.position = new Vector3(4.5f, 4.0f, 4.5f);
+            Physics.SyncTransforms();
+
+            return rigObject.GetComponent<BlockiverseSwimProvider>();
+        }
+
+        // Only the two maps and the handful of actions the swim inputs resolve through. Anything
+        // the rig looks up and does not find simply stays null, which is the same state a rig has
+        // before its asset is assigned.
+        static InputActionAsset CreateSwimActions()
+        {
+            var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+
+            InputActionMap leftHand = asset.AddActionMap(BlockiverseInputActionNames.LeftHandMap);
+            leftHand.AddAction(
+                BlockiverseInputActionNames.Move,
+                InputActionType.PassThrough,
+                "<Gamepad>/leftStick",
+                expectedControlLayout: "Vector2");
+
+            // The dominant hand defaults to Right, so this is the map both swim inputs resolve
+            // through: rise on Primary Button, descend on Crouch.
+            InputActionMap rightHand = asset.AddActionMap(BlockiverseInputActionNames.RightHandMap);
+            rightHand.AddAction(
+                BlockiverseInputActionNames.Move,
+                InputActionType.PassThrough,
+                "<Gamepad>/rightStick",
+                expectedControlLayout: "Vector2");
+            rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonSouth");
+            rightHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/rightStickPress");
+
+            return asset;
+        }
+
+        static IEnumerator WaitFrames(int frames)
+        {
+            for (int frame = 0; frame < frames; frame++)
+                yield return null;
+        }
+    }
+
+    // Shared by both swim fixtures below: the plain one that drives state directly, and the
+    // input-driven one that needs InputTestFixture as its base class and so cannot inherit these.
+    static class SwimRigFixture
+    {
+        internal static void CreateWorldWithADeepPool(GameObject managerObject)
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var settings = new WorldGenerationSettings(
@@ -294,9 +489,12 @@ namespace Blockiverse.Tests.PlayMode
                 new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.FlatCreative));
         }
 
-        static GameObject CreateGravityRig(out XROrigin origin, out GravityProvider gravity)
+        internal static GameObject CreateGravityRig(
+            out XROrigin origin,
+            out GravityProvider gravity,
+            InputActionAsset actions = null)
         {
-            GameObject rigObject = CreateXrOrigin(out origin);
+            GameObject rigObject = SwimRigFixture.CreateXrOrigin(out origin);
             CharacterController characterController = rigObject.AddComponent<CharacterController>();
             BlockiverseInputRig.ConfigureCharacterController(characterController);
 
@@ -313,18 +511,25 @@ namespace Blockiverse.Tests.PlayMode
             ContinuousMoveProvider continuousMove = rigObject.AddComponent<ContinuousMoveProvider>();
             continuousMove.mediator = mediator;
             continuousMove.forwardSource = origin.Camera.transform;
-            continuousMove.leftHandMoveInput = CreateUnusedVector2Reader("Left Hand Move");
-            continuousMove.rightHandMoveInput = CreateUnusedVector2Reader("Right Hand Move");
+            continuousMove.leftHandMoveInput = SwimRigFixture.CreateUnusedVector2Reader("Left Hand Move");
+            continuousMove.rightHandMoveInput = SwimRigFixture.CreateUnusedVector2Reader("Right Hand Move");
 
             SnapTurnProvider snapTurn = rigObject.AddComponent<SnapTurnProvider>();
             snapTurn.mediator = mediator;
             snapTurn.delayTime = 0.0f;
-            snapTurn.leftHandTurnInput = CreateUnusedVector2Reader("Left Hand Snap Turn");
-            snapTurn.rightHandTurnInput = CreateUnusedVector2Reader("Right Hand Snap Turn");
+            snapTurn.leftHandTurnInput = SwimRigFixture.CreateUnusedVector2Reader("Left Hand Snap Turn");
+            snapTurn.rightHandTurnInput = SwimRigFixture.CreateUnusedVector2Reader("Right Hand Snap Turn");
 
             // The real rig component: its own provisioning is what is under test, so a
             // hand-configured swim provider would prove nothing.
             var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
+
+            // Wired before ConfigureLocomotion so the rig's action cache is populated on its first
+            // refresh; without an asset the jump and crouch lookups resolve to null and the swim
+            // inputs are unreachable.
+            if (actions != null)
+                inputRig.Configure(actions);
+
             inputRig.ConfigureLocomotion(teleport, snapTurn, null, continuousMove, mediator, bodyTransformer);
 
             gravity = inputRig.GravityProvider;
@@ -334,7 +539,7 @@ namespace Blockiverse.Tests.PlayMode
             return rigObject;
         }
 
-        static GameObject CreateXrOrigin(out XROrigin origin)
+        internal static GameObject CreateXrOrigin(out XROrigin origin)
         {
             GameObject rigObject = new("Swim Test XR Origin");
             rigObject.SetActive(false);
@@ -359,7 +564,7 @@ namespace Blockiverse.Tests.PlayMode
             return rigObject;
         }
 
-        static void DestroyRigImmediate(GameObject rig)
+        internal static void DestroyRigImmediate(GameObject rig)
         {
             if (rig == null)
                 return;
@@ -370,7 +575,7 @@ namespace Blockiverse.Tests.PlayMode
             Object.DestroyImmediate(rig);
         }
 
-        static XRInputValueReader<Vector2> CreateUnusedVector2Reader(string name) =>
+        internal static XRInputValueReader<Vector2> CreateUnusedVector2Reader(string name) =>
             new(name, XRInputValueReader.InputSourceMode.Unused);
     }
 }

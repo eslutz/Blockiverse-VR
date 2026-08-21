@@ -1058,9 +1058,16 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 
 | Section | Settings |
 |---|---|
-| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, UI scale, left-handed, toggle-to-mine, **click to toggle sprint**, **click to toggle crouch**, **use my real height**, height reset |
+| Comfort | Locomotion mode (glide/teleport), smooth/snap turn, snap-turn degrees, turn-around toggle, vignette toggle/strength, UI scale, left-handed, toggle-to-mine, **click to toggle sprint**, **click to toggle crouch**, **use my real height**, height reset, **sink when not swimming**, **swim speed**, **vignette while sinking** |
 | Audio | Master, effects, UI, and weather volume; haptic strength; mute all; haptics toggle; reduced flash; reduced particles |
 | Controls | Read-only controller mapping reference (shared with the first-launch popup) |
+
+The three swimming rows carry the accommodation for the one motion the game defaults *into*
+rather than out of (`voxel_survival_ruleset.md` §5.6). **Sink when not swimming** ships on;
+turning it off restores exact neutral buoyancy, so it belongs beside the vection controls
+rather than in gameplay options. **Vignette while sinking** ships on and engages the motion
+vignette during passive descent, not only during driven motion. **Swim speed** scales
+horizontal swimming between 0.30 and 1.00 of walking speed.
 
 **Actions:**
 

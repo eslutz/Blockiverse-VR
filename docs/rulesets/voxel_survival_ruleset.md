@@ -356,6 +356,50 @@ Additional rules:
 | Cave exposure bonus | Lumen quartz and staropal get higher placement chance on exposed cave walls |
 | Minimum cave roof thickness | Do not carve within 4 blocks of surface unless biome is Highlands |
 
+### 5.6 The Player In Fluid
+
+Fluids are not floors. The player falls into them, and what happens next depends on how deep
+they are, measured at three points on the collision capsule — feet, mid-body, head:
+
+| State | Condition | Gravity | Vertical control |
+|---|---|---|---|
+| Dry | no fluid at any sample | normal | normal |
+| Wading | feet in fluid, body dry | **normal** | normal |
+| Surfaced | body in fluid, head in air | suspended | swim |
+| Swimming | body and head in fluid | suspended | swim |
+
+Wading deliberately keeps normal gravity, so a puddle and the one-block shoreline step from
+§5.4 stay walkable rather than becoming swimmable.
+
+**Swimming is negatively buoyant by default.** A player who is not actively swimming sinks:
+the surface is not a resting state, and treading water is an active act. Descent is constant
+speed rather than accelerating, so it can never build into a fall, and it stops at the bed.
+
+| Verb | Input | Freshwater / brine | Emberflow |
+|---|---|---:|---:|
+| Sink, no input | — | 0.35 m/s | 0.20 m/s |
+| Descend | crouch held | 1.2 m/s | 0.6 m/s |
+| Rise | jump held | 1.0 m/s | 0.7 m/s |
+| Horizontal | move stick | ×0.55 of walking | ×0.275 of walking |
+
+Emberflow is thicker in every direction: it sinks the player more slowly than water, but it
+does sink them. Combined with its heat damage (§5.4), a molten pool is survivable only if the
+player reacts within a second or two.
+
+Neither swim input claims a new binding. Rise reuses jump, which is meaningless underwater;
+descend reuses crouch, whose height change is suppressed while swimming because its only
+meaning there is "go down". Rise must remain available in **both** locomotion modes: jump is
+otherwise disabled in Teleport mode, and a player who could descend but not ascend would be
+unable to leave the water.
+
+**Comfort.** Passive sinking is unrequested vertical motion, so the accommodation is
+first-class rather than buried: turning it off restores exact neutral buoyancy — with no input
+the player does not move vertically at all — and the motion vignette engages during passive
+descent just as it does for driven motion. Both live in the Comfort menu
+(`voxel_survival_menus.md` §4.3).
+
+Falling into freshwater or brine cancels impact damage; emberflow does not (§12).
+
 ---
 
 ## 6. Mining Rules
