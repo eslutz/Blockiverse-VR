@@ -52979,7 +52979,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d9f6b3a85c2470e9a7b4f218e0d5c63, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.UI::Blockiverse.UI.BlockiverseAudioSettingsPanel
-  feedbackSettings: {fileID: 0}
+  feedbackSettings: {fileID: 1976784173709437067}
   masterVolumeSlider: {fileID: 941374446645097621}
   effectsVolumeSlider: {fileID: 1452638263702515442}
   uiVolumeSlider: {fileID: 395842487723726299}
@@ -66493,6 +66493,7 @@ GameObject:
   - component: {fileID: 1933166028837104305}
   - component: {fileID: 5112670037234702618}
   - component: {fileID: 3246920303981869315}
+  - component: {fileID: 1880898784880377147}
   m_Layer: 0
   m_Name: BlockiverseXRRig
   m_TagString: Untagged
@@ -67988,6 +67989,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c1735a1536cc4c4eaf3e27676750fc3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseHandLightDriver
+--- !u!114 &1880898784880377147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e6ce9b7dfc0d498a9fcc794587739ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseSwimFeedback
+  swimProvider: {fileID: 5112670037234702618}
+  audioCuePlayer: {fileID: 8273465101139274317}
 --- !u!1 &6850496368584314547
 GameObject:
   m_ObjectHideFlags: 0

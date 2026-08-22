@@ -1014,6 +1014,13 @@ namespace Blockiverse.Editor
                 UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include));
             EditorUtility.SetDirty(locomotionFeedback);
 
+            // Water audio hangs off the swim provider's state machine, which is the only
+            // authoritative submersion state on the rig. The provider is added by the locomotion
+            // pass; GetComponent rather than EnsureComponent so ordering stays that pass's job.
+            BlockiverseSwimFeedback swimFeedback = EnsureComponent<BlockiverseSwimFeedback>(rig);
+            swimFeedback.Configure(rig.GetComponent<BlockiverseSwimProvider>(), audioCuePlayer);
+            EditorUtility.SetDirty(swimFeedback);
+
             // Comfort + feedback settings persist across launches (PlayerPrefs).
             BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
             EditorUtility.SetDirty(settingsPersistence);
@@ -1117,6 +1124,15 @@ namespace Blockiverse.Editor
             BlockiverseAudioCuePlayer audioCuePlayer,
             BlockiverseInteractionHaptics interactionHaptics)
         {
+            // The audio panel is built before the rig's feedback settings component is guaranteed
+            // to exist, so its settings reference is (re)asserted here rather than at build time.
+            BlockiverseFeedbackSettings feedbackSettings = rig.GetComponent<BlockiverseFeedbackSettings>();
+            foreach (BlockiverseAudioSettingsPanel audioPanel in rig.GetComponentsInChildren<BlockiverseAudioSettingsPanel>(true))
+            {
+                audioPanel.ConfigureFeedbackSettings(feedbackSettings);
+                EditorUtility.SetDirty(audioPanel);
+            }
+
             foreach (CreativeHotbar hotbar in rig.GetComponentsInChildren<CreativeHotbar>(true))
             {
                 hotbar.ConfigureFeedback(audioCuePlayer);

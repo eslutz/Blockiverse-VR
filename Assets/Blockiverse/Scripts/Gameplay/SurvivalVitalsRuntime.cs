@@ -51,7 +51,6 @@ namespace Blockiverse.Gameplay
         float nextHazardScanTime;
         float nextWorldDrinkTime;
         bool trackingFall;
-        bool wasFeetInFluid;
         float airbornePeakY;
         bool deathDropSubmitted;
         bool hasLastDeathDropPosition;
@@ -76,7 +75,6 @@ namespace Blockiverse.Gameplay
         // Presentation hooks. Vitals is simulation state, so it raises events and lets the
         // feedback bridge decide what they sound like (ruleset §1 decoupled presentation).
         public event Action WorldDrinkTaken;
-        public event Action<FluidFamily, float> LocalPlayerEnteredFluid;
 
         public bool HasBedrollSpawn => TryResolveBedrollSpawnPosition(out _);
         public bool HasDeathDropPosition => hasLastDeathDropPosition;
@@ -321,18 +319,8 @@ namespace Blockiverse.Gameplay
             // Before the fluid physics layer existed the player could not fall at all, so this
             // path never ran; it becomes reachable the moment gravity stops treating water as
             // ground, which is why it ships alongside that fix rather than after it.
-            bool feetInFluid = TryGetFeetFluidFamily(controller, out FluidFamily feetFluid);
-            if (feetInFluid && !wasFeetInFluid)
-            {
-                // Entry edge only — a splash every frame while wading would be a
-                // machine gun. Impact height scales the cue so stepping in is not
-                // as loud as falling in.
-                float entrySpeed = trackingFall ? Mathf.Max(airbornePeakY - currentY, 0f) : 0f;
-                LocalPlayerEnteredFluid?.Invoke(feetFluid, entrySpeed);
-            }
-            wasFeetInFluid = feetInFluid;
-
-            if (feetInFluid && feetFluid != FluidFamily.Emberflow)
+            if (TryGetFeetFluidFamily(controller, out FluidFamily feetFluid) &&
+                feetFluid != FluidFamily.Emberflow)
             {
                 trackingFall = false;
                 airbornePeakY = currentY;

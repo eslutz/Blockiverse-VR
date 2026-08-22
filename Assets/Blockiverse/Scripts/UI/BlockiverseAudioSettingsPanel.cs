@@ -55,6 +55,23 @@ namespace Blockiverse.UI
             Wire();
         }
 
+        /// <summary>
+        /// Sets just the settings object, leaving the control references alone.
+        /// The bootstrapper builds this panel before the rig's feedback settings component is
+        /// guaranteed to exist, so the reference is asserted afterwards rather than at build time —
+        /// passing a null through <see cref="Configure"/> would overwrite a good reference.
+        /// </summary>
+        public void ConfigureFeedbackSettings(BlockiverseFeedbackSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            feedbackSettings = settings;
+
+            if (wired)
+                RefreshControlsFromSettings();
+        }
+
         void OnEnable()
         {
             ResolveReferences();

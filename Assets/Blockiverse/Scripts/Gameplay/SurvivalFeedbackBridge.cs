@@ -131,7 +131,6 @@ namespace Blockiverse.Gameplay
             vitalsRuntime.LocalPlayerLowHealth += OnLocalPlayerLowHealth;
             vitalsRuntime.LocalPlayerDied += OnLocalPlayerDied;
             vitalsRuntime.WorldDrinkTaken += OnWorldDrinkTaken;
-            vitalsRuntime.LocalPlayerEnteredFluid += OnLocalPlayerEnteredFluid;
             subscribedToVitals = true;
         }
 
@@ -147,7 +146,6 @@ namespace Blockiverse.Gameplay
             vitalsRuntime.LocalPlayerLowHealth -= OnLocalPlayerLowHealth;
             vitalsRuntime.LocalPlayerDied -= OnLocalPlayerDied;
             vitalsRuntime.WorldDrinkTaken -= OnWorldDrinkTaken;
-            vitalsRuntime.LocalPlayerEnteredFluid -= OnLocalPlayerEnteredFluid;
             subscribedToVitals = false;
         }
 
@@ -230,19 +228,6 @@ namespace Blockiverse.Gameplay
         void OnWorldDrinkTaken()
         {
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.WaterScoop);
-        }
-
-        // Entering a fluid. Emberflow is not water and must not splash; a lava
-        // entry already carries its own contact hazard and hurt cue.
-        void OnLocalPlayerEnteredFluid(FluidFamily family, float entryHeightMeters)
-        {
-            if (audioCuePlayer == null || family == FluidFamily.Emberflow)
-                return;
-
-            // A step into the shallows is a stroke; an actual fall is a splash.
-            audioCuePlayer.PlayCue(entryHeightMeters >= 1.5f
-                ? BlockiverseAudioCue.WaterSplash
-                : BlockiverseAudioCue.SwimStroke);
         }
 
         // Drinks get the drink cue, everything else edible gets the eat cue.

@@ -16,6 +16,10 @@ namespace Blockiverse.Gameplay
         // How far below the capsule base to sample for the surface being walked on.
         const float GroundSampleDepthMeters = 0.20f;
 
+        // How far ABOVE the capsule base to check for standing water. Matches the feet probe in
+        // SurvivalVitalsRuntime so both agree on what "feet are wet" means.
+        const float FeetSampleHeightMeters = 0.10f;
+
         [SerializeField] CharacterController characterController;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseGaitCycle gaitCycle;
@@ -134,6 +138,18 @@ namespace Blockiverse.Gameplay
             VoxelWorld world = worldManager != null ? worldManager.World : null;
             if (world == null)
                 return false;
+
+            // Standing water is checked FIRST, at the feet rather than below them. Wading, the
+            // player stands on the solid block underneath the water, so the ground sample below the
+            // capsule reads that block and never the fluid — which left the Water footstep bank
+            // unreachable and shallow water sounding like dry land.
+            var feetPoint = new Vector3(bounds.center.x, bounds.min.y + FeetSampleHeightMeters, bounds.center.z);
+            BlockPosition feetCell = CreativeInteractionController.ToBlockPosition(feetPoint);
+            if (world.Bounds.Contains(feetCell) && FluidBlocks.IsFluid(world.GetBlock(feetCell)))
+            {
+                surface = BlockiverseSurfaceFamily.Water;
+                return true;
+            }
 
             var samplePoint = new Vector3(bounds.center.x, bounds.min.y - GroundSampleDepthMeters, bounds.center.z);
             BlockPosition cell = CreativeInteractionController.ToBlockPosition(samplePoint);

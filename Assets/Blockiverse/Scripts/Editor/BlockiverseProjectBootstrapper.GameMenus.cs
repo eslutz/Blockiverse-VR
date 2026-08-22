@@ -258,8 +258,12 @@ controller.ConfigureStationPanel(stationPanel);
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close", TopRightClosePosition(W), MenuCloseButtonSize);
             BlockiverseAudioSettingsPanel panel = EnsureComponent<BlockiverseAudioSettingsPanel>(panelRoot);
             // Without this the controls above exist but bind to nothing.
+            // Settings deliberately left null here and pushed later by
+            // ConfigurePanelFeedbackReferences: FindFirstObjectByType returns null while the rig
+            // prefab is being built, and passing that null overwrites a previously-wired
+            // reference with nothing.
             panel.Configure(
-                UnityEngine.Object.FindFirstObjectByType<BlockiverseFeedbackSettings>(FindObjectsInactive.Include),
+                panelRoot.GetComponentInParent<BlockiverseFeedbackSettings>(includeInactive: true),
                 master, effects, ui, weather, music, hapticStrength,
                 muteAll, haptics, reducedFlash, reducedParticles, classicBlockSounds);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);

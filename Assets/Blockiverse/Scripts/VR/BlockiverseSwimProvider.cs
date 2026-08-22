@@ -54,6 +54,38 @@ namespace Blockiverse.VR
 
         public SwimState State { get; private set; } = SwimState.Dry;
 
+        // Raised on every State transition, with the family of the fluid involved. Presentation
+        // (audio, and anything else that reacts to entering or leaving water) subscribes here
+        // rather than polling State, per voxel_audio_vfx_ruleset.md section 1: gameplay raises
+        // events, presentation systems subscribe. Every assignment routes through SetState so no
+        // path can change the state without announcing it.
+        public event System.Action<SwimState, SwimState, FluidFamily> StateChanged;
+
+        void SetState(SwimState next)
+        {
+            if (next == State)
+                return;
+
+            SwimState previous = State;
+            State = next;
+            ApplyGroundedOverride();
+            StateChanged?.Invoke(previous, next, Submersion.Family);
+        }
+
+        // Cached so the per-transition assignment allocates nothing.
+        static readonly System.Func<bool> NeverGrounded = () => false;
+
+        // Veto grounding while swimming, and otherwise get out of the way. The gait cycle's
+        // override REPLACES its ground probe rather than combining with it, so leaving a
+        // `() => !IsSwimming` installed while dry asserts "grounded" through every fall.
+        void ApplyGroundedOverride()
+        {
+            if (gaitCycle == null)
+                return;
+
+            gaitCycle.GroundedOverride = IsSwimming ? NeverGrounded : null;
+        }
+
         public FluidSubmersionState Submersion { get; private set; }
 
         public FluidFamily Family => Submersion.Family;
@@ -128,8 +160,7 @@ namespace Blockiverse.VR
 
             // The walk cycle drives both the head bob and the footstep cues. Swimming is not
             // walking, so it reports "not grounded" and both stop.
-            if (gaitCycle != null)
-                gaitCycle.GroundedOverride = () => !IsSwimming;
+            ApplyGroundedOverride();
         }
 
         protected override void OnDisable()
@@ -138,7 +169,7 @@ namespace Blockiverse.VR
             // forever -- a player would hang motionless in the air with no way to fall.
             ReleaseGravityLock();
             UpdateVignette(false);
-            State = SwimState.Dry;
+            SetState(SwimState.Dry);
             verticalVelocity = 0.0f;
 
             if (gaitCycle != null)
@@ -160,8 +191,8 @@ namespace Blockiverse.VR
             }
 
             Submersion = SampleSubmersion();
-            State = BlockiverseSwimMotion.ResolveState(
-                Submersion.FeetSubmerged, Submersion.BodySubmerged, Submersion.HeadSubmerged);
+            SetState(BlockiverseSwimMotion.ResolveState(
+                Submersion.FeetSubmerged, Submersion.BodySubmerged, Submersion.HeadSubmerged));
 
             if (!IsSwimming)
             {
@@ -325,7 +356,7 @@ namespace Blockiverse.VR
         void ExitSwimming()
         {
             if (State != SwimState.Dry && State != SwimState.Wading)
-                State = SwimState.Dry;
+                SetState(SwimState.Dry);
 
             verticalVelocity = 0.0f;
             ReleaseGravityLock();

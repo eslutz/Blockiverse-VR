@@ -1312,6 +1312,16 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(audioCuePlayer.AssignedFootstepSurfaceCount(), Is.EqualTo(surfaceFamilies),
                 "every walkable surface should have a footstep bank assigned.");
 
+            // Water audio is driven off the swim provider's state machine; if either
+            // reference is missing the rig swims in silence, which is what it did
+            // before this was wired.
+            BlockiverseSwimFeedback swimFeedback = prefab.GetComponent<BlockiverseSwimFeedback>();
+            Assert.That(swimFeedback, Is.Not.Null, "the rig should carry swim audio feedback.");
+            Assert.That(swimFeedback.SwimProvider, Is.Not.Null,
+                "swim feedback needs the swim provider to hear state transitions.");
+            Assert.That(swimFeedback.AudioCuePlayer, Is.SameAs(audioCuePlayer),
+                "swim feedback should share the rig's audio cue player.");
+
             // The Classic Block Sounds easter egg needs both original cues present
             // or the toggle silently does nothing.
             Assert.That(audioCuePlayer.HasClassicBlockClips, Is.True,
