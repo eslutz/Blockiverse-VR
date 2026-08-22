@@ -426,12 +426,19 @@ namespace Blockiverse.Editor
                 material.shader = shader;
             }
 
+            // EVERY property the lighting controller writes is reset here, not just the ones that
+            // look like configuration. The controller drives all of them every LateUpdate, and
+            // anything left unreset is a channel through which a Play-mode session's end state can
+            // reach the committed asset -- which is exactly how _CloudCoverage ended up at Clear
+            // weather's 0.1 in the repository.
             material.SetColor("_ZenithColor", SkyGradientSolver.DayZenith);
             material.SetColor("_HorizonColor", SkyGradientSolver.DayHorizon);
             material.SetColor("_GroundColor", SkyGradientSolver.DayGround);
             material.SetColor("_SunColor", SkyGradientSolver.DaySunColor);
             material.SetColor("_CloudColor", SkyGradientSolver.DayCloudColor);
             material.SetFloat("_CloudCoverage", 0.0f);
+            material.SetVector("_CloudScroll", Vector4.zero);
+            material.SetVector("_SunDirection", new Vector4(0.0f, 1.0f, 0.0f, 0.0f));
 
             EditorUtility.SetDirty(material);
             return material;

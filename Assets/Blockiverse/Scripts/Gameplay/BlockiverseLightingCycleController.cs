@@ -44,6 +44,7 @@ namespace Blockiverse.Gameplay
         // component poking RenderSettings would be erased within a frame; and the bolt view is
         // created at runtime, after this component's Awake lookups have already run, so a pull
         // would find null forever.
+        bool ownsSkyInstance;
         float skyFlashStrength;
         float skyFlashElapsed = FlashTrackingWindowSeconds;
 
@@ -88,6 +89,7 @@ namespace Blockiverse.Gameplay
             if (skyMaterial == null)
                 skyMaterial = RenderSettings.skybox;
 
+            EnsureRuntimeSkyInstance();
             ApplyCurrentLighting();
         }
 
@@ -201,7 +203,19 @@ namespace Blockiverse.Gameplay
         // Elevation comes from the CLOCK, never from the light's rotation, for exactly that reason.
         void ApplySky(float normalizedTime, float cloudCoverage)
         {
-            if (skyMaterial == null)
+            // ONLY ever writes a material this component minted for itself.
+            //
+            // Outside play mode there is no instance, and skyMaterial falls back to
+            // RenderSettings.skybox -- the GENERATED ASSET. Writing there dirties
+            // BlockiverseSky.mat with whatever time of day and cloud-scroll offset the caller
+            // happened to produce, which is how the committed asset ended up carrying Clear
+            // weather's coverage and a mid-drift scroll. EditMode tests that call Configure() are
+            // enough to trigger it: Awake runs on AddComponent in the editor, sees
+            // Application.isPlaying == false, and skips the instance.
+            //
+            // Skipping the write outside play mode costs nothing real -- the asset keeps its
+            // authored midday values, which is what a generated asset should show in the editor.
+            if (!ownsSkyInstance || skyMaterial == null)
                 return;
 
             float moonPhaseScale = MoonPhaseIndex / (float)EnvironmentLightComputer.FullMoonLightLevel;
@@ -226,6 +240,36 @@ namespace Blockiverse.Gameplay
         {
             if (sky != null)
                 skyMaterial = sky;
+        }
+
+        // ApplySky writes the gradient, the cloud colour and a continuously advancing cloud scroll
+        // into the sky material EVERY LateUpdate. Pointed at the generated .mat asset that is a
+        // real defect rather than a cosmetic one: in the editor those writes land in the ASSET, so
+        // every Play-mode session leaves BlockiverseSky.mat dirty carrying whatever time of day
+        // and scroll offset the session happened to end on. A stray `git add -A` then bakes a
+        // random cloud offset into the repo, and the bootstrapper's authored defaults are lost.
+        //
+        // So at runtime the controller drives its own instance and points RenderSettings at that.
+        // The asset keeps the authored midday values and is never written to while playing.
+        void EnsureRuntimeSkyInstance()
+        {
+            if (!Application.isPlaying || skyMaterial == null || ownsSkyInstance)
+                return;
+
+            skyMaterial = new Material(skyMaterial) { name = skyMaterial.name + " (Runtime)" };
+            ownsSkyInstance = true;
+            RenderSettings.skybox = skyMaterial;
+        }
+
+        void OnDestroy()
+        {
+            if (!ownsSkyInstance || skyMaterial == null)
+                return;
+
+            // Only the instance this component minted; the generated asset must survive.
+            Destroy(skyMaterial);
+            skyMaterial = null;
+            ownsSkyInstance = false;
         }
 
         static readonly int ZenithColorId = Shader.PropertyToID("_ZenithColor");
