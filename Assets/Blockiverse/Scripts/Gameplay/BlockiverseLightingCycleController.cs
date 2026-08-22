@@ -10,6 +10,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] WorldTimeClock worldTimeClock;
         [SerializeField] Light sunLight;
         [SerializeField] CreativeWorldManager environmentSource;
+        [SerializeField] BlockiverseWaterView waterView;
 
         [Header("Shadows")]
         [Tooltip("Shadow style for the sun/moon directional light. Hard is the Quest default; the URP asset ships with soft shadows unsupported, which would silently downgrade Soft anyway.")]
@@ -33,12 +34,18 @@ namespace Blockiverse.Gameplay
         // Moon phase index (0 = new, 4 = full) for the clock's current day.
         public int MoonPhaseIndex { get; private set; } = EnvironmentLightComputer.FullMoonLightLevel;
 
-        public void Configure(WorldTimeClock clock, Light sun, CreativeWorldManager environment = null)
+        public void Configure(
+            WorldTimeClock clock,
+            Light sun,
+            CreativeWorldManager environment = null,
+            BlockiverseWaterView water = null)
         {
             worldTimeClock = clock;
             sunLight = sun;
             if (environment != null)
                 environmentSource = environment;
+            if (water != null)
+                waterView = water;
             ApplyCurrentLighting();
         }
 
@@ -52,6 +59,9 @@ namespace Blockiverse.Gameplay
 
             if (environmentSource == null)
                 environmentSource = FindFirstObjectByType<CreativeWorldManager>();
+
+            if (waterView == null)
+                waterView = FindFirstObjectByType<BlockiverseWaterView>();
 
             ApplyCurrentLighting();
         }
@@ -77,8 +87,17 @@ namespace Blockiverse.Gameplay
 
         public void ApplyCurrentLighting()
         {
+            float submergedBlend = waterView != null ? waterView.SubmergedBlend : 0.0f;
+
+            // Underwater fog is resolved above the clock/sun guard on purpose. A world can be
+            // running -- and the player already swimming -- while this returns early, because
+            // CreativeWorldManager.ConfigureEnvironmentServices itself bails when it finds no
+            // WorldTimeClock. Losing fog there would mean surfacing into clear air underwater.
             if (worldTimeClock == null || sunLight == null)
+            {
+                ApplyFog(applyWeatherFog: false, RenderSettings.fogColor, weatherFogDensity: 0.0f, submergedBlend);
                 return;
+            }
 
             MoonPhaseIndex = ResolveMoonPhaseIndex(worldTimeClock);
             LightingCycleState state = LightingCycleEvaluator.Evaluate(worldTimeClock.NormalizedTime, MoonPhaseIndex);
@@ -118,13 +137,36 @@ namespace Blockiverse.Gameplay
             RenderSettings.ambientLight = state.AmbientColor * weatherFactor;
             RenderSettings.sun = sunLight;
 
-            RenderSettings.fog = applyFog;
-            if (applyFog)
+            ApplyFog(applyFog, state.AmbientColor * weatherFactor + ClearFogColor * 0.25f, fogDensity, submergedBlend);
+        }
+
+        // The single writer of RenderSettings.fog in the project. Weather and submersion both land
+        // here so they cannot fight each other frame to frame.
+        void ApplyFog(bool applyWeatherFog, Color weatherFogColor, float weatherFogDensity, float submergedBlend)
+        {
+            if (submergedBlend <= 0.0f)
             {
-                RenderSettings.fogMode = FogMode.ExponentialSquared;
-                RenderSettings.fogColor = state.AmbientColor * weatherFactor + ClearFogColor * 0.25f;
-                RenderSettings.fogDensity = fogDensity;
+                RenderSettings.fog = applyWeatherFog;
+                if (applyWeatherFog)
+                {
+                    RenderSettings.fogMode = FogMode.ExponentialSquared;
+                    RenderSettings.fogColor = weatherFogColor;
+                    RenderSettings.fogDensity = weatherFogDensity;
+                }
+
+                return;
             }
+
+            // Submerged: fog is forced on regardless of weather. Clear conditions produce a zero
+            // density and `applyFog` false, which is precisely when the player would otherwise
+            // swim through perfectly clear water, so this cannot be folded into the weather path.
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogColor = Color.Lerp(weatherFogColor, waterView.UnderwaterFogColor, submergedBlend);
+            RenderSettings.fogDensity = Mathf.Lerp(
+                applyWeatherFog ? weatherFogDensity : 0.0f,
+                waterView.UnderwaterFogDensity,
+                submergedBlend);
         }
     }
 }

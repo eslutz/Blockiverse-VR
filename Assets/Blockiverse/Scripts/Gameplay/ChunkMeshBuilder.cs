@@ -11,13 +11,20 @@ namespace Blockiverse.Gameplay
     // before triggering another rebuild.
     public sealed class ChunkMeshData
     {
-        public ChunkMeshData(List<Vector3> vertices, List<int> triangles, List<Vector2> uvs, List<Color> colors, int faceCount)
+        public ChunkMeshData(
+            List<Vector3> vertices,
+            List<int> triangles,
+            List<Vector2> uvs,
+            List<Color> colors,
+            int faceCount,
+            List<Vector2> fluidVertexData = null)
         {
             Vertices = vertices;
             Triangles = triangles;
             Uvs = uvs;
             Colors = colors;
             FaceCount = faceCount;
+            FluidVertexData = fluidVertexData;
         }
 
         public List<Vector3> Vertices { get; }
@@ -25,6 +32,12 @@ namespace Blockiverse.Gameplay
         public List<Vector2> Uvs { get; }
         public List<Color> Colors { get; }
         public int FaceCount { get; }
+
+        // Fluid-only second UV channel (x = surface mask, y = FluidFamily index), null on solid
+        // meshes. Vertex COLOR cannot carry it: VoxelLightSampler.ToVertexColor already spends
+        // R, G and B on sky exposure, emitter reach and self emission, and water needs all three
+        // (a torch-lit pool, a glowing emberflow) exactly as much as stone does.
+        public List<Vector2> FluidVertexData { get; }
 
         public int TriangleCount => Triangles.Count / 3;
     }
@@ -45,6 +58,7 @@ namespace Blockiverse.Gameplay
         [ThreadStatic] static List<int> pooledFluidTriangles;
         [ThreadStatic] static List<Vector2> pooledFluidUvs;
         [ThreadStatic] static List<Color> pooledFluidColors;
+        [ThreadStatic] static List<Vector2> pooledFluidVertexData;
         [ThreadStatic] static List<BlockPosition> pooledEmitters;
 
         static readonly BlockPosition[] NeighborOffsets =
@@ -56,6 +70,13 @@ namespace Blockiverse.Gameplay
             new(0, 0, 1),
             new(0, 0, -1)
         };
+
+        // FaceVertices[2] is the all-ones-in-Y quad and NeighborOffsets[2] is (0, 1, 0): the top
+        // face -- the only face the water shader displaces along its whole height.
+        public const int TopFaceIndex = 2;
+
+        // NeighborOffsets[3] is (0, -1, 0). Everything that is neither 2 nor 3 is a side wall.
+        public const int BottomFaceIndex = 3;
 
         static readonly Vector3[,] FaceVertices =
         {
@@ -112,10 +133,12 @@ namespace Blockiverse.Gameplay
             List<int> fluidTriangles = pooledFluidTriangles ??= new();
             List<Vector2> fluidUvs = pooledFluidUvs ??= new();
             List<Color> fluidColors = pooledFluidColors ??= new();
+            List<Vector2> fluidVertexData = pooledFluidVertexData ??= new();
             fluidVertices.Clear();
             fluidTriangles.Clear();
             fluidUvs.Clear();
             fluidColors.Clear();
+            fluidVertexData.Clear();
             int fluidFaceCount = 0;
 
             int startX = chunk.X * world.ChunkSize;
@@ -151,6 +174,12 @@ namespace Blockiverse.Gameplay
                         bool isFluid = definition.Category == BlockCategory.Fluid;
                         float selfEmission = definition.EmissiveLight / (float)VoxelLightSampler.MaxEmissiveLevel;
 
+                        // Resolved on the first face this cell actually emits, not once per fluid
+                        // cell: PlaceFluids fills entire submerged volumes whose interior cells
+                        // emit nothing, and they would all pay the lookup on every RebuildAll.
+                        FluidFamily fluidFamily = FluidFamily.Freshwater;
+                        bool fluidFamilyResolved = false;
+
                         for (int face = 0; face < NeighborOffsets.Length; face++)
                         {
                             BlockPosition neighbor = position + NeighborOffsets[face];
@@ -166,7 +195,23 @@ namespace Blockiverse.Gameplay
 
                             if (isFluid)
                             {
-                                AddFace(fluidVertices, fluidTriangles, fluidUvs, fluidColors, position, face, definition.Id, vertexColor);
+                                if (!fluidFamilyResolved)
+                                {
+                                    FluidBlocks.TryGetFamily(definition.Id, out fluidFamily);
+                                    fluidFamilyResolved = true;
+                                }
+
+                                // A side wall standing on a lower neighbour's surface has to ride
+                                // that surface down, or the wave opens a slit beneath it at every
+                                // step in flowing water.
+                                bool wallFootFollowsSurface =
+                                    face != TopFaceIndex &&
+                                    face != BottomFaceIndex &&
+                                    HasSameFamilySurfaceBelow(world, registry, neighbor, fluidFamily);
+
+                                AddFluidFace(
+                                    fluidVertices, fluidTriangles, fluidUvs, fluidColors, fluidVertexData,
+                                    position, face, definition.Id, vertexColor, fluidFamily, wallFootFollowsSurface);
                                 fluidFaceCount++;
                             }
                             else
@@ -181,8 +226,24 @@ namespace Blockiverse.Gameplay
 
             nearbyEmitters.Clear();
 
-            fluidMesh = new ChunkMeshData(fluidVertices, fluidTriangles, fluidUvs, fluidColors, fluidFaceCount);
+            fluidMesh = new ChunkMeshData(
+                fluidVertices, fluidTriangles, fluidUvs, fluidColors, fluidFaceCount, fluidVertexData);
             return new ChunkMeshData(vertices, triangles, uvs, colors, faceCount);
+        }
+
+        // True when the cell under this face's (non-fluid) neighbour is the same fluid family. That
+        // cell's top face is an emitted, displaced surface at exactly the height of our wall's foot
+        // and at exactly the same x/z, so both dip by the same amount and the seam stays closed.
+        static bool HasSameFamilySurfaceBelow(
+            VoxelWorld world, BlockRegistry registry, BlockPosition neighbor, FluidFamily family)
+        {
+            BlockPosition below = neighbor + NeighborOffsets[BottomFaceIndex];
+
+            if (!world.Bounds.Contains(below))
+                return false;
+
+            return FluidBlocks.TryGetFamily(world.GetBlock(below), out FluidFamily belowFamily) &&
+                   belowFamily == family;
         }
 
         static bool ShouldRenderFace(VoxelWorld world, BlockRegistry registry, BlockDefinition current, BlockPosition neighbor)
@@ -203,6 +264,42 @@ namespace Blockiverse.Gameplay
             }
 
             return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
+        }
+
+        // A distinct name, not an AddFace overload: ChunkRenderingEditModeTests reflects AddFace
+        // up by name and a second overload would throw AmbiguousMatch.
+        static void AddFluidFace(
+            List<Vector3> vertices,
+            List<int> triangles,
+            List<Vector2> uvs,
+            List<Color> colors,
+            List<Vector2> fluidVertexData,
+            BlockPosition position,
+            int faceIndex,
+            BlockId blockId,
+            Color vertexColor,
+            FluidFamily family,
+            bool wallFootFollowsSurface)
+        {
+            AddFace(vertices, triangles, uvs, colors, position, faceIndex, blockId, vertexColor);
+
+            // The surface mask comes from the face index, never from a vertex height test, so it
+            // marks exactly the +Y faces that were actually emitted. A water cell with a sapling,
+            // a different fluid, or a placed block above still emits its top face at full height
+            // and still gets masked, so neighbouring water can never dip away from a face that
+            // stayed put -- the shoreline crack that killed the surface-drop design is not
+            // expressible here.
+            bool topFace = faceIndex == TopFaceIndex;
+
+            for (int i = 0; i < 4; i++)
+            {
+                // The whole top face moves; on a side wall only the foot moves, and only when it
+                // is standing on a neighbouring surface that moves with it.
+                bool footVertex = FaceVertices[faceIndex, i].y == 0.0f;
+                bool masked = topFace || (wallFootFollowsSurface && footVertex);
+
+                fluidVertexData.Add(new Vector2(masked ? 1.0f : 0.0f, (int)family));
+            }
         }
 
         // Signature is changed in place rather than overloaded: ChunkRenderingEditModeTests looks

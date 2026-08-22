@@ -634,6 +634,7 @@ MonoBehaviour:
   worldTimeClock: {fileID: 1590357438}
   sunLight: {fileID: 1590357434}
   environmentSource: {fileID: 0}
+  waterView: {fileID: 0}
   directionalShadows: 1
   daytimeShadowStrength: 0.8
   nighttimeShadowStrength: 0.45
