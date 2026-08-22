@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 using Blockiverse.Core;
+using Blockiverse.Persistence;
 
 namespace Blockiverse.UI
 {
@@ -369,6 +370,23 @@ namespace Blockiverse.UI
             if (!TrySuspendSinglePlayerSessionForMultiplayer())
                 return;
 
+            // The field carries "host" or "host:port". A dedicated server on a non-default port is
+            // unreachable otherwise, and one field is one pass with the system keyboard rather
+            // than two, which matters in a headset.
+            if (!BlockiverseServerAddress.TryParse(address, out BlockiverseServerAddress parsed))
+            {
+                SetStatus(BlockiverseLocalization.Format(
+                    BlockiverseLocalization.Keys.LanJoinFailed, address, session.Config.Port, DescribeSessionState()));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                RefreshStatus();
+                return;
+            }
+
+            // Applied before StartClient: the transport reads the port from the session config.
+            if (parsed.HasExplicitPort && parsed.Port != session.Config.Port)
+                session.Configure(session.Config.WithPort(parsed.Port));
+
+            address = parsed.Host;
             bool started = session.StartClient(address);
             SetStatus(started
                 ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LanJoining, address, session.Config.Port)
@@ -377,8 +395,35 @@ namespace Blockiverse.UI
                     address,
                     session.Config.Port,
                     DescribeSessionState()));
+            // Remembered only on a successful start, so a typo never enters the list.
+            if (started)
+                BlockiverseServerBookmarkStore.Remember(parsed.ToString());
+
             PlayFeedback(started ? BlockiverseAudioCue.UiConfirm : BlockiverseAudioCue.UiCancel);
             RefreshStatus();
+        }
+
+        // Servers this player has joined before, most recent first. LAN discovery cannot find a
+        // server across the internet, which is the case a dedicated server exists for.
+        public static IReadOnlyList<BlockiverseServerBookmark> RememberedServers() =>
+            BlockiverseServerBookmarkStore.Load();
+
+        public void JoinRememberedServer(int index)
+        {
+            IReadOnlyList<BlockiverseServerBookmark> servers = BlockiverseServerBookmarkStore.Load();
+            if (index < 0 || index >= servers.Count || servers[index] == null)
+            {
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                return;
+            }
+
+            string address = servers[index].address;
+            if (addressInput != null)
+                addressInput.text = address;
+
+            LastJoinAddress = address;
+            JoinSessionInternal(address);
         }
 
         public void StopSession()

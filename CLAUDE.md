@@ -300,6 +300,15 @@ scripts/unity/run-tests.sh --platform EditMode \
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
 # Release-signed APKs are built by .github/workflows/quest-alpha.yml only.
 
+# Linux dedicated server (generates the server scene, then builds it)
+scripts/unity/build-linux-server.sh
+# Needs the linux-server editor module. The build refuses to run without an explicit version:
+# a server advertises it in the approval payload and clients on another version are refused.
+
+# After any gate that touches assembly definitions: assert the test assemblies were DISCOVERED.
+# A mis-resolved asmdef reference drops a whole assembly silently and the run still reports green.
+scripts/unity/check-test-suites.py
+
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
 python3 scripts/audio/generate-audio.py           # music bed + classic block cues ONLY
@@ -323,6 +332,20 @@ render the full original set for comparison.
 ## Architecture
 
 VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK 205 (core embedded with a local `entityId` compile fix — see docs/testing/meta-xr-simulator-and-mcp.md), XRI, Netcode for GameObjects 2.13.1. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
+
+### Dedicated server
+
+A headless Linux server build ships alongside the Quest client; see
+[ADR 0007](docs/adr/0007-self-hosted-dedicated-server.md) and [docs/server/](docs/server/).
+`NetworkSessionMode.Server` is authoritative with no local player. Two rules that are easy to
+break and expensive to debug:
+
+- Presentation assemblies are kept out of the server with `excludePlatforms`, **never** with
+  `defineConstraints: ["!UNITY_SERVER"]` — that define is set for Editor scripts too, which stops
+  `Blockiverse.Editor` compiling and makes `-executeMethod` unrunnable, including the build itself.
+- `Blockiverse.MetaAvatars` ships in the server build despite being useless to it: its components
+  are on the shared network player prefab and one is a `NetworkBehaviour`, so excluding it would
+  change the spawn contract between server and client.
 
 ### Assembly layering (Assets/Blockiverse/Scripts/)
 

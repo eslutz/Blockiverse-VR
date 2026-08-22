@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.Tests.EditMode.Server",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Networking",
     "Blockiverse.Persistence",
     "Blockiverse.Server",
     "UnityEngine.TestRunner",
