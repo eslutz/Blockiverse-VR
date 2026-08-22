@@ -3076,11 +3076,17 @@ namespace Blockiverse.Networking
 
             if (!TryResolveClientWorldPosition(clientId, out Vector3 requesterPosition))
             {
-                // A host cannot resolve a peer's head only transiently -- an unspawned or
-                // just-connected player -- so it stays permissive (ruleset §16). A DEDICATED
-                // server has no local player and is permanently in this state for any client
-                // whose pose has not arrived, which would make a permissive answer equivalent to
-                // no reach validation at all. Fail closed there instead.
+                // Fail closed on a dedicated server. NOT for the reason an earlier version of this
+                // comment gave: pose arrival has NO bearing on whether a position resolves, because
+                // the head anchor is created in Awake and the resolver falls back to the player
+                // object's transform regardless. Poses also do reach a dedicated server -- NGO's
+                // SendTo.NotOwner adds the server back whenever the owner is not the server, and
+                // that resolves to an in-process invoke.
+                //
+                // The real reason is narrower: resolution fails only when the client has no player
+                // object or has left ConnectedClients. On a host that is a transient startup state
+                // worth tolerating; a dedicated server has no reason to accept an edit from a
+                // client with no avatar at all.
                 if (!IsDedicatedServerProcess())
                     return false;
 
@@ -4417,10 +4423,26 @@ namespace Blockiverse.Networking
                 Mathf.FloorToInt(worldPosition.z));
         }
 
-        private static bool IsBlockWithinInteractionReach(Vector3 requesterPosition, BlockPosition targetPosition)
+        // ONE formula and ONE tolerance for every server-side reach gate (ruleset §16). This used
+        // to measure to the block's CENTRE at a hardcoded 6.0 m, which rejected legitimate edits
+        // the client had already accepted -- it was tighter than the chunk-path gate by the whole
+        // 1.5 m pose-lag tolerance plus up to sqrt(3)/2 ≈ 0.87 m of centre-versus-box. A survival
+        // harvest at the far end of reach failed while the identical creative edit succeeded.
+        //
+        // CreativeInteractionController.IsBlockWithinInteractionReach states the contract that was
+        // being broken: the client shares the Core implementation "so a locally legal edit is never
+        // rejected as out of reach by the host on a mismatched formula". Do not reintroduce a
+        // second formula here; change BlockiverseInteractionLimits instead.
+        public static bool IsBlockWithinInteractionReach(Vector3 requesterPosition, BlockPosition targetPosition)
         {
-            Vector3 center = new Vector3(targetPosition.X + 0.5f, targetPosition.Y + 0.5f, targetPosition.Z + 0.5f);
-            return Vector3.Distance(requesterPosition, center) <= 6.0f;
+            return BlockiverseInteractionLimits.IsWithinReach(
+                requesterPosition.x,
+                requesterPosition.y,
+                requesterPosition.z,
+                targetPosition.X,
+                targetPosition.Y,
+                targetPosition.Z,
+                BlockiverseInteractionLimits.MaxHostValidatedReachMeters);
         }
 
         private static bool IsPlayerOccupyingBlock(BlockPosition targetPosition, BlockPosition playerHeadPosition, bool crouching)

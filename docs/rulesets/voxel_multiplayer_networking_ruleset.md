@@ -1035,24 +1035,70 @@ LAN co-op is not a hostile competitive environment, but the host must still vali
 | Client edits a block it could not reach | Reject with `OutOfReach`. |
 | Client modifies save locally | Ignored in multiplayer; host save is authoritative. |
 
-### Implemented host reach check
+### What the reach check is for *(amended 2026-08-22)*
+
+**Reach validation is an anti-accident and anti-desync gate. It is not a defence against a
+modified client, and must not be described or relied upon as one** — including on a self-hosted
+dedicated server, where the temptation to read it as a security boundary is strongest.
+
+The reason is structural, not a gap to be closed by tuning the number. The position the check
+validates against is **authored by the client being validated**. There is no `NetworkTransform`
+anywhere in the project; a player's server-side transform is written entirely from the
+`AvatarPose` values that client publishes, with no speed, continuity, collision, or ground
+validation. A modified client can therefore place its own head next to any loaded block, wait one
+30 Hz pose tick, and submit an edit that both server-side gates accept. This is identical on a LAN
+host and on a dedicated server.
+
+What the check does buy, and why it stays: it catches desynchronised or stale client state, bounds
+the blast radius of an ordinary bug, and stops a confused client from editing across the world. Those
+are real and worth keeping.
+
+Actual cheat-resistance needs server-side movement validation or a server-authoritative transform.
+That is a separate piece of work with its own design cost, and it must not be smuggled in under the
+heading of reach validation.
+
+### One formula, one tolerance *(amended 2026-08-22)*
+
+**Every server-side reach gate MUST call `BlockiverseInteractionLimits.IsWithinReach` with
+`MaxHostValidatedReachMeters`.** No gate may define its own distance formula or its own limit.
 
 | Rule | Value |
 |---|---:|
 | Local interaction reach | 6.0 m (`BlockiverseInteractionLimits.MaxBlockInteractionReachMeters`) |
-| Host tolerance on top of it | 1.5 m |
-| Enforced host-side limit | 7.5 m from the requesting player's head to the edited block's box |
+| Host tolerance on top of it | 1.5 m (`HostReachToleranceMeters`) |
+| Enforced server-side limit | 7.5 m (`MaxHostValidatedReachMeters`), measured to the edited block's **box**, never its centre |
 
-The tolerance exists because the host's view of a remote head arrives at 30 Hz over unreliable
+The tolerance exists because the server's view of a remote head arrives at 30 Hz over unreliable
 delivery and therefore trails the client's own view by up to a frame or two of locomotion;
-enforcing exactly the local limit would reject legitimate edits made while moving. The local
-preview and the host check share one implementation in `Blockiverse.Core` so they cannot drift
-apart.
+enforcing exactly the local limit would reject legitimate edits made while moving. Measuring to the
+box rather than the centre means the limit means the same thing regardless of which face the player
+faces.
 
-The check **fails open** when the host cannot resolve the requester's head — an unspawned or
-just-connected player must not have legitimate edits dropped because presence data has not
-arrived yet. That is the right trade for cooperative LAN play; a hostile-client topology should
-revisit it.
+An earlier version of this section claimed the local preview and the host check "share one
+implementation in `Blockiverse.Core` so they cannot drift apart." **They drifted.** The survival
+command gate carried its own `Vector3.Distance` to the block *centre* at a hardcoded 6.0 m — tighter
+than the chunk gate by the entire 1.5 m tolerance plus up to sqrt(3)/2 ≈ 0.87 m of centre-versus-box.
+The visible symptom was a survival harvest or placement at the far end of reach being rejected as
+`OutOfReach` while the identical creative edit succeeded. Sharing a helper is not the same as being
+required to use it, which is why this is now a rule rather than an observation.
+
+Gates currently bound by it: `MultiplayerChunkAuthoritySync.IsWithinHostValidatedReach` and
+`MultiplayerSurvivalSync.IsBlockWithinInteractionReach`.
+
+### Unresolvable requester position *(amended 2026-08-22)*
+
+A requester's position fails to resolve only when that client has no player object or has left the
+connected set. It is **not** related to whether an avatar pose has arrived: the head anchor is
+created on spawn and the resolver falls back to the player object's transform, so a position
+resolves whether or not any pose was ever published.
+
+- On a **host**, the gate fails **open**. This is a transient startup state and a cooperative peer
+  must not have legitimate edits dropped because presence data has not landed yet.
+- On a **dedicated server**, the survival gate fails **closed**. A server with no local player has
+  no reason to accept an edit from a client that has no avatar at all.
+
+This asymmetry is deliberate but nearly unreachable in practice, and it is not a security control —
+see "What the reach check is for" above.
 
 Recommended additional host checks before public/cloud multiplayer:
 
