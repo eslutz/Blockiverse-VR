@@ -65,6 +65,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
 - Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
 - A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
+- Only one Unity batchmode instance can hold the license at a time, machine-wide. Parallel worktrees must **coordinate explicitly** over who runs Unity next; do not poll for a gap. A single session's sequential Unity invocations are not atomic — a build's editor exits before the next one starts — so "no Unity is running" cannot distinguish *free* from *between two of someone else's runs*, and claiming the license in that gap kills the run that was mid-sequence. Announce before you start and when you finish; only act on processes you started. See "Matching Unity Processes Safely" for the checks themselves.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
 - Unity CLI (`unity`, installed at `~/.unity/bin`; experimental) is available as local developer tooling. Run `unity pipeline list` before any batchmode command to confirm no Unity Editor already has the project open — a second instance fails to launch. `unity test` and `unity build` may be used for targeted runs and CI-style builds, but the committed scripts above remain the acceptance gate. Do not install the Unity Pipeline package (`unity pipeline install`, which edits `Packages/manifest.json`) without explicit approval; treat it like MCP for Unity and Unity Skills — local-only, never committed.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
@@ -74,19 +75,70 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 
 ### Unity Licensing Recovery
 
+> **Destructive to other worktrees.** The Unity licensing client is per-user, not
+> per-project — one `Unity.Licensing.Client --namedPipe Unity-LicenseClient-<user>`
+> serves every editor on the machine. Killing it takes the license away from any
+> Unity run in *any* worktree, not just the stuck one. Run the pre-flight check
+> below first, and if another worktree's run is live, coordinate with it instead of
+> killing anything.
+
+**Pre-flight — is anything else using Unity right now?**
+
+```sh
+ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+```
+
+Every line is a real editor process; the `-projectPath` argument says which project
+it belongs to. Proceed only when the sole hit is this project's stuck run (or there
+are none). Do not use `pgrep -f`/`pkill -f` with a bare `Unity` pattern for this
+check — see "Matching Unity Processes Safely" below.
+
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
-or waits on `LicenseClient-ericslutz-6000.5`, reset the local Unity/Hub process state:
+or waits on `LicenseClient-ericslutz-6000.5`, and the pre-flight shows no other
+project's run, reset the local Unity/Hub process state:
 
 ```sh
 osascript -e 'tell application "Unity Hub" to quit'
 pkill -f 'Unity.Licensing.Client|Unity Hub Helper|Unity Hub.app' || true
-pgrep -afil 'Unity|Licensing|UnityPackageManager'
+ps -eo command= | grep "^/Applications/Unity"
 scripts/unity/run-tests.sh
 ```
 
-The `pgrep` command should return no Unity editor, Unity Hub, UnityPackageManager,
-or Unity licensing processes before the retry. Do not leave stuck Unity batchmode
-processes running.
+The `ps` verification should print nothing before the retry: `^/Applications/Unity`
+anchors on the install path, so it catches editors, the licensing client, the
+package-manager server, and shader compilers while matching no shell or `grep` of
+its own. Do not leave stuck Unity batchmode processes running.
+
+### Matching Unity Processes Safely
+
+Process checks around Unity have broken three separate agent sessions on this
+machine, always the same way: a `-f` pattern matches the *observer* as well as the
+observed.
+
+- `pgrep -afil 'Unity|Licensing|UnityPackageManager'` matched **31 processes** on a
+  machine running exactly 2 editors. `PATH` contains `~/.unity/bin`, so every shell
+  this repo's tooling spawns matches on its environment alone, as do unrelated MCP
+  servers and the checking command itself. Its documented acceptance ("should return
+  no processes") is therefore unsatisfiable and reads as a stuck process that is not
+  there.
+- `pgrep -f "MacOS/Unity -batchmode"` matches the shell running it, because that
+  literal is in its own command line. A guard built on it reports a Unity run that
+  does not exist.
+- `pkill -f` with a broad pattern kills other worktrees' runs. This has destroyed an
+  in-flight build.
+
+Anchor on the binary path instead, and filter by `-projectPath` when you care which
+project a run belongs to:
+
+```sh
+# All real editor processes
+ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+
+# Only this project's
+ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity " | grep "<worktree-dir>"
+```
+
+Kill by PID after identifying the specific process, not by pattern.
 
 ## Commands
 
