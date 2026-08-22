@@ -94,6 +94,17 @@ if command -v python3 >/dev/null 2>&1; then
     } >&2
     exit 65
   fi
+  # Both scenes instantiate the same network manager prefab and are configured by one method, so
+  # they agree by construction -- this makes that structural, instead of something to remember.
+  echo "Checking client/server Netcode connection-config parity"
+  if ! python3 "$PROJECT_ROOT/scripts/unity/check-netcode-config-parity.py"; then
+    {
+      echo
+      echo "A scene overrides a NetworkConfig field that Netcode hashes into the connection config."
+      echo "Clients would be dropped before approval, with no rejection reason on either side."
+    } >&2
+    exit 65
+  fi
 else
   echo "python3 not found; skipping the excluded-assembly scene check" >&2
 fi
