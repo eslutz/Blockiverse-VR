@@ -595,14 +595,18 @@ namespace Blockiverse.Networking
         public static string LocalGameVersion =>
             string.IsNullOrWhiteSpace(Application.version) ? "0.0.0-dev" : Application.version;
 
+        // Deliberately not WorldSaveService's hashes: those cover canonical string ids, which
+        // is what a save stores. The wire sends integer BlockIds, so the handshake needs the
+        // id→integer mapping and the definition fields peers simulate from. See
+        // BlockiverseRegistryCompatibility.
         public static string LocalBlockRegistryHash =>
-            cachedBlockRegistryHash ??= WorldSaveService.ComputeBlockRegistryHash(BlockRegistry.Default);
+            cachedBlockRegistryHash ??= BlockiverseRegistryCompatibility.ComputeBlockHash(BlockRegistry.Default);
 
         public static string LocalItemRegistryHash =>
-            cachedItemRegistryHash ??= WorldSaveService.ComputeItemRegistryHash(ItemRegistry.Default);
+            cachedItemRegistryHash ??= BlockiverseRegistryCompatibility.ComputeItemHash(ItemRegistry.Default);
 
         public static string LocalRecipeRegistryHash =>
-            cachedRecipeRegistryHash ??= WorldSaveService.ComputeRecipeRegistryHash(CraftingRecipeBook.Default);
+            cachedRecipeRegistryHash ??= BlockiverseRegistryCompatibility.ComputeRecipeHash(CraftingRecipeBook.Default);
 
         static byte[] ComputePayloadSignature(string body, string joinCode) =>
             BlockiverseLanPayloadSigning.ComputeSignature(body, joinCode);

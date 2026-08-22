@@ -119,6 +119,17 @@ namespace Blockiverse.Networking
         /// <summary>Changed-block count above which the host warns that late join is getting expensive (ruleset §14).</summary>
         public const int LateJoinSnapshotWarningBlockCount = 10_000;
 
+        /// <summary>
+        /// Batches queued per frame while streaming a late-join snapshot. The transport's send
+        /// queue is bounded (`MaxPacketQueueSize`, 256 by default here) and each ~3.2 KB batch
+        /// fragments into several packets, so a synchronous burst over a large world overflows
+        /// the queue and *drops* batches. A dropped batch is invisible to the sender: the client
+        /// simply never reaches `batchCount`, stalls, resyncs, and receives the same oversized
+        /// burst again — an infinite loop rather than an error. Pacing keeps each frame's burst
+        /// far below the queue and lets the transport drain between frames.
+        /// </summary>
+        public const int SnapshotBatchesPerFrame = 8;
+
         const int HostMutationRateLimitMaxRequests = 30;
         const double HostMutationRateLimitWindowSeconds = 1.0d;
         // A resync re-sends the whole world, so it is budgeted far more tightly than edits.
@@ -178,6 +189,9 @@ namespace Blockiverse.Networking
         // Reused by SendToRemoteClients so each broadcast avoids a per-delta list allocation.
         readonly List<ulong> remoteClientIdsScratch = new();
         readonly ChunkDeltaLog chunkDeltaLog = new();
+        // In-flight paced snapshot sends, keyed by receiving client so a resync supersedes the
+        // stream it replaces instead of interleaving two snapshots on the same connection.
+        readonly Dictionary<ulong, Coroutine> snapshotSendRoutines = new();
         NetworkManager subscribedNetworkManager;
         BlockMutationAuthority mutationAuthority;
         uint nextMutationRequestId = 1;
@@ -331,6 +345,8 @@ namespace Blockiverse.Networking
 
         void OnDisable()
         {
+            StopAllSnapshotSends();
+
             // Stop the snapshot poll explicitly and clear the handle: a stale non-null handle
             // would block StartSnapshotGeneration's null-check forever after a re-enable.
             if (snapshotRoutine != null)
@@ -509,6 +525,7 @@ namespace Blockiverse.Networking
 
         void HandleServerStopped(bool wasHost)
         {
+            StopAllSnapshotSends();
             hostMutationRateLimiter.Clear();
             hostResyncRateLimiter.Clear();
             UnregisterMessageHandlers();
@@ -523,6 +540,7 @@ namespace Blockiverse.Networking
             ObserveAbandonedSnapshotTask(pendingSnapshot);
             pendingSnapshot = null;
             snapshotRoutine = null;
+            StopAllSnapshotSends();
             hostMutationRateLimiter.Clear();
             hostResyncRateLimiter.Clear();
             ResetClientChunkDeltaState();
@@ -536,6 +554,31 @@ namespace Blockiverse.Networking
         {
             hostMutationRateLimiter.RemoveClient(clientId);
             hostResyncRateLimiter.RemoveClient(clientId);
+            StopSnapshotSend(clientId);
+        }
+
+        void StopSnapshotSend(ulong clientId)
+        {
+            if (!snapshotSendRoutines.TryGetValue(clientId, out Coroutine routine))
+                return;
+
+            if (routine != null)
+                StopCoroutine(routine);
+
+            snapshotSendRoutines.Remove(clientId);
+        }
+
+        // Paced sends outlive a single frame, so every path that ends the session has to stop
+        // them; otherwise a coroutine keeps writing to a transport that is shutting down.
+        void StopAllSnapshotSends()
+        {
+            foreach (KeyValuePair<ulong, Coroutine> pending in snapshotSendRoutines)
+            {
+                if (pending.Value != null)
+                    StopCoroutine(pending.Value);
+            }
+
+            snapshotSendRoutines.Clear();
         }
 
         void HandleMutationRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -1260,65 +1303,76 @@ namespace Blockiverse.Networking
             if (batchCount == 0)
                 return;
 
-            int batchIndex = 0;
-            int blocksInBatch = 0;
-            var batchWriter = default(FastBufferWriter);
-            bool writerOpen = false;
+            // Copy the changed set now: the paced send spans frames and the world keeps
+            // mutating underneath it. The header has already committed to this count, so the
+            // batches must describe the same set the header announced.
+            var blocks = new List<BlockChange>(changedBlocks);
 
-            try
+            if (snapshotSendRoutines.TryGetValue(clientId, out Coroutine existing) && existing != null)
+                StopCoroutine(existing);
+
+            snapshotSendRoutines[clientId] = StartCoroutine(
+                SendSnapshotBatches(clientId, snapshotId, batchCount, blocks));
+        }
+
+        // Paced so a large world cannot overflow the transport's send queue in one frame; see
+        // SnapshotBatchesPerFrame for why a dropped batch is worse than a slow one.
+        IEnumerator SendSnapshotBatches(ulong clientId, uint snapshotId, int batchCount, List<BlockChange> blocks)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            int sentThisFrame = 0;
+
+            for (int batchIndex = 0; batchIndex < batchCount; batchIndex++)
             {
-                foreach (BlockChange change in changedBlocks)
+                // The client can leave mid-stream; sending to a gone client is pointless and
+                // the remaining batches belong to nobody.
+                if (networkManager == null ||
+                    !networkManager.IsListening ||
+                    !networkManager.IsServer ||
+                    !IsClientConnected(networkManager, clientId))
                 {
-                    if (!writerOpen)
+                    break;
+                }
+
+                int offset = batchIndex * SnapshotBatchMaxBlocks;
+                int count = Math.Min(SnapshotBatchMaxBlocks, blocks.Count - offset);
+                var writer = new FastBufferWriter(
+                    SnapshotBatchHeaderBytes + count * SnapshotBlockBytes,
+                    Allocator.Temp);
+
+                try
+                {
+                    writer.WriteValueSafe(snapshotId);
+                    writer.WriteValueSafe(batchIndex);
+                    writer.WriteValueSafe(batchCount);
+                    writer.WriteValueSafe(count);
+
+                    for (int index = offset; index < offset + count; index++)
                     {
-                        int remaining = blockCount - batchIndex * SnapshotBatchMaxBlocks;
-                        int capacity = Math.Min(SnapshotBatchMaxBlocks, remaining);
-                        batchWriter = new FastBufferWriter(
-                            SnapshotBatchHeaderBytes + capacity * SnapshotBlockBytes,
-                            Allocator.Temp);
-                        writerOpen = true;
-                        batchWriter.WriteValueSafe(snapshotId);
-                        batchWriter.WriteValueSafe(batchIndex);
-                        batchWriter.WriteValueSafe(batchCount);
-                        batchWriter.WriteValueSafe(capacity);
-                        blocksInBatch = 0;
+                        WriteBlockPosition(ref writer, blocks[index].Position);
+                        writer.WriteValueSafe(blocks[index].NewBlock.Value);
                     }
 
-                    WriteBlockPosition(ref batchWriter, change.Position);
-                    batchWriter.WriteValueSafe(change.NewBlock.Value);
-                    blocksInBatch++;
-
-                    if (blocksInBatch < SnapshotBatchMaxBlocks)
-                        continue;
-
                     networkManager.CustomMessagingManager.SendNamedMessage(
                         ChunkSnapshotBatchMessage,
                         clientId,
-                        batchWriter,
+                        writer,
                         NetworkDelivery.ReliableFragmentedSequenced);
                     SentSnapshotBatchCount++;
-                    batchWriter.Dispose();
-                    writerOpen = false;
-                    batchIndex++;
                 }
-
-                if (writerOpen)
+                finally
                 {
-                    networkManager.CustomMessagingManager.SendNamedMessage(
-                        ChunkSnapshotBatchMessage,
-                        clientId,
-                        batchWriter,
-                        NetworkDelivery.ReliableFragmentedSequenced);
-                    SentSnapshotBatchCount++;
-                    batchWriter.Dispose();
-                    writerOpen = false;
+                    writer.Dispose();
                 }
+
+                if (++sentThisFrame < SnapshotBatchesPerFrame)
+                    continue;
+
+                sentThisFrame = 0;
+                yield return null;
             }
-            finally
-            {
-                if (writerOpen)
-                    batchWriter.Dispose();
-            }
+
+            snapshotSendRoutines.Remove(clientId);
         }
 
         /// <summary>
@@ -1345,6 +1399,17 @@ namespace Blockiverse.Networking
                 position.Y,
                 position.Z,
                 BlockiverseInteractionLimits.MaxHostValidatedReachMeters);
+        }
+
+        static bool IsClientConnected(NetworkManager networkManager, ulong clientId)
+        {
+            foreach (ulong connected in networkManager.ConnectedClientsIds)
+            {
+                if (connected == clientId)
+                    return true;
+            }
+
+            return false;
         }
 
         uint AllocateSnapshotId()

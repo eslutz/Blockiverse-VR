@@ -1005,19 +1005,28 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             // Mutate the host world directly: this stands in for the accumulated changed-block
             // set a played world carries (player edits, fluid flow, crop growth, snow settle).
-            const int changedBlockCount = 900;
+            const int changedBlockCount = 2000;
             var changedPositions = new List<BlockPosition>(changedBlockCount);
+            // Spans several layers: one y level only holds width*depth (1024 here), which is
+            // fewer batches than a single frame sends and would leave pacing untested.
             int placed = 0;
-            for (int x = 0; x < hostSettings.Bounds.Width && placed < changedBlockCount; x++)
+            for (int y = hostSettings.GroundHeight;
+                 y < hostSettings.Bounds.Height - 1 && placed < changedBlockCount;
+                 y++)
             {
-                for (int z = 0; z < hostSettings.Bounds.Depth && placed < changedBlockCount; z++)
+                for (int x = 0; x < hostSettings.Bounds.Width && placed < changedBlockCount; x++)
                 {
-                    var position = new BlockPosition(x, hostSettings.GroundHeight, z);
-                    hostWorldManager.World.SetBlock(position, BlockRegistry.Graystone);
-                    changedPositions.Add(position);
-                    placed++;
+                    for (int z = 0; z < hostSettings.Bounds.Depth && placed < changedBlockCount; z++)
+                    {
+                        var position = new BlockPosition(x, y, z);
+                        hostWorldManager.World.SetBlock(position, BlockRegistry.Graystone);
+                        changedPositions.Add(position);
+                        placed++;
+                    }
                 }
             }
+
+            Assert.That(placed, Is.EqualTo(changedBlockCount), "The test world must actually reach the target block count.");
 
             Assert.That(
                 hostWorldManager.World.GetChangedBlocks().Count,
@@ -1029,21 +1038,49 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
                 "Host did not start for the large late-join snapshot.");
 
-            Assert.That(lateJoinSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
-            yield return WaitFor(
-                () => lateJoinSession.NetworkManager.IsConnectedClient &&
-                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
-                "Late join client did not connect for the large late-join snapshot.");
-
             int expectedChangedBlocks = hostWorldManager.World.GetChangedBlocks().Count;
             int expectedBatches =
                 (expectedChangedBlocks + MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks - 1) /
                 MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks;
 
-            yield return WaitFor(
-                () => lateJoinSync.HasHostGenerationSnapshotForSession,
-                "Late join client never received the batched world snapshot.",
-                timeoutSeconds: 20.0f);
+            // Sampling starts BEFORE the client connects, so the whole send is observed. If it
+            // started after, a synchronous send would already have finished, every delta would
+            // be zero, and the cap assertion below would pass while proving nothing.
+            Assert.That(lateJoinSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+
+            int previousSent = hostSync.Diagnostics.SentSnapshotBatchCount;
+            int largestFrameBurst = 0;
+            float pacingDeadline = Time.realtimeSinceStartup + 25.0f;
+
+            while (!lateJoinSync.HasHostGenerationSnapshotForSession &&
+                   Time.realtimeSinceStartup < pacingDeadline)
+            {
+                yield return null;
+                int sent = hostSync.Diagnostics.SentSnapshotBatchCount;
+                largestFrameBurst = Mathf.Max(largestFrameBurst, sent - previousSent);
+                previousSent = sent;
+            }
+
+            Assert.That(
+                lateJoinSession.NetworkManager.IsConnectedClient,
+                Is.True,
+                "Late join client did not connect for the large late-join snapshot.");
+            Assert.That(
+                lateJoinSync.HasHostGenerationSnapshotForSession,
+                Is.True,
+                "Late join client never received the batched world snapshot.");
+            Assert.That(
+                largestFrameBurst,
+                Is.GreaterThan(0),
+                "The send was never observed in flight, so the pacing assertion would be vacuous.");
+            Assert.That(
+                expectedBatches,
+                Is.GreaterThan(MultiplayerChunkAuthoritySync.SnapshotBatchesPerFrame),
+                "This world must need more batches than one frame sends, or pacing is untested.");
+            Assert.That(
+                largestFrameBurst,
+                Is.LessThanOrEqualTo(MultiplayerChunkAuthoritySync.SnapshotBatchesPerFrame),
+                "Snapshot batches must be paced across frames, not queued in one burst.");
 
             Assert.That(hostSync.Diagnostics.SentLateJoinSnapshotCount, Is.EqualTo(1));
             Assert.That(hostSync.Diagnostics.SentSnapshotBatchCount, Is.EqualTo(expectedBatches));

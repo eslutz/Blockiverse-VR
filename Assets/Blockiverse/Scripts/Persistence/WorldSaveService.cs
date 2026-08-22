@@ -1419,25 +1419,6 @@ namespace Blockiverse.Persistence
             return ComputeMd5Hex(content);
         }
 
-        // Covers everything a peer must agree on to resolve a craft identically: output, station,
-        // craft time, and the ingredient set. Ordered so the hash is independent of registration
-        // order (ingredients keep their declared order — it is part of the recipe's identity).
-        public static string ComputeRecipeRegistryHash(CraftingRecipeBook recipeBook)
-        {
-            IEnumerable<string> recipes = recipeBook.All
-                .Select(recipe => string.Concat(
-                    recipe.Output.ItemId.Value, ":", recipe.Output.Count.ToString(CultureInfo.InvariantCulture),
-                    ">", ((int)recipe.RequiredStation).ToString(CultureInfo.InvariantCulture),
-                    "@", recipe.TimeTicks.ToString(CultureInfo.InvariantCulture),
-                    "<", string.Join(
-                        ",",
-                        recipe.Ingredients.Select(ingredient => string.Concat(
-                            ingredient.ItemId.Value, ":", ingredient.Count.ToString(CultureInfo.InvariantCulture))))))
-                .OrderBy(entry => entry, StringComparer.Ordinal);
-
-            return ComputeMd5Hex(string.Join("|", recipes));
-        }
-
         static string ComputeMd5Hex(string content)
         {
             using var md5 = MD5.Create();
