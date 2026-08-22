@@ -230,7 +230,7 @@ controller.ConfigureStationPanel(stationPanel);
 
         static (BlockiverseAudioSettingsPanel panel, BlockiverseWorldSpacePanelPresenter presenter, Button closeButton) EnsureAudioSettingsMenuPanel(Transform parent, Transform head)
         {
-            const float W = 540.0f; const float H = 956.0f;
+            const float W = 540.0f; const float H = 1020.0f;
             GameObject panelRoot = EnsureRoutedMenuPanelRoot(parent, BlockiverseMenuController.AudioSettingsPanelName);
             panelRoot.transform.localPosition = GameMenuLocalPosition; panelRoot.transform.localRotation = Quaternion.identity; panelRoot.transform.localScale = Vector3.one * GameMenuScale;
             RectTransform rootRect = panelRoot.GetComponent<RectTransform>(); rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, W); rootRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, H);
@@ -240,9 +240,28 @@ controller.ConfigureStationPanel(stationPanel);
             RectTransform bgRect = bg.GetComponent<RectTransform>(); bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one; bgRect.offsetMin = Vector2.zero; bgRect.offsetMax = Vector2.zero;
             Image bgImage = EnsureComponent<Image>(bg); ApplySlicedSprite(bgImage, GetUiSprite("settings_panel")); bgImage.color = PanelBaseColor;
             EnsureLabel(bg.transform, "Title", "Audio & Feedback", 32, TextAnchor.MiddleLeft, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(MenuPanelInset, -MenuPanelInset), TitleSizeWithClose(W));
+            // The full control set, restored. Only the master slider and the close
+            // button survived the UI Toolkit revert; the rest of the panel kept
+            // working purely because the references were still serialized in the
+            // committed prefab, so any regenerated rig lost them.
             Slider master = EnsureSettingsSlider(bg.transform, "Master Volume Slider", "Master Volume", 1.0f, new Vector2(28, -96));
+            Slider effects = EnsureSettingsSlider(bg.transform, "Effects Volume Slider", "Effects Volume", 1.0f, new Vector2(28, -184));
+            Slider ui = EnsureSettingsSlider(bg.transform, "UI Volume Slider", "UI Volume", 1.0f, new Vector2(28, -272));
+            Slider weather = EnsureSettingsSlider(bg.transform, "Weather Volume Slider", "Weather Volume", 1.0f, new Vector2(28, -360));
+            Slider music = EnsureSettingsSlider(bg.transform, "Music Volume Slider", "Music Volume", 0.5f, new Vector2(28, -448));
+            Slider hapticStrength = EnsureSettingsSlider(bg.transform, "Haptic Strength Slider", "Haptic Strength", 1.0f, new Vector2(28, -536));
+            Toggle muteAll = EnsureToggleControl(bg.transform, "Mute All Toggle", "Mute All", false, new Vector2(28, -636));
+            Toggle haptics = EnsureToggleControl(bg.transform, "Haptics Toggle", "Haptics", true, new Vector2(28, -700));
+            Toggle reducedFlash = EnsureToggleControl(bg.transform, "Reduced Flash Toggle", "Reduced Flash", false, new Vector2(28, -764));
+            Toggle reducedParticles = EnsureToggleControl(bg.transform, "Reduced Particles Toggle", "Reduced Particles", false, new Vector2(28, -828));
+            Toggle classicBlockSounds = EnsureToggleControl(bg.transform, "Classic Block Sounds Toggle", "Classic Block Sounds", false, new Vector2(28, -892));
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close", TopRightClosePosition(W), MenuCloseButtonSize);
             BlockiverseAudioSettingsPanel panel = EnsureComponent<BlockiverseAudioSettingsPanel>(panelRoot);
+            // Without this the controls above exist but bind to nothing.
+            panel.Configure(
+                UnityEngine.Object.FindFirstObjectByType<BlockiverseFeedbackSettings>(FindObjectsInactive.Include),
+                master, effects, ui, weather, music, hapticStrength,
+                muteAll, haptics, reducedFlash, reducedParticles, classicBlockSounds);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             ConfigureRoutedMenuPresenter(presenter, canvas, head);
             return (panel, presenter, closeButton);

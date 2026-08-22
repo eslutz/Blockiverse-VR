@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Regression checks for generated Blockiverse audio cues."""
+"""Regression checks for the audio `generate-audio.py` still produces.
+
+Scope note, because it is easy to mistake this for a shipping gate: this file
+exercises the GENERATOR's in-memory output, not the committed WAVs. It therefore
+proves the synthesis is still reproducible (ruleset §7) — nothing more. The check
+that guards what players actually hear is `validate-audio-assets.py`, which reads
+the files on disk.
+
+The generator still synthesizes the full original cue set, but only the music bed
+and the classic block cues are written into `Assets/`; the rest of the catalog was
+replaced by licensed production audio. Both halves are asserted below: the whole
+catalog stays renderable, and the shipped subset stays correct.
+"""
 import importlib.util
 import math
 import pathlib
@@ -35,6 +47,29 @@ class GeneratedAudioTests(unittest.TestCase):
             and path.name[len(MILESTONE_GENERATOR_PREFIX)].isdigit()
         ]
         self.assertEqual(milestone_generators, [])
+
+    def test_shipped_clips_are_limited_to_music_and_classic_cues(self):
+        """The generator must not write over production audio.
+
+        Before this split, any run of generate-audio.py overwrote all 34 cues in
+        `Assets/` with synth placeholders. Now `main()` only writes the clips
+        listed here, so a careless run cannot silently undo the audio pass.
+        """
+        self.assertEqual(
+            set(self.generator.SHIPPED_CLIPS),
+            {
+                "music_menu",
+                "music_day",
+                "music_night",
+                "music_cave",
+                "classic_block_break",
+                "classic_block_place",
+            },
+        )
+        # Every shipped name must resolve to a clip the generator can actually render.
+        for asset_name, clip_key in self.generator.SHIPPED_CLIPS.items():
+            with self.subTest(asset=asset_name):
+                self.assertIn(clip_key, self.generator.CLIPS)
 
     def test_clip_set_covers_phase_13_catalog(self):
         self.assertEqual(
@@ -78,6 +113,9 @@ class GeneratedAudioTests(unittest.TestCase):
         )
 
     def test_generated_clips_have_polished_duration_and_headroom(self):
+        # Covers the whole original catalog, not just the shipped subset: the
+        # ruleset requires the generated baseline to stay reproducible, and a
+        # regression in an unshipped cue is still a regression in the generator.
         expected_duration_ranges = {
             "block_break": (0.22, 0.34),
             "block_place": (0.16, 0.26),

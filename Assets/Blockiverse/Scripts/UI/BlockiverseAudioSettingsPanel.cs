@@ -21,6 +21,7 @@ namespace Blockiverse.UI
         [SerializeField] Toggle hapticsToggle;
         [SerializeField] Toggle reducedFlashToggle;
         [SerializeField] Toggle reducedParticlesToggle;
+        [SerializeField] Toggle classicBlockSoundsToggle;
 
         bool wired;
 
@@ -35,7 +36,8 @@ namespace Blockiverse.UI
             Toggle muteAll,
             Toggle haptics,
             Toggle reducedFlash,
-            Toggle reducedParticles)
+            Toggle reducedParticles,
+            Toggle classicBlockSounds = null)
         {
             Unwire();
             feedbackSettings = settings;
@@ -49,6 +51,7 @@ namespace Blockiverse.UI
             hapticsToggle = haptics;
             reducedFlashToggle = reducedFlash;
             reducedParticlesToggle = reducedParticles;
+            classicBlockSoundsToggle = classicBlockSounds;
             Wire();
         }
 
@@ -86,6 +89,7 @@ namespace Blockiverse.UI
             hapticsToggle?.SetIsOnWithoutNotify(feedbackSettings.HapticsEnabled);
             reducedFlashToggle?.SetIsOnWithoutNotify(feedbackSettings.ReducedFlash);
             reducedParticlesToggle?.SetIsOnWithoutNotify(feedbackSettings.ReducedParticles);
+            classicBlockSoundsToggle?.SetIsOnWithoutNotify(feedbackSettings.ClassicBlockSoundsEnabled);
         }
 
         void Wire()
@@ -103,6 +107,7 @@ namespace Blockiverse.UI
             hapticsToggle?.onValueChanged.AddListener(OnHapticsChanged);
             reducedFlashToggle?.onValueChanged.AddListener(OnReducedFlashChanged);
             reducedParticlesToggle?.onValueChanged.AddListener(OnReducedParticlesChanged);
+            classicBlockSoundsToggle?.onValueChanged.AddListener(OnClassicBlockSoundsChanged);
             wired = true;
         }
 
@@ -121,6 +126,7 @@ namespace Blockiverse.UI
             hapticsToggle?.onValueChanged.RemoveListener(OnHapticsChanged);
             reducedFlashToggle?.onValueChanged.RemoveListener(OnReducedFlashChanged);
             reducedParticlesToggle?.onValueChanged.RemoveListener(OnReducedParticlesChanged);
+            classicBlockSoundsToggle?.onValueChanged.RemoveListener(OnClassicBlockSoundsChanged);
             wired = false;
         }
 
@@ -134,5 +140,6 @@ namespace Blockiverse.UI
         void OnHapticsChanged(bool value) { if (feedbackSettings != null) feedbackSettings.HapticsEnabled = value; }
         void OnReducedFlashChanged(bool value) { if (feedbackSettings != null) feedbackSettings.ReducedFlash = value; }
         void OnReducedParticlesChanged(bool value) { if (feedbackSettings != null) feedbackSettings.ReducedParticles = value; }
+        void OnClassicBlockSoundsChanged(bool value) { if (feedbackSettings != null) feedbackSettings.ClassicBlockSoundsEnabled = value; }
     }
 }

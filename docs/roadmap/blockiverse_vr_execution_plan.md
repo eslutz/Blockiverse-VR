@@ -128,7 +128,7 @@ Before commercial release, re-check current Unity, Meta, store, SDK, and licensi
 
 ## 4. Naming, IP, and asset policy
 
-Use original Blockiverse names, textures, icons, UI, audio, creatures, structures, and branding.
+Use original Blockiverse names, textures, icons, UI, music, creatures, structures, and branding. Sound effects may be built from licensed third-party recordings under `voxel_audio_vfx_ruleset.md` §7, provided the result imitates no protected audio identity.
 
 Do not use:
 
@@ -162,7 +162,7 @@ A colorful, blocky, voxel sandbox style is acceptable. The final game identity m
 7. **VR comfort comes first.** Teleport, snap turn, height reset, readable UI, comfort toggles, and no forced smooth locomotion.
 8. **Trunk-based development.** `main` remains releasable. Feature branches stay short-lived.
 9. **Known-good tags.** After stable checkpoints, create annotated `kg/...` tags so rollback is easy.
-10. **Original assets only.** Do not copy protected assets, sounds, names, or silhouettes.
+10. **Original or properly licensed assets only.** Do not copy protected assets, sounds, names, or silhouettes. Third-party source material is allowed only where its license permits commercial use, modification, and redistribution in a shipped game, and only with its provenance recorded.
 
 ---
 
@@ -1193,7 +1193,7 @@ Manual Quest: VFX are readable and do not harm frame rate.
 Building loop has clear feedback.
 Weather feels present without reducing comfort.
 Important events are visible and audible.
-All shipped audio is original and documented.
+All shipped audio is original or properly licensed, and every cue's source and license are documented in `docs/audio/audio-asset-manifest.md`.
 ```
 
 ---

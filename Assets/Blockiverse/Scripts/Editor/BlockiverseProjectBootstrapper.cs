@@ -222,13 +222,13 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             (BlockiverseAudioCue.InventoryClose, "inventory_close"),
             (BlockiverseAudioCue.CraftSuccess, "craft_success"),
             (BlockiverseAudioCue.CraftFail, "craft_fail"),
-            (BlockiverseAudioCue.ToolHitSoft, "tool_hit_soft"),
-            (BlockiverseAudioCue.ToolHitStone, "tool_hit_stone"),
+            (BlockiverseAudioCue.ToolHitSoft, "tool_hit_soft_01"),
+            (BlockiverseAudioCue.ToolHitStone, "tool_hit_stone_01"),
             (BlockiverseAudioCue.ToolWrong, "tool_wrong"),
             (BlockiverseAudioCue.PickupItem, "pickup_item"),
-            (BlockiverseAudioCue.PlayerHurt, "tool_hit_stone"),
-            (BlockiverseAudioCue.LowHealth, "craft_fail"),
-            (BlockiverseAudioCue.PlayerDeath, "thunder_near"),
+            (BlockiverseAudioCue.PlayerHurt, "player_hurt"),
+            (BlockiverseAudioCue.LowHealth, "low_health"),
+            (BlockiverseAudioCue.PlayerDeath, "player_death"),
             (BlockiverseAudioCue.ContainerOpen, "container_open"),
             (BlockiverseAudioCue.ContainerClose, "container_close"),
             (BlockiverseAudioCue.TorchIgnite, "torch_ignite"),
@@ -244,7 +244,45 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             (BlockiverseAudioCue.NightAmbienceLoop, "night_ambience_loop"),
             (BlockiverseAudioCue.MultiplayerJoin, "multiplayer_join"),
             (BlockiverseAudioCue.MultiplayerLeave, "multiplayer_leave"),
+            (BlockiverseAudioCue.Eat, "eat"),
+            (BlockiverseAudioCue.Drink, "drink"),
+            (BlockiverseAudioCue.WaterScoop, "water_scoop"),
+            (BlockiverseAudioCue.WaterSplash, "water_splash"),
+            (BlockiverseAudioCue.SwimStroke, "swim_stroke"),
+            (BlockiverseAudioCue.SubmergedLoop, "submerged_loop"),
+            (BlockiverseAudioCue.EmberflowLoop, "emberflow_loop"),
+            (BlockiverseAudioCue.Landing, "landing"),
         };
+
+        // Per-material break/place clips (ruleset §13). The generic block_break /
+        // block_place cues above remain the fallback for an unmapped block.
+        static readonly (BlockiverseMaterialFamily Family, string BreakAsset, string PlaceAsset)[] MaterialAudioAssets =
+        {
+            (BlockiverseMaterialFamily.Soil,       "block_break_soil",       "block_place_soil"),
+            (BlockiverseMaterialFamily.Stone,      "block_break_stone",      "block_place_stone"),
+            (BlockiverseMaterialFamily.GravelSand, "block_break_gravelsand", "block_place_gravelsand"),
+            (BlockiverseMaterialFamily.Wood,       "block_break_wood",       "block_place_wood"),
+            (BlockiverseMaterialFamily.Leaf,       "block_break_leaf",       "block_place_leaf"),
+            (BlockiverseMaterialFamily.Glass,      "block_break_glass",      "block_place_glass"),
+            (BlockiverseMaterialFamily.Crystal,    "block_break_crystal",    "block_place_crystal"),
+            (BlockiverseMaterialFamily.OreMetal,   "block_break_oremetal",   "block_place_oremetal"),
+            (BlockiverseMaterialFamily.Snow,       "block_break_snow",       "block_place_snow"),
+        };
+
+        // Per-surface footstep variants (ruleset §5). Four takes per surface so a
+        // walk cycle does not repeat within earshot.
+        static readonly (BlockiverseSurfaceFamily Surface, string Prefix)[] FootstepSurfaceAssets =
+        {
+            (BlockiverseSurfaceFamily.Soil, "footstep_soil"),
+            (BlockiverseSurfaceFamily.Stone, "footstep_stone"),
+            (BlockiverseSurfaceFamily.GravelSand, "footstep_gravelsand"),
+            (BlockiverseSurfaceFamily.Wood, "footstep_wood"),
+            (BlockiverseSurfaceFamily.Leaf, "footstep_leaf"),
+            (BlockiverseSurfaceFamily.Snow, "footstep_snow"),
+            (BlockiverseSurfaceFamily.Water, "footstep_water"),
+        };
+
+        const int FootstepVariantsPerSurface = 4;
 
         [MenuItem("Blockiverse/Bootstrap Unity Quest Project")]
         public static void Run()

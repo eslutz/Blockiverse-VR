@@ -130,6 +130,8 @@ namespace Blockiverse.Gameplay
             vitalsRuntime.LocalPlayerDamaged += OnLocalPlayerDamaged;
             vitalsRuntime.LocalPlayerLowHealth += OnLocalPlayerLowHealth;
             vitalsRuntime.LocalPlayerDied += OnLocalPlayerDied;
+            vitalsRuntime.WorldDrinkTaken += OnWorldDrinkTaken;
+            vitalsRuntime.LocalPlayerEnteredFluid += OnLocalPlayerEnteredFluid;
             subscribedToVitals = true;
         }
 
@@ -144,6 +146,8 @@ namespace Blockiverse.Gameplay
             vitalsRuntime.LocalPlayerDamaged -= OnLocalPlayerDamaged;
             vitalsRuntime.LocalPlayerLowHealth -= OnLocalPlayerLowHealth;
             vitalsRuntime.LocalPlayerDied -= OnLocalPlayerDied;
+            vitalsRuntime.WorldDrinkTaken -= OnWorldDrinkTaken;
+            vitalsRuntime.LocalPlayerEnteredFluid -= OnLocalPlayerEnteredFluid;
             subscribedToVitals = false;
         }
 
@@ -156,7 +160,7 @@ namespace Blockiverse.Gameplay
                 case SurvivalCommandKind.HarvestResource:
                     if (result.Accepted)
                     {
-                        audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.BlockBreak, worldCenter);
+                        PlayBlockCue(BlockiverseAudioCue.BlockBreak, position, worldCenter);
                         audioCuePlayer?.PlayCue(BlockiverseAudioCue.PickupItem);
                         vfxCuePlayer?.PlayCue(BlockiverseVfxCue.BlockBreakDust, worldCenter);
                         vfxCuePlayer?.PlayCue(BlockiverseVfxCue.ResourceSpark, worldCenter);
@@ -173,7 +177,7 @@ namespace Blockiverse.Gameplay
                 case SurvivalCommandKind.PlaceBlock:
                     if (result.Accepted)
                     {
-                        audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.BlockPlace, worldCenter);
+                        PlayBlockCue(BlockiverseAudioCue.BlockPlace, position, worldCenter);
                         vfxCuePlayer?.PlayCue(BlockiverseVfxCue.BlockPlacePuff, worldCenter);
                     }
                     break;
@@ -190,9 +194,63 @@ namespace Blockiverse.Gameplay
 
                 case SurvivalCommandKind.UseConsumable:
                     if (result.Accepted)
-                        audioCuePlayer?.PlayCue(BlockiverseAudioCue.PickupItem);
+                        audioCuePlayer?.PlayCue(ConsumeCueFor(result.Item.ItemId));
                     break;
             }
+        }
+
+        // Plays a block cue using the family of the block actually at that position.
+        // The harvest case reads the world AFTER the mutation, so an emptied cell
+        // reads as Air; the generic cue is the right answer there rather than
+        // guessing at what used to be present.
+        void PlayBlockCue(BlockiverseAudioCue cue, BlockPosition position, Vector3 worldCenter)
+        {
+            if (audioCuePlayer == null)
+                return;
+
+            VoxelWorld world = worldManager != null ? worldManager.World : null;
+            if (world != null && world.Bounds.Contains(position))
+            {
+                BlockId block = world.GetBlock(position);
+                if (block != BlockRegistry.Air)
+                {
+                    audioCuePlayer.PlayMaterialCueAt(
+                        cue,
+                        BlockiverseBlockFeedbackCues.FamilyForBlock(BlockRegistry.Default, block),
+                        worldCenter);
+                    return;
+                }
+            }
+
+            audioCuePlayer.PlayCueAt(cue, worldCenter);
+        }
+
+        // Scooping straight from a river or lake — the ruleset's deferred
+        // `water_scoop` cue, which had no implementation at all before this.
+        void OnWorldDrinkTaken()
+        {
+            audioCuePlayer?.PlayCue(BlockiverseAudioCue.WaterScoop);
+        }
+
+        // Entering a fluid. Emberflow is not water and must not splash; a lava
+        // entry already carries its own contact hazard and hurt cue.
+        void OnLocalPlayerEnteredFluid(FluidFamily family, float entryHeightMeters)
+        {
+            if (audioCuePlayer == null || family == FluidFamily.Emberflow)
+                return;
+
+            // A step into the shallows is a stroke; an actual fall is a splash.
+            audioCuePlayer.PlayCue(entryHeightMeters >= 1.5f
+                ? BlockiverseAudioCue.WaterSplash
+                : BlockiverseAudioCue.SwimStroke);
+        }
+
+        // Drinks get the drink cue, everything else edible gets the eat cue.
+        static BlockiverseAudioCue ConsumeCueFor(ItemId itemId)
+        {
+            return itemId == ItemId.CleanWaterFlask
+                ? BlockiverseAudioCue.Drink
+                : BlockiverseAudioCue.Eat;
         }
 
         // Structure-loot grant: a broken crate dumped its contents into the player (§3 loot loop).

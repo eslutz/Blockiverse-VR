@@ -24,6 +24,9 @@ namespace Blockiverse.Gameplay
         [SerializeField, Range(0f, 1f)] float hapticIntensity = 1.0f;
         [SerializeField] bool reducedFlash;
         [SerializeField] bool reducedParticles;
+        // Easter egg: swaps block break/place back to the original synthesized
+        // cues the game shipped with before the production audio pass.
+        [SerializeField] bool classicBlockSounds;
 
         public float MasterVolume
         {
@@ -83,6 +86,12 @@ namespace Blockiverse.Gameplay
         {
             get => reducedParticles;
             set => reducedParticles = value;
+        }
+
+        public bool ClassicBlockSoundsEnabled
+        {
+            get => classicBlockSounds;
+            set => classicBlockSounds = value;
         }
 
         public float ResolveVolume(BlockiverseAudioCategory category)

@@ -9,3 +9,5 @@ This repository is source-available for portfolio, review, and collaboration pur
 Generated art, generated audio, project branding, game design documents, textures, models, sounds, and other non-code assets are also All Rights Reserved unless a separate file explicitly states otherwise.
 
 Third-party dependencies and assets retain their own licenses.
+
+The sound effects under `Assets/Blockiverse/Audio/` are processed from third-party source recordings and retain the licenses of those sources. Each cue's source and license are recorded in [`docs/audio/audio-asset-manifest.md`](docs/audio/audio-asset-manifest.md), and the licenses themselves are summarized in [`NOTICE.md`](NOTICE.md). The music tracks (`music_*.wav`) and the classic block cues (`classic_block_*.wav`) are original generated project assets and remain All Rights Reserved.

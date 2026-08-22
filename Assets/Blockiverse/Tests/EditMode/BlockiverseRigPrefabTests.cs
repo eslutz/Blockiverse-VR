@@ -1236,9 +1236,27 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(inputRig.AudioCuePlayer, Is.SameAs(audioCuePlayer));
 
             foreach (BlockiverseAudioCue cue in System.Enum.GetValues(typeof(BlockiverseAudioCue)))
-                Assert.That(audioCuePlayer.HasClipForCue(cue), Is.True, $"{cue} should have an assigned generated clip.");
+                Assert.That(audioCuePlayer.HasClipForCue(cue), Is.True, $"{cue} should have an assigned clip.");
 
+            // Flat fallback bank, used when the surface under the player cannot be resolved.
             Assert.That(audioCuePlayer.FootstepClipCount, Is.EqualTo(2));
+
+            // Every material family needs both a break and a place clip, and every
+            // walkable surface needs its own footstep bank (ruleset §13, §5). A
+            // missing family silently falls back to the generic thud, which is
+            // exactly the flatness this pass exists to remove.
+            int materialFamilies = System.Enum.GetValues(typeof(BlockiverseMaterialFamily)).Length;
+            Assert.That(audioCuePlayer.AssignedMaterialFamilyCount(), Is.EqualTo(materialFamilies),
+                "every block material family should have break and place clips assigned.");
+
+            int surfaceFamilies = System.Enum.GetValues(typeof(BlockiverseSurfaceFamily)).Length;
+            Assert.That(audioCuePlayer.AssignedFootstepSurfaceCount(), Is.EqualTo(surfaceFamilies),
+                "every walkable surface should have a footstep bank assigned.");
+
+            // The Classic Block Sounds easter egg needs both original cues present
+            // or the toggle silently does nothing.
+            Assert.That(audioCuePlayer.HasClassicBlockClips, Is.True,
+                "classic block break/place clips should be assigned for the Classic Block Sounds setting.");
 
             // The music bed: a controller on the rig with a generated track per context.
             BlockiverseMusicController musicController = prefab.GetComponent<BlockiverseMusicController>();
