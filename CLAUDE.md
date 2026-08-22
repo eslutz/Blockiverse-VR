@@ -162,7 +162,14 @@ other worktrees, but a shared service is not the same thing as an exclusive lock
    how long your run is. If nobody holds it, say you are taking it.
 2. **Announce when you finish**, and **hand off by name** to the next session that
    asked. Do not just go quiet — the next session cannot tell "finished" from
-   "between two runs".
+   "between two runs". **Only the holder announces a release, and only ever to one
+   named successor.** A broadcast "it's free" is a fact about a moment sent to an
+   audience that reads it at different times, with nothing to invalidate it once
+   someone claims — so it quietly decays into a false statement. This has already
+   caused a near-collision: a session acted on a "free, nothing queued" broadcast that
+   two claims had overtaken. A named hand-off has exactly one valid recipient, and any
+   second claimant knows immediately that they are not it. If you did not receive the
+   hand-off, ask the current holder rather than acting on an announcement.
 3. **Want a second run while someone is queued?** Hand off first and rejoin the back
    of the queue. A queued session gets a turn before you take another slot.
    **Leaving the queue is never permanent** — say so when you leave, and rejoin the
