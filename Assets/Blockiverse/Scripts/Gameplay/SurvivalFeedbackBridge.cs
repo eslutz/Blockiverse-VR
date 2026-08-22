@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -30,9 +29,15 @@ namespace Blockiverse.Gameplay
         // Bounded and consumed on read: an entry that is never claimed (a mutation with no command
         // feedback behind it — a remote player's edit, world simulation) must not accumulate, and
         // must not still be sitting there to answer for a later break at the same position.
+        // A ring rather than a dictionary plus an eviction queue: those are one bounded
+        // structure split in two, and keeping only one half maintained is how a consumed entry
+        // leaves a stale id queued that can later evict a live record for the same position.
+        // Thirty-two linear comparisons cost nothing at the rate blocks break.
         const int MaxRememberedRemovals = 32;
-        readonly Dictionary<BlockPosition, BlockId> removedBlocks = new();
-        readonly Queue<BlockPosition> removedBlockOrder = new();
+        readonly (BlockPosition position, BlockId block)[] removedBlocks =
+            new (BlockPosition, BlockId)[MaxRememberedRemovals];
+        readonly bool[] removedBlockUsed = new bool[MaxRememberedRemovals];
+        int nextRemovalSlot;
         VoxelWorld subscribedWorld;
 
         bool subscribedToNetworking;
@@ -168,9 +173,18 @@ namespace Blockiverse.Gameplay
             subscribedToVitals = false;
         }
 
-        void OnCommandFeedback(SurvivalCommandResult result, BlockPosition position)
+        // CreativeWorldManager replaces the VoxelWorld instance on a new world, a load, and a
+        // multiplayer join. Re-checking here rather than only when feedback arrives is what makes
+        // the listener live before the first mutation instead of one command behind it — the first
+        // harvest in a session is exactly the one that would otherwise have gone unrecorded.
+        // A reference comparison per frame; SubscribeWorld returns immediately when nothing moved.
+        void Update()
         {
             SubscribeWorld();
+        }
+
+        void OnCommandFeedback(SurvivalCommandResult result, BlockPosition position)
+        {
             Vector3 worldCenter = new(position.X + 0.5f, position.Y + 0.5f, position.Z + 0.5f);
 
             switch (result.CommandKind)
@@ -242,8 +256,7 @@ namespace Blockiverse.Gameplay
                 subscribedWorld.BlockChanged -= OnWorldBlockChanged;
 
             subscribedWorld = null;
-            removedBlocks.Clear();
-            removedBlockOrder.Clear();
+            ForgetRemovedBlocks();
         }
 
         void OnWorldBlockChanged(BlockChange change)
@@ -251,15 +264,44 @@ namespace Blockiverse.Gameplay
             if (change.NewBlock != BlockRegistry.Air || change.PreviousBlock == BlockRegistry.Air)
                 return;
 
-            if (!removedBlocks.ContainsKey(change.Position))
+            // Overwrite in place when this position is already remembered, so repeated breaks at
+            // one spot cannot crowd out the rest of the ring.
+            for (int index = 0; index < removedBlocks.Length; index++)
             {
-                while (removedBlockOrder.Count >= MaxRememberedRemovals)
-                    removedBlocks.Remove(removedBlockOrder.Dequeue());
-
-                removedBlockOrder.Enqueue(change.Position);
+                if (removedBlockUsed[index] && removedBlocks[index].position.Equals(change.Position))
+                {
+                    removedBlocks[index] = (change.Position, change.PreviousBlock);
+                    return;
+                }
             }
 
-            removedBlocks[change.Position] = change.PreviousBlock;
+            removedBlocks[nextRemovalSlot] = (change.Position, change.PreviousBlock);
+            removedBlockUsed[nextRemovalSlot] = true;
+            nextRemovalSlot = (nextRemovalSlot + 1) % MaxRememberedRemovals;
+        }
+
+        bool TryTakeRemovedBlock(BlockPosition position, out BlockId block)
+        {
+            for (int index = 0; index < removedBlocks.Length; index++)
+            {
+                if (!removedBlockUsed[index] || !removedBlocks[index].position.Equals(position))
+                    continue;
+
+                block = removedBlocks[index].block;
+                removedBlockUsed[index] = false;
+                return true;
+            }
+
+            block = default;
+            return false;
+        }
+
+        void ForgetRemovedBlocks()
+        {
+            for (int index = 0; index < removedBlockUsed.Length; index++)
+                removedBlockUsed[index] = false;
+
+            nextRemovalSlot = 0;
         }
 
         // Resolves the material a cue should sound like. For a break the cell is already air by the
@@ -269,12 +311,8 @@ namespace Blockiverse.Gameplay
         // old block.
         bool TryResolveCueBlock(BlockiverseAudioCue cue, BlockPosition position, out BlockId block)
         {
-            if (cue == BlockiverseAudioCue.BlockBreak &&
-                removedBlocks.TryGetValue(position, out block))
-            {
-                removedBlocks.Remove(position);
+            if (cue == BlockiverseAudioCue.BlockBreak && TryTakeRemovedBlock(position, out block))
                 return true;
-            }
 
             VoxelWorld world = worldManager != null ? worldManager.World : null;
             if (world != null && world.Bounds.Contains(position))

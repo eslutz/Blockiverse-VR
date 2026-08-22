@@ -102,7 +102,16 @@ namespace Blockiverse.VR
             if (submersion.BodySubmerged)
                 return SwimState.Surfaced;
 
-            return submersion.FeetSubmerged ? SwimState.Wading : SwimState.Dry;
+            // Feet wet, body and head dry. Whether that is standing in a puddle or floating with
+            // only the feet under the line is the SAME question the guard above asks, so it needs
+            // the same answer — the guard alone moved the flip point by 0.11 m rather than removing
+            // it. The body sample sits 0.89 m above the feet sample, so it clears the water line
+            // well before the feet do: for all but about one percent of vertical positions a
+            // player treading deep water arrives here, not at the guard.
+            if (submersion.FeetSubmerged)
+                return submersion.FluidBelowFeet ? SwimState.Surfaced : SwimState.Wading;
+
+            return SwimState.Dry;
         }
 
         // Swimming and Surfaced are the states where the swim provider owns vertical motion and

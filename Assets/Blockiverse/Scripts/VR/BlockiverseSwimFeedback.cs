@@ -56,6 +56,7 @@ namespace Blockiverse.VR
         bool submergedLoopActive;
         bool submergedWanted;
         bool emberflowLoopActive;
+        bool emberflowWanted;
 
         // Exposed so the rig prefab test can prove the wiring survived a regeneration, the same
         // way BlockiverseAudioCuePlayer exposes its own references.
@@ -174,6 +175,7 @@ namespace Blockiverse.VR
                 lastDescentSpeed = teleported ? 0.0f : Mathf.Max(0.0f, -delta.y / Time.deltaTime);
 
             TickSubmergedLoop();
+            TickEmberflowLoop();
 
             if (audioCuePlayer == null || swimProvider == null || !swimProvider.IsSwimming)
                 return;
@@ -268,10 +270,23 @@ namespace Blockiverse.VR
             return Mathf.Lerp(0.45f, 1.0f, t);
         }
 
-        // Emberflow has no surface line to cross, so it needs no release dwell: you are either
-        // standing in lava or you are not.
+        // Emberflow needs no release dwell — there is no surface line to bob across, you are
+        // either standing in lava or you are not — but it does need the same retry as the
+        // submerged loop, and for the same reason: StartLoop refuses at zero resolved volume and
+        // nothing asks again until the swim state next changes.
+        void TickEmberflowLoop()
+        {
+            if (emberflowWanted && !emberflowLoopActive && audioCuePlayer != null)
+            {
+                emberflowLoopActive = audioCuePlayer.StartLoop(BlockiverseAudioCue.EmberflowLoop) ||
+                                      audioCuePlayer.IsLoopActive(BlockiverseAudioCue.EmberflowLoop);
+            }
+        }
+
         void RequestEmberflowLoop(bool wanted)
         {
+            emberflowWanted = wanted;
+
             if (wanted == emberflowLoopActive || audioCuePlayer == null)
                 return;
 

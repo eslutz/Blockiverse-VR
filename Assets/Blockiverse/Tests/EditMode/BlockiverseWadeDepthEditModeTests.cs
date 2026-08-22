@@ -99,22 +99,63 @@ namespace Blockiverse.Tests.EditMode
                 Is.EqualTo(SwimState.Swimming));
         }
 
-        // Resolves state for a player whose FEET sit in the topmost cell of a fluid column that is
-        // `waterCells` deep — a swimmer who has risen to the water line, not someone standing in a
-        // puddle. The surface cell equals the feet cell in both cases, which is exactly why the
-        // surface alone cannot tell them apart.
-        static SwimState ResolveForFloaterAtSurface(int waterCells, float capsuleHeight)
+        // The provider's real sample geometry: feet at capsule base + 0.10 m, body at base + 0.55 x
+        // height, head at the head transform. For a 1.8 m capsule the feet and body samples are
+        // 0.89 m apart, so they land in DIFFERENT cells for all but about one percent of vertical
+        // positions. Modelling them as integer offsets from the feet cell — as this file's other
+        // helper does — collapses that separation to zero and quietly tests only that one percent.
+        const float FeetSampleHeightMeters = 0.10f;
+        const float BodySampleCapsuleFraction = 0.55f;
+
+        static SwimState ResolveAtCapsuleBase(int waterCells, float capsuleHeight, float baseWorldY)
         {
             VoxelWorld world = WorldWithWaterColumn(waterCells);
-            int surfaceCellY = GroundY + waterCells;
-            int feetCellY = surfaceCellY;
 
-            var feet = new BlockPosition(8, feetCellY, 8);
-            var body = new BlockPosition(8, feetCellY + CellOffset(capsuleHeight * 0.55f), 8);
-            var head = new BlockPosition(8, feetCellY + CellOffset(capsuleHeight), 8);
+            var feet = new BlockPosition(8, FloorToCell(baseWorldY + FeetSampleHeightMeters), 8);
+            var body = new BlockPosition(8, FloorToCell(baseWorldY + capsuleHeight * BodySampleCapsuleFraction), 8);
+            var head = new BlockPosition(8, FloorToCell(baseWorldY + capsuleHeight), 8);
 
             FluidSubmersionState submersion = FluidSubmersion.Sample(world, feet, body, head);
-            return BlockiverseSwimMotion.ResolveState(submersion, feetCellY);
+            return BlockiverseSwimMotion.ResolveState(submersion, feet.Y);
+        }
+
+        static int FloorToCell(float worldY) => (int)System.Math.Floor(worldY);
+
+        // Sweeps the capsule up through the surface cell of a deep column in 0.05 m steps. Every
+        // one of these positions has the feet in water with more water beneath them, so none of
+        // them is standing on anything and none may hand vertical motion back to gravity.
+        [TestCase(4, 1.80f, TestName = "deep water, default capsule")]
+        [TestCase(4, 0.90f, TestName = "deep water, crouched")]
+        [TestCase(8, 1.80f, TestName = "very deep water, default capsule")]
+        [TestCase(3, 1.20f, TestName = "deep water, short real-height player")]
+        [TestCase(6, 2.10f, TestName = "deep water, tall real-height player")]
+        public void TreadingAnywhereInTheSurfaceCellOfDeepWaterIsNeverWading(int waterCells, float capsuleHeight)
+        {
+            int surfaceCellY = GroundY + waterCells;
+
+            // Only positions where the feet sample is genuinely still under the water line. The
+            // feet sit 0.10 m above the capsule base and the line is at surfaceCellY + 1, so the
+            // feet leave the water once the base reaches surfaceCellY + 0.90; beyond that the
+            // player is out and Dry is the right answer, not a regression. Stepped by integers
+            // rather than accumulating a float, so the bound cannot drift past it.
+            for (int step = -1; step <= 17; step++)
+            {
+                float offset = step * 0.05f;
+                float baseWorldY = surfaceCellY + offset;
+                SwimState state = ResolveAtCapsuleBase(waterCells, capsuleHeight, baseWorldY);
+
+                Assert.That(state, Is.Not.EqualTo(SwimState.Wading),
+                    $"capsule base {baseWorldY:0.00} ({capsuleHeight:0.00} m player, {waterCells} blocks of water) "
+                    + "is afloat over more water, so gravity must stay with the swim provider");
+                Assert.That(BlockiverseSwimMotion.OwnsVerticalMotion(state), Is.True,
+                    $"capsule base {baseWorldY:0.00} released vertical motion mid-swim");
+            }
+        }
+
+        static SwimState ResolveForFloaterAtSurface(int waterCells, float capsuleHeight)
+        {
+            int surfaceCellY = GroundY + waterCells;
+            return ResolveAtCapsuleBase(waterCells, capsuleHeight, surfaceCellY);
         }
 
         [TestCase(4, 1.80f, TestName = "deep water, default capsule")]
