@@ -222,11 +222,19 @@ ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
 ```
 
 Read that by grouping on `-projectPath`, not by counting lines — one run shows two or
-three. Two caveats when attributing a run to a worktree: a run launched with a relative
-`-projectPath .` (this repo's own bootstrapper invocation does exactly that) shows `.`
-rather than a path and will be missed by any grouping on directory names, and an import
-worker names its parent with `-parentPid` rather than repeating the project. When the
-path is ambiguous, `lsof -a -p <pid> -d cwd -Fn` gives the real working directory.
+three. Three things break naive grouping, and this repo trips all of them:
+
+- **The checkout path contains a space** (`.../Code/Side Projects/...`), so the obvious
+  `sed -E 's/.*(-projectPath [^ ]*).*/\1/'` truncates at `Side` and silently groups
+  unrelated worktrees together. Take everything after the flag up to the next one:
+  `sed -E 's/.*-projectPath (.*)$/\1/; s/ -[a-zA-Z].*$//'`.
+- **A relative `-projectPath .`** — this repo's own bootstrapper invocation — shows as
+  `.` and is missed by any grouping on directory names.
+- **Import workers** identify their parent with `-parentPid`, not by repeating the
+  project.
+
+`lsof -a -p <pid> -d cwd -Fn` resolves all three: it gives the real working directory
+regardless of how the argument was written.
 
 Kill by PID after identifying the specific process, not by pattern.
 
