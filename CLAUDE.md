@@ -165,6 +165,10 @@ other worktrees, but a shared service is not the same thing as an exclusive lock
    "between two runs".
 3. **Want a second run while someone is queued?** Hand off first and rejoin the back
    of the queue. A queued session gets a turn before you take another slot.
+   **Leaving the queue is never permanent** — say so when you leave, and rejoin the
+   same way you joined, at the back. Review feedback and follow-up fixes routinely
+   mean a session that announced it was finished needs another slot, and a protocol
+   that reads as one-way leaves it blocked and silent rather than asking.
 4. **Never poll for a gap and claim it.** A session's sequential Unity invocations
    are not atomic — one run's editor exits before the next one starts — so "no Unity
    is running" cannot distinguish *free* from *between two of someone else's runs*.
