@@ -368,6 +368,16 @@ namespace Blockiverse.Networking
             return true;
         }
         readonly Dictionary<ulong, ProcessedRequestWindow> processedRequestsByClientId = new();
+        // PlayerHello was unlimited and is the most attractive channel to abuse: each one can
+        // create a stashed-inventory entry. Crouch state was unlimited and is now trusted for
+        // placement validation (see ProcessHostPlace), so it must not be floodable either.
+        readonly PerClientRequestRateLimiter playerHelloRateLimiter = new(maxRequests: 5, windowSeconds: 10.0);
+        readonly PerClientRequestRateLimiter crouchStateRateLimiter = new(maxRequests: 20, windowSeconds: 1.0);
+
+        // Counting violations without acting on them means a client can hammer a channel forever
+        // and the server just absorbs it. Sustained abuse now ends the connection.
+        readonly BlockiverseAbuseLedger abuseLedger = new();
+
         readonly PerClientRequestRateLimiter hostCommandRateLimiter =
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
         readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds)> pendingCommandRequests = new();
@@ -1808,7 +1818,12 @@ namespace Blockiverse.Networking
             bool requesterCrouching)
         {
             ReceivedPlaceRequestCount++;
-            lastKnownCrouchStateByClientId[clientId] = requesterCrouching;
+            // The crouch flag on a placement request is client-asserted. Taking it verbatim lets a
+            // client claim "crouching" to place a block inside its own head volume. Trust the
+            // separately tracked (and rate-limited) crouch state instead, and let the request's
+            // claim only make the overlap check stricter -- never more permissive.
+            bool trackedCrouching = lastKnownCrouchStateByClientId.TryGetValue(clientId, out bool tracked) && tracked;
+            requesterCrouching = trackedCrouching && requesterCrouching;
 
             if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.PlaceBlock, sendResponse, out SurvivalCommandResult duplicate))
                 return duplicate;
@@ -1905,6 +1920,11 @@ namespace Blockiverse.Networking
 
             if (TryRejectOutOfReach(clientId, requestId, SurvivalCommandKind.DeathDropInventory, preferredPosition, sendResponse, out SurvivalCommandResult reachFailure))
                 return reachFailure;
+
+            // Checked after reach so a legitimate death is not refused for a stale cooldown when
+            // the request was going to be rejected anyway.
+            if (TryRejectDeathDropCooldown(clientId, requestId, sendResponse, out SurvivalCommandResult cooldownFailure))
+                return cooldownFailure;
 
             Inventory inventory = GetInventory(clientId);
             if (!InventoryHasItems(inventory))
@@ -3080,6 +3100,8 @@ namespace Blockiverse.Networking
         void ClearKnownCrouchState()
         {
             lastKnownCrouchStateByClientId.Clear();
+            lastDeathDropTimeByClientId.Clear();
+            abuseLedger.Clear();
             hasSentLocalCrouchState = false;
             lastSentLocalCrouchState = false;
             nextCrouchStateHeartbeatTime = 0.0f;
@@ -3167,6 +3189,7 @@ namespace Blockiverse.Networking
             if (!hostCommandRateLimiter.TryConsume(senderClientId, HostCommandTimeSeconds))
             {
                 RateLimitedCommandRequestCount++;
+                NoteViolation(senderClientId, "survival command flood");
                 return;
             }
 
@@ -3835,8 +3858,46 @@ namespace Blockiverse.Networking
         {
             processedRequestsByClientId.Remove(clientId);
             hostCommandRateLimiter.RemoveClient(clientId);
+            playerHelloRateLimiter.RemoveClient(clientId);
+            crouchStateRateLimiter.RemoveClient(clientId);
+            abuseLedger.RemoveClient(clientId);
             lastAcceptedHarvestTimeByClientId.Remove(clientId);
             lastKnownCrouchStateByClientId.Remove(clientId);
+            lastDeathDropTimeByClientId.Remove(clientId);
+        }
+
+        // Death-drop cooldown. Vitals are simulated per-peer by design, so the server has NO
+        // authoritative death state to check against -- a client can ask to dump its inventory at
+        // any reachable position at any time. This does not fix that; it bounds it, so the request
+        // cannot be used as a repeatable world-spam primitive. The real fix needs server-side
+        // vitals, which is a larger change than this one.
+        readonly Dictionary<ulong, double> lastDeathDropTimeByClientId = new();
+        public const double DeathDropCooldownSeconds = 30.0;
+
+        bool TryRejectDeathDropCooldown(
+            ulong clientId,
+            uint requestId,
+            bool sendResponse,
+            out SurvivalCommandResult result)
+        {
+            result = default;
+
+            if (!sendResponse)
+                return false;
+
+            double now = HostCommandTimeSeconds;
+            if (lastDeathDropTimeByClientId.TryGetValue(clientId, out double last) &&
+                now - last < DeathDropCooldownSeconds)
+            {
+                NoteViolation(clientId, "death drop cooldown");
+                result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.DeathDropInventory, SurvivalCommandFailureReason.NotAllowed, requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return true;
+            }
+
+            lastDeathDropTimeByClientId[clientId] = now;
+            return false;
         }
 
         static string ResolveLocalPlayerGuid()
@@ -3907,6 +3968,14 @@ namespace Blockiverse.Networking
             if (!CanProcessHostRequests())
                 return;
 
+            // Each accepted hello can bind an identity and reclaim a stashed inventory, so this is
+            // the channel where a flood is worth the most to an attacker.
+            if (!playerHelloRateLimiter.TryConsume(senderClientId, HostCommandTimeSeconds))
+            {
+                NoteViolation(senderClientId, "player hello flood");
+                return;
+            }
+
             if (!SurvivalSyncWireCodec.TryReadBoundedNetworkString(ref reader, MaxNetworkPlayerGuidChars, out string guid))
                 return;
             if (!SurvivalSyncWireCodec.TryReadBoundedNetworkString(ref reader, MaxNetworkPlayerSecretChars, out string secret))
@@ -3932,8 +4001,35 @@ namespace Blockiverse.Networking
             if (!CanProcessHostRequests())
                 return;
 
+            if (!crouchStateRateLimiter.TryConsume(senderClientId, HostCommandTimeSeconds))
+            {
+                NoteViolation(senderClientId, "crouch state flood");
+                return;
+            }
+
             reader.ReadValueSafe(out bool crouching);
             lastKnownCrouchStateByClientId[senderClientId] = crouching;
+        }
+
+        // Records a protocol violation and disconnects the client once sustained abuse crosses the
+        // ledger's threshold. Violations decay, so a single bad network moment does not accumulate
+        // into a disconnect an hour later.
+        void NoteViolation(ulong clientId, string reason)
+        {
+            if (!abuseLedger.RecordViolation(clientId, HostCommandTimeSeconds))
+                return;
+
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return;
+
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Networking,
+                $"Disconnecting client {clientId} for sustained protocol abuse ({reason}).",
+                this);
+
+            abuseLedger.RemoveClient(clientId);
+            networkManager.DisconnectClient(clientId, "Disconnected for sustained protocol abuse.");
         }
 
         bool IsPlayerIdentityBoundToDifferentClient(ulong clientId, string identityKey)
