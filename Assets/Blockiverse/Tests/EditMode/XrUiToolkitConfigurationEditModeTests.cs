@@ -274,9 +274,20 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void LayerMaskArithmeticHandlesTheEdgeLayers()
         {
+            // Control first. Both assertions below are absences, and an absence proves nothing
+            // about arithmetic unless the same rule is shown firing on the same fixture — this
+            // test passed a deliberate sabotage that made Validate() return nothing at all.
+            Assert.That(
+                IssuesOf(HealthyScene(raycastMask: 1 << 10, panels: new[] { HealthyPanel(layer: 31) })),
+                Does.Contain(XrUiToolkitIssue.DocumentColliderNotRaycastable),
+                "layer 31 outside the mask must be condemned, or the two cases below are vacuous.");
+
+            // 1 << 31 is int.MinValue, so a mask test written `> 0` instead of `!= 0` fails here.
             Assert.That(
                 IssuesOf(HealthyScene(raycastMask: 1 << 31, panels: new[] { HealthyPanel(layer: 31) })),
                 Does.Not.Contains(XrUiToolkitIssue.DocumentColliderNotRaycastable));
+
+            // -1 is Unity's "Everything".
             Assert.That(
                 IssuesOf(HealthyScene(raycastMask: -1, panels: new[] { HealthyPanel(layer: 5) })),
                 Does.Not.Contains(XrUiToolkitIssue.DocumentColliderNotRaycastable));

@@ -67,8 +67,16 @@ namespace Blockiverse.Tests.EditMode
             string adr = File.ReadAllText("docs/adr/0006-quest-openxr-rendering-and-asset-policy.md");
             string standards = File.ReadAllText("docs/architecture/quest-runtime-engineering-standards.md");
 
-            StringAssert.Contains("composition menu cursor", menuRules);
-            StringAssert.Contains("shared Quad composition surface", testingReadme);
+            // These two previously pinned the shared-Quad composition-menu model -- which ADR 0006's
+            // own 2026-08-13 amendment reversed after on-headset failures, and which ADR 0010
+            // supersedes entirely. The suite was defending doctrine the architecture had already
+            // abandoned, and the device-validation checklist was sending testers to look for a
+            // cursor that no longer exists. They now pin the current policy, and forbid the old one
+            // coming back by name.
+            StringAssert.Contains("direct world-space surfaces", menuRules);
+            StringAssert.Contains("only** for the startup splash", menuRules);
+            Assert.That(menuRules, Does.Not.Contain("composition menu cursor"));
+            StringAssert.Contains("no shared composition Quad", testingReadme);
             StringAssert.Contains("com.unity.addressables", adr);
             StringAssert.Contains("No recurring managed allocations", standards);
             StringAssert.Contains("Addressables", standards);

@@ -351,7 +351,7 @@ namespace Blockiverse.Tests.EditMode
                 new[]
                 {
                     new XrUiToolkitPanelState(
-                        proof.gameObject.name, true, true, true, true, true, layer: 5),
+                        proof.gameObject.name, true, true, true, true, true, colliderLayer: 5),
                 });
 
             Assert.That(
