@@ -1,0 +1,135 @@
+/*
+ * Base presentation shared by every Blockiverse UI Toolkit surface.
+ * Tokens.uss must be applied alongside this sheet; every value here resolves from it.
+ */
+
+.bv-screen {
+    flex-grow: 1;
+    background-color: var(--bv-color-background);
+    color: var(--bv-color-text-primary);
+    padding-left: var(--bv-space-4);
+    padding-right: var(--bv-space-4);
+    padding-top: var(--bv-space-4);
+    padding-bottom: var(--bv-space-4);
+    font-size: var(--bv-type-body);
+}
+
+.bv-screen__header {
+    flex-shrink: 0;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--bv-color-border);
+    padding-bottom: var(--bv-space-3);
+    margin-bottom: var(--bv-space-3);
+}
+
+.bv-screen__title {
+    font-size: var(--bv-type-title);
+    -unity-font-style: bold;
+    color: var(--bv-color-text-primary);
+}
+
+.bv-screen__content {
+    flex-grow: 1;
+}
+
+.bv-screen__footer {
+    flex-shrink: 0;
+    flex-direction: row;
+    margin-top: var(--bv-space-3);
+}
+
+.bv-heading {
+    font-size: var(--bv-type-heading);
+    color: var(--bv-color-text-secondary);
+    margin-top: var(--bv-space-3);
+    margin-bottom: var(--bv-space-1);
+}
+
+/* Controls -------------------------------------------------------------- */
+
+.bv-button {
+    min-height: var(--bv-control-min-height);
+    padding-left: var(--bv-control-horizontal-padding);
+    padding-right: var(--bv-control-horizontal-padding);
+    margin-top: var(--bv-space-2);
+    margin-bottom: var(--bv-space-2);
+    font-size: var(--bv-type-control);
+    color: var(--bv-color-text-primary);
+    background-color: var(--bv-color-surface-raised);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-color: var(--bv-color-border);
+    border-right-color: var(--bv-color-border);
+    border-top-color: var(--bv-color-border);
+    border-bottom-color: var(--bv-color-border);
+    border-top-left-radius: var(--bv-radius-medium);
+    border-top-right-radius: var(--bv-radius-medium);
+    border-bottom-left-radius: var(--bv-radius-medium);
+    border-bottom-right-radius: var(--bv-radius-medium);
+}
+
+.bv-button:hover {
+    background-color: var(--bv-color-accent);
+    color: var(--bv-color-background);
+}
+
+/* Focus and hover are deliberately distinguishable rather than sharing one treatment: with a
+   controller ray, hover follows the pointer while focus stays where the last activation left it,
+   and a player who cannot tell them apart cannot tell what Submit will hit. Hover fills; focus
+   outlines. */
+.bv-button:focus {
+    border-left-color: var(--bv-color-focus);
+    border-right-color: var(--bv-color-focus);
+    border-top-color: var(--bv-color-focus);
+    border-bottom-color: var(--bv-color-focus);
+}
+
+.bv-button:active {
+    background-color: var(--bv-color-accent);
+    color: var(--bv-color-background);
+    scale: 0.98 0.98;
+}
+
+.bv-button:disabled {
+    color: var(--bv-color-disabled);
+    background-color: var(--bv-color-surface);
+    opacity: 1;
+}
+
+.bv-button--primary {
+    background-color: var(--bv-color-accent);
+    color: var(--bv-color-background);
+    -unity-font-style: bold;
+}
+
+.bv-button--danger {
+    border-left-color: var(--bv-color-danger);
+    border-right-color: var(--bv-color-danger);
+    border-top-color: var(--bv-color-danger);
+    border-bottom-color: var(--bv-color-danger);
+    color: var(--bv-color-danger);
+}
+
+.bv-field {
+    min-height: var(--bv-control-min-height);
+    margin-top: var(--bv-space-2);
+    margin-bottom: var(--bv-space-2);
+    font-size: var(--bv-type-control);
+}
+
+/* Status ---------------------------------------------------------------- */
+
+.bv-status {
+    font-size: var(--bv-type-caption);
+    color: var(--bv-color-text-secondary);
+    white-space: normal;
+    min-height: 56px;
+}
+
+/* State is never signalled by colour alone (spec §12.2): these modifiers change the colour, and
+   the controller prefixes the text with a word carrying the same meaning. */
+.bv-status--success { color: var(--bv-color-success); }
+.bv-status--warning { color: var(--bv-color-warning); }
+.bv-status--danger  { color: var(--bv-color-danger); }

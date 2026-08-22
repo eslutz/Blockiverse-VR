@@ -299,6 +299,12 @@ __pycache__/
 # Tabs Studio
 *.tss
 
+# ...but .tss is also Unity UI Toolkit's ThemeStyleSheet extension, and the rule above is
+# inherited from the stock Visual Studio ignore list, not written for this project. A theme
+# under Assets/ that is silently untracked works on the machine that made it and renders every
+# control unstyled on a fresh clone or in CI, with nothing but a generic "no theme" warning.
+!Assets/**/*.tss
+
 # Telerik's JustMock configuration file
 *.jmconfig
 

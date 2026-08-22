@@ -9,6 +9,7 @@
     "Blockiverse.Networking",
     "Blockiverse.Survival",
     "Blockiverse.UI",
+    "Blockiverse.UI.Toolkit",
     "Blockiverse.VR",
     "Oculus.AvatarSDK2",
     "Oculus.VR.Editor",

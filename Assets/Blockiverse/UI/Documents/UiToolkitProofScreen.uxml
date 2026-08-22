@@ -1,0 +1,43 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Phase 1 proof panel (ADR 0010). This is scaffolding, not a production screen: it exists to
+        prove that one control of each kind is reachable, hittable and legible through an XRI
+        controller ray on a real headset, before any routed screen is migrated.
+
+        Stylesheets are attached by UiToolkitProofPanel from serialized references rather than by a
+        <Style> element, because a UXML <Style src> carries the target asset's GUID and fileID and
+        those do not exist until Unity has imported the sheet. The bootstrapper assigns them, which
+        is the same reference-wiring pattern the rest of the generated scene uses.
+
+        Every control carries a stable name; the controller queries by name and nothing else.
+    -->
+    <engine:VisualElement name="bv-proof-screen" class="bv-screen">
+        <engine:VisualElement name="bv-proof-header" class="bv-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-proof-title" text="UI Toolkit Proof" class="bv-screen__title" picking-mode="Ignore" />
+            <engine:Label name="bv-proof-subtitle" picking-mode="Ignore" class="bv-status"
+                          text="Point at each control with either controller. Every interaction reports below." />
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-proof-content" class="bv-screen__content" mode="Vertical">
+            <engine:Label text="Button" class="bv-heading" picking-mode="Ignore" />
+            <engine:Button name="bv-proof-button" text="Activate" class="bv-button bv-button--primary" />
+
+            <engine:Label text="Toggle" class="bv-heading" picking-mode="Ignore" />
+            <engine:Toggle name="bv-proof-toggle" label="Toggle me" class="bv-field" />
+
+            <engine:Label text="Slider" class="bv-heading" picking-mode="Ignore" />
+            <engine:Slider name="bv-proof-slider" low-value="0" high-value="100" value="50" show-input-field="false" class="bv-field" />
+
+            <engine:Label text="Text field" class="bv-heading" picking-mode="Ignore" />
+            <engine:TextField name="bv-proof-text-field" placeholder-text="Tap to open the Quest keyboard" class="bv-field" />
+
+            <engine:Label text="Scrolling" class="bv-heading" picking-mode="Ignore" />
+            <engine:Label name="bv-proof-scroll-filler" picking-mode="Ignore" class="bv-status"
+                          text="This block exists so the scroll view has somewhere to scroll to. Thumbstick scrolling is bound to UI Scroll on each hand; drag scrolling uses the trigger. If the scrollbar handle is too small to grab reliably in the headset, that is a finding, not a nuisance — record it rather than working around it.&#10;&#10;Line 1&#10;Line 2&#10;Line 3&#10;Line 4&#10;Line 5&#10;Line 6&#10;Line 7&#10;Line 8&#10;Line 9&#10;Line 10&#10;&#10;End of scroll region." />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-proof-footer" class="bv-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-proof-status" class="bv-status" picking-mode="Ignore" text="Ready. No interaction yet." />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

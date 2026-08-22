@@ -1,0 +1,16 @@
+{
+  "name": "Blockiverse.UI.Toolkit",
+  "rootNamespace": "Blockiverse.UI.Toolkit",
+  "references": [
+    "Blockiverse.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

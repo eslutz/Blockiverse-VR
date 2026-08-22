@@ -1,0 +1,50 @@
+/*
+ * Shared design tokens for every Blockiverse UI Toolkit surface (ADR 0010, spec §10.2).
+ *
+ * No screen stylesheet may invent its own button colour, font scale, focus treatment or standard
+ * spacing. If a value is needed twice, it belongs here.
+ *
+ * Sizes are in UI pixels. Physical size in the headset is
+ *   metres = UIDocument.worldSpaceSize.x / PanelSettings.pixelsPerUnit * transform.localScale.x
+ * so at the project's 100 pixels-per-unit and 0.1 panel scale, 1000 px reads as 1.0 m wide.
+ * That is why the control minimum height is 64 px: 6.4 cm of physical target, which is large
+ * enough to hit reliably with controller tremor at 1.2 m. It is NOT a screen-UI number.
+ */
+
+:root {
+    /* Surfaces. Deliberately opaque rather than translucent: a see-through menu over a voxel world
+       loses contrast wherever the world behind it is bright, and Quest has no cheap backdrop blur. */
+    --bv-color-background: rgb(18, 20, 24);
+    --bv-color-surface: rgb(28, 32, 38);
+    --bv-color-surface-raised: rgb(40, 45, 53);
+    --bv-color-border: rgb(72, 80, 92);
+
+    --bv-color-text-primary: rgb(240, 243, 247);
+    --bv-color-text-secondary: rgb(168, 178, 192);
+
+    --bv-color-accent: rgb(96, 176, 240);
+    --bv-color-focus: rgb(255, 206, 84);
+    --bv-color-success: rgb(126, 200, 128);
+    --bv-color-warning: rgb(232, 176, 80);
+    --bv-color-danger: rgb(224, 104, 96);
+    --bv-color-disabled: rgb(96, 102, 112);
+
+    --bv-space-1: 4px;
+    --bv-space-2: 8px;
+    --bv-space-3: 16px;
+    --bv-space-4: 24px;
+    --bv-space-5: 32px;
+    --bv-space-6: 48px;
+
+    --bv-radius-small: 4px;
+    --bv-radius-medium: 8px;
+
+    --bv-type-caption: 20px;
+    --bv-type-body: 26px;
+    --bv-type-control: 28px;
+    --bv-type-heading: 38px;
+    --bv-type-title: 54px;
+
+    --bv-control-min-height: 64px;
+    --bv-control-horizontal-padding: 20px;
+}
