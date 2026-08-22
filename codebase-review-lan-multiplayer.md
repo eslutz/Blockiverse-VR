@@ -1,6 +1,16 @@
 # Codebase Review — LAN Multiplayer Networking Expert
 
 > Workflow run `wf_53b36881-009`, agent `afbb058d3510b422a`. Raw expert output, pre-verification.
+>
+> **STALE as of 2026-08-21 — do not treat these findings as current.** Verified against the code
+> during the P2P local-play review: findings 3 (single-player save overwritten by a LAN session),
+> 4 (multiplayer saves never persisted inventories), 5 (remote avatars stuck at world origin), and
+> 6 (missing `INTERNET` permission) are all fixed. Finding 1 (oversized late-join snapshot) was
+> still real but under a different cause than described — the message had since moved to
+> fragmented delivery, so the ceiling was Unity Transport's `MaxPayloadSize`, not NGO's
+> non-fragmented cap — and is fixed by snapshot batching. Finding 2 (oversized inventory
+> snapshots) was already addressed by fragmented delivery. File paths in this document also
+> predate the `Blockiverse.Networking` assembly extraction.
 
 ## Area Reviewed
 

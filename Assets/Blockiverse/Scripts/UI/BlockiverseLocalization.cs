@@ -215,6 +215,24 @@ public const string SettingsAudio = "ui.action.settings.audio";
             public const string LanLastDisconnect = "ui.status.lan.last_disconnect";
             public const string LanFailed = "ui.status.lan.failed";
 
+            // Join refusals. The host sends a BlockiverseJoinRejectionReason name as the Netcode
+            // disconnect reason; the session menu maps it to one of these.
+            public const string LanRejectedProtocolMismatch = "ui.status.lan.rejected.protocol_mismatch";
+            public const string LanRejectedGameVersionMismatch = "ui.status.lan.rejected.game_version_mismatch";
+            public const string LanRejectedBlockRegistryMismatch = "ui.status.lan.rejected.block_registry_mismatch";
+            public const string LanRejectedItemRegistryMismatch = "ui.status.lan.rejected.item_registry_mismatch";
+            public const string LanRejectedRecipeRegistryMismatch = "ui.status.lan.rejected.recipe_registry_mismatch";
+            public const string LanRejectedUnsupportedWorldVersion = "ui.status.lan.rejected.unsupported_world_version";
+            public const string LanRejectedSessionFull = "ui.status.lan.rejected.session_full";
+            public const string LanRejectedInvalidJoinPayload = "ui.status.lan.rejected.invalid_join_payload";
+
+            // LAN discovery.
+            public const string LanDiscoverySearching = "ui.status.lan.discovery.searching";
+            public const string LanDiscoveryNoneFound = "ui.status.lan.discovery.none_found";
+            public const string LanDiscoveryUnavailable = "ui.status.lan.discovery.unavailable";
+            public const string LanDiscoveryEntry = "ui.generated.lan.discovery_entry";
+            public const string LanDiscoveryEntryFull = "ui.generated.lan.discovery_entry_full";
+
             public const string CreativeWeather = "ui.status.creative.weather";
             public const string CreativeCornerA = "ui.status.creative.corner_a";
             public const string CreativeCornerB = "ui.status.creative.corner_b";
@@ -458,6 +476,21 @@ public const string SettingsAudio = "ui.action.settings.audio";
             [Keys.LanUnableToReach] = "Unable to reach LAN session at {0}:{1}. Check that the host is on the same LAN and try Join again.",
             [Keys.LanLastDisconnect] = "{0} Last disconnect: {1}",
             [Keys.LanFailed] = "LAN session failed.",
+
+            [Keys.LanRejectedProtocolMismatch] = "The host is running a different multiplayer protocol version. Both headsets need the same build of Blockiverse VR.",
+            [Keys.LanRejectedGameVersionMismatch] = "The host is running a different version of Blockiverse VR. Update both headsets to the same version and try again.",
+            [Keys.LanRejectedBlockRegistryMismatch] = "The host's block registry does not match this build, so blocks would not line up. Use the same version of Blockiverse VR on both headsets.",
+            [Keys.LanRejectedItemRegistryMismatch] = "The host's item registry does not match this build, so items would not line up. Use the same version of Blockiverse VR on both headsets.",
+            [Keys.LanRejectedRecipeRegistryMismatch] = "The host's crafting recipes do not match this build. Use the same version of Blockiverse VR on both headsets.",
+            [Keys.LanRejectedUnsupportedWorldVersion] = "The host's world save format does not match this build. Use the same version of Blockiverse VR on both headsets.",
+            [Keys.LanRejectedSessionFull] = "The LAN session is full. Try again when a player leaves.",
+            [Keys.LanRejectedInvalidJoinPayload] = "The host refused the join request. Check that both headsets are on the same LAN and running the same build.",
+
+            [Keys.LanDiscoverySearching] = "Looking for LAN sessions...",
+            [Keys.LanDiscoveryNoneFound] = "No LAN sessions found. Enter the host's address to join directly.",
+            [Keys.LanDiscoveryUnavailable] = "LAN discovery is unavailable on this network. Enter the host's address to join directly.",
+            [Keys.LanDiscoveryEntry] = "{0} ({1}:{2}) {3}/{4}",
+            [Keys.LanDiscoveryEntryFull] = "{0} ({1}:{2}) Full",
 
             [Keys.CreativeWeather] = "Weather: {0}",
             [Keys.CreativeCornerA] = "corner A",

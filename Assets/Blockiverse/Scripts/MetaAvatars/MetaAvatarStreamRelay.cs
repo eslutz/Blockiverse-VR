@@ -15,7 +15,6 @@ namespace Blockiverse.MetaAvatars
 
         BlockiverseMetaAvatarPresenter localFirstPersonPresenter;
         BlockiverseNetworkAvatarRig ownerNetworkFallbackRig;
-        readonly List<ulong> remoteStreamTargetClientIds = new();
         readonly List<MetaAvatarStreamMessage> _sendBuffer = new();
         readonly MetaAvatarStreamReassembler _reassembler = new();
         double nextSendTime;
@@ -110,11 +109,13 @@ namespace Blockiverse.MetaAvatars
 
             nextSendTime = nowLocal + minInterval;
             for (int i = 0; i < _sendBuffer.Count; i++)
-                SubmitAvatarStreamServerRpc(_sendBuffer[i]);
+                SubmitAvatarStreamRpc(_sendBuffer[i]);
         }
 
-        [ServerRpc(Delivery = RpcDelivery.Unreliable)]
-        void SubmitAvatarStreamServerRpc(MetaAvatarStreamMessage message)
+        // InvokePermission.Owner preserves the old [ServerRpc] default (which required
+        // ownership): only the player this relay belongs to may push its avatar stream.
+        [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Owner)]
+        void SubmitAvatarStreamRpc(MetaAvatarStreamMessage message)
         {
             if (!message.HasValidPayload)
                 return;
@@ -129,13 +130,13 @@ namespace Blockiverse.MetaAvatars
                 message.FragmentCount,
                 message.Payload);
 
-            ClientRpcParams recipients = BuildRemoteStreamRecipients();
-            if (remoteStreamTargetClientIds.Count > 0)
-                ReceiveAvatarStreamClientRpc(stamped, recipients);
+            ReceiveAvatarStreamRpc(stamped);
         }
 
-        [ClientRpc(Delivery = RpcDelivery.Unreliable)]
-        void ReceiveAvatarStreamClientRpc(MetaAvatarStreamMessage message, ClientRpcParams clientRpcParams = default)
+        // SendTo.NotOwner reproduces the old hand-built recipient list (every connected client
+        // except the owner, host included) without the per-fragment list rebuild.
+        [Rpc(SendTo.NotOwner, Delivery = RpcDelivery.Unreliable)]
+        void ReceiveAvatarStreamRpc(MetaAvatarStreamMessage message)
         {
             if (!message.HasValidPayload)
                 return;
@@ -159,28 +160,6 @@ namespace Blockiverse.MetaAvatars
 
             remotePresenter ??= GetComponent<BlockiverseMetaAvatarPresenter>();
             remotePresenter?.ApplyRemoteStream(complete);
-        }
-
-        ClientRpcParams BuildRemoteStreamRecipients()
-        {
-            remoteStreamTargetClientIds.Clear();
-
-            if (NetworkManager != null)
-            {
-                foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
-                {
-                    if (clientId != OwnerClientId)
-                        remoteStreamTargetClientIds.Add(clientId);
-                }
-            }
-
-            return new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams
-                {
-                    TargetClientIds = remoteStreamTargetClientIds,
-                },
-            };
         }
 
         void HideOwnerNetworkFallbackWhenLocalAvatarIsReady()

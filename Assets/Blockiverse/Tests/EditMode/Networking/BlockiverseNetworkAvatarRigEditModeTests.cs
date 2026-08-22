@@ -2,6 +2,7 @@ using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using NUnit.Framework;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -125,16 +126,30 @@ namespace Blockiverse.Tests.Networking.EditMode
         public void AvatarPoseRpcsUseUnreliableDelivery()
         {
             MethodInfo submit = typeof(BlockiverseNetworkAvatarRig).GetMethod(
-                "SubmitAvatarPoseServerRpc",
+                "SubmitAvatarPoseRpc",
                 BindingFlags.Instance | BindingFlags.NonPublic);
             MethodInfo receive = typeof(BlockiverseNetworkAvatarRig).GetMethod(
-                "ReceiveAvatarPoseClientRpc",
+                "ReceiveAvatarPoseRpc",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             Assert.That(submit, Is.Not.Null);
             Assert.That(receive, Is.Not.Null);
-            Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
-            Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+
+            // Pose is disposable presentation data at 30 Hz: a dropped frame is cheaper than a
+            // retransmit, and a retransmitted stale pose is actively worse than none.
+            Assert.That(submit.GetCustomAttribute<RpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+            Assert.That(receive.GetCustomAttribute<RpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+
+            // The universal-RPC migration must not have quietly widened who can publish a pose:
+            // the old [ServerRpc] required ownership by default, the new attribute does not.
+            Assert.That(
+                submit.GetCustomAttribute<RpcAttribute>()?.InvokePermission,
+                Is.EqualTo(RpcInvokePermission.Owner));
+
+            // The SendTo target is consumed by Netcode's ILPP and is not readable through
+            // reflection, so the pinned proxy is that the legacy attributes are gone.
+            Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>(), Is.Null);
+            Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>(), Is.Null);
         }
 
         [Test]
@@ -257,6 +272,198 @@ namespace Blockiverse.Tests.Networking.EditMode
             {
                 Object.DestroyImmediate(rigRoot);
             }
+        }
+
+        [Test]
+        public void CompressedPoseRoundTripsWithinVisualTolerance()
+        {
+            var expected = new BlockiverseNetworkAvatarRig.AvatarPose
+            {
+                Sequence = 42u,
+                RootPosition = new Vector3(191.25f, 96.5f, -37.125f),
+                RootRotation = Quaternion.Euler(0.0f, 137.0f, 0.0f),
+                HeadLocalPosition = new Vector3(0.02f, 1.63f, 0.05f),
+                HeadLocalRotation = Quaternion.Euler(18.0f, -42.0f, 6.0f),
+                LeftHandLocalPosition = new Vector3(-0.38f, 1.18f, 0.28f),
+                LeftHandLocalRotation = Quaternion.Euler(-70.0f, 12.0f, 95.0f),
+                RightHandLocalPosition = new Vector3(0.38f, 1.18f, 0.28f),
+                RightHandLocalRotation = Quaternion.Euler(33.0f, 210.0f, -15.0f),
+            };
+
+            BlockiverseNetworkAvatarRig.AvatarPose actual = RoundTrip(expected);
+
+            Assert.That(actual.Sequence, Is.EqualTo(expected.Sequence));
+
+            // The root carries world coordinates and is sent at full precision.
+            Assert.That(actual.RootPosition, Is.EqualTo(expected.RootPosition));
+
+            // Offsets are 16-bit fixed point over +/-4 m; sub-millimetre is far below what a
+            // player can perceive on a remote avatar.
+            Assert.That(
+                Vector3.Distance(actual.HeadLocalPosition, expected.HeadLocalPosition),
+                Is.LessThan(0.001f));
+            Assert.That(
+                Vector3.Distance(actual.LeftHandLocalPosition, expected.LeftHandLocalPosition),
+                Is.LessThan(0.001f));
+            Assert.That(
+                Vector3.Distance(actual.RightHandLocalPosition, expected.RightHandLocalPosition),
+                Is.LessThan(0.001f));
+
+            Assert.That(Quaternion.Angle(actual.RootRotation, expected.RootRotation), Is.LessThan(0.5f));
+            Assert.That(Quaternion.Angle(actual.HeadLocalRotation, expected.HeadLocalRotation), Is.LessThan(0.5f));
+            Assert.That(Quaternion.Angle(actual.LeftHandLocalRotation, expected.LeftHandLocalRotation), Is.LessThan(0.5f));
+            Assert.That(Quaternion.Angle(actual.RightHandLocalRotation, expected.RightHandLocalRotation), Is.LessThan(0.5f));
+        }
+
+        [Test]
+        public void CompressedPoseIsSubstantiallySmallerThanTheUncompressedLayout()
+        {
+            var pose = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            var writer = new FastBufferWriter(256, Allocator.Temp);
+
+            try
+            {
+                writer.WriteNetworkSerializable(pose);
+
+                // 8 uncompressed Vector3/Quaternion fields would be 112 bytes before the sequence.
+                Assert.That(writer.Length, Is.LessThan(64));
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        [Test]
+        public void RotationCompressionHandlesEveryDominantComponentAndDegenerateInput()
+        {
+            // One rotation per dominant quaternion component, so the 2-bit largest-index encoding
+            // is exercised in all four branches.
+            var rotations = new[]
+            {
+                Quaternion.identity,
+                Quaternion.Euler(90.0f, 0.0f, 0.0f),
+                Quaternion.Euler(0.0f, 90.0f, 0.0f),
+                Quaternion.Euler(0.0f, 0.0f, 90.0f),
+                Quaternion.Euler(179.0f, 0.0f, 0.0f),
+                Quaternion.Euler(-120.0f, 47.0f, 88.0f),
+            };
+
+            foreach (Quaternion rotation in rotations)
+            {
+                Quaternion decompressed = BlockiverseNetworkAvatarRig.AvatarPose.DecompressRotation(
+                    BlockiverseNetworkAvatarRig.AvatarPose.CompressRotation(rotation));
+
+                Assert.That(
+                    Quaternion.Angle(decompressed, rotation),
+                    Is.LessThan(0.5f),
+                    $"Rotation {rotation.eulerAngles} did not survive compression.");
+            }
+
+            // A zero quaternion cannot be normalized; it must fall back to identity rather than
+            // producing NaNs that would propagate into a remote avatar's transform.
+            Quaternion degenerate = BlockiverseNetworkAvatarRig.AvatarPose.DecompressRotation(
+                BlockiverseNetworkAvatarRig.AvatarPose.CompressRotation(new Quaternion(0.0f, 0.0f, 0.0f, 0.0f)));
+
+            Assert.That(float.IsNaN(degenerate.x), Is.False);
+            Assert.That(Quaternion.Angle(degenerate, Quaternion.identity), Is.LessThan(0.5f));
+        }
+
+        [Test]
+        public void StaleRemotePosesAreDroppedAndNewerOnesApplied()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            BlockiverseNetworkAvatarRig.AvatarPose first = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            first.Sequence = 10u;
+            first.RootPosition = new Vector3(5.0f, 0.0f, 0.0f);
+            avatarRig.ApplyRemotePose(first);
+
+            // Arrived late after overtaking: applying it would snap the remote body backwards.
+            BlockiverseNetworkAvatarRig.AvatarPose stale = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            stale.Sequence = 9u;
+            stale.RootPosition = new Vector3(-99.0f, 0.0f, 0.0f);
+            avatarRig.ApplyRemotePose(stale);
+
+            Assert.That(CurrentTargetPose(avatarRig).RootPosition.x, Is.EqualTo(5.0f).Within(0.001f));
+
+            BlockiverseNetworkAvatarRig.AvatarPose newer = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            newer.Sequence = 11u;
+            newer.RootPosition = new Vector3(7.0f, 0.0f, 0.0f);
+            avatarRig.ApplyRemotePose(newer);
+
+            Assert.That(CurrentTargetPose(avatarRig).RootPosition.x, Is.EqualTo(7.0f).Within(0.001f));
+        }
+
+        [Test]
+        public void PoseSequenceComparisonSurvivesTheUnsignedWrap()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            BlockiverseNetworkAvatarRig.AvatarPose beforeWrap = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            beforeWrap.Sequence = uint.MaxValue;
+            beforeWrap.RootPosition = new Vector3(1.0f, 0.0f, 0.0f);
+            avatarRig.ApplyRemotePose(beforeWrap);
+
+            // A plain '>' would treat this as ancient and stall the avatar for the rest of the
+            // session; serial-number arithmetic sees it as the next pose.
+            BlockiverseNetworkAvatarRig.AvatarPose afterWrap = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            afterWrap.Sequence = 1u;
+            afterWrap.RootPosition = new Vector3(2.0f, 0.0f, 0.0f);
+            avatarRig.ApplyRemotePose(afterWrap);
+
+            Assert.That(CurrentTargetPose(avatarRig).RootPosition.x, Is.EqualTo(2.0f).Within(0.001f));
+        }
+
+        [Test]
+        public void UnsequencedPosesAreAlwaysApplied()
+        {
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            BlockiverseNetworkAvatarRig.AvatarPose sequenced = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            sequenced.Sequence = 100u;
+            avatarRig.ApplyRemotePose(sequenced);
+
+            // Sequence 0 means "applied directly" (local rig drives, tests), not "oldest pose".
+            BlockiverseNetworkAvatarRig.AvatarPose unsequenced = BlockiverseNetworkAvatarRig.AvatarPose.Default;
+            unsequenced.RootPosition = new Vector3(3.0f, 0.0f, 0.0f);
+            avatarRig.ApplyRemotePose(unsequenced);
+
+            Assert.That(CurrentTargetPose(avatarRig).RootPosition.x, Is.EqualTo(3.0f).Within(0.001f));
+        }
+
+        static BlockiverseNetworkAvatarRig.AvatarPose RoundTrip(BlockiverseNetworkAvatarRig.AvatarPose pose)
+        {
+            var writer = new FastBufferWriter(256, Allocator.Temp);
+
+            try
+            {
+                writer.WriteNetworkSerializable(pose);
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+
+                try
+                {
+                    reader.ReadNetworkSerializable(out BlockiverseNetworkAvatarRig.AvatarPose result);
+                    return result;
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        static BlockiverseNetworkAvatarRig.AvatarPose CurrentTargetPose(BlockiverseNetworkAvatarRig avatarRig)
+        {
+            FieldInfo field = typeof(BlockiverseNetworkAvatarRig).GetField(
+                "targetRemotePose",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null, "The remote pose target should remain present.");
+            return (BlockiverseNetworkAvatarRig.AvatarPose)field.GetValue(avatarRig);
         }
 
         BlockiverseNetworkAvatarRig CreateAvatarRig()

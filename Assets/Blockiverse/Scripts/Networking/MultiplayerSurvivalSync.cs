@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Blockiverse.Core;
 using Blockiverse.Networking;
 using Blockiverse.Persistence;
 using Blockiverse.Survival;
@@ -254,6 +255,9 @@ namespace Blockiverse.Networking
         const string PlayerGuidPrefKey = "Blockiverse.PlayerGuid";
         const string PlayerSecretPrefKey = "Blockiverse.PlayerSecret";
         const int CommandRequestMessageBytes = 128;
+
+        /// <summary>Maximum unanswered survival commands before new ones are dropped (ruleset §14).</summary>
+        public const int MaxPendingCommandRequests = 64;
         const int CommandResultMessageBytes = 128;
         const int StationSnapshotMessageBytes = 512;
         const int StationRemovedSnapshotType = -1;
@@ -2981,6 +2985,18 @@ namespace Blockiverse.Networking
 
         void SendCommandRequest(SurvivalCommandKind commandKind, uint requestId, CommandPayloadWriter writePayload, BlockPosition position = default)
         {
+            // Ruleset §14: cap unanswered commands. Without this a client that keeps acting while
+            // the host is unreachable grows a pending set that no reply will ever drain, and the
+            // survival HUD stays wedged on stale mirrors long after the session is unrecoverable.
+            if (pendingCommandRequests.Count >= MaxPendingCommandRequests)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Networking,
+                    $"Dropping survival command kind={commandKind}: {pendingCommandRequests.Count} requests are already awaiting host validation.",
+                    this);
+                return;
+            }
+
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
             pendingCommandRequests[requestId] = (commandKind, position);

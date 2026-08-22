@@ -47,6 +47,30 @@ Unity editor domain reloads can also log `Call to StopSubsystems without an init
 
 Historical multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md). New multiplayer validation should follow [Voxel Multiplayer and Networking Ruleset](../rulesets/voxel_multiplayer_networking_ruleset.md).
 
+### Multiplayer Play Mode (two virtual players in one editor)
+
+`com.unity.multiplayer.playmode` is a committed dependency (`Packages/manifest.json`). It runs
+additional virtual players against the same project, which is the fastest way to reproduce
+anything that only goes wrong with a real second peer — late join into a played world, join
+refusals, avatar pose, disconnect handling.
+
+1. Open the project and `Window > Multiplayer > Multiplayer Play Mode`.
+2. Activate one virtual player. Leave the main editor as the host.
+3. Enter Play Mode, host from the LAN panel in the main editor, and join from the virtual player
+   (LAN discovery lists the host, or enter `127.0.0.1`).
+
+Use it for iteration, not as an acceptance gate: `scripts/unity/run-tests.sh` and the on-device
+Quest pass remain the gates. Two virtual players on one machine share a clock and a network
+stack, so they cannot tell you anything about real Wi-Fi behaviour.
+
+### LAN discovery on a real network
+
+The host broadcasts a signed UDP beacon on port 7778 once per second while hosting; clients
+listen only while the LAN panel is open. Some access points drop broadcast traffic between
+clients ("client isolation" / "AP isolation"), and on those networks the session list stays
+empty by design — manual address entry is the documented fallback, and the panel says so. When
+validating discovery on device, confirm both the discovered-list path and the typed-address path.
+
 Runtime diagnostics use local Unity and player logs only. Use `hzdb` for Quest player logs and other Quest-device operations whenever it exposes the needed command; use `adb` directly only as a documented fallback. On Eric's current development machine, `hzdb` resolves to `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`, but agents should verify the live path with `command -v hzdb` because the active `nvm` Node can change. If `node` or `npm` resolves outside the `hzdb` Node prefix, put the `hzdb` prefix first on `PATH` for package-manager verification. Capture recent Quest player logs with:
 
 ```sh

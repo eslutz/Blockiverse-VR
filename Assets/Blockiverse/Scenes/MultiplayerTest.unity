@@ -2667,6 +2667,10 @@ MonoBehaviour:
   worldSessionController: {fileID: 0}
   menuController: {fileID: 0}
   audioCuePlayer: {fileID: 0}
+  discovery: {fileID: 0}
+  discoveryButtons: []
+  discoveryLabels: []
+  discoveryStatusText: {fileID: 0}
 --- !u!114 &2058886983
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 4217372812379613015}
   - component: {fileID: 6306791826706361041}
   - component: {fileID: 7304802037864853859}
+  - component: {fileID: 4189121618780559820}
   m_Layer: 0
   m_Name: BlockiverseNetworkManager
   m_TagString: Untagged
@@ -55,12 +56,12 @@ MonoBehaviour:
   m_ProtocolType: 0
   m_UseWebSockets: 0
   m_UseEncryption: 0
-  m_MaxPacketQueueSize: 128
-  m_MaxPayloadSize: 6144
+  m_MaxPacketQueueSize: 256
+  m_MaxPayloadSize: 16384
   m_HeartbeatTimeoutMS: 500
   m_ConnectTimeoutMS: 1000
-  m_MaxConnectAttempts: 60
-  m_DisconnectTimeoutMS: 30000
+  m_MaxConnectAttempts: 10
+  m_DisconnectTimeoutMS: 5000
   ConnectionData:
     Address: 127.0.0.1
     Port: 7777
@@ -226,3 +227,18 @@ MonoBehaviour:
   vitalsRuntimeObject: {fileID: 0}
   saveFileName: multiplayer-world.vxlworld
   worldName: Multiplayer World
+--- !u!114 &4189121618780559820
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2707583939126641716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af92738cc77c04d6da045ba2342c03ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Networking::Blockiverse.Networking.BlockiverseLanDiscovery
+  session: {fileID: 0}
+  discoveryPort: 7778
+  broadcastWhileHosting: 1
