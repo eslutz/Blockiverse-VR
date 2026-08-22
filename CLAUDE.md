@@ -88,10 +88,16 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
 ```
 
-Every line is a real editor process; the `-projectPath` argument says which project
-it belongs to. Proceed only when the sole hit is this project's stuck run (or there
-are none). Do not use `pgrep -f`/`pkill -f` with a bare `Unity` pattern for this
-check — see "Matching Unity Processes Safely" below.
+Read this by **grouping on `-projectPath`, not by counting lines**. One run
+routinely shows two or three: the editor itself launches import workers from the
+same binary (`-adb2 ... -name AssetImportWorkerHW0`), and those match too. That is
+wanted — a busy worker still means the license is taken — but three lines sharing a
+`-projectPath` is one run, not three. To attribute a line whose path is ambiguous,
+`lsof -d cwd -p <pid>` gives the owning working directory.
+
+Proceed only when the projects listed are just this one (or there are none). Do not
+use `pgrep -f`/`pkill -f` with a bare `Unity` pattern for this check — see "Matching
+Unity Processes Safely" below.
 
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
 or waits on `LicenseClient-ericslutz-6000.5`, and the pre-flight shows no other
@@ -126,6 +132,14 @@ observed.
   does not exist.
 - `pkill -f` with a broad pattern kills other worktrees' runs. This has destroyed an
   in-flight build.
+- A **wait loop** built on a self-matching pattern (`while pgrep -f "...Unity..."; do
+  sleep; done`) is the worst of the family, because it fails differently: it is not a
+  one-shot false positive but a mutual deadlock that *grows*. Each waiter's own
+  command line satisfies the condition it is waiting on, so every additional waiter
+  makes the wait strictly harder for all the others. Thirty such loops once ended up
+  deadlocked against each other here. It presents as "the run is slow" rather than as
+  an error, so it is found by wondering why so many background tasks are alive, not
+  by reading a failure.
 
 Anchor on the binary path instead, and filter by `-projectPath` when you care which
 project a run belongs to:
