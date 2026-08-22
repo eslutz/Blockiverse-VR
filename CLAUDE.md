@@ -104,18 +104,37 @@ Unity Processes Safely" below.
 
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
 or waits on `LicenseClient-ericslutz-6000.5`, and the pre-flight shows no other
-project's run, reset the local Unity/Hub process state:
+project's run, reset the local Unity/Hub process state.
+
+**Select processes by PID, never by `pkill -f <pattern>`.** An agent submits these
+blocks through a command wrapper, so the invoking shell's own argument list contains
+whatever pattern you write — `pkill -f 'Unity.Licensing.Client|…'` can therefore match
+and kill the very shell running the recovery, before the verification or the retry
+happens. Deriving PIDs from an install-path-anchored `ps` cannot match a shell.
 
 ```sh
+# 1. Stuck editors, by PID. Confirm every hit is this project (see pre-flight) first.
+ps -eo pid=,command= | grep "/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+
+# 2. Terminate them and WAIT. An editor left alive keeps the project lock, and the
+#    retry below then fails to launch even though the licensing reset succeeded.
+#    SIGTERM first so Unity releases the lock cleanly; escalate only if it will not go.
+kill <editor-pids>
+while ps -eo command= | grep -q "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "; do sleep 2; done
+
+# 3. Hub, then the licensing client — again by PID.
 osascript -e 'tell application "Unity Hub" to quit'
-pkill -f 'Unity.Licensing.Client|Unity Hub Helper|Unity Hub.app' || true
+ps -eo pid=,command= | grep "/Applications/Unity/.*Unity.Licensing.Client" | awk '{print $1}' | xargs -r kill
+
+# 4. Verify: this must print nothing before retrying.
 ps -eo command= | grep "^/Applications/Unity"
+
+# 5. Retry.
 scripts/unity/run-tests.sh
 ```
 
-The `ps` verification should print nothing before the retry: `^/Applications/Unity`
-anchors on the install path, so it catches editors, the licensing client, the
-package-manager server, and shader compilers while matching no shell or `grep` of
+Step 4 anchors on `^/Applications/Unity`, so it catches editors, the licensing client,
+the package-manager server and shader compilers while matching no shell or `grep` of
 its own. Do not leave stuck Unity batchmode processes running.
 
 ### Sharing the Unity License
@@ -192,7 +211,10 @@ observed.
   literal is in its own command line. A guard built on it reports a Unity run that
   does not exist.
 - `pkill -f` with a broad pattern kills other worktrees' runs. This has destroyed an
-  in-flight build.
+  in-flight build. It can also kill **the shell running the recovery**: an agent submits
+  a block through a command wrapper, so the invoking shell's argument list contains the
+  pattern being searched for. This survived in the recovery block above through several
+  revisions of this very section — the fix is to select by PID from an anchored `ps`.
 - A **wait loop** built on a self-matching pattern (`while pgrep -f "...Unity..."; do
   sleep; done`) is the worst of the family, because it fails differently: it is not a
   one-shot false positive but a mutual deadlock that *grows*. Each waiter's own
