@@ -59,6 +59,12 @@ jobs:
           # MemoryDenyWriteExecute breaks the Mono JIT the server runs on; the unit says so.
           grep -q 'DELIBERATELY ABSENT: MemoryDenyWriteExecute' scripts/server/blockiverse-server.service
 
+      # Unknown config keys are fatal (exit 78), which turns ordinary doc drift into an outage:
+      # a typo in the config install.sh GENERATES would break every fresh install, on a file the
+      # operator never wrote.
+      - name: Check server configuration keys
+        run: python3 scripts/server/check-config-keys.py
+
   unity-validation:
     name: Unity validation
     needs: repository-checks
