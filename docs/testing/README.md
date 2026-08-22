@@ -237,6 +237,40 @@ For Quest pointer/ray changes, validate the normal development APK in the real g
 
 Remove any temporary ray diagnostic scenes or build scripts once the issue is reproduced in the real game path. Stub ray worlds are not part of the validation gate.
 
+## Writing Tests That Can Actually Fail
+
+A green suite only means something if each test could have gone red. Several tests in
+this repo have passed for reasons unrelated to the behaviour they named, and they are
+indistinguishable from real passes: same colour, same duration, same everything.
+
+**The check: when a test passes, ask what it would have looked like had the behaviour
+been broken. If the answer is "exactly the same", it is not a test yet.**
+
+Shapes this has actually taken here:
+
+- **Asserting a tautology.** A registry-hash test built two identical registries and
+  asserted their hashes matched. It could not fail. The real test builds two registries
+  that differ only in the field under test and asserts the hash separates them.
+- **Measuring outside the window.** A snapshot-pacing test sampled per-frame send counts
+  only after the transfer had begun, so a regression that sent everything in one burst
+  would have finished before sampling started and every sample would have read zero.
+  Sampling now spans the whole operation, and the test asserts it observed the work in
+  flight rather than trusting that it did.
+- **A fixture too small to reach the behaviour.** That same test used a world whose
+  changed-block count fitted inside a single frame's batch budget, so pacing was never
+  exercised. Fixtures for a threshold must cross it, and it is worth asserting the
+  fixture reached the size it intended.
+- **Testing a function nothing calls.** A helper can be correct, thoroughly covered, and
+  wired to nothing. Unit coverage of the helper cannot detect that; a test one level up
+  that drives the real entry point can.
+- **Correct per unit, wrong per path.** Each snapshot batch was individually within the
+  transport payload limit while the burst of them overflowed the send queue. Where a
+  limit applies to an aggregate, assert against the aggregate.
+
+The common thread is that the assertion sat at a different level from the behaviour. When
+a bug is found in tested code, the useful question is not only "what was wrong" but
+"what level was the test measuring, and what level does the bug live at".
+
 ## Test Selection Rules
 
 - Docs, governance, PR templates, issue templates, and markdown-only policy changes: run the Docs/Repo tier only.
