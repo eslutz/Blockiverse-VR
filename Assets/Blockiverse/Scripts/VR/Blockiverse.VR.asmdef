@@ -6,6 +6,7 @@
     "Blockiverse.Gameplay",
     "Blockiverse.Networking",
     "Blockiverse.Survival.Health",
+    "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
     "Unity.InputSystem",
     "UnityEngine.UI",
@@ -17,7 +18,9 @@
     "Unity.XR.Management"
   ],
   "includePlatforms": [],
-  "excludePlatforms": [],
+  "excludePlatforms": [
+    "LinuxStandalone64"
+  ],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],

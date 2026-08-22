@@ -12,7 +12,9 @@
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],
-  "excludePlatforms": [],
+  "excludePlatforms": [
+    "LinuxStandalone64"
+  ],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],

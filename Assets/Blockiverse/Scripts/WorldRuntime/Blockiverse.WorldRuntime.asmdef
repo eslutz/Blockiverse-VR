@@ -1,24 +1,16 @@
 {
-  "name": "Blockiverse.Gameplay",
+  "name": "Blockiverse.WorldRuntime",
   "rootNamespace": "Blockiverse.Gameplay",
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Networking",
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
-    "Blockiverse.Survival.Health",
-    "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
-    "Blockiverse.WorldGen",
-    "Unity.Netcode.Runtime",
-    "Unity.XR.Interaction.Toolkit",
-    "Unity.TextMeshPro",
-    "UnityEngine.UI"
+    "Blockiverse.WorldGen"
   ],
   "includePlatforms": [],
-  "excludePlatforms": [
-    "LinuxStandalone64"
-  ],
+  "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],

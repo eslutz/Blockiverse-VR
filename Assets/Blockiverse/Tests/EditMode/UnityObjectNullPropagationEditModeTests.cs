@@ -9,7 +9,7 @@ namespace Blockiverse.Tests.EditMode
         static readonly (string Path, string[] Patterns)[] GuardedSources =
         {
             (
-                "Assets/Blockiverse/Scripts/Gameplay/CreativeWorldManager.cs",
+                "Assets/Blockiverse/Scripts/WorldRuntime/CreativeWorldManager.cs",
                 new[]
                 {
                     // The `presentation` FIELD must never be dereferenced directly: only the
