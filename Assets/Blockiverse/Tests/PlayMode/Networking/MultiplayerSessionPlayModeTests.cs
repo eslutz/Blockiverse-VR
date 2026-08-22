@@ -1374,6 +1374,105 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Client did not stop after the pending-request limit check.");
         }
 
+        // A refused survival command must be reported as refused. Reporting RequestSent for a
+        // command that was never put on the wire tells the player the action is in flight and
+        // leaves the UI waiting on a reply that cannot come.
+        [UnityTest]
+        public IEnumerator SurvivalCommandsRefusedAtThePendingCapReportRejectionAndAgeOut()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            var settings = new WorldGenerationSettings(
+                width: 32,
+                height: 16,
+                depth: 32,
+                chunkSize: 16,
+                seed: 7700,
+                groundHeight: 4);
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Survival Cap Host World", settings);
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager("Survival Cap Client World", settings);
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvival = ConfigureSurvivalSync(hostSession, hostSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvival = ConfigureSurvivalSync(clientSession, clientSync, clientWorldManager);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the survival cap check.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for the survival cap check.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive the world snapshot before the survival cap check.");
+
+            // Stop the host answering so commands pile up the way they would if it went away.
+            hostSession.NetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                "Blockiverse.Survival.CommandRequest");
+
+            SurvivalCommandResult refused = default;
+            bool refusedSent = true;
+            int submitted = 0;
+
+            for (int index = 0; index < MultiplayerSurvivalSync.MaxPendingCommandRequests + 8; index++)
+            {
+                var position = new BlockPosition(index % 30, 5, index / 30);
+                SurvivalCommandResult result = clientSurvival.TrySubmitHarvest(position, out bool sentToHost);
+                submitted++;
+
+                if (result.FailureReason != SurvivalCommandFailureReason.PendingRequestLimitReached)
+                    continue;
+
+                refused = result;
+                refusedSent = sentToHost;
+                break;
+            }
+
+            Assert.That(
+                refused.FailureReason,
+                Is.EqualTo(SurvivalCommandFailureReason.PendingRequestLimitReached),
+                "The client should refuse commands once the pending cap is reached.");
+            Assert.That(refused.Accepted, Is.False);
+            Assert.That(refused.PendingHostValidation, Is.False, "A refused command is not awaiting the host.");
+            Assert.That(refusedSent, Is.False, "A refused command must not claim it reached the host.");
+            Assert.That(submitted, Is.EqualTo(MultiplayerSurvivalSync.MaxPendingCommandRequests + 1));
+            Assert.That(
+                clientSurvival.PendingCommandRequestCount,
+                Is.EqualTo(MultiplayerSurvivalSync.MaxPendingCommandRequests));
+
+            // Without a timeout the cap would be permanent for the rest of the session.
+            clientSurvival.TickPendingCommandTimeouts(
+                MultiplayerSurvivalSync.PendingCommandRequestTimeoutSeconds + 0.1f);
+
+            Assert.That(clientSurvival.TimedOutCommandRequestCount, Is.GreaterThan(0));
+            Assert.That(clientSurvival.PendingCommandRequestCount, Is.Zero);
+
+            // And the client can act again once the backlog drains.
+            clientSurvival.TrySubmitHarvest(new BlockPosition(1, 5, 1), out bool sentAfterDrain);
+            Assert.That(sentAfterDrain, Is.True, "The client should be able to act again after the backlog clears.");
+
+            Assert.That(hostSurvival, Is.Not.Null);
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after the survival cap check.");
+        }
+
         [UnityTest]
         public IEnumerator CompetingClientBlockMutationsRejectStaleRequestAndPreserveAuthoritativeWinner()
         {

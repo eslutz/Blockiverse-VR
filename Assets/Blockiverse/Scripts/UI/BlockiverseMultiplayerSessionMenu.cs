@@ -32,6 +32,8 @@ namespace Blockiverse.UI
         // would leak listeners onto the buttons.
         readonly List<UnityAction> discoveryClicked = new();
         readonly List<Button> registeredDiscoveryButtons = new();
+        BlockiverseWorldSpacePanelPresenter panelPresenter;
+        bool discoveryListening;
 
         UnityAction hostClicked;
         UnityAction joinClicked;
@@ -186,6 +188,14 @@ namespace Blockiverse.UI
                 return;
             }
 
+            if (!TryAdoptDiscoveredPort(discovered))
+            {
+                // A session started between listing and clicking; the refresh shows what
+                // actually happened rather than dialling a port we could not apply.
+                RefreshStatus();
+                return;
+            }
+
             // The address field is filled in as well as joined, so a failed auto-join leaves the
             // player one Join press away from retrying rather than back at a blank field.
             if (addressInput != null)
@@ -193,6 +203,32 @@ namespace Blockiverse.UI
 
             LastJoinAddress = discovered.Address;
             JoinSessionInternal(discovered.Address);
+        }
+
+        /// <summary>
+        /// Applies a discovered host's advertised game port to the session config before joining.
+        /// Without this, StartClient dials the locally configured port — and that port is also
+        /// signed into the approval payload, so a host on a non-default port would be listed with
+        /// the right port and then refuse the join as an invalid payload.
+        /// </summary>
+        bool TryAdoptDiscoveredPort(BlockiverseDiscoveredSession discovered)
+        {
+            if (session == null)
+                return false;
+
+            if (discovered.Port == 0 || discovered.Port == session.Config.Port)
+                return true;
+
+            try
+            {
+                session.Configure(session.Config.WithPort(discovered.Port));
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                // Config is immutable while a session is live.
+                return false;
+            }
         }
 
         public void RefreshDiscoveryList()
@@ -437,6 +473,8 @@ namespace Blockiverse.UI
 
         void Update()
         {
+            RefreshDiscoveryListening();
+
             if (session == null)
             {
                 DiscoverSession();
@@ -511,8 +549,6 @@ namespace Blockiverse.UI
                 state == BlockiverseConnectionState.ConnectedClient;
         }
 
-        // The LAN panel's root is deactivated when the menu is hidden, so these bracket exactly
-        // the window in which a player can look at the session list.
         void OnEnable()
         {
             DiscoverDiscovery();
@@ -523,20 +559,73 @@ namespace Blockiverse.UI
             discovery.Configure(session);
             discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
             discovery.DiscoveredSessionsChanged += RefreshDiscoveryList;
-            // Opening the panel is the natural retry point for a socket that failed to bind
-            // earlier — the failure latches so it cannot spin, but it should not be permanent.
-            discovery.ResetSocketFailure();
-            discovery.StartListening();
             RefreshDiscoveryList();
         }
 
         void OnDisable()
         {
+            // Backstop only. The panel is normally hidden by disabling its Canvas, which does not
+            // deactivate this GameObject, so browsing is driven by RefreshDiscoveryListening from
+            // Update instead — see the note there.
+            StopDiscoveryListening();
+
+            if (discovery != null)
+                discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
+        }
+
+        /// <summary>
+        /// Starts and stops browsing with the panel actually being on screen.
+        ///
+        /// This deliberately does not use OnEnable/OnDisable: BlockiverseWorldSpacePanelPresenter
+        /// hides a panel by disabling its Canvas and leaves the GameObject active, so those
+        /// callbacks fire once at scene load and never again. Keying off them left the UDP browse
+        /// socket and its receive loop running for the whole session — on a headset, for a player
+        /// who is out building.
+        /// </summary>
+        void RefreshDiscoveryListening()
+        {
             if (discovery == null)
                 return;
 
-            discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
-            discovery.StopListening();
+            bool panelVisible = ResolvePresenter() is { } presenter ? presenter.IsVisible : isActiveAndEnabled;
+
+            if (panelVisible == discoveryListening)
+                return;
+
+            if (panelVisible)
+                StartDiscoveryListening();
+            else
+                StopDiscoveryListening();
+        }
+
+        void StartDiscoveryListening()
+        {
+            if (discovery == null)
+                return;
+
+            discovery.Configure(session);
+            // Opening the panel is the natural retry point for a socket that failed to bind
+            // earlier — the failure latches so it cannot spin, but it should not be permanent.
+            discovery.ResetSocketFailure();
+            discovery.StartListening();
+            discoveryListening = true;
+            RefreshDiscoveryList();
+        }
+
+        void StopDiscoveryListening()
+        {
+            if (discovery != null && discoveryListening)
+                discovery.StopListening();
+
+            discoveryListening = false;
+        }
+
+        BlockiverseWorldSpacePanelPresenter ResolvePresenter()
+        {
+            if (panelPresenter == null)
+                panelPresenter = GetComponent<BlockiverseWorldSpacePanelPresenter>();
+
+            return panelPresenter;
         }
 
         void DiscoverDiscovery()
@@ -549,6 +638,7 @@ namespace Blockiverse.UI
 
         void OnDestroy()
         {
+            StopDiscoveryListening();
             UnregisterControlCallbacks();
             UnregisterDiscoveryCallbacks();
 

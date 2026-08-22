@@ -66,7 +66,10 @@ namespace Blockiverse.Networking
         NotBucketUse,
         BucketRejected,
         GameModeRejected,
-        OutOfReach
+        OutOfReach,
+        // The client already has the maximum number of unanswered commands in flight
+        // (ruleset §14); the command is refused locally and never sent.
+        PendingRequestLimitReached
     }
 
     public readonly struct SurvivalCommandResult
@@ -256,8 +259,17 @@ namespace Blockiverse.Networking
         const string PlayerSecretPrefKey = "Blockiverse.PlayerSecret";
         const int CommandRequestMessageBytes = 128;
 
-        /// <summary>Maximum unanswered survival commands before new ones are dropped (ruleset §14).</summary>
+        /// <summary>Maximum unanswered survival commands before new ones are refused (ruleset §14).</summary>
         public const int MaxPendingCommandRequests = 64;
+
+        /// <summary>
+        /// How long a survival command may go unanswered before the client stops waiting on it.
+        /// Without this the pending set only ever grows: a host that silently drops commands
+        /// (rate limiting, a handler that threw) would otherwise wedge the client at the cap for
+        /// the rest of the session. Longer than the block-mutation timeout because a survival
+        /// command can legitimately wait on host-side station work.
+        /// </summary>
+        public const float PendingCommandRequestTimeoutSeconds = 5.0f;
         const int CommandResultMessageBytes = 128;
         const int StationSnapshotMessageBytes = 512;
         const int StationRemovedSnapshotType = -1;
@@ -283,7 +295,9 @@ namespace Blockiverse.Networking
         readonly Dictionary<ulong, ProcessedRequestWindow> processedRequestsByClientId = new();
         readonly PerClientRequestRateLimiter hostCommandRateLimiter =
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
-        readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position)> pendingCommandRequests = new();
+        readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds)> pendingCommandRequests = new();
+        readonly List<uint> expiredCommandRequestScratch = new();
+        float clientCommandElapsedSeconds;
         readonly Dictionary<ulong, double> lastAcceptedHarvestTimeByClientId = new();
         readonly Dictionary<ulong, bool> lastKnownCrouchStateByClientId = new();
 
@@ -644,7 +658,53 @@ namespace Blockiverse.Networking
         {
             RefreshStationClockSubscription();
             RefreshCrouchStateReplication();
+            TickPendingCommandTimeouts(Time.unscaledDeltaTime);
         }
+
+        /// <summary>
+        /// Ages out unanswered commands. Takes an explicit delta so tests can step it
+        /// deterministically, mirroring the chunk-authority recovery tick.
+        /// </summary>
+        public void TickPendingCommandTimeouts(float deltaSeconds)
+        {
+            clientCommandElapsedSeconds += Mathf.Max(0.0f, deltaSeconds);
+
+            if (pendingCommandRequests.Count == 0)
+                return;
+
+            expiredCommandRequestScratch.Clear();
+
+            foreach (KeyValuePair<uint, (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds)> pending in pendingCommandRequests)
+            {
+                if (clientCommandElapsedSeconds - pending.Value.createdAtSeconds >= PendingCommandRequestTimeoutSeconds)
+                    expiredCommandRequestScratch.Add(pending.Key);
+            }
+
+            if (expiredCommandRequestScratch.Count == 0)
+                return;
+
+            foreach (uint requestId in expiredCommandRequestScratch)
+            {
+                pendingCommandRequests.Remove(requestId);
+                TimedOutCommandRequestCount++;
+            }
+
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Networking,
+                $"Gave up on {expiredCommandRequestScratch.Count} unanswered survival command(s) after {PendingCommandRequestTimeoutSeconds:0.#}s.",
+                this);
+            expiredCommandRequestScratch.Clear();
+        }
+
+        /// <summary>Unanswered survival commands the client has stopped waiting on.</summary>
+        public int TimedOutCommandRequestCount { get; private set; }
+
+        // Shared by every Try* path that finds the pending set full.
+        SurvivalCommandResult RejectPendingCommandLimit(SurvivalCommandKind commandKind, uint requestId) =>
+            SurvivalCommandResult.Reject(
+                commandKind,
+                SurvivalCommandFailureReason.PendingRequestLimitReached,
+                requestId);
 
         void OnDestroy()
         {
@@ -702,7 +762,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendHarvestRequest(requestId, position, equippedSlotIndex);
+                if (!SendHarvestRequest(requestId, position, equippedSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.HarvestResource, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.HarvestResource, requestId);
                 return LastCommandResult;
@@ -737,7 +802,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendPlaceCommandRequest(requestId, position, equippedSlotIndex, ResolveLocalCrouchActive());
+                if (!SendPlaceCommandRequest(requestId, position, equippedSlotIndex, ResolveLocalCrouchActive()))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.PlaceBlock, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PlaceBlock, requestId);
                 return LastCommandResult;
@@ -769,7 +839,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendDeathDropRequest(requestId, preferredPosition);
+                if (!SendDeathDropRequest(requestId, preferredPosition))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.DeathDropInventory, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.DeathDropInventory, requestId);
                 return LastCommandResult;
@@ -860,7 +935,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendBlockCommandRequest(SurvivalCommandKind.StripLog, requestId, position, equippedSlotIndex);
+                if (!SendBlockCommandRequest(SurvivalCommandKind.StripLog, requestId, position, equippedSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.StripLog, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.StripLog, requestId);
                 return LastCommandResult;
@@ -889,7 +969,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendBlockCommandRequest(SurvivalCommandKind.TillSoil, requestId, position, equippedSlotIndex);
+                if (!SendBlockCommandRequest(SurvivalCommandKind.TillSoil, requestId, position, equippedSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.TillSoil, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.TillSoil, requestId);
                 return LastCommandResult;
@@ -918,7 +1003,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendBlockCommandRequest(SurvivalCommandKind.PlantSeed, requestId, soilPosition, equippedSlotIndex);
+                if (!SendBlockCommandRequest(SurvivalCommandKind.PlantSeed, requestId, soilPosition, equippedSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.PlantSeed, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PlantSeed, requestId);
                 return LastCommandResult;
@@ -947,7 +1037,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendBlockCommandRequest(SurvivalCommandKind.FillBucket, requestId, position, equippedSlotIndex);
+                if (!SendBlockCommandRequest(SurvivalCommandKind.FillBucket, requestId, position, equippedSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.FillBucket, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.FillBucket, requestId);
                 return LastCommandResult;
@@ -976,7 +1071,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendBlockCommandRequest(SurvivalCommandKind.PourBucket, requestId, position, equippedSlotIndex);
+                if (!SendBlockCommandRequest(SurvivalCommandKind.PourBucket, requestId, position, equippedSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.PourBucket, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.PourBucket, requestId);
                 return LastCommandResult;
@@ -997,7 +1097,12 @@ namespace Blockiverse.Networking
             if (IsActiveClientOnly())
             {
                 uint requestId = AllocateCommandRequestId();
-                SendSlotCommandRequest(SurvivalCommandKind.RepairTool, requestId, toolSlotIndex);
+                if (!SendSlotCommandRequest(SurvivalCommandKind.RepairTool, requestId, toolSlotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.RepairTool, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.RepairTool, requestId);
                 return LastCommandResult;
@@ -1037,7 +1142,12 @@ namespace Blockiverse.Networking
             if (IsActiveClientOnly())
             {
                 uint requestId = AllocateCommandRequestId();
-                SendSlotCommandRequest(SurvivalCommandKind.UseConsumable, requestId, slotIndex);
+                if (!SendSlotCommandRequest(SurvivalCommandKind.UseConsumable, requestId, slotIndex))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.UseConsumable, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.UseConsumable, requestId);
                 return LastCommandResult;
@@ -1060,7 +1170,12 @@ namespace Blockiverse.Networking
             if (IsActiveClientOnly())
             {
                 uint requestId = AllocateCommandRequestId();
-                SendCraftRequest(requestId, outputItemId, availableStation);
+                if (!SendCraftRequest(requestId, outputItemId, availableStation))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(SurvivalCommandKind.CraftRecipe, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(SurvivalCommandKind.CraftRecipe, requestId);
                 return LastCommandResult;
@@ -1292,7 +1407,12 @@ namespace Blockiverse.Networking
                 }
 
                 uint requestId = AllocateCommandRequestId();
-                SendStationCommandRequest(requestId, commandKind, position, itemId, count);
+                if (!SendStationCommandRequest(requestId, commandKind, position, itemId, count))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(commandKind, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(commandKind, requestId);
                 return LastCommandResult;
@@ -1331,7 +1451,12 @@ namespace Blockiverse.Networking
             if (IsActiveClientOnly())
             {
                 uint requestId = AllocateCommandRequestId();
-                SendCrateTransferRequest(requestId, commandKind, itemId, count);
+                if (!SendCrateTransferRequest(requestId, commandKind, itemId, count))
+                {
+                    requestSentToHost = false;
+                    return RejectPendingCommandLimit(commandKind, requestId);
+                }
+
                 requestSentToHost = true;
                 LastCommandResult = SurvivalCommandResult.RequestSent(commandKind, requestId);
                 return LastCommandResult;
@@ -2983,23 +3108,25 @@ namespace Blockiverse.Networking
 
         delegate void CommandPayloadWriter(ref FastBufferWriter writer);
 
-        void SendCommandRequest(SurvivalCommandKind commandKind, uint requestId, CommandPayloadWriter writePayload, BlockPosition position = default)
+        bool SendCommandRequest(SurvivalCommandKind commandKind, uint requestId, CommandPayloadWriter writePayload, BlockPosition position = default)
         {
             // Ruleset §14: cap unanswered commands. Without this a client that keeps acting while
             // the host is unreachable grows a pending set that no reply will ever drain, and the
             // survival HUD stays wedged on stale mirrors long after the session is unrecoverable.
+            // Returning false rather than dropping silently matters: the caller would otherwise
+            // tell the player the action is in flight when nothing was sent.
             if (pendingCommandRequests.Count >= MaxPendingCommandRequests)
             {
                 BlockiverseLog.Warning(
                     BlockiverseLogCategory.Networking,
-                    $"Dropping survival command kind={commandKind}: {pendingCommandRequests.Count} requests are already awaiting host validation.",
+                    $"Refusing survival command kind={commandKind}: {pendingCommandRequests.Count} requests are already awaiting host validation.",
                     this);
-                return;
+                return false;
             }
 
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
-            pendingCommandRequests[requestId] = (commandKind, position);
+            pendingCommandRequests[requestId] = (commandKind, position, clientCommandElapsedSeconds);
             LastSentCommandRequestId = requestId;
             var writer = new FastBufferWriter(CommandRequestMessageBytes, Allocator.Temp);
 
@@ -3014,16 +3141,18 @@ namespace Blockiverse.Networking
             {
                 writer.Dispose();
             }
+
+            return true;
         }
 
-        void SendBlockCommandRequest(SurvivalCommandKind commandKind, uint requestId, BlockPosition position, int slotIndex) =>
+        bool SendBlockCommandRequest(SurvivalCommandKind commandKind, uint requestId, BlockPosition position, int slotIndex) =>
             SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) =>
             {
                 SurvivalSyncWireCodec.WriteBlockPosition(ref writer, position);
                 writer.WriteValueSafe(slotIndex);
             }, position);
 
-        void SendPlaceCommandRequest(uint requestId, BlockPosition position, int slotIndex, bool requesterCrouching) =>
+        bool SendPlaceCommandRequest(uint requestId, BlockPosition position, int slotIndex, bool requesterCrouching) =>
             SendCommandRequest(SurvivalCommandKind.PlaceBlock, requestId, (ref FastBufferWriter writer) =>
             {
                 SurvivalSyncWireCodec.WriteBlockPosition(ref writer, position);
@@ -3031,7 +3160,7 @@ namespace Blockiverse.Networking
                 writer.WriteValueSafe(requesterCrouching);
             }, position);
 
-        void SendSlotCommandRequest(SurvivalCommandKind commandKind, uint requestId, int slotIndex) =>
+        bool SendSlotCommandRequest(SurvivalCommandKind commandKind, uint requestId, int slotIndex) =>
             SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) => writer.WriteValueSafe(slotIndex));
 
         void HandleCommandResultMessage(ulong senderClientId, FastBufferReader reader)
@@ -3072,25 +3201,25 @@ namespace Blockiverse.Networking
             SharedCrateChanged?.Invoke();
         }
 
-        void SendHarvestRequest(uint requestId, BlockPosition position, int equippedSlotIndex = -1) =>
+        bool SendHarvestRequest(uint requestId, BlockPosition position, int equippedSlotIndex = -1) =>
             SendCommandRequest(SurvivalCommandKind.HarvestResource, requestId, (ref FastBufferWriter writer) =>
             {
                 SurvivalSyncWireCodec.WriteBlockPosition(ref writer, position);
                 writer.WriteValueSafe(equippedSlotIndex);
             }, position);
 
-        void SendDeathDropRequest(uint requestId, BlockPosition position) =>
+        bool SendDeathDropRequest(uint requestId, BlockPosition position) =>
             SendCommandRequest(SurvivalCommandKind.DeathDropInventory, requestId, (ref FastBufferWriter writer) =>
                 SurvivalSyncWireCodec.WriteBlockPosition(ref writer, position), position);
 
-        void SendCraftRequest(uint requestId, ItemId outputItemId, CraftingStation availableStation) =>
+        bool SendCraftRequest(uint requestId, ItemId outputItemId, CraftingStation availableStation) =>
             SendCommandRequest(SurvivalCommandKind.CraftRecipe, requestId, (ref FastBufferWriter writer) =>
             {
                 writer.WriteValueSafe(outputItemId.Value);
                 writer.WriteValueSafe((int)availableStation);
             });
 
-        void SendCrateTransferRequest(
+        bool SendCrateTransferRequest(
             uint requestId,
             SurvivalCommandKind commandKind,
             ItemId itemId,
@@ -3098,7 +3227,7 @@ namespace Blockiverse.Networking
             SendCommandRequest(commandKind, requestId, (ref FastBufferWriter writer) =>
                 SurvivalSyncWireCodec.WriteItemStack(ref writer, new ItemStack(itemId, count)));
 
-        void SendStationCommandRequest(
+        bool SendStationCommandRequest(
             uint requestId,
             SurvivalCommandKind commandKind,
             BlockPosition position,
@@ -3386,9 +3515,13 @@ namespace Blockiverse.Networking
         {
             pending = default;
 
-            if (requestId == 0 || !pendingCommandRequests.TryGetValue(requestId, out pending))
+            if (requestId == 0 ||
+                !pendingCommandRequests.TryGetValue(
+                    requestId,
+                    out (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds) tracked))
                 return false;
 
+            pending = (tracked.kind, tracked.position);
             pendingCommandRequests.Remove(requestId);
             LastCompletedCommandRequestId = requestId;
             return true;
@@ -3397,6 +3530,7 @@ namespace Blockiverse.Networking
         void ResetPendingCommands()
         {
             pendingCommandRequests.Clear();
+            clientCommandElapsedSeconds = 0.0f;
             nextCommandRequestId = 1;
             LastSentCommandRequestId = 0;
             LastCompletedCommandRequestId = 0;
