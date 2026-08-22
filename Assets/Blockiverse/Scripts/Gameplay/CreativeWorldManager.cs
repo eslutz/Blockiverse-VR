@@ -163,7 +163,7 @@ namespace Blockiverse.Gameplay
             if (world == null)
                 return false;
 
-            BlockPosition cell = CreativeInteractionController.ToBlockPosition(worldPosition);
+            BlockPosition cell = VoxelWorldCoordinates.ToBlockPosition(worldPosition);
             if (!world.Bounds.Contains(cell))
                 return false;
 

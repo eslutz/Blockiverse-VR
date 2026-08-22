@@ -112,8 +112,9 @@ namespace Blockiverse.VR
             if (!world.Bounds.Contains(cell))
                 return 1.0f;
 
-            VoxelSkyLightMap skyLight = worldManager.Renderer != null ? worldManager.Renderer.SkyLight : null;
-            float light = VoxelLightSampler.SampleAirLight(world, worldManager.Registry, cell, skyLight: skyLight);
+            // Sky occlusion is owned by the simulation, not the renderer, so this no longer
+            // reaches through a component that does not exist on a headless build.
+            float light = VoxelLightSampler.SampleAirLight(world, worldManager.Registry, cell, skyLight: worldManager.SkyLight);
 
             return Mathf.Max(light, MinimumHandLight);
         }
