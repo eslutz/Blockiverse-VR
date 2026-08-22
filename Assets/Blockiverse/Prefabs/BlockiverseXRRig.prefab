@@ -67337,6 +67337,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d1b0b7a6c6e642bda4be8a903ef0c125, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseCreativeFlightController
+  m_Mediator: {fileID: 8723554337888115654}
+  m_TransformationPriority: 0
   inputRig: {fileID: 6464803785323197589}
   worldManager: {fileID: 0}
   survivalSync: {fileID: 0}
