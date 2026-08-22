@@ -246,20 +246,17 @@ namespace Blockiverse.Gameplay
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.PickupItem);
         }
 
+        // The session raises these only for remote peers whose presence actually changed, so a
+        // refused join, a duplicate host-side notification, and the peers already in the world
+        // when we arrived all stay silent. Both cues reach client seats as well as the host.
         void OnClientConnected(ulong clientId)
         {
-            if (session == null || clientId == session.LocalClientId)
-                return;
-
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerJoin);
             ShowToast("Player joined.");
         }
 
         void OnClientDisconnected(ulong clientId)
         {
-            if (session == null || clientId == session.LocalClientId)
-                return;
-
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerLeave);
             ShowToast("Player left.");
         }
