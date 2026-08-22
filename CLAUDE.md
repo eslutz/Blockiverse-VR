@@ -65,7 +65,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
 - Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
 - A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
-- Only one Unity batchmode instance can hold the license at a time, machine-wide. Parallel worktrees must **coordinate explicitly** over who runs Unity next; do not poll for a gap. A single session's sequential Unity invocations are not atomic — a build's editor exits before the next one starts — so "no Unity is running" cannot distinguish *free* from *between two of someone else's runs*, and claiming the license in that gap kills the run that was mid-sequence. Announce before you start and when you finish; only act on processes you started. See "Matching Unity Processes Safely" for the checks themselves.
+- Only one Unity batchmode instance can hold the Unity license at a time, machine-wide — the licensing client is per-user (`Unity-LicenseClient-<user>`), one instance serving every editor. Parallel worktrees and agent sessions share it and must hand it off explicitly. See "Sharing the Unity License" below.
 - A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md) — the active target changes during a PlayMode run, and the owning package rewrites its define), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
 
 Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, minutes before the PlayMode build-target switch that explains the defines. The trigger is not established; an EditMode-only run is the cheap experiment for narrowing it. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
@@ -117,6 +117,34 @@ The `ps` verification should print nothing before the retry: `^/Applications/Uni
 anchors on the install path, so it catches editors, the licensing client, the
 package-manager server, and shader compilers while matching no shell or `grep` of
 its own. Do not leave stuck Unity batchmode processes running.
+
+### Sharing the Unity License
+
+Only one Unity batchmode run can hold the license at a time, machine-wide. When more
+than one worktree or agent session is active, treat the license as a token that is
+handed off by name, not as a resource you wait for.
+
+1. **Ask before you run.** Tell the current holder you need a slot, and say roughly
+   how long your run is. If nobody holds it, say you are taking it.
+2. **Announce when you finish**, and **hand off by name** to the next session that
+   asked. Do not just go quiet — the next session cannot tell "finished" from
+   "between two runs".
+3. **Want a second run while someone is queued?** Hand off first and rejoin the back
+   of the queue. A queued session gets a turn before you take another slot.
+4. **Never poll for a gap and claim it.** A session's sequential Unity invocations
+   are not atomic — one run's editor exits before the next one starts — so "no Unity
+   is running" cannot distinguish *free* from *between two of someone else's runs*.
+   Claiming the license in that gap kills the run that was mid-sequence. This has
+   destroyed an in-flight build.
+5. **Only ever kill processes you started.** If a run must be stopped, ask its owner.
+
+The reason for hand-off rather than polling is worth keeping with the rule, because a
+rule without it gets optimised back into a poll loop: no observation of the process
+table can establish that the license is free, only that it is momentarily unused. The
+holder is the only party that knows whether it is done.
+
+Where a check is genuinely needed — confirming a stuck run before recovery, say — use
+the anchored forms below rather than `pgrep -f`.
 
 ### Matching Unity Processes Safely
 
