@@ -53,7 +53,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Gameplay code, UI labels, registries, save data, and tests should use canonical IDs from the rulesets. Legacy IDs must be handled through explicit migration code or marked as historical validation artifacts.
 - Never commit secrets, keystores, signing credentials, API keys, `.env` files, Unity `Library`, `Temp`, `Logs`, local generated folders, device logs, screenshots, recordings, Perfetto traces, APKs, or other generated validation artifacts unless a tracked artifact is explicitly required.
 - Keystores and production signing material stay outside the repo and in GitHub Actions secrets.
-- Current licensing state is source-available / All Rights Reserved. Keep `LICENSE.md`, `NOTICE.md`, and related docs aligned with that posture.
+- Current licensing state is source-available / All Rights Reserved, with one carve-out: the compiled dedicated server binary and container image are distributable under the grant in `LICENSE.md` and the terms in `SERVER-EULA.md`. Source is never covered by that grant. Keep `LICENSE.md`, `NOTICE.md`, `SERVER-EULA.md`, and related docs aligned with that posture.
 
 ### Tooling Policy
 

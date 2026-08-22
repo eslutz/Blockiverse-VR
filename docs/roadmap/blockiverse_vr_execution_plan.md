@@ -11,7 +11,7 @@
 **Primary game target:** Ruleset-defined voxel survival/creative game using the canonical Blockiverse world, registries, menus, save schema, environment, structures, vegetation, multiplayer, and audio/VFX rulesets
 **World model:** Bounded canonical worlds first; world presets are `survival_terrain`, `flat_builder`, and `void_builder`
 **Player representation:** Meta Horizon avatars for local and remote players; original voxel characters for NPCs/mobs
-**Multiplayer:** LAN host-authoritative co-op first; cloud-hosted private worlds are tracked as future expansion
+**Multiplayer:** LAN host-authoritative co-op first, then self-hosted dedicated servers (promoted 2026-08-21, EPIC-11); managed paid hosting remains future expansion
 **Voice:** Meta Quest party chat; no in-app voice chat in the initial multiplayer scope
 **Release path:** Meta release channels and Meta Horizon Store / Early Access; signed APK fallback through GitHub Releases
 **Repo model:** Public GitHub repo, trunk-based development, protected `main`, short-lived branches, releases from `main` only
@@ -1470,7 +1470,8 @@ No analytics beyond documented diagnostics unless explicitly added
 Local saves remain local unless user shares them
 LAN multiplayer exchanges local network connection data only for the active session
 Meta Horizon Avatar/profile data use is disclosed when avatar integration ships
-Cloud-hosted private worlds remain outside the first public candidate and are tracked in the future expansion section
+Self-hosted dedicated servers are operator-run; the project stores no player data for them and the operator is the data controller for their own server
+Managed/paid hosted worlds remain outside the first public candidate and are tracked in the future expansion section
 ```
 
 ### Tests
@@ -1518,6 +1519,11 @@ Migration registry
 Network command validation
 Audio/VFX cue registries
 Settings persistence
+Server option resolution precedence (defaults, file, environment, CLI)
+Server save-path policy
+Headless world initializes weather, growth, and fluid services without scene lighting
+Reconnect inventory stash bounding
+Approval payload compatibility for the default join code
 ```
 
 ## PlayMode / Unity integration tests
@@ -1559,6 +1565,26 @@ Structure/vegetation sync
 Packet loss resilience
 Bandwidth measurement
 Manual two-Quest LAN tests
+Dedicated server with no local player: mutation validated, broadcast, and late-join synced
+Dedicated server reach validation accepts in-range and rejects out-of-range actions
+Environment resync reaches a single connected client
+Dedicated server saves on stop and reloads on restart
+LAN host world loads on a dedicated server with player state preserved
+```
+
+## Self-hosted server tests
+
+```text
+Linux dedicated server build succeeds from the committed script
+Server boots headless and reports its configuration
+Config precedence honoured across file, environment, and CLI
+Unknown or unparsable config keys fail the boot
+Quest client joins a dedicated server by address and port
+Admin console responds over stdin and the Unix socket
+Admin stop saves and exits cleanly
+Container image runs the same build and persists to a mounted volume
+World directory survives container removal and recreation
+Server refuses to start in require-secret mode with the default secret
 ```
 
 ## VR/device smoke tests
@@ -1881,6 +1907,60 @@ FEATURE: Meta store
   STORY: Private release channel validation
 ```
 
+## EPIC-11 — Self-hosted dedicated server
+
+Promoted from future expansion on 2026-08-21. Architecture and rationale: [ADR 0007](../adr/0007-self-hosted-dedicated-server.md).
+
+```text
+FEATURE: Headless world runtime
+  STORY: Split Blockiverse.Gameplay into Blockiverse.WorldRuntime and presentation
+  STORY: Cut the renderer behind an IWorldPresentation seam
+  STORY: Move VoxelSkyLightMap to simulation ownership
+  STORY: Remove the silent WorldTimeClock failure mode
+  STORY: Exclude VR/UI/MetaAvatars/MetaPlatform from the server platform
+
+FEATURE: Dedicated server session mode
+  STORY: Add NetworkSessionMode.Server and StartServer
+  STORY: Apply avatar poses server-side so reach validation works
+  STORY: Fail reach validation closed
+  STORY: Save the world on server shutdown
+  STORY: Fix environment resync for a lone client
+  STORY: Preserve saved player state without a vitals context
+  STORY: Make the player ceiling operator-configured
+
+FEATURE: Server runtime and operations
+  STORY: Config resolution across file, environment, and CLI
+  STORY: Configurable world directory and save-path policy
+  STORY: Headless logging to stdout with text and JSON formats
+  STORY: Frame-rate pinning and durable shutdown
+  STORY: Admin console over stdin and a Unix domain socket
+  STORY: Allowlist and banlist
+
+FEATURE: Server hardening
+  STORY: Bound the reconnect inventory stash
+  STORY: Server secret replaces the compile-time join code
+  STORY: Rate-limit player hello, crouch, and avatar channels
+  STORY: Escalate repeat rate-limit violations to disconnect
+  STORY: Stop trusting client-asserted crouch state
+  STORY: Constrain death-drop inventory requests
+
+FEATURE: Server build and distribution
+  STORY: Generated server scene and server player prefab
+  STORY: Linux dedicated server build entry point and script
+  STORY: Container image and compose example
+  STORY: server-release.yml publishing to GitHub Releases and ghcr
+  STORY: Binary distribution grant and server EULA
+
+FEATURE: Client join experience
+  STORY: Address and port entry
+  STORY: Saved server list with nicknames
+
+FEATURE: Operator documentation
+  STORY: Install, configure, and run guide
+  STORY: Port forwarding and security posture
+  STORY: Backup and restore
+```
+
 Future-feature epics are tracked in [14. Future features and later expansion](#14-future-features-and-later-expansion) instead of the active implementation outline.
 
 ---
@@ -2046,6 +2126,21 @@ Store metadata and privacy docs are ready.
 Submission package is complete.
 ```
 
+## M11 — Self-hosted dedicated server
+
+```text
+Linux dedicated server builds from a committed script and from CI.
+Server starts headless with no local player, renderer, or XR.
+Weather, growth, and fluid flow tick on a headless world (no silent no-op).
+Clients join by address and port, and reach validation accepts valid actions and rejects invalid ones.
+World saves on autosave and on admin stop, and reloads on restart.
+Container image runs the same build and persists its world to a mounted volume.
+Reconnect inventory stash is bounded.
+Server secret is configurable and required-secret mode refuses the default.
+Operator documentation covers install, config, ports, security posture, and backups.
+Binary distribution grant and server EULA are published.
+```
+
 Future feature definitions of done are tracked in [14. Future features and later expansion](#14-future-features-and-later-expansion).
 
 ---
@@ -2060,7 +2155,8 @@ This is the canonical home for later expansion feature definitions. When a futur
 |---|---|---|
 | Seasons | Future feature | Promote after Phase 5 weather/day-night systems are stable and seasonal variation is needed for survival or world feel. |
 | Full survival expansion | Future feature | Promote after the Store / Early Access candidate is stable and deeper survival is the next product goal. |
-| Cloud private worlds | Future feature | Promote after LAN multiplayer, save/load, entitlement, privacy, and cost guardrails are proven enough for internet-hosted worlds. |
+| Self-hosted dedicated server | **Promoted 2026-08-21** | Active scope. Tracked as EPIC-11 and M11; see [ADR 0007](../adr/0007-self-hosted-dedicated-server.md). |
+| Managed hosted private worlds | Future feature | Promote after the self-hosted server is stable in the field and entitlement, privacy, billing, and cost guardrails are proven enough for a paid service. |
 | Hand tracking and hand motion control | Future feature (V2 target) | Promote after the first Store / Early Access candidate ships and controller-based interaction is stable enough to add a second input mode. |
 | Mixed reality room play | Future feature (V3 target) | Promote after the V2 hand-tracking release is stable; MR room play builds on the hand-interaction layer and Meta scene/passthrough capabilities. |
 
@@ -2229,17 +2325,21 @@ Multiplayer survival remains stable.
 Quest performance remains acceptable.
 ```
 
-## Future feature — Cloud private worlds
+## Future feature — Managed hosted private worlds
+
+> The **self-hosted** half of this feature was promoted into active scope on 2026-08-21 as EPIC-11.
+> The server runtime, headless simulation, and operator tooling now live there. What remains future
+> here is the *managed, paid* service built on top of that runtime: provisioning, billing, identity,
+> and the control plane.
 
 ### Deliverable
 
-Cloud-hosted, owner-scoped private worlds persist when empty and can be joined by invited members over the internet. LAN remains available as a separate low-cost mode.
+Managed, owner-scoped private worlds persist when empty and can be joined by invited members over the internet, without the owner running any infrastructure. LAN and self-hosted servers remain available as separate low-cost modes.
 
 ### Scope
 
 ```text
-Cloud-hosted dedicated/private world runtime
-Server-authoritative world simulation
+Managed provisioning and orchestration of the EPIC-11 server runtime
 Stable cloud world IDs
 Owner identity
 Durable member list

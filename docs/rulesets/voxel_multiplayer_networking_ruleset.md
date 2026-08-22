@@ -4,7 +4,13 @@
 **Project:** Blockiverse VR
 **Primary target:** Meta Quest 3 / Quest 3S
 **Engine/runtime target:** Unity 6, C#, URP, OpenXR, Meta XR SDK, Netcode for GameObjects, Unity Transport
-**Primary multiplayer scope:** Local LAN co-op first; cloud-hosted persistent private worlds later
+**Primary multiplayer scope:** Local LAN co-op and self-hosted dedicated servers; paid hosted worlds later
+
+> **Amendment 2026-08-21 — dedicated server mode.** This ruleset originally described two session
+> modes (host and client) on a LAN. It now also covers a **self-hosted dedicated server**: a headless
+> process that owns the authoritative world with no local player. See
+> [ADR 0007](../adr/0007-self-hosted-dedicated-server.md). Sections marked *(amended 2026-08-21)*
+> carry the change; everything else is unchanged and still binding.
 
 This document defines the multiplayer/networking rules for the canonical Blockiverse VR world. The runtime should reuse proven Unity/C# patterns such as host-authoritative mutation validation, compact custom messages, and Meta avatar integration while replacing temporary world data with the registries and schemas defined in the ruleset documents.
 
@@ -16,8 +22,10 @@ This document defines the multiplayer/networking rules for the canonical Blockiv
 |---|---|
 | VR comfort first | Local head/controller tracking and locomotion must remain responsive and should not wait on network round trips. |
 | Host-authoritative world | The host owns world generation, block mutation validation, authoritative world state, survival command validation, and multiplayer save state. |
-| LAN-first release | The first shippable multiplayer mode is LAN host/client co-op. No public matchmaking or cloud persistence is required for the initial release. |
+| LAN-first release | The first shippable multiplayer mode is LAN host/client co-op. No public matchmaking or paid hosting is required for the initial release. |
+| Self-hosted servers | A dedicated server build must run the same authoritative simulation headlessly, with no local player, renderer, or XR. It is operator-run software, not a managed service. |
 | Two-player first | The implementation target is host + one client. Protocols should not hard-code assumptions that prevent later 3–4 player testing. |
+| Operator-set player count *(amended 2026-08-21)* | The dedicated server does not enforce a player ceiling. Counts above 4 are operator's risk and unsupported: late-join sends a whole-world delta snapshot per joiner and inventory snapshots broadcast at 4 KB reliable-fragmented, neither of which is measured beyond 4. |
 | Command-based gameplay | Clients send intent commands. The host validates commands and broadcasts accepted authoritative state changes. |
 | Comfort without prediction | LAN round trips are short enough that host-authoritative edits already feel immediate. Speculative prediction is deferred rather than shipped (§7.5). |
 | Bounded in-flight work | A client never accumulates unbounded unanswered commands, and recovers by resync when its view may have drifted (§7.5). |
@@ -50,6 +58,7 @@ Default port: 7777
 Default discovery port: 7778
 Initial max players: 2
 Recommended protocol headroom: 4 players
+Dedicated server max players: operator-configured, unenforced, unsupported above 4
 ```
 
 ### Transport configuration
@@ -88,9 +97,15 @@ batched or bounded accordingly — see §6 and §14.
 enum NetworkSessionMode {
   Offline = 0,
   Host = 1,
-  Client = 2
+  Client = 2,
+  Server = 3   // dedicated server: authoritative, no local player (amended 2026-08-21)
 }
 ```
+
+`Host` and `Server` share every authority power. They differ only in whether the process also owns a
+local player. Authority checks must therefore test `IsServer`, never `IsHost` — a host is a server
+that additionally has a client attached. Code gated on `CurrentMode == Host` must be re-read as
+"host or server" unless it genuinely concerns the local player.
 
 ### Session states
 
@@ -103,9 +118,13 @@ enum BlockiverseConnectionState {
   ConnectedClient = 4,
   Disconnecting = 5,
   Disconnected = 6,
-  Failed = 7
+  Failed = 7,
+  StartingServer = 8,  // amended 2026-08-21
+  Serving = 9          // amended 2026-08-21
 }
 ```
+
+New values are appended so existing persisted and logged values keep their meaning.
 
 ---
 
@@ -120,6 +139,11 @@ stateDiagram-v2
     StartingHost --> Failed: host start fails
     Hosting --> Disconnecting: Stop Session
     Disconnecting --> Stopped: shutdown complete
+
+    Stopped --> StartingServer: Start Dedicated Server
+    StartingServer --> Serving: NetworkManager.StartServer succeeds
+    StartingServer --> Failed: server start fails
+    Serving --> Disconnecting: Stop Session
 
     Stopped --> StartingClient: Join LAN Session
     StartingClient --> ConnectedClient: connected to host
@@ -151,6 +175,32 @@ function StartLanHost(): bool {
 
 Host-start preparation must run before `StartHost`. It may load a saved host world, initialize the default world, validate registry compatibility, or reject host start if authoritative save state cannot be restored.
 
+### Dedicated server start rules *(amended 2026-08-21)*
+
+```ts
+function StartDedicatedServer(): bool {
+  if networkManager.IsListening || networkManager.ShutdownInProgress:
+    return false
+
+  if !RunHostStartPreparation():        // same preparation contract as the host
+    state = Failed
+    return false
+
+  state = StartingServer
+  transport.SetConnectionData(config.address, config.port, config.listenAddress)
+  return networkManager.StartServer()
+}
+```
+
+The dedicated server runs the **same** start preparation as the host: world load, default world
+initialization, and registry validation are identical, and a preparation failure must refuse the
+start the same way. The differences are that no player object is created for the server itself, and
+`Serving` is reached from the server-started callback rather than from a local client connecting.
+
+`MaxPlayers` counts **seats**, not connections, in both modes. Connection approval runs before the
+joining client is added, so a host seats itself plus `MaxPlayers - 1` remote players while a server
+seats `MaxPlayers` remote players.
+
 ### Client start rules
 
 ```ts
@@ -171,8 +221,9 @@ function StartLanClient(address): bool {
 |---|---|
 | Offline | Set state to `Stopped`; no network action. |
 | Host | Run host-shutdown preparation, save world if allowed, then call `NetworkManager.Shutdown()`. |
+| Server *(amended 2026-08-21)* | Identical to Host: run shutdown preparation and save the world before `NetworkManager.Shutdown()`. Skipping this for a dedicated server loses the world on every stop. |
 | Client | Call `NetworkManager.Shutdown()` and discard pending commands. |
-| Shutdown preparation fails | Leave session in `Hosting` and show the failure reason. |
+| Shutdown preparation fails | Leave session in `Hosting` (or `Serving`) and report the failure reason. |
 | Transport failure | Set state to `Failed` with disconnect reason. |
 | Host lost by client | Set client state to `Disconnected`; show reconnect UI. |
 
