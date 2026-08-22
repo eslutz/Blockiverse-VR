@@ -1,9 +1,11 @@
+using System.Linq;
 using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using NUnit.Framework;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Blockiverse.Tests.Networking.EditMode
 {
@@ -55,6 +57,50 @@ namespace Blockiverse.Tests.Networking.EditMode
                 renderer.transform.name == "Fallback Head" && renderer.enabled));
             Assert.That(renderers, Has.None.Matches<Renderer>(renderer =>
                 renderer.transform.name == "Fallback Body" && renderer.enabled));
+        }
+
+        [Test]
+        public void FallbackProxyRenderersNeverCastShadows()
+        {
+            // The player is a pair of floating hands with no body, so a cast shadow reads as two
+            // disembodied blobs on the ground beside them. CreatePrimitive defaults shadow casting
+            // ON and nothing had turned it off, unlike every other non-terrain renderer in the
+            // project.
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+
+            Assert.That(renderers, Is.Not.Empty, "Fixture guard: the fallback proxy should have renderers.");
+            Assert.That(
+                renderers,
+                Has.All.Matches<Renderer>(renderer => renderer.shadowCastingMode == ShadowCastingMode.Off),
+                "No part of the bodiless player proxy may cast a shadow.");
+        }
+
+        [Test]
+        public void EveryPlayerGetsTheSameWarmHandColour()
+        {
+            // This replaces an owner/remote colour test. The split existed to tell your hands from
+            // someone else's, which it never actually did -- your own hands are always the pair
+            // attached to your view -- and the owner half was a blue that did not read as a hand.
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            avatarRig.SetMetaAvatarAvailable(false);
+
+            Assert.That(
+                typeof(BlockiverseNetworkAvatarRig).GetField(
+                    "remoteFallbackColor", BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null,
+                "The second colour should be removed, not left as a dead serialized field.");
+
+            Renderer handRenderer = avatarRig.FallbackRoot
+                .GetComponentsInChildren<Renderer>(includeInactive: true)
+                .First(renderer => renderer.transform.name == "Fallback Left Hand");
+
+            Color rendered = handRenderer.sharedMaterial.color;
+            Assert.That(rendered.r, Is.GreaterThan(rendered.b), "Hands should read warm.");
         }
 
         [Test]

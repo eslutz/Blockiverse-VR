@@ -53,22 +53,44 @@ namespace Blockiverse.Gameplay
         // Cool, desaturated moonlight (§19.1 "dark blue-black" night sky).
         public static readonly Color MoonColor = new(0.62f, 0.71f, 1.0f, 1.0f);
 
-        // Full-moon ambient. voxel_world_environment_effects.md §4.4 puts a full-moon night at
-        // sky light 4 of 15, so this carries exactly 4/15 of DayAmbientColor's radiance.
-        // NOTE: the project renders in LINEAR colour space, so the ratio is 4/15 of the LINEAR
-        // luminance (0.01214 vs the daytime 0.04570) even though these components are authored in
-        // gamma. Deriving the values in gamma space instead lands night at ~11% and leaves it
-        // roughly half as bright as the ruleset specifies.
-        public static readonly Color FullMoonAmbientColor = new(0.099f, 0.112f, 0.153f, 1.0f);
-
         const float DaySunIntensity = 1.15f;
 
-        // Full-moon directional intensity, derived in LINEAR space to match the renderer:
-        // sun radiance = 1.15 x linearLuminance(DaySunColor 0.8952) = 1.0295, and the moon
-        // 0.577 x linearLuminance(MoonColor 0.4757) = 0.2745, giving 0.2745 / 1.0295 = 4/15.
-        // The raw number looks high next to 4/15 only because moonlight is tinted cooler, and cool
-        // tints carry less luminance per unit intensity than the warm sun.
-        const float FullMoonIntensity = 0.577f;
+        // How bright a FULL moon is relative to noon, as a fraction of LINEAR radiance. Both the
+        // directional intensity and the night ambient are derived from this one number, so the two
+        // can never drift apart.
+        //
+        // This was 4/15, taken from the gameplay sky-light ladder in
+        // voxel_world_environment_effects.md §4.4 -- a 0-15 visibility/spawn/crop scale that ADR
+        // 0006 adopted as a RENDER target. It was never a photometric ratio, and it does not work
+        // as one: 4/15 of linear radiance presents as roughly 55% of noon after the sRGB transfer,
+        // so a full-moon night rendered about as bright as an overcast afternoon.
+        //
+        // 1/15 makes a full moon exactly as bright as the old NEW moon -- the one phase that never
+        // read as too bright. The gameplay ladder in EnvironmentLightComputer is deliberately NOT
+        // changed: it is engine-free WorldGen and remains the authority for crop growth and spawn
+        // gating, which must not move because the renderer did.
+        public const float FullMoonRadianceFraction = 1.0f / 15.0f;
+
+        // Ambient never falls below this fraction of daylight radiance, whatever the moon phase.
+        //
+        // Dimming the full moon to 1/15 drags every other phase down with it, and a NEW moon at a
+        // quarter of that lands at 1/60 -- half the brightness a previous build was called
+        // unnavigable at. Ambient is what decides whether you can see anything at all, so it gets
+        // a floor; the DIRECTIONAL moon still scales the full four-to-one with phase, which is
+        // where phase actually reads (moonlight direction, shading, whether shadows are cast).
+        // The cost is that ambient varies about two-to-one across the phase cycle instead of
+        // four-to-one.
+        public const float MinimumNightRadianceFraction = 1.0f / 25.0f;
+
+        // Both derived in LINEAR space, which is what the renderer works in. Deriving them in
+        // gamma instead is the bug documented in this file's history: it lands night at roughly
+        // half the intended radiance.
+        public static readonly Color FullMoonAmbientColor = ScaleRadiance(DayAmbientColor, FullMoonRadianceFraction);
+
+        // The raw number looks small next to the fraction only because moonlight is tinted cooler,
+        // and cool tints carry less luminance per unit intensity than the warm sun.
+        static readonly float FullMoonIntensity =
+            DaySunIntensity * LinearLuminance(DaySunColor) * FullMoonRadianceFraction / LinearLuminance(MoonColor);
 
         // Half-width of the twilight band, in units of sine-of-sun-elevation, over which ambient
         // crossfades between night and day.
@@ -105,7 +127,10 @@ namespace Blockiverse.Gameplay
             // Scale in LINEAR space, then convert back. Multiplying the gamma components directly
             // is not a brightness scale: a quarter-strength new moon would land at 4.8% of daylight
             // instead of the canonical 1/15 (6.7%), because the sRGB curve is not linear.
-            Color nightAmbient = (FullMoonAmbientColor.linear * phaseScale).gamma;
+            // Floored, unlike the directional term above: see MinimumNightRadianceFraction.
+            float ambientFraction = Mathf.Max(
+                FullMoonRadianceFraction * phaseScale, MinimumNightRadianceFraction);
+            Color nightAmbient = ScaleRadiance(DayAmbientColor, ambientFraction);
             nightAmbient.a = 1.0f;
 
             // Ambient gets its own, wider curve than the two bodies. Both directional intensities
@@ -132,5 +157,22 @@ namespace Blockiverse.Gameplay
             value %= 1.0f;
             return value < 0.0f ? value + 1.0f : value;
         }
+
+        // Rec. 709 luminance of a gamma-authored colour, measured in linear space.
+        public static float LinearLuminance(Color gammaColor)
+        {
+            Color linear = gammaColor.linear;
+            return 0.2126f * linear.r + 0.7152f * linear.g + 0.0722f * linear.b;
+        }
+
+        // Scales a gamma-authored colour to a fraction of its LINEAR radiance and returns it back
+        // in gamma. Alpha is carried through untouched.
+        public static Color ScaleRadiance(Color gammaColor, float fraction)
+        {
+            Color scaled = gammaColor.linear * fraction;
+            scaled.a = gammaColor.a;
+            return scaled.gamma;
+        }
+
     }
 }

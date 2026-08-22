@@ -168,7 +168,13 @@ namespace Blockiverse.Gameplay
             RefreshLoopVolumes();
         }
 
-        public void PlayCue(BlockiverseAudioCue cue)
+        public void PlayCue(BlockiverseAudioCue cue) => PlayCue(cue, volumeScale: 1.0f);
+
+        // volumeScale exists for cues whose loudness is a property of the EVENT rather than of the
+        // mix -- thunder, whose distance decides how loud it should be. It folds in inside
+        // ResolveVolume rather than at the PlayOneShot call, so master volume, the category bus
+        // and mute-all remain the single gate and a caller cannot scale its way past them.
+        public void PlayCue(BlockiverseAudioCue cue, float volumeScale)
         {
             if (IsLoopCue(cue))
             {
@@ -181,7 +187,7 @@ namespace Blockiverse.Gameplay
             if (clip == null || audioSource == null)
                 return;
 
-            float resolvedVolume = ResolveVolume(cue);
+            float resolvedVolume = ResolveVolume(cue, volumeScale);
             if (resolvedVolume <= 0f)
                 return;
 
@@ -736,12 +742,14 @@ namespace Blockiverse.Gameplay
                 BlockiverseAudioCue.EmberflowLoop;
         }
 
-        float ResolveVolume(BlockiverseAudioCue cue)
+        float ResolveVolume(BlockiverseAudioCue cue) => ResolveVolume(cue, volumeScale: 1.0f);
+
+        float ResolveVolume(BlockiverseAudioCue cue, float volumeScale)
         {
             float categoryVolume = feedbackSettings != null
                 ? feedbackSettings.ResolveVolume(GetCategory(cue))
                 : 1.0f;
-            return Mathf.Clamp01(volume * categoryVolume);
+            return Mathf.Clamp01(volume * categoryVolume * Mathf.Clamp01(volumeScale));
         }
 
         bool StartLoopInternal(BlockiverseAudioCue cue, Vector3? worldPosition)

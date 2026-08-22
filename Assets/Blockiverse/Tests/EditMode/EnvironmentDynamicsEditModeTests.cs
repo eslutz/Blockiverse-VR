@@ -246,6 +246,96 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
+        // ── Lightning ring fixture ───────────────────────────────────────────
+        // Wide enough that a 96-block ring centred on the middle stays in bounds, and flat, so
+        // every candidate column has a surface to strike and the only rejection left is the
+        // exclusion rule under test.
+        const int RingWidth = 256;
+        const int RingHeight = 24;
+        const int RingDepth = 256;
+        const int RingGroundHeight = 4;
+        const int RingAnchorX = 128;
+        const int RingAnchorZ = 128;
+
+        [Test]
+        public void StrikesLandInTheRingAroundTheAnchor()
+        {
+            using (var fixture = new SnowAccumulationFixture(RingSettings(), CreativeWorldGenerationPreset.FlatCreative))
+            {
+                var struck = new System.Collections.Generic.List<BlockPosition>();
+                fixture.Dynamics.LightningStruck += struck.Add;
+
+                for (int i = 0; i < 200; i++)
+                    fixture.Dynamics.TryStrikeNearAnchor(fixture.World, RingAnchorX, RingAnchorZ);
+
+                Assert.That(struck.Count, Is.GreaterThan(190),
+                    "Retrying candidates should recover almost every check rather than wasting the interval.");
+
+                foreach (BlockPosition strike in struck)
+                {
+                    double distance = Math.Sqrt(
+                        (strike.X - (double)RingAnchorX) * (strike.X - (double)RingAnchorX) +
+                        (strike.Z - (double)RingAnchorZ) * (strike.Z - (double)RingAnchorZ));
+
+                    Assert.That(distance, Is.GreaterThan(EnvironmentDynamicsController.StrikePlayerExclusionRadius),
+                        "A strike must never land inside the player comfort exclusion.");
+                    Assert.That(distance, Is.LessThan(LightningStrikeSelector.MaxRingRadius + 1.0));
+                }
+            }
+        }
+
+        [Test]
+        public void StrikesNeverLandInsideTheSpawnExclusion()
+        {
+            using (var fixture = new SnowAccumulationFixture(RingSettings(), CreativeWorldGenerationPreset.FlatCreative))
+            {
+                var struck = new System.Collections.Generic.List<BlockPosition>();
+                fixture.Dynamics.LightningStruck += struck.Add;
+
+                // Anchored right on spawn, so the spawn exclusion is the rule actually being
+                // exercised rather than something the ring geometry avoids for free.
+                BlockPosition spawn = RingSettings().SpawnPosition;
+                for (int i = 0; i < 200; i++)
+                    fixture.Dynamics.TryStrikeNearAnchor(fixture.World, spawn.X, spawn.Z);
+
+                Assert.That(struck, Is.Not.Empty, "Fixture guard: some strike must land to make this meaningful.");
+
+                foreach (BlockPosition strike in struck)
+                {
+                    Assert.That(
+                        LightningStrikeSelector.IsInsideExclusion(
+                            strike.X, strike.Z, spawn.X, spawn.Z,
+                            EnvironmentDynamicsController.StrikeSpawnExclusionRadius),
+                        Is.False);
+                }
+            }
+        }
+
+        [Test]
+        public void AStruckMeadowTurfColumnStillScorches()
+        {
+            using (var fixture = new SnowAccumulationFixture(RingSettings(), CreativeWorldGenerationPreset.FlatCreative))
+            {
+                // The scorch path is unchanged by ring selection, but it runs through the same
+                // TryApplyLightningStrike the selector now calls repeatedly -- worth holding.
+                var surface = new BlockPosition(RingAnchorX + 30, RingGroundHeight - 1, RingAnchorZ);
+                fixture.World.SetBlock(surface, BlockRegistry.MeadowTurf, trackChange: false);
+
+                Assert.That(fixture.Dynamics.TryApplyLightningStrike(fixture.World, surface.X, surface.Z), Is.True);
+                Assert.That(fixture.World.GetBlock(surface), Is.EqualTo(BlockRegistry.DryTurf));
+            }
+        }
+
+        static WorldGenerationSettings RingSettings() =>
+            new(
+                width: RingWidth,
+                height: RingHeight,
+                depth: RingDepth,
+                chunkSize: 16,
+                seed: 90210,
+                groundHeight: RingGroundHeight,
+                spawnPosition: new BlockPosition(16, RingGroundHeight + 1, 16));
+
         static WorldGenerationSettings BiomelessSettings() =>
             new(
                 width: BiomelessWidth,

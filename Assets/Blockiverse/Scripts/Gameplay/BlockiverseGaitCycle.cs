@@ -79,8 +79,22 @@ namespace Blockiverse.Gameplay
         /// </summary>
         public bool ExternallySuppressed { get; set; }
 
-        /// <summary>True while the cycle must not advance: external suppression or blocked world input.</summary>
-        public bool IsSuppressed => ExternallySuppressed || !BlockiverseRuntimeState.AllowWorldInput;
+        /// <summary>
+        /// True while the cycle must not advance. External suppression only -- creative flight.
+        /// </summary>
+        /// <remarks>
+        /// This deliberately does NOT gate on <c>BlockiverseRuntimeState.AllowWorldInput</c>. That
+        /// flag means "a menu holds input focus", which is the entire title/mini-world state, so
+        /// gating on it killed the walk bob and footsteps everywhere the player can walk but not
+        /// build. The menus ruleset already says menus never suppress locomotion and only block
+        /// editing stays gated (voxel_survival_menus.md), and sprint and crouch were fixed for the
+        /// same reason -- the gait cycle was simply missed by that pass.
+        ///
+        /// Nothing here needs the gate as a safety net: hasMoveIntent already requires real move
+        /// intent, and the displacement guard rejects any single-frame jump faster than a stride,
+        /// which is what keeps scripted rig moves and teleports from counting as walking.
+        /// </remarks>
+        public bool IsSuppressed => ExternallySuppressed;
 
         /// <summary>Position within the current step. Zero sits on the walk bob's low point.</summary>
         public float BobPhase01 => stepPhase - Mathf.Floor(stepPhase);

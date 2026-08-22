@@ -93,6 +93,18 @@ namespace Blockiverse.Editor
 
             gaitCycle.Configure(characterController);
 
+            // Underwater fog and camera clear. It lives on the rig (not the world root) because it
+            // samples the head camera every frame; both rig entry paths reach this method, so there
+            // is no second call site to forget.
+            BlockiverseWaterView waterView = rig.GetComponent<BlockiverseWaterView>();
+
+            if (waterView == null)
+                waterView = rig.AddComponent<BlockiverseWaterView>();
+
+            waterView.Configure(
+                UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(),
+                origin != null ? origin.Camera : null);
+
             XRBodyTransformer bodyTransformer = rig.GetComponent<XRBodyTransformer>();
 
             if (bodyTransformer == null)
@@ -121,6 +133,23 @@ namespace Blockiverse.Editor
             // ground and the player walks on lakes. Do not widen this to the targeting mask.
             gravityProvider.sphereCastLayerMask = GetInteractionLayerMask();
             gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
+
+            // Swimming. After the gravity provider so it can register itself as an IGravityController
+            // on enable: GravityProvider only auto-populates that list once, from components already
+            // present, so a provider added later would never be consulted and the player would sink
+            // at XRI's terminal velocity instead of swimming.
+            BlockiverseSwimProvider swimProvider = rig.GetComponent<BlockiverseSwimProvider>();
+
+            if (swimProvider == null)
+                swimProvider = rig.AddComponent<BlockiverseSwimProvider>();
+
+            swimProvider.mediator = mediator;
+            swimProvider.Configure(
+                inputRig,
+                null,
+                gravityProvider,
+                gaitCycle,
+                origin != null && origin.Camera != null ? origin.Camera.transform : null);
 
             JumpProvider jumpProvider = rig.GetComponent<JumpProvider>();
 

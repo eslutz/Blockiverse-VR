@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
 using UnityEngine;
+using UnityEngine.Rendering;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -21,6 +22,27 @@ namespace Blockiverse.Gameplay
         public const string AuthoredAtlasName = "blockiverse_block_atlas";
         public const string AuthoredAtlasPath = "Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/blockiverse_block_atlas.png";
         public const string VoxelLitShaderName = "Blockiverse/Voxel Lit";
+
+        // Local multi_compile keyword on the one voxel shader. There is deliberately no second
+        // .shader file: GraphicsSettings' m_AlwaysIncludedShaders lists this shader alone, so a
+        // separate water shader reached only through Shader.Find would be stripped from the
+        // Android player and water would render magenta on device while looking right in editor.
+        public const string WaterShaderKeyword = "_BLOCKIVERSE_WATER";
+
+        public const string BlockMaterialName = "Blockiverse Authored Block Atlas Material";
+        public const string FluidMaterialName = "Blockiverse Authored Fluid Atlas Material";
+        public const string FluidDepthPrimeMaterialName = "Blockiverse Authored Fluid Depth Prime Material";
+
+        // LightMode tag of the water depth-prime pass. Only the prime material runs it; terrain and
+        // the water shading material both switch it off, so neither pays for a pass it never wants.
+        public const string WaterDepthPrimePassName = "SRPDefaultUnlit";
+        const string ForwardPassName = "UniversalForward";
+
+        // One below the transparent queue, which is what orders the prime before every water
+        // shading draw in the scene -- including other chunks', so the nearest water surface
+        // anywhere claims the pixel. Render queue is the primary sort key, so this ordering does
+        // not depend on the pipeline's internal shader-tag order.
+        public const int FluidDepthPrimeRenderQueue = (int)RenderQueue.Transparent - 1;
 
         const float UvInsetPixels = 0.5f;
 
@@ -155,8 +177,112 @@ namespace Blockiverse.Gameplay
             }
 
             SetBaseColor(material, Color.white);
-            material.name = "Blockiverse Authored Block Atlas Material";
+
+            // Re-asserted, not inherited: the material is cloned from the authored URP Lit source
+            // asset, so whatever surface state that asset happens to carry would otherwise ride
+            // along into terrain rendering.
+            ApplySurfaceState(
+                material,
+                renderType: "Opaque",
+                queue: (int)RenderQueue.Geometry,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f);
+            material.DisableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
+
+            material.name = BlockMaterialName;
             return material;
+        }
+
+        // The water material is a runtime clone of the same authored atlas material, built on the
+        // path CreativeWorldManager.ConfigureWorldRuntime already drives, so texture-set switching
+        // and world reload need no extra wiring and no new .mat asset ships.
+        public static Material CreateFluidMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            // ZWrite is OFF here because CreateFluidDepthPrimeMaterial already wrote the depth:
+            // the nearest water fragment claims each pixel and every farther one is rejected before
+            // it can blend, so exactly one layer of tint lands from every angle. Writing depth here
+            // as well would be redundant, and it was never enough on its own -- ZWrite decides
+            // which fragments survive, not how many blend.
+            ApplySurfaceState(
+                material,
+                renderType: "Transparent",
+                queue: (int)RenderQueue.Transparent,
+                srcBlend: BlendMode.SrcAlpha,
+                dstBlend: BlendMode.OneMinusSrcAlpha,
+                zWrite: 0.0f,
+                // Every fluid quad winds outward and same-family faces are merged away, so from
+                // underneath a lake the surface was back-facing and culled -- you looked up at a
+                // hole in the world. Cull Off costs nothing here: only one side of a quad ever
+                // faces the camera, so it still rasterises once per pixel.
+                cull: CullMode.Off);
+            material.EnableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
+
+            material.name = FluidMaterialName;
+            return material;
+        }
+
+        // The depth half of the water pair. Rendered from the same fluid mesh through a second
+        // entry in the renderer's shared materials, one queue earlier, writing depth and no colour.
+        // It carries the water keyword and the same authored atlas so its vertex program is the
+        // same variant as the shading pass's, which is what keeps the two depths in agreement.
+        public static Material CreateFluidDepthPrimeMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            ApplySurfaceState(
+                material,
+                renderType: "Transparent",
+                queue: FluidDepthPrimeRenderQueue,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f,
+                // MUST match the shading material. If only that one un-culled, the prime would
+                // write no depth at the underside and the double-blend ADR 0007 section 4 exists
+                // to eliminate would come straight back for anyone looking up through water.
+                cull: CullMode.Off);
+            material.EnableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, true);
+            material.SetShaderPassEnabled(ForwardPassName, false);
+
+            material.name = FluidDepthPrimeMaterialName;
+            return material;
+        }
+
+        // cull is a parameter rather than a constant because terrain and water want different
+        // answers: opaque terrain never needs its backfaces and pays for culling them, while a
+        // water surface has to be visible from BELOW -- swimming under a lake and looking up at a
+        // hole in the world was the whole reason this became a parameter.
+        static void ApplySurfaceState(
+            Material material,
+            string renderType,
+            int queue,
+            BlendMode srcBlend,
+            BlendMode dstBlend,
+            float zWrite,
+            CullMode cull = CullMode.Back)
+        {
+            material.SetOverrideTag("RenderType", renderType);
+            material.renderQueue = queue;
+            SetFloatIfPresent(material, "_SrcBlend", (float)srcBlend);
+            SetFloatIfPresent(material, "_DstBlend", (float)dstBlend);
+            SetFloatIfPresent(material, "_ZWrite", zWrite);
+            SetFloatIfPresent(material, "_Cull", (float)cull);
+        }
+
+        // The fallback shaders CreateBaseMaterial can land on (URP Lit, Standard, Sprites/Default)
+        // do not all declare these, and SetFloat on a missing property is a silent no-op that
+        // would leave the state question unanswered.
+        static void SetFloatIfPresent(Material material, string propertyName, float value)
+        {
+            if (material != null && material.HasProperty(propertyName))
+                material.SetFloat(propertyName, value);
         }
 
         public static string AtlasPathForTextureSet(string textureSetId) =>

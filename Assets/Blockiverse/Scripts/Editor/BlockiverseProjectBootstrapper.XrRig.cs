@@ -452,6 +452,14 @@ namespace Blockiverse.Editor
             Transform leftHand = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
             Transform rightHand = cameraOffset != null ? cameraOffset.Find("Right Controller") : null;
 
+            // Lights the first-person hands from the voxel world's own light, because their
+            // material is unlit and nothing else would give them brightness. Lives on the rig
+            // rather than beside the hands: the avatar rig is in Networking, which cannot reach
+            // VoxelLightSampler in Gameplay.
+            BlockiverseHandLightDriver handLight = EnsureComponent<BlockiverseHandLightDriver>(rig);
+            handLight.Configure(avatarRig, null);
+            EditorUtility.SetDirty(handLight);
+
             avatarRig.ConfigureTrackingSources(head, leftHand, rightHand);
             avatarRig.SetMetaAvatarAvailable(false);
             avatarRig.ConfigureFallbackProxy(true);
@@ -707,6 +715,36 @@ namespace Blockiverse.Editor
                 EditorUtility.SetDirty(heightResetButton);
             }
 
+            // Swimming. Placed below the lowest existing rows in each column: the panel is 1040x980
+            // with hand-placed coordinates and no reflow, the left column's lowest row is the
+            // 64-tall toggle at -772 and the right column's is at -724, so these three clear both.
+            Toggle swimPassiveSinkToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Swim Sink Toggle",
+                "Sink When Not Swimming",
+                settings == null || settings.SwimPassiveSinkEnabled,
+                new Vector2(532.0f, -800.0f));
+            Toggle swimVignetteToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Swim Vignette Toggle",
+                "Vignette While Sinking",
+                settings == null || settings.SwimVignetteBoost,
+                new Vector2(532.0f, -864.0f));
+            Toggle swimClimbOutToggle = EnsureToggleControl(
+                panelObject.transform,
+                "Swim Climb Out Toggle",
+                "Climb Out At Low Banks",
+                settings == null || settings.SwimClimbOutEnabled,
+                new Vector2(532.0f, -928.0f));
+            Slider swimSpeedSlider = EnsureSettingsSlider(
+                panelObject.transform,
+                "Swim Speed Slider",
+                "Swim Speed",
+                settings != null ? settings.SwimSpeedFactor : 0.55f,
+                new Vector2(32.0f, -848.0f),
+                minValue: 0.30f,
+                maxValue: 1.00f);
+
             BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
             menu.Configure(canvas, settings, heightReset);
             menu.ConfigureControls(
@@ -725,7 +763,11 @@ namespace Blockiverse.Editor
                 targetGlideBobToggle: glideBobToggle,
                 targetRealPlayerHeightToggle: realPlayerHeightToggle,
                 targetSprintToggleToggle: sprintToggleToggle,
-                targetCrouchToggleToggle: crouchToggleToggle);
+                targetCrouchToggleToggle: crouchToggleToggle,
+                targetSwimPassiveSinkToggle: swimPassiveSinkToggle,
+                targetSwimSpeedSlider: swimSpeedSlider,
+                targetSwimVignetteToggle: swimVignetteToggle,
+                targetSwimClimbOutToggle: swimClimbOutToggle);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
             ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
             presenter.ConfigureComfortSettings(settings);
@@ -808,6 +850,18 @@ namespace Blockiverse.Editor
             AddVignetteProvider(controller, rig.GetComponent<ContinuousTurnProvider>());
             AddVignetteProvider(controller, rig.GetComponent<TeleportationProvider>());
 
+            // The swim provider drives the vignette itself rather than through a
+            // LocomotionVignetteProvider entry, because it engages only for its own vertical motion
+            // and only while the Vignette While Sinking comfort setting is on -- neither of which a
+            // static list entry can express.
+            BlockiverseSwimProvider swimProvider = rig.GetComponent<BlockiverseSwimProvider>();
+
+            if (swimProvider != null)
+            {
+                swimProvider.ConfigureVignette(controller);
+                EditorUtility.SetDirty(swimProvider);
+            }
+
             BlockiverseVignetteSettingsDriver driver = EnsureComponent<BlockiverseVignetteSettingsDriver>(controller.gameObject);
             driver.Configure(vignetteSettings);
 
@@ -884,6 +938,15 @@ namespace Blockiverse.Editor
         static void EnsureXrRigCreativeFlight(GameObject rig, BlockiverseInputRig inputRig)
         {
             BlockiverseCreativeFlightController flight = EnsureComponent<BlockiverseCreativeFlightController>(rig);
+
+            // Flight is a LocomotionProvider now, so it needs the mediator like every other one --
+            // gravity, swim, jump, teleport, move, snap turn and continuous turn are all wired the
+            // same way. Without it the component serializes m_Mediator: {fileID: 0}.
+            LocomotionMediator flightMediator = rig.GetComponent<LocomotionMediator>();
+
+            if (flightMediator != null)
+                flight.mediator = flightMediator;
+
             flight.Configure(inputRig);
             flight.FlightEnabledDefault = false;
             EditorUtility.SetDirty(flight);

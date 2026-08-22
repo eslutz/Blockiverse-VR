@@ -105,6 +105,12 @@ namespace Blockiverse.UI
 
             if (hotbar == null)
                 hotbar = FindFirstObjectByType<CreativeHotbar>(FindObjectsInactive.Include);
+
+            // Serialized as {fileID: 0} on the generated prefab, so the Fill/Delete/Replace
+            // confirmation modals silently never appeared. Resolved here rather than serialized
+            // so the prefab stays untouched.
+            if (menuController == null)
+                menuController = FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
         }
 
         void WireSliders()

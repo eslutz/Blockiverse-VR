@@ -207,12 +207,18 @@ namespace Blockiverse.Tests.EditMode
                 Vector3 towardLight = -(host.transform.rotation * Vector3.forward);
                 Assert.That(towardLight.y, Is.GreaterThan(0.95f));
 
-                // A fresh clock sits on day 0, i.e. a NEW moon — the dimmest phase. Even that must
-                // still light the world and cast, or the darkest night is the broken one again.
+                // A fresh clock sits on day 0, i.e. a NEW moon -- the dimmest phase. It must still
+                // LIGHT the world, or the darkest night is the unplayable one again.
                 Assert.That(controller.MoonPhaseIndex, Is.EqualTo(0));
+                Assert.That(light.intensity, Is.GreaterThan(0.0f));
+
+                // It no longer casts, and that is deliberate. Once a full moon renders at 1/15 of
+                // noon a new moon sits at a quarter of that, below the intensity where a shadow
+                // pass buys anything visible -- so the whole shadow-caster sweep over every loaded
+                // chunk is skipped. The brighter phases still cast; see the assertion below.
                 Assert.That(light.intensity,
-                    Is.GreaterThan(BlockiverseLightingCycleController.MinimumShadowCastingIntensity));
-                Assert.That(light.shadows, Is.Not.EqualTo(LightShadows.None));
+                    Is.LessThan(BlockiverseLightingCycleController.MinimumShadowCastingIntensity));
+                Assert.That(light.shadows, Is.EqualTo(LightShadows.None));
             }
             finally
             {
@@ -227,26 +233,48 @@ namespace Blockiverse.Tests.EditMode
             LightingCycleState fullMoon = LightingCycleEvaluator.Evaluate(0.75f, moonPhaseIndex: 4);
             LightingCycleState newMoon = LightingCycleEvaluator.Evaluate(0.75f, moonPhaseIndex: 0);
 
-            // voxel_world_environment_effects.md 4.4: a full moon is sky light 4 of 15 and a new
-            // moon is 1 of 15, so night radiance should land on those fractions of daylight.
-            // The ratios MUST be taken in linear space — the project renders in Linear colour
-            // space, and doing this arithmetic on gamma components lands night at ~11% of daylight
-            // instead of ~27%, which is most of the original "pitch black" bug.
+            // Asserted against the evaluator's own constant rather than a copy of the number, so
+            // retuning the moon updates one place.
+            //
+            // The ratios MUST be taken in linear space -- the project renders in Linear colour
+            // space, and doing this arithmetic on gamma components is the bug that once left night
+            // at roughly half its intended radiance.
+            //
+            // Note this is deliberately NOT the gameplay sky-light ladder's 4/15. That ladder is a
+            // 0-15 visibility/spawn/crop scale, and adopting it as a render target put a full-moon
+            // night at ~55% of noon once displayed -- brighter than an overcast afternoon.
+            // EnvironmentLightComputer still owns the gameplay ladder and is unchanged.
+            float expected = LightingCycleEvaluator.FullMoonRadianceFraction;
+
             float directionalRatio = fullMoon.MoonIntensity * LinearLuminance(fullMoon.MoonColor) /
                                      (day.SunIntensity * LinearLuminance(day.SunColor));
-            Assert.That(directionalRatio, Is.EqualTo(4.0f / 15.0f).Within(0.02f));
+            Assert.That(directionalRatio, Is.EqualTo(expected).Within(0.005f));
 
             float ambientRatio = LinearLuminance(fullMoon.AmbientColor) / LinearLuminance(day.AmbientColor);
-            Assert.That(ambientRatio, Is.EqualTo(4.0f / 15.0f).Within(0.02f),
+            Assert.That(ambientRatio, Is.EqualTo(expected).Within(0.005f),
                 "Ambient and directional must agree on how bright a full-moon night is.");
+
+            Assert.That(expected, Is.LessThan(4.0f / 15.0f),
+                "The render target is deliberately dimmer than the gameplay sky-light ladder.");
 
             Assert.That(fullMoon.IsMoonPrimary, Is.True);
             Assert.That(newMoon.MoonIntensity, Is.LessThan(fullMoon.MoonIntensity));
             Assert.That(newMoon.MoonIntensity, Is.GreaterThan(0.0f),
                 "Even a new moon keeps a floor so night is never unplayable.");
 
+            // The shadow-pass boundary now falls BETWEEN the phases, which is the intended
+            // consequence of dimming the moon: a bright night still casts, the darkest one skips
+            // the whole shadow-caster sweep over every loaded chunk.
+            Assert.That(
+                fullMoon.MoonIntensity,
+                Is.GreaterThan(BlockiverseLightingCycleController.MinimumShadowCastingIntensity),
+                "A full moon must still cast, or moonlit shadows are gone from the game entirely.");
+            Assert.That(
+                newMoon.MoonIntensity,
+                Is.LessThan(BlockiverseLightingCycleController.MinimumShadowCastingIntensity));
+
             // Still unmistakably night, and phase still reads.
-            Assert.That(ambientRatio, Is.LessThan(0.5f));
+            Assert.That(ambientRatio, Is.LessThan(0.12f));
             Assert.That(fullMoon.AmbientColor.grayscale, Is.GreaterThan(newMoon.AmbientColor.grayscale));
         }
 

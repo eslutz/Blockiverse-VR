@@ -290,6 +290,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "Block Editing Toggle",
+                    "type": "Button",
+                    "id": "0832a838-d09a-7638-89b4-fc9c5c1b91ac",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Teleport Mode",
                     "type": "Button",
                     "id": "76998c04-913d-0734-9650-be09376e63f2",
@@ -483,12 +492,23 @@
                 },
                 {
                     "name": "",
-                    "id": "c50c1501-d069-4a34-aea8-a12dc18ed3da",
-                    "path": "<XRController>{LeftHand}/thumbstickClicked",
+                    "id": "e83b397d-d8d4-da3e-ad5b-a0dfb21d546e",
+                    "path": "<XRController>{LeftHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Crouch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "bd966355-d27c-e83a-91fe-a8b661ac3230",
+                    "path": "<XRController>{LeftHand}/thumbstickClicked",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Block Editing Toggle",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },
@@ -700,6 +720,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "Block Editing Toggle",
+                    "type": "Button",
+                    "id": "56d6ba0f-067f-0234-8056-ed64437e6d53",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Teleport Mode",
                     "type": "Button",
                     "id": "5b3136c2-d1d0-c138-99ae-715caec84174",
@@ -893,12 +922,23 @@
                 },
                 {
                     "name": "",
-                    "id": "88eec592-af6b-ca3f-8200-9b1a7ad9396b",
-                    "path": "<XRController>{RightHand}/thumbstickClicked",
+                    "id": "a1592e93-b3e6-dc3d-b5e0-b7779a21d76a",
+                    "path": "<XRController>{RightHand}/secondaryButton",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
                     "action": "Crouch",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "5d6fa857-5df2-0b3f-8b4b-b416d5814e7b",
+                    "path": "<XRController>{RightHand}/thumbstickClicked",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Block Editing Toggle",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

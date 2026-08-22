@@ -505,6 +505,16 @@ namespace Blockiverse.VR
             if (!interactionRay.TryGetCurrent3DRaycastHit(out RaycastHit hit))
                 return false;
 
+            // The interaction ray deliberately includes the fluid layer -- drink, bucket fill and
+            // teleport-onto-water all need to hit a water surface. For BLOCK EDITING that made a
+            // lake behave like a wall: the ray stopped dead on the surface, so the only place you
+            // could put a block was on top of the water.
+            //
+            // Re-cast past it on the solid-only mask rather than narrowing the shared mask, which
+            // would break teleport-onto-water (shipped) and the two fluid use verbs.
+            if (IsFluidHit(hit) && TryRaycastPastFluid(out RaycastHit solidHit))
+                hit = solidHit;
+
             VoxelChunkTarget chunkTarget = hit.collider.GetComponentInParent<VoxelChunkTarget>();
 
             if (chunkTarget == null || !chunkTarget.TryGetHitBlock(hit, out target))
@@ -512,6 +522,28 @@ namespace Blockiverse.VR
 
             normal = hit.normal;
             return true;
+        }
+
+        static bool IsFluidHit(RaycastHit hit) =>
+            hit.collider != null && hit.collider.gameObject.layer == BlockiverseProject.FluidLayerIndex;
+
+        // Same origin, direction and reach as the interactor's own cast, minus the fluid layer, so
+        // the builder targets whatever the water is sitting on.
+        bool TryRaycastPastFluid(out RaycastHit hit)
+        {
+            hit = default;
+
+            Transform origin = interactionRay != null ? interactionRay.rayOriginTransform : null;
+
+            if (origin == null)
+                return false;
+
+            return Physics.Raycast(
+                new Ray(origin.position, origin.forward),
+                out hit,
+                interactionRay.maxRaycastDistance,
+                BlockiverseProject.VoxelGroundLayerMask,
+                QueryTriggerInteraction.Ignore);
         }
 
         void ApplyInteractionRayVisualState()

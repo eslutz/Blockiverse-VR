@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: BlockiverseSky
+  m_Shader: {fileID: 4800000, guid: 72812890a07654c48a161e2eadbfcf8d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _CloudCoverage: 0
+    - _CloudScale: 2.2
+    - _CloudSoftness: 0.22
+    - _HorizonSharpness: 2.2
+    - _SunGlow: 40
+    - _SunSize: 0.9975
+    m_Colors:
+    - _CloudColor: {r: 0.96, g: 0.96, b: 0.97, a: 1}
+    - _CloudScroll: {r: 0, g: 0, b: 0, a: 0}
+    - _GroundColor: {r: 0.3, g: 0.3, b: 0.31, a: 1}
+    - _HorizonColor: {r: 0.66, g: 0.78, b: 0.92, a: 1}
+    - _SunColor: {r: 1, g: 0.94, b: 0.8, a: 1}
+    - _SunDirection: {r: 0, g: 1, b: 0, a: 0}
+    - _ZenithColor: {r: 0.16, g: 0.36, b: 0.68, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
