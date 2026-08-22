@@ -137,6 +137,21 @@ handed off by name, not as a resource you wait for.
    Claiming the license in that gap kills the run that was mid-sequence. This has
    destroyed an in-flight build.
 5. **Only ever kill processes you started.** If a run must be stopped, ask its owner.
+6. **If the holder goes silent, take over deliberately.** Rules 4 and 5 otherwise
+   deadlock when a holder crashes or its session ends mid-run: no hand-off is ever
+   announced, and nobody is allowed to clear the stale process. So: ping the holder;
+   if **10 minutes** pass with no reply *and* no live Unity process under its
+   `-projectPath`, presume it dead, **announce the takeover** to everyone, and then
+   clean up. Ten minutes is far longer than the seconds-long gap between one
+   session's sequential runs, so this cannot fire on a live holder mid-sequence. The
+   number matters more than its value — an unstated timeout means every session picks
+   its own and you are racing again.
+
+Recovery is the one place rule 5 does not hold: the licensing recovery below kills the
+shared per-user licensing client by construction, which is precisely what it is for.
+It may be run by the session that has announced a takeover under rule 6, or by the
+holder on its own stuck run — not by a queued session acting unilaterally. Run the
+pre-flight first either way.
 
 The reason for hand-off rather than polling is worth keeping with the rule, because a
 rule without it gets optimised back into a poll loop: no observation of the process
