@@ -170,6 +170,15 @@ other worktrees, but a shared service is not the same thing as an exclusive lock
    two claims had overtaken. A named hand-off has exactly one valid recipient, and any
    second claimant knows immediately that they are not it. If you did not receive the
    hand-off, ask the current holder rather than acting on an announcement.
+
+   Announcements and `ps` answer different questions and neither substitutes for the
+   other. **Announcements are the authority for "may I claim"** — absence of a process
+   cannot distinguish *free* from *between two of someone's runs*, so no amount of
+   looking earns you the licence. **`ps` is the authority for "who holds it right
+   now"** — presence is definitive and names the holder. So: never claim on `ps`
+   alone, and always confirm the current holder with `ps` before believing any message
+   about who has it. The near-collision above was a stale announcement believed where
+   a live check would have answered correctly.
 3. **Want a second run while someone is queued?** Hand off first and rejoin the back
    of the queue. A queued session gets a turn before you take another slot.
    **Leaving the queue is never permanent** — say so when you leave, and rejoin the
