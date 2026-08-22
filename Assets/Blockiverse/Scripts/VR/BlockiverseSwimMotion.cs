@@ -62,7 +62,8 @@ namespace Blockiverse.VR
         /// </summary>
         /// <remarks>
         /// Wading is a question about the water, not about the player: water one block deep is
-        /// walkable because you are standing on the bottom of it, whoever you are. Deciding that
+        /// walkable because you are standing on the bottom of it, whoever you are — which means
+        /// the answer needs the cell BELOW the feet as well as the surface above them. Deciding that
         /// from where a fraction of the capsule happens to land makes it a question about height
         /// instead, and gets it wrong for everyone — the body sample sits at 0.55 x capsule
         /// height, which is 0.99 m for the default 1.8 m capsule and 0.50 m crouched, both inside
@@ -79,9 +80,18 @@ namespace Blockiverse.VR
             if (!submersion.InFluid)
                 return SwimState.Dry;
 
-            // Surface at or below the feet cell means the column the player occupies is a single
-            // cell tall: one block of water, standing on the bottom of it.
-            if (submersion.FeetSubmerged && submersion.HasSurface && submersion.SurfaceCellY <= feetCellY)
+            // Surface at or below the feet cell AND nothing but ground under them: one block of
+            // water, standing on the bottom of it.
+            //
+            // Both halves are load-bearing. The surface test alone is also true at the TOP of a
+            // deep column — a player who has risen until only their feet are still under the water
+            // line has the surface in their feet cell exactly as a puddle-stander does. Calling
+            // that Wading hands vertical motion back to gravity mid-swim, so they sink, re-enter
+            // Surfaced, get buoyed back up, and oscillate at the water line instead of treading.
+            if (submersion.FeetSubmerged &&
+                submersion.HasSurface &&
+                submersion.SurfaceCellY <= feetCellY &&
+                !submersion.FluidBelowFeet)
                 return SwimState.Wading;
 
             // Deeper than one block: how much of the player is under decides whether they are

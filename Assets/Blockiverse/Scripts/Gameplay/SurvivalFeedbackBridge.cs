@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -20,6 +21,20 @@ namespace Blockiverse.Gameplay
         [SerializeField] BlockiverseSubtitleToastPanel toastPanel;
 
         BlockiverseNetworkSession session;
+
+        // A harvest's cue has to sound like the block that was removed, but command feedback is
+        // raised AFTER the authoritative mutation has already replaced the cell with air, so
+        // reading the world at that point yields air and the material-aware banks never fire.
+        // These remember what each removal took away, keyed by where.
+        //
+        // Bounded and consumed on read: an entry that is never claimed (a mutation with no command
+        // feedback behind it — a remote player's edit, world simulation) must not accumulate, and
+        // must not still be sitting there to answer for a later break at the same position.
+        const int MaxRememberedRemovals = 32;
+        readonly Dictionary<BlockPosition, BlockId> removedBlocks = new();
+        readonly Queue<BlockPosition> removedBlockOrder = new();
+        VoxelWorld subscribedWorld;
+
         bool subscribedToNetworking;
         bool subscribedToSync;
         bool subscribedToLoot;
@@ -92,6 +107,8 @@ namespace Blockiverse.Gameplay
                 subscribedToLoot = true;
             }
 
+            SubscribeWorld();
+
             SubscribeVitals();
 
             if (session != null && !subscribedToNetworking)
@@ -111,6 +128,8 @@ namespace Blockiverse.Gameplay
             if (worldManager != null && subscribedToLoot)
                 worldManager.ContainerLooted -= OnContainerLooted;
             subscribedToLoot = false;
+
+            UnsubscribeWorld();
 
             UnsubscribeVitals();
 
@@ -151,6 +170,7 @@ namespace Blockiverse.Gameplay
 
         void OnCommandFeedback(SurvivalCommandResult result, BlockPosition position)
         {
+            SubscribeWorld();
             Vector3 worldCenter = new(position.X + 0.5f, position.Y + 0.5f, position.Z + 0.5f);
 
             switch (result.CommandKind)
@@ -201,23 +221,84 @@ namespace Blockiverse.Gameplay
         // The harvest case reads the world AFTER the mutation, so an emptied cell
         // reads as Air; the generic cue is the right answer there rather than
         // guessing at what used to be present.
+        void SubscribeWorld()
+        {
+            VoxelWorld world = worldManager != null ? worldManager.World : null;
+            if (ReferenceEquals(world, subscribedWorld))
+                return;
+
+            UnsubscribeWorld();
+
+            if (world == null)
+                return;
+
+            world.BlockChanged += OnWorldBlockChanged;
+            subscribedWorld = world;
+        }
+
+        void UnsubscribeWorld()
+        {
+            if (subscribedWorld != null)
+                subscribedWorld.BlockChanged -= OnWorldBlockChanged;
+
+            subscribedWorld = null;
+            removedBlocks.Clear();
+            removedBlockOrder.Clear();
+        }
+
+        void OnWorldBlockChanged(BlockChange change)
+        {
+            if (change.NewBlock != BlockRegistry.Air || change.PreviousBlock == BlockRegistry.Air)
+                return;
+
+            if (!removedBlocks.ContainsKey(change.Position))
+            {
+                while (removedBlockOrder.Count >= MaxRememberedRemovals)
+                    removedBlocks.Remove(removedBlockOrder.Dequeue());
+
+                removedBlockOrder.Enqueue(change.Position);
+            }
+
+            removedBlocks[change.Position] = change.PreviousBlock;
+        }
+
+        // Resolves the material a cue should sound like. For a break the cell is already air by the
+        // time feedback arrives, so the removal record answers it; for a placement the cell holds
+        // the new block and reading the world is right. On a client the two orderings both work:
+        // if the delta has landed the record is there, and if it has not the world still holds the
+        // old block.
+        bool TryResolveCueBlock(BlockiverseAudioCue cue, BlockPosition position, out BlockId block)
+        {
+            if (cue == BlockiverseAudioCue.BlockBreak &&
+                removedBlocks.TryGetValue(position, out block))
+            {
+                removedBlocks.Remove(position);
+                return true;
+            }
+
+            VoxelWorld world = worldManager != null ? worldManager.World : null;
+            if (world != null && world.Bounds.Contains(position))
+            {
+                block = world.GetBlock(position);
+                return block != BlockRegistry.Air;
+            }
+
+            block = default;
+            return false;
+        }
+
         void PlayBlockCue(BlockiverseAudioCue cue, BlockPosition position, Vector3 worldCenter)
         {
             if (audioCuePlayer == null)
                 return;
 
-            VoxelWorld world = worldManager != null ? worldManager.World : null;
-            if (world != null && world.Bounds.Contains(position))
+            if (TryResolveCueBlock(cue, position, out BlockId block))
             {
-                BlockId block = world.GetBlock(position);
-                if (block != BlockRegistry.Air)
-                {
-                    audioCuePlayer.PlayMaterialCueAt(
-                        cue,
-                        BlockiverseBlockFeedbackCues.FamilyForBlock(BlockRegistry.Default, block),
-                        worldCenter);
-                    return;
-                }
+                audioCuePlayer.PlayMaterialCueAt(
+                    cue,
+                    BlockiverseBlockFeedbackCues.FamilyForBlock(BlockRegistry.Default, block),
+                    worldCenter);
+                return;
             }
 
             audioCuePlayer.PlayCueAt(cue, worldCenter);

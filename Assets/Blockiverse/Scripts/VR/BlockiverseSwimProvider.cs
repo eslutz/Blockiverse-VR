@@ -405,7 +405,8 @@ namespace Blockiverse.VR
                 bodySubmerged: sampled.BodySubmerged,
                 headSubmerged: headSubmerged,
                 hasSurface: sampled.HasSurface,
-                surfaceCellY: sampled.SurfaceCellY);
+                surfaceCellY: sampled.SurfaceCellY,
+                fluidBelowFeet: sampled.FluidBelowFeet);
         }
 
         FluidSubmersionState SampleSubmersion()

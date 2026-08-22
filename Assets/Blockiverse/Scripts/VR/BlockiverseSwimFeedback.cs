@@ -214,7 +214,19 @@ namespace Blockiverse.VR
 
         void TickSubmergedLoop()
         {
-            if (submergedWanted || !submergedLoopActive || submergedReleaseAt <= 0.0f)
+            // Still under and still silent: retry. StartLoop refuses while the resolved volume is
+            // zero, so diving with Mute All on, or with the master or weather slider at zero, fails
+            // to latch — and the loop is only ever requested on a state CHANGE, so without this the
+            // player would have to leave the water and come back before unmuting had any effect.
+            if (submergedWanted)
+            {
+                if (!submergedLoopActive)
+                    StartSubmergedLoop();
+
+                return;
+            }
+
+            if (!submergedLoopActive || submergedReleaseAt <= 0.0f)
                 return;
 
             if (Time.time >= submergedReleaseAt)

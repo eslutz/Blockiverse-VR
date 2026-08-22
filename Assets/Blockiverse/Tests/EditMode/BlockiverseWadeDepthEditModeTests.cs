@@ -99,6 +99,65 @@ namespace Blockiverse.Tests.EditMode
                 Is.EqualTo(SwimState.Swimming));
         }
 
+        // Resolves state for a player whose FEET sit in the topmost cell of a fluid column that is
+        // `waterCells` deep — a swimmer who has risen to the water line, not someone standing in a
+        // puddle. The surface cell equals the feet cell in both cases, which is exactly why the
+        // surface alone cannot tell them apart.
+        static SwimState ResolveForFloaterAtSurface(int waterCells, float capsuleHeight)
+        {
+            VoxelWorld world = WorldWithWaterColumn(waterCells);
+            int surfaceCellY = GroundY + waterCells;
+            int feetCellY = surfaceCellY;
+
+            var feet = new BlockPosition(8, feetCellY, 8);
+            var body = new BlockPosition(8, feetCellY + CellOffset(capsuleHeight * 0.55f), 8);
+            var head = new BlockPosition(8, feetCellY + CellOffset(capsuleHeight), 8);
+
+            FluidSubmersionState submersion = FluidSubmersion.Sample(world, feet, body, head);
+            return BlockiverseSwimMotion.ResolveState(submersion, feetCellY);
+        }
+
+        [TestCase(4, 1.80f, TestName = "deep water, default capsule")]
+        [TestCase(4, 0.90f, TestName = "deep water, crouched")]
+        [TestCase(8, 1.80f, TestName = "very deep water, default capsule")]
+        [TestCase(3, 1.20f, TestName = "deep water, short real-height player")]
+        public void RisingToTheSurfaceOfDeepWaterIsNotWading(int waterCells, float capsuleHeight)
+        {
+            // Feet in the topmost fluid cell puts the surface cell AT the feet cell, exactly as
+            // standing in one block of water does. Reading only the surface therefore called this
+            // Wading, which hands vertical motion back to gravity mid-swim: the player sinks,
+            // re-enters Surfaced, is buoyed back up, and oscillates at the water line. What
+            // separates the two is the cell BELOW the feet — ground in a puddle, more water here.
+            Assert.That(ResolveForFloaterAtSurface(waterCells, capsuleHeight),
+                Is.Not.EqualTo(SwimState.Wading),
+                $"a {capsuleHeight:0.00} m player at the top of {waterCells} blocks of water is afloat, not standing");
+        }
+
+        [Test]
+        public void TheCellBelowTheFeetIsWhatDistinguishesAPuddleFromASurface()
+        {
+            // Pinning the discriminator itself, so a future change cannot go back to inferring
+            // depth from the surface cell and still pass everything above.
+            VoxelWorld puddle = WorldWithWaterColumn(1);
+            FluidSubmersionState standing = FluidSubmersion.Sample(
+                puddle,
+                new BlockPosition(8, GroundY + 1, 8),
+                new BlockPosition(8, GroundY + 1, 8),
+                new BlockPosition(8, GroundY + 2, 8));
+
+            VoxelWorld deep = WorldWithWaterColumn(4);
+            FluidSubmersionState afloat = FluidSubmersion.Sample(
+                deep,
+                new BlockPosition(8, GroundY + 4, 8),
+                new BlockPosition(8, GroundY + 4, 8),
+                new BlockPosition(8, GroundY + 5, 8));
+
+            Assert.That(standing.SurfaceCellY, Is.EqualTo(afloat.SurfaceCellY - 3),
+                "sanity: these are different columns");
+            Assert.That(standing.FluidBelowFeet, Is.False, "a puddle has ground under it");
+            Assert.That(afloat.FluidBelowFeet, Is.True, "the top of a deep column has more water under it");
+        }
+
         [Test]
         public void OutOfFluidResolvesDryWhateverTheFeetCell()
         {
