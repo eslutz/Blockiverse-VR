@@ -11,10 +11,15 @@ FROM debian:bookworm-slim
 
 # The Unity Linux dedicated-server player links only against the glibc family -- verified with the
 # ELF NEEDED entries: libc, libm, libgcc_s, libanl and the loader. No X11 and no GL, because the
-# server subtarget has no graphics. So the slim base needs nothing added for the player itself;
-# ca-certificates is here only so an operator's own tooling in an exec shell behaves.
+# server subtarget has no graphics. So the slim base needs nothing added for the player itself.
+#
+# netcat-openbsd IS needed, and not as a convenience: the admin surface is a Unix domain socket,
+# this base image ships no client that can speak to one, and under `docker run -d` there is no
+# stdin either. Without it the container has NO way to run `save` or a clean `stop` -- so every
+# shutdown would be a hard kill and the documented admin commands would fail with "nc: not found".
+# It is ~30 KB; python3 would do the same job for a thousand times the size.
 RUN apt-get update \
- && apt-get install --no-install-recommends --assume-yes ca-certificates \
+ && apt-get install --no-install-recommends --assume-yes ca-certificates netcat-openbsd \
  && rm -rf /var/lib/apt/lists/*
 
 # Unprivileged by construction. The world directory is the only thing the server writes, and a
@@ -33,6 +38,16 @@ COPY ${SERVER_DIR}/BlockiverseServer        ./BlockiverseServer
 COPY ${SERVER_DIR}/UnityPlayer.so           ./UnityPlayer.so
 COPY ${SERVER_DIR}/BlockiverseServer_Data   ./BlockiverseServer_Data
 
+# The same admin helper the systemd install uses, so `docker exec` and a native install are
+# administered with one command instead of two different incantations.
+#
+# Copied from source, NOT from ${SERVER_DIR}: the build context is the repo root either way, and
+# sourcing it from the staged output would mean a local
+# `docker build --build-arg SERVER_DIR=Builds/LinuxServer` fails, because a Unity build does not
+# produce this file. One source, both paths.
+COPY scripts/server/blockiverse-server-admin.sh /usr/local/bin/blockiverse-server-admin
+RUN chmod +x /usr/local/bin/blockiverse-server-admin
+
 RUN chmod +x ./BlockiverseServer \
  && mkdir -p /data \
  && chown -R blockiverse:blockiverse /opt/blockiverse /data
@@ -47,7 +62,8 @@ USER blockiverse
 
 ENV BLOCKIVERSE_WORLD_DIR=/data \
     BLOCKIVERSE_SERVER_LISTEN_ADDRESS=0.0.0.0 \
-    BLOCKIVERSE_LOG_FORMAT=text
+    BLOCKIVERSE_LOG_FORMAT=text \
+    BLOCKIVERSE_ADMIN_SOCKET=/data/admin.sock
 
 # A UDP game port has nothing to probe and the admin socket needs a client, so the server touches
 # a heartbeat file every 10s and the check reads its age. Stale means the main loop has stopped

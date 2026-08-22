@@ -119,6 +119,14 @@ jobs:
           chmod +x staging/blockiverse-server/BlockiverseServer
           cp docs/server/README.md docs/server/configuration.md docs/server/security-posture.md \
              SERVER-EULA.md staging/blockiverse-server/
+          # The systemd install path. Without these the archive is "untar it and remember to run it
+          # yourself", which is not a server install -- nothing restarts it after a reboot.
+          cp scripts/server/install.sh \
+             scripts/server/blockiverse-server.service \
+             scripts/server/blockiverse-server-admin.sh \
+             staging/blockiverse-server/
+          chmod +x staging/blockiverse-server/install.sh \
+                   staging/blockiverse-server/blockiverse-server-admin.sh
           ls -la staging/blockiverse-server
 
       - name: Create archive and checksum
@@ -161,6 +169,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # `latest` must only ever move on a real release tag. A workflow_dispatch run builds a
+      # `-ci.runN` version for testing, and letting that claim `latest` would silently hand every
+      # `docker pull` with no tag an untested build -- with no signal that it had happened.
+      - name: Decide image tags
+        id: tags
+        run: |
+          {
+            echo "tags<<TAGS_EOF"
+            echo "${IMAGE_NAME}:${{ needs.build.outputs.version }}"
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+              echo "${IMAGE_NAME}:latest"
+            else
+              echo "Not a tag build: publishing the version tag only, leaving :latest alone." >&2
+            fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and push the image
         uses: docker/build-push-action@v6
         with:
@@ -169,9 +194,7 @@ jobs:
           push: true
           build-args: |
             SERVER_DIR=artifact/staging/blockiverse-server
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}
-            ${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.build.outputs.version }}

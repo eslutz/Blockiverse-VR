@@ -28,7 +28,12 @@ jobs:
         run: git lfs pull
 
       - name: Check shell script syntax
-        run: bash -n scripts/unity/*.sh
+        run: |
+          bash -n scripts/unity/*.sh
+          bash -n scripts/server/install.sh
+          # The admin helper is /bin/sh on purpose -- it runs on a minimal server where bash may
+          # not be installed -- so check it with sh, which is the stricter grammar here.
+          sh -n scripts/server/blockiverse-server-admin.sh
 
       - name: Check release workflow conventions
         run: |
@@ -42,6 +47,17 @@ jobs:
           test -f .github/workflows/quest-promote.yml
           test -f .github/workflows/server-release.yml
           test ! -f .github/workflows/meta-release.yml
+          # The release archive stages these by name. A rename that only updated the workflow would
+          # produce a release whose install path silently vanished.
+          test -f scripts/server/install.sh
+          test -f scripts/server/blockiverse-server.service
+          test -f scripts/server/blockiverse-server-admin.sh
+          test -f docs/server/README.md
+          test -f docs/server/configuration.md
+          test -f docs/server/security-posture.md
+          test -f SERVER-EULA.md
+          # MemoryDenyWriteExecute breaks the Mono JIT the server runs on; the unit says so.
+          grep -q 'DELIBERATELY ABSENT: MemoryDenyWriteExecute' scripts/server/blockiverse-server.service
 
   unity-validation:
     name: Unity validation

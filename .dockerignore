@@ -10,3 +10,5 @@
 !Builds/LinuxServer/UnityPlayer.so
 !Builds/LinuxServer/BlockiverseServer_Data
 !artifact/staging/blockiverse-server
+# Copied straight from source by the Dockerfile so the local and CI builds share one copy.
+!scripts/server/blockiverse-server-admin.sh

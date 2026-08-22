@@ -2,7 +2,7 @@
 #
 #   docker compose up -d          start
 #   docker compose logs -f        watch
-#   docker compose exec server /bin/sh -c 'printf stop | nc -U /data/admin.sock'   stop cleanly
+#   docker compose exec server blockiverse-server-admin stop                      stop cleanly
 #
 # `docker compose stop` also works, but the admin `stop` above is preferred: it saves the world and
 # writes the clean-shutdown marker before exiting, so nothing is lost and the next boot does not
@@ -18,6 +18,10 @@ services:
       - "7777:7777/udp"
     volumes:
       # The world. Back this up; it is the only thing here you cannot rebuild.
+      #
+      # The container runs unprivileged as uid 10001, and a bind mount keeps the HOST's ownership,
+      # so run `sudo chown -R 10001:10001 ./world` once before the first start. Swap this for a
+      # named volume (blockiverse-world:/data) to have Docker seed the ownership instead.
       - ./world:/data
     environment:
       BLOCKIVERSE_SERVER_NAME: "My Blockiverse Server"
