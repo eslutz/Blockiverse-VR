@@ -33,11 +33,11 @@ Material:
     - _SunSize: 0.9975
     m_Colors:
     - _CloudColor: {r: 0.89199996, g: 0.89299995, b: 0.906, a: 1}
-    - _CloudScroll: {r: 0.042272586, g: 0.025363537, b: 0, a: 0}
+    - _CloudScroll: {r: 0.043353543, g: 0.026012093, b: 0, a: 0}
     - _GroundColor: {r: 0.28350002, g: 0.28350002, b: 0.29295, a: 1}
     - _HorizonColor: {r: 0.6237, g: 0.73709995, b: 0.8694, a: 1}
     - _SunColor: {r: 1, g: 0.94, b: 0.8, a: 1}
-    - _SunDirection: {r: 0.09128235, g: 0.98319393, b: -0.15810555, a: 0}
+    - _SunDirection: {r: 0.0912814, g: 0.9831941, b: -0.15810409, a: 0}
     - _ZenithColor: {r: 0.1512, g: 0.3402, b: 0.6426, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

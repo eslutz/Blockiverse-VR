@@ -938,6 +938,15 @@ namespace Blockiverse.Editor
         static void EnsureXrRigCreativeFlight(GameObject rig, BlockiverseInputRig inputRig)
         {
             BlockiverseCreativeFlightController flight = EnsureComponent<BlockiverseCreativeFlightController>(rig);
+
+            // Flight is a LocomotionProvider now, so it needs the mediator like every other one --
+            // gravity, swim, jump, teleport, move, snap turn and continuous turn are all wired the
+            // same way. Without it the component serializes m_Mediator: {fileID: 0}.
+            LocomotionMediator flightMediator = rig.GetComponent<LocomotionMediator>();
+
+            if (flightMediator != null)
+                flight.mediator = flightMediator;
+
             flight.Configure(inputRig);
             flight.FlightEnabledDefault = false;
             EditorUtility.SetDirty(flight);

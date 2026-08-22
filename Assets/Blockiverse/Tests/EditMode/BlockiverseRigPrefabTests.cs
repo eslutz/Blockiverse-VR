@@ -841,25 +841,39 @@ namespace Blockiverse.Tests.EditMode
                 flight.SetFlightActive(true);
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding the dominant primary button toward the dominant-hand aim pose, not by stick locomotion.");
-                Assert.That(continuousMove.enableFly, Is.False);
-                Assert.That(gravity.useGravity, Is.False);
-                Assert.That(jump.enabled, Is.False);
+                // Inverted deliberately. Flight used to disable the move provider outright and
+                // move only along the dominant hand's aim while jump was held -- which meant the
+                // stick did nothing while flying, and the motion bypassed the mediator and the
+                // CharacterController, so flight had no collision at all.
+                //
+                // Horizontal is now the ordinary move provider, so a flying player keeps every
+                // comfort setting they already have, and flight collides like everything else.
+                Assert.That(continuousMove.enabled, Is.True,
+                    "Flight moves horizontally on the stick, through the same provider walking uses.");
+                Assert.That(continuousMove.enableFly, Is.False,
+                    "Vertical is owned by the flight provider, not by the move provider's fly mode.");
+
+                // Gravity is suppressed through the provider LOCK rather than by writing
+                // useGravity, which GravityProvider re-asserts on every comfort change.
+                Assert.That(flight.GravityLockHeld, Is.True);
+                Assert.That(jump.enabled, Is.False, "Jump/A is the ascend verb while flying.");
                 Assert.That(inputRig.TurnWithBothHands, Is.True, "Both sticks should keep turning available while the player is in creative flight.");
 
                 flight.SetFlightActive(false);
 
                 Assert.That(flight.IsFlightActive, Is.False);
                 Assert.That(continuousMove.enableFly, Is.False);
-                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(flight.GravityLockHeld, Is.False,
+                    "Leaving flight must release the lock, or the player hangs in mid-air on the ground.");
                 Assert.That(jump.enabled, Is.True);
                 Assert.That(inputRig.TurnWithBothHands, Is.False);
 
                 flight.SetFlightActive(true);
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enabled, Is.False);
-                Assert.That(gravity.useGravity, Is.False);
+                Assert.That(continuousMove.enabled, Is.True,
+                    "Horizontal flight is the ordinary move provider, so it stays enabled.");
+                Assert.That(flight.GravityLockHeld, Is.True);
                 Assert.That(jump.enabled, Is.False);
 
                 worldManager.SetGameMode(WorldGameMode.Survival);
@@ -867,7 +881,8 @@ namespace Blockiverse.Tests.EditMode
 
                 Assert.That(flight.IsFlightActive, Is.False);
                 Assert.That(continuousMove.enableFly, Is.False);
-                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(flight.GravityLockHeld, Is.False,
+                    "Dropping out of creative mode must release the lock like any other exit path.");
                 Assert.That(jump.enabled, Is.True);
                 Assert.That(inputRig.TurnWithBothHands, Is.False);
             }
