@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
+using System.Globalization;
 using System.Text;
+using Blockiverse.Core;
+using Blockiverse.Persistence;
+using Blockiverse.Survival;
+using Blockiverse.Voxel;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -15,12 +19,19 @@ namespace Blockiverse.Networking
     [RequireComponent(typeof(UnityTransport))]
     public sealed class BlockiverseNetworkSession : MonoBehaviour
     {
-        public const int ApprovalPayloadProtocolVersion = 1;
+        // Bumped to 2 when the payload gained the §5 compatibility fields (game version, world
+        // save schema, registry hashes). A version-1 peer is refused with ProtocolMismatch.
+        public const int ApprovalPayloadProtocolVersion = 2;
         public const int ForcedHostShutdownPreparationFailureThreshold = 2;
         const string ApprovalPayloadRulesetVersion = "voxel-networking-1";
         const string ApprovalPayloadSessionMode = "lan_host_authoritative";
         const string ApprovalPayloadVoiceMode = "meta_quest_party_chat_external";
         const char ApprovalPayloadSeparator = '|';
+        const string ApprovalPayloadMagic = "blockiverse_lan";
+        const int ApprovalPayloadFieldCount = 12;
+        const int ApprovalPayloadPartCount = ApprovalPayloadFieldCount + 1;
+        // Body runs ~200 bytes (three 32-char hashes plus metadata) and the signature adds 44.
+        const int ApprovalPayloadMaxBytes = 1024;
 
         [SerializeField]
         BlockiverseNetworkConfig config = BlockiverseNetworkConfig.Default;
@@ -253,20 +264,29 @@ namespace Blockiverse.Networking
 
         public bool ValidateConnectionRequest(byte[] payload, int connectedPlayerCount, out string failureReason)
         {
+            bool approved = ValidateConnectionRequest(
+                payload,
+                connectedPlayerCount,
+                out BlockiverseJoinRejectionReason rejectionReason);
+            failureReason = approved ? string.Empty : rejectionReason.ToString();
+            return approved;
+        }
+
+        public bool ValidateConnectionRequest(
+            byte[] payload,
+            int connectedPlayerCount,
+            out BlockiverseJoinRejectionReason rejectionReason)
+        {
+            // Capacity is checked first: a full session should say so even when the joining build
+            // is also incompatible, because "come back later" is the more actionable message.
             if (connectedPlayerCount >= config.MaxPlayers)
             {
-                failureReason = "SessionFull";
+                rejectionReason = BlockiverseJoinRejectionReason.SessionFull;
                 return false;
             }
 
-            if (!ValidateApprovalPayload(payload, config))
-            {
-                failureReason = "InvalidJoinPayload";
-                return false;
-            }
-
-            failureReason = string.Empty;
-            return true;
+            rejectionReason = ValidateApprovalPayload(payload, config);
+            return rejectionReason == BlockiverseJoinRejectionReason.None;
         }
 
         bool RunPreparation(
@@ -349,11 +369,24 @@ namespace Blockiverse.Networking
             NetworkManager.ConnectionApprovalResponse response)
         {
             int connectedPlayerCount = networkManager != null ? networkManager.ConnectedClientsIds.Count : 0;
-            bool approved = ValidateConnectionRequest(request.Payload, connectedPlayerCount, out string failureReason);
+            bool approved = ValidateConnectionRequest(
+                request.Payload,
+                connectedPlayerCount,
+                out BlockiverseJoinRejectionReason rejectionReason);
             response.Approved = approved;
             response.CreatePlayerObject = approved;
-            response.Reason = approved ? string.Empty : failureReason;
+            // Netcode delivers this to the refused client as NetworkManager.DisconnectReason; the
+            // session menu maps the enum name to localized text.
+            response.Reason = approved ? string.Empty : rejectionReason.ToString();
             response.Pending = false;
+
+            if (!approved)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Networking,
+                    $"Refused LAN join reason={rejectionReason} connectedPlayers={connectedPlayerCount} maxPlayers={config.MaxPlayers}",
+                    this);
+            }
         }
 
         void MarkFailed(string reason)
@@ -457,25 +490,35 @@ namespace Blockiverse.Networking
             ApplyConnectionApprovalSettings();
         }
 
+        static string[] BuildApprovalPayloadFields(BlockiverseNetworkConfig config) => new[]
+        {
+            ApprovalPayloadMagic,
+            ApprovalPayloadProtocolVersion.ToString(CultureInfo.InvariantCulture),
+            ApprovalPayloadRulesetVersion,
+            config.Port.ToString(CultureInfo.InvariantCulture),
+            config.MaxPlayers.ToString(CultureInfo.InvariantCulture),
+            ApprovalPayloadSessionMode,
+            ApprovalPayloadVoiceMode,
+            LocalGameVersion,
+            WorldSaveService.CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture),
+            LocalBlockRegistryHash,
+            LocalItemRegistryHash,
+            LocalRecipeRegistryHash,
+        };
+
         static byte[] BuildApprovalPayload(BlockiverseNetworkConfig config)
         {
-            string body = string.Join(
-                ApprovalPayloadSeparator.ToString(),
-                "blockiverse_lan",
-                ApprovalPayloadProtocolVersion.ToString(),
-                ApprovalPayloadRulesetVersion,
-                config.Port.ToString(),
-                config.MaxPlayers.ToString(),
-                ApprovalPayloadSessionMode,
-                ApprovalPayloadVoiceMode);
+            string body = string.Join(ApprovalPayloadSeparator.ToString(), BuildApprovalPayloadFields(config));
             string signature = Convert.ToBase64String(ComputePayloadSignature(body, config.JoinCode));
             return Encoding.UTF8.GetBytes(body + ApprovalPayloadSeparator + signature);
         }
 
-        static bool ValidateApprovalPayload(byte[] payload, BlockiverseNetworkConfig config)
+        static BlockiverseJoinRejectionReason ValidateApprovalPayload(
+            byte[] payload,
+            BlockiverseNetworkConfig config)
         {
-            if (payload == null || payload.Length == 0 || payload.Length > 512)
-                return false;
+            if (payload == null || payload.Length == 0 || payload.Length > ApprovalPayloadMaxBytes)
+                return BlockiverseJoinRejectionReason.InvalidJoinPayload;
 
             string text;
             try
@@ -484,51 +527,92 @@ namespace Blockiverse.Networking
             }
             catch (ArgumentException)
             {
-                return false;
+                return BlockiverseJoinRejectionReason.InvalidJoinPayload;
             }
 
             string[] parts = text.Split(ApprovalPayloadSeparator);
-            if (parts.Length != 8 ||
-                parts[0] != "blockiverse_lan" ||
-                parts[1] != ApprovalPayloadProtocolVersion.ToString() ||
+
+            // Checked before the part count so a peer speaking an older payload shape — which has
+            // a different field count — still gets ProtocolMismatch rather than a generic
+            // "malformed payload" that reads like corruption.
+            if (parts.Length >= 2 &&
+                parts[0] == ApprovalPayloadMagic &&
+                parts[1] != ApprovalPayloadProtocolVersion.ToString(CultureInfo.InvariantCulture))
+                return BlockiverseJoinRejectionReason.ProtocolMismatch;
+
+            // parts[4] is the joiner's own configured capacity. It is deliberately not compared:
+            // capacity is the host's business, enforced by the connected-player count above, and
+            // a client should not have to mirror the host's setting to be let in.
+            if (parts.Length != ApprovalPayloadPartCount ||
+                parts[0] != ApprovalPayloadMagic ||
                 parts[2] != ApprovalPayloadRulesetVersion ||
-                parts[3] != config.Port.ToString() ||
+                parts[3] != config.Port.ToString(CultureInfo.InvariantCulture) ||
                 parts[5] != ApprovalPayloadSessionMode ||
                 parts[6] != ApprovalPayloadVoiceMode)
-                return false;
+                return BlockiverseJoinRejectionReason.InvalidJoinPayload;
 
-            string body = string.Join(ApprovalPayloadSeparator.ToString(), parts, 0, 7);
+            // Signature before content comparisons: an unsigned or wrongly-signed payload is not
+            // trustworthy enough to report a specific mismatch from.
+            string body = string.Join(ApprovalPayloadSeparator.ToString(), parts, 0, ApprovalPayloadFieldCount);
             byte[] expected = ComputePayloadSignature(body, config.JoinCode);
             byte[] actual;
             try
             {
-                actual = Convert.FromBase64String(parts[7]);
+                actual = Convert.FromBase64String(parts[ApprovalPayloadFieldCount]);
             }
             catch (FormatException)
             {
-                return false;
+                return BlockiverseJoinRejectionReason.InvalidJoinPayload;
             }
 
-            return FixedTimeEquals(expected, actual);
+            if (!FixedTimeEquals(expected, actual))
+                return BlockiverseJoinRejectionReason.InvalidJoinPayload;
+
+            if (parts[7] != LocalGameVersion)
+                return BlockiverseJoinRejectionReason.GameVersionMismatch;
+
+            if (parts[8] != WorldSaveService.CurrentSchemaVersion.ToString(CultureInfo.InvariantCulture))
+                return BlockiverseJoinRejectionReason.UnsupportedWorldVersion;
+
+            if (parts[9] != LocalBlockRegistryHash)
+                return BlockiverseJoinRejectionReason.BlockRegistryMismatch;
+
+            if (parts[10] != LocalItemRegistryHash)
+                return BlockiverseJoinRejectionReason.ItemRegistryMismatch;
+
+            if (parts[11] != LocalRecipeRegistryHash)
+                return BlockiverseJoinRejectionReason.RecipeRegistryMismatch;
+
+            return BlockiverseJoinRejectionReason.None;
         }
 
-        static byte[] ComputePayloadSignature(string body, string joinCode)
-        {
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(joinCode));
-            return hmac.ComputeHash(Encoding.UTF8.GetBytes(body));
-        }
+        // Registry hashes are pure functions of the built-in registries, so they are computed once
+        // per process rather than on every join attempt and every payload validation.
+        static string cachedBlockRegistryHash;
+        static string cachedItemRegistryHash;
+        static string cachedRecipeRegistryHash;
 
-        static bool FixedTimeEquals(byte[] left, byte[] right)
-        {
-            if (left == null || right == null || left.Length != right.Length)
-                return false;
+        public static string LocalGameVersion =>
+            string.IsNullOrWhiteSpace(Application.version) ? "0.0.0-dev" : Application.version;
 
-            int diff = 0;
-            for (int i = 0; i < left.Length; i++)
-                diff |= left[i] ^ right[i];
+        // Deliberately not WorldSaveService's hashes: those cover canonical string ids, which
+        // is what a save stores. The wire sends integer BlockIds, so the handshake needs the
+        // id→integer mapping and the definition fields peers simulate from. See
+        // BlockiverseRegistryCompatibility.
+        public static string LocalBlockRegistryHash =>
+            cachedBlockRegistryHash ??= BlockiverseRegistryCompatibility.ComputeBlockHash(BlockRegistry.Default);
 
-            return diff == 0;
-        }
+        public static string LocalItemRegistryHash =>
+            cachedItemRegistryHash ??= BlockiverseRegistryCompatibility.ComputeItemHash(ItemRegistry.Default);
+
+        public static string LocalRecipeRegistryHash =>
+            cachedRecipeRegistryHash ??= BlockiverseRegistryCompatibility.ComputeRecipeHash(CraftingRecipeBook.Default);
+
+        static byte[] ComputePayloadSignature(string body, string joinCode) =>
+            BlockiverseLanPayloadSigning.ComputeSignature(body, joinCode);
+
+        static bool FixedTimeEquals(byte[] left, byte[] right) =>
+            BlockiverseLanPayloadSigning.FixedTimeEquals(left, right);
 
         NetworkManager ResolveNetworkManager()
         {

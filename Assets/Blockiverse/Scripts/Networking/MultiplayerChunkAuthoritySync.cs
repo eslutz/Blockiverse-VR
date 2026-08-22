@@ -32,6 +32,13 @@ namespace Blockiverse.Networking
             AppliedChunkDeltaCount = sync.AppliedChunkDeltaCount;
             IgnoredOutOfOrderChunkDeltaCount = sync.IgnoredOutOfOrderChunkDeltaCount;
             SentLateJoinSnapshotCount = sync.SentLateJoinSnapshotCount;
+            SentSnapshotBatchCount = sync.SentSnapshotBatchCount;
+            AppliedSnapshotBatchCount = sync.AppliedSnapshotBatchCount;
+            SentResyncRequestCount = sync.SentResyncRequestCount;
+            ServedResyncRequestCount = sync.ServedResyncRequestCount;
+            TimedOutMutationRequestCount = sync.TimedOutMutationRequestCount;
+            RefusedPendingLimitMutationCount = sync.RefusedPendingLimitMutationCount;
+            OutOfReachRejectedMutationCount = sync.OutOfReachRejectedMutationCount;
             SentEnvironmentSnapshotCount = sync.SentEnvironmentSnapshotCount;
             AppliedEnvironmentSnapshotCount = sync.AppliedEnvironmentSnapshotCount;
             AppliedGenerationSnapshotCount = sync.AppliedGenerationSnapshotCount;
@@ -55,6 +62,13 @@ namespace Blockiverse.Networking
         public int AppliedChunkDeltaCount { get; }
         public int IgnoredOutOfOrderChunkDeltaCount { get; }
         public int SentLateJoinSnapshotCount { get; }
+        public int SentSnapshotBatchCount { get; }
+        public int AppliedSnapshotBatchCount { get; }
+        public int SentResyncRequestCount { get; }
+        public int ServedResyncRequestCount { get; }
+        public int TimedOutMutationRequestCount { get; }
+        public int RefusedPendingLimitMutationCount { get; }
+        public int OutOfReachRejectedMutationCount { get; }
         public int SentEnvironmentSnapshotCount { get; }
         public int AppliedEnvironmentSnapshotCount { get; }
         public int AppliedGenerationSnapshotCount { get; }
@@ -76,18 +90,74 @@ namespace Blockiverse.Networking
         const string MutationRequestMessage = "Blockiverse.ChunkAuthority.MutationRequest";
         const string MutationDeltaMessage = "Blockiverse.ChunkAuthority.MutationDelta";
         const string ChunkSnapshotMessage = "Blockiverse.ChunkAuthority.ChunkSnapshot";
+        const string ChunkSnapshotBatchMessage = "Blockiverse.ChunkAuthority.ChunkSnapshotBatch";
         const string MutationResultMessage = "Blockiverse.ChunkAuthority.MutationResult";
         const string EnvironmentSnapshotMessage = "Blockiverse.ChunkAuthority.EnvironmentSnapshot";
+        const string ResyncRequestMessage = "Blockiverse.ChunkAuthority.ResyncRequest";
         const int MutationRequestMessageBytes = 128;
         const int MutationDeltaMessageBytes = 160;
         const int MutationResultMessageBytes = 128;
+        const int ResyncRequestMessageBytes = 16;
         public const int WorldSnapshotHeaderBytes = 80;
         public const int EnvironmentSnapshotBytes = 20;
         public const float EnvironmentResyncIntervalSeconds = 5.0f;
         const int SnapshotHeaderBytes = WorldSnapshotHeaderBytes;
-        const int SnapshotBlockBytes = 32;
+        // The wire format is 3 ints of position plus 1 int of block id.
+        public const int SnapshotBlockBytes = 16;
+        // snapshotId + batchIndex + batchCount + blockCount.
+        public const int SnapshotBatchHeaderBytes = 16;
+
+        /// <summary>
+        /// Blocks per late-join batch. Unity Transport sizes its fragmentation stage to
+        /// <c>MaxPayloadSize</c>, so one giant snapshot message is silently undeliverable once a
+        /// played world accumulates edits — fluid flow, crop growth and snow settle all count as
+        /// changed blocks. Batching keeps every message far below that ceiling regardless of how
+        /// much the world has changed. 200 blocks ≈ 3.2 KB of payload.
+        /// </summary>
+        public const int SnapshotBatchMaxBlocks = 200;
+
+        /// <summary>Changed-block count above which the host warns that late join is getting expensive (ruleset §14).</summary>
+        public const int LateJoinSnapshotWarningBlockCount = 10_000;
+
+        /// <summary>
+        /// Batches queued per frame while streaming a late-join snapshot. The transport's send
+        /// queue is bounded (`MaxPacketQueueSize`, 256 by default here) and each ~3.2 KB batch
+        /// fragments into several packets, so a synchronous burst over a large world overflows
+        /// the queue and *drops* batches. A dropped batch is invisible to the sender: the client
+        /// simply never reaches `batchCount`, stalls, resyncs, and receives the same oversized
+        /// burst again — an infinite loop rather than an error. Pacing keeps each frame's burst
+        /// far below the queue and lets the transport drain between frames.
+        /// </summary>
+        public const int SnapshotBatchesPerFrame = 8;
+
         const int HostMutationRateLimitMaxRequests = 30;
         const double HostMutationRateLimitWindowSeconds = 1.0d;
+        // A resync re-sends the whole world, so it is budgeted far more tightly than edits.
+        const int HostResyncRateLimitMaxRequests = 2;
+        const double HostResyncRateLimitWindowSeconds = 10.0d;
+
+        /// <summary>Maximum unanswered client mutation requests before new edits are refused locally (ruleset §14).</summary>
+        public const int MaxPendingMutationRequests = 64;
+
+        /// <summary>How long a pending request may go unanswered before the client gives up on it (ruleset §7.5).</summary>
+        public const float PendingMutationRequestTimeoutSeconds = 1.5f;
+
+        /// <summary>How long a sequence gap may persist before the client asks the host to resync.</summary>
+        public const float ChunkDeltaGapTimeoutSeconds = 1.5f;
+
+        /// <summary>Minimum spacing between client-initiated resync requests.</summary>
+        public const float ResyncRequestCooldownSeconds = 5.0f;
+
+        /// <summary>
+        /// How long a snapshot may sit waiting for the rest of its batches before the client gives
+        /// up and asks for a fresh one. Reliable delivery makes a lost batch unlikely, but a
+        /// malformed or rejected batch would otherwise leave the client waiting forever with no
+        /// world and no way to ask again.
+        /// </summary>
+        public const float SnapshotBatchStallTimeoutSeconds = 20.0f;
+
+        /// <summary>Buffered out-of-order deltas retained before the client gives up and resyncs.</summary>
+        public const int MaxBufferedChunkDeltas = 256;
 
         static readonly ProfilerMarker TrySubmitMutationMarker = new("Blockiverse.ChunkAuthority.TrySubmitMutation");
         static readonly ProfilerMarker HandleMutationRequestMarker = new("Blockiverse.ChunkAuthority.HandleMutationRequest");
@@ -109,19 +179,29 @@ namespace Blockiverse.Networking
         [SerializeField] BlockiverseNetworkSession session;
         IMultiplayerWorldContext worldManager;
 
-        readonly Dictionary<uint, BlockMutationRequest> pendingMutationRequests = new();
+        readonly Dictionary<uint, PendingMutationRequest> pendingMutationRequests = new();
+        readonly List<uint> expiredMutationRequestScratch = new();
         readonly PerClientRequestRateLimiter hostMutationRateLimiter =
             new(HostMutationRateLimitMaxRequests, HostMutationRateLimitWindowSeconds);
+        readonly PerClientRequestRateLimiter hostResyncRateLimiter =
+            new(HostResyncRateLimitMaxRequests, HostResyncRateLimitWindowSeconds);
         readonly List<PendingChunkDeltaMessage> bufferedChunkDeltas = new();
         // Reused by SendToRemoteClients so each broadcast avoids a per-delta list allocation.
         readonly List<ulong> remoteClientIdsScratch = new();
         readonly ChunkDeltaLog chunkDeltaLog = new();
+        // In-flight paced snapshot sends, keyed by receiving client so a resync supersedes the
+        // stream it replaces instead of interleaving two snapshots on the same connection.
+        readonly Dictionary<ulong, Coroutine> snapshotSendRoutines = new();
         NetworkManager subscribedNetworkManager;
         BlockMutationAuthority mutationAuthority;
         uint nextMutationRequestId = 1;
+        uint nextSnapshotId = 1;
         bool messagesRegistered;
         bool hasHostGenerationSnapshotForSession;
         float environmentResyncTimer;
+        float chunkDeltaGapTimer;
+        float resyncRequestCooldownTimer;
+        float clientRecoveryElapsedSeconds;
         Func<double> hostMutationTimeProvider;
 
         public ChunkAuthorityBoundary CurrentBoundary { get; private set; } = ChunkAuthorityBoundary.ForHost();
@@ -137,6 +217,13 @@ namespace Blockiverse.Networking
         internal int AppliedChunkDeltaCount { get; private set; }
         internal int IgnoredOutOfOrderChunkDeltaCount { get; private set; }
         internal int SentLateJoinSnapshotCount { get; private set; }
+        internal int SentSnapshotBatchCount { get; private set; }
+        internal int AppliedSnapshotBatchCount { get; private set; }
+        internal int SentResyncRequestCount { get; private set; }
+        internal int ServedResyncRequestCount { get; private set; }
+        internal int TimedOutMutationRequestCount { get; private set; }
+        internal int RefusedPendingLimitMutationCount { get; private set; }
+        internal int OutOfReachRejectedMutationCount { get; private set; }
         internal int SentEnvironmentSnapshotCount { get; private set; }
         internal int AppliedEnvironmentSnapshotCount { get; private set; }
         internal int AppliedGenerationSnapshotCount { get; private set; }
@@ -173,7 +260,9 @@ namespace Blockiverse.Networking
                 int groundHeight,
                 BlockPosition spawnPosition,
                 uint hostDeltaSequence,
-                int changedBlockCount)
+                int changedBlockCount,
+                uint snapshotId = 0,
+                int batchCount = 0)
             {
                 GenerationPreset = generationPreset;
                 Width = width;
@@ -185,6 +274,8 @@ namespace Blockiverse.Networking
                 SpawnPosition = spawnPosition;
                 HostDeltaSequence = hostDeltaSequence;
                 ChangedBlockCount = changedBlockCount;
+                SnapshotId = snapshotId;
+                BatchCount = batchCount;
             }
 
             public CreativeWorldGenerationPreset GenerationPreset { get; }
@@ -197,6 +288,12 @@ namespace Blockiverse.Networking
             public BlockPosition SpawnPosition { get; }
             public uint HostDeltaSequence { get; }
             public int ChangedBlockCount { get; }
+
+            /// <summary>Identifies this snapshot so batches from a superseded one can be discarded.</summary>
+            public uint SnapshotId { get; }
+
+            /// <summary>How many <c>ChunkSnapshotBatch</c> messages follow this header.</summary>
+            public int BatchCount { get; }
         }
 
         public readonly struct EnvironmentSnapshotState
@@ -248,6 +345,8 @@ namespace Blockiverse.Networking
 
         void OnDisable()
         {
+            StopAllSnapshotSends();
+
             // Stop the snapshot poll explicitly and clear the handle: a stale non-null handle
             // would block StartSnapshotGeneration's null-check forever after a re-enable.
             if (snapshotRoutine != null)
@@ -267,6 +366,7 @@ namespace Blockiverse.Networking
         void Update()
         {
             TickEnvironmentResync(Time.unscaledDeltaTime);
+            TickChunkDeltaRecovery(Time.unscaledDeltaTime);
         }
 
         public void TickEnvironmentResync(float deltaSeconds)
@@ -328,6 +428,18 @@ namespace Blockiverse.Networking
                     return LastMutationResult;
                 }
 
+                // Ruleset §14: a client that keeps editing while the host is unreachable would
+                // otherwise grow an unbounded pending set that no reply will ever drain.
+                if (pendingMutationRequests.Count >= MaxPendingMutationRequests)
+                {
+                    RefusedPendingLimitMutationCount++;
+                    LastMutationResult = BlockMutationResult.Reject(
+                        BlockMutationRejectionReason.PendingRequestLimitReached,
+                        ChunkCoordinate.FromBlockPosition(request.Position, ResolveMutationChunkSize()),
+                        "Too many block edits are still awaiting host validation.");
+                    return LastMutationResult;
+                }
+
                 uint requestId = AllocateMutationRequestId();
                 SendMutationRequest(requestId, request);
                 requestSentToHost = true;
@@ -372,6 +484,7 @@ namespace Blockiverse.Networking
         {
             RefreshAuthorityBoundary();
             hostMutationRateLimiter.Clear();
+            hostResyncRateLimiter.Clear();
             ResetHostChunkDeltaLog();
             RegisterMessageHandlers();
         }
@@ -385,6 +498,7 @@ namespace Blockiverse.Networking
                 hasHostGenerationSnapshotForSession = false;
                 ResetClientChunkDeltaState();
                 ResetPendingMutationRequests();
+                ResetClientRecoveryState();
             }
 
             RegisterMessageHandlers();
@@ -411,7 +525,9 @@ namespace Blockiverse.Networking
 
         void HandleServerStopped(bool wasHost)
         {
+            StopAllSnapshotSends();
             hostMutationRateLimiter.Clear();
+            hostResyncRateLimiter.Clear();
             UnregisterMessageHandlers();
             RefreshAuthorityBoundary();
         }
@@ -424,9 +540,12 @@ namespace Blockiverse.Networking
             ObserveAbandonedSnapshotTask(pendingSnapshot);
             pendingSnapshot = null;
             snapshotRoutine = null;
+            StopAllSnapshotSends();
             hostMutationRateLimiter.Clear();
+            hostResyncRateLimiter.Clear();
             ResetClientChunkDeltaState();
             ResetPendingMutationRequests();
+            ResetClientRecoveryState();
             UnregisterMessageHandlers();
             RefreshAuthorityBoundary();
         }
@@ -434,6 +553,32 @@ namespace Blockiverse.Networking
         void HandleClientDisconnected(ulong clientId)
         {
             hostMutationRateLimiter.RemoveClient(clientId);
+            hostResyncRateLimiter.RemoveClient(clientId);
+            StopSnapshotSend(clientId);
+        }
+
+        void StopSnapshotSend(ulong clientId)
+        {
+            if (!snapshotSendRoutines.TryGetValue(clientId, out Coroutine routine))
+                return;
+
+            if (routine != null)
+                StopCoroutine(routine);
+
+            snapshotSendRoutines.Remove(clientId);
+        }
+
+        // Paced sends outlive a single frame, so every path that ends the session has to stop
+        // them; otherwise a coroutine keeps writing to a transport that is shutting down.
+        void StopAllSnapshotSends()
+        {
+            foreach (KeyValuePair<ulong, Coroutine> pending in snapshotSendRoutines)
+            {
+                if (pending.Value != null)
+                    StopCoroutine(pending.Value);
+            }
+
+            snapshotSendRoutines.Clear();
         }
 
         void HandleMutationRequestMessage(ulong senderClientId, FastBufferReader reader)
@@ -480,6 +625,21 @@ namespace Blockiverse.Networking
                 SendMutationResult(senderClientId, requestId, request, gameModeRejection);
                 return;
             }
+            // Ruleset §16: the host does not take a client's word for where it is standing. A
+            // modified client could otherwise edit anywhere in the world from spawn.
+            if (!IsWithinHostValidatedReach(senderClientId, request.Position))
+            {
+                OutOfReachRejectedMutationCount++;
+                BlockMutationResult reachRejection = BlockMutationResult.Reject(
+                    BlockMutationRejectionReason.OutOfReach,
+                    ChunkCoordinate.FromBlockPosition(request.Position, ResolveWorld().ChunkSize),
+                    "Block is out of the requesting player's interaction reach.",
+                    requestId);
+                LastMutationResult = reachRejection;
+                SendMutationResult(senderClientId, requestId, request, reachRejection);
+                return;
+            }
+
             BlockMutationResult result = ResolveMutationAuthority().TryCommit(request, out _).WithRpcRequestId(requestId);
             LastMutationResult = result;
 
@@ -526,19 +686,12 @@ namespace Blockiverse.Networking
             if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
                 return;
 
-            // Read the entire payload inside the handler (the reader is only valid here), then
-            // hand world generation to a background task: regenerating a full survival world
-            // synchronously would stall the VR main thread for seconds.
+            // The header arrives on its own; changed blocks follow as bounded batch messages.
+            // World generation starts immediately and runs on a background task — regenerating a
+            // full survival world synchronously would stall the VR main thread for seconds — so
+            // generation and batch transfer overlap.
             if (!TryReadWorldSnapshotHeader(ref reader, out WorldSnapshotHeader header))
                 return;
-
-            var blocks = new List<(BlockPosition position, int blockId)>(header.ChangedBlockCount);
-            for (int index = 0; index < header.ChangedBlockCount; index++)
-            {
-                BlockPosition position = ReadBlockPosition(ref reader);
-                reader.ReadValueSafe(out int blockId);
-                blocks.Add((position, blockId));
-            }
 
             var settings = new WorldGenerationSettings(
                 header.Width,
@@ -548,7 +701,58 @@ namespace Blockiverse.Networking
                 header.Seed,
                 header.GroundHeight,
                 header.SpawnPosition);
-            StartSnapshotGeneration(header.GenerationPreset, settings, header.HostDeltaSequence, blocks);
+            StartSnapshotGeneration(
+                header.GenerationPreset,
+                settings,
+                header.HostDeltaSequence,
+                header.SnapshotId,
+                header.BatchCount,
+                header.ChangedBlockCount);
+        }
+
+        void HandleChunkSnapshotBatchMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            using ProfilerMarker.AutoScope scope = HandleSnapshotMarker.Auto();
+
+            RefreshAuthorityBoundary();
+
+            if (senderClientId != CurrentBoundary.HostClientId || !CurrentBoundary.MustRequestMutations)
+                return;
+
+            if (reader.Length - reader.Position < SnapshotBatchHeaderBytes)
+                return;
+
+            reader.ReadValueSafe(out uint snapshotId);
+            reader.ReadValueSafe(out int batchIndex);
+            reader.ReadValueSafe(out int batchCount);
+            reader.ReadValueSafe(out int blockCount);
+
+            PendingWorldSnapshot snapshot = pendingSnapshot;
+
+            // Batches from a superseded snapshot (or arriving with no snapshot in flight) are
+            // dropped: the header that replaced it also reset the block set they belong to.
+            if (snapshot == null || snapshot.SnapshotId != snapshotId)
+                return;
+
+            if (batchIndex < 0 ||
+                batchCount != snapshot.BatchCount ||
+                blockCount < 0 ||
+                blockCount > SnapshotBatchMaxBlocks ||
+                reader.Length - reader.Position < blockCount * SnapshotBlockBytes)
+            {
+                return;
+            }
+
+            for (int index = 0; index < blockCount; index++)
+            {
+                BlockPosition position = ReadBlockPosition(ref reader);
+                reader.ReadValueSafe(out int blockId);
+                snapshot.Blocks.Add((position, blockId));
+            }
+
+            snapshot.ReceivedBatchCount++;
+            snapshot.WaitingForBatchesSeconds = 0.0f;
+            AppliedSnapshotBatchCount++;
         }
 
         // The in-flight late-join snapshot. Only the newest one matters: a fresh snapshot
@@ -558,8 +762,14 @@ namespace Blockiverse.Networking
             public CreativeWorldGenerationPreset Preset;
             public WorldGenerationSettings Settings;
             public uint HostDeltaSequence;
+            public uint SnapshotId;
+            public int BatchCount;
+            public int ReceivedBatchCount;
+            public float WaitingForBatchesSeconds;
             public List<(BlockPosition position, int blockId)> Blocks;
             public Task<GeneratedSnapshotWorld> GenerationTask;
+
+            public bool HasAllBatches => ReceivedBatchCount >= BatchCount;
         }
 
         sealed class GeneratedSnapshotWorld
@@ -576,7 +786,9 @@ namespace Blockiverse.Networking
             CreativeWorldGenerationPreset preset,
             WorldGenerationSettings settings,
             uint hostDeltaSequence,
-            List<(BlockPosition position, int blockId)> blocks)
+            uint snapshotId,
+            int batchCount,
+            int changedBlockCount)
         {
             // A newer snapshot supersedes any in-flight generation; observe the abandoned
             // task so a failed run cannot surface later as an UnobservedTaskException.
@@ -587,7 +799,10 @@ namespace Blockiverse.Networking
                 Preset = preset,
                 Settings = settings,
                 HostDeltaSequence = hostDeltaSequence,
-                Blocks = blocks,
+                SnapshotId = snapshotId,
+                BatchCount = batchCount,
+                ReceivedBatchCount = 0,
+                Blocks = new List<(BlockPosition position, int blockId)>(changedBlockCount),
                 // World generation is pure C# over engine-free types, safe off the main thread.
                 GenerationTask = Task.Run(() => GenerateSnapshotWorld(preset, settings)),
             };
@@ -637,7 +852,10 @@ namespace Blockiverse.Networking
                     yield break;
                 }
 
-                if (current.GenerationTask.IsCompleted)
+                // Both halves must land: the regenerated base world and every changed-block batch.
+                // Finalizing on generation alone would apply a partial delta set and leave the
+                // client quietly diverged from the host.
+                if (current.GenerationTask.IsCompleted && current.HasAllBatches)
                 {
                     pendingSnapshot = null;
                     snapshotRoutine = null;
@@ -723,7 +941,7 @@ namespace Blockiverse.Networking
 
             NetworkManager networkManager = ResolveNetworkManager();
             RegisterMessageHandlers();
-            pendingMutationRequests[requestId] = request;
+            pendingMutationRequests[requestId] = new PendingMutationRequest(request, clientRecoveryElapsedSeconds);
             LastSentMutationRequestId = requestId;
 
             var writer = new FastBufferWriter(MutationRequestMessageBytes, Allocator.Temp);
@@ -836,6 +1054,15 @@ namespace Blockiverse.Networking
             return true;
         }
 
+        // Cleared alongside the delta bookkeeping whenever a session starts or ends, so a stale
+        // resync cooldown from a previous session cannot suppress the first recovery of the next.
+        void ResetClientRecoveryState()
+        {
+            clientRecoveryElapsedSeconds = 0.0f;
+            resyncRequestCooldownTimer = 0.0f;
+            chunkDeltaGapTimer = 0.0f;
+        }
+
         void ResetPendingMutationRequests()
         {
             pendingMutationRequests.Clear();
@@ -848,6 +1075,184 @@ namespace Blockiverse.Networking
         {
             bufferedChunkDeltas.Clear();
             LastAppliedChunkDeltaSequence = 0;
+            chunkDeltaGapTimer = 0.0f;
+        }
+
+        /// <summary>
+        /// Client-side recovery clock (ruleset §7.5 "Missing sequence recovery"). Advances the
+        /// pending-request ages and the sequence-gap timer, and asks the host for a fresh world
+        /// snapshot when either stalls. Exposed and driven by an explicit delta so tests can run
+        /// it deterministically, mirroring <see cref="TickEnvironmentResync"/>.
+        /// </summary>
+        public void TickChunkDeltaRecovery(float deltaSeconds)
+        {
+            float step = Mathf.Max(0.0f, deltaSeconds);
+            clientRecoveryElapsedSeconds += step;
+
+            if (resyncRequestCooldownTimer > 0.0f)
+                resyncRequestCooldownTimer = Mathf.Max(0.0f, resyncRequestCooldownTimer - step);
+
+            RefreshAuthorityBoundary();
+
+            if (!IsActiveClientOnly() || !CurrentBoundary.MustRequestMutations)
+            {
+                chunkDeltaGapTimer = 0.0f;
+                return;
+            }
+
+            // Both are evaluated: || would short-circuit and leave the stall timer frozen for as
+            // long as requests keep ageing out.
+            bool requestsTimedOut = ExpireTimedOutMutationRequests();
+            bool snapshotStalled = HasStalledSnapshotTransfer(step);
+            bool needsResync = requestsTimedOut || snapshotStalled;
+
+            // A buffered delta means an earlier sequence never arrived. Reliable delivery makes
+            // that rare, but a handler that threw on the host, or a snapshot that landed stale,
+            // leaves the client permanently one sequence behind with no way back on its own.
+            if (hasHostGenerationSnapshotForSession && bufferedChunkDeltas.Count > 0)
+            {
+                chunkDeltaGapTimer += step;
+                if (chunkDeltaGapTimer >= ChunkDeltaGapTimeoutSeconds)
+                    needsResync = true;
+            }
+            else
+            {
+                chunkDeltaGapTimer = 0.0f;
+            }
+
+            if (needsResync)
+                RequestWorldResync();
+        }
+
+        // A snapshot whose generation has finished but whose batches stopped arriving will never
+        // complete on its own — the completion routine waits on both halves by design.
+        bool HasStalledSnapshotTransfer(float deltaSeconds)
+        {
+            PendingWorldSnapshot snapshot = pendingSnapshot;
+
+            if (snapshot == null || snapshot.HasAllBatches)
+                return false;
+
+            snapshot.WaitingForBatchesSeconds += deltaSeconds;
+
+            if (snapshot.WaitingForBatchesSeconds < SnapshotBatchStallTimeoutSeconds)
+                return false;
+
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Networking,
+                $"World snapshot {snapshot.SnapshotId} stalled after {snapshot.ReceivedBatchCount}/{snapshot.BatchCount} batches; requesting a fresh one.",
+                this);
+
+            ObserveAbandonedSnapshotTask(snapshot);
+            pendingSnapshot = null;
+            return true;
+        }
+
+        // Returns true when at least one request aged out, which is treated as evidence that the
+        // client's view may have drifted from the host's.
+        bool ExpireTimedOutMutationRequests()
+        {
+            if (pendingMutationRequests.Count == 0)
+                return false;
+
+            expiredMutationRequestScratch.Clear();
+
+            foreach (KeyValuePair<uint, PendingMutationRequest> pending in pendingMutationRequests)
+            {
+                if (clientRecoveryElapsedSeconds - pending.Value.CreatedAtSeconds >= PendingMutationRequestTimeoutSeconds)
+                    expiredMutationRequestScratch.Add(pending.Key);
+            }
+
+            if (expiredMutationRequestScratch.Count == 0)
+                return false;
+
+            foreach (uint requestId in expiredMutationRequestScratch)
+            {
+                pendingMutationRequests.Remove(requestId);
+                TimedOutMutationRequestCount++;
+            }
+
+            expiredMutationRequestScratch.Clear();
+            return true;
+        }
+
+        /// <summary>
+        /// Asks the host to re-send the authoritative world. The client discards its own delta
+        /// bookkeeping and stops accepting local edits until the replacement snapshot lands, so
+        /// nothing is applied on top of a world it can no longer prove is in sync.
+        /// </summary>
+        public void RequestWorldResync()
+        {
+            if (resyncRequestCooldownTimer > 0.0f)
+                return;
+
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+
+            if (networkManager == null || !networkManager.IsListening || networkManager.IsServer)
+                return;
+
+            // Captured before the reset below zeroes it — it tells the host how far this client
+            // had actually got, which is the useful number in a desync report.
+            uint lastAppliedSequence = LastAppliedChunkDeltaSequence;
+
+            resyncRequestCooldownTimer = ResyncRequestCooldownSeconds;
+            hasHostGenerationSnapshotForSession = false;
+            ResetClientChunkDeltaState();
+            ResetPendingMutationRequests();
+            RegisterMessageHandlers();
+
+            var writer = new FastBufferWriter(ResyncRequestMessageBytes, Allocator.Temp);
+
+            try
+            {
+                writer.WriteValueSafe(lastAppliedSequence);
+                networkManager.CustomMessagingManager.SendNamedMessage(
+                    ResyncRequestMessage,
+                    NetworkManager.ServerClientId,
+                    writer,
+                    NetworkDelivery.ReliableFragmentedSequenced);
+                SentResyncRequestCount++;
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Networking,
+                "Requested a world resync from the host after a chunk delta gap or repeated request timeouts.",
+                this);
+        }
+
+        void HandleResyncRequestMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            RefreshAuthorityBoundary();
+
+            if (!CurrentBoundary.CanServeLateJoinSync)
+                return;
+
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+
+            if (networkManager == null || !networkManager.IsServer || senderClientId == networkManager.LocalClientId)
+                return;
+
+            uint clientLastAppliedSequence = 0;
+            if (reader.Length - reader.Position >= sizeof(uint))
+                reader.ReadValueSafe(out clientLastAppliedSequence);
+
+            // Resending the world is far more expensive than an edit, so it gets its own, much
+            // tighter budget than the mutation limiter.
+            if (!hostResyncRateLimiter.TryConsume(senderClientId, HostMutationTimeSeconds))
+                return;
+
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Networking,
+                $"Serving a world resync clientId={senderClientId} clientSequence={clientLastAppliedSequence} hostSequence={chunkDeltaLog.LastSequenceId}",
+                this);
+
+            SendLateJoinSnapshot(senderClientId);
+            SendEnvironmentSnapshot(senderClientId);
+            ServedResyncRequestCount++;
         }
 
         void ResetHostChunkDeltaLog()
@@ -856,35 +1261,165 @@ namespace Blockiverse.Networking
             LastBroadcastChunkDeltaSequence = 0;
         }
 
+        // Sends the header first, then the changed blocks as a sequence of bounded batches.
+        // ReliableFragmentedSequenced preserves order, so the client always sees the header
+        // before the batches it describes.
         void SendLateJoinSnapshot(ulong clientId)
         {
             using ProfilerMarker.AutoScope scope = SendLateJoinSnapshotMarker.Auto();
 
             IReadOnlyCollection<BlockChange> changedBlocks = ResolveWorld().GetChangedBlocks();
-            int writerSize = SnapshotHeaderBytes + changedBlocks.Count * SnapshotBlockBytes;
+            int blockCount = changedBlocks.Count;
+            int batchCount = (blockCount + SnapshotBatchMaxBlocks - 1) / SnapshotBatchMaxBlocks;
+            uint snapshotId = AllocateSnapshotId();
 
-            var writer = new FastBufferWriter(writerSize, Allocator.Temp);
+            if (blockCount > LateJoinSnapshotWarningBlockCount)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Networking,
+                    $"Late-join snapshot is large: changedBlocks={blockCount} batches={batchCount} clientId={clientId}. " +
+                    "Consider compacting the world delta set.",
+                    this);
+            }
+
+            NetworkManager networkManager = ResolveNetworkManager();
+            var headerWriter = new FastBufferWriter(SnapshotHeaderBytes, Allocator.Temp);
 
             try
             {
-                WriteWorldSnapshotHeader(ref writer, changedBlocks.Count);
-                foreach (BlockChange change in changedBlocks)
-                {
-                    WriteBlockPosition(ref writer, change.Position);
-                    writer.WriteValueSafe(change.NewBlock.Value);
-                }
-
-                ResolveNetworkManager().CustomMessagingManager.SendNamedMessage(
+                WriteWorldSnapshotHeader(ref headerWriter, blockCount, snapshotId, batchCount);
+                networkManager.CustomMessagingManager.SendNamedMessage(
                     ChunkSnapshotMessage,
                     clientId,
-                    writer,
+                    headerWriter,
                     NetworkDelivery.ReliableFragmentedSequenced);
                 SentLateJoinSnapshotCount++;
             }
             finally
             {
-                writer.Dispose();
+                headerWriter.Dispose();
             }
+
+            if (batchCount == 0)
+                return;
+
+            // Copy the changed set now: the paced send spans frames and the world keeps
+            // mutating underneath it. The header has already committed to this count, so the
+            // batches must describe the same set the header announced.
+            var blocks = new List<BlockChange>(changedBlocks);
+
+            if (snapshotSendRoutines.TryGetValue(clientId, out Coroutine existing) && existing != null)
+                StopCoroutine(existing);
+
+            snapshotSendRoutines[clientId] = StartCoroutine(
+                SendSnapshotBatches(clientId, snapshotId, batchCount, blocks));
+        }
+
+        // Paced so a large world cannot overflow the transport's send queue in one frame; see
+        // SnapshotBatchesPerFrame for why a dropped batch is worse than a slow one.
+        IEnumerator SendSnapshotBatches(ulong clientId, uint snapshotId, int batchCount, List<BlockChange> blocks)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            int sentThisFrame = 0;
+
+            for (int batchIndex = 0; batchIndex < batchCount; batchIndex++)
+            {
+                // The client can leave mid-stream; sending to a gone client is pointless and
+                // the remaining batches belong to nobody.
+                if (networkManager == null ||
+                    !networkManager.IsListening ||
+                    !networkManager.IsServer ||
+                    !IsClientConnected(networkManager, clientId))
+                {
+                    break;
+                }
+
+                int offset = batchIndex * SnapshotBatchMaxBlocks;
+                int count = Math.Min(SnapshotBatchMaxBlocks, blocks.Count - offset);
+                var writer = new FastBufferWriter(
+                    SnapshotBatchHeaderBytes + count * SnapshotBlockBytes,
+                    Allocator.Temp);
+
+                try
+                {
+                    writer.WriteValueSafe(snapshotId);
+                    writer.WriteValueSafe(batchIndex);
+                    writer.WriteValueSafe(batchCount);
+                    writer.WriteValueSafe(count);
+
+                    for (int index = offset; index < offset + count; index++)
+                    {
+                        WriteBlockPosition(ref writer, blocks[index].Position);
+                        writer.WriteValueSafe(blocks[index].NewBlock.Value);
+                    }
+
+                    networkManager.CustomMessagingManager.SendNamedMessage(
+                        ChunkSnapshotBatchMessage,
+                        clientId,
+                        writer,
+                        NetworkDelivery.ReliableFragmentedSequenced);
+                    SentSnapshotBatchCount++;
+                }
+                finally
+                {
+                    writer.Dispose();
+                }
+
+                if (++sentThisFrame < SnapshotBatchesPerFrame)
+                    continue;
+
+                sentThisFrame = 0;
+                yield return null;
+            }
+
+            snapshotSendRoutines.Remove(clientId);
+        }
+
+        /// <summary>
+        /// Host-side reach gate for a client-requested edit. Returns true when the host cannot
+        /// resolve the requester's head — an unspawned or just-connected player must not have its
+        /// legitimate edits dropped because presence data has not arrived yet — and the check is
+        /// skipped entirely for the host's own edits, which never travel over the wire.
+        /// </summary>
+        bool IsWithinHostValidatedReach(ulong clientId, BlockPosition position)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+
+            if (networkManager == null || clientId == networkManager.LocalClientId)
+                return true;
+
+            if (session == null || !session.TryResolvePlayerHeadWorldPosition(clientId, out Vector3 headPosition))
+                return true;
+
+            return BlockiverseInteractionLimits.IsWithinReach(
+                headPosition.x,
+                headPosition.y,
+                headPosition.z,
+                position.X,
+                position.Y,
+                position.Z,
+                BlockiverseInteractionLimits.MaxHostValidatedReachMeters);
+        }
+
+        static bool IsClientConnected(NetworkManager networkManager, ulong clientId)
+        {
+            foreach (ulong connected in networkManager.ConnectedClientsIds)
+            {
+                if (connected == clientId)
+                    return true;
+            }
+
+            return false;
+        }
+
+        uint AllocateSnapshotId()
+        {
+            uint snapshotId = nextSnapshotId++;
+
+            if (nextSnapshotId == 0)
+                nextSnapshotId = 1;
+
+            return snapshotId;
         }
 
         void SendEnvironmentSnapshot(ulong clientId)
@@ -1069,6 +1604,14 @@ namespace Blockiverse.Networking
                     return;
             }
 
+            // A buffer this deep means the missing sequence is never going to arrive on its own.
+            // Drop the backlog and go straight to a resync rather than growing without bound.
+            if (bufferedChunkDeltas.Count >= MaxBufferedChunkDeltas)
+            {
+                RequestWorldResync();
+                return;
+            }
+
             bufferedChunkDeltas.Add(message);
         }
 
@@ -1240,8 +1783,10 @@ namespace Blockiverse.Networking
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MutationRequestMessage, HandleMutationRequestMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MutationDeltaMessage, HandleMutationDeltaMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ChunkSnapshotMessage, HandleChunkSnapshotMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ChunkSnapshotBatchMessage, HandleChunkSnapshotBatchMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(MutationResultMessage, HandleMutationResultMessage);
             networkManager.CustomMessagingManager.RegisterNamedMessageHandler(EnvironmentSnapshotMessage, HandleEnvironmentSnapshotMessage);
+            networkManager.CustomMessagingManager.RegisterNamedMessageHandler(ResyncRequestMessage, HandleResyncRequestMessage);
             messagesRegistered = true;
         }
 
@@ -1258,8 +1803,10 @@ namespace Blockiverse.Networking
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MutationRequestMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MutationDeltaMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ChunkSnapshotMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ChunkSnapshotBatchMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(MutationResultMessage);
             subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(EnvironmentSnapshotMessage);
+            subscribedNetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(ResyncRequestMessage);
             messagesRegistered = false;
         }
 
@@ -1309,7 +1856,11 @@ namespace Blockiverse.Networking
             return nextSequenceId == 0 ? 1 : nextSequenceId;
         }
 
-        void WriteWorldSnapshotHeader(ref FastBufferWriter writer, int changedBlockCount)
+        void WriteWorldSnapshotHeader(
+            ref FastBufferWriter writer,
+            int changedBlockCount,
+            uint snapshotId,
+            int batchCount)
         {
             VoxelWorld world = ResolveWorld();
             WorldGenerationSettings settings = worldManager.Settings;
@@ -1332,7 +1883,9 @@ namespace Blockiverse.Networking
                     groundHeight,
                     spawnPosition,
                     chunkDeltaLog.LastSequenceId,
-                    changedBlockCount));
+                    changedBlockCount,
+                    snapshotId,
+                    batchCount));
         }
 
         public static void WriteWorldSnapshotHeader(ref FastBufferWriter writer, WorldSnapshotHeader header)
@@ -1347,13 +1900,16 @@ namespace Blockiverse.Networking
             WriteBlockPosition(ref writer, header.SpawnPosition);
             writer.WriteValueSafe(header.HostDeltaSequence);
             writer.WriteValueSafe(header.ChangedBlockCount);
+            writer.WriteValueSafe(header.SnapshotId);
+            writer.WriteValueSafe(header.BatchCount);
         }
 
         public static bool TryReadWorldSnapshotHeader(ref FastBufferReader reader, out WorldSnapshotHeader header)
         {
             header = default;
 
-            if (reader.Length - reader.Position < 48)
+            // 48 bytes of world metadata plus snapshotId and batchCount.
+            if (reader.Length - reader.Position < 56)
                 return false;
 
             reader.ReadValueSafe(out int generationPreset);
@@ -1366,6 +1922,8 @@ namespace Blockiverse.Networking
             BlockPosition spawnPosition = ReadBlockPosition(ref reader);
             reader.ReadValueSafe(out uint hostDeltaSequence);
             reader.ReadValueSafe(out int changedBlockCount);
+            reader.ReadValueSafe(out uint snapshotId);
+            reader.ReadValueSafe(out int batchCount);
 
             if (generationPreset < 0 ||
                 generationPreset > (int)CreativeWorldGenerationPreset.VoidBuilder ||
@@ -1375,7 +1933,9 @@ namespace Blockiverse.Networking
                 chunkSize <= 0 ||
                 groundHeight < 1 ||
                 groundHeight >= height ||
-                changedBlockCount < 0)
+                changedBlockCount < 0 ||
+                batchCount < 0 ||
+                batchCount > changedBlockCount)
             {
                 return false;
             }
@@ -1394,7 +1954,9 @@ namespace Blockiverse.Networking
                 groundHeight,
                 spawnPosition,
                 hostDeltaSequence,
-                changedBlockCount);
+                changedBlockCount,
+                snapshotId,
+                batchCount);
             return true;
         }
 
@@ -1503,6 +2065,21 @@ namespace Blockiverse.Networking
                 ? new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock), new BlockId(expectedCurrentBlock))
                 : new BlockMutationRequest(requestingClientId, position, new BlockId(newBlock));
             return true;
+        }
+
+        // A client mutation request awaiting a host answer. The timestamp is measured against the
+        // client's own recovery clock (advanced by TickChunkDeltaRecovery) rather than wall time,
+        // so timeout behaviour is deterministic and testable without a live session.
+        readonly struct PendingMutationRequest
+        {
+            public PendingMutationRequest(BlockMutationRequest request, float createdAtSeconds)
+            {
+                Request = request;
+                CreatedAtSeconds = createdAtSeconds;
+            }
+
+            public BlockMutationRequest Request { get; }
+            public float CreatedAtSeconds { get; }
         }
 
         readonly struct PendingChunkDeltaMessage

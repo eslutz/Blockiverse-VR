@@ -25,7 +25,9 @@ namespace Blockiverse.Tests.Networking.EditMode
                 groundHeight: 64,
                 spawnPosition: new BlockPosition(44, 65, 80),
                 hostDeltaSequence: 9u,
-                changedBlockCount: 3);
+                changedBlockCount: 3,
+                snapshotId: 17u,
+                batchCount: 1);
 
             var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.WorldSnapshotHeaderBytes, Allocator.Temp);
             try
@@ -47,6 +49,8 @@ namespace Blockiverse.Tests.Networking.EditMode
                     Assert.That(actual.SpawnPosition, Is.EqualTo(expected.SpawnPosition));
                     Assert.That(actual.HostDeltaSequence, Is.EqualTo(expected.HostDeltaSequence));
                     Assert.That(actual.ChangedBlockCount, Is.EqualTo(expected.ChangedBlockCount));
+                    Assert.That(actual.SnapshotId, Is.EqualTo(expected.SnapshotId));
+                    Assert.That(actual.BatchCount, Is.EqualTo(expected.BatchCount));
                 }
                 finally
                 {
@@ -57,6 +61,61 @@ namespace Blockiverse.Tests.Networking.EditMode
             {
                 writer.Dispose();
             }
+        }
+
+        [Test]
+        public void SnapshotHeaderRejectsABatchCountThatCannotDescribeItsBlocks()
+        {
+            // A header claiming more batches than blocks is either corrupt or hostile; either way
+            // the client must not start waiting for batches that will never arrive.
+            var header = new MultiplayerChunkAuthoritySync.WorldSnapshotHeader(
+                CreativeWorldGenerationPreset.FlatCreative,
+                width: 32,
+                height: 32,
+                depth: 32,
+                chunkSize: 16,
+                seed: 11,
+                groundHeight: 8,
+                spawnPosition: new BlockPosition(16, 9, 16),
+                hostDeltaSequence: 1u,
+                changedBlockCount: 2,
+                snapshotId: 3u,
+                batchCount: 9);
+
+            var writer = new FastBufferWriter(MultiplayerChunkAuthoritySync.WorldSnapshotHeaderBytes, Allocator.Temp);
+            try
+            {
+                MultiplayerChunkAuthoritySync.WriteWorldSnapshotHeader(ref writer, header);
+                var reader = new FastBufferReader(writer, Allocator.Temp);
+                try
+                {
+                    Assert.That(
+                        MultiplayerChunkAuthoritySync.TryReadWorldSnapshotHeader(ref reader, out _),
+                        Is.False);
+                }
+                finally
+                {
+                    reader.Dispose();
+                }
+            }
+            finally
+            {
+                writer.Dispose();
+            }
+        }
+
+        [Test]
+        public void SnapshotBatchSizeStaysUnderTheTransportPayloadCeiling()
+        {
+            // The whole point of batching: a single message must fit inside Unity Transport's
+            // fragmentation capacity, which is sized from MaxPayloadSize. A regression here is
+            // exactly the defect batching was introduced to fix.
+            int batchBytes = MultiplayerChunkAuthoritySync.SnapshotBatchHeaderBytes +
+                             MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks *
+                             MultiplayerChunkAuthoritySync.SnapshotBlockBytes;
+
+            Assert.That(batchBytes, Is.LessThan(6 * 1024), "A batch must fit under the stock 6 KB payload cap.");
+            Assert.That(MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks, Is.GreaterThan(0));
         }
 
         [Test]

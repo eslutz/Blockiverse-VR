@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using TMPro;
@@ -21,7 +23,17 @@ namespace Blockiverse.UI
         [SerializeField] BlockiverseWorldSessionController worldSessionController;
         [SerializeField] BlockiverseMenuController menuController;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
+        [SerializeField] BlockiverseLanDiscovery discovery;
+        [SerializeField] Button[] discoveryButtons = Array.Empty<Button>();
+        [SerializeField] TMP_Text[] discoveryLabels = Array.Empty<TMP_Text>();
+        [SerializeField] TMP_Text discoveryStatusText;
         IBlockiverseInteractionHaptics interactionHaptics;
+        // One closure per slot, created once at configure time: rebuilding them on every refresh
+        // would leak listeners onto the buttons.
+        readonly List<UnityAction> discoveryClicked = new();
+        readonly List<Button> registeredDiscoveryButtons = new();
+        BlockiverseWorldSpacePanelPresenter panelPresenter;
+        bool discoveryListening;
 
         UnityAction hostClicked;
         UnityAction joinClicked;
@@ -40,7 +52,10 @@ namespace Blockiverse.UI
         bool sessionEndedRouteRequested;
 
         public BlockiverseNetworkSession Session => session;
+        public BlockiverseLanDiscovery Discovery => discovery;
         public string LastJoinAddress { get; private set; }
+        public IReadOnlyList<BlockiverseDiscoveredSession> DiscoveredSessions =>
+            discovery != null ? discovery.DiscoveredSessions : Array.Empty<BlockiverseDiscoveredSession>();
         public TMP_Text StatusText => statusText;
         public TMP_InputField AddressInput => addressInput;
         public Button HostButton => hostButton;
@@ -84,6 +99,197 @@ namespace Blockiverse.UI
         {
             statusBadge = badge;
             UpdateStatusBadge();
+        }
+
+        /// <summary>
+        /// Wires the LAN discovery list. Optional: with no discovery component the menu behaves
+        /// exactly as before, and manual address entry stays the way in.
+        /// </summary>
+        public void ConfigureDiscovery(
+            BlockiverseLanDiscovery targetDiscovery,
+            Button[] targetDiscoveryButtons,
+            TMP_Text[] targetDiscoveryLabels,
+            TMP_Text targetDiscoveryStatusText)
+        {
+            UnregisterDiscoveryCallbacks();
+
+            if (discovery != null)
+                discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
+
+            discovery = targetDiscovery;
+            discoveryButtons = targetDiscoveryButtons ?? Array.Empty<Button>();
+            discoveryLabels = targetDiscoveryLabels ?? Array.Empty<TMP_Text>();
+            discoveryStatusText = targetDiscoveryStatusText;
+
+            if (discovery != null)
+            {
+                discovery.Configure(session);
+                discovery.DiscoveredSessionsChanged += RefreshDiscoveryList;
+            }
+
+            RegisterDiscoveryCallbacks();
+            RefreshDiscoveryList();
+        }
+
+        void RegisterDiscoveryCallbacks()
+        {
+            // Clear-then-add. onClick listeners added here are runtime-only (they do not survive
+            // serialization), so this runs again in Awake for buttons wired by the bootstrapper —
+            // and adding without removing first is how a menu button ends up firing N times.
+            UnregisterDiscoveryCallbacks();
+
+            for (int index = 0; index < discoveryButtons.Length; index++)
+            {
+                Button button = discoveryButtons[index];
+                if (button == null)
+                {
+                    discoveryClicked.Add(null);
+                    registeredDiscoveryButtons.Add(null);
+                    continue;
+                }
+
+                int slot = index;
+                UnityAction callback = () => JoinDiscoveredSession(slot);
+                button.onClick.AddListener(callback);
+                discoveryClicked.Add(callback);
+                registeredDiscoveryButtons.Add(button);
+            }
+        }
+
+        void UnregisterDiscoveryCallbacks()
+        {
+            for (int index = 0; index < registeredDiscoveryButtons.Count && index < discoveryClicked.Count; index++)
+            {
+                Button button = registeredDiscoveryButtons[index];
+                UnityAction callback = discoveryClicked[index];
+
+                if (button != null && callback != null)
+                    button.onClick.RemoveListener(callback);
+            }
+
+            registeredDiscoveryButtons.Clear();
+            discoveryClicked.Clear();
+        }
+
+        /// <summary>Joins the session in a discovery slot. Ignores an empty or stale slot.</summary>
+        public void JoinDiscoveredSession(int slot)
+        {
+            IReadOnlyList<BlockiverseDiscoveredSession> sessions = DiscoveredSessions;
+
+            if (slot < 0 || slot >= sessions.Count)
+                return;
+
+            BlockiverseDiscoveredSession discovered = sessions[slot];
+
+            if (session == null)
+            {
+                SetStatus(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanUnavailable));
+                PlayFeedback(BlockiverseAudioCue.UiCancel);
+                return;
+            }
+
+            if (!TryAdoptDiscoveredPort(discovered))
+            {
+                // A session started between listing and clicking; the refresh shows what
+                // actually happened rather than dialling a port we could not apply.
+                RefreshStatus();
+                return;
+            }
+
+            // The address field is filled in as well as joined, so a failed auto-join leaves the
+            // player one Join press away from retrying rather than back at a blank field.
+            if (addressInput != null)
+                addressInput.text = discovered.Address;
+
+            LastJoinAddress = discovered.Address;
+            JoinSessionInternal(discovered.Address);
+        }
+
+        /// <summary>
+        /// Applies a discovered host's advertised game port to the session config before joining.
+        /// Without this, StartClient dials the locally configured port — and that port is also
+        /// signed into the approval payload, so a host on a non-default port would be listed with
+        /// the right port and then refuse the join as an invalid payload.
+        /// </summary>
+        bool TryAdoptDiscoveredPort(BlockiverseDiscoveredSession discovered)
+        {
+            if (session == null)
+                return false;
+
+            if (discovered.Port == 0 || discovered.Port == session.Config.Port)
+                return true;
+
+            try
+            {
+                session.Configure(session.Config.WithPort(discovered.Port));
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                // Config is immutable while a session is live.
+                return false;
+            }
+        }
+
+        public void RefreshDiscoveryList()
+        {
+            IReadOnlyList<BlockiverseDiscoveredSession> sessions = DiscoveredSessions;
+
+            for (int index = 0; index < discoveryButtons.Length; index++)
+            {
+                Button button = discoveryButtons[index];
+                TMP_Text label = index < discoveryLabels.Length ? discoveryLabels[index] : null;
+                bool hasSession = index < sessions.Count;
+
+                if (button != null)
+                {
+                    if (button.gameObject.activeSelf != hasSession)
+                        button.gameObject.SetActive(hasSession);
+
+                    // A full session stays listed but unjoinable — seeing it greyed out explains
+                    // more than it silently vanishing.
+                    button.interactable = hasSession && sessions[index].HasRoom;
+                }
+
+                if (label == null || !hasSession)
+                    continue;
+
+                BlockiverseDiscoveredSession discovered = sessions[index];
+                label.text = discovered.HasRoom
+                    ? BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.LanDiscoveryEntry,
+                        discovered.HostName,
+                        discovered.Address,
+                        discovered.Port,
+                        discovered.PlayerCount,
+                        discovered.MaxPlayers)
+                    : BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.LanDiscoveryEntryFull,
+                        discovered.HostName,
+                        discovered.Address,
+                        discovered.Port);
+            }
+
+            if (discoveryStatusText == null)
+                return;
+
+            if (discovery == null)
+            {
+                discoveryStatusText.text = BlockiverseLocalization.Text(
+                    BlockiverseLocalization.Keys.LanDiscoveryUnavailable);
+                return;
+            }
+
+            if (sessions.Count > 0)
+            {
+                discoveryStatusText.text = string.Empty;
+                return;
+            }
+
+            discoveryStatusText.text = BlockiverseLocalization.Text(
+                discovery.IsListening
+                    ? BlockiverseLocalization.Keys.LanDiscoverySearching
+                    : BlockiverseLocalization.Keys.LanDiscoveryNoneFound);
         }
 
         public void ConfigureControls(
@@ -229,7 +435,9 @@ namespace Blockiverse.UI
             DiscoverSession();
             DiscoverWorldSessionController();
             DiscoverMenuController();
+            DiscoverDiscovery();
             RegisterControlCallbacks();
+            RegisterDiscoveryCallbacks();
             ApplyDefaultAddressText();
             RefreshStatus();
         }
@@ -265,6 +473,8 @@ namespace Blockiverse.UI
 
         void Update()
         {
+            RefreshDiscoveryListening();
+
             if (session == null)
             {
                 DiscoverSession();
@@ -339,9 +549,101 @@ namespace Blockiverse.UI
                 state == BlockiverseConnectionState.ConnectedClient;
         }
 
+        void OnEnable()
+        {
+            DiscoverDiscovery();
+
+            if (discovery == null)
+                return;
+
+            discovery.Configure(session);
+            discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
+            discovery.DiscoveredSessionsChanged += RefreshDiscoveryList;
+            RefreshDiscoveryList();
+        }
+
+        void OnDisable()
+        {
+            // Backstop only. The panel is normally hidden by disabling its Canvas, which does not
+            // deactivate this GameObject, so browsing is driven by RefreshDiscoveryListening from
+            // Update instead — see the note there.
+            StopDiscoveryListening();
+
+            if (discovery != null)
+                discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
+        }
+
+        /// <summary>
+        /// Starts and stops browsing with the panel actually being on screen.
+        ///
+        /// This deliberately does not use OnEnable/OnDisable: BlockiverseWorldSpacePanelPresenter
+        /// hides a panel by disabling its Canvas and leaves the GameObject active, so those
+        /// callbacks fire once at scene load and never again. Keying off them left the UDP browse
+        /// socket and its receive loop running for the whole session — on a headset, for a player
+        /// who is out building.
+        /// </summary>
+        void RefreshDiscoveryListening()
+        {
+            if (discovery == null)
+                return;
+
+            bool panelVisible = ResolvePresenter() is { } presenter ? presenter.IsVisible : isActiveAndEnabled;
+
+            if (panelVisible == discoveryListening)
+                return;
+
+            if (panelVisible)
+                StartDiscoveryListening();
+            else
+                StopDiscoveryListening();
+        }
+
+        void StartDiscoveryListening()
+        {
+            if (discovery == null)
+                return;
+
+            discovery.Configure(session);
+            // Opening the panel is the natural retry point for a socket that failed to bind
+            // earlier — the failure latches so it cannot spin, but it should not be permanent.
+            discovery.ResetSocketFailure();
+            discovery.StartListening();
+            discoveryListening = true;
+            RefreshDiscoveryList();
+        }
+
+        void StopDiscoveryListening()
+        {
+            if (discovery != null && discoveryListening)
+                discovery.StopListening();
+
+            discoveryListening = false;
+        }
+
+        BlockiverseWorldSpacePanelPresenter ResolvePresenter()
+        {
+            if (panelPresenter == null)
+                panelPresenter = GetComponent<BlockiverseWorldSpacePanelPresenter>();
+
+            return panelPresenter;
+        }
+
+        void DiscoverDiscovery()
+        {
+            if (discovery != null)
+                return;
+
+            discovery = FindFirstObjectByType<BlockiverseLanDiscovery>(FindObjectsInactive.Include);
+        }
+
         void OnDestroy()
         {
+            StopDiscoveryListening();
             UnregisterControlCallbacks();
+            UnregisterDiscoveryCallbacks();
+
+            if (discovery != null)
+                discovery.DiscoveredSessionsChanged -= RefreshDiscoveryList;
         }
 
         void ApplyDefaultAddressText()
@@ -438,7 +740,7 @@ namespace Blockiverse.UI
                 : BlockiverseLocalization.Format(
                     BlockiverseLocalization.Keys.LanLastDisconnect,
                     reconnectMessage,
-                    session.LastDisconnectReason);
+                    DescribeDisconnectReason(session.LastDisconnectReason));
         }
 
         string DescribeUnableToReachHostState()
@@ -454,7 +756,7 @@ namespace Blockiverse.UI
                 : BlockiverseLocalization.Format(
                     BlockiverseLocalization.Keys.LanLastDisconnect,
                     retryMessage,
-                    session.LastDisconnectReason);
+                    DescribeDisconnectReason(session.LastDisconnectReason));
         }
 
         string DescribeHostJoinAddresses()
@@ -470,9 +772,46 @@ namespace Blockiverse.UI
 
         string DescribeFailedState()
         {
-            return string.IsNullOrWhiteSpace(session.LastDisconnectReason)
-                ? BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanFailed)
-                : session.LastDisconnectReason;
+            if (string.IsNullOrWhiteSpace(session.LastDisconnectReason))
+                return BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanFailed);
+
+            return DescribeDisconnectReason(session.LastDisconnectReason);
+        }
+
+        /// <summary>
+        /// Turns a Netcode disconnect reason into player-facing text. A refused join arrives as a
+        /// <see cref="BlockiverseJoinRejectionReason"/> name, which says something actionable
+        /// ("both headsets need the same build") rather than an enum the player cannot act on.
+        /// Anything else — a transport error, a host-side message — passes through unchanged.
+        /// </summary>
+        public static string DescribeDisconnectReason(string disconnectReason)
+        {
+            if (string.IsNullOrWhiteSpace(disconnectReason))
+                return string.Empty;
+
+            if (!Enum.TryParse(disconnectReason.Trim(), out BlockiverseJoinRejectionReason rejectionReason))
+                return disconnectReason;
+
+            return rejectionReason switch
+            {
+                BlockiverseJoinRejectionReason.ProtocolMismatch =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedProtocolMismatch),
+                BlockiverseJoinRejectionReason.GameVersionMismatch =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedGameVersionMismatch),
+                BlockiverseJoinRejectionReason.BlockRegistryMismatch =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedBlockRegistryMismatch),
+                BlockiverseJoinRejectionReason.ItemRegistryMismatch =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedItemRegistryMismatch),
+                BlockiverseJoinRejectionReason.RecipeRegistryMismatch =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedRecipeRegistryMismatch),
+                BlockiverseJoinRejectionReason.UnsupportedWorldVersion =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedUnsupportedWorldVersion),
+                BlockiverseJoinRejectionReason.SessionFull =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedSessionFull),
+                BlockiverseJoinRejectionReason.InvalidJoinPayload =>
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanRejectedInvalidJoinPayload),
+                _ => disconnectReason,
+            };
         }
 
         void SetStatus(string message)

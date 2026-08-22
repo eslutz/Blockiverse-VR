@@ -970,6 +970,546 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(clientSync.Diagnostics.LastCompletedMutationRequestId, Is.Zero);
         }
 
+        // The regression test for the defect batching exists to fix: before the late-join
+        // snapshot was split into bounded messages, one oversized message went undelivered and
+        // the joining client never received a world at all. The old ceiling sat near 380 changed
+        // blocks, which a played world crosses within minutes of fluid flow and crop growth
+        // alone, so this deliberately builds a world several times past it.
+        [UnityTest]
+        public IEnumerator LateJoinSyncsAWorldWithFarMoreChangedBlocksThanFitOneMessage()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession lateJoinSession = CreateClientSession(hostSession);
+            var hostSettings = new WorldGenerationSettings(
+                width: 32,
+                height: 16,
+                depth: 32,
+                chunkSize: 16,
+                seed: 7300,
+                groundHeight: 4);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Large Snapshot Host World", hostSettings);
+            CreativeWorldManager lateJoinWorldManager = CreateCreativeWorldManager(
+                "Large Snapshot Late Join World",
+                new WorldGenerationSettings(width: 8, height: 8, depth: 8, chunkSize: 4, seed: 7301, groundHeight: 2));
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync lateJoinSync = ConfigureChunkSync(lateJoinSession, lateJoinWorldManager);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            lateJoinSession.Configure(testConfig);
+
+            // Mutate the host world directly: this stands in for the accumulated changed-block
+            // set a played world carries (player edits, fluid flow, crop growth, snow settle).
+            const int changedBlockCount = 2000;
+            var changedPositions = new List<BlockPosition>(changedBlockCount);
+            // Spans several layers: one y level only holds width*depth (1024 here), which is
+            // fewer batches than a single frame sends and would leave pacing untested.
+            int placed = 0;
+            for (int y = hostSettings.GroundHeight;
+                 y < hostSettings.Bounds.Height - 1 && placed < changedBlockCount;
+                 y++)
+            {
+                for (int x = 0; x < hostSettings.Bounds.Width && placed < changedBlockCount; x++)
+                {
+                    for (int z = 0; z < hostSettings.Bounds.Depth && placed < changedBlockCount; z++)
+                    {
+                        var position = new BlockPosition(x, y, z);
+                        hostWorldManager.World.SetBlock(position, BlockRegistry.Graystone);
+                        changedPositions.Add(position);
+                        placed++;
+                    }
+                }
+            }
+
+            Assert.That(placed, Is.EqualTo(changedBlockCount), "The test world must actually reach the target block count.");
+
+            Assert.That(
+                hostWorldManager.World.GetChangedBlocks().Count,
+                Is.GreaterThan(MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks * 2),
+                "The host world must exceed a single batch several times over for this to be a real test.");
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the large late-join snapshot.");
+
+            int expectedChangedBlocks = hostWorldManager.World.GetChangedBlocks().Count;
+            int expectedBatches =
+                (expectedChangedBlocks + MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks - 1) /
+                MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks;
+
+            // Sampling starts BEFORE the client connects, so the whole send is observed. If it
+            // started after, a synchronous send would already have finished, every delta would
+            // be zero, and the cap assertion below would pass while proving nothing.
+            Assert.That(lateJoinSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+
+            int previousSent = hostSync.Diagnostics.SentSnapshotBatchCount;
+            int largestFrameBurst = 0;
+            float pacingDeadline = Time.realtimeSinceStartup + 25.0f;
+
+            while (!lateJoinSync.HasHostGenerationSnapshotForSession &&
+                   Time.realtimeSinceStartup < pacingDeadline)
+            {
+                yield return null;
+                int sent = hostSync.Diagnostics.SentSnapshotBatchCount;
+                largestFrameBurst = Mathf.Max(largestFrameBurst, sent - previousSent);
+                previousSent = sent;
+            }
+
+            Assert.That(
+                lateJoinSession.NetworkManager.IsConnectedClient,
+                Is.True,
+                "Late join client did not connect for the large late-join snapshot.");
+            Assert.That(
+                lateJoinSync.HasHostGenerationSnapshotForSession,
+                Is.True,
+                "Late join client never received the batched world snapshot.");
+            Assert.That(
+                largestFrameBurst,
+                Is.GreaterThan(0),
+                "The send was never observed in flight, so the pacing assertion would be vacuous.");
+            Assert.That(
+                expectedBatches,
+                Is.GreaterThan(MultiplayerChunkAuthoritySync.SnapshotBatchesPerFrame),
+                "This world must need more batches than one frame sends, or pacing is untested.");
+            Assert.That(
+                largestFrameBurst,
+                Is.LessThanOrEqualTo(MultiplayerChunkAuthoritySync.SnapshotBatchesPerFrame),
+                "Snapshot batches must be paced across frames, not queued in one burst.");
+
+            Assert.That(hostSync.Diagnostics.SentLateJoinSnapshotCount, Is.EqualTo(1));
+            Assert.That(hostSync.Diagnostics.SentSnapshotBatchCount, Is.EqualTo(expectedBatches));
+            Assert.That(lateJoinSync.Diagnostics.AppliedSnapshotBatchCount, Is.EqualTo(expectedBatches));
+            Assert.That(lateJoinSync.Diagnostics.AppliedSnapshotBlockCount, Is.EqualTo(expectedChangedBlocks));
+            Assert.That(lateJoinWorldManager.World.Bounds, Is.EqualTo(hostWorldManager.World.Bounds));
+            Assert.That(lateJoinWorldManager.World.Seed, Is.EqualTo(hostWorldManager.World.Seed));
+
+            // Spot-check the ends and the middle rather than all 900: a batch boundary bug shows
+            // up as a contiguous run of missing blocks, which any of these would catch.
+            foreach (int index in new[] { 0, 1, changedPositions.Count / 2, changedPositions.Count - 2, changedPositions.Count - 1 })
+            {
+                Assert.That(
+                    lateJoinWorldManager.World.GetBlock(changedPositions[index]),
+                    Is.EqualTo(BlockRegistry.Graystone),
+                    $"Changed block {index} of {changedPositions.Count} did not survive the batched snapshot.");
+            }
+
+            int mismatches = 0;
+            foreach (BlockPosition position in changedPositions)
+            {
+                if (lateJoinWorldManager.World.GetBlock(position) != BlockRegistry.Graystone)
+                    mismatches++;
+            }
+
+            Assert.That(mismatches, Is.Zero, "Every changed block should have arrived across the batches.");
+
+            lateJoinSession.StopSession();
+            yield return WaitFor(
+                () => !lateJoinSession.NetworkManager.IsListening,
+                "Late join client did not stop after the large snapshot test.");
+        }
+
+        [UnityTest]
+        public IEnumerator HostRejectsAClientEditFarOutsideItsReach()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            var settings = new WorldGenerationSettings(
+                width: 32,
+                height: 16,
+                depth: 32,
+                chunkSize: 16,
+                seed: 7400,
+                groundHeight: 4);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Reach Host World", settings);
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager("Reach Client World", settings);
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the reach check.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for the reach check.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive the world snapshot before the reach check.");
+
+            // Positions are derived from the head the host actually resolves rather than a fixed
+            // coordinate: the owner republishes its pose every frame, so anything this test wrote
+            // into the host's copy of the player object would be overwritten moments later.
+            ulong clientId = clientSession.NetworkManager.LocalClientId;
+            yield return WaitFor(
+                () => hostSession.TryResolvePlayerHeadWorldPosition(clientId, out _),
+                "Host never resolved the client's head position for the reach check.");
+
+            Assert.That(hostSession.TryResolvePlayerHeadWorldPosition(clientId, out Vector3 headPosition), Is.True);
+
+            var nearPosition = new BlockPosition(
+                Mathf.Clamp(Mathf.FloorToInt(headPosition.x) + 1, 0, settings.Bounds.Width - 1),
+                Mathf.Clamp(Mathf.FloorToInt(headPosition.y), 0, settings.Bounds.Height - 1),
+                Mathf.Clamp(Mathf.FloorToInt(headPosition.z), 0, settings.Bounds.Depth - 1));
+
+            // Diagonally opposite corner of the world: well past the reach limit plus its
+            // pose-latency tolerance, whatever the head ended up at.
+            var farPosition = new BlockPosition(
+                headPosition.x < settings.Bounds.Width * 0.5f ? settings.Bounds.Width - 1 : 0,
+                Mathf.Clamp(Mathf.FloorToInt(headPosition.y), 0, settings.Bounds.Height - 1),
+                headPosition.z < settings.Bounds.Depth * 0.5f ? settings.Bounds.Depth - 1 : 0);
+
+            Assert.That(
+                Vector3.Distance(headPosition, new Vector3(farPosition.X, farPosition.Y, farPosition.Z)),
+                Is.GreaterThan(BlockiverseInteractionLimits.MaxHostValidatedReachMeters + 2.0f),
+                "The far block must be comfortably outside the host-validated reach.");
+
+            BlockId originalFarBlock = hostWorldManager.World.GetBlock(farPosition);
+
+            clientSync.TrySubmitMutation(
+                farPosition,
+                BlockRegistry.Graystone,
+                out _,
+                out bool farRequestSent);
+
+            Assert.That(farRequestSent, Is.True);
+
+            yield return WaitFor(
+                () => hostSync.Diagnostics.OutOfReachRejectedMutationCount >= 1,
+                "Host did not reject an edit made far outside the client's reach.");
+
+            Assert.That(hostWorldManager.World.GetBlock(farPosition), Is.EqualTo(originalFarBlock));
+
+            yield return WaitFor(
+                () => clientSync.LastMutationResult.RejectionReason == BlockMutationRejectionReason.OutOfReach &&
+                      clientSync.Diagnostics.PendingMutationRequestCount == 0,
+                "Client did not clear the pending request after an out-of-reach rejection.");
+
+            // A block right next to the player must still be editable — the check has to reject
+            // the impossible edit without breaking ordinary building.
+            clientSync.TrySubmitMutation(
+                nearPosition,
+                BlockRegistry.Graystone,
+                out _,
+                out bool nearRequestSent);
+
+            Assert.That(nearRequestSent, Is.True);
+
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(nearPosition) == BlockRegistry.Graystone &&
+                      clientWorldManager.World.GetBlock(nearPosition) == BlockRegistry.Graystone,
+                "Host rejected an in-reach client edit.");
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after the reach check.");
+        }
+
+        // The recovery path from ruleset §7.5: a client that misses one delta is stuck one
+        // sequence behind forever without it, because every later delta buffers against a gap
+        // that nothing will ever fill.
+        [UnityTest]
+        public IEnumerator ClientRecoversFromAMissedDeltaByResyncingWithTheHost()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            var settings = new WorldGenerationSettings(
+                width: 32,
+                height: 16,
+                depth: 32,
+                chunkSize: 16,
+                seed: 7600,
+                groundHeight: 4);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Resync Host World", settings);
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager("Resync Client World", settings);
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            var missedPosition = new BlockPosition(5, 6, 5);
+            var laterPosition = new BlockPosition(6, 6, 5);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the resync check.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for the resync check.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive the world snapshot before the resync check.");
+
+            // Disabling the sync unregisters its message handlers, so the next delta is delivered
+            // by the transport and then dropped with nowhere to go — the same observable state as
+            // a host-side handler that threw.
+            clientSync.enabled = false;
+            yield return null;
+
+            hostSync.TrySubmitMutation(missedPosition, BlockRegistry.Graystone, out _, out _);
+            yield return WaitFor(
+                () => hostWorldManager.World.GetBlock(missedPosition) == BlockRegistry.Graystone,
+                "Host did not apply its own edit during the resync check.");
+
+            // Give the dropped delta time to actually reach the client's transport and be
+            // discarded before handlers come back, so the miss is deterministic rather than a
+            // race against re-registration.
+            for (int frame = 0; frame < 10; frame++)
+                yield return null;
+
+            clientSync.enabled = true;
+            yield return null;
+
+            Assert.That(
+                clientWorldManager.World.GetBlock(missedPosition),
+                Is.Not.EqualTo(BlockRegistry.Graystone),
+                "The client should have missed the first delta for this test to mean anything.");
+
+            // This one arrives, but its sequence is ahead of what the client has applied, so it
+            // buffers against the gap instead of being applied.
+            hostSync.TrySubmitMutation(laterPosition, BlockRegistry.Graystone, out _, out _);
+            yield return WaitFor(
+                () => clientSync.Diagnostics.LastAppliedChunkDeltaSequence == 0 &&
+                      clientWorldManager.World.GetBlock(laterPosition) != BlockRegistry.Graystone,
+                "The out-of-order delta should have buffered rather than applied.");
+
+            // Age past the gap timeout. Update() also ticks this, so allow for either path
+            // having already fired the request.
+            clientSync.TickChunkDeltaRecovery(MultiplayerChunkAuthoritySync.ChunkDeltaGapTimeoutSeconds + 0.1f);
+
+            Assert.That(clientSync.Diagnostics.SentResyncRequestCount, Is.GreaterThanOrEqualTo(1));
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession &&
+                      clientWorldManager.World.GetBlock(missedPosition) == BlockRegistry.Graystone &&
+                      clientWorldManager.World.GetBlock(laterPosition) == BlockRegistry.Graystone,
+                "Client did not converge on the host world after requesting a resync.",
+                timeoutSeconds: 15.0f);
+
+            Assert.That(hostSync.Diagnostics.ServedResyncRequestCount, Is.GreaterThanOrEqualTo(1));
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after the resync check.");
+        }
+
+        [UnityTest]
+        public IEnumerator ClientRefusesNewEditsOnceThePendingRequestLimitIsReached()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            var settings = new WorldGenerationSettings(
+                width: 32,
+                height: 16,
+                depth: 32,
+                chunkSize: 16,
+                seed: 7500,
+                groundHeight: 4);
+            CreativeWorldManager hostWorldManager = CreateCreativeWorldManager("Pending Limit Host World", settings);
+            CreativeWorldManager clientWorldManager = CreateCreativeWorldManager("Pending Limit Client World", settings);
+            ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the pending-request limit check.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for the pending-request limit check.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive the world snapshot before the pending-request limit check.");
+
+            // Stop the host from answering so requests pile up the way they would if the host
+            // went unreachable mid-build.
+            hostSession.NetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                "Blockiverse.ChunkAuthority.MutationRequest");
+
+            int refusedAt = -1;
+            for (int index = 0; index < MultiplayerChunkAuthoritySync.MaxPendingMutationRequests + 8; index++)
+            {
+                var position = new BlockPosition(index % 30, 6, index / 30);
+                BlockMutationResult result = clientSync.TrySubmitMutation(
+                    position,
+                    BlockRegistry.Graystone,
+                    out _,
+                    out _);
+
+                if (result.RejectionReason != BlockMutationRejectionReason.PendingRequestLimitReached)
+                    continue;
+
+                refusedAt = index;
+                break;
+            }
+
+            Assert.That(
+                refusedAt,
+                Is.EqualTo(MultiplayerChunkAuthoritySync.MaxPendingMutationRequests),
+                "The client should refuse the first edit past the pending-request cap, and no earlier.");
+            Assert.That(
+                clientSync.Diagnostics.PendingMutationRequestCount,
+                Is.EqualTo(MultiplayerChunkAuthoritySync.MaxPendingMutationRequests));
+            Assert.That(clientSync.Diagnostics.RefusedPendingLimitMutationCount, Is.GreaterThanOrEqualTo(1));
+
+            // Pending requests age out, and the client asks the host to resync rather than
+            // sitting on a world it can no longer prove is correct.
+            clientSync.TickChunkDeltaRecovery(MultiplayerChunkAuthoritySync.PendingMutationRequestTimeoutSeconds + 0.1f);
+
+            Assert.That(clientSync.Diagnostics.TimedOutMutationRequestCount, Is.GreaterThan(0));
+            Assert.That(clientSync.Diagnostics.PendingMutationRequestCount, Is.Zero);
+            Assert.That(clientSync.Diagnostics.SentResyncRequestCount, Is.EqualTo(1));
+            Assert.That(clientSync.HasHostGenerationSnapshotForSession, Is.False);
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after the pending-request limit check.");
+        }
+
+        // A refused survival command must be reported as refused. Reporting RequestSent for a
+        // command that was never put on the wire tells the player the action is in flight and
+        // leaves the UI waiting on a reply that cannot come.
+        [UnityTest]
+        public IEnumerator SurvivalCommandsRefusedAtThePendingCapReportRejectionAndAgeOut()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            var settings = new WorldGenerationSettings(
+                width: 32,
+                height: 16,
+                depth: 32,
+                chunkSize: 16,
+                seed: 7700,
+                groundHeight: 4);
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Survival Cap Host World", settings);
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager("Survival Cap Client World", settings);
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvival = ConfigureSurvivalSync(hostSession, hostSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvival = ConfigureSurvivalSync(clientSession, clientSync, clientWorldManager);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the survival cap check.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for the survival cap check.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive the world snapshot before the survival cap check.");
+
+            // Stop the host answering so commands pile up the way they would if it went away.
+            hostSession.NetworkManager.CustomMessagingManager.UnregisterNamedMessageHandler(
+                "Blockiverse.Survival.CommandRequest");
+
+            SurvivalCommandResult refused = default;
+            bool refusedSent = true;
+            int submitted = 0;
+
+            for (int index = 0; index < MultiplayerSurvivalSync.MaxPendingCommandRequests + 8; index++)
+            {
+                var position = new BlockPosition(index % 30, 5, index / 30);
+                SurvivalCommandResult result = clientSurvival.TrySubmitHarvest(position, out bool sentToHost);
+                submitted++;
+
+                if (result.FailureReason != SurvivalCommandFailureReason.PendingRequestLimitReached)
+                    continue;
+
+                refused = result;
+                refusedSent = sentToHost;
+                break;
+            }
+
+            Assert.That(
+                refused.FailureReason,
+                Is.EqualTo(SurvivalCommandFailureReason.PendingRequestLimitReached),
+                "The client should refuse commands once the pending cap is reached.");
+            Assert.That(refused.Accepted, Is.False);
+            Assert.That(refused.PendingHostValidation, Is.False, "A refused command is not awaiting the host.");
+            Assert.That(refusedSent, Is.False, "A refused command must not claim it reached the host.");
+            Assert.That(submitted, Is.EqualTo(MultiplayerSurvivalSync.MaxPendingCommandRequests + 1));
+            Assert.That(
+                clientSurvival.PendingCommandRequestCount,
+                Is.EqualTo(MultiplayerSurvivalSync.MaxPendingCommandRequests));
+
+            // Without a timeout the cap would be permanent for the rest of the session.
+            clientSurvival.TickPendingCommandTimeouts(
+                MultiplayerSurvivalSync.PendingCommandRequestTimeoutSeconds + 0.1f);
+
+            Assert.That(clientSurvival.TimedOutCommandRequestCount, Is.GreaterThan(0));
+            Assert.That(clientSurvival.PendingCommandRequestCount, Is.Zero);
+
+            // And the client can act again once the backlog drains.
+            clientSurvival.TrySubmitHarvest(new BlockPosition(1, 5, 1), out bool sentAfterDrain);
+            Assert.That(sentAfterDrain, Is.True, "The client should be able to act again after the backlog clears.");
+
+            Assert.That(hostSurvival, Is.Not.Null);
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after the survival cap check.");
+        }
+
         [UnityTest]
         public IEnumerator CompetingClientBlockMutationsRejectStaleRequestAndPreserveAuthoritativeWinner()
         {

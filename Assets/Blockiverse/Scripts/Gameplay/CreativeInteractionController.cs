@@ -9,7 +9,10 @@ namespace Blockiverse.Gameplay
 {
     public sealed class CreativeInteractionController : MonoBehaviour
     {
-        public const float MaxBlockInteractionReachMeters = 6.0f;
+        // Forwards the canonical value in Core so the host-side authority check in
+        // Blockiverse.Networking (which cannot reference Gameplay) enforces the same reach.
+        public const float MaxBlockInteractionReachMeters =
+            BlockiverseInteractionLimits.MaxBlockInteractionReachMeters;
 
         readonly List<SetBlockCommand> undoStack = new();
         // Undone edits eligible for redo (§12.1); cleared whenever a fresh edit lands.
@@ -101,23 +104,16 @@ namespace Blockiverse.Gameplay
 
         public static bool IsBlockWithinInteractionReach(Vector3 origin, BlockPosition target)
         {
-            float distanceX = DistanceOutsideAxis(origin.x, target.X, target.X + 1);
-            float distanceY = DistanceOutsideAxis(origin.y, target.Y, target.Y + 1);
-            float distanceZ = DistanceOutsideAxis(origin.z, target.Z, target.Z + 1);
-            float maxDistance = MaxBlockInteractionReachMeters;
-
-            return distanceX * distanceX + distanceY * distanceY + distanceZ * distanceZ <= maxDistance * maxDistance;
-        }
-
-        static float DistanceOutsideAxis(float value, int minInclusive, int maxExclusive)
-        {
-            if (value < minInclusive)
-                return minInclusive - value;
-
-            if (value > maxExclusive)
-                return value - maxExclusive;
-
-            return 0.0f;
+            // Shares the Core implementation with the host-side authority check so a locally
+            // legal edit is never rejected as out of reach by the host on a mismatched formula.
+            return BlockiverseInteractionLimits.IsWithinReach(
+                origin.x,
+                origin.y,
+                origin.z,
+                target.X,
+                target.Y,
+                target.Z,
+                MaxBlockInteractionReachMeters);
         }
 
         public bool TryBreakBlock(BlockPosition position)

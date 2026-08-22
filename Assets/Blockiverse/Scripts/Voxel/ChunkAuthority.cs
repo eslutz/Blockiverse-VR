@@ -84,7 +84,13 @@ namespace Blockiverse.Voxel
         // Survival worlds accept client edits only through the validated survival command
         // channel; the raw creative mutation channel is host-only there.
         GameModeForbidsDirectMutation,
-        WorldInputBlocked
+        WorldInputBlocked,
+        // The client already has the maximum number of unanswered mutation requests in flight
+        // (ruleset §14); new edits are refused locally until the host answers some of them.
+        PendingRequestLimitReached,
+        // The host's view of the requesting player's head is too far from the edited block
+        // (ruleset §16). Host-side only — the local preview path uses its own reach check.
+        OutOfReach
     }
 
     public readonly struct BlockMutationRequest : IEquatable<BlockMutationRequest>

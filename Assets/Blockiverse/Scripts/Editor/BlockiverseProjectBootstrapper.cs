@@ -129,7 +129,12 @@ const float GameMenuDistanceMeters = 0.95f;
         static readonly Vector2 LoadWorldPanelSize = new(620.0f, 600.0f);
         static readonly Vector2 SettingsPanelSize = new(480.0f, 300.0f);
         static readonly Vector2 StationPanelSize = new(540.0f, 620.0f);
-        static readonly Vector2 LanMultiplayerPanelSize = new(620.0f, 520.0f);
+        // Taller than the pre-discovery panel: the four discovered-session slots sit under the
+        // status text, and the panel must not clip them when every slot is filled.
+        static readonly Vector2 LanMultiplayerPanelSize = new(620.0f, 680.0f);
+
+        /// <summary>Discovered-session slots shown in the LAN panel (protocol headroom is 4 players).</summary>
+        const int LanDiscoverySlotCount = 4;
         static readonly Vector2 InventoryPanelSize = new(480.0f, 600.0f);
         static readonly Vector2 CraftingPanelSize = new(480.0f, 600.0f);
         static readonly Vector2 CatalogPanelSize = new(560.0f, 600.0f);

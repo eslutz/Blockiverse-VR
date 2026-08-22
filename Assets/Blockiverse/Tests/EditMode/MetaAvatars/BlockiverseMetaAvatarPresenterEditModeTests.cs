@@ -104,18 +104,28 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
         public void AvatarStreamRelayUsesUnreliableDeliveryAndBoundedPayloads()
         {
             MethodInfo submit = typeof(MetaAvatarStreamRelay).GetMethod(
-                "SubmitAvatarStreamServerRpc",
+                "SubmitAvatarStreamRpc",
                 BindingFlags.Instance | BindingFlags.NonPublic);
             MethodInfo receive = typeof(MetaAvatarStreamRelay).GetMethod(
-                "ReceiveAvatarStreamClientRpc",
+                "ReceiveAvatarStreamRpc",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             Assert.That(MetaAvatarStreamMessage.MaxFragmentBytes, Is.LessThan(MetaAvatarStreamMessage.MaxStreamBytes));
             Assert.That(MetaAvatarStreamMessage.MaxStreamBytes, Is.EqualTo(64 * 1024));
             Assert.That(submit, Is.Not.Null);
             Assert.That(receive, Is.Not.Null);
-            Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
-            Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+            // Unreliable delivery is why the stream is manually fragmented: Netcode does not
+            // fragment unreliable messages, so each one must fit under the MTU.
+            Assert.That(submit.GetCustomAttribute<RpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+            Assert.That(receive.GetCustomAttribute<RpcAttribute>()?.Delivery, Is.EqualTo(RpcDelivery.Unreliable));
+
+            // The old [ServerRpc] required ownership by default; the universal attribute does
+            // not, so the relay states it explicitly and this pins it.
+            Assert.That(
+                submit.GetCustomAttribute<RpcAttribute>()?.InvokePermission,
+                Is.EqualTo(RpcInvokePermission.Owner));
+            Assert.That(submit.GetCustomAttribute<ServerRpcAttribute>(), Is.Null);
+            Assert.That(receive.GetCustomAttribute<ClientRpcAttribute>(), Is.Null);
             Assert.That(
                 new MetaAvatarStreamMessage(1, 0.0, 1, 0, 1, new byte[MetaAvatarStreamMessage.MaxFragmentBytes + 1]).HasValidPayload,
                 Is.False);

@@ -47,6 +47,30 @@ Unity editor domain reloads can also log `Call to StopSubsystems without an init
 
 Historical multiplayer editor-network validation, simulated latency and packet-loss checks, and active block-editing bandwidth estimates are documented in [M5 Multiplayer Validation](multiplayer-m5-validation.md). New multiplayer validation should follow [Voxel Multiplayer and Networking Ruleset](../rulesets/voxel_multiplayer_networking_ruleset.md).
 
+### Multiplayer Play Mode (two virtual players in one editor)
+
+`com.unity.multiplayer.playmode` is a committed dependency (`Packages/manifest.json`). It runs
+additional virtual players against the same project, which is the fastest way to reproduce
+anything that only goes wrong with a real second peer — late join into a played world, join
+refusals, avatar pose, disconnect handling.
+
+1. Open the project and `Window > Multiplayer > Multiplayer Play Mode`.
+2. Activate one virtual player. Leave the main editor as the host.
+3. Enter Play Mode, host from the LAN panel in the main editor, and join from the virtual player
+   (LAN discovery lists the host, or enter `127.0.0.1`).
+
+Use it for iteration, not as an acceptance gate: `scripts/unity/run-tests.sh` and the on-device
+Quest pass remain the gates. Two virtual players on one machine share a clock and a network
+stack, so they cannot tell you anything about real Wi-Fi behaviour.
+
+### LAN discovery on a real network
+
+The host broadcasts a signed UDP beacon on port 7778 once per second while hosting; clients
+listen only while the LAN panel is open. Some access points drop broadcast traffic between
+clients ("client isolation" / "AP isolation"), and on those networks the session list stays
+empty by design — manual address entry is the documented fallback, and the panel says so. When
+validating discovery on device, confirm both the discovered-list path and the typed-address path.
+
 Runtime diagnostics use local Unity and player logs only. Use `hzdb` for Quest player logs and other Quest-device operations whenever it exposes the needed command; use `adb` directly only as a documented fallback. On Eric's current development machine, `hzdb` resolves to `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`, but agents should verify the live path with `command -v hzdb` because the active `nvm` Node can change. If `node` or `npm` resolves outside the `hzdb` Node prefix, put the `hzdb` prefix first on `PATH` for package-manager verification. Capture recent Quest player logs with:
 
 ```sh
@@ -212,6 +236,40 @@ For Quest pointer/ray changes, validate the normal development APK in the real g
 - Menu hover suppresses block editing for the active ray, missed menu rays use the short menu aim guide, world targeting restores normal line length after the menu is left, routed game menus use the shared Quad composition surface, controller/ray visuals stay on the normal main-camera render path, and the generated composition menu cursor tracks menu-local UI hits over the compositor surface.
 
 Remove any temporary ray diagnostic scenes or build scripts once the issue is reproduced in the real game path. Stub ray worlds are not part of the validation gate.
+
+## Writing Tests That Can Actually Fail
+
+A green suite only means something if each test could have gone red. Several tests in
+this repo have passed for reasons unrelated to the behaviour they named, and they are
+indistinguishable from real passes: same colour, same duration, same everything.
+
+**The check: when a test passes, ask what it would have looked like had the behaviour
+been broken. If the answer is "exactly the same", it is not a test yet.**
+
+Shapes this has actually taken here:
+
+- **Asserting a tautology.** A registry-hash test built two identical registries and
+  asserted their hashes matched. It could not fail. The real test builds two registries
+  that differ only in the field under test and asserts the hash separates them.
+- **Measuring outside the window.** A snapshot-pacing test sampled per-frame send counts
+  only after the transfer had begun, so a regression that sent everything in one burst
+  would have finished before sampling started and every sample would have read zero.
+  Sampling now spans the whole operation, and the test asserts it observed the work in
+  flight rather than trusting that it did.
+- **A fixture too small to reach the behaviour.** That same test used a world whose
+  changed-block count fitted inside a single frame's batch budget, so pacing was never
+  exercised. Fixtures for a threshold must cross it, and it is worth asserting the
+  fixture reached the size it intended.
+- **Testing a function nothing calls.** A helper can be correct, thoroughly covered, and
+  wired to nothing. Unit coverage of the helper cannot detect that; a test one level up
+  that drives the real entry point can.
+- **Correct per unit, wrong per path.** Each snapshot batch was individually within the
+  transport payload limit while the burst of them overflowed the send queue. Where a
+  limit applies to an aggregate, assert against the aggregate.
+
+The common thread is that the assertion sat at a different level from the behaviour. When
+a bug is found in tested code, the useful question is not only "what was wrong" but
+"what level was the test measuring, and what level does the bug live at".
 
 ## Test Selection Rules
 

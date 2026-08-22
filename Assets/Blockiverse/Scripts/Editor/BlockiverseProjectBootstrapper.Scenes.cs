@@ -186,6 +186,37 @@ namespace Blockiverse.Editor
             return prefab;
         }
 
+        // Unity Transport's defaults are tuned for a wired connection to a dedicated server, not
+        // two headsets on household Wi-Fi. Every value here is set explicitly so the tuning is
+        // reviewable rather than inherited, and so tests can assert it survived a bootstrap.
+        public static void ConfigureUnityTransportLimits(UnityTransport transport)
+        {
+            // The fragmentation stage is sized from this, so it is the real ceiling on a single
+            // reliable message. Late-join snapshots are batched under it (see
+            // MultiplayerChunkAuthoritySync.SnapshotBatchMaxBlocks); the headroom covers
+            // inventory and station snapshots for a full 44-slot inventory.
+            transport.MaxPayloadSize = TransportMaxPayloadBytes;
+
+            // Late join bursts a header plus every changed-block batch back to back. The stock
+            // 128-packet queue overflows on a well-built world and drops snapshot messages.
+            transport.MaxPacketQueueSize = TransportMaxPacketQueueSize;
+
+            // Quest Wi-Fi tolerates a roaming stall better than it tolerates a false disconnect
+            // mid-session, so the disconnect timeout is generous and heartbeats are frequent
+            // enough to keep an idle build session alive.
+            transport.HeartbeatTimeoutMS = TransportHeartbeatTimeoutMs;
+            transport.ConnectTimeoutMS = TransportConnectTimeoutMs;
+            transport.MaxConnectAttempts = TransportMaxConnectAttempts;
+            transport.DisconnectTimeoutMS = TransportDisconnectTimeoutMs;
+        }
+
+        public const int TransportMaxPayloadBytes = 16 * 1024;
+        public const int TransportMaxPacketQueueSize = 256;
+        public const int TransportHeartbeatTimeoutMs = 500;
+        public const int TransportConnectTimeoutMs = 1000;
+        public const int TransportMaxConnectAttempts = 10;
+        public const int TransportDisconnectTimeoutMs = 5000;
+
         static void ConfigureNetworkManagerObject(GameObject managerObject, GameObject playerPrefab)
         {
             GameObjectUtility.RemoveMonoBehavioursWithMissingScript(managerObject);
@@ -198,6 +229,7 @@ namespace Blockiverse.Editor
                 BlockiverseNetworkConfig.DefaultAddress,
                 BlockiverseNetworkConfig.DefaultPort,
                 BlockiverseNetworkConfig.DefaultListenAddress);
+            ConfigureUnityTransportLimits(transport);
 
             NetworkManager networkManager = EnsureComponent<NetworkManager>(managerObject);
             networkManager.NetworkConfig ??= new NetworkConfig();
@@ -212,6 +244,9 @@ namespace Blockiverse.Editor
             EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
             EnsureComponent<MultiplayerChunkAuthoritySync>(managerObject);
             EnsureComponent<MultiplayerSurvivalSync>(managerObject);
+            // Lives on the always-active NetworkManager object, not the LAN panel: the host has
+            // to keep beaconing while the panel is closed and the player is out building.
+            EnsureComponent<BlockiverseLanDiscovery>(managerObject);
             EnsureComponent<SurvivalVitalsRuntime>(managerObject);
             EnsureComponent<MultiplayerWorldPersistence>(managerObject);
             EnsureComponent<EnvironmentDynamicsController>(managerObject);
