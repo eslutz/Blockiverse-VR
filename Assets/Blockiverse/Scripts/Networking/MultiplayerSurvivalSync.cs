@@ -704,11 +704,9 @@ namespace Blockiverse.Networking
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
             stashedIdentityOrder.Clear();
-            processedRequestsByClientId.Clear();
-            hostCommandRateLimiter.Clear();
+            ClearPerClientEnforcementState();
             pendingCommandRequests.Clear();
             ClearExpiredCommandRequests();
-            lastAcceptedHarvestTimeByClientId.Clear();
             ClearKnownCrouchState();
             stationModels.Clear();
             nextCommandRequestId = 1;
@@ -3097,11 +3095,23 @@ namespace Blockiverse.Networking
 
         bool ResolveLocalCrouchActive() => localCrouchStateProvider != null && localCrouchStateProvider();
 
+        // Every per-client enforcement store, cleared together. Kept as one method rather than
+        // parallel .Clear() calls at each lifecycle boundary: those drift, and a limiter that
+        // quietly stops being reset is invisible until someone abuses the channel it guards.
+        void ClearPerClientEnforcementState()
+        {
+            hostCommandRateLimiter.Clear();
+            playerHelloRateLimiter.Clear();
+            crouchStateRateLimiter.Clear();
+            abuseLedger.Clear();
+            lastDeathDropTimeByClientId.Clear();
+            lastAcceptedHarvestTimeByClientId.Clear();
+            processedRequestsByClientId.Clear();
+        }
+
         void ClearKnownCrouchState()
         {
             lastKnownCrouchStateByClientId.Clear();
-            lastDeathDropTimeByClientId.Clear();
-            abuseLedger.Clear();
             hasSentLocalCrouchState = false;
             lastSentLocalCrouchState = false;
             nextCrouchStateHeartbeatTime = 0.0f;
@@ -3800,9 +3810,7 @@ namespace Blockiverse.Networking
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
             stashedIdentityOrder.Clear();
-            processedRequestsByClientId.Clear();
-            hostCommandRateLimiter.Clear();
-            lastAcceptedHarvestTimeByClientId.Clear();
+            ClearPerClientEnforcementState();
             ClearKnownCrouchState();
             groundItems = new GroundItemStore(itemRegistry);
             stationModels.Clear();

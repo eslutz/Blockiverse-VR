@@ -227,6 +227,29 @@ function StartLanClient(address): bool {
 | Transport failure | Set state to `Failed` with disconnect reason. |
 | Host lost by client | Set client state to `Disconnected`; show reconnect UI. |
 
+### Request limits and abuse handling *(amended 2026-08-22)*
+
+Every client-to-server channel is rate limited per client, not only the command channel:
+
+| Channel | Limit |
+|---|---|
+| Block mutation requests | 30 / second |
+| Survival command requests | 30 / second |
+| Player hello (identity bind) | 5 / 10 seconds |
+| Player crouch state | 20 / second |
+
+Exceeding a limit drops the message and records a violation. **Violations must be acted on, not
+only counted**: sustained abuse escalates to `DisconnectClient`. Violation scores decay so a single
+bad network moment cannot accumulate into a disconnect later.
+
+Client-asserted state must never be able to make a server-side check more permissive. The crouch
+flag carried on a placement request may only make the player-overlap check stricter; the
+authoritative value is the separately tracked, rate-limited crouch state.
+
+Death-drop is **cooldown-limited, not validated**. Vitals are per-peer local simulation by design,
+so a server has no authoritative death state to check against. The cooldown bounds the request as a
+world-spam primitive; it does not make it authentic. Genuine validation requires server-side vitals.
+
 ---
 
 ## 4. Authority model
