@@ -1,6 +1,12 @@
-# The image packages a built player only. Everything else is context Docker would upload for
+# The image packages an already-built player. Everything else is context Docker would upload for
 # nothing -- this repo's Library alone is tens of gigabytes.
+#
+# Two build-context layouts are supported, so both must be re-included:
+#   local  -- docker build --build-arg SERVER_DIR=Builds/LinuxServer
+#   CI     -- the release workflow downloads the build artifact and passes
+#             SERVER_DIR=artifact/staging/blockiverse-server
 *
 !Builds/LinuxServer/BlockiverseServer
 !Builds/LinuxServer/UnityPlayer.so
 !Builds/LinuxServer/BlockiverseServer_Data
+!artifact/staging/blockiverse-server

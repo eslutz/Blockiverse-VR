@@ -21,6 +21,11 @@ namespace Blockiverse.Server
     {
         public const string EnvironmentPrefix = "BLOCKIVERSE_";
 
+        // Handled by the caller (it selects which file to read) rather than by a setter, so it must
+        // be skipped here or every run using it dies reporting "unknown option '--config'".
+        public const string ConfigFileArgument = "--config";
+        public const string ConfigFileEnvironmentName = EnvironmentPrefix + "CONFIG";
+
         public sealed class Resolution
         {
             public BlockiverseServerOptions Options { get; }
@@ -45,7 +50,6 @@ namespace Blockiverse.Server
                 ["server.advertised_address"] = (o, v, p) => o.AdvertisedAddress = v,
                 ["server.max_players"] = (o, v, p) => { if (TryInt(v, p, "server.max_players", 1, int.MaxValue, out int x)) o.MaxPlayers = x; },
                 ["server.name"] = (o, v, p) => o.ServerName = v,
-                ["server.motd"] = (o, v, p) => o.Motd = v,
                 ["server.secret"] = (o, v, p) => o.Secret = v,
                 ["server.tick_rate"] = (o, v, p) => { if (TryInt(v, p, "server.tick_rate", 1, 120, out int x)) o.TickRate = x; },
                 ["server.frame_rate"] = (o, v, p) => { if (TryInt(v, p, "server.frame_rate", 10, 1000, out int x)) o.FrameRate = x; },
@@ -70,7 +74,6 @@ namespace Blockiverse.Server
 
                 ["log.level"] = (o, v, p) => { if (TryLogLevel(v, p, out BlockiverseServerLogLevel x)) o.LogLevel = x; },
                 ["log.format"] = (o, v, p) => { if (TryLogFormat(v, p, out BlockiverseServerLogFormat x)) o.LogFormat = x; },
-                ["log.dir"] = (o, v, p) => o.LogDirectory = v,
 
                 ["admin.stdin_enabled"] = (o, v, p) => { if (TryBool(v, p, "admin.stdin_enabled", out bool x)) o.AdminStdinEnabled = x; },
                 ["admin.socket_path"] = (o, v, p) => o.AdminSocketPath = v,
@@ -146,6 +149,10 @@ namespace Blockiverse.Server
                 if (!entry.Key.StartsWith(EnvironmentPrefix, StringComparison.OrdinalIgnoreCase))
                     continue;
 
+                // Consumed by the caller to choose the config file, exactly like --config.
+                if (string.Equals(entry.Key, ConfigFileEnvironmentName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 if (!byEnvName.TryGetValue(entry.Key, out string canonical))
                 {
                     problems.Add($"environment: unknown variable '{entry.Key}'");
@@ -182,6 +189,18 @@ namespace Blockiverse.Server
                 {
                     name = argument.Substring(0, equals);
                     inlineValue = argument.Substring(equals + 1);
+                }
+
+                // Consumed before resolution; skip it and its value.
+                if (string.Equals(name, ConfigFileArgument, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (inlineValue == null && index + 1 < arguments.Count &&
+                        !arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        index++;
+                    }
+
+                    continue;
                 }
 
                 if (!byArgName.TryGetValue(name, out string canonical))

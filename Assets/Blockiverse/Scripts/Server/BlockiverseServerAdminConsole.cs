@@ -164,6 +164,10 @@ namespace Blockiverse.Server
                     client?.Dispose();
                     if (!running)
                         return;
+
+                    // A persistent error -- descriptor exhaustion, say -- would otherwise retry
+                    // instantly forever and burn a core while the server looks healthy.
+                    Thread.Sleep(200);
                 }
             }
         }
@@ -309,6 +313,18 @@ namespace Blockiverse.Server
         public void Stop()
         {
             running = false;
+
+            // Answer and close anything queued but not yet drained: Stop() can run between an
+            // enqueue and the next Update, and a caller left waiting on a socket that will never
+            // be read is worse than a refusal.
+            while (pending.TryDequeue(out PendingCommand abandoned))
+            {
+                if (abandoned.Reply == null)
+                    continue;
+
+                TrySend(abandoned.Reply, "server is shutting down");
+                abandoned.Reply.Dispose();
+            }
 
             try
             {

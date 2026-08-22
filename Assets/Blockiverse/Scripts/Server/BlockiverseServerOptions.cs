@@ -30,7 +30,6 @@ namespace Blockiverse.Server
         public string AdvertisedAddress { get; set; } = string.Empty;
         public int MaxPlayers { get; set; } = 4;
         public string ServerName { get; set; } = "Blockiverse Server";
-        public string Motd { get; set; } = string.Empty;
         public string Secret { get; set; } = string.Empty;
         public int TickRate { get; set; } = 30;
         public int FrameRate { get; set; } = 60;
@@ -55,7 +54,6 @@ namespace Blockiverse.Server
 
         public BlockiverseServerLogLevel LogLevel { get; set; } = BlockiverseServerLogLevel.Info;
         public BlockiverseServerLogFormat LogFormat { get; set; } = BlockiverseServerLogFormat.Text;
-        public string LogDirectory { get; set; } = string.Empty;
 
         public bool AdminStdinEnabled { get; set; } = true;
         public string AdminSocketPath { get; set; } = string.Empty;

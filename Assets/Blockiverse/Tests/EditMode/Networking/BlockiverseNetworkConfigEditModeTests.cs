@@ -52,10 +52,20 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
-        public void MaxPlayersClampsToInitialLanHeadroom()
+        public void MaxPlayersIsOperatorConfiguredAboveTheSupportedCount()
         {
+            // A nonsensical count still falls back to the default: zero or negative players is a
+            // mistake, not a choice.
             Assert.That(BlockiverseNetworkConfig.Default.WithMaxPlayers(-1).MaxPlayers, Is.EqualTo(BlockiverseNetworkConfig.DefaultMaxPlayers));
-            Assert.That(BlockiverseNetworkConfig.Default.WithMaxPlayers(99).MaxPlayers, Is.EqualTo(BlockiverseNetworkConfig.MaxSupportedPlayers));
+            Assert.That(BlockiverseNetworkConfig.Default.WithMaxPlayers(0).MaxPlayers, Is.EqualTo(BlockiverseNetworkConfig.DefaultMaxPlayers));
+
+            // But a deliberate count above the supported one is HONOURED rather than clamped. A
+            // dedicated-server operator sets what they want; above MaxSupportedPlayers it is
+            // unmeasured and unsupported, and the server warns at boot rather than silently
+            // seating fewer players than the operator configured.
+            Assert.That(BlockiverseNetworkConfig.Default.WithMaxPlayers(99).MaxPlayers, Is.EqualTo(99));
+            Assert.That(BlockiverseNetworkConfig.MaxSupportedPlayers, Is.EqualTo(4),
+                "The supported count is still 4 and is what the boot warning is measured against.");
         }
     }
 }

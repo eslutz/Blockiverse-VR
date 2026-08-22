@@ -116,13 +116,19 @@ namespace Blockiverse.Server
                 return;
 
             ApplyRuntimeSettings();
-            ApplySessionConfiguration();
+
+            if (!ApplySessionConfiguration())
+                return;
 
             if (!StartSession())
                 return;
 
             adminConsole = new BlockiverseServerAdminConsole(this, options);
             adminConsole.Start();
+
+            // Without this the allow/ban lists are decorative: the admin console would report a
+            // ban and the player would rejoin at once.
+            MultiplayerSurvivalSync.PlayerAccessCheck = adminConsole.AccessControl.IsAllowed;
             IsRunning = true;
         }
 
@@ -135,15 +141,35 @@ namespace Blockiverse.Server
 
             for (int index = 0; index < arguments.Count; index++)
             {
-                if (!string.Equals(arguments[index], "--config", StringComparison.OrdinalIgnoreCase))
+                string argument = arguments[index];
+                if (argument == null)
                     continue;
 
-                if (index + 1 < arguments.Count)
+                // Both --config <path> and --config=<path>. Matching only the exact token would
+                // silently discard the inline form: the resolver skips it, this never sees it, and
+                // the operator's named file is ignored with no problem reported.
+                if (argument.StartsWith(BlockiverseServerOptionsResolver.ConfigFileArgument + "=", StringComparison.OrdinalIgnoreCase))
+                {
+                    path = argument.Substring(BlockiverseServerOptionsResolver.ConfigFileArgument.Length + 1);
+                    continue;
+                }
+
+                if (!string.Equals(argument, BlockiverseServerOptionsResolver.ConfigFileArgument, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (index + 1 < arguments.Count &&
+                    !arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+                {
                     path = arguments[index + 1];
+                }
+                else
+                {
+                    problems.Add($"argument: '{BlockiverseServerOptionsResolver.ConfigFileArgument}' needs a value");
+                }
             }
 
             if (path == null && environment != null &&
-                environment.TryGetValue(BlockiverseServerOptionsResolver.EnvironmentPrefix + "CONFIG", out string fromEnvironment))
+                environment.TryGetValue(BlockiverseServerOptionsResolver.ConfigFileEnvironmentName, out string fromEnvironment))
             {
                 path = fromEnvironment;
             }
@@ -236,7 +262,10 @@ namespace Blockiverse.Server
             BlockiverseRuntimeState.SetRouterState(isGamePaused: false, allowWorldInput: true);
         }
 
-        void ApplySessionConfiguration()
+        // Returns false when configuration failed fatally. Application.Quit only takes effect at
+        // the end of the frame, so a fatal path MUST also stop the caller -- otherwise the server
+        // carries on and binds the port anyway.
+        bool ApplySessionConfiguration()
         {
             ResolveReferences();
 
@@ -251,8 +280,12 @@ namespace Blockiverse.Server
 
                 session.Configure(networkConfig);
 
-                if (options.TlsEnabled)
-                    ApplyTransportSecurity();
+                // Otherwise server.tick_rate parses, validates, and does nothing.
+                if (session.NetworkManager != null && session.NetworkManager.NetworkConfig != null)
+                    session.NetworkManager.NetworkConfig.TickRate = (uint)options.TickRate;
+
+                if (options.TlsEnabled && !ApplyTransportSecurity())
+                    return false;
             }
 
             if (survivalSync != null)
@@ -267,11 +300,23 @@ namespace Blockiverse.Server
                 string savePath = Path.Combine(worldDirectory, MultiplayerWorldPersistence.DefaultSaveFileName);
                 // worldManager stays null: MultiplayerWorldPersistence resolves the scene's
                 // IMultiplayerWorldContext itself, and the server scene has exactly one.
+                // Set BEFORE Configure: host-start preparation creates the world, and it reads this.
+                persistence.FreshWorldOverride = new MultiplayerWorldPersistence.FreshWorldSpec
+                {
+                    Preset = options.WorldPreset,
+                    Seed = options.WorldSeed,
+                    GameMode = string.Equals(options.GameMode, "creative", StringComparison.OrdinalIgnoreCase)
+                        ? WorldGameMode.Creative
+                        : WorldGameMode.Survival,
+                };
+
                 persistence.Configure(session, targetWorldManager: null, targetSavePath: savePath, targetWorldName: options.WorldName);
             }
+
+            return true;
         }
 
-        void ApplyTransportSecurity()
+        bool ApplyTransportSecurity()
         {
             try
             {
@@ -281,13 +326,17 @@ namespace Blockiverse.Server
                     serverPrivateKey: File.ReadAllText(options.TlsKeyPath),
                     serverCommonName: options.TlsServerName,
                     clientCaCertificate: File.ReadAllText(options.TlsCertificatePath));
+                return true;
             }
             catch (Exception exception)
             {
+                // Falling through here would bind the port in plaintext for an operator who
+                // explicitly asked for encryption -- the worst possible failure mode.
                 BlockiverseLog.Error(
                     BlockiverseLogCategory.Bootstrap,
-                    $"Could not load TLS material: {exception.Message}");
+                    $"Could not load TLS material: {exception.Message}. Refusing to start unencrypted.");
                 Quit(ExitConfigurationError);
+                return false;
             }
         }
 
@@ -365,9 +414,20 @@ namespace Blockiverse.Server
 
         IEnumerator StopSequence()
         {
-            BlockiverseLog.Info(BlockiverseLogCategory.Bootstrap, "Stopping: saving world and disconnecting players.");
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Bootstrap,
+                options.SaveOnStop
+                    ? "Stopping: saving world and disconnecting players."
+                    : "Stopping: persistence.save_on_stop is false, so the world will NOT be saved.");
+            bool saveFailed = false;
 
-            if (session != null)
+            // An operator who turned this off has accepted losing everything since the last
+            // autosave; say so above rather than doing it quietly.
+            if (session != null && !options.SaveOnStop)
+            {
+                session.StopSession();
+            }
+            else if (session != null)
             {
                 // StopSession runs shutdown preparation, which is what writes the world.
                 session.StopSession();
@@ -384,11 +444,28 @@ namespace Blockiverse.Server
                     BlockiverseLog.Error(
                         BlockiverseLogCategory.Persistence,
                         "Shutdown preparation did not succeed within 30s; stopping anyway. The world may be stale.");
+                    saveFailed = true;
+                }
+
+                // StopSession FORCES the shutdown through on the second consecutive preparation
+                // failure and reports success, so LastStopRequestSucceeded alone cannot tell us the
+                // world was written. This flag is the only signal that it was not.
+                if (session.LastStopForcedAfterPreparationFailure)
+                {
+                    BlockiverseLog.Error(
+                        BlockiverseLogCategory.Persistence,
+                        "Shutdown was forced after repeated save-preparation failures. The world on disk is stale.");
+                    saveFailed = true;
                 }
             }
 
-            WriteCleanShutdownMarker();
+            // Only claim an orderly stop when the world was actually written. Writing the marker
+            // after a failed save suppresses the next boot's warning, which is the only notice an
+            // operator would ever get that they lost progress.
+            if (!saveFailed)
+                WriteCleanShutdownMarker();
             IsRunning = false;
+            MultiplayerSurvivalSync.PlayerAccessCheck = null;
             adminConsole?.Stop();
             Quit(0);
         }

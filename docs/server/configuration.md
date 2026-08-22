@@ -47,7 +47,6 @@ log.format = json
 | `server.advertised_address` | *(empty)* | Display only — logged and shown to operators. Does not affect binding. |
 | `server.max_players` | `4` | **Not enforced above 4, and unsupported above 4.** See below. |
 | `server.name` | `Blockiverse Server` | Shown to operators and in logs. |
-| `server.motd` | *(empty)* | Message shown to joining players. |
 | `server.tick_rate` | `30` | Netcode network tick rate. Leave alone unless you are measuring. |
 | `server.frame_rate` | `60` | Process frame rate. The simulation tick is frame-rate independent; this caps CPU burn. |
 
@@ -105,7 +104,6 @@ value.** It is a shared password for the whole server, and a captured join can b
 |---|---|---|
 | `log.level` | `info` | `error`, `warn`, `info`, or `debug`. |
 | `log.format` | `text` | `text` for humans, `json` for log shipping. |
-| `log.dir` | `<world.dir>/logs` | Rolling diagnostic files. Logs also always go to stdout. |
 | `admin.stdin_enabled` | `true` | Read admin commands from standard input. Useful with `docker run -it`. |
 | `admin.socket_path` | `<world.dir>/admin.sock` | Unix domain socket for admin commands. Its permissions are its authorization — there is no token and no network port. |
 
@@ -139,3 +137,9 @@ unban <playerId>      remove from the ban list
 **There is no view distance or simulation distance.** Blockiverse worlds are bounded and fully
 resident — the server always simulates the whole world. A knob here would not do anything, so there
 isn't one.
+
+**There is no `server.motd` and no `log.dir`.** Both were drafted and then removed rather than
+shipped inert. A message of the day needs a wire message the protocol does not have yet, and a log
+directory needs diagnostic file routing that is currently gated to development builds. A documented
+setting that silently does nothing is worse than an absent one, because you would believe it worked.
+Logs go to stdout, which is where a container log driver and `journalctl` both expect them.

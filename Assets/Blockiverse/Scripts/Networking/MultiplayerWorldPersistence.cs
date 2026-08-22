@@ -15,6 +15,19 @@ namespace Blockiverse.Networking
     public sealed class MultiplayerWorldPersistence : MonoBehaviour
     {
         public const string DefaultSaveFileName = "multiplayer-world.vxlworld";
+
+        // How a dedicated server's FIRST world is generated. Null in LAN play, where the menus own
+        // world creation. Without this, world.seed / world.preset / world.gamemode parse, validate,
+        // and then do nothing -- a config option that silently has no effect is worse than one that
+        // does not exist, because the operator believes it worked.
+        public sealed class FreshWorldSpec
+        {
+            public string Preset;
+            public int? Seed;
+            public WorldGameMode GameMode = WorldGameMode.Survival;
+        }
+
+        public FreshWorldSpec FreshWorldOverride { get; set; }
         const string DefaultWorldName = "Multiplayer World";
         const string DefaultWorldPreset = WorldPresetIds.SurvivalTerrain;
 
@@ -227,6 +240,33 @@ namespace Blockiverse.Networking
             return true;
         }
 
+        // Applies the operator's world settings when a dedicated server creates its first world.
+        // A seedless survival world keeps the existing default generation exactly.
+        GeneratedCreativeWorld GenerateFreshWorld()
+        {
+            FreshWorldSpec spec = FreshWorldOverride;
+            if (spec == null)
+                return WorldSaveGeneration.GenerateDefaultWorld();
+
+            bool isDefaultPreset = string.IsNullOrEmpty(spec.Preset) ||
+                string.Equals(spec.Preset, "survival_terrain", StringComparison.OrdinalIgnoreCase);
+
+            if (isDefaultPreset && !spec.Seed.HasValue)
+                return WorldSaveGeneration.GenerateDefaultWorld();
+
+            // Unset seed means "random on first create", which is what an operator expects from a
+            // fresh server: two servers started from the same image get different worlds.
+            int seed = spec.Seed ?? UnityEngine.Random.Range(int.MinValue, int.MaxValue);
+            (int width, int depth) = WorldSaveGeneration.SizeFor("medium");
+
+            return WorldSaveGeneration.GenerateNewWorld(
+                string.IsNullOrEmpty(spec.Preset) ? "survival_terrain" : spec.Preset,
+                seed,
+                width,
+                depth,
+                startingBiome: null);
+        }
+
         bool InitializeFreshMultiplayerWorldBeforeHostStart(string path, out string failureReason)
         {
             failureReason = string.Empty;
@@ -249,7 +289,7 @@ namespace Blockiverse.Networking
 
             try
             {
-                GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateDefaultWorld();
+                GeneratedCreativeWorld generated = GenerateFreshWorld();
                 worldTextureSet = BlockTextureSetIds.Default;
                 worldManager.SetTextureSet(worldTextureSet);
                 worldManager.InitializeGeneratedWorld(
@@ -258,7 +298,7 @@ namespace Blockiverse.Networking
                     generated.World,
                     generated.GenerationPreset,
                     generated.ContainerLoot);
-                worldManager.SetGameMode(WorldGameMode.Survival);
+                worldManager.SetGameMode(FreshWorldOverride?.GameMode ?? WorldGameMode.Survival);
                 ResetFreshMultiplayerSurvivalState();
             }
             catch (Exception exception)

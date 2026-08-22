@@ -69,7 +69,11 @@ namespace Blockiverse.Networking
         OutOfReach,
         // The client already has the maximum number of unanswered commands in flight
         // (ruleset §14); the command is refused locally and never sent.
-        PendingRequestLimitReached
+        PendingRequestLimitReached,
+        // Appended, so existing values keep their ordinals on the wire.
+        // A death drop was requested again inside the cooldown. The server has no authoritative
+        // death state to validate against, so this bounds the request rather than judging it.
+        DeathDropCooldown
     }
 
     public readonly struct SurvivalCommandResult
@@ -377,6 +381,12 @@ namespace Blockiverse.Networking
         // Counting violations without acting on them means a client can hammer a channel forever
         // and the server just absorbs it. Sustained abuse now ends the connection.
         readonly BlockiverseAbuseLedger abuseLedger = new();
+
+        // Installed by a dedicated server to enforce its allow/ban lists; null in LAN play, where
+        // there is no operator and no list. A player's identity is not in the connection-approval
+        // payload -- it arrives with PlayerHello -- so this is the earliest point a ban can be
+        // applied without a protocol change.
+        public static Func<string, bool> PlayerAccessCheck { get; set; }
 
         readonly PerClientRequestRateLimiter hostCommandRateLimiter =
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
@@ -1816,12 +1826,20 @@ namespace Blockiverse.Networking
             bool requesterCrouching)
         {
             ReceivedPlaceRequestCount++;
-            // The crouch flag on a placement request is client-asserted. Taking it verbatim lets a
-            // client claim "crouching" to place a block inside its own head volume. Trust the
+            // The crouch flag on a REMOTE placement request is client-asserted. Taking it verbatim
+            // lets a client claim "crouching" to place a block inside its own head volume, because
+            // a crouching player occupies fewer cells and so passes the overlap check. Trust the
             // separately tracked (and rate-limited) crouch state instead, and let the request's
-            // claim only make the overlap check stricter -- never more permissive.
-            bool trackedCrouching = lastKnownCrouchStateByClientId.TryGetValue(clientId, out bool tracked) && tracked;
-            requesterCrouching = trackedCrouching && requesterCrouching;
+            // claim only make the check stricter, never more permissive.
+            //
+            // sendResponse false is the host's OWN command, where the value came from
+            // ResolveLocalCrouchActive() rather than off the wire -- there is no one to lie, and
+            // distrusting it would reject the host's own legitimate crouch-placements.
+            if (sendResponse)
+            {
+                bool trackedCrouching = lastKnownCrouchStateByClientId.TryGetValue(clientId, out bool tracked) && tracked;
+                requesterCrouching = trackedCrouching && requesterCrouching;
+            }
 
             if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.PlaceBlock, sendResponse, out SurvivalCommandResult duplicate))
                 return duplicate;
@@ -3899,7 +3917,7 @@ namespace Blockiverse.Networking
             {
                 NoteViolation(clientId, "death drop cooldown");
                 result = SurvivalCommandResult.Reject(
-                    SurvivalCommandKind.DeathDropInventory, SurvivalCommandFailureReason.NotAllowed, requestId);
+                    SurvivalCommandKind.DeathDropInventory, SurvivalCommandFailureReason.DeathDropCooldown, requestId);
                 SendCommandFailure(clientId, result, sendResponse);
                 return true;
             }
@@ -3990,6 +4008,24 @@ namespace Blockiverse.Networking
                 return;
             if (!TryBuildPlayerIdentityKey(guid, secret, out string identityKey))
                 return;
+
+            // Enforced here rather than at connection approval because approval has no identity to
+            // judge. Without this the admin 'ban' command reports success and the player rejoins
+            // immediately -- a moderation surface that lies is worse than none.
+            if (PlayerAccessCheck != null && !PlayerAccessCheck(guid))
+            {
+                NetworkManager networkManager = ResolveNetworkManagerOrNull();
+                if (networkManager != null && networkManager.IsServer)
+                {
+                    BlockiverseLog.Warning(
+                        BlockiverseLogCategory.Networking,
+                        $"Refusing player {guid}: not permitted by the server's access lists.",
+                        this);
+                    networkManager.DisconnectClient(senderClientId, "Not permitted on this server.");
+                }
+
+                return;
+            }
 
             if (IsPlayerIdentityBoundToDifferentClient(senderClientId, identityKey))
                 return;

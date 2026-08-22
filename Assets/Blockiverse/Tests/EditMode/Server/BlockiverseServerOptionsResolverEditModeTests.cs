@@ -111,6 +111,51 @@ namespace Blockiverse.Tests.EditMode.Server
         }
 
         [Test]
+        public void ConfigFileArgumentIsConsumedNotReportedAsUnknown()
+        {
+            // --config selects which file to read and is handled before resolution. Without an
+            // explicit skip the resolver sees it as an unknown option and every run that uses a
+            // config file dies reporting "unknown option '--config'".
+            Assert.That(Resolve(arguments: new List<string> { "--config", "server.properties" }).Succeeded, Is.True);
+            Assert.That(Resolve(arguments: new List<string> { "--config=server.properties" }).Succeeded, Is.True);
+
+            // Its value must not be mistaken for the next option's value either.
+            BlockiverseServerOptionsResolver.Resolution resolution =
+                Resolve(arguments: new List<string> { "--config", "server.properties", "--server-port", "7788" });
+            Assert.That(resolution.Succeeded, Is.True, string.Join("; ", resolution.Problems));
+            Assert.That(resolution.Options.Port, Is.EqualTo(7788));
+        }
+
+        [Test]
+        public void ConfigFileEnvironmentVariableIsConsumedNotReportedAsUnknown()
+        {
+            // The twin of the --config bug. BLOCKIVERSE_CONFIG is read by the caller to choose the
+            // file, so reporting it here as an unknown variable made every env-configured run exit
+            // 78 -- the strictness defeating the feature it was protecting.
+            BlockiverseServerOptionsResolver.Resolution resolution = Resolve(
+                environment: new Dictionary<string, string>
+                {
+                    ["BLOCKIVERSE_CONFIG"] = "/etc/blockiverse/server.properties",
+                    ["BLOCKIVERSE_SERVER_PORT"] = "7788",
+                });
+
+            Assert.That(resolution.Succeeded, Is.True, string.Join("; ", resolution.Problems));
+            Assert.That(resolution.Options.Port, Is.EqualTo(7788));
+        }
+
+        [Test]
+        public void SingleDashEngineArgumentsAreIgnored()
+        {
+            // A real invocation is "./BlockiverseServer -batchmode -nographics --world-dir ./world".
+            // The engine's own flags must not be read as unknown options.
+            BlockiverseServerOptionsResolver.Resolution resolution = Resolve(
+                arguments: new List<string> { "-batchmode", "-nographics", "--world-dir", "/data" });
+
+            Assert.That(resolution.Succeeded, Is.True, string.Join("; ", resolution.Problems));
+            Assert.That(resolution.Options.WorldDirectory, Is.EqualTo("/data"));
+        }
+
+        [Test]
         public void RequireSecretWithoutASecretRefusesToStart()
         {
             BlockiverseServerOptionsResolver.Resolution resolution =
