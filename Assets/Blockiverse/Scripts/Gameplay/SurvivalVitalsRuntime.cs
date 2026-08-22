@@ -72,6 +72,9 @@ namespace Blockiverse.Gameplay
         public event Action LocalPlayerDied;
         public event Action<HealthChangeResult> LocalPlayerDamaged;
         public event Action<HealthChangeResult> LocalPlayerLowHealth;
+        // Presentation hooks. Vitals is simulation state, so it raises events and lets the
+        // feedback bridge decide what they sound like (ruleset §1 decoupled presentation).
+        public event Action WorldDrinkTaken;
 
         public bool HasBedrollSpawn => TryResolveBedrollSpawnPosition(out _);
         public bool HasDeathDropPosition => hasLastDeathDropPosition;
@@ -571,6 +574,7 @@ namespace Blockiverse.Gameplay
 
             nextWorldDrinkTime = Time.time + WorldDrinkCooldownSeconds;
             SurvivalVitals.Drink(WorldDrinkThirstRestore);
+            WorldDrinkTaken?.Invoke();
             return true;
         }
 

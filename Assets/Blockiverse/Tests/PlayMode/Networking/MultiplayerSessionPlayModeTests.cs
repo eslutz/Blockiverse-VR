@@ -1510,6 +1510,392 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Client did not stop after the survival cap check.");
         }
 
+        // Giving up on a reply and the reply never coming are different things. The pending entry
+        // is the only place the client holds the position a command referred to, so dropping it on
+        // timeout used to mean a host answer that arrived late applied to the world in silence: no
+        // block cue, no impact effect, no haptic, and no stamina charged for the harvest, because
+        // every one of those hangs off CommandFeedback. The timeout must free the pending slot
+        // without erasing what the request was.
+        [UnityTest]
+        public IEnumerator ASurvivalCommandAnsweredAfterItsTimeoutStillReportsFeedbackAtItsPosition()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(hostSession, Is.Not.Null);
+
+            BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
+            var settings = new WorldGenerationSettings(
+                width: 8,
+                height: 8,
+                depth: 8,
+                chunkSize: 4,
+                seed: 7701,
+                groundHeight: 2);
+            CreativeWorldManager hostWorldManager = CreateSurvivalWorldManager("Late Reply Host World", settings);
+            CreativeWorldManager clientWorldManager = CreateSurvivalWorldManager("Late Reply Client World", settings);
+
+            // Within the host's 6 m interaction reach of the spawned player object
+            // (IsBlockWithinInteractionReach), matching the geometry of the survival-sync tests that
+            // are known to be accepted. Farther out the harvest is rejected OutOfReach, and this test
+            // then proves only that a rejection feeds back, which is not what it is for.
+            var harvestPosition = new BlockPosition(2, 2, 2);
+            hostWorldManager.World.SetBlock(harvestPosition, BlockRegistry.BranchwoodLog);
+            MultiplayerChunkAuthoritySync hostSync = ConfigureChunkSync(hostSession, hostWorldManager);
+            MultiplayerChunkAuthoritySync clientSync = ConfigureChunkSync(clientSession, clientWorldManager);
+            MultiplayerSurvivalSync hostSurvival = ConfigureSurvivalSync(hostSession, hostSync, hostWorldManager);
+            MultiplayerSurvivalSync clientSurvival = ConfigureSurvivalSync(clientSession, clientSync, clientWorldManager);
+            ushort port = NextPort();
+            var testConfig = CreateTestNetworkConfig(port);
+
+            hostSession.Configure(testConfig);
+            clientSession.Configure(testConfig);
+
+            Assert.That(hostSession.StartHost(), Is.True);
+            yield return WaitFor(
+                () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start for the late reply check.");
+
+            Assert.That(clientSession.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => clientSession.NetworkManager.IsConnectedClient &&
+                      hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
+                "Client did not connect for the late reply check.");
+
+            yield return WaitFor(
+                () => clientSync.HasHostGenerationSnapshotForSession,
+                "Client did not receive the world snapshot before the late reply check.");
+
+            Assert.That(hostSurvival, Is.Not.Null);
+
+            // Nothing in the suite watched this event before, which is why the regression was
+            // invisible: the sync's own counters all looked healthy while the player got nothing.
+            int feedbackCount = 0;
+            BlockPosition feedbackPosition = default;
+            SurvivalCommandResult feedbackResult = default;
+            void OnFeedback(SurvivalCommandResult result, BlockPosition position)
+            {
+                feedbackCount++;
+                feedbackPosition = position;
+                feedbackResult = result;
+            }
+
+            clientSurvival.CommandFeedback += OnFeedback;
+
+            try
+            {
+                clientSurvival.TrySubmitHarvest(harvestPosition, ItemStack.Empty, out bool sentToHost);
+                Assert.That(sentToHost, Is.True, "The harvest should have reached the host.");
+                Assert.That(feedbackCount, Is.Zero, "Feedback belongs to the host's answer, not the request.");
+
+                // Age the request out in the same frame it was sent, before the reply can complete
+                // its round trip. That is the real shape of the bug: a reply delayed behind other
+                // traffic rather than a host that has gone away.
+                clientSurvival.TickPendingCommandTimeouts(
+                    MultiplayerSurvivalSync.PendingCommandRequestTimeoutSeconds + 0.1f);
+
+                Assert.That(clientSurvival.PendingCommandRequestCount, Is.Zero,
+                    "The timeout must still free the pending slot.");
+                Assert.That(clientSurvival.TimedOutCommandRequestCount, Is.GreaterThan(0));
+                Assert.That(clientSurvival.RetainedExpiredCommandRequestCount, Is.GreaterThan(0),
+                    "The timed-out request must keep its descriptor so a late reply can resolve.");
+
+                yield return WaitFor(
+                    () => feedbackCount > 0,
+                    "The host's late reply raised no command feedback, so the player got no cue and paid no stamina.");
+
+                Assert.That(feedbackPosition, Is.EqualTo(harvestPosition),
+                    "Late feedback must carry the position the command was for, not the world origin.");
+
+                // Without this the test passes on a rejected harvest too, and the thing it exists to
+                // protect — SurvivalVitalsRuntime.OnCommandFeedback charging harvest stamina — only
+                // runs for an accepted one. A rejection would satisfy every other assertion here.
+                Assert.That(feedbackResult.Accepted, Is.True,
+                    "The late reply must be the accepted harvest, not a rejection that happens to feed back. "
+                    + $"Rejected with FailureReason={feedbackResult.FailureReason}, "
+                    + $"HarvestFailureReason={feedbackResult.HarvestFailureReason}.");
+                Assert.That(feedbackResult.CommandKind, Is.EqualTo(SurvivalCommandKind.HarvestResource));
+                Assert.That(feedbackResult.IsDuplicate, Is.False);
+                Assert.That(clientSurvival.LateCommandResultCount, Is.EqualTo(1));
+                Assert.That(clientSurvival.RetainedExpiredCommandRequestCount, Is.Zero,
+                    "A resolved late reply must not stay retained.");
+            }
+            finally
+            {
+                clientSurvival.CommandFeedback -= OnFeedback;
+            }
+
+            clientSession.StopSession();
+            yield return WaitFor(
+                () => !clientSession.NetworkManager.IsListening,
+                "Client did not stop after the late reply check.");
+        }
+
+        // Join and leave notifications must describe what a player would call an arrival or a
+        // departure, which is not the set of events Netcode reports. Three seats, not two: with a
+        // host and a single guest, the guest has no peer other than the host, so the peer-delivery
+        // path this exists to cover never executes and every client-side assertion is vacuous.
+        [UnityTest]
+        public IEnumerator PeerArrivalsAndDeparturesReachGuestSeatsAndAnnounceOnce()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession host = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(host, Is.Not.Null);
+
+            BlockiverseNetworkSession guestA = CreateClientSession(host);
+            BlockiverseNetworkSession guestB = CreateClientSession(host);
+            var testConfig = CreateTestNetworkConfig(NextPort());
+
+            host.Configure(testConfig);
+            guestA.Configure(testConfig);
+            guestB.Configure(testConfig);
+
+            var log = new PeerNotificationLog(host, guestA, guestB);
+
+            try
+            {
+                yield return StartHostAndTwoGuests(host, guestA, guestB);
+
+                ulong guestAId = guestA.LocalClientId;
+                ulong guestBId = guestB.LocalClientId;
+
+                yield return WaitFor(
+                    () => log.Host.Arrivals.Count == 2 && log.GuestA.Arrivals.Count == 1,
+                    "The host was not told both guests arrived, or guest A never heard guest B join.");
+                yield return WaitForSeconds(BlockiverseNetworkSession.PeerDepartureSettleSeconds + 0.2f);
+
+                Assert.That(log.Host.Arrivals, Is.EquivalentTo(new[] { guestAId, guestBId }),
+                    "The host announces each guest exactly once, despite Netcode reporting each arrival twice.");
+                Assert.That(log.GuestA.Arrivals, Is.EqualTo(new[] { guestBId }),
+                    "Guest A was connected when B joined, so B is an arrival to A. This is the delivery "
+                    + "path the legacy callbacks never reached on a client seat.");
+                Assert.That(log.GuestB.Arrivals, Is.Empty,
+                    "A was already in the world when B joined, so A is not an arrival to B.");
+                Assert.That(log.Host.Departures, Is.Empty);
+                Assert.That(log.GuestA.Departures, Is.Empty);
+                Assert.That(log.GuestB.Departures, Is.Empty);
+
+                // Positive control for the shutdown test below: one guest genuinely leaving IS
+                // announced, on the host and on the other guest, once each.
+                //
+                // Guest A is the one to stop, deliberately. B joined last, so B knows about A only
+                // because HandleConnectionEvent seeded B's set from ConnectionEventData.PeerClientIds
+                // — Netcode announces nothing for peers who were already present. Nothing else reads
+                // that seeded set: stopping B instead would exercise A's set, which was filled by an
+                // ordinary PeerConnected, and the seeding could then be deleted outright with every
+                // test still green. The shipped symptom would be seat-dependent and horrible to
+                // reproduce — the last player to join never sees anyone who preceded them leave.
+                guestA.StopSession();
+                yield return WaitFor(
+                    () => log.Host.Departures.Count > 0 && log.GuestB.Departures.Count > 0,
+                    "A guest leaving was not announced on the host and on the guest that joined after it.");
+                yield return WaitForSeconds(BlockiverseNetworkSession.PeerDepartureSettleSeconds + 0.2f);
+
+                Assert.That(log.Host.Departures, Is.EqualTo(new[] { guestAId }));
+                Assert.That(log.GuestB.Departures, Is.EqualTo(new[] { guestAId }),
+                    "B learned about A only through the seeded set, so this is what proves it was seeded.");
+                Assert.That(log.GuestA.Departures, Is.Empty, "Leaving is not being told someone left.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        // Stopping a host disconnects each guest in turn, and Netcode broadcasts every one of those
+        // disconnects to the guests still connected (OnClientDisconnectFromServer). A guest is
+        // therefore told the others left a fraction of a second before losing its own connection.
+        // True message by message, wrong as a description: nobody left, the world closed.
+        [UnityTest]
+        public IEnumerator StoppingTheHostAnnouncesNoDeparturesOnAnySeat()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession host = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(host, Is.Not.Null);
+
+            BlockiverseNetworkSession guestA = CreateClientSession(host);
+            BlockiverseNetworkSession guestB = CreateClientSession(host);
+            var testConfig = CreateTestNetworkConfig(NextPort());
+
+            host.Configure(testConfig);
+            guestA.Configure(testConfig);
+            guestB.Configure(testConfig);
+
+            var log = new PeerNotificationLog(host, guestA, guestB);
+
+            try
+            {
+                yield return StartHostAndTwoGuests(host, guestA, guestB);
+                yield return WaitFor(
+                    () => log.Host.Arrivals.Count == 2,
+                    "Both guests must be established before the shutdown is meaningful.");
+
+                log.ClearDepartures();
+
+                host.StopSession();
+
+                // Anchor the negative assertion: wait until both guests have actually observed the
+                // disconnect, so "nothing was announced" cannot pass by the event not having
+                // happened yet. Then wait out the settle window on top.
+                yield return WaitFor(
+                    () => !host.NetworkManager.IsListening &&
+                          !guestA.NetworkManager.IsConnectedClient &&
+                          !guestB.NetworkManager.IsConnectedClient,
+                    "Guests never observed the host shutting down, so the assertions below would be vacuous.");
+                yield return WaitForSeconds(BlockiverseNetworkSession.PeerDepartureSettleSeconds + 0.3f);
+
+                Assert.That(log.Host.Departures, Is.Empty,
+                    "A host closing its own world is one event, not one departure per guest.");
+                // Which seat actually carries this coverage is decided by Netcode, not by the test.
+                // OnClientDisconnectFromServer removes a guest from ConnectedClientIds BEFORE
+                // broadcasting its departure, so the guest disconnected first is structurally
+                // incapable of hearing anything, and by the time the second goes there is nobody
+                // left to tell. Exactly one seat — whichever Netcode disconnects second — receives
+                // the broadcast, and it is still processing messages when it does: TransportDisconnect
+                // drains the incoming queue before handling the disconnect, deliberately
+                // (NetworkConnectionManager.cs, "so that we get everything from the server
+                // disconnecting us"). So one of these two assertions is load-bearing every run and
+                // the other is free, and there is no way to say in advance which. Asserting both is
+                // the point; dropping either would make the coverage a coin flip.
+                Assert.That(log.GuestA.Departures, Is.Empty,
+                    "Guest A is told B disconnected moments before losing its own connection. "
+                    + "That is the world closing, not B leaving.");
+                Assert.That(log.GuestB.Departures, Is.Empty,
+                    "Same from B's seat, whichever guest Netcode happens to disconnect first.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        // The regression that produced this whole change: a join the host REFUSES is disconnected
+        // by Netcode through the ordinary server disconnect path, so the host announced that a
+        // player left who had never arrived. Covered against the live session here, not only
+        // against BlockiversePeerPresence in isolation — the helper was never where the bug was.
+        [UnityTest]
+        public IEnumerator AJoinRefusedByTheHostAnnouncesNothing()
+        {
+            yield return LoadMultiplayerTestScene();
+
+            BlockiverseNetworkSession host = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
+            Assert.That(host, Is.Not.Null);
+
+            BlockiverseNetworkSession refusedGuest = CreateClientSession(host);
+            ushort port = NextPort();
+
+            // One seat total: the host fills it, so the guest is refused with SessionFull.
+            host.Configure(CreateTestNetworkConfig(port).WithMaxPlayers(1));
+            refusedGuest.Configure(CreateTestNetworkConfig(port));
+
+            var log = new PeerNotificationLog(host, refusedGuest);
+
+            try
+            {
+                Assert.That(host.StartHost(), Is.True);
+                yield return WaitFor(
+                    () => host.NetworkManager.IsHost && host.CurrentState == BlockiverseConnectionState.Hosting,
+                    "Host did not start for the refused-join check.");
+
+                Assert.That(refusedGuest.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+
+                // Anchor: the refusal must actually have happened and been processed by the host.
+                yield return WaitFor(
+                    () => !refusedGuest.NetworkManager.IsConnectedClient &&
+                          host.NetworkManager.ConnectedClientsIds.Count <= 1 &&
+                          refusedGuest.CurrentState != BlockiverseConnectionState.StartingClient,
+                    "The join was never refused, so the assertions below would be vacuous.");
+                yield return WaitForSeconds(BlockiverseNetworkSession.PeerDepartureSettleSeconds + 0.3f);
+
+                Assert.That(log.Host.Arrivals, Is.Empty, "A refused connection never arrived.");
+                Assert.That(log.Host.Departures, Is.Empty,
+                    "A refused connection was never present, so it cannot leave. The host used to "
+                    + "play the leave cue here for someone who never joined.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        // Brings up a host and two guests, which is the smallest session in which a guest has a
+        // peer at all.
+        static IEnumerator StartHostAndTwoGuests(
+            BlockiverseNetworkSession host,
+            BlockiverseNetworkSession guestA,
+            BlockiverseNetworkSession guestB)
+        {
+            Assert.That(host.StartHost(), Is.True);
+            yield return WaitFor(
+                () => host.NetworkManager.IsHost && host.CurrentState == BlockiverseConnectionState.Hosting,
+                "Host did not start.");
+
+            Assert.That(guestA.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => guestA.NetworkManager.IsConnectedClient && host.NetworkManager.ConnectedClientsIds.Count == 2,
+                "First guest did not connect.");
+
+            Assert.That(guestB.StartClient(BlockiverseNetworkConfig.DefaultAddress), Is.True);
+            yield return WaitFor(
+                () => guestB.NetworkManager.IsConnectedClient && host.NetworkManager.ConnectedClientsIds.Count == 3,
+                "Second guest did not connect.");
+        }
+
+        // Records what each seat was told, and unsubscribes as a unit so a failed assertion cannot
+        // leave handlers attached to a session the next test reuses.
+        sealed class PeerNotificationLog : IDisposable
+        {
+            readonly List<SeatLog> seats = new();
+
+            public PeerNotificationLog(params BlockiverseNetworkSession[] sessions)
+            {
+                foreach (BlockiverseNetworkSession session in sessions)
+                    seats.Add(new SeatLog(session));
+            }
+
+            public SeatLog Host => seats[0];
+            public SeatLog GuestA => seats[1];
+            public SeatLog GuestB => seats[2];
+
+            public void ClearDepartures()
+            {
+                foreach (SeatLog seat in seats)
+                    seat.Departures.Clear();
+            }
+
+            public void Dispose()
+            {
+                foreach (SeatLog seat in seats)
+                    seat.Dispose();
+            }
+
+            public sealed class SeatLog : IDisposable
+            {
+                readonly BlockiverseNetworkSession session;
+
+                public SeatLog(BlockiverseNetworkSession session)
+                {
+                    this.session = session;
+                    session.ClientConnected += OnConnected;
+                    session.ClientDisconnected += OnDisconnected;
+                }
+
+                public List<ulong> Arrivals { get; } = new();
+                public List<ulong> Departures { get; } = new();
+
+                void OnConnected(ulong clientId) => Arrivals.Add(clientId);
+                void OnDisconnected(ulong clientId) => Departures.Add(clientId);
+
+                public void Dispose()
+                {
+                    session.ClientConnected -= OnConnected;
+                    session.ClientDisconnected -= OnDisconnected;
+                }
+            }
+        }
+
         [UnityTest]
         public IEnumerator CompetingClientBlockMutationsRejectStaleRequestAndPreserveAuthoritativeWinner()
         {
@@ -3628,6 +4014,22 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 Directory.Delete(path, recursive: true);
             else if (File.Exists(path))
                 File.Delete(path);
+        }
+
+        // Settles for a fixed number of frames, for asserting that something did NOT happen —
+        // WaitFor cannot express that, because a condition that is already true returns at once.
+        static IEnumerator WaitForFrames(int frames)
+        {
+            for (int frame = 0; frame < frames; frame++)
+                yield return null;
+        }
+
+        // Real-time settle, for waiting out a window measured in seconds rather than frames.
+        static IEnumerator WaitForSeconds(float seconds)
+        {
+            float until = Time.realtimeSinceStartup + seconds;
+            while (Time.realtimeSinceStartup < until)
+                yield return null;
         }
 
         static IEnumerator WaitFor(Func<bool> condition, string failureMessage, float timeoutSeconds = 5.0f)

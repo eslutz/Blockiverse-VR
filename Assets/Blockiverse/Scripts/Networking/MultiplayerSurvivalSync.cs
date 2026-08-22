@@ -263,6 +263,16 @@ namespace Blockiverse.Networking
         public const int MaxPendingCommandRequests = 64;
 
         /// <summary>
+        /// How many timed-out commands keep their descriptor after they stop counting against
+        /// <see cref="MaxPendingCommandRequests"/>. Giving up on a reply must not erase what the
+        /// request was: a host answer that arrives late is still authoritative, and the position
+        /// it refers to exists nowhere else on the client. Without this the late reply applies to
+        /// the world while the acting player gets no cue, no impact effect, no haptic, and — for a
+        /// harvest — never pays the stamina, because all of that hangs off the feedback event.
+        /// </summary>
+        const int MaxRetainedExpiredCommandRequests = MaxPendingCommandRequests;
+
+        /// <summary>
         /// How long a survival command may go unanswered before the client stops waiting on it.
         /// Without this the pending set only ever grows: a host that silently drops commands
         /// (rate limiting, a handler that threw) would otherwise wedge the client at the cap for
@@ -297,6 +307,8 @@ namespace Blockiverse.Networking
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
         readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds)> pendingCommandRequests = new();
         readonly List<uint> expiredCommandRequestScratch = new();
+        readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position)> expiredCommandRequests = new();
+        readonly Queue<uint> expiredCommandRequestOrder = new();
         float clientCommandElapsedSeconds;
         readonly Dictionary<ulong, double> lastAcceptedHarvestTimeByClientId = new();
         readonly Dictionary<ulong, bool> lastKnownCrouchStateByClientId = new();
@@ -617,6 +629,7 @@ namespace Blockiverse.Networking
             processedRequestsByClientId.Clear();
             hostCommandRateLimiter.Clear();
             pendingCommandRequests.Clear();
+            ClearExpiredCommandRequests();
             lastAcceptedHarvestTimeByClientId.Clear();
             ClearKnownCrouchState();
             stationModels.Clear();
@@ -685,6 +698,11 @@ namespace Blockiverse.Networking
 
             foreach (uint requestId in expiredCommandRequestScratch)
             {
+                if (pendingCommandRequests.TryGetValue(
+                        requestId,
+                        out (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds) expired))
+                    RetainExpiredCommandRequest(requestId, expired.kind, expired.position);
+
                 pendingCommandRequests.Remove(requestId);
                 TimedOutCommandRequestCount++;
             }
@@ -698,6 +716,42 @@ namespace Blockiverse.Networking
 
         /// <summary>Unanswered survival commands the client has stopped waiting on.</summary>
         public int TimedOutCommandRequestCount { get; private set; }
+
+        /// <summary>
+        /// Host replies that arrived after this client had already given up waiting. They still
+        /// resolve normally; this only exists so the case is observable rather than silent.
+        /// </summary>
+        public int LateCommandResultCount { get; private set; }
+
+        /// <summary>Timed-out commands still holding a descriptor for a possible late reply.</summary>
+        public int RetainedExpiredCommandRequestCount => expiredCommandRequests.Count;
+
+        // Keeps a timed-out request's descriptor alive after it stops occupying a pending slot,
+        // oldest evicted first so the store cannot grow with the session.
+        void RetainExpiredCommandRequest(uint requestId, SurvivalCommandKind kind, BlockPosition position)
+        {
+            if (expiredCommandRequests.ContainsKey(requestId))
+                return;
+
+            while (expiredCommandRequestOrder.Count >= MaxRetainedExpiredCommandRequests)
+                expiredCommandRequests.Remove(expiredCommandRequestOrder.Dequeue());
+
+            expiredCommandRequests[requestId] = (kind, position);
+            expiredCommandRequestOrder.Enqueue(requestId);
+        }
+
+        // The eviction order queue is compacted lazily rather than searched: a resolved id stays
+        // queued until it reaches the front, where dequeuing it simply frees nothing. The queue is
+        // what the bound is enforced against, so it still cannot grow past the cap.
+        //
+        // A stale queue entry can only ever evict nothing, never the wrong entry, because request
+        // ids are unique for the life of the store: nextCommandRequestId only increases, and the
+        // one place it restarts at 1 (ResetPendingCommands) clears both the dictionary and the
+        // queue in the same call. Keep those two facts together if either ever changes.
+        void ForgetExpiredCommandRequest(uint requestId)
+        {
+            expiredCommandRequests.Remove(requestId);
+        }
 
         // Shared by every Try* path that finds the pending set full.
         SurvivalCommandResult RejectPendingCommandLimit(SurvivalCommandKind commandKind, uint requestId) =>
@@ -3535,11 +3589,33 @@ namespace Blockiverse.Networking
         {
             pending = default;
 
-            if (requestId == 0 ||
-                !pendingCommandRequests.TryGetValue(
+            if (requestId == 0)
+                return false;
+
+            if (!pendingCommandRequests.TryGetValue(
                     requestId,
                     out (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds) tracked))
-                return false;
+            {
+                // We stopped waiting, but the host answered anyway. The reply is authoritative and
+                // its effects have already been applied, so completing it here is what keeps the
+                // player's feedback and stamina in step with the world.
+                if (!expiredCommandRequests.TryGetValue(
+                        requestId,
+                        out (SurvivalCommandKind kind, BlockPosition position) late))
+                    return false;
+
+                pending = late;
+                ForgetExpiredCommandRequest(requestId);
+
+                // Deliberately not assigned when it would move backwards: a late reply resolves an
+                // id older than requests that already completed while this one was being waited on,
+                // so "last completed" would run backwards and read as ids being reused.
+                if (requestId > LastCompletedCommandRequestId)
+                    LastCompletedCommandRequestId = requestId;
+
+                LateCommandResultCount++;
+                return true;
+            }
 
             pending = (tracked.kind, tracked.position);
             pendingCommandRequests.Remove(requestId);
@@ -3547,9 +3623,16 @@ namespace Blockiverse.Networking
             return true;
         }
 
+        void ClearExpiredCommandRequests()
+        {
+            expiredCommandRequests.Clear();
+            expiredCommandRequestOrder.Clear();
+        }
+
         void ResetPendingCommands()
         {
             pendingCommandRequests.Clear();
+            ClearExpiredCommandRequests();
             clientCommandElapsedSeconds = 0.0f;
             nextCommandRequestId = 1;
             LastSentCommandRequestId = 0;

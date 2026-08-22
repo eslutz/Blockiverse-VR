@@ -302,8 +302,21 @@ scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapp
 
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
-python3 scripts/audio/generate-audio.py           # all SFX
+python3 scripts/audio/generate-audio.py           # music bed + classic block cues ONLY
+
+# Sound effects are built from licensed third-party source recordings staged
+# outside the repo (see docs/audio/audio-asset-manifest.md for the full pipeline).
+python3 scripts/audio/make-audio-manifest.py      # regenerate the cue -> source map
+python3 scripts/audio/build-audio-assets.py --check   # verify sources resolve first
+python3 scripts/audio/build-audio-assets.py       # build the shipping cues
+python3 scripts/audio/validate-audio-assets.py    # gate: format/level/licence of what shipped
+python3 scripts/audio/make-audio-docs.py          # refresh the provenance table
 ```
+
+`generate-audio.py` still synthesizes the whole original cue set, but only writes
+the music tracks and `classic_block_*` into `Assets/` — the other cue names now
+hold licensed production audio. Use `--dump-legacy <dir>` (outside `Assets/`) to
+render the full original set for comparison.
 
 `.github/workflows/quest-ci.yml` validates pull requests with repository checks, Unity Personal activation through GameCI, Unity tests, and an Android smoke APK. `.github/workflows/quest-alpha.yml` builds the release-signed APK that goes to Meta `alpha`. `.github/workflows/quest-promote.yml` promotes already-uploaded Meta build IDs to `beta`, `rc`, and eventually `store` without rebuilding.
 

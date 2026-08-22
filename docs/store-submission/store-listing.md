@@ -38,7 +38,7 @@ Key features:
   can reconnect when the host is available again.
 - **Audio and haptic feedback** on every block break and placement for a tactile feel.
 
-Blockiverse VR uses only original art, characters, and audio.
+Blockiverse VR uses original art, characters, and music. Its sound effects are built from third-party recordings licensed for commercial use, modification, and distribution in a shipped game; per-cue sources and licenses are recorded in [`docs/audio/audio-asset-manifest.md`](../audio/audio-asset-manifest.md). No third-party identity is imitated or reproduced.
 
 ## Comfort rating
 

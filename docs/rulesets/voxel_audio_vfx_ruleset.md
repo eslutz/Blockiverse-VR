@@ -13,7 +13,7 @@ This document defines how Blockiverse VR should present audio, haptics, particle
 
 | Goal | Rule |
 |---|---|
-| Original identity | All audio, VFX, music, and visual motifs must be original Blockiverse assets. Do not imitate protected voxel-game sounds, music, UI, mobs, or branding. |
+| Original identity | Blockiverse's audio identity must be its own. Music and visual motifs are original project assets. Sound effects may be built from licensed third-party source material under §7, but the resulting cues must not imitate protected voxel-game sounds, music, UI, mobs, or branding. |
 | VR comfort | Avoid abrupt full-screen flashes, excessive camera-space particles, loud spikes, or haptic patterns that can cause discomfort. |
 | Decoupled presentation | Gameplay code raises events; audio, haptics, and VFX subscribe as presentation systems. |
 | Quest performance | Effects must be pooled, short-lived, low-overdraw, and bounded by budgets suitable for Quest 3/3S. |
@@ -113,6 +113,7 @@ Haptics toggle
 Haptic Intensity slider
 Reduced Thunder/Flash toggle
 Subtitles/Feedback Toasts toggle
+Classic Block Sounds toggle
 ```
 
 ---
@@ -139,18 +140,29 @@ Subtitles/Feedback Toasts toggle
 | `container_open` | `ContainerOpen` | Crate/storage opens. | Spatial one-shot. | 0.20s | Medium | `UiTick` optional |
 | `container_close` | `ContainerClose` | Crate/storage closes. | Spatial one-shot. | 0.18s | Medium | `UiTick` optional |
 | `torch_ignite` | `TorchIgnite` | Torchbud/glow light activates. | Spatial one-shot. | 0.24s | Medium | Light pulse optional |
-| `torch_loop` | `TorchLoop` | Nearby active torch. | Spatial loop. | 1.20s loop | Low | None |
-| `campfire_loop` | `CampfireLoop` | Campfire active. | Spatial loop. | 1.40s loop | Low | None |
-| `rain_light_loop` | `RainLightLoop` | Light rain. | Weather loop. | 2.00s loop | Low | None |
-| `rain_heavy_loop` | `RainHeavyLoop` | Heavy rain. | Weather loop. | 2.00s loop | Low | None |
-| `thunder_near` | `ThunderNear` | Nearby lightning. | Weather one-shot. | 0.90s | Medium | Optional reduced rumble |
-| `thunder_far` | `ThunderFar` | Distant lightning. | Weather one-shot. | 1.10s | Low | None |
-| `snow_wind_loop` | `SnowWindLoop` | Snowfall or tundra gust. | Weather loop. | 2.40s loop | Low | None |
-| `cave_ambience_loop` | `CaveAmbienceLoop` | Underground/cave. | Ambience loop. | 2.20s loop | Low | None |
-| `day_ambience_loop` | `DayAmbienceLoop` | Daytime biome ambience. | Ambience loop. | 2.40s loop | Low | None |
-| `night_ambience_loop` | `NightAmbienceLoop` | Nighttime ambience. | Ambience loop. | 2.40s loop | Low | None |
+| `torch_loop` | `TorchLoop` | Nearby active torch. | Spatial loop. | 8–15s loop | Low | None |
+| `campfire_loop` | `CampfireLoop` | Campfire active. | Spatial loop. | 10–20s loop | Low | None |
+| `rain_light_loop` | `RainLightLoop` | Light rain. | Weather loop. | 15–30s loop | Low | None |
+| `rain_heavy_loop` | `RainHeavyLoop` | Heavy rain. | Weather loop. | 15–30s loop | Low | None |
+| `thunder_near` | `ThunderNear` | Nearby lightning. Volume scales with strike distance. | Weather one-shot. | 3.20s | Medium | Optional reduced rumble |
+| `thunder_far` | `ThunderFar` | Distant lightning, and the fallback when a storm has no strike behind it. | Weather one-shot. | 3.60s | Low | None |
+| `snow_wind_loop` | `SnowWindLoop` | Snowfall or tundra gust. | Weather loop. | 6.00s loop | Low | None |
+| `cave_ambience_loop` | `CaveAmbienceLoop` | Underground/cave. | Ambience loop. | 15–30s loop | Low | None |
+| `day_ambience_loop` | `DayAmbienceLoop` | Daytime biome ambience. | Ambience loop. | 20–30s loop | Low | None |
+| `night_ambience_loop` | `NightAmbienceLoop` | Nighttime ambience. | Ambience loop. | 20–30s loop | Low | None |
 | `multiplayer_join` | `MultiplayerJoin` | Client joins. | 2D UI/system. | 0.22s | Medium | `UiTick` optional |
 | `multiplayer_leave` | `MultiplayerLeave` | Client leaves/host disconnects. | 2D UI/system. | 0.24s | Medium | `UiTick` optional |
+| `player_hurt` | `PlayerHurt` | Local player takes damage. | 2D. | 0.55s | High | Existing damage haptic |
+| `low_health` | `LowHealth` | Health crosses the low threshold. | 2D. | 1.60s | Medium | `LowHealth` |
+| `player_death` | `PlayerDeath` | Local player dies. | 2D. | 2.20s | High | `PlayerDeath` |
+| `eat` | `Eat` | Edible consumable used. | 2D. | 0.44s | Medium | None |
+| `drink` | `Drink` | Drinkable consumable used. | 2D. | 0.90s | Medium | None |
+| `water_scoop` | `WaterScoop` | Drinking straight from a world fluid source. | 2D. | 0.80s | Medium | None |
+| `water_splash` | `WaterSplash` | Body enters water (`Dry`/`Wading` to `Surfaced`/`Swimming`). Volume scales with descent speed, so a step off a bank and a fall from height are distinguishable. | 2D. | 1.10s | Medium | None |
+| `swim_stroke` | `SwimStroke` | Swim cadence while the swim provider owns vertical motion and the player is actually travelling. | 2D. | 0.70s | Low | None |
+| `submerged_loop` | `SubmergedLoop` | Head submerged, from `SwimState.Swimming`. Note this is NOT the underwater view's line: `BlockiverseWaterView` applies its own hysteresis and blend, `SwimState` does not, so the audio holds open for a short release window instead. | Loop. | 12.01s loop | Low | None |
+| `emberflow_loop` | `EmberflowLoop` | In emberflow — any state other than `Dry` with the emberflow family. Replaces the water cues, which are suppressed for lava. | Loop. | 7.99s loop | Low | None |
+| `landing` | `Landing` | Grounded after a fall above the landing threshold. | Spatial at the feet. | 0.34s | Medium | None |
 
 ### Cue cooldowns
 
@@ -161,14 +173,14 @@ Subtitles/Feedback Toasts toggle
 | UI confirm/cancel | 0.10s. |
 | Footstep | One cue per step of horizontal travel (0.79 m), fired a tenth of a step ahead of the walk bob's low point so the cue leads the view drop as a real step does. Rate-capped at 0.18s per footstep: crossings past the cap are swallowed, so sprint cadence thins rather than machine-guns. |
 | Craft success/fail | 0.20s. |
+| Swim stroke | 1.5s while swimming, and only above 0.35 m/s of real travel — a swimmer held against a wall or sinking passively is not stroking. |
+| Water splash | Entry transition only. Wading does not splash: shallow water is covered by the Water footstep bank, and splashing there would fire on top of every step at the water's edge. |
 
 ---
 
 ## 6. Deferred audio cue catalog
 
-| Cue ID | Trigger | Notes |
-|---|---|---|
-| `water_scoop` | Bucket/flask fills. | Low splash. |
+None. `water_scoop` was the last deferred cue and now ships — see §5.
 
 ---
 
@@ -181,7 +193,9 @@ Subtitles/Feedback Toasts toggle
 | No protected references | Do not use or imitate Minecraft sounds, music, UI cues, mob cues, or branding. |
 | Generated baseline | Generated cues must remain reproducible from the committed audio generator script. |
 | Authored replacement | Hand-authored replacement sounds are allowed only with clear original provenance. |
-| Third-party assets | Use only if redistribution and commercial use are explicitly allowed; record license in notices. |
+| Third-party assets | Use only if redistribution and commercial use are explicitly allowed; record license in notices. Verify terms from the original provider, not a search result or mirror. Prefer attribution-free (CC0 or equivalent) sources. |
+| Third-party provenance | Every committed cue built from third-party source must have a row in `docs/audio/audio-asset-manifest.md` naming the source pack, source file, and license. A cue with no manifest row must not ship. |
+| Source retention | Raw third-party bundles are staged outside the repository and never committed. Only processed cues are committed. |
 | File naming | Lowercase snake_case, e.g. `block_break.wav`. |
 | Metadata | Unity `.meta` files are committed. |
 | Large files | Track `.wav` files through Git LFS. |
@@ -191,12 +205,14 @@ Subtitles/Feedback Toasts toggle
 | Setting | Value |
 |---|---|
 | Format | WAV for source; platform compression may be added after headset testing. |
-| Channels | Mono for one-shot SFX. |
+| Bed length | 15–30s for ambience and weather beds where the source supports it. Shorter is acceptable where the source is genuinely steady — `snow_wind_loop` is 6s and `emberflow_loop` 8s because both are continuous textures with no event structure to expose the wrap. |
+| Channels | Mono for one-shot SFX, so they spatialize correctly. Stereo for ambience, weather, and music beds, which play non-spatially and lose their sense of space when folded to mono. |
 | Sample rate | 44.1 kHz source unless a specific reason exists. |
-| Peak target | Approximately -1.7 dBFS / 0.82 peak for generated cues. |
-| Normalize | Enabled for generated baseline cues. |
-| Preload | Enabled for short SFX. |
+| Peak target | Approximately -1.7 dBFS / 0.82 peak for one-shot cues. |
+| Normalize | Enabled for one-shot cues. **Disabled for stereo beds** — Unity's import normalize re-levels professionally mastered source and flattens the relationship between a bed's quiet and loud passages. |
+| Preload | Enabled for short SFX; disabled for streamed beds. |
 | Load in background | Disabled for short SFX. |
+| Load type | Decompress-on-load for short SFX; streaming for ambience, weather, and music beds. |
 | Spatial | Import itself non-spatial; spatial behavior is controlled by the AudioSource. |
 
 ---
@@ -210,7 +226,7 @@ Subtitles/Feedback Toasts toggle
 | UI, inventory, crafting menu | 2D/non-spatial. |
 | Local block edit | Prefer short spatial one-shot at block center; 2D fallback allowed only until pooled spatial sources exist. |
 | Remote block edit | Spatial one-shot at edited block position, distance-limited. |
-| Footsteps | Local comfort-tuned low-volume cue; remote footsteps spatial and distance-limited. |
+| Footsteps | Spatial one-shot at the walker's own feet, from the bank matching the surface below them, distance-limited to 8 m. Placing it under the feet rather than in the head keeps it centred and slightly below, which reads as walking; a 2D cue reads as being inside the player's head. Remote footsteps use the same path from remote pose. |
 | Weather | Area/ambient loops mixed from weather state. |
 | Thunder | 2D + spatial hybrid; distance delay and volume based on strike distance. |
 | Campfire/torch | Spatial loop or periodic one-shot with strict voice limits. |

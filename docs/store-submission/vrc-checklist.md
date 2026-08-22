@@ -36,12 +36,18 @@
 ## Audio
 
 - [ ] Audio plays on supported output without clipping.
-- [ ] No copyrighted or third-party audio (all cues original/synthesized — see
-      `Assets/Blockiverse/Audio`).
+- [ ] All audio is licensed for commercial distribution. Music is original to the project;
+      sound effects are built from third-party recordings under licenses that permit
+      commercial use, modification, and inclusion in a shipped game with no attribution
+      requirement. Every cue's source and license are recorded in
+      `../audio/audio-asset-manifest.md`; `scripts/audio/validate-audio-assets.py` fails
+      any committed cue without one.
 
 ## Content & legal
 
-- [ ] All art, characters, and audio are original (no third-party IP).
+- [ ] Art, characters, and music are original. Sound effects use licensed third-party
+      recordings — permitted, and recorded in `../audio/audio-asset-manifest.md`.
+      No third-party IP is imitated or reproduced.
 - [ ] Privacy policy published and linked (see `privacy-policy.md`).
 - [ ] Data-use declarations match actual behavior (see `data-and-safety.md`).
 - [ ] Age rating questionnaire (IARC) completed.

@@ -136,6 +136,22 @@ git diff --check
 bash -n scripts/unity/*.sh
 ```
 
+### Audio Assets
+
+Run this whenever anything under `Assets/Blockiverse/Audio` or `scripts/audio/` changes. It
+validates the committed WAVs — format, channel layout, level, loop continuity, and that every
+cue traces to a source and a license — rather than the generator's output:
+
+```sh
+python3 scripts/audio/validate-audio-assets.py      # gates what actually ships
+python3 scripts/audio/validate-generated-audio.py   # generator still reproducible
+```
+
+Rebuilding the cues needs the source packs staged outside the repository; see
+[`docs/audio/audio-asset-manifest.md`](../audio/audio-asset-manifest.md) for the full
+pipeline and `scripts/audio/build-audio-assets.py --check` to confirm sources resolve
+before anything is written.
+
 ### Targeted Unity
 
 Use targeted Unity validation while iterating on Unity-impacting changes. Prefer the smallest fixture, test fullname, or subsystem filter that covers the changed behavior:

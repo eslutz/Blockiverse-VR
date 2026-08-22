@@ -1,3 +1,4 @@
+using Blockiverse.Voxel;
 using UnityEngine;
 
 namespace Blockiverse.Gameplay
@@ -12,16 +13,25 @@ namespace Blockiverse.Gameplay
         // Falls shorter than this land silently (stepping off a single block stays quiet).
         public const float LandingMinFallSpeed = 3.0f;
 
+        // How far below the capsule base to sample for the surface being walked on.
+        const float GroundSampleDepthMeters = 0.20f;
+
+        // How far ABOVE the capsule base to check for standing water. Matches the feet probe in
+        // SurvivalVitalsRuntime so both agree on what "feet are wet" means.
+        const float FeetSampleHeightMeters = 0.10f;
+
         [SerializeField] CharacterController characterController;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
         [SerializeField] BlockiverseGaitCycle gaitCycle;
+        [SerializeField] CreativeWorldManager worldManager;
 
         Vector3 lastPosition;
         bool wasGrounded;
         float peakFallSpeed;
         bool subscribed;
 
-        public void Configure(CharacterController controller, BlockiverseAudioCuePlayer cuePlayer, BlockiverseGaitCycle gait = null)
+        public void Configure(CharacterController controller, BlockiverseAudioCuePlayer cuePlayer,
+                              BlockiverseGaitCycle gait = null, CreativeWorldManager world = null)
         {
             Unsubscribe();
             characterController = controller;
@@ -29,6 +39,9 @@ namespace Blockiverse.Gameplay
 
             if (gait != null)
                 gaitCycle = gait;
+
+            if (world != null)
+                worldManager = world;
 
             Subscribe();
         }
@@ -56,6 +69,9 @@ namespace Blockiverse.Gameplay
 
             if (gaitCycle == null)
                 gaitCycle = GetComponent<BlockiverseGaitCycle>() ?? GetComponentInParent<BlockiverseGaitCycle>();
+
+            if (worldManager == null)
+                worldManager = FindFirstObjectByType<CreativeWorldManager>();
 
             // Rigs generated before the gait cycle existed still need one; the bootstrapper puts it
             // on the prefab, this only covers a stale prefab at runtime.
@@ -91,7 +107,61 @@ namespace Blockiverse.Gameplay
 
         void OnFootfall()
         {
-            audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
+            if (audioCuePlayer == null)
+                return;
+
+            // Spatial, under the feet, using the bank for whatever is being walked
+            // on. Falls back to the flat bank when the world is not resolvable
+            // (menu states, a rig running without a world).
+            if (TryGetGroundSample(out BlockiverseSurfaceFamily surface, out Vector3 footPoint))
+                audioCuePlayer.PlayFootstepAt(surface, footPoint);
+            else
+                audioCuePlayer.PlayCue(BlockiverseAudioCue.Footstep);
+        }
+
+        // The block directly beneath the capsule base, translated into the surface
+        // family its footstep bank is keyed on. Sampled from the collision capsule
+        // rather than the rig transform so it stays correct while crouching and
+        // under real-player-height tracking, both of which move the capsule
+        // relative to the origin — the same reasoning as the vitals fluid probe.
+        bool TryGetGroundSample(out BlockiverseSurfaceFamily surface, out Vector3 footPoint)
+        {
+            surface = BlockiverseSurfaceFamily.Soil;
+            footPoint = transform.position;
+
+            if (characterController == null)
+                return false;
+
+            Bounds bounds = characterController.bounds;
+            footPoint = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+
+            VoxelWorld world = worldManager != null ? worldManager.World : null;
+            if (world == null)
+                return false;
+
+            // Standing water is checked FIRST, at the feet rather than below them. Wading, the
+            // player stands on the solid block underneath the water, so the ground sample below the
+            // capsule reads that block and never the fluid — which left the Water footstep bank
+            // unreachable and shallow water sounding like dry land.
+            var feetPoint = new Vector3(bounds.center.x, bounds.min.y + FeetSampleHeightMeters, bounds.center.z);
+            BlockPosition feetCell = CreativeInteractionController.ToBlockPosition(feetPoint);
+            if (world.Bounds.Contains(feetCell) && FluidBlocks.IsFluid(world.GetBlock(feetCell)))
+            {
+                surface = BlockiverseSurfaceFamily.Water;
+                return true;
+            }
+
+            var samplePoint = new Vector3(bounds.center.x, bounds.min.y - GroundSampleDepthMeters, bounds.center.z);
+            BlockPosition cell = CreativeInteractionController.ToBlockPosition(samplePoint);
+            if (!world.Bounds.Contains(cell))
+                return false;
+
+            BlockId block = world.GetBlock(cell);
+            if (block == BlockRegistry.Air)
+                return false;
+
+            surface = BlockiverseBlockFeedbackCues.SurfaceForBlock(BlockRegistry.Default, block);
+            return true;
         }
 
         void Update()
@@ -117,8 +187,14 @@ namespace Blockiverse.Gameplay
             // suppression gate keeps creative flight's ground-skimming and menu-focused states
             // silent; footstep cues need no equivalent check because a suppressed gait raises no
             // Footfall events at all.
+            // Landing now has its own weightier cue rather than borrowing a footstep.
             if (grounded && !wasGrounded && !gaitCycle.IsSuppressed && peakFallSpeed > LandingMinFallSpeed)
-                audioCuePlayer?.PlayCue(BlockiverseAudioCue.Footstep);
+            {
+                if (audioCuePlayer != null && TryGetGroundSample(out _, out Vector3 landPoint))
+                    audioCuePlayer.PlayCueAt(BlockiverseAudioCue.Landing, landPoint);
+                else
+                    audioCuePlayer?.PlayCue(BlockiverseAudioCue.Landing);
+            }
 
             if (grounded)
                 peakFallSpeed = 0f;

@@ -730,6 +730,10 @@ PrefabInstance:
       propertyPath: m_isRichText
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6462008124094724459, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
+      propertyPath: worldManager
+      value: 
+      objectReference: {fileID: 597296391}
     - target: {fileID: 6788423518949538828, guid: d39dfd0a2f45047b3b90789c9d341f48, type: 3}
       propertyPath: m_Name
       value: BlockiverseXRRig
