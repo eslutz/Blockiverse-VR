@@ -51,7 +51,6 @@ namespace Blockiverse.Server
                 ["server.max_players"] = (o, v, p) => { if (TryInt(v, p, "server.max_players", 1, int.MaxValue, out int x)) o.MaxPlayers = x; },
                 ["server.name"] = (o, v, p) => o.ServerName = v,
                 ["server.secret"] = (o, v, p) => o.Secret = v,
-                ["server.tick_rate"] = (o, v, p) => { if (TryInt(v, p, "server.tick_rate", 1, 120, out int x)) o.TickRate = x; },
                 ["server.frame_rate"] = (o, v, p) => { if (TryInt(v, p, "server.frame_rate", 10, 1000, out int x)) o.FrameRate = x; },
 
                 ["world.dir"] = (o, v, p) => o.WorldDirectory = v,

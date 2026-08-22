@@ -50,12 +50,32 @@ namespace Blockiverse.Editor
                 managerObject = (GameObject)PrefabUtility.InstantiatePrefab(networkManagerPrefab, scene);
 
             ConfigureNetworkManagerObject(managerObject, playerPrefab);
+            StripClientOnlyComponents(managerObject);
 
             EnsureServerWorldRoot(scene);
             EnsureServerBootstrap(scene, managerObject);
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, BlockiverseProject.ServerScenePath);
+        }
+
+        // The network manager prefab is SHARED with the client, and it carries components from
+        // assemblies the server build excludes. Left in place they deserialize as "The referenced
+        // script on this Behaviour is missing!" on every single server start -- an error the
+        // operator cannot act on, emitted before logging is even configured, in a process whose
+        // whole contract is that silence means healthy.
+        //
+        // SurvivalVitalsRuntime is the one that applies: it lives in Blockiverse.Gameplay, and a
+        // dedicated server has no local player whose vitals it could simulate anyway. Anything else
+        // added to that prefab from an excluded assembly belongs in this list too.
+        static void StripClientOnlyComponents(GameObject managerObject)
+        {
+            if (managerObject == null)
+                return;
+
+            SurvivalVitalsRuntime vitals = managerObject.GetComponent<SurvivalVitalsRuntime>();
+            if (vitals != null)
+                UnityEngine.Object.DestroyImmediate(vitals, allowDestroyingAssets: false);
         }
 
         // The world root, minus presentation. CreativeWorldManager and WorldTimeClock only: the

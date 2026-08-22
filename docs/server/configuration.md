@@ -47,7 +47,6 @@ log.format = json
 | `server.advertised_address` | *(empty)* | Display only — logged and shown to operators. Does not affect binding. |
 | `server.max_players` | `4` | **Not enforced above 4, and unsupported above 4.** See below. |
 | `server.name` | `Blockiverse Server` | Shown to operators and in logs. |
-| `server.tick_rate` | `30` | Netcode network tick rate. Leave alone unless you are measuring. |
 | `server.frame_rate` | `60` | Process frame rate. The simulation tick is frame-rate independent; this caps CPU burn. |
 
 ### On `server.max_players`
@@ -137,6 +136,12 @@ unban <playerId>      remove from the ban list
 **There is no view distance or simulation distance.** Blockiverse worlds are bounded and fully
 resident — the server always simulates the whole world. A knob here would not do anything, so there
 isn't one.
+
+**There is no `server.tick_rate`.** Netcode hashes the tick rate into the handshake that gates
+every connection, and the client's value is fixed at 30 in the shipped prefab. Any other value on
+the server produces a different hash, so Netcode drops every joining client *before* Blockiverse's
+own validation runs — no rejection reason, nothing useful in the log, and a server that looks
+healthy while nobody can join. A setting whose only valid value is the default is not a setting.
 
 **There is no `server.motd` and no `log.dir`.** Both were drafted and then removed rather than
 shipped inert. A message of the day needs a wire message the protocol does not have yet, and a log

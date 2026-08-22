@@ -238,6 +238,14 @@ namespace Blockiverse.Editor
             RemoveGeneratedNetworkPrefabLists(networkManager.NetworkConfig);
             networkManager.NetworkConfig.EnableSceneManagement = false;
             networkManager.NetworkConfig.ConnectionApproval = true;
+            // Load-bearing beyond performance: Netcode hashes TickRate into the connection config
+            // hash (NetworkConfig.GetConfig writes it), and a mismatch makes Netcode drop the
+            // client BEFORE connection approval -- so no BlockiverseJoinRejectionReason is produced
+            // and the refusal is close to undiagnosable from either side.
+            //
+            // This one line is why server and client agree: the dedicated server scene instantiates
+            // this same prefab through this same method. Do NOT make it per-mode configurable, and
+            // if the value ever changes it must change here for both, never on one side.
             networkManager.NetworkConfig.TickRate = 30;
 
             EnsureComponent<BlockiverseNetworkSession>(managerObject);

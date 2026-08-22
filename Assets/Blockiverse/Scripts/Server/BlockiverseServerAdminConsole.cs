@@ -87,11 +87,33 @@ namespace Blockiverse.Server
             }
         }
 
+        const string NoSocketConsequence =
+            "Admin commands are then only available on stdin, which is NOT attached under systemd " +
+            "or `docker run -d` -- meaning no `save`, no `stop`, and no clean shutdown. The world " +
+            "still autosaves, so at most one autosave interval is at risk, but fix this before " +
+            "relying on the server.";
+
         void StartSocketListener()
         {
             string path = ResolveSocketPath();
             if (string.IsNullOrEmpty(path))
                 return;
+
+            // AF_UNIX caps the socket path at ~104 bytes -- far shorter than any filesystem path
+            // limit, so a perfectly legal world directory can simply be too deep to hold a socket.
+            // Check it explicitly: the raw OS error sends operators to look at permissions, which
+            // is the wrong place, and the consequence is severe (see the catch below).
+            const int MaxUnixSocketPathBytes = 104;
+            if (Encoding.UTF8.GetByteCount(path) > MaxUnixSocketPathBytes)
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Bootstrap,
+                    $"Admin socket path '{path}' is {Encoding.UTF8.GetByteCount(path)} bytes; the " +
+                    $"operating system limit for a Unix socket is {MaxUnixSocketPathBytes}. Set " +
+                    "admin.socket_path to somewhere shorter (for example /run/blockiverse.sock), or " +
+                    "use a shallower world.dir. " + NoSocketConsequence);
+                return;
+            }
 
             try
             {
@@ -114,7 +136,7 @@ namespace Blockiverse.Server
                 BlockiverseLog.Warning(
                     BlockiverseLogCategory.Bootstrap,
                     $"Could not open the admin socket at '{path}': {exception.Message}. " +
-                    "stdin remains available if attached.");
+                    NoSocketConsequence);
             }
         }
 
@@ -225,7 +247,7 @@ namespace Blockiverse.Server
                 case "save": return SaveNow();
                 case "stop": bootstrap.RequestStop(); return "stopping: saving world and disconnecting players";
                 case "kick": return Kick(parts);
-                case "ban": return accessControl.Ban(parts.Length > 1 ? parts[1] : null);
+                case "ban": return BanAndDisconnect(parts.Length > 1 ? parts[1] : null);
                 case "unban": return accessControl.Unban(parts.Length > 1 ? parts[1] : null);
                 default: return $"unknown command '{parts[0]}'. Try 'help'.";
             }
@@ -272,13 +294,23 @@ namespace Blockiverse.Server
             if (networkManager == null || !networkManager.IsListening)
                 return "server is not listening";
 
+            MultiplayerSurvivalSync survivalSync =
+                UnityEngine.Object.FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+
             var text = new StringBuilder();
             foreach (ulong id in networkManager.ConnectedClientsIds)
             {
                 if (id == networkManager.LocalClientId)
                     continue;
 
-                text.Append("client ").Append(id.ToString(CultureInfo.InvariantCulture)).Append('\n');
+                // The player id is what `ban` takes. Printing only the numeric client id made the
+                // ban command impossible to use: nothing else ever revealed an id it would match.
+                string playerId = survivalSync != null && survivalSync.TryGetPlayerIdForClient(id, out string resolved)
+                    ? resolved
+                    : "(identity not yet received)";
+
+                text.Append("client ").Append(id.ToString(CultureInfo.InvariantCulture))
+                    .Append("  player ").Append(playerId).Append('\n');
             }
 
             return text.Length == 0 ? "no players connected" : text.ToString().TrimEnd('\n');
@@ -295,6 +327,26 @@ namespace Blockiverse.Server
             return persistence.SaveCurrentMultiplayerWorld()
                 ? "world saved"
                 : "save refused: this process does not hold save authority";
+        }
+
+        // Adding an id to the ban file is only half of a ban: without the disconnect the player
+        // keeps playing until they choose to leave, which is not what the operator asked for.
+        string BanAndDisconnect(string playerId)
+        {
+            string result = accessControl.Ban(playerId);
+            if (string.IsNullOrWhiteSpace(playerId))
+                return result;
+
+            MultiplayerSurvivalSync survivalSync =
+                UnityEngine.Object.FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+
+            int disconnected = survivalSync != null
+                ? survivalSync.DisconnectPlayer(playerId, "Banned by the server operator.")
+                : 0;
+
+            return disconnected > 0
+                ? $"{result}; disconnected {disconnected} connected session(s)"
+                : $"{result}; not currently connected";
         }
 
         static string Kick(string[] parts)

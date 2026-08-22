@@ -72,3 +72,28 @@ unity_args=(
 }
 
 "$UNITY_EDITOR" "${unity_args[@]}"
+
+# The build regenerates Server.unity, so check the scene that was actually just built rather than
+# whatever was on disk beforehand.
+#
+# This catches a failure mode no test can: a component whose script lives in an assembly excluded
+# from LinuxStandalone64 deserializes as "The referenced script on this Behaviour is missing!" on
+# every server start. The build SUCCEEDS -- it is a runtime log line, not a compile error -- so
+# without this gate a broken artifact ships green. The shared network manager prefab carries exactly
+# such a component (SurvivalVitalsRuntime, from Blockiverse.Gameplay).
+if command -v python3 >/dev/null 2>&1; then
+  echo "Checking the generated server scene for components from excluded assemblies"
+  if ! python3 "$PROJECT_ROOT/scripts/unity/check-prefab-assemblies.py" \
+      --platform LinuxStandalone64 \
+      --assets "$PROJECT_ROOT/Assets" \
+      --asset "$PROJECT_ROOT/Assets/Blockiverse/Scenes/Server.unity"; then
+    {
+      echo
+      echo "The server scene contains components the server build cannot load."
+      echo "Strip them in BlockiverseProjectBootstrapper.Server.StripClientOnlyComponents."
+    } >&2
+    exit 65
+  fi
+else
+  echo "python3 not found; skipping the excluded-assembly scene check" >&2
+fi

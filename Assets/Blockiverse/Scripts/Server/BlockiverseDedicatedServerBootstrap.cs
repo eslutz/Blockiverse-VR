@@ -222,6 +222,27 @@ namespace Blockiverse.Server
                 return false;
             }
 
+            // Prove the directory is WRITABLE, not merely present. A bind-mounted /data keeps the
+            // host's ownership -- the image's chown only seeds named volumes -- so the unprivileged
+            // server can find the directory and still be unable to write it. Without this probe the
+            // first sign is a failed autosave minutes later, or a lost world at shutdown.
+            try
+            {
+                string probe = Path.Combine(worldDirectory, ".write-probe");
+                File.WriteAllText(probe, "ok");
+                File.Delete(probe);
+            }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Bootstrap,
+                    $"World directory '{worldDirectory}' is not writable: {exception.Message}. " +
+                    "If this is a bind-mounted volume, its ownership comes from the host, not the image: " +
+                    "run `chown -R 10001:10001 <host-dir>` (or mount a named volume) and start again.");
+                Quit(ExitConfigurationError);
+                return false;
+            }
+
             // Must happen before persistence is configured: the policy seals once a session is
             // listening, and a save path outside a registered root is refused.
             if (!BlockiverseSavePathPolicy.TryRegisterAdditionalRoot(worldDirectory, out string failureReason))
@@ -280,9 +301,6 @@ namespace Blockiverse.Server
 
                 session.Configure(networkConfig);
 
-                // Otherwise server.tick_rate parses, validates, and does nothing.
-                if (session.NetworkManager != null && session.NetworkManager.NetworkConfig != null)
-                    session.NetworkManager.NetworkConfig.TickRate = (uint)options.TickRate;
 
                 if (options.TlsEnabled && !ApplyTransportSecurity())
                     return false;

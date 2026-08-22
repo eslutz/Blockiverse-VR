@@ -31,7 +31,6 @@ namespace Blockiverse.Server
         public int MaxPlayers { get; set; } = 4;
         public string ServerName { get; set; } = "Blockiverse Server";
         public string Secret { get; set; } = string.Empty;
-        public int TickRate { get; set; } = 30;
         public int FrameRate { get; set; } = 60;
 
         public string WorldDirectory { get; set; } = "./world";

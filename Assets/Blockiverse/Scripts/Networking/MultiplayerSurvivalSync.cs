@@ -382,6 +382,49 @@ namespace Blockiverse.Networking
         // and the server just absorbs it. Sustained abuse now ends the connection.
         readonly BlockiverseAbuseLedger abuseLedger = new();
 
+        // The player guid a connected client authenticated as, for operator tooling. `ban` takes a
+        // player id, so a server that never reveals one makes its own moderation commands unusable.
+        public bool TryGetPlayerIdForClient(ulong clientId, out string playerId)
+        {
+            playerId = null;
+            if (!playerIdentityKeysByClientId.TryGetValue(clientId, out string identityKey) ||
+                string.IsNullOrEmpty(identityKey))
+            {
+                return false;
+            }
+
+            // The key is "{guid}_{secret}"; only the guid is the operator-facing identity, and the
+            // secret is a bearer token that must never be printed or written to a ban file.
+            int separator = identityKey.IndexOf('_');
+            playerId = separator > 0 ? identityKey.Substring(0, separator) : identityKey;
+            return true;
+        }
+
+        // Disconnects any connected client authenticated as this player. Adding an id to a ban file
+        // without this leaves the banned player in the world until they choose to leave.
+        public int DisconnectPlayer(string playerId, string reason)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer || string.IsNullOrEmpty(playerId))
+                return 0;
+
+            var targets = new List<ulong>();
+            foreach (ulong clientId in networkManager.ConnectedClientsIds)
+            {
+                if (clientId != networkManager.LocalClientId &&
+                    TryGetPlayerIdForClient(clientId, out string candidate) &&
+                    string.Equals(candidate, playerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    targets.Add(clientId);
+                }
+            }
+
+            foreach (ulong clientId in targets)
+                networkManager.DisconnectClient(clientId, reason);
+
+            return targets.Count;
+        }
+
         // Installed by a dedicated server to enforce its allow/ban lists; null in LAN play, where
         // there is no operator and no list. A player's identity is not in the connection-approval
         // payload -- it arrives with PlayerHello -- so this is the earliest point a ban can be
