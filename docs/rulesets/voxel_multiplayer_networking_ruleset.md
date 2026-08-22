@@ -19,7 +19,8 @@ This document defines the multiplayer/networking rules for the canonical Blockiv
 | LAN-first release | The first shippable multiplayer mode is LAN host/client co-op. No public matchmaking or cloud persistence is required for the initial release. |
 | Two-player first | The implementation target is host + one client. Protocols should not hard-code assumptions that prevent later 3–4 player testing. |
 | Command-based gameplay | Clients send intent commands. The host validates commands and broadcasts accepted authoritative state changes. |
-| Comfort-preserving prediction | Clients may locally predict their own actions for responsiveness while the host remains authoritative. |
+| Comfort without prediction | LAN round trips are short enough that host-authoritative edits already feel immediate. Speculative prediction is deferred rather than shipped (§7.5). |
+| Bounded in-flight work | A client never accumulates unbounded unanswered commands, and recovers by resync when its view may have drifted (§7.5). |
 | Deterministic correction | Rejected or stale client commands must produce explicit rejection/correction messages and client reconciliation. |
 | Bounded world first | Multiplayer sync assumes fixed-size worlds. Infinite streaming terrain is out of scope for the first multiplayer version. |
 | Meta identity for players | Local and remote players should use Meta Horizon avatars when available, with a simple fallback proxy for development or unavailable avatar data. |
@@ -37,6 +38,7 @@ This document defines the multiplayer/networking rules for the canonical Blockiv
 | Gameplay sync | Use custom named messages for high-frequency or compact gameplay commands where explicit payload control is useful. |
 | Avatar fallback sync | Use owner-written `NetworkVariable` pose data for fallback proxy avatars. |
 | Meta avatar stream | Use owner-to-server-to-client avatar stream relay when Meta Horizon avatar data is available. |
+| Session discovery | Hosts broadcast a signed UDP beacon so clients can find them without typing an address. Manual address entry remains supported and is the fallback when broadcast is filtered. |
 | Voice | Do not create an in-app microphone transport for the initial LAN release. Use platform party chat outside the game protocol. |
 
 ### Default LAN config
@@ -45,9 +47,40 @@ This document defines the multiplayer/networking rules for the canonical Blockiv
 Default join address: 127.0.0.1
 Default listen address: 0.0.0.0
 Default port: 7777
+Default discovery port: 7778
 Initial max players: 2
 Recommended protocol headroom: 4 players
 ```
+
+### Transport configuration
+
+Unity Transport's defaults are tuned for a wired link to a dedicated server. The generated
+`NetworkManager` prefab sets these explicitly instead of inheriting them:
+
+```txt
+Max payload size:        16384 bytes   (sizes the fragmentation stage; the real per-message ceiling)
+Max packet queue size:   256           (late join bursts a header plus every block batch)
+Heartbeat timeout:       500 ms
+Connect timeout:         1000 ms
+Max connect attempts:    10
+Disconnect timeout:      5000 ms       (a Wi-Fi roam should not end the session)
+Netcode tick rate:       30 Hz
+```
+
+Any single message must fit inside the payload size above. Snapshot and inventory payloads are
+batched or bounded accordingly — see §6 and §14.
+
+### LAN discovery beacon
+
+| Field | Rule |
+|---|---|
+| Transport | UDP broadcast to `255.255.255.255` on the discovery port. |
+| Cadence | One beacon per second while hosting, whether or not the LAN panel is open. |
+| Listening | Clients listen only while the LAN menu is open. |
+| Payload | Magic, protocol version, game port, player count, max players, host name — signed with the session join code (HMAC-SHA256). |
+| Address source | The joining address is taken from the packet's sender, never from the payload. |
+| Expiry | A session disappears from the list after 3 seconds without a beacon. |
+| Failure mode | If the socket cannot bind or broadcast is filtered (AP client isolation), the list stays empty and manual address entry is unaffected. |
 
 ### Session modes
 
@@ -183,35 +216,52 @@ This prevents single-player logic from diverging from multiplayer host validatio
 
 ## 5. Connection handshake
 
-The first production-ready multiplayer handshake should include this data before gameplay commands are accepted:
+The join payload travels in Netcode's connection-approval data and is validated by the host
+before the client is admitted. It is a separator-delimited body plus an HMAC-SHA256 signature
+keyed on the session join code:
 
-```json
-{
-  "protocolVersion": 1,
-  "gameVersion": "0.0.0-dev",
-  "rulesetVersion": "voxel-networking-1",
-  "worldSaveSchemaVersion": 1,
-  "blockRegistryHash": "sha256:<hash>",
-  "itemRegistryHash": "sha256:<hash>",
-  "recipeRegistryHash": "sha256:<hash>",
-  "maxPlayers": 2,
-  "sessionMode": "lan_host_authoritative",
-  "voiceMode": "meta_quest_party_chat_external"
-}
+```txt
+blockiverse_lan | protocolVersion | rulesetVersion | port | maxPlayers | sessionMode | voiceMode
+                | gameVersion | worldSaveSchemaVersion
+                | blockRegistryHash | itemRegistryHash | recipeRegistryHash
+                | signature
 ```
+
+| Field | Source |
+|---|---|
+| `protocolVersion` | `BlockiverseNetworkSession.ApprovalPayloadProtocolVersion` (currently 2). |
+| `gameVersion` | `Application.version`. |
+| `worldSaveSchemaVersion` | `WorldSaveService.CurrentSchemaVersion`. |
+| `blockRegistryHash` / `itemRegistryHash` / `recipeRegistryHash` | `WorldSaveService.Compute*RegistryHash`, the same hashes the save manifest stores. |
+| `maxPlayers` | The joiner's own configured capacity. Carried for diagnostics and **not** compared: capacity is the host's business, enforced by the connected-player count. |
+
+Validation order is deliberate. Capacity is checked first, then the protocol version (before the
+field-count check, so a peer on an older payload shape gets `ProtocolMismatch` rather than a
+generic "malformed"), then the signature, and only then the content fields. An unsigned or
+wrongly-signed payload never produces a specific mismatch reason — it is not trustworthy enough
+to report one from.
 
 ### Handshake validation
 
+Rejection reasons are the names of `BlockiverseJoinRejectionReason`. The host returns the name as
+the Netcode approval reason; it reaches the client as `NetworkManager.DisconnectReason`, and the
+multiplayer session menu maps it to player-facing text.
+
 | Condition | Result |
 |---|---|
-| Protocol version mismatch | Reject join with `ProtocolMismatch`. |
-| Block registry mismatch | Reject join with `BlockRegistryMismatch`. |
-| Item/recipe registry mismatch | Reject survival commands until compatible; preferably reject join before gameplay starts. |
-| World save schema too new | Reject join with `UnsupportedWorldVersion`. |
-| Session full | Reject join with `SessionFull`. |
-| Host not ready | Client waits for snapshot; mutation/survival commands are rejected locally as `AwaitingHostWorldSnapshot`. |
+| Session already full | Reject with `SessionFull`. |
+| Protocol version mismatch | Reject with `ProtocolMismatch`. |
+| Malformed, over-long, or wrongly-signed payload | Reject with `InvalidJoinPayload`. |
+| Game version mismatch | Reject with `GameVersionMismatch`. |
+| World save schema mismatch | Reject with `UnsupportedWorldVersion`. |
+| Block registry mismatch | Reject with `BlockRegistryMismatch`. |
+| Item registry mismatch | Reject with `ItemRegistryMismatch`. |
+| Recipe registry mismatch | Reject with `RecipeRegistryMismatch`. |
+| Host not ready | Client waits for the snapshot; mutation and survival commands are rejected locally until it arrives. |
 
-A LAN-only implementation may start with a compact handshake, but the save/versioning schema should reserve the full compatibility fields now.
+Registry hashes are compared at the door rather than per command. Two peers on mismatched builds
+would resolve the same canonical id to different registry contents and diverge silently, which is
+far worse to diagnose than a refused join.
 
 ---
 
@@ -258,14 +308,35 @@ Canonical world presets:
 | `flat_builder` | 128–256 | 64 | 128–256 | 16 | 1001 | 8 | Flat canonical creative world with the full creative catalog. |
 | `void_builder` | 128–256 | 64 | 128–256 | 16 | 1001 | 32 | Empty builder world with a 16×16 cutstone spawn platform (surface at ground height − 1) and explicit bounds. |
 
+### Host world metadata (wire header)
+
+The snapshot header additionally carries the world's `spawnPosition`, a `snapshotId`, and the
+`batchCount` describing how many block batches follow it.
+
 ### Late-join snapshot
+
+The changed-block set is **batched**. A single message carrying every changed block exceeds Unity
+Transport's fragmentation capacity once a world has been played — fluid flow, crop growth, and
+snow settle all count as changed blocks — and an oversized message is simply not delivered, which
+leaves the joining client with no world at all. Batching is therefore a correctness requirement,
+not an optimization.
+
+| Rule | Value |
+|---|---:|
+| Blocks per batch | 200 (≈3.2 KB, well under the payload ceiling in §2) |
+| Delivery | Reliable fragmented sequenced, so the header always precedes its batches |
+| Superseded snapshots | Batches whose `snapshotId` does not match the pending snapshot are discarded |
+| Warning threshold | Log when the changed-block set exceeds 10,000 |
 
 When a client connects after the host already has changed blocks:
 
-1. Host sends the world snapshot header.
-2. Host sends all changed block positions and their authoritative block IDs.
-3. Client initializes/generated local world from the header.
-4. Client applies changed blocks with `trackChange = false`.
+1. Host allocates a `snapshotId` and sends the world snapshot header, including `batchCount`.
+2. Host sends the changed blocks as `batchCount` bounded batch messages.
+3. Client starts regenerating the world from the header on a background task, and accumulates
+   batches as they arrive — generation and transfer overlap.
+4. Client applies changed blocks with `trackChange = false`, but only once generation has
+   finished **and** every batch has arrived. Finalizing on generation alone would apply a partial
+   delta set and leave the client quietly diverged.
 5. Client records the host's latest chunk delta sequence.
 6. Client applies any buffered chunk deltas newer than the snapshot sequence.
 7. Client marks `HasHostGenerationSnapshotForSession = true`.
@@ -280,8 +351,11 @@ When a client connects after the host already has changed blocks:
 |---|---|---|---|
 | `Blockiverse.ChunkAuthority.MutationRequest` | Client → Host | Reliable sequenced | Request a block edit. |
 | `Blockiverse.ChunkAuthority.MutationDelta` | Host → Clients | Reliable sequenced | Broadcast accepted authoritative edit. |
-| `Blockiverse.ChunkAuthority.ChunkSnapshot` | Host → Client | Reliable sequenced | Send changed blocks to late joiner. |
+| `Blockiverse.ChunkAuthority.ChunkSnapshot` | Host → Client | Reliable fragmented sequenced | Late-join world header, including batch count. |
+| `Blockiverse.ChunkAuthority.ChunkSnapshotBatch` | Host → Client | Reliable fragmented sequenced | One bounded batch of changed blocks. |
 | `Blockiverse.ChunkAuthority.MutationResult` | Host → Client | Reliable sequenced | Report rejection or correction. |
+| `Blockiverse.ChunkAuthority.EnvironmentSnapshot` | Host → Client(s) | Reliable sequenced | Weather state/RNG and world time. |
+| `Blockiverse.ChunkAuthority.ResyncRequest` | Client → Host | Reliable fragmented sequenced | Ask for a fresh world snapshot after a sequence gap or repeated timeouts. |
 
 ### Mutation request payload
 
@@ -325,6 +399,8 @@ function SubmitMutation(position, newBlock): MutationResult {
 | Requested new block equals current block | `NoChange` |
 | Block editing disabled | `BlockEditingDisabled` |
 | Client runs host-only validation locally | `HostOnlyAuthorityOperation` |
+| Block is outside the requesting player's reach | `OutOfReach` |
+| Client already has the maximum unanswered requests in flight | `PendingRequestLimitReached` (rejected locally, never sent) |
 
 ### Accepted mutation delta payload
 
@@ -381,132 +457,66 @@ On rejection, the client must:
 
 ---
 
-## 7.5 Client Prediction and Reconciliation
+## 7.5 In-flight command limits, recovery, and deferred prediction
 
-### Goals
+### Client prediction is deferred
 
-Prediction exists to improve VR comfort and responsiveness while preserving host authority.
+Speculative client-side prediction is **not implemented and is not required for LAN co-op.** On a
+LAN the round trip between request and authoritative delta is a few milliseconds — below the
+threshold where a player perceives the delay — so a predicted-block state machine would add a
+rollback path that can itself desync, in exchange for responsiveness that is already there.
 
-The host remains authoritative for:
+Prediction becomes worth revisiting when the round trip does: cloud-hosted private worlds (§18),
+or any topology where the authoritative host is not on the same network segment. Until then, a
+client shows an edit when the host's delta arrives.
 
-- Block state
-- Chunk state
-- Inventory state
-- Survival progression
-- Shared containers
-- Multiplayer save data
+What follows are the parts of in-flight command management that **do** ship, because they protect
+a client whose host has gone quiet — a failure mode that exists at any latency.
 
-Clients may predict:
-
-- Local block placement previews
-- Local block removal previews
-- Controller interactions
-- Hand interactions
-- Audio feedback
-- Visual feedback
-
-Clients must not predict authoritative gameplay state for inventory, crafting, shared containers, progression, or persistence.
-
-### Prediction flow
-
-1. Client performs local validation.
-2. Client creates a predicted local result.
-3. Client sends mutation request to host.
-4. Host validates request.
-5. Host broadcasts authoritative mutation delta or rejection result.
-6. Client reconciles prediction against authoritative result.
-
-### Prediction limits
+### In-flight command limits
 
 | Rule | Value |
 |---|---:|
-| Maximum pending predicted edits | 16 |
-| Prediction warning timeout | 500 ms |
-| Prediction rollback timeout | 1500 ms |
-| Prediction before snapshot received | Not allowed |
-| Prediction for inventory commands | Not allowed |
-| Prediction for shared crate commands | Not allowed |
-| Prediction for crafting commands | Not allowed |
-| Prediction for batch/fill/world-edit tools | Not allowed |
+| Maximum unanswered block mutation requests | 64 |
+| Maximum unanswered survival commands | 64 |
+| Request timeout | 1500 ms |
+| Buffered out-of-order deltas retained | 256 |
+| Sequence-gap timeout before resync | 1500 ms |
+| Minimum spacing between resync requests | 5 s |
 
-### Predicted block state rules
+A client at the mutation cap rejects new edits locally with `PendingRequestLimitReached` rather
+than sending them; a client at the survival-command cap drops the command and logs it. Without a
+cap, a client that keeps acting while the host is unreachable grows a pending set that no reply
+will ever drain.
 
-Predicted edits must use dedicated prediction state instead of directly mutating authoritative chunk data.
+### Request timeouts
 
-A predicted block edit must track:
-
-```json
-{
-  "requestId": 12,
-  "position": { "x": 42, "y": 31, "z": 77 },
-  "expectedCurrentBlockId": 3,
-  "predictedNewBlockId": 0,
-  "createdAtMs": 123456,
-  "state": "PendingHostResult"
-}
-```
-
-Predicted edits:
-
-- exist only in local client state
-- are never saved
-- are never transmitted as authoritative state
-- must be replaced by the authoritative host delta
-- must be rolled back if rejected
-- must be cleared on disconnect, reconnect, or snapshot reload
-
-### Accepted prediction reconciliation
-
-If the authoritative delta matches the prediction:
-
-1. Convert prediction to committed state.
-2. Clear pending request.
-3. Remove prediction markers.
-
-If the authoritative delta differs from the prediction:
-
-1. Apply the authoritative delta.
-2. Clear pending request.
-3. Remove prediction markers.
-4. Show correction feedback only if the visual difference is player-noticeable.
-
-### Rejected prediction reconciliation
-
-If the authoritative result rejects the request:
-
-1. Remove predicted state.
-2. Apply authoritative correction if provided.
-3. Clear pending request.
-4. Show subtle local failure feedback.
-5. Do not automatically replay the failed command.
-
-### Timeout handling
-
-If a prediction exceeds the warning timeout:
-
-1. Keep the predicted state visible.
-2. Mark the request as delayed.
-3. Avoid sending duplicate mutation requests unless explicitly retried by protocol logic.
-
-If a prediction exceeds the rollback timeout:
-
-1. Remove the predicted state.
-2. Clear the pending request.
-3. Request a chunk or world resync if repeated timeouts occur.
-4. Show subtle degraded-connection feedback.
+A request older than the timeout is cleared from the pending set and counted. Timeouts are
+evidence that the client's view may have drifted from the host's, so they escalate to a resync
+rather than being silently forgotten.
 
 ### Missing sequence recovery
 
-If a sequence gap is detected:
+Chunk deltas carry strictly increasing sequence ids. A delta that arrives ahead of its
+predecessor is buffered; a buffered delta means an earlier sequence never arrived.
 
-1. Buffer newer deltas.
-2. Request missing deltas or a chunk resync.
-3. Apply buffered deltas once gaps are resolved.
-4. Request a broader world resync if recovery fails.
+1. Buffer newer deltas, up to the retention cap.
+2. If the gap persists past the gap timeout — or the buffer hits its cap, or requests keep timing
+   out — send `ResyncRequest` to the host.
+3. On sending a resync, the client clears its buffer and pending requests and stops accepting
+   local edits until the replacement snapshot lands. Nothing is applied on top of a world it can
+   no longer prove is in sync.
+4. The host serves a resync as a fresh late-join snapshot plus an environment snapshot, under a
+   much tighter rate limit than edits (2 per 10 s per client) because it re-sends the whole world.
 
-### Prediction implementation rule
+Reliable delivery makes a true packet loss gap rare; the case this recovers from is a host-side
+handler that threw, or a snapshot that landed stale.
 
-Prediction is a presentation and responsiveness layer. It must not weaken host validation, save ownership, inventory authority, registry compatibility checks, or survival command authority.
+### Authority is unaffected
+
+None of this weakens host validation, save ownership, inventory authority, registry compatibility
+checks, or survival command authority. These limits govern only what a client is willing to keep
+waiting for.
 
 ## 8. Creative editing rules in multiplayer
 
@@ -531,19 +541,8 @@ canPlacePreview =
   !IntersectsPlayerBounds(position)
 ```
 
-A client preview result is not authoritative and must not create a real block until the host delta arrives.
-
-Clients may create temporary predicted edits for responsiveness.
-
-Predicted edits:
-
-- exist only in local client state
-- are never saved
-- are never transmitted as authoritative state
-- must be replaced by the authoritative host delta
-- must be rolled back if rejected
-
-Predicted edits should use dedicated prediction state rather than modifying authoritative chunk data directly.
+A client preview result is not authoritative and must not create a real block until the host delta
+arrives. Speculative predicted edits are deferred — see §7.5.
 
 ---
 
@@ -675,9 +674,12 @@ function ProcessCrateTransfer(clientId, itemId, count, direction): SurvivalComma
 
 | Field | Rule |
 |---|---|
-| Authority | Owner writes pose; everyone reads. |
+| Authority | Owner sends its own pose; the host relays it to everyone else. |
+| Transport | Unreliable RPC (`SendTo.Server` then `SendTo.NotOwner`), not a `NetworkVariable` — pose is disposable presentation data and a dropped frame is cheaper than a retransmit. |
 | Send rate | 30 Hz target. |
-| Pose fields | Root position/rotation, head local pose, left hand local pose, right hand local pose. |
+| Pose fields | Root position/rotation, head local pose, left hand local pose, right hand local pose, plus a send sequence. |
+| Ordering | Each pose carries a monotonic sequence; a receiver drops any pose not newer than the last one applied. Unreliable delivery reorders, and applying a stale pose snaps a remote head backwards — the jitter VR punishes hardest. Comparison uses serial-number arithmetic so it survives the counter wrap. |
+| Wire size | ~50 bytes. Root position is full precision (world coordinates); head/hand offsets are 16-bit fixed point over ±4 m; rotations use a 32-bit smallest-three packing (~0.16°). |
 | Source | HMD/camera, left controller, right controller. |
 | Remote smoothing | Interpolate remote pose over `50–100 ms`; do not delay local owner tracking. |
 
@@ -733,8 +735,11 @@ canSaveMultiplayerWorld = currentBoundary.Role == Host
 ### Default multiplayer save path
 
 ```txt
-Application.persistentDataPath/Saves/multiplayer-world.json
+Application.persistentDataPath/Saves/multiplayer-world.vxlworld/
 ```
+
+The multiplayer host world uses the same directory save format as single-player worlds
+(see `voxel_save_versioning_schema.md`), not a flat JSON file.
 
 ### Required save metadata match
 
@@ -786,7 +791,10 @@ If Blockiverse later adds in-app voice, this document must be updated before imp
 | Client mutation request | 128 bytes |
 | Host mutation delta broadcast | 160 bytes |
 | Host rejection/result response | 128 bytes |
-| Late-join snapshot | 80 byte header + 32 bytes per changed block |
+| Late-join snapshot header | 56 bytes |
+| Late-join snapshot batch | 16 byte header + 16 bytes per changed block, max 200 blocks (~3.2 KB) |
+| Fallback avatar pose | ~50 bytes per player per send (30 Hz) |
+| LAN discovery beacon | <512 bytes, once per second while hosting |
 
 For a two-player accepted client edit:
 
@@ -807,11 +815,17 @@ These estimates exclude Netcode headers, Unity Transport headers, retransmits, c
 
 | Source | Limit |
 |---|---:|
-| Manual block edits | 20 accepted edits/sec/client hard cap |
-| Held-trigger repeat edits | 10 accepted edits/sec/client default |
+| Client mutation requests accepted by the host | 30 requests/sec/client (`PerClientRequestRateLimiter`); excess is dropped, not queued |
+| Client survival commands accepted by the host | Rate-limited per client on the same limiter |
+| Client resync requests served by the host | 2 per 10 s/client — a resync re-sends the whole world |
+| Held-trigger repeat edits | 10 accepted edits/sec/client default (client-side input pacing) |
 | Batch world edit | Host-only; max 512 blocks per command for the initial LAN release |
-| Late-join snapshot | Warn or compact if changed blocks exceed 10,000 |
-| Pending commands | Max 64 pending per client, then reject new commands until responses arrive |
+| Late-join snapshot | 200 blocks per batch; warn when changed blocks exceed 10,000 |
+| Pending commands | Max 64 pending per client for block edits and for survival commands (§7.5) |
+
+The host limiter counts *requests received*, which is deliberately above the ~20 edits/sec a
+player can physically produce: the limiter exists to bound a misbehaving client, while ordinary
+held-trigger building is paced client-side and never reaches it.
 
 ### Reliability choices
 
@@ -819,11 +833,12 @@ These estimates exclude Netcode headers, Unity Transport headers, retransmits, c
 |---|---|
 | Block mutation requests | Reliable sequenced |
 | Block mutation deltas | Reliable sequenced |
-| Snapshot data | Reliable fragmented/sequenced if available; otherwise chunk payloads manually |
+| Snapshot data | Reliable fragmented sequenced, batched under the transport payload ceiling (§2, §6) |
 | Survival commands | Reliable sequenced |
-| Inventory snapshots | Reliable sequenced |
-| Fallback avatar pose | NetworkVariable/unreliable-friendly owner updates acceptable |
-| Meta avatar stream | Unreliable or sequenced stream acceptable when SDK supports it; tolerate dropped frames |
+| Inventory snapshots | Reliable fragmented sequenced |
+| Fallback avatar pose | Unreliable owner→server→others RPC, sequence-gated on the receiver (§10) |
+| Meta avatar stream | Unreliable, manually fragmented; tolerate dropped frames |
+| LAN discovery beacon | UDP broadcast outside the Netcode transport entirely |
 
 ---
 
@@ -837,7 +852,7 @@ When a client loses the host:
 
 1. Set state to `Disconnected`.
 2. Clear pending mutation and survival command request dictionaries.
-3. Clear all predicted edit state.
+3. Clear buffered chunk deltas and the client recovery timers.
 4. Keep the last entered join address.
 5. Show reconnect/session-ended UI.
 6. Prevent further gameplay commands.
@@ -942,19 +957,37 @@ LAN co-op is not a hostile competitive environment, but the host must still vali
 | Client sends impossible inventory transfer | Reject and send inventory snapshot. |
 | Client sends duplicate request | Return duplicate result and snapshots; do not execute twice. |
 | Client sends too many commands | Rate-limit and drop/reject excess. |
-| Client registry mismatch | Reject join or disable gameplay commands. |
+| Client registry mismatch | Reject the join outright with the specific mismatch reason (§5). A registry-mismatched peer is refused at the door, not allowed in with commands disabled. |
+| Client edits a block it could not reach | Reject with `OutOfReach`. |
 | Client modifies save locally | Ignored in multiplayer; host save is authoritative. |
+
+### Implemented host reach check
+
+| Rule | Value |
+|---|---:|
+| Local interaction reach | 6.0 m (`BlockiverseInteractionLimits.MaxBlockInteractionReachMeters`) |
+| Host tolerance on top of it | 1.5 m |
+| Enforced host-side limit | 7.5 m from the requesting player's head to the edited block's box |
+
+The tolerance exists because the host's view of a remote head arrives at 30 Hz over unreliable
+delivery and therefore trails the client's own view by up to a frame or two of locomotion;
+enforcing exactly the local limit would reject legitimate edits made while moving. The local
+preview and the host check share one implementation in `Blockiverse.Core` so they cannot drift
+apart.
+
+The check **fails open** when the host cannot resolve the requester's head — an unspawned or
+just-connected player must not have legitimate edits dropped because presence data has not
+arrived yet. That is the right trade for cooperative LAN play; a hostile-client topology should
+revisit it.
 
 Recommended additional host checks before public/cloud multiplayer:
 
 ```txt
-max edit distance from player hand/head
 line-of-sight check for block edits
 role/permission check for creative edits
 region protection check
 cooldowns per command type
 server-side inventory stack validation
-signed or hashed registry manifest
 ```
 
 ---
@@ -1017,7 +1050,10 @@ moderation/reporting if public social features expand
 |---|---|
 | Block mutation authority | Host accepts valid edits, rejects invalid/stale edits, clients cannot commit directly. |
 | Chunk delta log | Sequence IDs are nonzero, increasing, replayable, and wrap safely. |
-| Client prediction | Predicted edits are isolated from authoritative chunk state and clear correctly on accept, reject, timeout, disconnect, and resync. |
+| Join handshake | Payload carries the compatibility fields; each mismatch yields its own rejection reason; an unsigned payload never yields a specific one. |
+| Snapshot batching | Header round-trips `snapshotId`/`batchCount`; a batch stays under the transport payload ceiling; a header claiming more batches than blocks is refused. |
+| Avatar pose wire format | Compressed pose round-trips within visual tolerance; stale sequences are dropped; comparison survives the counter wrap. |
+| LAN discovery beacon | Round-trips session details; rejects wrong join code, tampered payload, oversized payload, and missing source address; host names are sanitized. |
 | Survival commands | Harvest/craft/crate commands are validated and do not duplicate on repeated request ID. |
 | Inventory snapshots | Snapshot shape and contents round-trip. |
 | Save metadata | Multiplayer save refuses mismatched dimensions/chunk size/seed. |
@@ -1033,7 +1069,9 @@ moderation/reporting if public social features expand
 | Late join | Late join receives generated world + changed blocks. |
 | Conflict | Competing edits converge to host-authoritative winner. |
 | 100 ms simulated latency | Active block edit converges with no pending request left open. |
-| Prediction reconciliation | Client prediction commits on matching delta, corrects on mismatched delta, and rolls back on rejection. |
+| Large late join | A world with far more changed blocks than fit one message syncs completely — every batch applied, no gaps. |
+| Host reach check | An edit far outside the requesting player's reach is rejected; an adjacent edit still commits. |
+| In-flight limits | The client refuses edits past the pending cap, ages out timed-out requests, and escalates to a resync. |
 | Simulated packet loss | Ordered deltas eventually converge or trigger resync. |
 | Host disconnect | Client sees session-ended/reconnect UI. |
 | Host shutdown save | Saved edits reload before next hosted session. |
@@ -1046,6 +1084,9 @@ Before store candidate:
 Quest 3 host + Quest 3S client LAN smoke test
 Quest 3S host + Quest 3 client LAN smoke test
 same-router Wi-Fi test
+LAN discovery test (host listed without typing an address)
+discovery-blocked network test (manual address entry still joins)
+mismatched-build join test (refusal shows an actionable reason)
 blocked/unavailable host test
 host disconnect/reconnect test
 OVR Metrics or equivalent frame pacing capture
@@ -1072,7 +1113,9 @@ Client mutation request sender
 Host mutation request handler
 Host chunk delta broadcaster
 Client ordered delta applier
-Late-join snapshot sender/applier
+Late-join snapshot sender/applier (batched)
+Client resync request/serve path
+LAN discovery beacon + session list
 Survival command request/result protocol
 Per-player host inventory map
 Shared crate host inventory
@@ -1083,7 +1126,6 @@ Fallback proxy avatar sync
 Meta avatar stream relay
 Reconnect/session-ended UX
 Simulator latency tests
-Prediction/reconciliation tests
 Simulator packet loss tests
 Quest LAN smoke test plan
 ```

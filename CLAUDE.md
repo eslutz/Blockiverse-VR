@@ -65,6 +65,10 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
 - Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
 - A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
+- When several worktrees or agent sessions are active, coordinate Unity runs explicitly rather than starting whenever you feel like it. See "Sharing the Unity License" below.
+- A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md) — the active target changes during a PlayMode run, and the owning package rewrites its define), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
+
+Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, minutes before the PlayMode build-target switch that explains the defines. The trigger is not established; an EditMode-only run is the cheap experiment for narrowing it. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
 - Unity CLI (`unity`, installed at `~/.unity/bin`; experimental) is available as local developer tooling. Run `unity pipeline list` before any batchmode command to confirm no Unity Editor already has the project open — a second instance fails to launch. `unity test` and `unity build` may be used for targeted runs and CI-style builds, but the committed scripts above remain the acceptance gate. Do not install the Unity Pipeline package (`unity pipeline install`, which edits `Packages/manifest.json`) without explicit approval; treat it like MCP for Unity and Unity Skills — local-only, never committed.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
@@ -74,19 +78,191 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 
 ### Unity Licensing Recovery
 
-If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
-or waits on `LicenseClient-ericslutz-6000.5`, reset the local Unity/Hub process state:
+> **Destructive to other worktrees.** The Unity licensing client is per-user, not
+> per-project — one `Unity.Licensing.Client --namedPipe Unity-LicenseClient-<user>`
+> serves every editor on the machine. Killing it takes the license away from any
+> Unity run in *any* worktree, not just the stuck one. Run the pre-flight check
+> below first, and if another worktree's run is live, coordinate with it instead of
+> killing anything.
+
+**Pre-flight — is anything else using Unity right now?**
 
 ```sh
+ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+```
+
+Read this by **grouping on `-projectPath`, not by counting lines**. One run
+routinely shows two or three: the editor itself launches import workers from the
+same binary (`-adb2 ... -name AssetImportWorkerHW0`), and those match too. That is
+wanted — a busy worker still means the license is taken — but three lines sharing a
+`-projectPath` is one run, not three. To attribute a line whose path is ambiguous,
+`lsof -d cwd -p <pid>` gives the owning working directory.
+
+Proceed only when the projects listed are just this one (or there are none). Do not
+use `pgrep -f`/`pkill -f` with a bare `Unity` pattern for this check — see "Matching
+Unity Processes Safely" below.
+
+If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
+or waits on `LicenseClient-ericslutz-6000.5`, and the pre-flight shows no other
+project's run, reset the local Unity/Hub process state.
+
+**Select processes by PID, never by `pkill -f <pattern>`.** An agent submits these
+blocks through a command wrapper, so the invoking shell's own argument list contains
+whatever pattern you write — `pkill -f 'Unity.Licensing.Client|…'` can therefore match
+and kill the very shell running the recovery, before the verification or the retry
+happens. Deriving PIDs from an install-path-anchored `ps` cannot match a shell.
+
+```sh
+# 1. Stuck editors, by PID. Confirm every hit is this project (see pre-flight) first.
+ps -eo pid=,command= | grep "/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+
+# 2. Terminate them and WAIT. An editor left alive keeps the project lock, and the
+#    retry below then fails to launch even though the licensing reset succeeded.
+#    SIGTERM first so Unity releases the lock cleanly; escalate only if it will not go.
+kill <editor-pids>
+while ps -eo command= | grep -q "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "; do sleep 2; done
+
+# 3. Hub, then the licensing client — again by PID.
 osascript -e 'tell application "Unity Hub" to quit'
-pkill -f 'Unity.Licensing.Client|Unity Hub Helper|Unity Hub.app' || true
-pgrep -afil 'Unity|Licensing|UnityPackageManager'
+ps -eo pid=,command= | grep "/Applications/Unity/.*Unity.Licensing.Client" | awk '{print $1}' | xargs -r kill
+
+# 4. Verify: this must print nothing before retrying.
+ps -eo command= | grep "^/Applications/Unity"
+
+# 5. Retry.
 scripts/unity/run-tests.sh
 ```
 
-The `pgrep` command should return no Unity editor, Unity Hub, UnityPackageManager,
-or Unity licensing processes before the retry. Do not leave stuck Unity batchmode
-processes running.
+Step 4 anchors on `^/Applications/Unity`, so it catches editors, the licensing client,
+the package-manager server and shader compilers while matching no shell or `grep` of
+its own. Do not leave stuck Unity batchmode processes running.
+
+### Sharing the Unity License
+
+When more than one worktree or agent session is active, treat a Unity run as a token
+handed off by name, not as a resource you wait for.
+
+Why, precisely — because a wrong reason gets the rule discarded by the first person
+who falsifies it:
+
+- Two editors **cannot** open the same project at once; the second fails to launch.
+- Batchmode runs are heavy (editor, import workers, shader compilers, ILPP) and
+  several at once will thrash the machine.
+- Whenever you *do* have to wait, waiting by observation does not work — see rule 4.
+
+What this is **not** based on: an earlier version of this section claimed only one
+batchmode instance can hold the license machine-wide. That is unverified and probably
+wrong — two batchmode editors on different project paths have been observed running
+concurrently without error, and the session that first asserted the constraint
+retracted it. The licensing *client* is genuinely a single per-user process
+(`Unity-LicenseClient-<user>`), which is why the recovery below is destructive to
+other worktrees, but a shared service is not the same thing as an exclusive lock.
+
+1. **Ask before you run.** Tell the current holder you need a slot, and say roughly
+   how long your run is. If nobody holds it, say you are taking it.
+2. **Announce when you finish**, and **hand off by name** to the next session that
+   asked. Do not just go quiet — the next session cannot tell "finished" from
+   "between two runs".
+3. **Want a second run while someone is queued?** Hand off first and rejoin the back
+   of the queue. A queued session gets a turn before you take another slot.
+   **Leaving the queue is never permanent** — say so when you leave, and rejoin the
+   same way you joined, at the back. Review feedback and follow-up fixes routinely
+   mean a session that announced it was finished needs another slot, and a protocol
+   that reads as one-way leaves it blocked and silent rather than asking.
+4. **Never poll for a gap and claim it.** A session's sequential Unity invocations
+   are not atomic — one run's editor exits before the next one starts — so "no Unity
+   is running" cannot distinguish *free* from *between two of someone else's runs*.
+   Claiming the license in that gap kills the run that was mid-sequence. This has
+   destroyed an in-flight build.
+5. **Only ever kill processes you started.** If a run must be stopped, ask its owner.
+6. **If the holder goes silent, take over deliberately.** Rules 4 and 5 otherwise
+   deadlock when a holder crashes or its session ends mid-run: no hand-off is ever
+   announced, and nobody is allowed to clear the stale process. So: ping the holder;
+   if **10 minutes** pass with no reply *and* no live Unity process under its
+   `-projectPath`, presume it dead, **announce the takeover** to everyone, and then
+   clean up. Ten minutes is far longer than the seconds-long gap between one
+   session's sequential runs, so this cannot fire on a live holder mid-sequence. The
+   number matters more than its value — an unstated timeout means every session picks
+   its own and you are racing again.
+
+Recovery is the one place rule 5 does not hold: the licensing recovery below kills the
+shared per-user licensing client by construction, which is precisely what it is for.
+It may be run by the session that has announced a takeover under rule 6, or by the
+holder on its own stuck run — not by a queued session acting unilaterally. Run the
+pre-flight first either way.
+
+The reason for hand-off rather than polling is worth keeping with the rule, because a
+rule without it gets optimised back into a poll loop: no observation of the process
+table can establish that the license is free, only that it is momentarily unused. The
+holder is the only party that knows whether it is done.
+
+Where a check is genuinely needed — confirming a stuck run before recovery, say — use
+the anchored forms below rather than `pgrep -f`.
+
+### Matching Unity Processes Safely
+
+Process checks around Unity have broken three separate agent sessions on this
+machine, always the same way: a `-f` pattern matches the *observer* as well as the
+observed.
+
+- `pgrep -afil 'Unity|Licensing|UnityPackageManager'` matched **31 processes** on a
+  machine running exactly 2 editors. `PATH` contains `~/.unity/bin`, so every shell
+  this repo's tooling spawns matches on its environment alone, as do unrelated MCP
+  servers and the checking command itself. Its documented acceptance ("should return
+  no processes") is therefore unsatisfiable and reads as a stuck process that is not
+  there.
+- `pgrep -f "MacOS/Unity -batchmode"` matches the shell running it, because that
+  literal is in its own command line. A guard built on it reports a Unity run that
+  does not exist.
+- `pkill -f` with a broad pattern kills other worktrees' runs. This has destroyed an
+  in-flight build. It can also kill **the shell running the recovery**: an agent submits
+  a block through a command wrapper, so the invoking shell's argument list contains the
+  pattern being searched for. This survived in the recovery block above through several
+  revisions of this very section — the fix is to select by PID from an anchored `ps`.
+- A **wait loop** built on a self-matching pattern (`while pgrep -f "...Unity..."; do
+  sleep; done`) is the worst of the family, because it fails differently: it is not a
+  one-shot false positive but a mutual deadlock that *grows*. Each waiter's own
+  command line satisfies the condition it is waiting on, so every additional waiter
+  makes the wait strictly harder for all the others. Thirty such loops once ended up
+  deadlocked against each other here. It presents as "the run is slow" rather than as
+  an error, so it is found by wondering why so many background tasks are alive, not
+  by reading a failure.
+
+Two safe forms. Match on the process *name*, which no shell command line can satisfy:
+
+```sh
+# Is anything running? (editors and their import workers; workers exit with their editor)
+pgrep -x Unity
+
+# How many runs? Workers share the binary, so the name alone cannot tell them apart —
+# read the command line to drop them.
+for p in $(pgrep -x Unity); do
+  ps -p "$p" -o command= | grep -q -- "-adb2\|AssetImportWorker\|-srvPort" || echo "editor $p"
+done
+```
+
+Or anchor on the install path, which additionally shows you *whose* run it is:
+
+```sh
+ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+```
+
+Read that by grouping on `-projectPath`, not by counting lines — one run shows two or
+three. Three things break naive grouping, and this repo trips all of them:
+
+- **The checkout path contains a space** (`.../Code/Side Projects/...`), so the obvious
+  `sed -E 's/.*(-projectPath [^ ]*).*/\1/'` truncates at `Side` and silently groups
+  unrelated worktrees together. Take everything after the flag up to the next one:
+  `sed -E 's/.*-projectPath (.*)$/\1/; s/ -[a-zA-Z].*$//'`.
+- **A relative `-projectPath .`** — this repo's own bootstrapper invocation — shows as
+  `.` and is missed by any grouping on directory names.
+- **Import workers** identify their parent with `-parentPid`, not by repeating the
+  project.
+
+`lsof -a -p <pid> -d cwd -Fn` resolves all three: it gives the real working directory
+regardless of how the argument was written.
+
+Kill by PID after identifying the specific process, not by pattern.
 
 ## Commands
 
@@ -96,11 +272,13 @@ Unity 6000.5.8f1 (Apple Silicon path is the default; override with `UNITY_EDITOR
 # Required validation — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
 scripts/unity/run-tests.sh
 
-# Single test / one platform (the script takes no args; invoke Unity directly)
-"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity}" \
-  -batchmode -nographics -projectPath . -runTests -testPlatform EditMode \
-  -testFilter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" \
-  -testResults TestResults/Unity/Single.xml -logFile -
+# Single test / one platform — the script takes --platform, --filter, --results-name,
+# and --results-dir. Use it rather than invoking Unity directly: it passes -nographics
+# only for EditMode, because a PlayMode run without a graphics device segfaults inside
+# EnterPlayMode with a native stack that reads like a code bug. (Set
+# UNITY_PLAYMODE_NOGRAPHICS=1 to opt in deliberately.)
+scripts/unity/run-tests.sh --platform EditMode \
+  --filter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" --results-name Single
 
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first

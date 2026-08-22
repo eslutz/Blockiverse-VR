@@ -155,6 +155,91 @@ namespace Blockiverse.Tests.Networking.EditMode
             Assert.That(menu.StopButton.interactable, Is.False);
         }
 
+        [Test]
+        public void JoiningADiscoveredHostAdoptsItsAdvertisedPort()
+        {
+            BlockiverseMultiplayerSessionMenu menu = CreateMenu();
+            BlockiverseNetworkSession session = CreateSession();
+            BlockiverseLanDiscovery discovery = session.gameObject.AddComponent<BlockiverseLanDiscovery>();
+            discovery.Configure(session);
+            menu.Configure(session);
+            menu.ConfigureDiscovery(discovery, System.Array.Empty<Button>(), System.Array.Empty<TMP_Text>(), null);
+
+            // A host on a non-default port. Without adopting it, StartClient dials the local
+            // config port and signs that port into the approval payload, so the host refuses the
+            // join it just advertised.
+            const ushort advertisedPort = 7999;
+            discovery.ApplyBeacon(
+                BlockiverseLanDiscoveryBeacon.Encode(
+                    advertisedPort,
+                    playerCount: 0,
+                    maxPlayers: 2,
+                    hostName: "Other Port Host",
+                    joinCode: session.Config.JoinCode),
+                "192.168.1.77");
+
+            Assert.That(menu.DiscoveredSessions, Has.Count.EqualTo(1));
+            Assert.That(session.Config.Port, Is.Not.EqualTo(advertisedPort));
+
+            // The port adoption is exercised on its own rather than through
+            // JoinDiscoveredSession, which would start a real Netcode client in EditMode.
+            Assert.That(AdoptDiscoveredPort(menu, menu.DiscoveredSessions[0]), Is.True);
+
+            Assert.That(session.Config.Port, Is.EqualTo(advertisedPort));
+        }
+
+        static bool AdoptDiscoveredPort(BlockiverseMultiplayerSessionMenu menu, BlockiverseDiscoveredSession discovered)
+        {
+            MethodInfo adopt = typeof(BlockiverseMultiplayerSessionMenu).GetMethod(
+                "TryAdoptDiscoveredPort",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(adopt, Is.Not.Null, "The discovered-port adoption should remain present.");
+            return (bool)adopt.Invoke(menu, new object[] { discovered });
+        }
+
+        [Test]
+        public void BrowsingFollowsPanelVisibilityRatherThanComponentLifecycle()
+        {
+            BlockiverseMultiplayerSessionMenu menu = CreateMenu();
+            BlockiverseNetworkSession session = CreateSession();
+            BlockiverseLanDiscovery discovery = session.gameObject.AddComponent<BlockiverseLanDiscovery>();
+            menu.Configure(session);
+            menu.ConfigureDiscovery(discovery, System.Array.Empty<Button>(), System.Array.Empty<TMP_Text>(), null);
+
+            // The world-space presenter hides a panel by disabling its Canvas and leaves the
+            // GameObject active, so OnEnable/OnDisable cannot be the signal: keying off them left
+            // the browse socket open for the entire session.
+            var canvas = menuObject.AddComponent<Canvas>();
+            var presenter = menuObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
+            presenter.Configure(canvas, null, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+
+            presenter.Hide();
+            Assert.That(menuObject.activeSelf, Is.True, "Hiding the panel must not deactivate the GameObject for this test to mean anything.");
+            Assert.That(presenter.IsVisible, Is.False);
+
+            RefreshDiscoveryListening(menu);
+            Assert.That(discovery.ListenRequested, Is.False, "A hidden panel should not be browsing.");
+
+            presenter.Show(recenterPlacement: false);
+            RefreshDiscoveryListening(menu);
+            Assert.That(discovery.ListenRequested, Is.True, "A visible panel should browse.");
+
+            presenter.Hide();
+            RefreshDiscoveryListening(menu);
+            Assert.That(discovery.ListenRequested, Is.False, "Closing the panel should stop browsing.");
+        }
+
+        // The per-frame visibility check Update() drives; invoked directly so the test does not
+        // depend on EditMode frame ticking.
+        static void RefreshDiscoveryListening(BlockiverseMultiplayerSessionMenu menu)
+        {
+            MethodInfo refresh = typeof(BlockiverseMultiplayerSessionMenu).GetMethod(
+                "RefreshDiscoveryListening",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(refresh, Is.Not.Null, "The panel-visibility check should remain present.");
+            refresh.Invoke(menu, null);
+        }
+
         BlockiverseMultiplayerSessionMenu CreateMenu()
         {
             menuObject = new GameObject("Session Menu");

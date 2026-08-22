@@ -261,6 +261,32 @@ namespace Blockiverse.Tests.EditMode
                 "The voxel shader needs a ShadowCaster pass or chunks never cast shadows.");
             Assert.That(shader, Does.Contain("GetAdditionalLight"),
                 "The fragment stage must actually loop additional lights, not just declare the keywords.");
+
+            // Each punctual light gets exactly ONE occlusion term: its own shadow map if it owns a
+            // shadow slice, the baked per-face emitterReach gate if it does not.
+            Assert.That(shader, Does.Contain("GetAdditionalLightShadowParams"),
+                "Occlusion is chosen per light from the shadow slice index, so the shader must ask "
+                + "URP which lights actually own a shadow map.");
+            Assert.That(shader, Does.Contain("GetPerObjectLightIndex"),
+                "The shipped renderer is Forward, where LIGHT_LOOP_BEGIN yields a loop counter "
+                + "rather than a light index. Without this mapping the shadow-slice lookup reads "
+                + "the wrong light on device.");
+
+            // The regression this guards is the reported one: emitterReach is a 1 m per-face term
+            // and the shadow map is a ~4 cm one, so multiplying the summed punctual total by the
+            // bake let the coarser term zero the finer one and stepped every emitter shadow onto
+            // block boundaries.
+            Assert.That(shader, Does.Not.Contain("additional *= emitterReach"),
+                "The baked gate must not be applied to the summed punctual total again after the "
+                + "light loop; that double-gates the one emitter that already has a shadow map.");
+
+            // The handoff to the bake has to crossfade the RAW shadow sample. URP has already
+            // mixed the fade into Light.shadowAttenuation, so a fully shadowed texel reads back as
+            // `fade`, and combining two fade-lifted envelopes reopens pixels both terms call
+            // occluded -- half the punctual light through a wall at the middle of the band.
+            Assert.That(shader, Does.Contain("AdditionalLightRealtimeShadow"),
+                "Emitter occlusion must sample the unfaded realtime shadow directly rather than "
+                + "reuse the fade-mixed Light.shadowAttenuation.");
         }
 
         [Test]

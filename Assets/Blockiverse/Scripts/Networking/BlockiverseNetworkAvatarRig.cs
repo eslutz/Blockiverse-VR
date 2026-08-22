@@ -53,7 +53,8 @@ namespace Blockiverse.Networking
 
         Renderer[] fallbackRenderers = Array.Empty<Renderer>();
         Material fallbackMaterial;
-        readonly List<ulong> remotePoseTargetClientIds = new();
+        uint nextPoseSequence = 1;
+        uint lastAppliedPoseSequence;
         AvatarPose targetRemotePose = AvatarPose.Default;
         AvatarPose smoothedRemotePose = AvatarPose.Default;
         bool hasRemotePose;
@@ -219,20 +220,47 @@ namespace Blockiverse.Networking
                 headAnchor,
                 leftHandAnchor,
                 rightHandAnchor);
+            pose.Sequence = AllocatePoseSequence();
 
-            SubmitAvatarPoseServerRpc(pose);
+            SubmitAvatarPoseRpc(pose);
         }
 
-        [ServerRpc(Delivery = RpcDelivery.Unreliable)]
-        void SubmitAvatarPoseServerRpc(AvatarPose pose)
+        uint AllocatePoseSequence()
         {
-            ClientRpcParams recipients = BuildRemotePoseRecipients();
-            if (remotePoseTargetClientIds.Count > 0)
-                ReceiveAvatarPoseClientRpc(pose, recipients);
+            unchecked
+            {
+                nextPoseSequence++;
+            }
+
+            // Zero marks an unsequenced pose (a directly applied local/test pose), so it is
+            // never handed out as a real sequence number.
+            if (nextPoseSequence == 0)
+                nextPoseSequence = 1;
+
+            return nextPoseSequence;
+        }
+
+        // InvokePermission.Owner preserves the old [ServerRpc] default (which required
+        // ownership): only the player this rig belongs to may publish its pose.
+        [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Owner)]
+        void SubmitAvatarPoseRpc(AvatarPose pose)
+        {
+            ReceiveAvatarPoseRpc(pose);
         }
 
         public void ApplyRemotePose(AvatarPose pose)
         {
+            // Poses travel unreliably, so they can arrive out of order. Applying an older pose
+            // after a newer one snaps a remote head backwards — the kind of jitter VR punishes
+            // hardest. Sequence 0 means "unsequenced" (a directly applied pose) and is accepted.
+            if (pose.Sequence != 0)
+            {
+                if (hasRemotePose && lastAppliedPoseSequence != 0 && !IsNewerPoseSequence(pose.Sequence, lastAppliedPoseSequence))
+                    return;
+
+                lastAppliedPoseSequence = pose.Sequence;
+            }
+
             targetRemotePose = pose;
             LastRemotePoseTime = Time.unscaledTime;
             if (IsPoseStale)
@@ -248,14 +276,20 @@ namespace Blockiverse.Networking
             }
         }
 
-        [ClientRpc(Delivery = RpcDelivery.Unreliable)]
-        void ReceiveAvatarPoseClientRpc(AvatarPose pose, ClientRpcParams clientRpcParams = default)
+        // SendTo.NotOwner reproduces the old hand-built recipient list (every connected client
+        // except the owner, host included) without the per-send list rebuild.
+        [Rpc(SendTo.NotOwner, Delivery = RpcDelivery.Unreliable)]
+        void ReceiveAvatarPoseRpc(AvatarPose pose)
         {
             if (IsOwner)
                 return;
 
             ApplyRemotePose(pose);
         }
+
+        // Serial-number comparison: correct across the uint wrap, unlike a plain '>'.
+        static bool IsNewerPoseSequence(uint incoming, uint lastApplied) =>
+            (int)(incoming - lastApplied) > 0;
 
         public void SetStreamStale(bool stale)
         {
@@ -310,28 +344,6 @@ namespace Blockiverse.Networking
             {
                 ApplyFallbackRendererVisibility();
             }
-        }
-
-        ClientRpcParams BuildRemotePoseRecipients()
-        {
-            remotePoseTargetClientIds.Clear();
-
-            if (NetworkManager != null)
-            {
-                foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
-                {
-                    if (clientId != OwnerClientId)
-                        remotePoseTargetClientIds.Add(clientId);
-                }
-            }
-
-            return new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams
-                {
-                    TargetClientIds = remotePoseTargetClientIds,
-                },
-            };
         }
 
         void ApplyTrackingSources()
@@ -669,6 +681,20 @@ namespace Blockiverse.Networking
 
         public struct AvatarPose : INetworkSerializable, IEquatable<AvatarPose>
         {
+            /// <summary>Range, in metres, of the quantized head/hand offsets from the rig root.</summary>
+            const float LocalOffsetRangeMeters = 4.0f;
+
+            /// <summary>Largest magnitude any component of a unit quaternion's smallest three can take.</summary>
+            const float SmallestThreeRange = 0.70710678f;
+
+            /// <summary>
+            /// Monotonic per-owner send counter. Poses go out unreliably, so this is what lets a
+            /// receiver discard one that overtook a newer pose in flight. Zero means unsequenced.
+            /// Deliberately excluded from <see cref="Equals(AvatarPose)"/>: it is transport
+            /// metadata, not part of the pose itself.
+            /// </summary>
+            public uint Sequence;
+
             public Vector3 RootPosition;
             public Quaternion RootRotation;
             public Vector3 HeadLocalPosition;
@@ -725,17 +751,184 @@ namespace Blockiverse.Networking
                 };
             }
 
+            // 50 bytes on the wire instead of 112. Poses are sent per player at 30 Hz for the
+            // whole session, so the shape of this method is the avatar system's entire bandwidth
+            // cost. The root keeps full float precision because it carries world coordinates that
+            // reach the far side of a 256-block world; everything else is body-scale and is
+            // quantized: offsets to 16-bit fixed point over +/-4 m (~0.12 mm), rotations to a
+            // 32-bit smallest-three packing (~0.16 degrees).
             public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
             {
+                serializer.SerializeValue(ref Sequence);
                 serializer.SerializeValue(ref RootPosition);
-                serializer.SerializeValue(ref RootRotation);
-                serializer.SerializeValue(ref HeadLocalPosition);
-                serializer.SerializeValue(ref HeadLocalRotation);
-                serializer.SerializeValue(ref LeftHandLocalPosition);
-                serializer.SerializeValue(ref LeftHandLocalRotation);
-                serializer.SerializeValue(ref RightHandLocalPosition);
-                serializer.SerializeValue(ref RightHandLocalRotation);
+
+                if (serializer.IsWriter)
+                {
+                    uint rootRotation = CompressRotation(RootRotation);
+                    uint headRotation = CompressRotation(HeadLocalRotation);
+                    uint leftRotation = CompressRotation(LeftHandLocalRotation);
+                    uint rightRotation = CompressRotation(RightHandLocalRotation);
+                    serializer.SerializeValue(ref rootRotation);
+                    serializer.SerializeValue(ref headRotation);
+                    serializer.SerializeValue(ref leftRotation);
+                    serializer.SerializeValue(ref rightRotation);
+
+                    WriteOffset(serializer, ref HeadLocalPosition);
+                    WriteOffset(serializer, ref LeftHandLocalPosition);
+                    WriteOffset(serializer, ref RightHandLocalPosition);
+                    return;
+                }
+
+                uint packedRoot = 0;
+                uint packedHead = 0;
+                uint packedLeft = 0;
+                uint packedRight = 0;
+                serializer.SerializeValue(ref packedRoot);
+                serializer.SerializeValue(ref packedHead);
+                serializer.SerializeValue(ref packedLeft);
+                serializer.SerializeValue(ref packedRight);
+                RootRotation = DecompressRotation(packedRoot);
+                HeadLocalRotation = DecompressRotation(packedHead);
+                LeftHandLocalRotation = DecompressRotation(packedLeft);
+                RightHandLocalRotation = DecompressRotation(packedRight);
+
+                HeadLocalPosition = ReadOffset(serializer);
+                LeftHandLocalPosition = ReadOffset(serializer);
+                RightHandLocalPosition = ReadOffset(serializer);
             }
+
+            static void WriteOffset<T>(BufferSerializer<T> serializer, ref Vector3 offset) where T : IReaderWriter
+            {
+                short x = QuantizeOffset(offset.x);
+                short y = QuantizeOffset(offset.y);
+                short z = QuantizeOffset(offset.z);
+                serializer.SerializeValue(ref x);
+                serializer.SerializeValue(ref y);
+                serializer.SerializeValue(ref z);
+            }
+
+            static Vector3 ReadOffset<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+            {
+                short x = 0;
+                short y = 0;
+                short z = 0;
+                serializer.SerializeValue(ref x);
+                serializer.SerializeValue(ref y);
+                serializer.SerializeValue(ref z);
+                return new Vector3(DequantizeOffset(x), DequantizeOffset(y), DequantizeOffset(z));
+            }
+
+            static short QuantizeOffset(float value)
+            {
+                float clamped = Mathf.Clamp(value, -LocalOffsetRangeMeters, LocalOffsetRangeMeters);
+                return (short)Mathf.RoundToInt(clamped / LocalOffsetRangeMeters * short.MaxValue);
+            }
+
+            static float DequantizeOffset(short value) =>
+                value / (float)short.MaxValue * LocalOffsetRangeMeters;
+
+            /// <summary>
+            /// Smallest-three packing: 2 bits naming the largest component, then the other three
+            /// at 10 bits each. The dropped component is rebuilt from unit length, and its sign
+            /// costs nothing because q and -q are the same rotation — the whole quaternion is
+            /// negated so the dropped one is always positive.
+            /// </summary>
+            public static uint CompressRotation(Quaternion rotation)
+            {
+                float x = rotation.x;
+                float y = rotation.y;
+                float z = rotation.z;
+                float w = rotation.w;
+
+                float magnitude = Mathf.Sqrt(x * x + y * y + z * z + w * w);
+                if (magnitude < 1e-6f)
+                {
+                    x = 0.0f;
+                    y = 0.0f;
+                    z = 0.0f;
+                    w = 1.0f;
+                }
+                else
+                {
+                    x /= magnitude;
+                    y /= magnitude;
+                    z /= magnitude;
+                    w /= magnitude;
+                }
+
+                int largest = 0;
+                float largestAbs = Mathf.Abs(x);
+
+                if (Mathf.Abs(y) > largestAbs)
+                {
+                    largest = 1;
+                    largestAbs = Mathf.Abs(y);
+                }
+
+                if (Mathf.Abs(z) > largestAbs)
+                {
+                    largest = 2;
+                    largestAbs = Mathf.Abs(z);
+                }
+
+                if (Mathf.Abs(w) > largestAbs)
+                    largest = 3;
+
+                float largestValue = largest switch
+                {
+                    0 => x,
+                    1 => y,
+                    2 => z,
+                    _ => w,
+                };
+
+                if (largestValue < 0.0f)
+                {
+                    x = -x;
+                    y = -y;
+                    z = -z;
+                    w = -w;
+                }
+
+                (float a, float b, float c) = largest switch
+                {
+                    0 => (y, z, w),
+                    1 => (x, z, w),
+                    2 => (x, y, w),
+                    _ => (x, y, z),
+                };
+
+                return ((uint)largest << 30) |
+                       ((uint)QuantizeRotationComponent(a) << 20) |
+                       ((uint)QuantizeRotationComponent(b) << 10) |
+                       (uint)QuantizeRotationComponent(c);
+            }
+
+            public static Quaternion DecompressRotation(uint packed)
+            {
+                int largest = (int)(packed >> 30);
+                float a = DequantizeRotationComponent((int)((packed >> 20) & 0x3FFu));
+                float b = DequantizeRotationComponent((int)((packed >> 10) & 0x3FFu));
+                float c = DequantizeRotationComponent((int)(packed & 0x3FFu));
+                float d = Mathf.Sqrt(Mathf.Max(0.0f, 1.0f - (a * a + b * b + c * c)));
+
+                return largest switch
+                {
+                    0 => new Quaternion(d, a, b, c),
+                    1 => new Quaternion(a, d, b, c),
+                    2 => new Quaternion(a, b, d, c),
+                    _ => new Quaternion(a, b, c, d),
+                };
+            }
+
+            static int QuantizeRotationComponent(float value)
+            {
+                float normalized = Mathf.Clamp(value / SmallestThreeRange, -1.0f, 1.0f);
+                return Mathf.Clamp(Mathf.RoundToInt((normalized * 0.5f + 0.5f) * 1023.0f), 0, 1023);
+            }
+
+            static float DequantizeRotationComponent(int quantized) =>
+                (quantized / 1023.0f * 2.0f - 1.0f) * SmallestThreeRange;
 
             public bool Equals(AvatarPose other)
             {

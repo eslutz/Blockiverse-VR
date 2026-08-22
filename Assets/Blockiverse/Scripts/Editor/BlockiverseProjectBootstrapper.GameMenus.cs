@@ -148,9 +148,46 @@ controller.ConfigureStationPanel(stationPanel);
             Image statusBadge = EnsureComponent<Image>(badgeObject);
             ApplySlicedSprite(statusBadge, GetUiSprite("multiplayer_status_badge"));
             statusBadge.color = new Color(0.55f, 0.58f, 0.62f, 1.0f);
+            // Discovered LAN sessions. Slots are generated up front and hidden until a beacon
+            // fills them, so the panel layout never reflows as hosts come and go.
+            var discoveryButtons = new Button[LanDiscoverySlotCount];
+            var discoveryLabels = new TMP_Text[LanDiscoverySlotCount];
+            for (int slot = 0; slot < LanDiscoverySlotCount; slot++)
+            {
+                float slotY = -404.0f - slot * 58.0f;
+                Button slotButton = EnsureButtonControl(
+                    bg.transform,
+                    $"Discovered Session {slot + 1}",
+                    string.Empty,
+                    new Vector2(28.0f, slotY),
+                    new Vector2(width - 56.0f, 50.0f));
+                Transform slotLabel = slotButton.transform.Find("Label");
+                discoveryButtons[slot] = slotButton;
+                discoveryLabels[slot] = slotLabel != null ? slotLabel.GetComponent<TMP_Text>() : null;
+                slotButton.gameObject.SetActive(false);
+            }
+
+            TextMeshProUGUI discoveryStatusText = EnsureLabel(
+                bg.transform,
+                "Discovery Status",
+                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanDiscoverySearching),
+                20,
+                TextAnchor.UpperLeft,
+                new Vector2(0, 1),
+                new Vector2(0, 1),
+                new Vector2(0, 1),
+                new Vector2(28.0f, -376.0f),
+                new Vector2(width - 56.0f, 28.0f),
+                TextDimColor);
+
             BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(panelRoot);
             menu.ConfigureControls(hostButton, joinButton, reconnectButton, stopButton, addressInput, statusText);
             menu.ConfigureStatusBadge(statusBadge);
+            menu.ConfigureDiscovery(
+                UnityEngine.Object.FindFirstObjectByType<BlockiverseLanDiscovery>(FindObjectsInactive.Include),
+                discoveryButtons,
+                discoveryLabels,
+                discoveryStatusText);
             BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(panelRoot);
             ConfigureRoutedMenuPresenter(presenter, canvas, head);
             return (presenter, closeButton);

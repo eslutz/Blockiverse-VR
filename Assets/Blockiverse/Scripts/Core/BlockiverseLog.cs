@@ -12,7 +12,9 @@ namespace Blockiverse.Core
         Bootstrap,
         Performance,
         Audio,
-        Trace
+        Trace,
+        // Appended rather than inserted so existing ordinal values stay stable.
+        Networking
     }
 
     public readonly struct BlockiverseLogEntry

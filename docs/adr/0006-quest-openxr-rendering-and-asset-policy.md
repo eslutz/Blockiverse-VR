@@ -2,11 +2,81 @@
 
 ## Status
 
-Accepted; menu-surface decision amended 2026-08-13 and lighting/shadow policy amended 2026-08-19 (see Amendments below)
+Accepted; menu-surface decision amended 2026-08-13, lighting/shadow policy amended 2026-08-19, and emitter occlusion amended 2026-08-22 (see Amendments below)
 
 ## Date
 
-2026-06-16 (amended 2026-08-13 and 2026-08-19)
+2026-06-16 (amended 2026-08-13, 2026-08-19 and 2026-08-22)
+
+## Amendment 2026-08-22: Each Punctual Light Gets One Occlusion Term, Not Two
+
+The 2026-08-19 amendment below says the shader "gates the realtime term by the result" of the
+baked line-of-sight bake. It gated **every** punctual light by it, including the one emitter that
+owns a real shadow map. That is a composition of two occlusion terms by multiplication, and the
+coarser one wins wherever it is zero:
+
+- The baked `emitterReach` term is one sample per face (`VoxelLightSampler.SampleEmitterReach`
+  returns exactly 0 or 1, and `ChunkMeshBuilder` writes one value to all four vertices), so it
+  resolves occlusion at **1 m**.
+- The nearest emitter's cube shadow map is a 1024 atlas holding six slices on a 4x4 grid — 256 px
+  per cube face, about **4 cm** at five metres, 25 times finer.
+
+The visible consequence was that emitter shadows stepped along block boundaries instead of
+following the geometry actually occluding the light: the bake zeroed the punctual term across a
+whole face wherever the face centre was occluded, annihilating the shadow map's silhouette inside
+that face.
+
+The rule is therefore one occlusion term per light, chosen by whether the light owns a shadow
+slice:
+
+- A light with a shadow slice (`GetAdditionalLightShadowParams(i).w >= 0`) is occluded by **its
+  shadow map only**. `GlowwickLightManager.MaxShadowCastingLights` rations that to the nearest
+  emitter, which is the one whose shadow edge a player is close enough to read.
+- Every other light is occluded by **the baked gate only**, exactly as before. Without a shadow
+  map, URP punctual attenuation is pure inverse-square with no occlusion at all, so the bake
+  remains the only thing stopping a torch lighting the far side of a wall.
+- Past URP's additional-shadow fade the cube map stops answering and occlusion is handed back to
+  the bake, so distance cannot reopen the bleed-through the bake exists to prevent. That crossfade
+  must use the **raw** shadow sample (`AdditionalLightRealtimeShadow`), never
+  `Light.shadowAttenuation`: URP has already mixed the fade into the latter, so a fully shadowed
+  texel reads back as `fade` rather than 0. Combining two envelopes that have both been lifted by
+  the same fade reopens pixels that *both* terms call occluded — the naive
+  `min(shadowAttenuation, max(emitterReach, 1 - fade))` peaks at 0.5 mid-band and puts half the
+  punctual light through a wall.
+- `Light.shadowStrength` for emitters moves from 0.7 to 1.0. It was tuned while the bake also
+  hard-zeroed the punctual term, so it never governed anything; it is now the sole control over
+  how dark an emitter shadow is, and 1.0 preserves the "no punctual light through a wall"
+  contract.
+
+This changes no CPU work at all: no new rays, no change to `ChunkMeshBuilder` or
+`VoxelLightSampler`, and the bake keeps its exact previous semantics. It costs one constant-buffer
+read, one uniform branch and one lerp per light per fragment, plus moving the gate multiply inside
+the light loop (at most four per fragment under the per-object cap).
+
+It fails safe. `GetAdditionalLightShadowParams` returns a slice index of -1 for every light when
+`ADDITIONAL_LIGHT_CALCULATE_SHADOWS` is undefined, so a player whose shadow keywords were stripped
+by the build preprocessor — the `m_PrefilteringMode` trap — falls back to the baked gate
+everywhere and renders as it did before this amendment.
+
+**What is deliberately not fixed:** emitters without a shadow map keep the 1 m block-aligned
+occlusion edge. They are farther, dimmer by inverse-square at the surfaces in question, and not
+the light a player is reading. If a multi-emitter room proves objectionable on device, the next
+move is `MaxShadowCastingLights = 2` — bounded, and the atlas already packs 12 slices at the same
+256 px per face — not per-corner sampling on the chunk rebuild path.
+
+**Still open, and unchanged by this amendment:** the device profiling gate below. This amendment
+was reasoned and unit-tested, not measured.
+
+**If emitter shadows misbehave in a device build, check `Assets/UniversalRenderPipelineGlobalSettings.asset`
+before suspecting the shader.** The fallback above is only safe because `_ADDITIONAL_LIGHT_SHADOWS`
+is present or absent *predictably*, and `ShaderStrippingSetting` — one of the 13 entries under
+`m_RuntimeSettings` — is what governs that. A Unity batchmode run has twice been observed emptying
+that list (mid-EditMode, on two unrelated worktrees, with no project code referencing the asset;
+see the tooling policy in `CLAUDE.md`). The dropped entries include XR runtime resources, variable
+rate shading — the foveated rendering this project pins at 0.66 — and shader stripping. Committed
+empty, that is a device-only rendering regression that looks nothing like a shader bug. Nobody has
+built a player from an emptied list to confirm breakage; what is established is what the entries
+are. Revert that file unconditionally if a run dirties it.
 
 ## Amendment 2026-08-19: Budgeted Realtime Lighting And Shadows Supersede "Shadows And Additional Lights Off"
 
