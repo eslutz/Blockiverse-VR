@@ -386,6 +386,55 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ExactlyOneEmitterOwnsTheShadowSlotSoTheShaderCanTrustTheSliceIndex()
+        {
+            // The voxel shader picks an occlusion term per light: a real shadow map for a light
+            // that owns a shadow slice, the baked per-face emitterReach gate for one that does
+            // not. That split is only correct because the shadow slot is rationed here -- if two
+            // emitters cast at once, two of them would bypass the bake, and if none did, the
+            // sub-block shadow the fix exists to show would never be drawn.
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(32, 32, 32), chunkSize: 16, seed: 31);
+            var host = new GameObject("Glowwick Light Manager");
+            host.transform.position = Vector3.zero;
+
+            var nearPosition = new BlockPosition(2, 2, 2);
+            var farPosition = new BlockPosition(28, 2, 28);
+
+            try
+            {
+                world.SetBlock(nearPosition, BlockRegistry.Glowwick, trackChange: false);
+                world.SetBlock(farPosition, BlockRegistry.LumenLamp, trackChange: false);
+
+                GlowwickLightManager manager = host.AddComponent<GlowwickLightManager>();
+                manager.Configure(world, registry);
+
+                Assert.That(manager.ActiveLightCount, Is.EqualTo(2),
+                    "Both emitters are well inside the runtime light budget.");
+                Assert.That(manager.TryGetLight(nearPosition, out Light nearLight), Is.True);
+                Assert.That(manager.TryGetLight(farPosition, out Light farLight), Is.True);
+
+                int casters = 0;
+                if (nearLight.shadows != LightShadows.None)
+                    casters++;
+                if (farLight.shadows != LightShadows.None)
+                    casters++;
+
+                // Asserted as a count rather than naming which light wins: selection ranks by
+                // distance to Camera.main when one exists, and EditMode gives no guarantee about
+                // that. The count is the invariant the shader actually depends on.
+                Assert.That(casters, Is.EqualTo(GlowwickLightManager.MaxShadowCastingLights),
+                    "Exactly MaxShadowCastingLights emitters may cast. Any other number breaks the "
+                    + "shader's assumption that a shadow slice identifies the one emitter whose "
+                    + "occlusion is resolved by its cube map instead of the block-resolution bake.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void VoxelLightSamplerDarkensTunnelWithDistanceFromOpening()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
@@ -698,6 +747,13 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(light.type, Is.EqualTo(LightType.Point));
                 Assert.That(light.intensity, Is.GreaterThan(0.0f));
                 Assert.That(light.range, Is.GreaterThanOrEqualTo(4.0f));
+                Assert.That(light.shadows, Is.EqualTo(LightShadows.Hard),
+                    "The nearest emitter must own the shadow slot: the voxel shader routes exactly "
+                    + "the lights that have a shadow slice past the baked per-face gate.");
+                Assert.That(light.shadowStrength, Is.EqualTo(1.0f).Within(0.001f),
+                    "The shadow map is this light's only occluder now, so its strength alone "
+                    + "decides how dark an emitter shadow is. Anything below 1 leaks punctual "
+                    + "light through walls.");
 
                 world.SetBlock(lightPosition, BlockRegistry.Air);
 
