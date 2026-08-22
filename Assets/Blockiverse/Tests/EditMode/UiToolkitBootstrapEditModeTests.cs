@@ -195,12 +195,28 @@ namespace Blockiverse.Tests.EditMode
             UiToolkitProofPanel proof = CreateProofPanel();
             UIDocument document = proof.GetComponent<UIDocument>();
 
-            float metresWide = document.worldSpaceSize.x
-                / BlockiverseProjectBootstrapper.UiToolkitPixelsPerUnit
-                * proof.transform.localScale.x;
-            float metresHigh = document.worldSpaceSize.y
-                / BlockiverseProjectBootstrapper.UiToolkitPixelsPerUnit
-                * proof.transform.localScale.y;
+            // Read pixels-per-unit from the PanelSettings the panel actually points at, NOT from
+            // the bootstrapper constant. The physical size on device is decided by three values
+            // that live in two places -- the document's size and the transform scale on the
+            // GameObject, and pixels-per-unit on the asset -- and an earlier version of this test
+            // divided by the constant, so it consulted only one of them.
+            //
+            // That made it pass under a real defect: m_PixelsPerUnit is float32 and was being
+            // written through SerializedProperty.intValue, so the write never landed. The panel
+            // would have been the wrong physical size in the headset while this test reported
+            // 1.00 m, because it was measuring the number the bootstrapper intended rather than
+            // the number it wrote. A test that agrees with both the right and the wrong
+            // implementation is not testing anything.
+            var serialized = new SerializedObject(document.panelSettings);
+            float pixelsPerUnit = serialized.FindProperty("m_PixelsPerUnit").floatValue;
+
+            Assert.That(
+                pixelsPerUnit,
+                Is.EqualTo(BlockiverseProjectBootstrapper.UiToolkitPixelsPerUnit).Within(0.001f),
+                "PanelSettings disagrees with the bootstrapper constant; the two have drifted.");
+
+            float metresWide = document.worldSpaceSize.x / pixelsPerUnit * proof.transform.localScale.x;
+            float metresHigh = document.worldSpaceSize.y / pixelsPerUnit * proof.transform.localScale.y;
 
             Assert.That(metresWide, Is.EqualTo(1.0f).Within(0.001f));
             Assert.That(metresHigh, Is.EqualTo(0.7f).Within(0.001f));
@@ -219,10 +235,15 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(collider, Is.Not.Null);
             Assert.That(collider.isTrigger, Is.True);
 
+            // Same rule as the sizing test: derive from the value that shipped on the asset, not
+            // from the constant the bootstrapper meant to write. Otherwise collider and document
+            // can agree with each other while both disagree with the panel the player sees.
+            var serialized = new SerializedObject(document.panelSettings);
+            float pixelsPerUnit = serialized.FindProperty("m_PixelsPerUnit").floatValue;
+
             Vector3 worldSize = Vector3.Scale(collider.size, proof.transform.localScale);
-            float documentMetresWide = document.worldSpaceSize.x
-                / BlockiverseProjectBootstrapper.UiToolkitPixelsPerUnit
-                * proof.transform.localScale.x;
+            float documentMetresWide =
+                document.worldSpaceSize.x / pixelsPerUnit * proof.transform.localScale.x;
 
             Assert.That(worldSize.x, Is.EqualTo(documentMetresWide).Within(0.001f));
         }
