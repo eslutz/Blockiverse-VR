@@ -41,6 +41,8 @@ namespace Blockiverse.VR
         [SerializeField] TunnelingVignetteController vignetteController;
 
         bool gravityLockHeld;
+        int lastFeetCellY;
+        bool headSubmergedHeld;
         bool registeredAsGravityController;
         bool vignetteEngaged;
         float verticalVelocity;
@@ -171,6 +173,7 @@ namespace Blockiverse.VR
             UpdateVignette(false);
             SetState(SwimState.Dry);
             verticalVelocity = 0.0f;
+            headSubmergedHeld = false;
 
             if (gaitCycle != null)
                 gaitCycle.GroundedOverride = null;
@@ -191,8 +194,10 @@ namespace Blockiverse.VR
             }
 
             Submersion = SampleSubmersion();
-            SetState(BlockiverseSwimMotion.ResolveState(
-                Submersion.FeetSubmerged, Submersion.BodySubmerged, Submersion.HeadSubmerged));
+            // Depth-based: one block of water is walkable whoever you are. See the remarks on the
+            // overload -- the capsule-fraction body sample put every default-height player in
+            // Surfaced while ankle deep, which locks gravity off in a puddle.
+            SetState(BlockiverseSwimMotion.ResolveState(Submersion, lastFeetCellY));
 
             if (!IsSwimming)
             {
@@ -359,11 +364,48 @@ namespace Blockiverse.VR
                 SetState(SwimState.Dry);
 
             verticalVelocity = 0.0f;
+            headSubmergedHeld = false;
             ReleaseGravityLock();
             UpdateVignette(false);
 
             if (locomotionState == LocomotionState.Moving)
                 TryEndLocomotion();
+        }
+
+        // The raw head sample is a bare cell lookup, so a head resting at the surface flips
+        // Swimming/Surfaced every frame -- and passive sink means a treading player re-crosses the
+        // line constantly. BlockiverseSwimMotion.ResolveHeadSubmerged exists for exactly this and
+        // was never wired up; without it the distinction strobes and everything downstream strobes
+        // with it (the comfort vignette, and the underwater audio bed, which needed its own release
+        // window to stop clicking once per frame).
+        FluidSubmersionState ApplyHeadHysteresis(in FluidSubmersionState sampled, float headWorldY)
+        {
+            if (!sampled.InFluid || !sampled.HasSurface || headWorldY <= float.MinValue)
+            {
+                headSubmergedHeld = false;
+                return sampled;
+            }
+
+            // SurfaceCellY is the topmost fluid cell; the water line is its top face.
+            float surfaceWorldY = sampled.SurfaceCellY + 1.0f;
+            bool headSubmerged = BlockiverseSwimMotion.ResolveHeadSubmerged(
+                headSubmergedHeld, headWorldY, surfaceWorldY);
+            headSubmergedHeld = headSubmerged;
+
+            if (headSubmerged == sampled.HeadSubmerged)
+                return sampled;
+
+            return new FluidSubmersionState(
+                inFluid: sampled.InFluid,
+                family: sampled.Family,
+                immersion: headSubmerged
+                    ? FluidImmersion.Head
+                    : sampled.BodySubmerged ? FluidImmersion.Body : FluidImmersion.Feet,
+                feetSubmerged: sampled.FeetSubmerged,
+                bodySubmerged: sampled.BodySubmerged,
+                headSubmerged: headSubmerged,
+                hasSurface: sampled.HasSurface,
+                surfaceCellY: sampled.SurfaceCellY);
         }
 
         FluidSubmersionState SampleSubmersion()
@@ -386,7 +428,9 @@ namespace Blockiverse.VR
                 ? CreativeInteractionController.ToBlockPosition(headTransform.position)
                 : body;
 
-            return FluidSubmersion.Sample(world, feet, body, head);
+            lastFeetCellY = feet.Y;
+            FluidSubmersionState sampled = FluidSubmersion.Sample(world, feet, body, head);
+            return ApplyHeadHysteresis(sampled, headTransform != null ? headTransform.position.y : float.MinValue);
         }
 
         // Reads the jump ACTION, not jumpProvider.enabled. Jump is gated by locomotion mode, so a

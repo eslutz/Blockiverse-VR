@@ -55,12 +55,44 @@ namespace Blockiverse.VR
         // reads as a slow pulse and can never strobe.
         public const float SubmersionHysteresisMeters = 0.06f;
 
-        public static SwimState ResolveState(bool feetSubmerged, bool bodySubmerged, bool headSubmerged)
-        {
-            if (bodySubmerged || headSubmerged)
-                return headSubmerged ? SwimState.Swimming : SwimState.Surfaced;
 
-            return feetSubmerged ? SwimState.Wading : SwimState.Dry;
+        /// <summary>
+        /// Resolves the swim state from how DEEP the water is, falling back to the sample flags
+        /// only once it is deeper than one block.
+        /// </summary>
+        /// <remarks>
+        /// Wading is a question about the water, not about the player: water one block deep is
+        /// walkable because you are standing on the bottom of it, whoever you are. Deciding that
+        /// from where a fraction of the capsule happens to land makes it a question about height
+        /// instead, and gets it wrong for everyone — the body sample sits at 0.55 x capsule
+        /// height, which is 0.99 m for the default 1.8 m capsule and 0.50 m crouched, both inside
+        /// a one-block water cell. Every player at default height therefore read as Surfaced in
+        /// ankle-deep water, which locks gravity off and lets them swim up out of a puddle.
+        ///
+        /// Note this deliberately leaves a crouching player's head underwater in one block of
+        /// water still Wading: they are standing on the bottom and can stand up. The underwater
+        /// VIEW is a separate question and BlockiverseWaterView answers it from its own head
+        /// sample, so the picture still changes without the motion doing so.
+        /// </remarks>
+        public static SwimState ResolveState(in FluidSubmersionState submersion, int feetCellY)
+        {
+            if (!submersion.InFluid)
+                return SwimState.Dry;
+
+            // Surface at or below the feet cell means the column the player occupies is a single
+            // cell tall: one block of water, standing on the bottom of it.
+            if (submersion.FeetSubmerged && submersion.HasSurface && submersion.SurfaceCellY <= feetCellY)
+                return SwimState.Wading;
+
+            // Deeper than one block: how much of the player is under decides whether they are
+            // swimming or treading.
+            if (submersion.HeadSubmerged)
+                return SwimState.Swimming;
+
+            if (submersion.BodySubmerged)
+                return SwimState.Surfaced;
+
+            return submersion.FeetSubmerged ? SwimState.Wading : SwimState.Dry;
         }
 
         // Swimming and Surfaced are the states where the swim provider owns vertical motion and

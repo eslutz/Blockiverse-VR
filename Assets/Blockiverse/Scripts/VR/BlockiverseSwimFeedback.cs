@@ -32,11 +32,12 @@ namespace Blockiverse.VR
         // ever having left the water.
         public const float ResplashLockoutSeconds = 1.5f;
 
-        // The head crossing the surface has no hysteresis in SwimState (the provider samples the
-        // head cell raw), and stopping a loop destroys its AudioSource while starting one recreates
-        // it and retriggers from sample zero. Treading water at the surface therefore flips state
-        // every frame. Holding the loop open briefly after the head clears turns that into a steady
-        // bed instead of a click train.
+        // Backstop. The provider now applies BlockiverseSwimMotion.ResolveHeadSubmerged, so the
+        // Swimming/Surfaced line no longer strobes at source -- but stopping a loop destroys its
+        // AudioSource and starting one retriggers from sample zero, so the cost of a spurious
+        // toggle is high enough to be worth a second guard. This also covers the state being
+        // forced to Dry for reasons unrelated to the water, which ExitSwimming does whenever
+        // locomotion is suppressed.
         public const float SubmergedReleaseSeconds = 0.35f;
 
         // Anything faster than this in one frame is a teleport or a respawn, not motion: it would
@@ -55,9 +56,6 @@ namespace Blockiverse.VR
         bool submergedLoopActive;
         bool submergedWanted;
         bool emberflowLoopActive;
-
-        public bool SubmergedLoopActive => submergedLoopActive;
-        public bool EmberflowLoopActive => emberflowLoopActive;
 
         // Exposed so the rig prefab test can prove the wiring survived a regeneration, the same
         // way BlockiverseAudioCuePlayer exposes its own references.

@@ -76,16 +76,46 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void SamplesMapToStatesAndOnlySwimmingStatesOwnVerticalMotion()
         {
-            Assert.That(BlockiverseSwimMotion.ResolveState(false, false, false), Is.EqualTo(SwimState.Dry));
-            Assert.That(BlockiverseSwimMotion.ResolveState(true, false, false), Is.EqualTo(SwimState.Wading));
-            Assert.That(BlockiverseSwimMotion.ResolveState(true, true, false), Is.EqualTo(SwimState.Surfaced));
-            Assert.That(BlockiverseSwimMotion.ResolveState(true, true, true), Is.EqualTo(SwimState.Swimming));
+            // Feet cell 10 throughout. Depth is what separates wading from swimming, so the
+            // surface cell is the discriminator: at or below the feet you are standing on the
+            // bottom of a single block of water; above it, submersion decides.
+            Assert.That(State(inFluid: false, feet: false, body: false, head: false, surfaceCellY: 0),
+                Is.EqualTo(SwimState.Dry));
+            Assert.That(State(inFluid: true, feet: true, body: false, head: false, surfaceCellY: 10),
+                Is.EqualTo(SwimState.Wading));
+            Assert.That(State(inFluid: true, feet: true, body: true, head: false, surfaceCellY: 12),
+                Is.EqualTo(SwimState.Surfaced));
+            Assert.That(State(inFluid: true, feet: true, body: true, head: true, surfaceCellY: 14),
+                Is.EqualTo(SwimState.Swimming));
+
+            // The case that used to be unreachable: body submerged, but the water is only one
+            // block deep. That is a puddle, and it is walked through, not swum.
+            Assert.That(State(inFluid: true, feet: true, body: true, head: false, surfaceCellY: 10),
+                Is.EqualTo(SwimState.Wading),
+                "one block of water is wading however much of a short or crouched player is in it");
 
             Assert.That(BlockiverseSwimMotion.OwnsVerticalMotion(SwimState.Wading), Is.False,
                 "Wading keeps gravity on, or every puddle and the one-block shore step would become swimmable.");
             Assert.That(BlockiverseSwimMotion.OwnsVerticalMotion(SwimState.Dry), Is.False);
             Assert.That(BlockiverseSwimMotion.OwnsVerticalMotion(SwimState.Surfaced), Is.True);
             Assert.That(BlockiverseSwimMotion.OwnsVerticalMotion(SwimState.Swimming), Is.True);
+        }
+
+        const int FeetCellY = 10;
+
+        static SwimState State(bool inFluid, bool feet, bool body, bool head, int surfaceCellY)
+        {
+            var submersion = new FluidSubmersionState(
+                inFluid: inFluid,
+                family: FluidFamily.Freshwater,
+                immersion: head ? FluidImmersion.Head : body ? FluidImmersion.Body : FluidImmersion.Feet,
+                feetSubmerged: feet,
+                bodySubmerged: body,
+                headSubmerged: head,
+                hasSurface: inFluid,
+                surfaceCellY: surfaceCellY);
+
+            return BlockiverseSwimMotion.ResolveState(submersion, FeetCellY);
         }
 
         [Test]
