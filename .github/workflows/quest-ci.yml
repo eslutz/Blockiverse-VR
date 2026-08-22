@@ -40,6 +40,7 @@ jobs:
           test -f .github/workflows/quest-ci.yml
           test -f .github/workflows/quest-alpha.yml
           test -f .github/workflows/quest-promote.yml
+          test -f .github/workflows/server-release.yml
           test ! -f .github/workflows/meta-release.yml
 
   unity-validation:

@@ -40,10 +40,17 @@ Specific decisions:
 3. **Presentation assemblies are excluded with `excludePlatforms: ["LinuxStandalone64"]`, never
    with `defineConstraints: ["!UNITY_SERVER"]`.** See Consequences for why this distinction is
    load-bearing. The exclusion applies to exactly three assemblies — `Blockiverse.Gameplay`,
-   `Blockiverse.UI`, and `Blockiverse.VR` — plus `Blockiverse.MetaAvatars` and
-   `Blockiverse.MetaPlatform`. It is *not* needed on `Blockiverse.Editor`
+   `Blockiverse.UI`, and `Blockiverse.VR`. It is *not* needed on `Blockiverse.Editor`
    (`includePlatforms: ["Editor"]`) or on any test assembly (`defineConstraints:
    ["UNITY_INCLUDE_TESTS"]`); none of those is compiled into a player build.
+
+   **`Blockiverse.MetaAvatars` and `Blockiverse.MetaPlatform` ship in the server build**, despite
+   being useless to it. An earlier draft excluded them for size. That is wrong: the shared network
+   player prefab carries three `Blockiverse.MetaAvatars` components, and `MetaAvatarStreamRelay` is
+   a `NetworkBehaviour`. Excluding the assembly changes the prefab's NetworkBehaviour set, so server
+   and client would disagree on the spawn contract and player spawning would fail. The native Oculus
+   calls are already `#if UNITY_ANDROID && !UNITY_EDITOR` guarded and the assembly compiles for the
+   server target, so the cost is dead weight rather than breakage. Do not "optimise" it out.
 4. **The renderer is cut with an `IWorldPresentation` seam**, resolved by `GetComponent` + `is`,
    and simply absent on the server. `VoxelSkyLightMap` moves to `CreativeWorldManager` ownership
    because sky occlusion is a simulation input (crop growth, cave detection), not a render artifact.

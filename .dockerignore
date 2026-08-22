@@ -1,0 +1,6 @@
+# The image packages a built player only. Everything else is context Docker would upload for
+# nothing -- this repo's Library alone is tens of gigabytes.
+*
+!Builds/LinuxServer/BlockiverseServer
+!Builds/LinuxServer/UnityPlayer.so
+!Builds/LinuxServer/BlockiverseServer_Data
