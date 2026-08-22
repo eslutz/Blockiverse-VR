@@ -43,6 +43,10 @@ namespace Blockiverse.Gameplay
         VoxelSkyLightMap skyLight;
         VoxelEmitterIndex emitterIndex;
         Material chunkMaterial;
+        // Water renders from a second, transparent clone of the same authored atlas material, drawn
+        // after a depth-only prime of the same geometry so exactly one water layer blends per pixel.
+        Material fluidMaterial;
+        Material fluidDepthPrimeMaterial;
         int interactionLayer = -1;
         // Fluid geometry sits on its own layer so gravity's ground sphere-cast never sees it.
         // Resolved by name at Configure time, falling back to the canonical index.
@@ -56,6 +60,12 @@ namespace Blockiverse.Gameplay
         // The layer fluid chunk children are placed on. Exposed so rig/prefab tests can assert the
         // gravity mask excludes it and the targeting masks include it.
         public int FluidLayer => fluidLayer;
+
+        // Deepest the water shader's wave can pull a surface vertex below its voxel face plane.
+        // FillMesh pads the fluid mesh bounds by this much so troughs are not frustum-culled and
+        // popped at the edge of vision -- very visible in VR, where head rotation sweeps geometry
+        // across the screen edge constantly. Must stay >= 2x the largest _Wave*.x amplitude.
+        public const float MaxWaveDipMeters = 0.05f;
 
         // The per-column sky map kept current by the rebuild queue; also consumable by
         // gameplay systems that need cheap "is this cell under open sky" answers.
@@ -90,11 +100,17 @@ namespace Blockiverse.Gameplay
             rebuildQueue?.Detach();
             DestroyGeneratedChunkContent();
             DestroyGeneratedObject(chunkMaterial);
+            DestroyGeneratedObject(fluidMaterial);
+            DestroyGeneratedObject(fluidDepthPrimeMaterial);
 
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             BlockVisualAtlas.ValidateRenderableBlockCoverage(registry);
             chunkMaterial = BlockVisualAtlas.CreateMaterial(material, selectedAtlas, textureSetId);
+            // Both materials are created before any rebuild: CreateFluidObject reads fluidMaterial
+            // lazily during the rebuild below, and a null there renders water with no material.
+            fluidMaterial = BlockVisualAtlas.CreateFluidMaterial(material, selectedAtlas, textureSetId);
+            fluidDepthPrimeMaterial = BlockVisualAtlas.CreateFluidDepthPrimeMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
             fluidLayer = ResolveFluidLayer();
             skyLight = new VoxelSkyLightMap(world, registry);
@@ -305,15 +321,29 @@ namespace Blockiverse.Gameplay
             return triangleCount;
         }
 
-        static void FillMesh(Mesh mesh, ChunkMeshData data)
+        static void FillMesh(Mesh mesh, ChunkMeshData data, float boundsPaddingDownY = 0.0f)
         {
             mesh.Clear();
             mesh.SetVertices(data.Vertices);
             mesh.SetTriangles(data.Triangles, 0);
             mesh.SetUVs(0, data.Uvs);
+            if (data.FluidVertexData != null && data.FluidVertexData.Count > 0)
+                mesh.SetUVs(1, data.FluidVertexData);
             mesh.SetColors(data.Colors);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
+
+            if (boundsPaddingDownY <= 0.0f)
+                return;
+
+            // RecalculateBounds measured the undisplaced vertices; the wave only ever moves the
+            // surface DOWN, so the bounds only need to grow downward.
+            Bounds bounds = mesh.bounds;
+            Vector3 min = bounds.min;
+            Vector3 max = bounds.max;
+            min.y -= boundsPaddingDownY;
+            bounds.SetMinMax(min, max);
+            mesh.bounds = bounds;
         }
 
         // Refills the chunk's pooled fluid mesh in place. Fluid colliders are queued through the
@@ -346,7 +376,7 @@ namespace Blockiverse.Gameplay
                 filter.sharedMesh = mesh;
             }
 
-            FillMesh(mesh, fluidData);
+            FillMesh(mesh, fluidData, MaxWaveDipMeters);
             EnqueueFluidColliderRebuild(chunk);
         }
 
@@ -375,8 +405,13 @@ namespace Blockiverse.Gameplay
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = true;
 
-            if (chunkMaterial != null)
-                renderer.sharedMaterial = chunkMaterial;
+            // Two materials over a single-submesh mesh: Unity draws the mesh once per material, and
+            // the materials' render queues put the depth prime first. Array order here is
+            // documentation -- the queues are what actually sequence the draws.
+            if (fluidMaterial != null && fluidDepthPrimeMaterial != null)
+                renderer.sharedMaterials = new[] { fluidDepthPrimeMaterial, fluidMaterial };
+            else if (fluidMaterial != null)
+                renderer.sharedMaterial = fluidMaterial;
 
             // The fluid layer is what actually keeps players out of water: it is absent from
             // GravityProvider's ground sphere-cast mask (scene queries ignore excludeLayers, so the
@@ -598,6 +633,8 @@ namespace Blockiverse.Gameplay
             rebuildQueue?.Detach();
             DestroyGeneratedChunkContent();
             DestroyGeneratedObject(chunkMaterial);
+            DestroyGeneratedObject(fluidMaterial);
+            DestroyGeneratedObject(fluidDepthPrimeMaterial);
         }
 
         // Destroys every generated chunk object and mesh and resets the bookkeeping — used on

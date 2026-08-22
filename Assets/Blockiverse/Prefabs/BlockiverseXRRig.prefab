@@ -64788,6 +64788,7 @@ GameObject:
   - component: {fileID: 4244124723345566980}
   - component: {fileID: 7830425733673505590}
   - component: {fileID: 2157709069665111210}
+  - component: {fileID: 1933166028837104305}
   m_Layer: 0
   m_Name: BlockiverseXRRig
   m_TagString: Untagged
@@ -66140,6 +66141,20 @@ MonoBehaviour:
   characterController: {fileID: 6210852948677632059}
   stepLengthMeters: 0.79
   footfallLeadPhase: 0.1
+--- !u!114 &1933166028837104305
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6788423518949538828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5aa5d2edd31654574949c8d0d28d6cc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.BlockiverseWaterView
+  worldManager: {fileID: 0}
+  headCamera: {fileID: 2498534017811587301}
 --- !u!1 &6850496368584314547
 GameObject:
   m_ObjectHideFlags: 0

@@ -139,6 +139,27 @@ namespace Blockiverse.Gameplay
             return World.Bounds.Contains(cell) && !skyLight.HasSkyAccess(cell);
         }
 
+        // Whether a world position sits inside a fluid cell, and which family. The shared answer
+        // for every "is this point in water" consumer -- the underwater view, vitals, and anything
+        // that follows -- so they cannot drift apart. False when there is no world yet or the cell
+        // is out of bounds, both of which are real states (before the first world is generated,
+        // and above WorldMaxY).
+        public bool TryGetFluidFamilyAt(Vector3 worldPosition, out FluidFamily family)
+        {
+            family = default;
+
+            // Read live, never cached: New World and Load replace the VoxelWorld instance whole.
+            VoxelWorld world = World;
+            if (world == null)
+                return false;
+
+            BlockPosition cell = CreativeInteractionController.ToBlockPosition(worldPosition);
+            if (!world.Bounds.Contains(cell))
+                return false;
+
+            return FluidBlocks.TryGetFamily(world.GetBlock(cell), out family);
+        }
+
         // Returns the weather state, accumulated ticks, and RNG position for a network snapshot.
         // Returns a Clear default when the weather service is not yet initialized.
         public WeatherSyncState GetWeatherSyncState() =>

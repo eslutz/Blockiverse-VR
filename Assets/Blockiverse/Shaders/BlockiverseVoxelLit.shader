@@ -11,6 +11,27 @@ Shader "Blockiverse/Voxel Lit"
         _AdditionalLightScale("Additional Light Scale", Range(0, 2)) = 1.0
         // How brightly an emitter block renders its own faces regardless of surrounding light.
         _SelfEmissionStrength("Self Emission Strength", Range(0, 2)) = 1.0
+
+        // Per-family water look, selected per vertex from the fluid mesh's UV1 channel.
+        // Unused by the opaque terrain material.
+        _TintFreshwater("Freshwater Tint", Color) = (0.72, 0.92, 1.00, 0.72)
+        _TintBrine("Brine Tint", Color) = (0.68, 0.92, 0.90, 0.78)
+        _TintEmberflow("Emberflow Tint", Color) = (1.00, 0.86, 0.72, 1.00)
+        // x = dip amplitude (blocks), y = spatial frequency (rad/block),
+        // z = time speed (rad/s), w = normal amplification (visual slope multiplier).
+        // x must never exceed VoxelWorldRenderer.MaxWaveDipMeters * 0.5, or troughs fall outside
+        // the padded mesh bounds and pop at the edge of vision.
+        _WaveFreshwater("Freshwater Wave", Vector) = (0.025, 0.90, 1.10, 8.0)
+        _WaveBrine("Brine Wave", Vector) = (0.020, 1.05, 0.90, 7.0)
+        _WaveEmberflow("Emberflow Wave", Vector) = (0.012, 0.45, 0.22, 3.0)
+        _WaterSpecularStrength("Water Specular Strength", Range(0, 2)) = 0.35
+
+        // Material-driven surface state (the URP Lit pattern). Defaults are OPAQUE, so terrain
+        // is unaffected; BlockVisualAtlas.CreateFluidMaterial overrides them for water.
+        [HideInInspector] _SrcBlend("__src", Float) = 1.0
+        [HideInInspector] _DstBlend("__dst", Float) = 0.0
+        [HideInInspector] _ZWrite("__zw", Float) = 1.0
+        [HideInInspector] _Cull("__cull", Float) = 2.0
     }
 
     SubShader
@@ -26,6 +47,25 @@ Shader "Blockiverse/Voxel Lit"
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+
+            // Opaque by default; the water material drives these to alpha blending. ZWrite stays
+            // ON for water so a FARTHER fluid fragment can never paint over a nearer one -- the
+            // sort flip that reads as a far bank sliding on top of the near surface, both between
+            // chunks as the head turns and inside one fluid mesh, where a top face and a far wall
+            // are submitted in voxel-traversal order rather than depth order.
+            //
+            // It does NOT make the blending order-independent. When the farther fragment happens
+            // to be submitted first it blends and writes depth, and the nearer one then blends
+            // over it, so that patch carries two layers of tint instead of one and reads slightly
+            // denser; submitted the other way round the far fragment is depth-rejected and only
+            // one layer lands. Triangle order is fixed by the voxel scan, so which of the two you
+            // get depends on where you are standing. Removing that residue needs a depth-primed
+            // second pass over fluid geometry (ColorMask 0 + ZWrite, then ZTest Equal with ZWrite
+            // off) or per-frame sorting; both cost an extra pass, so they wait on the device
+            // capture that can actually price them.
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
+            Cull [_Cull]
 
             HLSLPROGRAM
             // 3.5 guarantees the loop/indexing features the clustered light path relies on.
@@ -58,6 +98,12 @@ Shader "Blockiverse/Voxel Lit"
             // matrices and, once additional lights land, the per-eye light cluster.
             #pragma multi_compile_instancing
 
+            // multi_compile_local, NOT shader_feature_local: no material ASSET in the build
+            // references this shader (BlockVisualAtlas swaps it in at runtime), so a
+            // shader_feature variant would be stripped from the Android player and water would
+            // render as opaque terrain on device while looking correct in the editor.
+            #pragma multi_compile_local _ _BLOCKIVERSE_WATER
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "BlockiverseVoxelLitInput.hlsl"
@@ -71,6 +117,12 @@ Shader "Blockiverse/Voxel Lit"
                 float3 normalOS : NORMAL;
                 float2 uv : TEXCOORD0;
                 float4 color : COLOR;
+                #if defined(_BLOCKIVERSE_WATER)
+                    // ChunkMeshBuilder.AddFluidFace: x = surface mask (1 on emitted +Y faces),
+                    // y = FluidFamily index. Declared only in the water variant so terrain never
+                    // pays the extra attribute fetch.
+                    float2 fluidData : TEXCOORD1;
+                #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -84,6 +136,10 @@ Shader "Blockiverse/Voxel Lit"
                 float fogCoord : TEXCOORD3;
                 #if defined(_ADDITIONAL_LIGHTS_VERTEX)
                     half3 vertexLighting : TEXCOORD4;
+                #endif
+                #if defined(_BLOCKIVERSE_WATER)
+                    float4 waterTint : TEXCOORD5;
+                    float surfaceMask : TEXCOORD6;
                 #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
@@ -99,10 +155,41 @@ Shader "Blockiverse/Voxel Lit"
 
                 VertexPositionInputs positionInputs = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs normalInputs = GetVertexNormalInputs(input.normalOS);
+                float3 normalWS = normalInputs.normalWS;
+
+                #if defined(_BLOCKIVERSE_WATER)
+                    float mask = input.fluidData.x;
+                    float4 wave = BlockiverseSelectFluidWave(input.fluidData.y);
+
+                    // Displaced through the shared helper, byte for byte the same call the depth
+                    // prime pass makes, so the depth this pass is tested against is the depth that
+                    // pass wrote.
+                    float3 positionWS = positionInputs.positionWS;
+                    float3 waveNormal;
+                    BlockiverseApplyFluidWave(mask, wave, positionWS, waveNormal);
+
+                    positionInputs.positionWS = positionWS;
+                    positionInputs.positionCS = TransformWorldToHClip(positionWS);
+
+                    // Gated on the baked normal as well as the mask: a masked vertex is not always
+                    // part of a surface. The foot of a side wall standing on a lower surface is
+                    // masked so it MOVES with that surface, but it is still part of a vertical
+                    // face, and handing it an upward wave normal would shade the bottom of the
+                    // wall as though it were lying flat.
+                    float upFacing = step(0.5, normalWS.y);
+                    float surfaceMask = mask * upFacing;
+                    normalWS = normalize(lerp(normalWS, waveNormal, surfaceMask));
+
+                    output.waterTint = BlockiverseSelectFluidTint(input.fluidData.y);
+                    // The gated mask, not the raw one: downstream this means "on an animated
+                    // horizontal surface", which is what the highlight wants. A wall foot moves
+                    // but must not glint.
+                    output.surfaceMask = surfaceMask;
+                #endif
 
                 output.positionCS = positionInputs.positionCS;
                 output.positionWS = positionInputs.positionWS;
-                output.normalWS = NormalizeNormalPerVertex(normalInputs.normalWS);
+                output.normalWS = NormalizeNormalPerVertex(normalWS);
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.color = input.color;
                 output.fogCoord = ComputeFogFactor(positionInputs.positionCS.z);
@@ -213,9 +300,113 @@ Shader "Blockiverse/Voxel Lit"
                 // cave would render black inside the pool of light it casts.
                 lighting += selfEmission * half(_SelfEmissionStrength);
 
-                half3 color = sampled.rgb * lighting;
-                color = MixFog(color, input.fogCoord);
-                return half4(color, sampled.a);
+                #if defined(_BLOCKIVERSE_WATER)
+                    // Water keeps the full terrain lighting solve above -- sky gating, the sun or
+                    // moon, clustered punctual lights and self emission -- because a torch-lit
+                    // pool and a glowing emberflow are exactly as load-bearing as a lit wall.
+                    // Only the surface treatment differs.
+                    half3 color = sampled.rgb * input.waterTint.rgb * lighting;
+
+                    // The highlight comes off the wave normal itself, so it is band-limited by the
+                    // one-metre vertex spacing. An independent high-frequency sparkle sine would
+                    // alias past ~20 m -- and alias DIFFERENTLY in each eye, which is binocular
+                    // rivalry: invisible in the flat game view, a comfort defect in the headset.
+                    half3 viewDir = SafeNormalize(GetWorldSpaceViewDir(input.positionWS));
+                    half3 halfDir = SafeNormalize(mainLight.direction + viewDir);
+                    half spec = pow(saturate(dot(normalWS, halfDir)), 32.0) * half(input.surfaceMask);
+                    // Gated by the same shadow and sky terms as the diffuse sun above. Without the
+                    // shadow attenuation the glint burns straight through a cliff's or a bridge's
+                    // shadow, which is the one place the water is obviously not in sunlight.
+                    color += mainLight.color *
+                        (spec * half(_WaterSpecularStrength) * bakedSky * mainLight.shadowAttenuation);
+
+                    color = MixFog(color, input.fogCoord);
+                    return half4(color, input.waterTint.a * sampled.a);
+                #else
+                    half3 color = sampled.rgb * lighting;
+                    color = MixFog(color, input.fogCoord);
+                    return half4(color, sampled.a);
+                #endif
+            }
+            ENDHLSL
+        }
+
+        // Depth prime for transparent water. Water is drawn as two materials on the one fluid
+        // renderer: this pass first, from a material at a lower render queue, then the shading
+        // pass. It writes ONLY depth, so the nearest water fragment claims each pixel and every
+        // farther one -- a far wall seen through a near surface, another chunk's surface behind
+        // this one -- is depth-rejected before it can blend.
+        //
+        // Why it exists: ZWrite alone does not make alpha blending order-independent. It decides
+        // which fragments survive, not how many blend, so submission order (fixed by the voxel
+        // scan, not by the camera) decided whether a patch of water carried one layer of tint or
+        // two, and that changed as the player walked around a lake. Priming depth first pins it
+        // at exactly one layer from every angle.
+        //
+        // The ordering is guaranteed by the two materials' render queues, not by URP's shader-tag
+        // order, so it does not depend on an internal detail of the pipeline. Terrain and the
+        // water shading material both disable this pass outright, so nothing but the prime
+        // material ever runs it.
+        Pass
+        {
+            Name "WaterDepthPrime"
+            Tags { "LightMode" = "SRPDefaultUnlit" }
+
+            ColorMask 0
+            ZWrite On
+            ZTest LEqual
+            Cull [_Cull]
+            // Pushes the primed depth a hair away from the camera so the shading pass's own
+            // fragment reliably passes ZTest LEqual. The two passes compute the same displaced
+            // position through the same helper, but they are separately compiled programs and an
+            // exact-equality depth test would be at the mercy of the compiler's float scheduling.
+            // One depth unit is far below the metre-scale separation between water layers.
+            Offset 1, 1
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex WaterPrimeVert
+            #pragma fragment WaterPrimeFrag
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "BlockiverseVoxelLitInput.hlsl"
+
+            struct WaterPrimeAttributes
+            {
+                float4 positionOS : POSITION;
+                float2 fluidData : TEXCOORD1;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct WaterPrimeVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            WaterPrimeVaryings WaterPrimeVert(WaterPrimeAttributes input)
+            {
+                WaterPrimeVaryings output = (WaterPrimeVaryings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 waveNormal;
+                BlockiverseApplyFluidWave(
+                    input.fluidData.x, BlockiverseSelectFluidWave(input.fluidData.y), positionWS, waveNormal);
+
+                output.positionCS = TransformWorldToHClip(positionWS);
+                return output;
+            }
+
+            half4 WaterPrimeFrag(WaterPrimeVaryings input) : SV_TARGET
+            {
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                return 0;
             }
             ENDHLSL
         }

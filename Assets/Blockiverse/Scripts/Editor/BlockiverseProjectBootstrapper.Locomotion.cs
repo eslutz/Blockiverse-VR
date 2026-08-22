@@ -93,6 +93,18 @@ namespace Blockiverse.Editor
 
             gaitCycle.Configure(characterController);
 
+            // Underwater fog and camera clear. It lives on the rig (not the world root) because it
+            // samples the head camera every frame; both rig entry paths reach this method, so there
+            // is no second call site to forget.
+            BlockiverseWaterView waterView = rig.GetComponent<BlockiverseWaterView>();
+
+            if (waterView == null)
+                waterView = rig.AddComponent<BlockiverseWaterView>();
+
+            waterView.Configure(
+                UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(),
+                origin != null ? origin.Camera : null);
+
             XRBodyTransformer bodyTransformer = rig.GetComponent<XRBodyTransformer>();
 
             if (bodyTransformer == null)

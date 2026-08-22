@@ -591,6 +591,26 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void RigCarriesTheWaterViewWiredToTheEyeCamera()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseWaterView waterView = prefab.GetComponent<BlockiverseWaterView>();
+            Camera mainCamera = prefab.transform.Find("Camera Offset/Main Camera")?.GetComponent<Camera>();
+
+            Assert.That(waterView, Is.Not.Null,
+                "The rig must carry the underwater view, or submerging changes nothing on the generated rig.");
+            Assert.That(mainCamera, Is.Not.Null);
+
+            SerializedObject serialized = new(waterView);
+
+            Assert.That(serialized.FindProperty("headCamera").objectReferenceValue, Is.SameAs(mainCamera),
+                "The water view samples the eye it is given; leaving it to a Camera.main lookup makes submersion depend on tag order.");
+        }
+
+        [Test]
         public void XrRigPrefabInputBindingsHaveJumpAndThumbstickUpTeleport()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
