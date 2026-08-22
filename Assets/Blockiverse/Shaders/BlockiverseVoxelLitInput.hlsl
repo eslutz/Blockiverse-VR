@@ -57,9 +57,25 @@ float4 BlockiverseSelectFluidTint(float familyIndex)
 // Displaces positionWS in place and returns the analytic surface normal for the displaced point.
 // Chunk vertices are absolute voxel coordinates and the world root is pinned to identity, so a
 // world-space wave is continuous across every chunk border with no per-chunk uniform.
+// How far from the camera the wave keeps its full amplitude, and where it has faded out entirely.
+// Ripples on a lake two hundred metres away carry no information -- from an elevated vantage they
+// read as noise across the whole surface, and every one of them is a sin/cos pair plus a normal
+// rebuild. Fading them out is mostly a LOOK fix; the honest performance note is that the vertex is
+// transformed either way, so this saves shader work but no vertices. Cutting the vertices needs a
+// fluid LOD, which is a different job.
+//
+// It also buys headroom for the near field: with the far field quiet, close-up amplitude can rise
+// without the horizon turning into static.
+#define BLOCKIVERSE_WAVE_FULL_DISTANCE 28.0
+#define BLOCKIVERSE_WAVE_FADE_DISTANCE 90.0
+
 void BlockiverseApplyFluidWave(float mask, float4 wave, inout float3 positionWS, out float3 waveNormal)
 {
-    float amp = wave.x * mask;
+    float cameraDistance = distance(positionWS, GetCameraPositionWS());
+    float distanceFade = 1.0 - smoothstep(
+        BLOCKIVERSE_WAVE_FULL_DISTANCE, BLOCKIVERSE_WAVE_FADE_DISTANCE, cameraDistance);
+
+    float amp = wave.x * mask * distanceFade;
     float k = wave.y;
     float t = _Time.y * wave.z;
 
@@ -77,6 +93,9 @@ void BlockiverseApplyFluidWave(float mask, float4 wave, inout float3 positionWS,
     // The CPU-baked flat normal cannot follow a GPU displacement, which would light the whole
     // animated surface as one rigid sliding sheet. Rebuild it from the wave derivative and amplify
     // by wave.w so the shading reads even though the geometry moves only a couple of centimetres.
+    // Faded by the same term. Leaving the normal at full strength would keep a distant, now-flat
+    // surface glinting as though it were still moving -- the shading is doing most of the visual
+    // work here, so a mismatch would be more obvious than the geometry ever was.
     float slopeScale = amp * 0.5 * wave.w;
     waveNormal = normalize(float3(
         -slopeScale * k * cosX,
