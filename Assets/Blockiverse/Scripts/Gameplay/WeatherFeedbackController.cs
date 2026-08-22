@@ -651,6 +651,13 @@ namespace Blockiverse.Gameplay
 
         void StopLoops()
         {
+            // The precipitation volume is an independent, unparented object with its own
+            // LateUpdate, so it does NOT stop just because this controller stopped polling. Every
+            // StopLoops path -- menus taking world input, returning to the title, losing the
+            // environment query -- returns before UpdateWeatherVolume, which would otherwise leave
+            // the last rain or snow rate emitting forever over the title screen.
+            weatherVolume?.SetPrecipitation(PrecipitationKind.None, 0.0f);
+
             // Cleared before the audio-player guard: this drives the particle scatter, which runs
             // on its own cadence and would otherwise keep raining after the weather query fails.
             activePrecipitationVfx = null;

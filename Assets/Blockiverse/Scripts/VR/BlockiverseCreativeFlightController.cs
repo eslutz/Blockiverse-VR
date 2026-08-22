@@ -275,7 +275,15 @@ namespace Blockiverse.VR
 
         void TickFlightMotion(float deltaSeconds)
         {
-            if (!Application.isPlaying || !IsFlightActive)
+            // Suppression counts as inactive, exactly as it does for swimming. ApplyProviderState
+            // disables the STANDARD providers while locomotion is suppressed, but this one queues
+            // its own vertical XROriginMovement -- so without this it keeps displacing the rig
+            // during New World and Load, while the session controller is restoring the saved
+            // position or waiting on spawn collision. A creative player holding rise or descend
+            // through a world load is all it takes.
+            bool suppressed = inputRig != null && inputRig.LocomotionSuppressed;
+
+            if (!Application.isPlaying || !IsFlightActive || suppressed)
             {
                 ReleaseGravityLock();
                 verticalVelocity = 0.0f;

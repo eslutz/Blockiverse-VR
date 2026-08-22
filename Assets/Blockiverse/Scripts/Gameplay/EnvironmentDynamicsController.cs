@@ -260,16 +260,28 @@ namespace Blockiverse.Gameplay
             anchor = default;
             int found = 0;
 
+            bool usedLocalCamera = false;
+
             if (Camera.main != null)
             {
                 anchor = Camera.main.transform.position;
                 found = 1;
+                usedLocalCamera = true;
             }
 
             if (session != null)
             {
                 foreach (ulong clientId in session.ConnectedClientIds)
                 {
+                    // On a host, ConnectedClientIds includes the host's OWN client, whose player
+                    // object resolves to the same head the camera above already contributed. Left
+                    // in, the host enters the reservoir twice and draws roughly two thirds of the
+                    // strikes in a two-player session -- the opposite of the even spread this is
+                    // for. Skipped only when the camera actually supplied that head, so a headless
+                    // host still anchors on its own player object.
+                    if (usedLocalCamera && clientId == session.LocalClientId)
+                        continue;
+
                     if (!session.TryResolvePlayerHeadWorldPosition(clientId, out Vector3 headPosition))
                         continue;
 

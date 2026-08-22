@@ -71,6 +71,27 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ClearingPrecipitationStopsTheVolume()
+        {
+            // The volume is unparented with its own LateUpdate, so it does not stop merely because
+            // the weather controller stopped polling. Menus taking world input, returning to the
+            // title, or losing the environment query all bail before the volume is updated -- so
+            // whatever stops feedback has to clear this explicitly, or it rains on the title
+            // screen forever.
+            BlockiverseWeatherVolume volume = CreateVolume();
+
+            volume.SetPrecipitation(PrecipitationKind.Rain, 1.0f);
+            Assert.That(volume.ActiveKind, Is.EqualTo(PrecipitationKind.Rain));
+
+            volume.SetPrecipitation(PrecipitationKind.None, 0.0f);
+
+            Assert.That(volume.ActiveKind, Is.EqualTo(PrecipitationKind.None));
+            Assert.That(host.GetComponent<ParticleSystem>().emission.rateOverTime.constant,
+                Is.EqualTo(0.0f).Within(0.001f).Or.LessThan(volume.CurrentEmissionRate + 1.0f),
+                "A cleared volume must ramp to zero rather than hold its last rate.");
+        }
+
+        [Test]
         public void RainIsDenserAndFasterThanSnow()
         {
             // Backwards in the old implementation: snow had no case in the count switch and fell
