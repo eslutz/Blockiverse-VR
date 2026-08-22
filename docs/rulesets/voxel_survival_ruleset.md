@@ -392,10 +392,35 @@ meaning there is "go down". Rise must remain available in **both** locomotion mo
 otherwise disabled in Teleport mode, and a player who could descend but not ascend would be
 unable to leave the water.
 
+**Climbing out.** Reaching a bank does not, on its own, get the player out of the water. The swim
+states end the moment the *body* sample reads dry, and that sample sits roughly a metre above the
+capsule base — so control returns while the player's feet are still about a metre below the bank,
+gravity resumes, and they slide back in. None of the usual rescues apply: the character controller's
+step offset is a fraction of that, its step assist requires being grounded and a treading player
+never is, and jump is disabled while swimming.
+
+So a swimmer pushing toward a low bank is lifted onto it:
+
+| Condition | Rule |
+|---|---|
+| Bank height | Level with the water surface, or one block above it |
+| Maximum lift | Two blocks — the reach is bounded on the bank's *surface*, and the landing is one higher again |
+| Trigger | Only while the player is actively pushing toward the bank |
+| Direction | Quantised to one axis, so a diagonal cannot pull the player through a corner |
+| Headroom | The landing needs two clear cells, or the standing capsule would be wedged |
+| Fluids | Never a bank — fluids are not solid, so a swimmer cannot climb onto the lake they are in |
+
+Requiring active forward intent is what makes this **redirected requested motion** rather than
+motion nobody asked for, which is the distinction the comfort argument rests on. It reverses an
+earlier decision against any ledge assist; [ADR 0008](../adr/0008-swim-locomotion.md) carries the
+reasoning and records that the two-block case still wants a headset comfort pass.
+
 **Comfort.** Passive sinking is unrequested vertical motion, so the accommodation is
 first-class rather than buried: turning it off restores exact neutral buoyancy — with no input
 the player does not move vertically at all — and the motion vignette engages during passive
-descent just as it does for driven motion. Both live in the Comfort menu
+descent just as it does for driven motion. The climb-out assist has its own switch for the same
+reason — it is still an automatic vertical translation — defaulting on, because the alternative is a
+shoreline that traps you. All three live in the Comfort menu
 (`voxel_survival_menus.md` §4.3).
 
 Falling into freshwater or brine cancels impact damage; emberflow does not (§12).

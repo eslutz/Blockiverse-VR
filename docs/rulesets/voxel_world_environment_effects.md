@@ -446,26 +446,61 @@ Weather cloud bonuses:
 | Thunderstorm / Blizzard | +0.65 |
 | Fog | +0.20 |
 
-### 7.2 Cloud altitude and movement
+### 7.2 Cloud rendering
+
+Clouds are painted **into the sky itself**, not drawn as a layer at altitude. The earlier draft
+specified a cloud plane at `y = 176` translated by a wind vector; that was never implemented, and
+what ships is cheaper and better suited to a tile GPU, where the sky is already full-screen fill and
+a second large transparent layer above the world would be the most expensive thing on screen.
+
+Coverage drives a **threshold**, not an opacity:
 
 ```ts
-cloudAltitude = 176;
-windDirectionDegrees = noise2D(seed + 77, dayIndex * 0.2, 0) * 180 + 180;
-windSpeed = lerp(0.2, 1.2, cloudCoverage);
+// Two octaves of value noise, generated in the shader -- no cloud texture ships.
+density   = cloudNoise(viewDirection projected onto a plane overhead);
+threshold = 1.0 - cloudCoverage;
+amount    = smoothstep(threshold, threshold + softness, density);
 ```
 
-Cloud rendering offset:
+Threshold rather than opacity matters: at low coverage a few small clouds appear and grow and join
+up as it rises, whereas fading a full-sky sheet in and out reads as haze rather than as weather.
 
-```ts
-cloudOffset += windVector * windSpeed * deltaSeconds;
-```
+Clouds are faded out near the horizon, where the projection stretches the noise into streaks, and
+they drift slowly so the sky is not static. They grey toward storm and darken at night along with
+the rest of the sky, but never to black — an overcast night must not become a flat void.
 
-Gameplay effect:
+Gameplay effect (unchanged, and the *only* thing coverage did before this):
 
 ```ts
 if cloudCoverage > 0.75:
     outdoorSolarLightPenalty = 2 or 3
 ```
+
+### 7.3 Sky rendering
+
+The sky is a generated material owned by the lighting cycle, written in the same pass that already
+owns the sun, ambient and fog.
+
+**Elevation comes from the CLOCK, never from the directional light's rotation.** This is the
+load-bearing rule. One shared directional light serves as both sun and moon (§5), and at night it is
+rotated to come from overhead so the ground stays lit — so its rotation says "day" at midnight. The
+project previously used Unity's stock procedural skybox, which derives the sky from exactly that
+rotation, and consequently rendered a full noon sky behind a correctly dark world.
+
+```ts
+sunElevation = sin(normalizedTime * 2 * PI);   // +1 midday, -1 midnight, 0 at dawn/dusk
+dayAmount    = smoothstep over the twilight band around elevation 0
+```
+
+| Term | Rule |
+|---|---|
+| Zenith / horizon / ground | Crossfade night → day on `dayAmount`, with a warm horizon peaking through the twilight band |
+| Night floor | Dark blue-black, never pure black — a black sky reads as a rendering failure |
+| Moon phase | A moonless night's sky is darker than a full-moon one, matching the directional term |
+| Overcast | Scales the whole gradient down; heavier coverage, darker sky |
+| Sun disk | Hidden once `sunElevation` is below the horizon, so no disk appears at the zenith at midnight |
+
+---
 
 ---
 
@@ -604,7 +639,40 @@ isRainedOn(pos) = hasOpenSky(pos) && precipitationType == "RAIN" && precipitatio
 | Heavy Rain | `0.60–0.85` | Dense rainfall | Extinguishes exposed weak flames |
 | Thunderstorm | `0.75–1.00` | Dense rainfall, dark sky | Enables lightning strikes |
 
-### 9.2 Rain effects
+### 9.2 Precipitation rendering
+
+Rain and snow are a **continuous head-locked volume**, not scattered one-shot bursts.
+
+```ts
+simulationSpace = World;          // NOT Local -- see below
+shape           = box overhead, following the head in POSITION only
+emissionRate    = maxRate * precipitationIntensity;   // ramped, not switched
+```
+
+Two rules here exist because breaking either makes precipitation invisible or wrong, and both were
+broken before:
+
+- **World simulation space.** In Local space every particle is welded to the XR origin — the same
+  transform teleport, continuous move and snap turn all drive — so precipitation travels with the
+  player, never falls past them, and swings 45° with every snap turn.
+- **Position without rotation.** The volume follows the head so it stays populated wherever the
+  player walks, but must not inherit head rotation, or the whole weather system rotates with the
+  view.
+
+Density has to be sufficient to read at all. Rain at full intensity keeps on the order of a hundred
+or more particles alive in the volume; a handful of sub-degree billboards is indistinguishable from
+nothing. Rain renders as a stretched streak — most of what makes it read as rain rather than as
+floating dots — and snow as a drifting billboard with noise, since rain that wanders reads as ash.
+
+Fog is real distance fog (§11), not particles. Fog wisps remain a sparse scatter cue layered on top
+of it.
+
+> **Build note.** Fog shader variants are stripped under Automatic stripping unless a scene in the
+> build has fog enabled at build time. Every scene here ships with fog off because the lighting
+> controller enables it at runtime, so fog stripping must stay **Custom** with the ExpSq mode kept,
+> or fog works in the editor and silently does nothing in the player.
+
+### 9.3 Rain effects
 
 | Target | Effect |
 |---|---|
@@ -617,7 +685,7 @@ isRainedOn(pos) = hasOpenSky(pos) && precipitationType == "RAIN" && precipitatio
 | Loose snow | Rain increases melt rate if temperature > 0 |
 | Player | Optional wetness status if survival temperature system is enabled |
 
-### 9.3 Soil moisture
+### 9.4 Soil moisture
 
 ```ts
 type SoilMoistureState = {
@@ -642,7 +710,7 @@ Crop growth uses:
 soilIsMoist = moisture >= 0.35;
 ```
 
-### 9.4 Rain sound zones
+### 9.5 Rain sound zones
 
 Sound should be based on whether the listener is exposed.
 

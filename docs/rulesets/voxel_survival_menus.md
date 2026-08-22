@@ -1063,7 +1063,7 @@ via the player-prefs snapshot — there is no pending Apply/Reset flow).
 | Controls | Read-only controller mapping reference (shared with the first-launch popup) |
 
 The three swimming rows carry the accommodation for the one motion the game defaults *into*
-rather than out of (`voxel_survival_ruleset.md` §5.6). **Sink when not swimming** ships on;
+rather than out of (`voxel_survival_ruleset.md` §5.6). **Sink when not swimming** ships on; **Climb out at low banks** ships on (the alternative is a shoreline that traps you, `voxel_survival_ruleset.md` §5.6);
 turning it off restores exact neutral buoyancy, so it belongs beside the vection controls
 rather than in gameplay options. **Vignette while sinking** ships on and engages the motion
 vignette during passive descent, not only during driven motion. **Swim speed** scales
