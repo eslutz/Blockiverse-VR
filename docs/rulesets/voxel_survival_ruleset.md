@@ -356,6 +356,75 @@ Additional rules:
 | Cave exposure bonus | Lumen quartz and staropal get higher placement chance on exposed cave walls |
 | Minimum cave roof thickness | Do not carve within 4 blocks of surface unless biome is Highlands |
 
+### 5.6 The Player In Fluid
+
+Fluids are not floors. The player falls into them, and what happens next depends on how deep
+they are, measured at three points on the collision capsule — feet, mid-body, head:
+
+| State | Condition | Gravity | Vertical control |
+|---|---|---|---|
+| Dry | no fluid at any sample | normal | normal |
+| Wading | feet in fluid, body dry | **normal** | normal |
+| Surfaced | body in fluid, head in air | suspended | swim |
+| Swimming | body and head in fluid | suspended | swim |
+
+Wading deliberately keeps normal gravity, so a puddle and the one-block shoreline step from
+§5.4 stay walkable rather than becoming swimmable.
+
+**Swimming is negatively buoyant by default.** A player who is not actively swimming sinks:
+the surface is not a resting state, and treading water is an active act. Descent is constant
+speed rather than accelerating, so it can never build into a fall, and it stops at the bed.
+
+| Verb | Input | Freshwater / brine | Emberflow |
+|---|---|---:|---:|
+| Sink, no input | — | 0.35 m/s | 0.20 m/s |
+| Descend | crouch held | 1.2 m/s | 0.6 m/s |
+| Rise | jump held | 1.0 m/s | 0.7 m/s |
+| Horizontal | move stick | ×0.55 of walking | ×0.275 of walking |
+
+Emberflow is thicker in every direction: it sinks the player more slowly than water, but it
+does sink them. Combined with its heat damage (§5.4), a molten pool is survivable only if the
+player reacts within a second or two.
+
+Neither swim input claims a new binding. Rise reuses jump, which is meaningless underwater;
+descend reuses crouch, whose height change is suppressed while swimming because its only
+meaning there is "go down". Rise must remain available in **both** locomotion modes: jump is
+otherwise disabled in Teleport mode, and a player who could descend but not ascend would be
+unable to leave the water.
+
+**Climbing out.** Reaching a bank does not, on its own, get the player out of the water. The swim
+states end the moment the *body* sample reads dry, and that sample sits roughly a metre above the
+capsule base — so control returns while the player's feet are still about a metre below the bank,
+gravity resumes, and they slide back in. None of the usual rescues apply: the character controller's
+step offset is a fraction of that, its step assist requires being grounded and a treading player
+never is, and jump is disabled while swimming.
+
+So a swimmer pushing toward a low bank is lifted onto it:
+
+| Condition | Rule |
+|---|---|
+| Bank height | Level with the water surface, or one block above it |
+| Maximum lift | Two blocks — the reach is bounded on the bank's *surface*, and the landing is one higher again |
+| Trigger | Only while the player is actively pushing toward the bank |
+| Direction | Quantised to one axis, so a diagonal cannot pull the player through a corner |
+| Headroom | The landing needs two clear cells, or the standing capsule would be wedged |
+| Fluids | Never a bank — fluids are not solid, so a swimmer cannot climb onto the lake they are in |
+
+Requiring active forward intent is what makes this **redirected requested motion** rather than
+motion nobody asked for, which is the distinction the comfort argument rests on. It reverses an
+earlier decision against any ledge assist; [ADR 0008](../adr/0008-swim-locomotion.md) carries the
+reasoning and records that the two-block case still wants a headset comfort pass.
+
+**Comfort.** Passive sinking is unrequested vertical motion, so the accommodation is
+first-class rather than buried: turning it off restores exact neutral buoyancy — with no input
+the player does not move vertically at all — and the motion vignette engages during passive
+descent just as it does for driven motion. The climb-out assist has its own switch for the same
+reason — it is still an automatic vertical translation — defaulting on, because the alternative is a
+shoreline that traps you. All three live in the Comfort menu
+(`voxel_survival_menus.md` §4.3).
+
+Falling into freshwater or brine cancels impact damage; emberflow does not (§12).
+
 ---
 
 ## 6. Mining Rules

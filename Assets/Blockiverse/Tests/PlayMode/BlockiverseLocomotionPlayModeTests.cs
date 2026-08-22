@@ -684,13 +684,13 @@ namespace Blockiverse.Tests.PlayMode
                 Assert.That(inputRig.SprintActive, Is.False,
                     "Sprint defaults to click-and-hold; releasing the support stick must end it.");
 
-                Press(gamepad.leftStickButton);
+                Press(gamepad.selectButton);
                 yield return null;
                 Assert.That(inputRig.CrouchActive, Is.True);
-                Release(gamepad.leftStickButton);
+                Release(gamepad.selectButton);
                 yield return null;
                 Assert.That(inputRig.CrouchActive, Is.False,
-                    "Crouch defaults to click-and-hold; releasing the dominant stick must end it.");
+                    "Crouch defaults to click-and-hold; releasing the dominant secondary button must end it.");
 
                 Set(gamepad.leftStick, Vector2.right);
                 yield return null;
@@ -725,10 +725,10 @@ namespace Blockiverse.Tests.PlayMode
                 Release(gamepad.rightShoulder);
                 yield return null;
 
-                Press(gamepad.selectButton);
+                Press(gamepad.leftStickButton);
                 yield return null;
                 Assert.That(blockTogglePresses, Is.EqualTo(1));
-                Release(gamepad.selectButton);
+                Release(gamepad.leftStickButton);
                 yield return null;
             }
             finally
@@ -771,17 +771,19 @@ namespace Blockiverse.Tests.PlayMode
                 Press(gamepad.leftStickButton);
                 yield return null;
                 Assert.That(inputRig.SprintActive, Is.True);
-                Assert.That(inputRig.CrouchActive, Is.False);
+                Assert.That(inputRig.CrouchActive, Is.False,
+                    "Sprint and crouch are on different physical controls now -- the support stick " +
+                    "click must never crouch.");
                 Release(gamepad.leftStickButton);
                 yield return null;
 
-                Press(gamepad.rightStickButton);
+                Press(gamepad.buttonEast);
                 yield return null;
                 Assert.That(inputRig.CrouchActive, Is.True);
-                Release(gamepad.rightStickButton);
+                Release(gamepad.buttonEast);
                 yield return null;
                 Assert.That(inputRig.CrouchActive, Is.False,
-                    "Crouch defaults to click-and-hold; releasing the dominant stick must end it.");
+                    "Crouch defaults to click-and-hold; releasing the dominant secondary button must end it.");
             }
             finally
             {
@@ -1263,7 +1265,8 @@ namespace Blockiverse.Tests.PlayMode
             leftHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonWest");
             leftHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/select");
             leftHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/leftStickPress");
-            leftHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/leftStickPress");
+            leftHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/select");
+            leftHand.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<Gamepad>/leftStickPress");
             leftHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             leftHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 
@@ -1283,7 +1286,8 @@ namespace Blockiverse.Tests.PlayMode
             rightHand.AddAction(BlockiverseInputActionNames.PrimaryButton, InputActionType.Button, "<Gamepad>/buttonNorth");
             rightHand.AddAction(BlockiverseInputActionNames.SecondaryButton, InputActionType.Button, "<Gamepad>/buttonEast");
             rightHand.AddAction(BlockiverseInputActionNames.Sprint, InputActionType.Button, "<Gamepad>/rightStickPress");
-            rightHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/rightStickPress");
+            rightHand.AddAction(BlockiverseInputActionNames.Crouch, InputActionType.Button, "<Gamepad>/buttonEast");
+            rightHand.AddAction(BlockiverseInputActionNames.BlockEditingToggle, InputActionType.Button, "<Gamepad>/rightStickPress");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportMode, InputActionType.Button, "<Gamepad>/leftShoulder");
             rightHand.AddAction(BlockiverseInputActionNames.TeleportSelect, InputActionType.Button, "<Gamepad>/buttonSouth");
 

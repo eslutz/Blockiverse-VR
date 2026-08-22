@@ -30,6 +30,7 @@ namespace Blockiverse.Gameplay
         Camera overriddenCamera;
         CameraClearFlags cachedClearFlags;
         Color cachedBackgroundColor;
+        BlockiverseBubbleVolume bubbleVolume;
         bool clearFlagsOverridden;
 
         // 0 = fully above water, 1 = fully submerged. Fades across SubmergeBlendSeconds.
@@ -39,6 +40,8 @@ namespace Blockiverse.Gameplay
         public FluidFamily SubmergedFamily { get; private set; }
 
         public bool IsSubmerged => SubmergedBlend > 0.0f;
+
+        public BlockiverseBubbleVolume BubbleVolume => bubbleVolume;
 
         public Color UnderwaterFogColor => FogColorFor(SubmergedFamily);
 
@@ -91,6 +94,7 @@ namespace Blockiverse.Gameplay
             {
                 SubmergedBlend = 0.0f;
                 RestoreCameraClear();
+                UpdateBubbles();
                 return;
             }
 
@@ -99,9 +103,60 @@ namespace Blockiverse.Gameplay
             SubmergedBlend = Mathf.MoveTowards(SubmergedBlend, target, step);
 
             ApplyCameraClear();
+            UpdateBubbles();
+        }
+
+        // Bubbles rise past a submerged player. Driven from here because this component already
+        // owns the submersion blend and the family, and driving them off the blend rather than a
+        // boolean means they fade in with the rest of the underwater treatment instead of
+        // snapping on at the waterline.
+        void UpdateBubbles()
+        {
+            if (bubbleVolume == null)
+            {
+                // Nothing to create until there is something to be submerged in.
+                if (SubmergedBlend <= 0.0f)
+                    return;
+
+                Camera camera = headCamera != null ? headCamera : Camera.main;
+
+                if (camera == null)
+                    return;
+
+                // Created at runtime and parented to nothing: it follows the head in POSITION
+                // only. Parenting would inherit rotation and drag the whole column round on every
+                // snap turn.
+                var host = new GameObject("Bubble Volume");
+                bubbleVolume = host.AddComponent<BlockiverseBubbleVolume>();
+
+                BlockiverseVfxPool pool = FindFirstObjectByType<BlockiverseVfxPool>(FindObjectsInactive.Include);
+
+                bubbleVolume.Configure(
+                    camera.transform,
+                    pool != null ? pool.ParticleMaterial : null,
+                    pool != null ? pool.BubbleSprite : null);
+            }
+
+            bubbleVolume.SetSubmerged(SubmergedBlend, SubmergedFamily);
         }
 
         bool HasWorld() => worldManager != null && worldManager.World != null;
+
+        // Same ownership problem as the weather volume: created at runtime, parented to nothing so
+        // a snap turn cannot drag it round, and therefore owned by nobody unless this says so.
+        void OnDestroy()
+        {
+            if (bubbleVolume == null)
+                return;
+
+            GameObject host = bubbleVolume.gameObject;
+            bubbleVolume = null;
+
+            if (Application.isPlaying)
+                Destroy(host);
+            else
+                DestroyImmediate(host);
+        }
 
         void OnDisable()
         {

@@ -1715,9 +1715,29 @@ namespace Blockiverse.Networking
             if (TryRejectPlacementOverlappingPlayer(clientId, requestId, position, requesterCrouching, sendResponse, out SurvivalCommandResult overlapFailure))
                 return overlapFailure;
 
+            // Read the live cell rather than assuming Air, so a block can be placed into water --
+            // but keep passing the value we actually observed. expectedCurrentBlock is the
+            // optimistic-concurrency guard: dropping it would let two clients racing for the same
+            // cell both succeed.
+            VoxelWorld placementWorld = ResolveWorld();
+            BlockId existing = placementWorld != null && placementWorld.Bounds.Contains(position)
+                ? placementWorld.GetBlock(position)
+                : BlockRegistry.Air;
+
+            if (!BlockPlacement.IsReplaceable(existing))
+            {
+                var occupied = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.PlaceBlock,
+                    SurvivalCommandFailureReason.PlacementRejected,
+                    requestId,
+                    new ItemStack(held.ItemId, 1));
+                SendCommandFailure(clientId, occupied, sendResponse);
+                return occupied;
+            }
+
             BlockId block = def.BlockId.Value;
             BlockMutationResult mutation = ResolveChunkAuthoritySync().TrySubmitMutation(
-                new BlockMutationRequest(clientId, position, block, BlockRegistry.Air),
+                new BlockMutationRequest(clientId, position, block, existing),
                 out _,
                 out _,
                 BlockMutationSubmissionKind.SurvivalCommand);

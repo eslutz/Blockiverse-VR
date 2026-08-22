@@ -143,6 +143,32 @@ Recommended controls:
 
 Collision remains enabled by default. Noclip can exist as a separate admin/debug permission.
 
+**Shipped behaviour matches this, and did not for a long time.** Flight was implemented as a plain
+component writing the rig transform directly, which bypassed the locomotion mediator and the
+character controller — so it had **no collision at all** and passed straight through terrain,
+contrary to the line above. It also moved only along the dominant hand's aim while the ascend button
+was held, and disabled the move provider outright, so the stick did nothing while flying.
+
+Flight is now a locomotion provider and its controls mirror swimming (`voxel_survival_ruleset.md`
+§5.6), because "in the air" and "in water" are the same problem — the player owns horizontal motion
+and a vertical verb in each direction:
+
+| Verb | Input | Notes |
+|---|---|---|
+| Horizontal | move stick | Through the ordinary move provider, so every comfort setting still applies |
+| Ascend | jump / A held | |
+| Descend | crouch / B held | |
+| Faster | sprint | Multiplies both vertical and horizontal |
+| Idle | no input | **Hovers.** The one deliberate difference from swimming, whose resting state is sinking |
+
+Vertical motion is queued through the same constrained body manipulator as every other locomotion
+provider, which is what restores collision and makes flight respect the live capsule height.
+
+Gravity is suppressed with the provider **lock**, not by writing the gravity flag: the gravity
+provider re-asserts that flag on every comfort change, so a raw write is undone the next time the
+player touches a setting. Every exit path must release the lock, or the player hangs motionless in
+mid-air on dry land with nothing to explain why.
+
 ```ts
 type CreativeMovementSettings = {
   flightEnabled: boolean;

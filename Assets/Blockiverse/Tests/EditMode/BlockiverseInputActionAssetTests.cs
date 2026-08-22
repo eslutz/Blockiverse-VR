@@ -135,7 +135,11 @@ namespace Blockiverse.Tests.EditMode
             AssertAction(asset, mapName, BlockiverseInputActionNames.PrimaryButton, $"{controllerPath}/primaryButton");
             AssertAction(asset, mapName, BlockiverseInputActionNames.SecondaryButton, $"{controllerPath}/secondaryButton");
             AssertAction(asset, mapName, BlockiverseInputActionNames.Sprint, $"{controllerPath}/thumbstickClicked");
-            AssertAction(asset, mapName, BlockiverseInputActionNames.Crouch, $"{controllerPath}/thumbstickClicked");
+            // Crouch/swim-down is on B/Y, not the stick click. Both thumbsticks are also bound to
+            // Turn, and clicking a Touch stick deflects it past the deadzone -- so pressing to
+            // descend underwater fired a snap turn instead of descending.
+            AssertAction(asset, mapName, BlockiverseInputActionNames.Crouch, $"{controllerPath}/secondaryButton");
+            AssertAction(asset, mapName, BlockiverseInputActionNames.BlockEditingToggle, $"{controllerPath}/thumbstickClicked");
         }
 
         static void AssertAction(InputActionAsset asset, string mapName, string actionName, string expectedPath)

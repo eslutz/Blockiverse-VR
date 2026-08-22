@@ -64,6 +64,99 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator SkyFlashRaisesAmbientAndReturnsToBaseline()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
+            yield return null;
+
+            BlockiverseLightingCycleController controller = Object.FindFirstObjectByType<BlockiverseLightingCycleController>();
+            Assert.That(controller, Is.Not.Null);
+
+            controller.Clock.SetNormalizedTime(0.75f);
+            controller.ApplyCurrentLighting();
+            yield return null;
+
+            float baseline = RenderSettings.ambientLight.grayscale;
+
+            controller.PulseSkyFlash(1.0f);
+            yield return null;
+
+            Assert.That(RenderSettings.ambientLight.grayscale, Is.GreaterThan(baseline),
+                "A full-strength flash has to visibly lift ambient.");
+            Assert.That(controller.ActiveSkyFlashIntensity, Is.GreaterThan(0.0f));
+
+            // Longer than FlashDurationSeconds at any plausible frame rate.
+            float deadline = Time.time + 1.0f;
+            while (Time.time < deadline)
+                yield return null;
+
+            Assert.That(controller.ActiveSkyFlashIntensity, Is.EqualTo(0.0f),
+                "Any residual would bleed into ambient permanently -- the term is re-added every frame.");
+            Assert.That(RenderSettings.ambientLight.grayscale, Is.EqualTo(baseline).Within(1e-4f));
+        }
+
+        [UnityTest]
+        public IEnumerator SkyFlashNeverFlipsTheShadowPassAtNight()
+        {
+            // The most valuable assertion in this file. At night the sun sits below
+            // MinimumShadowCastingIntensity; if the flash modulated the SUN rather than ambient it
+            // would toggle the whole shadow pass on and off for two frames -- a full shadow-caster
+            // sweep over every loaded chunk, with every shadow in the scene snapping in and out.
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
+            yield return null;
+
+            BlockiverseLightingCycleController controller = Object.FindFirstObjectByType<BlockiverseLightingCycleController>();
+            Assert.That(controller, Is.Not.Null);
+
+            controller.Clock.SetNormalizedTime(0.75f);
+            controller.ApplyCurrentLighting();
+            yield return null;
+
+            LightShadows shadowsBefore = controller.SunLight.shadows;
+            float intensityBefore = controller.SunLight.intensity;
+
+            controller.PulseSkyFlash(1.0f);
+
+            float deadline = Time.time + 0.6f;
+            while (Time.time < deadline)
+            {
+                Assert.That(controller.SunLight.shadows, Is.EqualTo(shadowsBefore),
+                    "The flash must not touch the sun's shadow mode at any point in its life.");
+                Assert.That(controller.SunLight.intensity, Is.EqualTo(intensityBefore).Within(1e-4f),
+                    "The flash must modulate ambient only.");
+                yield return null;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator SkyFlashRefusesToStrobeOnCloselySpacedStrikes()
+        {
+            yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
+            yield return null;
+
+            BlockiverseLightingCycleController controller = Object.FindFirstObjectByType<BlockiverseLightingCycleController>();
+            Assert.That(controller, Is.Not.Null);
+
+            controller.PulseSkyFlash(1.0f);
+
+            // Let the flash get well past its peak but stay inside the retrigger window, so a
+            // second pulse would visibly spike the intensity back up if it were allowed through.
+            float settleDeadline =
+                Time.time + BlockiverseLightingCycleController.MinimumFlashRetriggerSeconds * 0.6f;
+            while (Time.time < settleDeadline)
+                yield return null;
+
+            float decayed = controller.ActiveSkyFlashIntensity;
+
+            controller.PulseSkyFlash(1.0f);
+            yield return null;
+
+            Assert.That(controller.ActiveSkyFlashIntensity, Is.LessThanOrEqualTo(decayed),
+                "A second strike inside the retrigger window restarted the flash -- two close " +
+                "strikes would compound into a strobe.");
+        }
+
+        [UnityTest]
         public IEnumerator VoxelChunksCastAndReceiveShadows()
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);

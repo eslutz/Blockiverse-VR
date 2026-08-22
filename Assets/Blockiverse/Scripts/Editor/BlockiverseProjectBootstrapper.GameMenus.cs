@@ -22,9 +22,9 @@ namespace Blockiverse.Editor
             "Support grip: blocks menu\n" +
             "Menu: pause\n" +
             "Dominant stick: snap turn\n" +
-            "Dominant stick click: crouch\n" +
-            "Dominant primary button: jump\n" +
-            "Dominant secondary button: toggle block editing\n" +
+            "Dominant stick click: toggle block editing\n" +
+            "Dominant primary button: jump / swim up\n" +
+            "Dominant secondary button: crouch / swim down\n" +
             "Support stick: move\n" +
             "Support stick click: sprint\n" +
             "Either stick hold up: teleport aim, release to land";

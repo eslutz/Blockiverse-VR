@@ -88,6 +88,14 @@ namespace Blockiverse.VR
                     KeyPrefix + "SprintToggle", comfortSettings.SprintToggleEnabled ? 1 : 0) != 0;
                 comfortSettings.CrouchToggleEnabled = PlayerPrefs.GetInt(
                     KeyPrefix + "CrouchToggle", comfortSettings.CrouchToggleEnabled ? 1 : 0) != 0;
+                comfortSettings.SwimPassiveSinkEnabled = PlayerPrefs.GetInt(
+                    KeyPrefix + "SwimPassiveSink", comfortSettings.SwimPassiveSinkEnabled ? 1 : 0) != 0;
+                comfortSettings.SwimSpeedFactor = PlayerPrefs.GetFloat(
+                    KeyPrefix + "SwimSpeedFactor", comfortSettings.SwimSpeedFactor);
+                comfortSettings.SwimVignetteBoost = PlayerPrefs.GetInt(
+                    KeyPrefix + "SwimVignetteBoost", comfortSettings.SwimVignetteBoost ? 1 : 0) != 0;
+                comfortSettings.SwimClimbOutEnabled = PlayerPrefs.GetInt(
+                    KeyPrefix + "SwimClimbOutEnabled", comfortSettings.SwimClimbOutEnabled ? 1 : 0) != 0;
                 comfortSettings.ContinuousMoveSpeed = PlayerPrefs.GetFloat(
                     KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 comfortSettings.SmoothTurnEnabled = PlayerPrefs.GetInt(
@@ -147,6 +155,10 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetInt(KeyPrefix + "RealPlayerHeight", comfortSettings.RealPlayerHeightEnabled ? 1 : 0);
                 PlayerPrefs.SetInt(KeyPrefix + "SprintToggle", comfortSettings.SprintToggleEnabled ? 1 : 0);
                 PlayerPrefs.SetInt(KeyPrefix + "CrouchToggle", comfortSettings.CrouchToggleEnabled ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "SwimPassiveSink", comfortSettings.SwimPassiveSinkEnabled ? 1 : 0);
+                PlayerPrefs.SetFloat(KeyPrefix + "SwimSpeedFactor", comfortSettings.SwimSpeedFactor);
+                PlayerPrefs.SetInt(KeyPrefix + "SwimVignetteBoost", comfortSettings.SwimVignetteBoost ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "SwimClimbOutEnabled", comfortSettings.SwimClimbOutEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "MoveSpeed", comfortSettings.ContinuousMoveSpeed);
                 PlayerPrefs.SetInt(KeyPrefix + "SmoothTurn", comfortSettings.SmoothTurnEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "ContinuousTurnSpeed", comfortSettings.ContinuousTurnSpeed);
@@ -188,6 +200,10 @@ namespace Blockiverse.VR
                     hash = hash * 31 + (comfortSettings.RealPlayerHeightEnabled ? 1 : 0);
                     hash = hash * 31 + (comfortSettings.SprintToggleEnabled ? 1 : 0);
                     hash = hash * 31 + (comfortSettings.CrouchToggleEnabled ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.SwimPassiveSinkEnabled ? 1 : 0);
+                    hash = hash * 31 + comfortSettings.SwimSpeedFactor.GetHashCode();
+                    hash = hash * 31 + (comfortSettings.SwimVignetteBoost ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.SwimClimbOutEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousMoveSpeed.GetHashCode();
                     hash = hash * 31 + (comfortSettings.SmoothTurnEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.ContinuousTurnSpeed.GetHashCode();

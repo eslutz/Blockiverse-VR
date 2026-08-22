@@ -457,8 +457,7 @@ MonoBehaviour:
   headAnchor: {fileID: 2512016379466410757}
   leftHandAnchor: {fileID: 219462041398571930}
   rightHandAnchor: {fileID: 5994998175652950093}
-  ownerFallbackColor: {r: 0.2, g: 0.68, b: 0.94, a: 1}
-  remoteFallbackColor: {r: 0.94, g: 0.62, b: 0.22, a: 1}
+  fallbackColor: {r: 0.94, g: 0.62, b: 0.22, a: 1}
 --- !u!114 &3261388504053597789
 MonoBehaviour:
   m_ObjectHideFlags: 0

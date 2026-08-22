@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -6,6 +7,40 @@ using UnityEngine;
 
 namespace Blockiverse.Gameplay
 {
+    // When thunder arrives, how loud, and which clip -- all from the strike's distance.
+    //
+    // Pure statics beside the controller, following BlockiverseMusicScheduling, so the three
+    // decisions that make distance audible can be pinned in EditMode without an AudioSource.
+    public static class BlockiverseThunderScheduling
+    {
+        // Deliberately ~10x slower than the real 343 m/s. Over a 96-block strike ring, honest
+        // propagation peaks at 0.28 s, which no player perceives as a delay at all; at 34 the same
+        // strike lands 2.8 s after the flash, which is the whole cue. voxel_world_environment_effects.md
+        // section 10.5 is the source of this constant, and the reason it is not physical is
+        // recorded there so it does not get "fixed" later.
+        public const float SoundBlocksPerSecond = 34.0f;
+
+        // Where thunder falls silent. The ruleset's original 256 was written for a world where
+        // strikes could be that far away; against the 96-block ring it left the most distant
+        // thunder still playing at 62%, flattening the exact distinction this is building. 128
+        // puts the ring's outer edge at ~0.25.
+        public const float SilenceDistanceBlocks = 128.0f;
+
+        // Past this a strike gets the far clip. Roughly the middle of the ring.
+        public const float NearThunderDistanceBlocks = 40.0f;
+
+        public static float ResolveDelaySeconds(float distanceBlocks) =>
+            Mathf.Max(distanceBlocks, 0.0f) / SoundBlocksPerSecond;
+
+        public static float ResolveVolumeScale(float distanceBlocks) =>
+            Mathf.Clamp01(1.0f - Mathf.Max(distanceBlocks, 0.0f) / SilenceDistanceBlocks);
+
+        public static BlockiverseAudioCue SelectThunderCue(float distanceBlocks) =>
+            distanceBlocks <= NearThunderDistanceBlocks
+                ? BlockiverseAudioCue.ThunderNear
+                : BlockiverseAudioCue.ThunderFar;
+    }
+
     // Drives the authored weather/ambience audio loops and weather VFX from the live weather
     // simulation: rain/snow loops and particles chosen from what is falling at the player's own
     // cell (WeatherService.PrecipitationKind, so the same storm is rain in the valley and snow on
@@ -22,6 +57,9 @@ namespace Blockiverse.Gameplay
         // Splits the rain loop between the light and heavy cue. Sits between the light-rain
         // intensity (0.3) and the heavy-rain intensity (0.7) from WeatherService.
         const float HeavyPrecipitationIntensity = 0.5f;
+        // Distinct from every other DeterministicHash consumer, so a bolt's shape cannot correlate
+        // with terrain or structure rolls at the same column.
+        const int LightningBoltSalt = 0x6017;
 
         [SerializeField] CreativeWorldManager worldManager;
         [SerializeField] BlockiverseAudioCuePlayer audioCuePlayer;
@@ -47,6 +85,35 @@ namespace Blockiverse.Gameplay
         EnvironmentDynamicsController subscribedEnvironmentDynamics;
         bool campfireLoopActive;
 
+        // Deliberately NOT [SerializeField]s: adding one would re-serialize the generated XR rig
+        // prefab for no visible change, and this branch is meant to leave prefabs untouched.
+        BlockiverseLightingCycleController lightingCycle;
+        LightningBoltView boltView;
+        BlockiverseWeatherVolume weatherVolume;
+
+        // A LIST, not a single nextThunderTime like the other timers in this file: strikes can
+        // overlap, and a distant one still travelling must not be cancelled by a closer one
+        // behind it. There is no scheduling utility in the project to reuse and no delayed-play
+        // API on the cue player, so this follows the codebase's dominant Time.time pattern.
+        readonly List<PendingThunder> pendingThunder = new();
+
+        // Explicit wiring, following the Configure methods on the other feedback components.
+        // Scene lookup still fills in whatever is left null, but a caller that already knows its
+        // dependencies should not have to hope BlockiverseSceneLookup returns the same instance --
+        // with a Boot scene loaded alongside, it may not.
+        public void Configure(
+            BlockiverseAudioCuePlayer audio,
+            BlockiverseVfxCuePlayer vfx = null,
+            CreativeWorldManager manager = null)
+        {
+            if (audio != null)
+                audioCuePlayer = audio;
+            if (vfx != null)
+                vfxCuePlayer = vfx;
+            if (manager != null)
+                worldManager = manager;
+        }
+
         void OnEnable()
         {
             DiscoverDependencies();
@@ -58,6 +125,29 @@ namespace Blockiverse.Gameplay
             StopLoops();
         }
 
+        // The weather volume and the bolt view are created at runtime and deliberately parented to
+        // nothing, so they follow the head in position without inheriting its rotation. Nothing
+        // else owns them -- without this they outlive the controller, and in a PlayMode run each
+        // scene load leaves another one behind still ticking its LateUpdate.
+        void OnDestroy()
+        {
+            DestroyRuntimeChild(weatherVolume != null ? weatherVolume.gameObject : null);
+            DestroyRuntimeChild(boltView != null ? boltView.gameObject : null);
+            weatherVolume = null;
+            boltView = null;
+        }
+
+        static void DestroyRuntimeChild(GameObject host)
+        {
+            if (host == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(host);
+            else
+                DestroyImmediate(host);
+        }
+
         void Update()
         {
             if (Time.time >= nextPollTime)
@@ -67,6 +157,7 @@ namespace Blockiverse.Gameplay
             }
 
             TickPrecipitationVfx();
+            TickPendingThunder();
         }
 
         void DiscoverDependencies()
@@ -85,6 +176,9 @@ namespace Blockiverse.Gameplay
 
             if (environmentDynamics == null)
                 environmentDynamics = BlockiverseSceneLookup.Find<EnvironmentDynamicsController>(FindObjectsInactive.Include);
+
+            if (lightingCycle == null)
+                lightingCycle = BlockiverseSceneLookup.Find<BlockiverseLightingCycleController>(FindObjectsInactive.Include);
 
             SubscribeLightningStrikes();
         }
@@ -132,6 +226,7 @@ namespace Blockiverse.Gameplay
 
             UpdatePrecipitationLoop(environment);
             activePrecipitationVfx = SelectPrecipitationVfx(environment);
+            UpdateWeatherVolume(environment);
             UpdateAmbienceLoop();
             UpdateCampfireLoop();
             TickThunder(environment.Weather);
@@ -299,8 +394,154 @@ namespace Blockiverse.Gameplay
             DiscoverDependencies();
 
             Vector3 strikePosition = new(strike.X + 0.5f, strike.Y + 1.0f, strike.Z + 0.5f);
-            audioCuePlayer?.PlayCueAt(BlockiverseAudioCue.ThunderNear, strikePosition);
-            vfxCuePlayer?.PlayCue(BlockiverseVfxCue.LightningFlash, strikePosition + Vector3.up * 6.0f);
+
+            // No head means no listener and nothing to measure distance from, so there is nothing
+            // to schedule -- a headless host simulates its weather in silence.
+            bool haveHead = TryGetHeadWorldPosition(out Vector3 headPosition);
+            float distance = haveHead ? Vector3.Distance(headPosition, strikePosition) : 0.0f;
+
+            // Queued BEFORE the comfort gate below: Reduced Flash suppresses the visuals, not the
+            // storm. A player using it should still hear the thunder.
+            if (haveHead)
+                QueueThunder(distance);
+
+            // Every flash the strike produces goes through the same gate. PlayCue enforces it for
+            // its own cue, but the sky flash never touches PlayCue, so the check has to happen
+            // here for it.
+            if (vfxCuePlayer == null || !vfxCuePlayer.AllowFlashEffects)
+                return;
+
+            if (haveHead)
+            {
+                // The flash is scaled by how far away the bolt was, across the whole ring and down
+                // to exactly nothing at its outer edge: a close strike washes out the sky, a
+                // distant one is a bolt you see with no flash at all. That pairing is what makes
+                // distance legible before the player has finished turning their head.
+                if (lightingCycle != null)
+                    lightingCycle.PulseSkyFlash(LightningFlashSolver.DistanceStrength(distance));
+
+                // Seeded from the struck column so the same strike draws the same bolt on every
+                // peer -- clients receive the strike as a relayed event and build it themselves.
+                EnsureBoltView().Strike(
+                    new Vector3(strike.X + 0.5f, strike.Y + 1.0f, strike.Z + 0.5f),
+                    seed: unchecked((int)DeterministicHash.Hash(0, strike.X, strike.Y, strike.Z, LightningBoltSalt)),
+                    distance,
+                    reducedParticles: vfxCuePlayer.ParticleIntensityScale < 1.0f);
+            }
+
+            vfxCuePlayer.PlayCue(BlockiverseVfxCue.LightningFlash, strikePosition + Vector3.up * 6.0f);
+            vfxCuePlayer.PlayCue(BlockiverseVfxCue.BlockChipBurst, strikePosition);
+        }
+
+        // Thunder plays 2D rather than positionally, on purpose. PlayCueAt routes through an
+        // 8-source round-robin pool that MOVES whichever source it picks, so a clip still ringing
+        // when the pool wraps gets teleported mid-tail; those sources also apply Unity's default
+        // logarithmic rolloff, which would attenuate a second time on top of this curve. Thunder
+        // is a sky-filling sound rather than a point source, and the audio ruleset already
+        // specifies it as "global with distance-based delay".
+        // Public and distance-only, the same shape as EnvironmentDynamicsController.TryStrikeNearAnchor:
+        // a seam that lets the delay be driven without a strike, a world or a camera.
+        public void QueueThunder(float distance)
+        {
+            pendingThunder.Add(new PendingThunder(
+                Time.time + BlockiverseThunderScheduling.ResolveDelaySeconds(distance),
+                BlockiverseThunderScheduling.SelectThunderCue(distance),
+                BlockiverseThunderScheduling.ResolveVolumeScale(distance)));
+        }
+
+        // How many thunder claps are still in flight. Exposed because "the clip never arrived" and
+        // "the clip arrived instantly" look identical from outside otherwise.
+        public int PendingThunderCount => pendingThunder.Count;
+
+        void TickPendingThunder()
+        {
+            // Reverse iteration so removals cannot skip an entry, and every due cue fires on the
+            // frame it comes due rather than one per frame.
+            for (int i = pendingThunder.Count - 1; i >= 0; i--)
+            {
+                if (Time.time < pendingThunder[i].DueTime)
+                    continue;
+
+                audioCuePlayer?.PlayCue(pendingThunder[i].Cue, pendingThunder[i].VolumeScale);
+                pendingThunder.RemoveAt(i);
+            }
+        }
+
+        readonly struct PendingThunder
+        {
+            public readonly float DueTime;
+            public readonly BlockiverseAudioCue Cue;
+            public readonly float VolumeScale;
+
+            public PendingThunder(float dueTime, BlockiverseAudioCue cue, float volumeScale)
+            {
+                DueTime = dueTime;
+                Cue = cue;
+                VolumeScale = volumeScale;
+            }
+        }
+
+        // Drives the continuous precipitation volume from what is falling at the PLAYER'S cell,
+        // for the same reason the audio and the old cue selection did: one thunderstorm is rain in
+        // the valley and snow on the peak above it.
+        void UpdateWeatherVolume(EnvironmentState environment)
+        {
+            BlockiverseWeatherVolume volume = EnsureWeatherVolume();
+
+            if (volume == null)
+                return;
+
+            volume.SetPrecipitation(environment.Precipitation, environment.PrecipitationIntensity);
+        }
+
+        BlockiverseWeatherVolume EnsureWeatherVolume()
+        {
+            if (weatherVolume != null)
+                return weatherVolume;
+
+            if (!TryGetHeadTransform(out Transform headTransform))
+                return null;
+
+            // Created at runtime and parented to nothing: it follows the head in POSITION only.
+            // Parenting to the camera would inherit its rotation, which swings the whole volume on
+            // every snap turn -- the artefact the old Local-space burst had.
+            var host = new GameObject("Weather Volume");
+            weatherVolume = host.AddComponent<BlockiverseWeatherVolume>();
+
+            BlockiverseVfxPool pool = vfxCuePlayer != null ? vfxCuePlayer.Pool : null;
+
+            weatherVolume.Configure(
+                headTransform,
+                pool != null ? pool.ParticleMaterial : null,
+                pool != null ? pool.RainSprite : null,
+                pool != null ? pool.SnowSprite : null);
+
+            return weatherVolume;
+        }
+
+        static bool TryGetHeadTransform(out Transform headTransform)
+        {
+            Camera head = Camera.main;
+            headTransform = head != null ? head.transform : null;
+            return headTransform != null;
+        }
+
+        LightningBoltView EnsureBoltView()
+        {
+            if (boltView != null)
+                return boltView;
+
+            // Created at runtime, following CreativeWorldManager.CreatePlacementPreview. One
+            // instance restarted per strike: the flash refuses to retrigger inside its own window
+            // for comfort reasons, so two visible bolts never overlap and a pool would be
+            // machinery with nothing to hold.
+            var host = new GameObject("Lightning Bolt");
+            boltView = host.AddComponent<LightningBoltView>();
+
+            if (Camera.main != null)
+                boltView.Configure(Camera.main.transform);
+
+            return boltView;
         }
 
         void TickThunder(WeatherState state)
@@ -313,15 +554,16 @@ namespace Blockiverse.Gameplay
 
             nextThunderTime = Time.time + Random.Range(6.0f, 14.0f);
 
-            bool near = Random.value < 0.4f;
-            audioCuePlayer.PlayCue(near ? BlockiverseAudioCue.ThunderNear : BlockiverseAudioCue.ThunderFar);
-
-            if (near && vfxCuePlayer != null && TryGetHeadWorldPosition(out Vector3 headPosition))
-            {
-                Vector3 flashPosition = headPosition +
-                    new Vector3(Random.Range(-12.0f, 12.0f), Random.Range(8.0f, 16.0f), Random.Range(-12.0f, 12.0f));
-                vfxCuePlayer.PlayCue(BlockiverseVfxCue.LightningFlash, flashPosition);
-            }
+            // Audio only. This used to also fire a "flash" near the player every 6-14 seconds with
+            // no strike behind it and no relation to LightningStruck -- an effect that pretended
+            // lightning was happening while the real strikes went unseen somewhere else. Distant
+            // rumble with no visible bolt is correct ambience; a flash with no bolt is a lie.
+            //
+            // Always the far clip now, where it used to be a 40% coin flip. Ambient thunder has no
+            // strike behind it and therefore no distance -- a near crack from nowhere is the same
+            // lie the flash was, and it would fight the real strikes, whose whole point is that
+            // near means near.
+            audioCuePlayer.PlayCue(BlockiverseAudioCue.ThunderFar);
         }
 
         void TickPrecipitationVfx()
@@ -332,18 +574,14 @@ namespace Blockiverse.Gameplay
             if (vfxCuePlayer == null || worldManager == null)
                 return;
 
-            // Particles follow the locally selected cue for the same reason the audio does: a
-            // thunderstorm over a freezing peak has to drift snowflakes, not splash rain. The cue
-            // is re-selected from the freshly polled environment on every poll — never derived
-            // from a stale weather state — so a kind flip under an unchanged state switches the
-            // particles too. Fog is not precipitation, so it stays keyed to the weather state.
-            if (activePrecipitationVfx.HasValue)
-            {
-                PlayScatterVfx(activePrecipitationVfx.Value, ref nextPrecipitationVfxTime, PrecipitationVfxIntervalSeconds);
-                return;
-            }
-
-            if (lastWeatherState == WeatherState.Fog)
+            // Rain and snow no longer come through here. They are a continuous head-locked volume
+            // (BlockiverseWeatherVolume) because the burst path could not physically render them:
+            // two 4.5 cm particles every 0.6 seconds is roughly one drop on screen at a time,
+            // against a spec asking for a couple of hundred.
+            //
+            // Fog wisps stay a scatter cue. They are an accent on top of real distance fog rather
+            // than the fog itself, and they are sparse by design.
+            if (!activePrecipitationVfx.HasValue && lastWeatherState == WeatherState.Fog)
                 PlayScatterVfx(BlockiverseVfxCue.FogWisp, ref nextFogVfxTime, FogVfxIntervalSeconds);
         }
 
@@ -413,6 +651,13 @@ namespace Blockiverse.Gameplay
 
         void StopLoops()
         {
+            // The precipitation volume is an independent, unparented object with its own
+            // LateUpdate, so it does NOT stop just because this controller stopped polling. Every
+            // StopLoops path -- menus taking world input, returning to the title, losing the
+            // environment query -- returns before UpdateWeatherVolume, which would otherwise leave
+            // the last rain or snow rate emitting forever over the title screen.
+            weatherVolume?.SetPrecipitation(PrecipitationKind.None, 0.0f);
+
             // Cleared before the audio-player guard: this drives the particle scatter, which runs
             // on its own cadence and would otherwise keep raining after the weather query fails.
             activePrecipitationVfx = null;

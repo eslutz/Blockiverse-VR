@@ -256,6 +256,10 @@ namespace Blockiverse.UI
                 }
             }
 
+            // Cleared on the way back to the title, so a creative session cannot leave the
+            // permission latched on for whatever world is loaded next.
+            menuController?.ConfigurePauseMenuPermissions(canToggleMode: false, canOpenCreativeTools: false);
+
             SetTransitionLocomotionBlocked(false);
             RefreshSaveList();
             ApplyTitleMenuPose();
@@ -1045,15 +1049,28 @@ namespace Blockiverse.UI
         }
 
         // Aligns the player's interaction mode with the world's rules mode (creative worlds
-        // stash the freshly restored survival inventory, exactly like a manual switch).
+        // stash the freshly restored survival inventory, exactly like a manual switch), and tells
+        // the pause menu which entries this world is allowed to show.
         void ApplyPlayerMode()
         {
             if (survivalSync == null || worldManager == null)
                 return;
 
-            survivalSync.SetMode(worldManager.GameMode == WorldGameMode.Creative
-                ? PlayerModeState.Creative
-                : PlayerModeState.Survival);
+            bool creative = worldManager.GameMode == WorldGameMode.Creative;
+
+            survivalSync.SetMode(creative ? PlayerModeState.Creative : PlayerModeState.Survival);
+
+            // Without this the pause menu's Creative Tools entry can never appear: the permission
+            // flags default to false and ConfigurePauseMenuPermissions had no caller anywhere in
+            // the project, so the whole screen -- weather, time of day, region tools -- shipped
+            // unreachable.
+            //
+            // canToggleMode stays false deliberately. MenuActions.PauseToggleMode is not handled
+            // by this controller's HandleAction switch, so enabling it would ship a visible button
+            // that does nothing.
+            menuController?.ConfigurePauseMenuPermissions(
+                canToggleMode: false,
+                canOpenCreativeTools: creative);
         }
 
         BlockPosition ResolveSpawnPosition()

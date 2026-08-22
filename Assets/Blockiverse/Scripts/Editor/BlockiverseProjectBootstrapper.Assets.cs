@@ -399,12 +399,69 @@ namespace Blockiverse.Editor
             return material;
         }
 
+        // The URP particle shader, which unlike URP/Unlit declares a COLOR semantic in its vertex
+        // Attributes.
+        const string ParticleShaderName = "Universal Render Pipeline/Particles/Unlit";
+
+        // The generated sky. Its properties are written every LateUpdate by
+        // BlockiverseLightingCycleController, so the authored values here only matter before the
+        // first frame -- but they are set to a plausible midday so the material never looks broken
+        // in the editor's preview.
+        static Material EnsureSkyMaterial()
+        {
+            Shader shader = Shader.Find("Blockiverse/Sky");
+
+            if (shader == null)
+                throw new InvalidOperationException("Blockiverse/Sky shader is missing; the generated sky cannot be built.");
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.SkyMaterialPath);
+
+            if (material == null)
+            {
+                material = new Material(shader) { name = Path.GetFileNameWithoutExtension(BlockiverseProject.SkyMaterialPath) };
+                AssetDatabase.CreateAsset(material, BlockiverseProject.SkyMaterialPath);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+            }
+
+            // EVERY property the lighting controller writes is reset here, not just the ones that
+            // look like configuration. The controller drives all of them every LateUpdate, and
+            // anything left unreset is a channel through which a Play-mode session's end state can
+            // reach the committed asset -- which is exactly how _CloudCoverage ended up at Clear
+            // weather's 0.1 in the repository.
+            material.SetColor("_ZenithColor", SkyGradientSolver.DayZenith);
+            material.SetColor("_HorizonColor", SkyGradientSolver.DayHorizon);
+            material.SetColor("_GroundColor", SkyGradientSolver.DayGround);
+            material.SetColor("_SunColor", SkyGradientSolver.DaySunColor);
+            material.SetColor("_CloudColor", SkyGradientSolver.DayCloudColor);
+            material.SetFloat("_CloudCoverage", 0.0f);
+            material.SetVector("_CloudScroll", Vector4.zero);
+            material.SetVector("_SunDirection", new Vector4(0.0f, 1.0f, 0.0f, 0.0f));
+
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         static Material EnsureTransparentVfxParticleMaterial()
         {
             Material material = EnsureMaterial(
                 BlockiverseProject.VfxParticleMaterialPath,
                 new Color(1.0f, 1.0f, 1.0f, 0.72f),
                 preferUnlit: true);
+
+            // BlockiverseVfxPool writes each cue's tint into main.startColor, which lands in the
+            // particle VERTEX COLOUR stream. URP/Unlit's vertex input declares only POSITION and
+            // TEXCOORD0 -- there is no COLOR semantic -- so that tint has been dropped on the
+            // floor for EVERY cue, not just lightning's. Dust, sparks, embers, rain splash and
+            // snow have all been rendering as the material's flat white times their sprite.
+            //
+            // Reassigned explicitly because EnsureMaterial only picks a shader when it CREATES the
+            // asset; an existing .mat keeps whatever shader it was authored with.
+            Shader particleShader = Shader.Find(ParticleShaderName);
+            if (particleShader != null && material.shader != particleShader)
+                material.shader = particleShader;
 
             material.SetOverrideTag("RenderType", "Transparent");
             material.renderQueue = (int)RenderQueue.Transparent;

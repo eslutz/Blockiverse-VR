@@ -22,6 +22,10 @@ namespace Blockiverse.UI
         [SerializeField] Toggle realPlayerHeightToggle;
         [SerializeField] Toggle sprintToggleToggle;
         [SerializeField] Toggle crouchToggleToggle;
+        [SerializeField] Toggle swimPassiveSinkToggle;
+        [SerializeField] Slider swimSpeedSlider;
+        [SerializeField] Toggle swimVignetteToggle;
+        [SerializeField] Toggle swimClimbOutToggle;
         [SerializeField] Toggle vignetteToggle;
         [SerializeField] Slider vignetteStrengthSlider;
         [SerializeField] Toggle glideBobToggle;
@@ -54,6 +58,10 @@ namespace Blockiverse.UI
         Slider registeredSmoothTurnSpeedSlider;
         Slider registeredVignetteStrengthSlider;
         Slider registeredUiScaleSlider;
+        Toggle registeredSwimPassiveSinkToggle;
+        Slider registeredSwimSpeedSlider;
+        Toggle registeredSwimVignetteToggle;
+        Toggle registeredSwimClimbOutToggle;
 
         public bool IsVisible => canvas != null ? canvas.enabled : visibilityRoot != null && visibilityRoot.activeSelf;
 
@@ -92,7 +100,11 @@ namespace Blockiverse.UI
             Toggle targetGlideBobToggle = null,
             Toggle targetRealPlayerHeightToggle = null,
             Toggle targetSprintToggleToggle = null,
-            Toggle targetCrouchToggleToggle = null)
+            Toggle targetCrouchToggleToggle = null,
+            Toggle targetSwimPassiveSinkToggle = null,
+            Slider targetSwimSpeedSlider = null,
+            Toggle targetSwimVignetteToggle = null,
+            Toggle targetSwimClimbOutToggle = null)
         {
             glideToggle = targetGlideToggle;
             teleportToggle = targetTeleportToggle;
@@ -108,6 +120,10 @@ namespace Blockiverse.UI
             realPlayerHeightToggle = targetRealPlayerHeightToggle;
             sprintToggleToggle = targetSprintToggleToggle;
             crouchToggleToggle = targetCrouchToggleToggle;
+            swimPassiveSinkToggle = targetSwimPassiveSinkToggle;
+            swimSpeedSlider = targetSwimSpeedSlider;
+            swimVignetteToggle = targetSwimVignetteToggle;
+            swimClimbOutToggle = targetSwimClimbOutToggle;
             uiScaleSlider = targetUiScaleSlider;
             glideBobToggle = targetGlideBobToggle;
             RegisterControlCallbacks();
@@ -199,6 +215,9 @@ namespace Blockiverse.UI
             RegisterToggleCallback(realPlayerHeightToggle, ref registeredRealPlayerHeightToggle);
             RegisterToggleCallback(sprintToggleToggle, ref registeredSprintToggleToggle);
             RegisterToggleCallback(crouchToggleToggle, ref registeredCrouchToggleToggle);
+            RegisterToggleCallback(swimPassiveSinkToggle, ref registeredSwimPassiveSinkToggle);
+            RegisterToggleCallback(swimVignetteToggle, ref registeredSwimVignetteToggle);
+            RegisterToggleCallback(swimClimbOutToggle, ref registeredSwimClimbOutToggle);
             RegisterToggleCallback(vignetteToggle, ref registeredVignetteToggle);
             RegisterToggleCallback(glideBobToggle, ref registeredGlideBobToggle);
             RegisterSliderCallback(snapTurnSlider, ref registeredSnapTurnSlider);
@@ -206,6 +225,7 @@ namespace Blockiverse.UI
             RegisterSliderCallback(smoothTurnSpeedSlider, ref registeredSmoothTurnSpeedSlider);
             RegisterSliderCallback(vignetteStrengthSlider, ref registeredVignetteStrengthSlider);
             RegisterSliderCallback(uiScaleSlider, ref registeredUiScaleSlider);
+            RegisterSliderCallback(swimSpeedSlider, ref registeredSwimSpeedSlider);
         }
 
         void OnGlideToggled(bool isOn)
@@ -279,6 +299,20 @@ namespace Blockiverse.UI
             if (crouchToggleToggle != null)
                 settings.CrouchToggleEnabled = crouchToggleToggle.isOn;
 
+            // The toggle asks "should I sink?", which is how the player thinks about it, so it maps
+            // straight onto the setting rather than being inverted into an accommodation flag.
+            if (swimPassiveSinkToggle != null)
+                settings.SwimPassiveSinkEnabled = swimPassiveSinkToggle.isOn;
+
+            if (swimSpeedSlider != null)
+                settings.SwimSpeedFactor = swimSpeedSlider.value;
+
+            if (swimVignetteToggle != null)
+                settings.SwimVignetteBoost = swimVignetteToggle.isOn;
+
+            if (swimClimbOutToggle != null)
+                settings.SwimClimbOutEnabled = swimClimbOutToggle.isOn;
+
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.isOn;
 
@@ -311,6 +345,9 @@ namespace Blockiverse.UI
             realPlayerHeightToggle?.SetIsOnWithoutNotify(settings.RealPlayerHeightEnabled);
             sprintToggleToggle?.SetIsOnWithoutNotify(settings.SprintToggleEnabled);
             crouchToggleToggle?.SetIsOnWithoutNotify(settings.CrouchToggleEnabled);
+            swimPassiveSinkToggle?.SetIsOnWithoutNotify(settings.SwimPassiveSinkEnabled);
+            swimVignetteToggle?.SetIsOnWithoutNotify(settings.SwimVignetteBoost);
+            swimClimbOutToggle?.SetIsOnWithoutNotify(settings.SwimClimbOutEnabled);
 
             if (snapTurnSlider != null)
             {
@@ -331,6 +368,9 @@ namespace Blockiverse.UI
 
             if (uiScaleSlider != null)
                 uiScaleSlider.SetValueWithoutNotify(settings.UiScale);
+
+            if (swimSpeedSlider != null)
+                swimSpeedSlider.SetValueWithoutNotify(settings.SwimSpeedFactor);
         }
 
         void RegisterLocomotionToggle(Toggle target, ref Toggle registered, UnityAction<bool> action)

@@ -248,6 +248,46 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void BothFluidMaterialsRenderFromUnderneathWhileTerrainStaysCulled()
+        {
+            // Every fluid quad winds outward and same-family interior faces are merged away, so
+            // with back-face culling the surface simply did not exist when seen from below --
+            // swimming under a lake and looking up showed a hole in the world.
+            //
+            // Both fluid materials must agree. If only the shading material un-culled, the prime
+            // would write no depth at the underside and the double-blend that ADR 0007 section 4
+            // exists to eliminate would come straight back for anyone looking up through water.
+            Texture2D atlasTexture = null;
+            Material sourceMaterial = null;
+            Material fluidMaterial = null;
+            Material primeMaterial = null;
+            Material blockMaterial = null;
+
+            try
+            {
+                sourceMaterial = CreateBlockAtlasMaterial(out atlasTexture);
+                fluidMaterial = BlockVisualAtlas.CreateFluidMaterial(sourceMaterial, atlasTexture, BlockTextureSetIds.Default);
+                primeMaterial = BlockVisualAtlas.CreateFluidDepthPrimeMaterial(sourceMaterial, atlasTexture, BlockTextureSetIds.Default);
+                blockMaterial = BlockVisualAtlas.CreateMaterial(sourceMaterial, atlasTexture, BlockTextureSetIds.Default);
+
+                Assert.That(fluidMaterial.GetFloat("_Cull"), Is.EqualTo((float)CullMode.Off).Within(0.001f),
+                    "The water surface has to be visible from below.");
+                Assert.That(primeMaterial.GetFloat("_Cull"), Is.EqualTo((float)CullMode.Off).Within(0.001f),
+                    "The prime must claim the same pixels the shading pass will blend into, from every direction.");
+                Assert.That(blockMaterial.GetFloat("_Cull"), Is.EqualTo((float)CullMode.Back).Within(0.001f),
+                    "Opaque terrain never needs its backfaces and must keep paying nothing for them.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(blockMaterial);
+                Object.DestroyImmediate(primeMaterial);
+                Object.DestroyImmediate(fluidMaterial);
+                Object.DestroyImmediate(sourceMaterial);
+                Object.DestroyImmediate(atlasTexture);
+            }
+        }
+
+        [Test]
         public void FluidMaterialIsTransparentAndKeepsTheAuthoredAtlas()
         {
             Texture2D atlasTexture = null;

@@ -372,7 +372,7 @@ enum BlockiverseVfxCue {
 | `rain_splash` | Raindrop hits visible block. | 1–2 per hit | 0.20s | Tiny splash. | Strongly budgeted. |
 | `snowflake_drift` | Snow weather. | Weather pool | 2–5s | Falling flakes. | Camera-relative volume with low density. |
 | `fog_wisp` | Fog pockets. | Weather pool | 3–6s | Slow wisps. | Avoid near-camera opacity. |
-| `lightning_flash` | Lightning strike. | 0–1 | 0.05–0.12s | Light intensity flash. | Respect reduced-flash setting. |
+| `lightning_flash` | Lightning strike. | 0–1 | 0.05–0.12s | Ambient flash accompanying the procedural bolt mesh; scaled by strike distance. | Respect reduced-flash setting. |
 | `torch_spark` | Torch/campfire active. | 1–3/sec/source | 0.40s | Tiny ember. | Only nearest sources. |
 | `campfire_ember` | Campfire active. | 3–8/sec | 0.60s | Rising embers. | Distance culled. |
 
@@ -431,22 +431,34 @@ type EnvironmentPresentationState = {
 ### Thunder and lightning
 
 ```ts
-if thunderstormIntensity > 0.6 and randomStormTimerElapsed:
-  strikePosition = chooseOutdoorPointNearPlayerOrDistantHorizon()
+if stormStrikeRollSucceeded:                       // see environment ruleset section 10.1
+  strikePosition = chooseColumnInRingAroundPlayer()  // section 10.2
   flashDelay = 0
-  thunderDelay = distance(player, strikePosition) / 343.0
-  PlayLightningFlash(strikePosition)
-  ScheduleThunder(thunderDelay)
+  thunderDelay = distance(player, strikePosition) / 34.0
+  PlayLightningBoltAndFlash(strikePosition)
+  ScheduleThunder(thunderDelay, volumeFor(distance), clipFor(distance))
 ```
+
+The divisor is **34, not 343**. It is deliberately about ten times slower than the real speed of
+sound: over the shipped 96-block strike ring, honest propagation peaks at 0.28 s, which no player
+perceives as a delay at all, while 34 puts the same strike 2.8 s behind its flash. That gap is the
+strongest distance cue the game has. This file previously specified 343 and contradicted
+[voxel_world_environment_effects.md](voxel_world_environment_effects.md) section 10.5, which is
+canonical for lightning; the two now agree.
+
+Thunder plays **2D (global)**, as the cue table below says, rather than through a positional source.
+See section 10.5 of the environment ruleset for why: positional playback would both cut off clips
+when the shared source pool wraps and apply Unity's own distance rolloff on top of the volume curve.
 
 Comfort rules:
 
 | Setting | Effect |
 |---|---|
-| Reduced Flash disabled | Lightning flash may briefly raise sky/key light. |
-| Reduced Flash enabled | Suppress lightning flash VFX entirely; thunder audio may still convey the storm. |
-| Weather volume low | Thunder respects weather bus volume. |
-| Haptics disabled | No thunder rumble. |
+| Reduced Flash disabled | Lightning raises ambient briefly. It never modulates the key light — see environment ruleset section 10.5 for the shadow-pass reason. |
+| Reduced Flash enabled | Suppresses the bolt and the sky flash entirely; thunder audio still conveys the storm. |
+| Weather volume low | Thunder respects the weather bus, and the per-strike distance volume folds in beneath it rather than around it. |
+| Haptics disabled | No thunder rumble. **Not implemented** — there is no thunder haptic yet. |
+| Reduced thunder audio | **Not implemented.** `ReducedFlash` and `ReducedParticles` are visual-only settings today. |
 
 ### Fog
 
