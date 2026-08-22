@@ -272,11 +272,13 @@ Unity 6000.5.8f1 (Apple Silicon path is the default; override with `UNITY_EDITOR
 # Required validation — runs EditMode then PlayMode, NUnit XML to TestResults/Unity/
 scripts/unity/run-tests.sh
 
-# Single test / one platform (the script takes no args; invoke Unity directly)
-"${UNITY_EDITOR:-/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity}" \
-  -batchmode -nographics -projectPath . -runTests -testPlatform EditMode \
-  -testFilter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" \
-  -testResults TestResults/Unity/Single.xml -logFile -
+# Single test / one platform — the script takes --platform, --filter, --results-name,
+# and --results-dir. Use it rather than invoking Unity directly: it passes -nographics
+# only for EditMode, because a PlayMode run without a graphics device segfaults inside
+# EnterPlayMode with a native stack that reads like a code bug. (Set
+# UNITY_PLAYMODE_NOGRAPHICS=1 to opt in deliberately.)
+scripts/unity/run-tests.sh --platform EditMode \
+  --filter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" --results-name Single
 
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
