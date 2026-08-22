@@ -90,6 +90,11 @@ namespace Blockiverse.Gameplay
 
         public Sprite SnowSprite => snowflakeParticle;
 
+        // Bubbles reuse the fog wisp. A soft round blob is a perfectly serviceable bubble, and it
+        // costs no new art asset and none of the generated-art validation tail that would come
+        // with one.
+        public Sprite BubbleSprite => fogWispParticle;
+
         public void Prewarm()
         {
             while (systems.Count < poolSize)

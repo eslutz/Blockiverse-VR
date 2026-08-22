@@ -125,6 +125,29 @@ namespace Blockiverse.Gameplay
             StopLoops();
         }
 
+        // The weather volume and the bolt view are created at runtime and deliberately parented to
+        // nothing, so they follow the head in position without inheriting its rotation. Nothing
+        // else owns them -- without this they outlive the controller, and in a PlayMode run each
+        // scene load leaves another one behind still ticking its LateUpdate.
+        void OnDestroy()
+        {
+            DestroyRuntimeChild(weatherVolume != null ? weatherVolume.gameObject : null);
+            DestroyRuntimeChild(boltView != null ? boltView.gameObject : null);
+            weatherVolume = null;
+            boltView = null;
+        }
+
+        static void DestroyRuntimeChild(GameObject host)
+        {
+            if (host == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(host);
+            else
+                DestroyImmediate(host);
+        }
+
         void Update()
         {
             if (Time.time >= nextPollTime)

@@ -156,10 +156,12 @@ namespace Blockiverse.Gameplay
             if (particles != null)
                 return;
 
-            particles = gameObject.GetComponent<ParticleSystem>();
-
-            if (particles == null)
-                particles = gameObject.AddComponent<ParticleSystem>();
+            // NOT `??`. The null-coalescing operator uses plain reference equality, which bypasses
+            // UnityEngine.Object's overloaded == -- so a destroyed-or-missing component comes back
+            // as a "fake null" that ?? happily accepts, AddComponent never runs, and the first
+            // module write throws "Do not create your own module instances".
+            ParticleSystem existing = gameObject.GetComponent<ParticleSystem>();
+            particles = existing != null ? existing : gameObject.AddComponent<ParticleSystem>();
 
             ParticleSystem.MainModule main = particles.main;
             main.playOnAwake = false;
