@@ -35,6 +35,47 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SwimmingDefaultsToSinkingAndTheAccommodationIsTheInverseSetting()
+        {
+            // The one place this game deliberately defaults away from the gentler option: water
+            // should read as something you work against, not a floor you bob on. Turning the
+            // setting off is what restores exact neutral buoyancy, so the default must be ON and
+            // the escape hatch must exist.
+            BlockiverseComfortSettings settings = CreateSettings();
+
+            Assert.That(settings.SwimPassiveSinkEnabled, Is.True,
+                "Negative buoyancy is the ratified default.");
+            Assert.That(settings.SwimVignetteBoost, Is.True,
+                "The unrequested vertical motion gets the same comfort aid as driven motion.");
+
+            settings.SwimPassiveSinkEnabled = false;
+
+            Assert.That(settings.SwimPassiveSinkEnabled, Is.False,
+                "The accommodation has to be reachable, or the default is not defensible.");
+        }
+
+        [Test]
+        public void SwimSpeedFactorIsClampedToTheRangeTheMotionHelperExpects()
+        {
+            BlockiverseComfortSettings settings = CreateSettings();
+
+            Assert.That(settings.SwimSpeedFactor,
+                Is.EqualTo(BlockiverseSwimMotion.DefaultSwimSpeedFactor).Within(0.0001f),
+                "The settings default and the motion helper's default must be the same number.");
+
+            settings.SwimSpeedFactor = 99.0f;
+
+            Assert.That(settings.SwimSpeedFactor,
+                Is.EqualTo(BlockiverseSwimMotion.MaximumSwimSpeedFactor).Within(0.0001f));
+
+            settings.SwimSpeedFactor = -5.0f;
+
+            Assert.That(settings.SwimSpeedFactor,
+                Is.EqualTo(BlockiverseSwimMotion.MinimumSwimSpeedFactor).Within(0.0001f),
+                "A zero factor would strand a swimmer motionless with no way to tell why.");
+        }
+
+        [Test]
         public void DefaultGlideStyleIsSmooth()
         {
             BlockiverseComfortSettings settings = CreateSettings();

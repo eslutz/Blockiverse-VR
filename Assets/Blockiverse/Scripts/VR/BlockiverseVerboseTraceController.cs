@@ -342,12 +342,26 @@ namespace Blockiverse.VR
                 $"{{\"position\":{BlockPositionJson(position)}}}");
         }
 
+        // Carries the derived distance/delay/volume as well as the position, because on device
+        // there is no other way to check that a far strike really did rumble seconds later and
+        // quietly -- the timing is the feature, and it is invisible to every other tool.
         void OnLightningStruck(BlockPosition position)
         {
+            Camera head = Camera.main;
+            float distance = head != null
+                ? Vector3.Distance(head.transform.position, new Vector3(position.X + 0.5f, position.Y + 1.0f, position.Z + 0.5f))
+                : -1.0f;
+
             BlockiverseTrace.Write(
                 "environment",
                 "environment.lightning_strike",
-                $"{{\"position\":{BlockPositionJson(position)}}}");
+                "{" +
+                $"\"position\":{BlockPositionJson(position)}," +
+                $"\"distance\":{distance:0.00}," +
+                $"\"thunderDelay\":{BlockiverseThunderScheduling.ResolveDelaySeconds(distance):0.00}," +
+                $"\"thunderVolume\":{BlockiverseThunderScheduling.ResolveVolumeScale(distance):0.00}," +
+                $"\"flashStrength\":{LightningFlashSolver.DistanceStrength(distance):0.00}" +
+                "}");
         }
 
         void OnAudioCuePlayed(BlockiverseAudioCue cue, AudioClip clip)

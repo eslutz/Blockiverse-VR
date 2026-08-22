@@ -78,14 +78,17 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void BobbingDoesNotApplyWhileWorldInputIsBlocked()
+        public void BobbingStillAppliesWhileWorldInputIsBlocked()
         {
+            // Inverted deliberately. This controller carried its OWN copy of the world-input gate
+            // independently of BlockiverseGaitCycle, so fixing the cycle alone would have left the
+            // bob dead in the title mini-world with a green test suite.
             TestStack stack = CreateTestStack(GlideStyle.Bobbing);
             BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
 
             stack.Walk(SettleFrames);
 
-            Assert.That(stack.CameraOffsetY, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(stack.CameraOffsetY, Is.Not.EqualTo(0f).Within(0.001f));
         }
 
         [Test]

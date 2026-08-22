@@ -61,6 +61,15 @@ namespace Blockiverse.WorldGen
             2400,  // Fog
         };
 
+        // How long a state runs before its next transition is rolled. Exposed so presentation can
+        // place "where in this weather am I" on a 0..1 arc -- lightning intensity reads it to make
+        // a storm build and taper rather than striking at one flat rate.
+        public static int MinimumStateDurationTicks(WeatherState state)
+        {
+            int index = (int)state;
+            return index >= 0 && index < MinDurationTicks.Length ? MinDurationTicks[index] : 0;
+        }
+
         // Transition weights: for each current state, the probability weights for each next state.
         // Row = current, Column = next. Zero means impossible transition.
         static readonly int[,] TransitionWeights =

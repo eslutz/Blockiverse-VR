@@ -134,6 +134,23 @@ namespace Blockiverse.Editor
             gravityProvider.sphereCastLayerMask = GetInteractionLayerMask();
             gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
 
+            // Swimming. After the gravity provider so it can register itself as an IGravityController
+            // on enable: GravityProvider only auto-populates that list once, from components already
+            // present, so a provider added later would never be consulted and the player would sink
+            // at XRI's terminal velocity instead of swimming.
+            BlockiverseSwimProvider swimProvider = rig.GetComponent<BlockiverseSwimProvider>();
+
+            if (swimProvider == null)
+                swimProvider = rig.AddComponent<BlockiverseSwimProvider>();
+
+            swimProvider.mediator = mediator;
+            swimProvider.Configure(
+                inputRig,
+                null,
+                gravityProvider,
+                gaitCycle,
+                origin != null && origin.Camera != null ? origin.Camera.transform : null);
+
             JumpProvider jumpProvider = rig.GetComponent<JumpProvider>();
 
             if (jumpProvider == null)

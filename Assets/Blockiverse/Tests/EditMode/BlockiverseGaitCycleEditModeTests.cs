@@ -185,8 +185,13 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void BlockedWorldInputSuppressesTheCycle()
+        public void BlockedWorldInputDoesNotSuppressTheCycle()
         {
+            // The inverse of what this used to assert, and the reason it changed: blocked world
+            // input means "a menu holds focus", which is the entire title/mini-world state. Gating
+            // the walk cycle on it killed the bob and the footsteps everywhere the player can walk
+            // but not build -- exactly the mini-world. The menus ruleset says menus never suppress
+            // locomotion; only block editing stays gated.
             (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
             int footfalls = 0;
             gait.Footfall += () => footfalls++;
@@ -195,8 +200,26 @@ namespace Blockiverse.Tests.EditMode
 
             Walk(rig, gait, Mathf.CeilToInt(3f * BlockiverseGaitCycle.DefaultStepLengthMeters / MetersPerFrame));
 
-            Assert.That(footfalls, Is.Zero);
-            Assert.That(gait.IsStepping, Is.False);
+            Assert.That(gait.IsSuppressed, Is.False, "Menu focus must not suppress the walk cycle.");
+            Assert.That(gait.IsStepping, Is.True);
+            Assert.That(footfalls, Is.GreaterThan(0), "Footsteps must fire in the title mini-world.");
+        }
+
+        [Test]
+        public void OnlyExternalSuppressionCanStopTheCycle()
+        {
+            // Pins the contract so the world-input gate cannot be reintroduced silently. Creative
+            // flight is the one legitimate suppressor.
+            (GameObject rig, BlockiverseGaitCycle gait) = CreateGait();
+
+            BlockiverseRuntimeState.SetRouterState(isGamePaused: true, allowWorldInput: false);
+            Assert.That(gait.IsSuppressed, Is.False);
+
+            gait.ExternallySuppressed = true;
+            Assert.That(gait.IsSuppressed, Is.True);
+
+            gait.ExternallySuppressed = false;
+            Assert.That(gait.IsSuppressed, Is.False);
         }
 
         [Test]

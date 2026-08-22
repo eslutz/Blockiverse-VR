@@ -125,9 +125,11 @@ namespace Blockiverse.VR
                                   comfortSettings.LocomotionMode == BlockiverseLocomotionMode.Glide &&
                                   comfortSettings.GlideStyle == GlideStyle.Bobbing;
             bool flying = inputRig != null && inputRig.CreativeFlightLocomotionActive;
+            // A second, independent copy of the world-input gate used to live here, so fixing the
+            // gait cycle alone would have left the bob dead. gaitCycle.IsStepping already carries
+            // every condition that matters.
             bool stepping = bobbingEnabled &&
                             !flying &&
-                            BlockiverseRuntimeState.AllowWorldInput &&
                             gaitCycle != null &&
                             gaitCycle.IsStepping;
 

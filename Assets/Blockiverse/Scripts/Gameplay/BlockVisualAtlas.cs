@@ -214,7 +214,12 @@ namespace Blockiverse.Gameplay
                 queue: (int)RenderQueue.Transparent,
                 srcBlend: BlendMode.SrcAlpha,
                 dstBlend: BlendMode.OneMinusSrcAlpha,
-                zWrite: 0.0f);
+                zWrite: 0.0f,
+                // Every fluid quad winds outward and same-family faces are merged away, so from
+                // underneath a lake the surface was back-facing and culled -- you looked up at a
+                // hole in the world. Cull Off costs nothing here: only one side of a quad ever
+                // faces the camera, so it still rasterises once per pixel.
+                cull: CullMode.Off);
             material.EnableKeyword(WaterShaderKeyword);
             material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
             material.SetShaderPassEnabled(ForwardPassName, true);
@@ -237,7 +242,11 @@ namespace Blockiverse.Gameplay
                 queue: FluidDepthPrimeRenderQueue,
                 srcBlend: BlendMode.One,
                 dstBlend: BlendMode.Zero,
-                zWrite: 1.0f);
+                zWrite: 1.0f,
+                // MUST match the shading material. If only that one un-culled, the prime would
+                // write no depth at the underside and the double-blend ADR 0007 section 4 exists
+                // to eliminate would come straight back for anyone looking up through water.
+                cull: CullMode.Off);
             material.EnableKeyword(WaterShaderKeyword);
             material.SetShaderPassEnabled(WaterDepthPrimePassName, true);
             material.SetShaderPassEnabled(ForwardPassName, false);
@@ -246,20 +255,25 @@ namespace Blockiverse.Gameplay
             return material;
         }
 
+        // cull is a parameter rather than a constant because terrain and water want different
+        // answers: opaque terrain never needs its backfaces and pays for culling them, while a
+        // water surface has to be visible from BELOW -- swimming under a lake and looking up at a
+        // hole in the world was the whole reason this became a parameter.
         static void ApplySurfaceState(
             Material material,
             string renderType,
             int queue,
             BlendMode srcBlend,
             BlendMode dstBlend,
-            float zWrite)
+            float zWrite,
+            CullMode cull = CullMode.Back)
         {
             material.SetOverrideTag("RenderType", renderType);
             material.renderQueue = queue;
             SetFloatIfPresent(material, "_SrcBlend", (float)srcBlend);
             SetFloatIfPresent(material, "_DstBlend", (float)dstBlend);
             SetFloatIfPresent(material, "_ZWrite", zWrite);
-            SetFloatIfPresent(material, "_Cull", (float)CullMode.Back);
+            SetFloatIfPresent(material, "_Cull", (float)cull);
         }
 
         // The fallback shaders CreateBaseMaterial can land on (URP Lit, Standard, Sprites/Default)

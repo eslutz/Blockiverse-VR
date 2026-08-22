@@ -33,18 +33,43 @@ namespace Blockiverse.Gameplay
             Subscribe();
         }
 
+        // Whether a cue is a full-field brightness event, which is what the Reduced Flash comfort
+        // setting exists to suppress. The single source of truth: the sky flash and the bolt mesh
+        // do not route through PlayCue, so without one shared predicate the setting would be
+        // enforced in three places and drift.
+        public static bool IsFlashCue(BlockiverseVfxCue cue) => cue == BlockiverseVfxCue.LightningFlash;
+
+        // Consulted by anything that produces a flash, cue or not -- see
+        // WeatherFeedbackController.OnLightningStruck, which gates both the bolt and the sky
+        // flash on this.
+        public bool AllowFlashEffects
+        {
+            get
+            {
+                EnsureReferences();
+                return feedbackSettings == null || !feedbackSettings.ReducedFlash;
+            }
+        }
+
+        public float ParticleIntensityScale
+        {
+            get
+            {
+                EnsureReferences();
+                return feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
+            }
+        }
+
         public void PlayCue(BlockiverseVfxCue cue, Vector3 position)
         {
             EnsureReferences();
             if (pool == null)
                 return;
 
-            if (cue == BlockiverseVfxCue.LightningFlash && feedbackSettings != null && feedbackSettings.ReducedFlash)
+            if (IsFlashCue(cue) && !AllowFlashEffects)
                 return;
 
-            float intensity = feedbackSettings != null && feedbackSettings.ReducedParticles ? 0.5f : 1.0f;
-
-            pool.Play(cue, position, TintForCue(cue), intensity);
+            pool.Play(cue, position, TintForCue(cue), ParticleIntensityScale);
             CuePlayed?.Invoke(cue, position);
         }
 
@@ -105,6 +130,10 @@ namespace Blockiverse.Gameplay
                 BlockiverseVfxCue.RainSplash => new Color(0.55f, 0.85f, 1.0f),
                 BlockiverseVfxCue.SnowflakeDrift => Color.white,
                 BlockiverseVfxCue.FogWisp => new Color(0.75f, 0.82f, 0.82f),
+                // Had no entry at all and fell through to the dull tan default below -- which was
+                // invisible while vertex tint was being discarded, and would have been obviously
+                // wrong the moment it started working.
+                BlockiverseVfxCue.LightningFlash => new Color(0.85f, 0.92f, 1.0f),
                 BlockiverseVfxCue.TorchSpark or BlockiverseVfxCue.CampfireEmber => new Color(1.0f, 0.48f, 0.15f),
                 _ => new Color(0.75f, 0.68f, 0.55f)
             };

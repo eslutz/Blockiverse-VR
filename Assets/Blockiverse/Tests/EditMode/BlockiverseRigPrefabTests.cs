@@ -611,6 +611,30 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void RigCarriesTheSwimProviderAndItsComfortRows()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
+
+            Assert.That(prefab, Is.Not.Null);
+
+            BlockiverseSwimProvider swimProvider = prefab.GetComponent<BlockiverseSwimProvider>();
+            GravityProvider gravityProvider = prefab.GetComponent<GravityProvider>();
+
+            Assert.That(swimProvider, Is.Not.Null,
+                "Without the provider on the generated rig the player sinks under gravity instead of swimming.");
+            Assert.That(gravityProvider, Is.Not.Null,
+                "The swim provider registers itself against this one; it has to exist on the same rig.");
+
+            Transform panel = prefab.transform.Find("Camera Offset/Comfort Settings Menu/Panel");
+
+            Assert.That(panel, Is.Not.Null);
+            Assert.That(panel.Find("Swim Sink Toggle")?.GetComponent<Toggle>(), Is.Not.Null,
+                "Passive sink is the one comfort default that opts INTO motion, so its off switch has to be in the menu.");
+            Assert.That(panel.Find("Swim Vignette Toggle")?.GetComponent<Toggle>(), Is.Not.Null);
+            Assert.That(panel.Find("Swim Speed Slider/Slider")?.GetComponent<Slider>(), Is.Not.Null);
+        }
+
+        [Test]
         public void XrRigPrefabInputBindingsHaveJumpAndThumbstickUpTeleport()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
@@ -817,25 +841,39 @@ namespace Blockiverse.Tests.EditMode
                 flight.SetFlightActive(true);
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enabled, Is.False, "Creative flight moves by holding the dominant primary button toward the dominant-hand aim pose, not by stick locomotion.");
-                Assert.That(continuousMove.enableFly, Is.False);
-                Assert.That(gravity.useGravity, Is.False);
-                Assert.That(jump.enabled, Is.False);
+                // Inverted deliberately. Flight used to disable the move provider outright and
+                // move only along the dominant hand's aim while jump was held -- which meant the
+                // stick did nothing while flying, and the motion bypassed the mediator and the
+                // CharacterController, so flight had no collision at all.
+                //
+                // Horizontal is now the ordinary move provider, so a flying player keeps every
+                // comfort setting they already have, and flight collides like everything else.
+                Assert.That(continuousMove.enabled, Is.True,
+                    "Flight moves horizontally on the stick, through the same provider walking uses.");
+                Assert.That(continuousMove.enableFly, Is.False,
+                    "Vertical is owned by the flight provider, not by the move provider's fly mode.");
+
+                // Gravity is suppressed through the provider LOCK rather than by writing
+                // useGravity, which GravityProvider re-asserts on every comfort change.
+                Assert.That(flight.GravityLockHeld, Is.True);
+                Assert.That(jump.enabled, Is.False, "Jump/A is the ascend verb while flying.");
                 Assert.That(inputRig.TurnWithBothHands, Is.True, "Both sticks should keep turning available while the player is in creative flight.");
 
                 flight.SetFlightActive(false);
 
                 Assert.That(flight.IsFlightActive, Is.False);
                 Assert.That(continuousMove.enableFly, Is.False);
-                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(flight.GravityLockHeld, Is.False,
+                    "Leaving flight must release the lock, or the player hangs in mid-air on the ground.");
                 Assert.That(jump.enabled, Is.True);
                 Assert.That(inputRig.TurnWithBothHands, Is.False);
 
                 flight.SetFlightActive(true);
 
                 Assert.That(flight.IsFlightActive, Is.True);
-                Assert.That(continuousMove.enabled, Is.False);
-                Assert.That(gravity.useGravity, Is.False);
+                Assert.That(continuousMove.enabled, Is.True,
+                    "Horizontal flight is the ordinary move provider, so it stays enabled.");
+                Assert.That(flight.GravityLockHeld, Is.True);
                 Assert.That(jump.enabled, Is.False);
 
                 worldManager.SetGameMode(WorldGameMode.Survival);
@@ -843,7 +881,8 @@ namespace Blockiverse.Tests.EditMode
 
                 Assert.That(flight.IsFlightActive, Is.False);
                 Assert.That(continuousMove.enableFly, Is.False);
-                Assert.That(gravity.useGravity, Is.True);
+                Assert.That(flight.GravityLockHeld, Is.False,
+                    "Dropping out of creative mode must release the lock like any other exit path.");
                 Assert.That(jump.enabled, Is.True);
                 Assert.That(inputRig.TurnWithBothHands, Is.False);
             }
@@ -1340,9 +1379,9 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
             Assert.That(popupText, Does.Contain("Menu: pause"));
             Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
-            Assert.That(popupText, Does.Contain("Dominant stick click: crouch"));
-            Assert.That(popupText, Does.Contain("Dominant primary button: jump"));
-            Assert.That(popupText, Does.Contain("Dominant secondary button: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Dominant stick click: toggle block editing"));
+            Assert.That(popupText, Does.Contain("Dominant primary button: jump / swim up"));
+            Assert.That(popupText, Does.Contain("Dominant secondary button: crouch / swim down"));
             Assert.That(popupText, Does.Contain("Support stick: move"));
             Assert.That(popupText, Does.Contain("Support stick click: sprint"));
             Assert.That(popupText, Does.Contain("Either stick hold up: teleport aim, release to land"));
@@ -1531,8 +1570,21 @@ namespace Blockiverse.Tests.EditMode
                 $"{map.name}/Sprint should be bound to {controllerPath}/thumbstickClicked.");
             Assert.That(crouch, Is.Not.Null, $"{map.name}/Crouch should exist.");
             Assert.That(crouch.bindings,
+                Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/secondaryButton"),
+                $"{map.name}/Crouch should be bound to {controllerPath}/secondaryButton.");
+
+            // The trap this guards: EnsureButtonAction in the schema-repair path only ever ADDS a
+            // missing binding and never removes a stale one, so forgetting the removal would leave
+            // crouch firing from BOTH the B button and the stick click after the next regeneration.
+            Assert.That(crouch.bindings,
+                Has.None.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
+                $"{map.name}/Crouch must not keep its old stick-click binding.");
+
+            InputAction blockEditingToggle = map.FindAction(BlockiverseInputActionNames.BlockEditingToggle, throwIfNotFound: false);
+            Assert.That(blockEditingToggle, Is.Not.Null, $"{map.name}/Block Editing Toggle should exist.");
+            Assert.That(blockEditingToggle.bindings,
                 Has.Some.Matches<InputBinding>(b => (b.effectivePath ?? b.path ?? "") == $"{controllerPath}/thumbstickClicked"),
-                $"{map.name}/Crouch should be bound to {controllerPath}/thumbstickClicked.");
+                $"{map.name}/Block Editing Toggle should be bound to {controllerPath}/thumbstickClicked.");
         }
 
         static void AssertButtonReaderReferencesAction(XRInputButtonReader reader, InputAction action, string message)

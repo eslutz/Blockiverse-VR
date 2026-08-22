@@ -270,6 +270,41 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(uiTicks, Is.EqualTo(2));
         }
 
+        [Test]
+        public void PerCallVolumeScaleCannotBypassTheMixGates()
+        {
+            // The whole reason the thunder distance curve folds into ResolveVolume rather than
+            // being applied at the PlayOneShot call: a caller must not be able to scale its way
+            // past mute-all or the category bus.
+            BlockiverseAudioCuePlayer player = CreateCuePlayer();
+            player.ConfigureClip(BlockiverseAudioCue.ThunderFar, CreateClip("thunder_far"));
+
+            var settingsObject = new GameObject("Thunder Feedback Settings");
+            objectsToDestroy.Add(settingsObject);
+            BlockiverseFeedbackSettings settings = settingsObject.AddComponent<BlockiverseFeedbackSettings>();
+            player.ConfigureFeedbackSettings(settings);
+
+            var played = new List<BlockiverseAudioCue>();
+            player.CuePlayed += (cue, _) => played.Add(cue);
+
+            player.PlayCue(BlockiverseAudioCue.ThunderFar, volumeScale: 0.25f);
+            Assert.That(played, Has.Count.EqualTo(1), "A quiet distant clap should still play.");
+
+            // Zero scale is how a strike past the silence distance drops out, and it must drop out
+            // rather than play inaudibly.
+            player.PlayCue(BlockiverseAudioCue.ThunderFar, volumeScale: 0.0f);
+            Assert.That(played, Has.Count.EqualTo(1));
+
+            settings.WeatherVolume = 0.0f;
+            player.PlayCue(BlockiverseAudioCue.ThunderFar, volumeScale: 1.0f);
+            Assert.That(played, Has.Count.EqualTo(1), "The weather bus must still be able to silence thunder.");
+
+            settings.WeatherVolume = 1.0f;
+            settings.MuteAll = true;
+            player.PlayCue(BlockiverseAudioCue.ThunderFar, volumeScale: 1.0f);
+            Assert.That(played, Has.Count.EqualTo(1), "Mute All must still win over a full-volume strike.");
+        }
+
         BlockiverseAudioCuePlayer CreateCuePlayer()
         {
             var gameObject = new GameObject("Audio Cue Player");

@@ -388,8 +388,9 @@ namespace Blockiverse.Tests.EditMode
 
             StringAssert.Contains("Either stick hold up: teleport aim, release to land", gameMenuBootstrapper);
             StringAssert.Contains("Support stick: move", gameMenuBootstrapper);
-            StringAssert.Contains("Dominant stick click: crouch", gameMenuBootstrapper);
-            StringAssert.Contains("Dominant primary button: jump", gameMenuBootstrapper);
+            StringAssert.Contains("Dominant stick click: toggle block editing", gameMenuBootstrapper);
+            StringAssert.Contains("Dominant primary button: jump / swim up", gameMenuBootstrapper);
+            StringAssert.Contains("Dominant secondary button: crouch / swim down", gameMenuBootstrapper);
             Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right stick hold up: teleport aim"));
             Assert.That(gameMenuBootstrapper, Does.Not.Contain("Right A: jump"));
         }

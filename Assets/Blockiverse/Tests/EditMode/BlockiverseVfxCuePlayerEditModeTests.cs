@@ -93,6 +93,44 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void OnlyLightningCountsAsAFlashCue()
+        {
+            // Iterating the enum rather than spot-checking, so adding a cue forces a decision
+            // about whether it is a photosensitivity concern instead of defaulting to "no".
+            foreach (BlockiverseVfxCue cue in System.Enum.GetValues(typeof(BlockiverseVfxCue)))
+            {
+                Assert.That(
+                    BlockiverseVfxCuePlayer.IsFlashCue(cue),
+                    Is.EqualTo(cue == BlockiverseVfxCue.LightningFlash),
+                    $"{cue} disagrees with the single flash-cue predicate.");
+            }
+        }
+
+        [Test]
+        public void FlashAndParticleGatesReadTheComfortSettings()
+        {
+            // The bolt mesh and the sky flash never touch PlayCue, so they consult these two
+            // properties directly -- a comfort aid that silently stopped reporting would be
+            // invisible until someone felt ill.
+            root = new GameObject("VFX Gate Root");
+            BlockiverseFeedbackSettings settings = root.AddComponent<BlockiverseFeedbackSettings>();
+            BlockiverseVfxPool pool = root.AddComponent<BlockiverseVfxPool>();
+            BlockiverseVfxCuePlayer player = root.AddComponent<BlockiverseVfxCuePlayer>();
+
+            pool.ConfigureForTests(poolSize: 2);
+            player.Configure(pool, settings);
+
+            Assert.That(player.AllowFlashEffects, Is.True);
+            Assert.That(player.ParticleIntensityScale, Is.EqualTo(1.0f).Within(0.001f));
+
+            settings.ReducedFlash = true;
+            settings.ReducedParticles = true;
+
+            Assert.That(player.AllowFlashEffects, Is.False);
+            Assert.That(player.ParticleIntensityScale, Is.EqualTo(0.5f).Within(0.001f));
+        }
+
+        [Test]
         public void WeatherFeedbackDoesNotScatterHeadsetVfxWhileMenusBlockWorldInput()
         {
             root = new GameObject("Weather Feedback Root");

@@ -25,6 +25,7 @@ namespace Blockiverse.Core
         public const string PointerLineMaterialPath = "Assets/Blockiverse/Materials/BlockiversePointerLine.mat";
         public const string VfxParticleMaterialPath = "Assets/Blockiverse/Materials/BlockiverseVfxParticle.mat";
         public const string ChunkAtlasMaterialPath = "Assets/Blockiverse/Materials/BlockiverseChunkAtlas.mat";
+        public const string SkyMaterialPath = "Assets/Blockiverse/Materials/BlockiverseSky.mat";
         public const string InteractionLayerName = "BlockiverseInteractable";
         public const int InteractionLayerIndex = 10;
         public const int InteractionLayerMask = 1 << InteractionLayerIndex;

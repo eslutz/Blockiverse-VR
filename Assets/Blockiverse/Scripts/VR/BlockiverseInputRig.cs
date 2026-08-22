@@ -55,6 +55,7 @@ namespace Blockiverse.VR
         [SerializeField] ContinuousTurnProvider continuousTurnProvider;
         [SerializeField] GravityProvider gravityProvider;
         [SerializeField] JumpProvider jumpProvider;
+        [SerializeField] BlockiverseSwimProvider swimProvider;
         [SerializeField] CharacterController characterController;
         BlockiverseGaitCycle wiredGaitCycle;
         BlockiversePlayerBodyManipulator playerBodyManipulator;
@@ -100,6 +101,8 @@ namespace Blockiverse.VR
         BlockiverseControllerRole lastDominantHand;
         bool lastTurnWithBothHands;
         bool lastSprintActive;
+        bool lastSwimming;
+        float lastSwimSpeedFactor = 1.0f;
         bool locomotionSuppressed;
         bool turnWithBothHands;
         bool creativeFlightLocomotionActive;
@@ -143,6 +146,12 @@ namespace Blockiverse.VR
         public GravityProvider GravityProvider => gravityProvider;
         public JumpProvider JumpProvider => jumpProvider;
         public CharacterController CharacterController => characterController;
+        public BlockiverseComfortSettings ComfortSettings => comfortSettings;
+        public BlockiverseSwimProvider SwimProvider => swimProvider;
+
+        // True while the swim provider owns vertical motion. Crouch and jump both change meaning
+        // here, so this is read by the rig itself rather than only by the provider.
+        public bool SwimLocomotionActive => swimProvider != null && swimProvider.IsSwimming;
         public BlockiverseAudioCuePlayer AudioCuePlayer => audioCuePlayer;
         public BlockiverseControllerHaptics LeftControllerHaptics => leftControllerHaptics;
         public BlockiverseControllerHaptics RightControllerHaptics => rightControllerHaptics;
@@ -152,14 +161,19 @@ namespace Blockiverse.VR
         public BlockiverseControllerRole ActiveMoveHand => GetMoveHand();
         public BlockiverseControllerRole ActiveTurnHand => GetTurnHand();
         public BlockiverseControllerRole ActiveToolHand => GetToolHand();
-        public float MoveInputMagnitude
+        public float MoveInputMagnitude => MoveInput.magnitude;
+
+        // The raw stick vector, not just its length. The shore-climb assist needs a heading to
+        // know which column to look at, and it only ever fires while the player is actively
+        // pushing toward the bank.
+        public Vector2 MoveInput
         {
             get
             {
                 string mapName = GetControllerMapName(GetMoveHand());
                 return TryFindAction(mapName, BlockiverseInputActionNames.Move, out InputAction moveAction)
-                    ? moveAction.ReadValue<Vector2>().magnitude
-                    : 0.0f;
+                    ? moveAction.ReadValue<Vector2>()
+                    : Vector2.zero;
             }
         }
         public bool LocomotionSuppressed
@@ -500,7 +514,9 @@ namespace Blockiverse.VR
             TryFindAction(supportMap, BlockiverseInputActionNames.Activate, out cachedQuickMenuAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Select, out cachedBreakAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Activate, out cachedPlaceAction);
-            TryFindAction(dominantMap, BlockiverseInputActionNames.SecondaryButton, out cachedBlockEditingToggleAction);
+            // Its own action now, rather than the raw Secondary Button passthrough: B/Y carries
+            // crouch and swim-down, and the pointer toggle moved to the dominant stick click.
+            TryFindAction(dominantMap, BlockiverseInputActionNames.BlockEditingToggle, out cachedBlockEditingToggleAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Crouch, out cachedCrouchAction);
             TryFindAction(supportMap, BlockiverseInputActionNames.Sprint, out cachedSprintAction);
         }
@@ -551,7 +567,10 @@ namespace Blockiverse.VR
         // Without this the crouch toggle changed only block-placement rules and looked broken.
         void ApplyCrouchState()
         {
-            bool crouching = CrouchActive;
+            // While swimming, crouch is the swim-down input and nothing else: shrinking the capsule
+            // and dropping the camera underwater would move the view for an input that is supposed
+            // to move the body.
+            bool crouching = CrouchActive && !SwimLocomotionActive;
             bool realHeight = comfortSettings != null && comfortSettings.RealPlayerHeightEnabled;
 
             if (playerBodyManipulator != null)
@@ -825,6 +844,15 @@ namespace Blockiverse.VR
             if (jumpProvider == null)
                 jumpProvider = gameObject.AddComponent<JumpProvider>();
 
+            // After GravityProvider, so the swim provider finds it and can register itself as an
+            // IGravityController on enable. GravityProvider only auto-populates that list once,
+            // from components already present, so a provider added later is never consulted.
+            if (swimProvider == null)
+                swimProvider = GetComponent<BlockiverseSwimProvider>();
+
+            if (swimProvider == null)
+                swimProvider = gameObject.AddComponent<BlockiverseSwimProvider>();
+
             if (heightReset == null)
                 heightReset = GetComponent<BlockiverseHeightReset>();
 
@@ -884,6 +912,16 @@ namespace Blockiverse.VR
                 gravityProvider.useLocalSpaceGravity = true;
                 gravityProvider.sphereCastLayerMask = GetVoxelTerrainLayerMask();
                 gravityProvider.sphereCastTriggerInteraction = QueryTriggerInteraction.Ignore;
+            }
+
+            if (swimProvider != null)
+            {
+                // LocomotionProvider.OnEnable disables itself when it has no mediator, and
+                // AddComponent runs OnEnable before this line, so the mediator assignment has to be
+                // followed by an explicit re-enable exactly as the jump provider gets one below.
+                swimProvider.mediator = locomotionMediator;
+                swimProvider.Configure(this, null, gravityProvider, GetComponent<BlockiverseGaitCycle>(), null);
+                swimProvider.enabled = true;
             }
 
             if (jumpProvider != null)
@@ -1185,7 +1223,12 @@ namespace Blockiverse.VR
                 ? comfortSettings.ContinuousMoveSpeed
                 : DefaultContinuousMoveSpeed;
             bool sprintActive = SprintActive;
-            float resolvedMoveSpeed = ResolveSprintMoveSpeed(moveSpeed, sprintActive);
+            bool swimming = SwimLocomotionActive;
+            float swimSpeedFactor = BlockiverseSwimMotion.HorizontalSpeedFactor(
+                swimProvider != null ? swimProvider.State : SwimState.Dry,
+                swimProvider != null ? swimProvider.Family : default,
+                comfortSettings != null ? comfortSettings.SwimSpeedFactor : BlockiverseSwimMotion.DefaultSwimSpeedFactor);
+            float resolvedMoveSpeed = ResolveSprintMoveSpeed(moveSpeed, sprintActive) * swimSpeedFactor;
             float continuousTurnSpeed = comfortSettings != null
                 ? comfortSettings.ContinuousTurnSpeed
                 : DefaultContinuousTurnSpeed;
@@ -1209,6 +1252,8 @@ namespace Blockiverse.VR
                 Mathf.Approximately(snapTurnDegrees, lastSnapTurnDegrees) &&
                 snapTurnAroundEnabled == lastSnapTurnAroundEnabled &&
                 sprintActive == lastSprintActive &&
+                swimming == lastSwimming &&
+                Mathf.Approximately(swimSpeedFactor, lastSwimSpeedFactor) &&
                 !controlHandChanged)
             {
                 return;
@@ -1224,6 +1269,8 @@ namespace Blockiverse.VR
             lastDominantHand = dominantHand;
             lastTurnWithBothHands = turnWithBothHands;
             lastSprintActive = sprintActive;
+            lastSwimming = swimming;
+            lastSwimSpeedFactor = swimSpeedFactor;
 
             if (controlHandChanged)
             {
@@ -1266,8 +1313,11 @@ namespace Blockiverse.VR
             // The teleport ray mediators read LocomotionMode directly, so no rig-level toggle is
             // needed here. Jump is only meaningful in Glide mode (Teleport mode teleports instead);
             // the jump reader itself is wired once in ConfigureXriProviderInputs, never per frame.
+            // Jumping underwater is meaningless, so the provider is off while swimming -- but the
+            // swim provider reads the jump ACTION directly rather than this component, so swimming
+            // up still works in Teleport mode, where the jump provider is disabled anyway.
             if (jumpProvider != null)
-                jumpProvider.enabled = isGlide && locomotionAllowed;
+                jumpProvider.enabled = isGlide && locomotionAllowed && !swimming;
         }
 
         void UpdateTurnProviderEnabledState()

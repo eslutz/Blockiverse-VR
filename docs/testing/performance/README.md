@@ -11,10 +11,14 @@ Minimum internal target:
 
 ## Instrumentation
 
-- **In-headset HUD:** the generated World object carries `PerformanceStatsOverlay`
-  (Gameplay), which shows live FPS (avg/min/max), frame time, chunk count, triangle
-  count, and the rebuild queue depth in development builds. It also logs a periodic
-  `Performance` summary through `BlockiverseLog` for Quest log capture.
+- **Frame stats:** the generated World object carries `PerformanceStatsOverlay`
+  (Gameplay), which reports FPS (avg/min), frame time, chunk count, triangle count,
+  and the rebuild queue depth in development builds. It draws through IMGUI
+  (`OnGUI`), which never reaches a VR eye buffer, so **on device the only place these
+  numbers surface is its periodic `Performance sample` log line** — captured
+  automatically by `scripts/perf/capture-gpu-counters.sh`. `queuedRebuilds` is the
+  one to watch for anything that rewrites blocks (settling snow, fluid spread),
+  because chunk remeshing costs CPU that GPU counters cannot see.
 - **ProfilerMarkers:** generation, meshing, save/load, menu routing, world-session
   transitions, and host-authoritative networking are wrapped with named markers for
   the Unity Profiler and OVR Metrics Tool. Watch at least:
@@ -34,6 +38,18 @@ Minimum internal target:
 Fill-rate questions cannot be answered from the editor: the Quest GPU is a tiler and
 the desktop numbers do not transfer. Horizon OS ships `ovrgpuprofiler` at
 `/system_ext/bin/ovrgpuprofiler`, reachable through `hzdb`:
+
+```sh
+scripts/perf/capture-gpu-counters.sh <label> [seconds]
+```
+
+The script checks the device is attached and that our package is actually in the
+foreground, then writes a timestamped log to `TestResults/Performance/` with the
+build's version name recorded in the header, so two captures can be diffed
+directly. It refuses to run against the system dashboard rather than producing a
+plausible-looking file full of the wrong numbers.
+
+What it does, if you need to drive it by hand:
 
 ```sh
 hzdb device list                                   # confirm the headset is attached

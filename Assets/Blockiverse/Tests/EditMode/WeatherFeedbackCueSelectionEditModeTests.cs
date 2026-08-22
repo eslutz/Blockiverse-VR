@@ -132,5 +132,87 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(WeatherFeedbackController.SelectPrecipitationVfx(valley), Is.EqualTo(BlockiverseVfxCue.RainSplash));
             Assert.That(WeatherFeedbackController.SelectPrecipitationVfx(peak), Is.EqualTo(BlockiverseVfxCue.SnowflakeDrift));
         }
+        // ── Thunder ───────────────────────────────────────────────────────────
+        // Distance used to have no effect on thunder at all: OnLightningStruck played ThunderNear
+        // immediately at full volume however far away the strike was, and the ambient rumble
+        // picked near/far on a coin flip. With bolts now landing anywhere from 10 to 96 blocks
+        // out, the delay is the strongest distance cue the game has.
+
+        [Test]
+        public void ThunderDelayGrowsWithDistanceAcrossTheStrikeRing()
+        {
+            float near = BlockiverseThunderScheduling.ResolveDelaySeconds(LightningStrikeSelector.MinRingRadius);
+            float far = BlockiverseThunderScheduling.ResolveDelaySeconds(LightningStrikeSelector.MaxRingRadius);
+
+            // A strike at the ring's inner edge should crack almost immediately.
+            Assert.That(near, Is.LessThan(0.4f));
+
+            // One at the outer edge should arrive seconds later -- the gap IS the distance cue,
+            // and the whole reason the constant is not the real speed of sound.
+            Assert.That(far, Is.GreaterThan(2.5f));
+
+            float previous = 0.0f;
+            for (float distance = 0.0f; distance <= 128.0f; distance += 4.0f)
+            {
+                float delay = BlockiverseThunderScheduling.ResolveDelaySeconds(distance);
+                Assert.That(delay, Is.GreaterThanOrEqualTo(previous));
+                previous = delay;
+            }
+
+            Assert.That(BlockiverseThunderScheduling.ResolveDelaySeconds(0.0f), Is.EqualTo(0.0f));
+            Assert.That(BlockiverseThunderScheduling.ResolveDelaySeconds(-5.0f), Is.EqualTo(0.0f),
+                "A negative distance means 'unknown' in the trace path and must not produce a negative delay.");
+        }
+
+        [Test]
+        public void ThunderVolumeFallsOffAndReachesTheRingsEdgeQuiet()
+        {
+            Assert.That(BlockiverseThunderScheduling.ResolveVolumeScale(0.0f), Is.EqualTo(1.0f));
+
+            // The point of rescaling the ruleset's original /256 divisor: against a 96-block ring
+            // it left the most distant thunder at 62% volume, which flattened the distinction.
+            Assert.That(
+                BlockiverseThunderScheduling.ResolveVolumeScale(LightningStrikeSelector.MaxRingRadius),
+                Is.EqualTo(0.25f).Within(0.01f));
+
+            Assert.That(
+                BlockiverseThunderScheduling.ResolveVolumeScale(BlockiverseThunderScheduling.SilenceDistanceBlocks),
+                Is.EqualTo(0.0f));
+            Assert.That(BlockiverseThunderScheduling.ResolveVolumeScale(1000.0f), Is.EqualTo(0.0f));
+
+            float previous = 1.0f;
+            for (float distance = 0.0f; distance <= 200.0f; distance += 4.0f)
+            {
+                float scale = BlockiverseThunderScheduling.ResolveVolumeScale(distance);
+                Assert.That(scale, Is.LessThanOrEqualTo(previous));
+                previous = scale;
+            }
+        }
+
+        [Test]
+        public void NearAndFarClipsAreChosenByDistanceNotAtRandom()
+        {
+            const float threshold = BlockiverseThunderScheduling.NearThunderDistanceBlocks;
+
+            Assert.That(
+                BlockiverseThunderScheduling.SelectThunderCue(threshold),
+                Is.EqualTo(BlockiverseAudioCue.ThunderNear),
+                "The threshold itself is near -- asserted at the boundary, not near it.");
+            Assert.That(
+                BlockiverseThunderScheduling.SelectThunderCue(threshold + 0.01f),
+                Is.EqualTo(BlockiverseAudioCue.ThunderFar));
+
+            Assert.That(
+                BlockiverseThunderScheduling.SelectThunderCue(LightningStrikeSelector.MinRingRadius),
+                Is.EqualTo(BlockiverseAudioCue.ThunderNear));
+            Assert.That(
+                BlockiverseThunderScheduling.SelectThunderCue(LightningStrikeSelector.MaxRingRadius),
+                Is.EqualTo(BlockiverseAudioCue.ThunderFar));
+
+            // Both ends of the ring must be reachable, or one clip is dead weight.
+            Assert.That(threshold, Is.GreaterThan(LightningStrikeSelector.MinRingRadius));
+            Assert.That(threshold, Is.LessThan(LightningStrikeSelector.MaxRingRadius));
+        }
+
     }
 }
