@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using Blockiverse.Core;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
 namespace Blockiverse.Editor
@@ -16,6 +17,7 @@ namespace Blockiverse.Editor
         const string SigningConfigPathArgument = "-blockiverseSigningConfigPath";
         const string DefaultBuildOutputPath = "Builds/Android/BlockiverseVR-development.apk";
         const string DefaultReleaseBuildOutputPath = "Builds/Android/BlockiverseVR-release.apk";
+        const string DefaultLinuxServerSpikeOutputPath = "Builds/LinuxServerSpike/BlockiverseServer";
         const string BaseVersionFilePath = "ProjectSettings/BlockiverseVersion.txt";
         const string MetaAvatarSamplePresetDirectory = "Assets/Oculus/Avatar2_SampleAssets/SampleAssets/SampleAssets";
         const string MetaAvatarSamplePresetMarkerFile = ".blockiverse-no-sample-presets";
@@ -121,6 +123,52 @@ namespace Blockiverse.Editor
                     throw new InvalidOperationException(
                         $"Android release build failed with {summary.result}. Errors: {summary.totalErrors}");
                 }
+            }
+        }
+
+        // Phase 0 feasibility spike for the self-hosted dedicated server. Proves the Unity
+        // Dedicated Server (Linux x86-64) pipeline completes with the Meta XR SDK in the
+        // project, whose build preprocessors are not build-target gated. Deliberately does not
+        // call BlockiverseProjectBootstrapper.Run(): that switches the active build target to
+        // Android. Replaced by a real BuildLinuxServer entry point once the spike is green.
+        public static void BuildLinuxServerSpike()
+        {
+            string outputPath = GetArgumentValue(BuildOutputArgument) ?? DefaultLinuxServerSpikeOutputPath;
+            string outputDirectory = Path.GetDirectoryName(outputPath);
+
+            if (!string.IsNullOrEmpty(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+
+            StandaloneBuildSubtarget previousSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+            EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Server;
+
+            try
+            {
+                var options = new BuildPlayerOptions
+                {
+                    scenes = new[] { BlockiverseProject.BootScenePath },
+                    locationPathName = outputPath,
+                    target = BuildTarget.StandaloneLinux64,
+                    targetGroup = BuildTargetGroup.Standalone,
+                    subtarget = (int)StandaloneBuildSubtarget.Server,
+                    options = BuildOptions.None
+                };
+
+                using (PrepareOptionalMetaAvatarSamplePresets())
+                {
+                    BuildReport report = BuildPipeline.BuildPlayer(options);
+                    BuildSummary summary = report.summary;
+
+                    if (summary.result != BuildResult.Succeeded)
+                    {
+                        throw new InvalidOperationException(
+                            $"Linux dedicated server spike build failed with {summary.result}. Errors: {summary.totalErrors}");
+                    }
+                }
+            }
+            finally
+            {
+                EditorUserBuildSettings.standaloneBuildSubtarget = previousSubtarget;
             }
         }
 

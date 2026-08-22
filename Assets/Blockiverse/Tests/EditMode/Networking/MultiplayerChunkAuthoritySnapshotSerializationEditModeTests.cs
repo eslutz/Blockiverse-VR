@@ -183,7 +183,7 @@ namespace Blockiverse.Tests.Networking.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
                 manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(
                     registry,
                     settings,
@@ -285,7 +285,7 @@ namespace Blockiverse.Tests.Networking.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
                 manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(
                     registry,
                     settings,

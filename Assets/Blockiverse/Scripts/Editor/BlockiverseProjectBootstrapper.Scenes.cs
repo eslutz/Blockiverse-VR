@@ -794,11 +794,15 @@ namespace Blockiverse.Editor
             PerformanceStatsOverlay performanceOverlay = EnsureComponent<PerformanceStatsOverlay>(worldObject);
             CreativeInteractionController controller = EnsureComponent<CreativeInteractionController>(worldObject);
             CreativeWorldManager manager = EnsureComponent<CreativeWorldManager>(worldObject);
+            // The presentation half of the world root. CreativeWorldManager finds it by interface,
+            // so it must exist on the same object; on a dedicated server this component's whole
+            // assembly is excluded and the manager simply resolves null (ADR 0007).
+            BlockiverseWorldPresentation presentation = EnsureComponent<BlockiverseWorldPresentation>(worldObject);
             CreativeHotbar hotbar = FindBootSceneHotbar(scene);
             performanceOverlay.Configure(renderer);
             manager.InitializeDefaultWorldOnAwake = true;
-            manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
-            manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
+            presentation.Configure(worldMaterial, interactionLayer, controller, hotbar);
+            presentation.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
 
             BlockiverseCreativeInputBridge staleWorldBridge = worldObject.GetComponent<BlockiverseCreativeInputBridge>();
 
@@ -812,6 +816,7 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(performanceOverlay);
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(manager);
+            EditorUtility.SetDirty(presentation);
         }
 
         static CreativeHotbar FindBootSceneHotbar(Scene scene)

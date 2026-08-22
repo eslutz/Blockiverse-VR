@@ -93,7 +93,11 @@ namespace Blockiverse.Gameplay
             int layer,
             Texture2D selectedAtlas = null,
             string textureSetId = BlockTextureSetIds.Default,
-            bool deferInitialRebuild = false)
+            bool deferInitialRebuild = false,
+            // Supplied by the world simulation, which owns sky occlusion because crop growth and
+            // cave detection read it. Optional so renderer-only tests keep their existing calls;
+            // when null the renderer builds its own map as it always did.
+            VoxelSkyLightMap sharedSkyLight = null)
         {
             // Reconfiguring onto a new world (new/load from the menus) must not leave the old
             // world's chunk meshes, queue subscription, or material behind.
@@ -113,7 +117,7 @@ namespace Blockiverse.Gameplay
             fluidDepthPrimeMaterial = BlockVisualAtlas.CreateFluidDepthPrimeMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
             fluidLayer = ResolveFluidLayer();
-            skyLight = new VoxelSkyLightMap(world, registry);
+            skyLight = sharedSkyLight ?? new VoxelSkyLightMap(world, registry);
             emitterIndex = new VoxelEmitterIndex(world, registry);
             rebuildQueue = new ChunkRebuildQueue(world, skyLight, emitterIndex);
 

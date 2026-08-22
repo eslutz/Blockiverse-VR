@@ -1364,7 +1364,7 @@ namespace Blockiverse.Tests.EditMode
             BlockiverseMenuController controller = rig.AddComponent<BlockiverseMenuController>();
             CreativeWorldManager worldManager = rig.AddComponent<CreativeWorldManager>();
             MultiplayerSurvivalSync survivalSync = rig.AddComponent<MultiplayerSurvivalSync>();
-            worldManager.Configure(CreateTestChunkMaterial(), BlockiverseProject.InteractionLayerIndex);
+            BlockiverseWorldPresentation.Attach(worldManager, CreateTestChunkMaterial(), BlockiverseProject.InteractionLayerIndex);
             CreateGeneratedActionMenu(rig.transform, "Title Menu", 6);
             CreateGeneratedActionMenu(rig.transform, "Pause Menu", 8);
             BlockiverseStationPanel panel = CreateGeneratedStationPanel(rig.transform);

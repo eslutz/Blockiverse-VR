@@ -305,7 +305,8 @@ namespace Blockiverse.Tests.EditMode
             worldObject = new GameObject("World Manager");
             worldObject.SetActive(false);
             CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
-            manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
+            BlockiverseWorldPresentation.Attach(manager, null, -1)
+                .ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
             manager.InitializeDefaultWorld();
             return manager;
         }

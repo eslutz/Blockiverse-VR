@@ -339,7 +339,7 @@ namespace Blockiverse.UI
                 return;
 
             worldManager.SpawnStandardTree(world, basePos);
-            worldManager.Renderer?.RebuildDirty();
+            worldManager.Presentation?.RebuildDirty();
             SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSpawnedTree, basePos));
         }
 
@@ -349,7 +349,7 @@ namespace Blockiverse.UI
                 return;
 
             worldManager.SpawnStructure(world, basePos);
-            worldManager.Renderer?.RebuildDirty();
+            worldManager.Presentation?.RebuildDirty();
             SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeSpawnedRuin, basePos));
         }
 
@@ -532,7 +532,7 @@ namespace Blockiverse.UI
         {
             if (result == WorldEditResult.Success)
             {
-                worldManager.Renderer?.RebuildDirty();
+                worldManager.Presentation?.RebuildDirty();
                 SetStatus(BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeOperationDone, operation));
                 return;
             }

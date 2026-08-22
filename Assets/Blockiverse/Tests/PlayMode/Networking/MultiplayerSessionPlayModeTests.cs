@@ -3892,7 +3892,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             GameObject worldObject = new(name);
             worldObject.SetActive(false);
             CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
-            manager.Configure(CreateBlockAtlasMaterial(), -1);
+            BlockiverseWorldPresentation.Attach(manager, CreateBlockAtlasMaterial(), -1);
             BlockRegistry registry = BlockRegistry.CreateDefault();
             settings ??= new WorldGenerationSettings(
                     width: 16,

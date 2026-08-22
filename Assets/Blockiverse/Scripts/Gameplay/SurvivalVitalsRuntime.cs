@@ -549,7 +549,7 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            CreativeWorldManager.PositionRig(
+            BlockiverseRigPlacement.PositionAt(
                 new Vector3(state.PositionX, state.PositionY, state.PositionZ),
                 state.YawDegrees);
             Vitals.RestoreHealth(state.Health);
@@ -618,7 +618,7 @@ namespace Blockiverse.Gameplay
             deathDropSubmitted = false;
             Vitals.RespawnAt(spawn);
             SurvivalVitals.ResetToFull();
-            CreativeWorldManager.PositionRigAtSpawn(spawn);
+            BlockiverseRigPlacement.PositionAtSpawn(spawn);
         }
 
         void SubmitDeathDropIfNeeded()
