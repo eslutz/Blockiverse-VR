@@ -204,10 +204,45 @@ Shader "Blockiverse/Voxel Lit"
                 return output;
             }
 
-            half3 AccumulatePunctual(Light light, half3 normalWS)
+            // One occlusion term per light, never two. A light that owns a shadow slice resolves
+            // occlusion from its own cube map -- 1024 atlas, six slices on a 4x4 grid, so 256 px
+            // per cube face, about 4 cm at five metres. The baked emitterReach gate resolves it at
+            // one metre, because VoxelLightSampler.SampleEmitterReach returns 0 or 1 and
+            // ChunkMeshBuilder samples it once per face. Multiplying the two lets the 25x coarser
+            // term zero the finer one wherever it is 0, which is what put a block-aligned step
+            // through a real shadow.
+            half PunctualOcclusion(uint loopIndex, half emitterReach, half shadowAtten, float3 positionWS)
+            {
+                // The same mapping GetAdditionalLight performs internally (RealtimeLights.hlsl):
+                // the cluster iterator yields real light indices, the UBO path a loop counter.
+                #if USE_CLUSTER_LIGHT_LOOP
+                    int lightIndex = loopIndex;
+                #else
+                    int lightIndex = GetPerObjectLightIndex(loopIndex);
+                #endif
+
+                // .w is the light's first shadow slice index, -1 when it has no shadow map. It is
+                // also -1 for EVERY light when ADDITIONAL_LIGHT_CALCULATE_SHADOWS is undefined, so
+                // a player whose shadow keyword got stripped by the build preprocessor falls back
+                // to the baked gate everywhere -- exactly today's behaviour, never light through
+                // walls. That is the safe direction for the m_PrefilteringMode trap to fail in.
+                int shadowSliceIndex = GetAdditionalLightShadowParams(lightIndex).w;
+
+                UNITY_BRANCH
+                if (shadowSliceIndex < 0)
+                    return emitterReach;
+
+                // Trust the cube map only as far as URP itself does. Past the additional-shadow
+                // fade shadowAtten has already been lifted to 1, and the bake is the only thing
+                // left between a torch and the wall it is behind.
+                half fade = GetAdditionalLightShadowFade(positionWS);
+                return min(shadowAtten, max(emitterReach, 1.0h - fade));
+            }
+
+            half3 AccumulatePunctual(Light light, half3 normalWS, half occlusion)
             {
                 half nDotL = saturate(dot(normalWS, light.direction));
-                return light.color * (nDotL * light.distanceAttenuation * light.shadowAttenuation);
+                return light.color * (nDotL * light.distanceAttenuation * occlusion);
             }
 
             half4 frag(Varyings input) : SV_Target
@@ -224,8 +259,9 @@ Shader "Blockiverse/Voxel Lit"
                 //   R = sky exposure (1 open sky .. 0 fully enclosed) — gates sun/moon/ambient so
                 //       a cave stays dark at noon and a sealed room is dark;
                 //   G = emitter reach — 1 only if some emitter in range has clear line of sight
-                //       to this face, so realtime point lights cannot shine through walls or
-                //       the ground (that is otherwise pure inverse-square with no occlusion);
+                //       to this face. It is the occluder for punctual lights that own no shadow
+                //       map (URP punctual attenuation is otherwise pure inverse-square with no
+                //       occlusion at all); see PunctualOcclusion for which lights it applies to;
                 //   B = the block's own emissive level, so a torch stays visible in the dark.
                 half bakedSky = max(input.color.r, half(_BakedLightFloor));
                 half emitterReach = input.color.g;
@@ -267,21 +303,26 @@ Shader "Blockiverse/Voxel Lit"
                         // hard-references a variable called lightIndex.
                         [loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
                         {
-                            additional += AccumulatePunctual(
-                                GetAdditionalLight(lightIndex, input.positionWS, shadowMask), normalWS);
+                            Light light = GetAdditionalLight(lightIndex, input.positionWS, shadowMask);
+                            additional += AccumulatePunctual(light, normalWS,
+                                PunctualOcclusion(lightIndex, emitterReach, light.shadowAttenuation, input.positionWS));
                         }
                     #endif
 
                     uint pixelLightCount = GetAdditionalLightsCount();
                     LIGHT_LOOP_BEGIN(pixelLightCount)
-                        additional += AccumulatePunctual(
-                            GetAdditionalLight(lightIndex, input.positionWS, shadowMask), normalWS);
+                        Light light = GetAdditionalLight(lightIndex, input.positionWS, shadowMask);
+                        additional += AccumulatePunctual(light, normalWS,
+                            PunctualOcclusion(lightIndex, emitterReach, light.shadowAttenuation, input.positionWS));
                     LIGHT_LOOP_END
                 #elif defined(_ADDITIONAL_LIGHTS_VERTEX)
                     // Interpolated from the vertex stage. Per-vertex lighting gives a coarse 1 m
                     // grid gradient on voxel faces and barely lights a torch alcove, which is why
                     // ConfigureQuestUrpShadowPolicy ships Per Pixel instead.
-                    additional += input.vertexLighting;
+                    // Gated here rather than after the branch: vertex lighting carries no per-light
+                    // shadow information, so the baked gate is the only occluder available to it,
+                    // and the per-pixel path above no longer uses a shared post-loop multiply.
+                    additional += input.vertexLighting * emitterReach;
                 #endif
 
                 // URP's punctual attenuation is rcp(distanceSqr) with no near clamp, and an emitter
@@ -289,9 +330,10 @@ Shader "Blockiverse/Voxel Lit"
                 // 1.2-4.0. The URP asset has HDR off, so without this every surface within about a
                 // metre of a glowwick would saturate to flat white. Reinhard keeps the canonical
                 // brightness ladder intact while asymptotically approaching 1.
-                // Baked line-of-sight gate first: behind a wall or under the ground this is 0 and
-                // no amount of realtime intensity gets through.
-                additional *= emitterReach * half(_AdditionalLightScale);
+                // Occlusion is resolved per light inside the loop above -- each light gets its own
+                // shadow map or the baked gate, never both -- so this is scale and range
+                // compression only.
+                additional *= half(_AdditionalLightScale);
                 additional = additional / (half3(1.0h, 1.0h, 1.0h) + additional);
 
                 lighting += additional;

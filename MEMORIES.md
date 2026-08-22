@@ -96,18 +96,29 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
   minimum light is 8, and the level drops to 6 one block out). Saves are unaffected:
   `WorldSaveService.ComputeBlockRegistryHash` hashes canonical IDs only, not block attributes.
   Pinned by `CaveCrystalsLightCropsEnoughForReedsAndBerriesButNotGrain`.
-- Occlusion model (2026-08-19): the voxel mesh bakes three channels per face — R sky exposure
-  (floor 0: sealed rooms are black, tunnels fade to 0 by 12 blocks), G emitter reach (a voxel
-  DDA line-of-sight ray from the face to each emitter in range; `VoxelEmitterIndex` supplies the
-  candidates per chunk), B self-emission. The shader gates sun/moon/ambient by R and realtime
-  point lights by G, so emitters cannot shine through walls or the ground even though only the
-  nearest one owns a shadow map. `_BakedLightFloor` on the voxel material is the one knob if true
-  black proves unplayable on device (0.01 is the "eyes adjusted" equivalent). Crop growth still
-  reads `SampleAirLight` (axis-probe max(sky, emissive)) — deliberately NOT the LOS bake, so the
-  berries-adjacent-to-quartz decision is unchanged.
+- Occlusion model (updated 2026-08-22): the voxel mesh bakes three channels per face — R sky
+  exposure (floor 0: sealed rooms are black, tunnels fade to 0 by 12 blocks), G emitter reach (a
+  voxel DDA line-of-sight ray from the face to each emitter in range; `VoxelEmitterIndex` supplies
+  the candidates per chunk), B self-emission. The shader gates sun/moon/ambient by R.
+  **Punctual lights get exactly ONE occlusion term, never two** (`PunctualOcclusion` in
+  `BlockiverseVoxelLit.shader`): a light that owns a shadow slice
+  (`GetAdditionalLightShadowParams(i).w >= 0`) is occluded by its cube shadow map alone; every
+  other light is occluded by G alone. Applying both was the bug — G is one sample per face (1 m)
+  and the shadow map is ~4 cm, so multiplying them let the 25x coarser term zero the finer one and
+  stepped emitter shadows onto block boundaries. Past URP's additional-shadow fade, occlusion
+  hands back to G. Emitter `shadowStrength` is 1.0 (was 0.7, which never governed anything while
+  G was also hard-zeroing the term). Fails safe: with the shadow keyword stripped,
+  `GetAdditionalLightShadowParams` reports slice -1 for every light and G gates everything, i.e.
+  the pre-2026-08-22 behaviour. `_BakedLightFloor` on the voxel material is still the one knob if
+  true black proves unplayable on device (0.01 is the "eyes adjusted" equivalent). Crop growth
+  still reads `SampleAirLight` (axis-probe max(sky, emissive)) — deliberately NOT the LOS bake, so
+  the berries-adjacent-to-quartz decision is unchanged.
 - Remaining known gaps: baked light is still time-of-day independent (the sun/moon do the
-  darkening, the bake only gates them); the LOS gate is per face, so an occlusion edge lands on a
-  block boundary rather than interpolating across a face; the emitter index and
+  darkening, the bake only gates them); emitters WITHOUT a shadow map still take the per-face G
+  gate, so their occlusion edge lands on a block boundary (the escalation if that reads badly on
+  device is `MaxShadowCastingLights = 2`, not per-corner sampling — 16 LOS walks per face on the
+  main-thread rebuild was measured as too expensive and is parked at
+  `~/.claude/plans/glowwick-per-corner-light-parked.patch`); the emitter index and
   `GlowwickLightManager` each scan the world once on load (consolidation candidate).
 
 ## Release And Companion Docs

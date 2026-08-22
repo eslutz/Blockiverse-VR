@@ -359,7 +359,14 @@ namespace Blockiverse.Gameplay
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Point;
             light.shadows = LightShadows.None;
-            light.shadowStrength = 0.7f;
+            // Full strength, because the shadow map is now this light's ONLY occluder. 0.7 was
+            // tuned while the baked emitterReach gate also zeroed the punctual term, so it never
+            // actually governed anything -- wherever it mattered the bake had already won. The
+            // shader resolves occlusion per light now (PunctualOcclusion in BlockiverseVoxelLit),
+            // so this is the sole control over how dark an emitter shadow is, and 1.0 is what
+            // preserves the shipped "no punctual light through a wall" contract. Back it off only
+            // if shadow acne proves objectionable on device.
+            light.shadowStrength = 1.0f;
             // Emitters sit inside their own voxel, so bias the near plane out past the block face
             // to stop the source cube self-shadowing into a black halo.
             light.shadowNearPlane = 0.6f;
