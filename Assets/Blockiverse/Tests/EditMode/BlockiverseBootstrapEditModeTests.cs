@@ -279,6 +279,14 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(shader, Does.Not.Contain("additional *= emitterReach"),
                 "The baked gate must not be applied to the summed punctual total again after the "
                 + "light loop; that double-gates the one emitter that already has a shadow map.");
+
+            // The handoff to the bake has to crossfade the RAW shadow sample. URP has already
+            // mixed the fade into Light.shadowAttenuation, so a fully shadowed texel reads back as
+            // `fade`, and combining two fade-lifted envelopes reopens pixels both terms call
+            // occluded -- half the punctual light through a wall at the middle of the band.
+            Assert.That(shader, Does.Contain("AdditionalLightRealtimeShadow"),
+                "Emitter occlusion must sample the unfaded realtime shadow directly rather than "
+                + "reuse the fade-mixed Light.shadowAttenuation.");
         }
 
         [Test]

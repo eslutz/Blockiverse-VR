@@ -211,7 +211,7 @@ Shader "Blockiverse/Voxel Lit"
             // ChunkMeshBuilder samples it once per face. Multiplying the two lets the 25x coarser
             // term zero the finer one wherever it is 0, which is what put a block-aligned step
             // through a real shadow.
-            half PunctualOcclusion(uint loopIndex, half emitterReach, half shadowAtten, float3 positionWS)
+            half PunctualOcclusion(uint loopIndex, half emitterReach, float3 positionWS, half3 lightDirection)
             {
                 // The same mapping GetAdditionalLight performs internally (RealtimeLights.hlsl):
                 // the cluster iterator yields real light indices, the UBO path a loop counter.
@@ -232,11 +232,21 @@ Shader "Blockiverse/Voxel Lit"
                 if (shadowSliceIndex < 0)
                     return emitterReach;
 
-                // Trust the cube map only as far as URP itself does. Past the additional-shadow
-                // fade shadowAtten has already been lifted to 1, and the bake is the only thing
-                // left between a torch and the wall it is behind.
+                // The RAW shadow sample, deliberately not Light.shadowAttenuation. URP has already
+                // mixed the fade into that one (MixRealtimeAndBakedShadows -> lerp(raw, 1, fade)
+                // with no lightmaps here), so a fully shadowed texel reads back as `fade` rather
+                // than 0. Crossfading two envelopes that have both been lifted by the same fade
+                // reopens pixels that BOTH terms call occluded -- min(fade, 1 - fade) peaks at 0.5
+                // mid-band, letting half the punctual light through a wall. Fetching the light
+                // without the shadowMask overload leaves shadowAttenuation at 1, so this is the
+                // only shadow sample taken, not a second one.
+                half raw = AdditionalLightRealtimeShadow(lightIndex, positionWS, lightDirection);
+
+                // Hand occlusion from the cube map to the bake exactly as URP retires the shadow:
+                // 0 fade is the map alone, 1 is the bake alone, and a pixel both agree is occluded
+                // stays occluded the whole way across.
                 half fade = GetAdditionalLightShadowFade(positionWS);
-                return min(shadowAtten, max(emitterReach, 1.0h - fade));
+                return lerp(raw, emitterReach, fade);
             }
 
             half3 AccumulatePunctual(Light light, half3 normalWS, half occlusion)
@@ -303,17 +313,20 @@ Shader "Blockiverse/Voxel Lit"
                         // hard-references a variable called lightIndex.
                         [loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
                         {
-                            Light light = GetAdditionalLight(lightIndex, input.positionWS, shadowMask);
+                            // No shadowMask overload: PunctualOcclusion takes the raw shadow sample
+                            // itself, so letting URP also compute a fade-mixed one would be both a
+                            // second cube-map fetch and the wrong value.
+                            Light light = GetAdditionalLight(lightIndex, input.positionWS);
                             additional += AccumulatePunctual(light, normalWS,
-                                PunctualOcclusion(lightIndex, emitterReach, light.shadowAttenuation, input.positionWS));
+                                PunctualOcclusion(lightIndex, emitterReach, input.positionWS, light.direction));
                         }
                     #endif
 
                     uint pixelLightCount = GetAdditionalLightsCount();
                     LIGHT_LOOP_BEGIN(pixelLightCount)
-                        Light light = GetAdditionalLight(lightIndex, input.positionWS, shadowMask);
+                        Light light = GetAdditionalLight(lightIndex, input.positionWS);
                         additional += AccumulatePunctual(light, normalWS,
-                            PunctualOcclusion(lightIndex, emitterReach, light.shadowAttenuation, input.positionWS));
+                            PunctualOcclusion(lightIndex, emitterReach, input.positionWS, light.direction));
                     LIGHT_LOOP_END
                 #elif defined(_ADDITIONAL_LIGHTS_VERTEX)
                     // Interpolated from the vertex stage. Per-vertex lighting gives a coarse 1 m

@@ -36,7 +36,13 @@ slice:
   map, URP punctual attenuation is pure inverse-square with no occlusion at all, so the bake
   remains the only thing stopping a torch lighting the far side of a wall.
 - Past URP's additional-shadow fade the cube map stops answering and occlusion is handed back to
-  the bake, so distance cannot reopen the bleed-through the bake exists to prevent.
+  the bake, so distance cannot reopen the bleed-through the bake exists to prevent. That crossfade
+  must use the **raw** shadow sample (`AdditionalLightRealtimeShadow`), never
+  `Light.shadowAttenuation`: URP has already mixed the fade into the latter, so a fully shadowed
+  texel reads back as `fade` rather than 0. Combining two envelopes that have both been lifted by
+  the same fade reopens pixels that *both* terms call occluded — the naive
+  `min(shadowAttenuation, max(emitterReach, 1 - fade))` peaks at 0.5 mid-band and puts half the
+  punctual light through a wall.
 - `Light.shadowStrength` for emitters moves from 0.7 to 1.0. It was tuned while the bake also
   hard-zeroed the punctual term, so it never governed anything; it is now the sole control over
   how dark an emitter shadow is, and 1.0 preserves the "no punctual light through a wall"
