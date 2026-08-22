@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Blockiverse.Gameplay;
 using Blockiverse.VR;
 using Blockiverse.Core;
 using NUnit.Framework;
@@ -63,6 +64,47 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(settings.VignetteAperture, Is.EqualTo(0.8f).Within(0.001f));
         }
 
+        [Test]
+        public void ClassicBlockSoundsSurvivesARestart()
+        {
+            // Persisting a new setting takes three edits — load, save, and the
+            // change-detection hash. Miss the hash and the value reads back fine in
+            // the same session but never actually reaches PlayerPrefs, so this
+            // asserts the write, not just the read.
+            (BlockiverseFeedbackSettings feedback, BlockiverseSettingsPersistence persistence) =
+                CreateFeedbackWithPersistence();
+            Assert.That(feedback.ClassicBlockSoundsEnabled, Is.False, "should default off");
+
+            feedback.ClassicBlockSoundsEnabled = true;
+            Invoke(persistence, "SaveIfChanged");
+
+            Assert.That(PlayerPrefs.GetInt(KeyPrefix + "ClassicBlockSounds", 0), Is.EqualTo(1),
+                "enabling the setting should reach PlayerPrefs");
+
+            // A fresh component pair stands in for the next launch.
+            (BlockiverseFeedbackSettings reloaded, _) = CreateFeedbackWithPersistence();
+            Assert.That(reloaded.ClassicBlockSoundsEnabled, Is.True);
+        }
+
+        (BlockiverseFeedbackSettings, BlockiverseSettingsPersistence) CreateFeedbackWithPersistence()
+        {
+            GameObject target = new("Feedback Settings Persistence");
+            objectsToDestroy.Add(target);
+
+            BlockiverseFeedbackSettings feedback = target.AddComponent<BlockiverseFeedbackSettings>();
+            BlockiverseSettingsPersistence persistence = target.AddComponent<BlockiverseSettingsPersistence>();
+            Invoke(persistence, "Start");
+            return (feedback, persistence);
+        }
+
+        static void Invoke(BlockiverseSettingsPersistence persistence, string methodName)
+        {
+            MethodInfo method = typeof(BlockiverseSettingsPersistence)
+                .GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null, $"{methodName} should exist");
+            method.Invoke(persistence, null);
+        }
+
         BlockiverseComfortSettings CreateSettingsWithPersistence()
         {
             GameObject target = new("Settings Persistence");
@@ -84,6 +126,7 @@ namespace Blockiverse.Tests.EditMode
             PlayerPrefs.DeleteKey(KeyPrefix + "VignetteEnabled");
             PlayerPrefs.DeleteKey(KeyPrefix + "VignetteStrength");
             PlayerPrefs.DeleteKey(KeyPrefix + "VignettePrefsVersion");
+            PlayerPrefs.DeleteKey(KeyPrefix + "ClassicBlockSounds");
             PlayerPrefs.Save();
         }
     }

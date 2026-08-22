@@ -1005,8 +1005,21 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(gaitCycle);
 
             BlockiverseLocomotionFeedback locomotionFeedback = EnsureComponent<BlockiverseLocomotionFeedback>(rig);
-            locomotionFeedback.Configure(rig.GetComponent<CharacterController>(), audioCuePlayer, gaitCycle);
+            // The world reference lets footsteps sample the block underfoot and pick
+            // the matching surface bank; null in the prefab path, resolved at runtime.
+            locomotionFeedback.Configure(
+                rig.GetComponent<CharacterController>(),
+                audioCuePlayer,
+                gaitCycle,
+                UnityEngine.Object.FindFirstObjectByType<CreativeWorldManager>(FindObjectsInactive.Include));
             EditorUtility.SetDirty(locomotionFeedback);
+
+            // Water audio hangs off the swim provider's state machine, which is the only
+            // authoritative submersion state on the rig. The provider is added by the locomotion
+            // pass; GetComponent rather than EnsureComponent so ordering stays that pass's job.
+            BlockiverseSwimFeedback swimFeedback = EnsureComponent<BlockiverseSwimFeedback>(rig);
+            swimFeedback.Configure(rig.GetComponent<BlockiverseSwimProvider>(), audioCuePlayer);
+            EditorUtility.SetDirty(swimFeedback);
 
             // Comfort + feedback settings persist across launches (PlayerPrefs).
             BlockiverseSettingsPersistence settingsPersistence = EnsureComponent<BlockiverseSettingsPersistence>(rig);
@@ -1040,9 +1053,54 @@ namespace Blockiverse.Editor
             foreach ((BlockiverseAudioCue cue, string assetName) in AudioCueAssets)
                 audioCuePlayer.ConfigureClip(cue, LoadAudioClip(assetName));
 
+            var materialBanks = new BlockiverseMaterialBank[MaterialAudioAssets.Length];
+            for (int index = 0; index < MaterialAudioAssets.Length; index++)
+            {
+                (BlockiverseMaterialFamily family, string breakAsset, string placeAsset) = MaterialAudioAssets[index];
+                materialBanks[index] = new BlockiverseMaterialBank
+                {
+                    Family = family,
+                    BreakClip = LoadAudioClip(breakAsset),
+                    PlaceClip = LoadAudioClip(placeAsset),
+                };
+            }
+            audioCuePlayer.ConfigureMaterialBanks(materialBanks);
+
+            var footstepBanks = new BlockiverseFootstepBank[FootstepSurfaceAssets.Length];
+            for (int index = 0; index < FootstepSurfaceAssets.Length; index++)
+            {
+                (BlockiverseSurfaceFamily surface, string prefix) = FootstepSurfaceAssets[index];
+                var clips = new AudioClip[FootstepVariantsPerSurface];
+                for (int variant = 0; variant < FootstepVariantsPerSurface; variant++)
+                    clips[variant] = LoadAudioClip($"{prefix}_{variant + 1:00}");
+
+                footstepBanks[index] = new BlockiverseFootstepBank { Surface = surface, Clips = clips };
+            }
+            audioCuePlayer.ConfigureFootstepBanks(footstepBanks);
+
+            // Legacy flat bank, kept as the fallback for a surface with no bank
+            // (and for callers that still play a bare Footstep cue).
             audioCuePlayer.ConfigureFootstepClips(
-                LoadAudioClip("footstep_01"),
-                LoadAudioClip("footstep_02"));
+                LoadAudioClip("footstep_soil_01"),
+                LoadAudioClip("footstep_soil_02"));
+
+            audioCuePlayer.ConfigureToolHitClips(
+                new[]
+                {
+                    LoadAudioClip("tool_hit_soft_01"),
+                    LoadAudioClip("tool_hit_soft_02"),
+                    LoadAudioClip("tool_hit_soft_03"),
+                },
+                new[]
+                {
+                    LoadAudioClip("tool_hit_stone_01"),
+                    LoadAudioClip("tool_hit_stone_02"),
+                    LoadAudioClip("tool_hit_stone_03"),
+                });
+
+            audioCuePlayer.ConfigureClassicBlockClips(
+                LoadAudioClip("classic_block_break"),
+                LoadAudioClip("classic_block_place"));
         }
 
         static AudioClip LoadAudioClip(string assetName)
@@ -1066,6 +1124,15 @@ namespace Blockiverse.Editor
             BlockiverseAudioCuePlayer audioCuePlayer,
             BlockiverseInteractionHaptics interactionHaptics)
         {
+            // The audio panel is built before the rig's feedback settings component is guaranteed
+            // to exist, so its settings reference is (re)asserted here rather than at build time.
+            BlockiverseFeedbackSettings feedbackSettings = rig.GetComponent<BlockiverseFeedbackSettings>();
+            foreach (BlockiverseAudioSettingsPanel audioPanel in rig.GetComponentsInChildren<BlockiverseAudioSettingsPanel>(true))
+            {
+                audioPanel.ConfigureFeedbackSettings(feedbackSettings);
+                EditorUtility.SetDirty(audioPanel);
+            }
+
             foreach (CreativeHotbar hotbar in rig.GetComponentsInChildren<CreativeHotbar>(true))
             {
                 hotbar.ConfigureFeedback(audioCuePlayer);

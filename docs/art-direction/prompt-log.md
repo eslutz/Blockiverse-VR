@@ -61,3 +61,16 @@ Each generated asset entry should include:
 - Negative prompt or exclusions: No Minecraft, Creeper, Steve, Enderman, Mojang, copied game texture, copied sound, copied logo, copyrighted character, protected font, third-party screenshots, or protected item identity
 - Post-processing steps: Block source tiles were normalized into RGBA PNG files and packed into an 8x7 committed atlas; item/UI/VFX sprites were written as transparent PNGs; WAV cues were normalized with headroom; Unity `.meta` import settings were generated for texture and audio assets
 - Reviewer notes: This pass expands the committed generated set to the current canonical block and item registries, adds feedback UI/VFX sprites, and makes the generator scripts reusable across roadmap phases. Quest headset readability and audio-comfort review remains a manual validation step.
+- **Superseded for audio (2026-08-21):** the "no external audio model was used" statement above describes this pass only and remains accurate for it. The committed sound effects were replaced in the 2026-08-21 production audio pass below; the music tracks from this pass are still what ships. Art is unaffected.
+
+## 2026-08-21 — Production audio pass
+
+- Asset path: `Assets/Blockiverse/Audio/*.wav` (all sound effects)
+- Asset path: `Assets/Blockiverse/Audio/music_*.wav` (unchanged — original generated music, retained deliberately)
+- Asset path: `Assets/Blockiverse/Audio/classic_block_*.wav` (original generated block cues, retained behind the Classic Block Sounds setting)
+- Generation date: 2026-08-21
+- Tool/model: **No generative model was used.** Sound effects are edited from licensed third-party field recordings and foley libraries (Sonniss #GameAudioGDC bundles under the Sonniss GDC Bundle Licensing Agreement; Kenney and OpenGameArt packs under CC0 1.0), processed deterministically by `scripts/audio/build-audio-assets.py` driven by `scripts/audio/audio-manifest.json`. Music and the classic block cues remain synthesized by `scripts/audio/generate-audio.py`.
+- Prompt: Not applicable — source material is recorded audio, selected by hand against the ruleset §5 cue catalog and §13 block-material table.
+- Negative prompt or exclusions: No Minecraft or other protected voxel-game sounds, music, UI cues, mob cues, or branding. No source whose license restricts commercial use, modification, or distribution inside a commercial game. No AI/ML training use of any Sonniss material, which its license expressly prohibits.
+- Post-processing steps: Sources trimmed to cue length, resampled to 44.1 kHz, loop beds crossfaded at the loop point, one-shots peak-normalized to 0.82 (approximately -1.7 dBFS) and folded to mono for spatialization, ambience/weather beds kept stereo with Unity import normalization disabled so the source mastering survives. Unity `.meta` files are regenerated with path-derived GUIDs so prefab wiring is preserved.
+- Reviewer notes: Every committed cue has a row in `docs/audio/audio-asset-manifest.md` naming its source pack, source file, and license — a cue without a manifest row fails `scripts/audio/validate-audio-assets.py`. Raw bundles are staged outside the repository and never committed. Licenses were verified at each original provider, not from search results or mirrors. Quest headset audio-comfort review remains a manual validation step.

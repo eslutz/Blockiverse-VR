@@ -41,6 +41,8 @@ namespace Blockiverse.VR
         [SerializeField] TunnelingVignetteController vignetteController;
 
         bool gravityLockHeld;
+        int lastFeetCellY;
+        bool headSubmergedHeld;
         bool registeredAsGravityController;
         bool vignetteEngaged;
         float verticalVelocity;
@@ -53,6 +55,38 @@ namespace Blockiverse.VR
         public XROriginMovement transformation { get; set; } = new XROriginMovement();
 
         public SwimState State { get; private set; } = SwimState.Dry;
+
+        // Raised on every State transition, with the family of the fluid involved. Presentation
+        // (audio, and anything else that reacts to entering or leaving water) subscribes here
+        // rather than polling State, per voxel_audio_vfx_ruleset.md section 1: gameplay raises
+        // events, presentation systems subscribe. Every assignment routes through SetState so no
+        // path can change the state without announcing it.
+        public event System.Action<SwimState, SwimState, FluidFamily> StateChanged;
+
+        void SetState(SwimState next)
+        {
+            if (next == State)
+                return;
+
+            SwimState previous = State;
+            State = next;
+            ApplyGroundedOverride();
+            StateChanged?.Invoke(previous, next, Submersion.Family);
+        }
+
+        // Cached so the per-transition assignment allocates nothing.
+        static readonly System.Func<bool> NeverGrounded = () => false;
+
+        // Veto grounding while swimming, and otherwise get out of the way. The gait cycle's
+        // override REPLACES its ground probe rather than combining with it, so leaving a
+        // `() => !IsSwimming` installed while dry asserts "grounded" through every fall.
+        void ApplyGroundedOverride()
+        {
+            if (gaitCycle == null)
+                return;
+
+            gaitCycle.GroundedOverride = IsSwimming ? NeverGrounded : null;
+        }
 
         public FluidSubmersionState Submersion { get; private set; }
 
@@ -128,8 +162,7 @@ namespace Blockiverse.VR
 
             // The walk cycle drives both the head bob and the footstep cues. Swimming is not
             // walking, so it reports "not grounded" and both stop.
-            if (gaitCycle != null)
-                gaitCycle.GroundedOverride = () => !IsSwimming;
+            ApplyGroundedOverride();
         }
 
         protected override void OnDisable()
@@ -138,8 +171,9 @@ namespace Blockiverse.VR
             // forever -- a player would hang motionless in the air with no way to fall.
             ReleaseGravityLock();
             UpdateVignette(false);
-            State = SwimState.Dry;
+            SetState(SwimState.Dry);
             verticalVelocity = 0.0f;
+            headSubmergedHeld = false;
 
             if (gaitCycle != null)
                 gaitCycle.GroundedOverride = null;
@@ -160,8 +194,10 @@ namespace Blockiverse.VR
             }
 
             Submersion = SampleSubmersion();
-            State = BlockiverseSwimMotion.ResolveState(
-                Submersion.FeetSubmerged, Submersion.BodySubmerged, Submersion.HeadSubmerged);
+            // Depth-based: one block of water is walkable whoever you are. See the remarks on the
+            // overload -- the capsule-fraction body sample put every default-height player in
+            // Surfaced while ankle deep, which locks gravity off in a puddle.
+            SetState(BlockiverseSwimMotion.ResolveState(Submersion, lastFeetCellY));
 
             if (!IsSwimming)
             {
@@ -325,14 +361,52 @@ namespace Blockiverse.VR
         void ExitSwimming()
         {
             if (State != SwimState.Dry && State != SwimState.Wading)
-                State = SwimState.Dry;
+                SetState(SwimState.Dry);
 
             verticalVelocity = 0.0f;
+            headSubmergedHeld = false;
             ReleaseGravityLock();
             UpdateVignette(false);
 
             if (locomotionState == LocomotionState.Moving)
                 TryEndLocomotion();
+        }
+
+        // The raw head sample is a bare cell lookup, so a head resting at the surface flips
+        // Swimming/Surfaced every frame -- and passive sink means a treading player re-crosses the
+        // line constantly. BlockiverseSwimMotion.ResolveHeadSubmerged exists for exactly this and
+        // was never wired up; without it the distinction strobes and everything downstream strobes
+        // with it (the comfort vignette, and the underwater audio bed, which needed its own release
+        // window to stop clicking once per frame).
+        FluidSubmersionState ApplyHeadHysteresis(in FluidSubmersionState sampled, float headWorldY)
+        {
+            if (!sampled.InFluid || !sampled.HasSurface || headWorldY <= float.MinValue)
+            {
+                headSubmergedHeld = false;
+                return sampled;
+            }
+
+            // SurfaceCellY is the topmost fluid cell; the water line is its top face.
+            float surfaceWorldY = sampled.SurfaceCellY + 1.0f;
+            bool headSubmerged = BlockiverseSwimMotion.ResolveHeadSubmerged(
+                headSubmergedHeld, headWorldY, surfaceWorldY);
+            headSubmergedHeld = headSubmerged;
+
+            if (headSubmerged == sampled.HeadSubmerged)
+                return sampled;
+
+            return new FluidSubmersionState(
+                inFluid: sampled.InFluid,
+                family: sampled.Family,
+                immersion: headSubmerged
+                    ? FluidImmersion.Head
+                    : sampled.BodySubmerged ? FluidImmersion.Body : FluidImmersion.Feet,
+                feetSubmerged: sampled.FeetSubmerged,
+                bodySubmerged: sampled.BodySubmerged,
+                headSubmerged: headSubmerged,
+                hasSurface: sampled.HasSurface,
+                surfaceCellY: sampled.SurfaceCellY,
+                fluidBelowFeet: sampled.FluidBelowFeet);
         }
 
         FluidSubmersionState SampleSubmersion()
@@ -355,7 +429,9 @@ namespace Blockiverse.VR
                 ? CreativeInteractionController.ToBlockPosition(headTransform.position)
                 : body;
 
-            return FluidSubmersion.Sample(world, feet, body, head);
+            lastFeetCellY = feet.Y;
+            FluidSubmersionState sampled = FluidSubmersion.Sample(world, feet, body, head);
+            return ApplyHeadHysteresis(sampled, headTransform != null ? headTransform.position.y : float.MinValue);
         }
 
         // Reads the jump ACTION, not jumpProvider.enabled. Jump is gated by locomotion mode, so a

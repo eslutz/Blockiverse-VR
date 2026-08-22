@@ -228,6 +228,93 @@ namespace Blockiverse.Tests.PlayMode
             // dependency is what the source-text guard in BlockiverseSwimMotionEditModeTests pins.
         }
 
+        [UnityTest]
+        public IEnumerator AHeadHeldAtTheWaterLineDoesNotStrobeBetweenSwimmingAndSurfaced()
+        {
+            // Guards the WIRING, not the helper. BlockiverseSwimMotion.ResolveHeadSubmerged was
+            // written for this, tested thoroughly, and then never called by anything -- so the raw
+            // cell lookup flipped Swimming/Surfaced every frame for a head resting at the surface.
+            // A unit test of the helper passes either way; only driving the provider catches it
+            // going unused again.
+            BlockiverseSwimProvider swim = CreateSubmergedRig(out XROrigin origin, out GravityProvider gravity);
+            BlockiverseInputRig inputRig = rigObject.GetComponent<BlockiverseInputRig>();
+
+            // Depth held exactly, so any state change is the water line being re-crossed rather
+            // than the player actually moving through it.
+            inputRig.ComfortSettings.SwimPassiveSinkEnabled = false;
+
+            yield return WaitFrames(SettleFrames);
+
+            // Park the eye within the hysteresis band of the surface -- the pool fills cells
+            // y = 1..8, so the water line is the top face of cell 8.
+            const float waterLineY = 9.0f;
+            Transform head = origin.Camera != null ? origin.Camera.transform : null;
+            Assert.That(head, Is.Not.Null, "the fixture rig must have a camera to sample the head from");
+
+            float offset = head.position.y - origin.transform.position.y;
+            origin.transform.position = new Vector3(
+                origin.transform.position.x,
+                waterLineY - offset - BlockiverseSwimMotion.SubmersionHysteresisMeters * 0.25f,
+                origin.transform.position.z);
+            Physics.SyncTransforms();
+
+            yield return WaitFrames(SettleFrames);
+
+            SwimState settled = swim.State;
+            int changes = 0;
+
+            for (int frame = 0; frame < 120; frame++)
+            {
+                yield return null;
+
+                if (swim.State != settled)
+                {
+                    changes++;
+                    settled = swim.State;
+                }
+            }
+
+            Assert.That(swim.IsSwimming, Is.True,
+                "a head at the water line is still in the water whichever side of the band it sits");
+            Assert.That(changes, Is.LessThanOrEqualTo(1),
+                $"two seconds at the water line produced {changes} state changes; the head sample is " +
+                "not going through ResolveHeadSubmerged, so Swimming/Surfaced is strobing again");
+        }
+
+        [UnityTest]
+        public IEnumerator StandingInOneBlockOfWaterWadesAndKeepsGravity()
+        {
+            // The integration case the suite never had: every other swim test drops the player in
+            // an eight-deep pool. With the state resolved from where a capsule fraction landed
+            // rather than from water depth, this read Surfaced at the default 1.8 m capsule --
+            // which pauses gravity, so the player could hold jump and float out of a puddle.
+            managerObject = new GameObject("Wade World Manager");
+            SwimRigFixture.CreateWorldWithAShallowPuddle(managerObject);
+
+            seabed = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            seabed.name = "Wade Ground";
+            seabed.layer = BlockiverseProject.InteractionLayerIndex;
+            seabed.transform.localScale = new Vector3(40.0f, 1.0f, 40.0f);
+            seabed.transform.position = new Vector3(8.0f, 0.5f, 8.0f);
+
+            rigObject = SwimRigFixture.CreateGravityRig(out XROrigin origin, out GravityProvider gravity);
+            rigObject.transform.position = new Vector3(4.5f, 1.05f, 4.5f);
+            Physics.SyncTransforms();
+
+            BlockiverseSwimProvider swim = rigObject.GetComponent<BlockiverseSwimProvider>();
+            Assert.That(swim, Is.Not.Null);
+
+            yield return WaitFrames(SettleFrames);
+
+            Assert.That(swim.Submersion.FeetSubmerged, Is.True,
+                "the fixture must actually put the player's feet in the puddle, or this proves nothing");
+            Assert.That(swim.State, Is.EqualTo(SwimState.Wading),
+                "one block of water is walked through, whatever the player's height");
+            Assert.That(swim.IsSwimming, Is.False);
+            Assert.That(swim.GravityLockHeld, Is.False,
+                "gravity must stay on in shallow water; pausing it lets the player swim up out of a puddle");
+        }
+
         BlockiverseSwimProvider CreateSubmergedRig(out XROrigin origin, out GravityProvider gravity)
         {
             managerObject = new GameObject("Swim World Manager");
@@ -486,6 +573,28 @@ namespace Blockiverse.Tests.PlayMode
             for (int z = 3; z <= 5; z++)
             for (int x = 3; x <= 5; x++)
                 world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Freshwater, trackChange: false);
+
+            CreativeWorldManager manager = managerObject.AddComponent<CreativeWorldManager>();
+            manager.InitializeGeneratedWorld(
+                new GeneratedCreativeWorld(registry, settings, world, CreativeWorldGenerationPreset.FlatCreative));
+        }
+
+        internal static void CreateWorldWithAShallowPuddle(GameObject managerObject)
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(
+                16, 16, 16, chunkSize: 4, seed: 88, groundHeight: 1, spawnPosition: new BlockPosition(8, 2, 8));
+            var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
+
+            for (int z = 0; z < settings.Bounds.Depth; z++)
+            for (int x = 0; x < settings.Bounds.Width; x++)
+                world.SetBlock(new BlockPosition(x, 0, z), BlockRegistry.MeadowTurf, trackChange: false);
+
+            // Exactly one cell deep. Every other swim fixture builds an eight-deep pool, which is
+            // why nothing caught a player swimming in ankle-deep water.
+            for (int z = 3; z <= 5; z++)
+            for (int x = 3; x <= 5; x++)
+                world.SetBlock(new BlockPosition(x, 1, z), BlockRegistry.Freshwater, trackChange: false);
 
             CreativeWorldManager manager = managerObject.AddComponent<CreativeWorldManager>();
             manager.InitializeGeneratedWorld(

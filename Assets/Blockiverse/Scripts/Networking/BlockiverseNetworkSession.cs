@@ -57,9 +57,29 @@ namespace Blockiverse.Networking
         [SerializeField, TextArea(4, 12)]
         string clientCaCertificatePem;
 
+        /// <summary>
+        /// How long a peer departure waits before it is announced. A guest cannot tell "someone
+        /// left" from "the world is closing" at the instant Netcode reports it — during a host
+        /// shutdown it is told the other guests disconnected before its own disconnect arrives.
+        /// Waiting a moment lets this seat's own disconnect withdraw the announcement instead.
+        /// Short enough to read as immediate; far longer than a LAN round trip, which is what has
+        /// to land inside it. If it ever does not, the announcement is merely spurious, which is
+        /// the behaviour this replaced.
+        /// </summary>
+        public const float PeerDepartureSettleSeconds = 0.35f;
+
         bool subscribed;
         bool stopRequestedByLocalSession;
         int consecutiveHostShutdownPreparationFailures;
+
+        // Which remote peers this seat believes are in the session, so join/leave notifications
+        // describe real arrivals and departures rather than raw Netcode callbacks.
+        readonly BlockiversePeerPresence peerPresence = new BlockiversePeerPresence();
+
+        // Departures wait this long before they are announced, so that a departure which is really
+        // the session ending can be withdrawn. See PeerDepartureSettleSeconds.
+        readonly List<(ulong clientId, float announceAtUnscaledTime)> pendingDepartureAnnouncements = new();
+        readonly List<ulong> departureAnnouncementScratch = new();
 
         public BlockiverseConnectionState CurrentState { get; private set; } = BlockiverseConnectionState.Stopped;
         public NetworkSessionMode CurrentMode { get; private set; } = NetworkSessionMode.Offline;
@@ -114,6 +134,7 @@ namespace Blockiverse.Networking
         void OnDisable()
         {
             Unsubscribe();
+            pendingDepartureAnnouncements.Clear();
         }
 
         void OnDestroy()
@@ -391,6 +412,8 @@ namespace Blockiverse.Networking
 
         void MarkFailed(string reason)
         {
+            peerPresence.Clear();
+            pendingDepartureAnnouncements.Clear();
             LastDisconnectReason = reason;
             CurrentMode = NetworkSessionMode.Offline;
             CurrentState = BlockiverseConnectionState.Failed;
@@ -412,8 +435,6 @@ namespace Blockiverse.Networking
 
         void HandleClientConnected(ulong clientId)
         {
-            ClientConnected?.Invoke(clientId);
-
             if (networkManager == null || clientId != networkManager.LocalClientId)
                 return;
 
@@ -429,8 +450,6 @@ namespace Blockiverse.Networking
 
         void HandleClientDisconnected(ulong clientId)
         {
-            ClientDisconnected?.Invoke(clientId);
-
             if (networkManager == null || (networkManager.IsServer && clientId != networkManager.LocalClientId))
                 return;
 
@@ -442,6 +461,148 @@ namespace Blockiverse.Networking
             if (CurrentState != BlockiverseConnectionState.Disconnecting || !stopRequestedByLocalSession)
                 CurrentState = BlockiverseConnectionState.Disconnected;
         }
+
+        /// <summary>
+        /// Netcode's connection event carries the four cases the legacy callbacks cannot express:
+        /// the local seat connecting or disconnecting, and a remote peer arriving or leaving.
+        /// The peer cases are what reach a non-host client at all — <c>OnClientConnectedCallback</c>
+        /// and <c>OnClientDisconnectCallback</c> only ever name the local client there, so a client
+        /// seat is otherwise never told that anyone else came or went.
+        /// </summary>
+        void HandleConnectionEvent(NetworkManager manager, ConnectionEventData connectionEvent)
+        {
+            ulong localClientId = manager != null ? manager.LocalClientId : 0;
+
+            switch (connectionEvent.EventType)
+            {
+                case ConnectionEvent.ClientConnected:
+                    if (connectionEvent.ClientId == localClientId)
+                    {
+                        // We are the one who just connected. Anyone already here is tracked but
+                        // not announced — they did not arrive, we did.
+                        if (connectionEvent.PeerClientIds.IsCreated)
+                        {
+                            foreach (ulong peerId in connectionEvent.PeerClientIds)
+                                peerPresence.AddKnownPeer(peerId, localClientId);
+                        }
+
+                        return;
+                    }
+
+                    AnnouncePeerConnected(connectionEvent.ClientId, localClientId);
+                    return;
+
+                case ConnectionEvent.PeerConnected:
+                    AnnouncePeerConnected(connectionEvent.ClientId, localClientId);
+                    return;
+
+                case ConnectionEvent.ClientDisconnected:
+                    if (connectionEvent.ClientId == localClientId)
+                    {
+                        // Our own session ended; the peers did not each leave, so say nothing.
+                        peerPresence.Clear();
+                        pendingDepartureAnnouncements.Clear();
+                        return;
+                    }
+
+                    AnnouncePeerDisconnected(connectionEvent.ClientId, localClientId);
+                    return;
+
+                case ConnectionEvent.PeerDisconnected:
+                    AnnouncePeerDisconnected(connectionEvent.ClientId, localClientId);
+                    return;
+            }
+        }
+
+        void AnnouncePeerConnected(ulong clientId, ulong localClientId)
+        {
+            if (peerPresence.TryAddPeer(clientId, localClientId) && IsSessionLive)
+                ClientConnected?.Invoke(clientId);
+        }
+
+        void AnnouncePeerDisconnected(ulong clientId, ulong localClientId)
+        {
+            // A join refused during approval is disconnected without ever being present, so
+            // TryRemovePeer reports no change and no departure is queued.
+            if (!peerPresence.TryRemovePeer(clientId, localClientId) || !IsSessionLive)
+                return;
+
+            pendingDepartureAnnouncements.Add((clientId, Time.unscaledTime + PeerDepartureSettleSeconds));
+        }
+
+        /// <summary>
+        /// Releases departures that have outlived the settle window, and drops every pending one
+        /// the moment this seat stops being in a live session.
+        ///
+        /// This is what makes a guest seat agree with the host about what happened. When a host
+        /// stops, Netcode disconnects the guests one at a time, and each disconnect is broadcast to
+        /// the guests still connected (NetworkConnectionManager.OnClientDisconnectFromServer). A
+        /// guest therefore hears that the others left a fraction of a second before it is
+        /// disconnected itself — true message by message, but wrong as a description: nobody left,
+        /// the world closed. Only this seat's own disconnect distinguishes the two, and it has not
+        /// arrived yet, so the decision has to wait rather than be made on the spot.
+        /// </summary>
+        void FlushPendingDepartureAnnouncements()
+        {
+            if (pendingDepartureAnnouncements.Count == 0)
+                return;
+
+            if (!IsSessionLive)
+            {
+                pendingDepartureAnnouncements.Clear();
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            int due = 0;
+            while (due < pendingDepartureAnnouncements.Count &&
+                   now >= pendingDepartureAnnouncements[due].announceAtUnscaledTime)
+                due++;
+
+            if (due == 0)
+                return;
+
+            // Copy out before raising: a handler may stop the session, which clears the list.
+            departureAnnouncementScratch.Clear();
+            for (int index = 0; index < due; index++)
+                departureAnnouncementScratch.Add(pendingDepartureAnnouncements[index].clientId);
+
+            pendingDepartureAnnouncements.RemoveRange(0, due);
+
+            foreach (ulong clientId in departureAnnouncementScratch)
+                ClientDisconnected?.Invoke(clientId);
+
+            departureAnnouncementScratch.Clear();
+        }
+
+        void Update()
+        {
+            FlushPendingDepartureAnnouncements();
+        }
+
+        /// <summary>
+        /// Whether peer arrivals and departures are worth telling the player about. Tearing a
+        /// session down disconnects every peer in turn and Netcode reports each one, but a host
+        /// stopping its own world is one event, not one departure per guest. Save preparation runs
+        /// before the shutdown, so those disconnects can land well after the player asked to stop.
+        /// Presence is still tracked either way; only the announcement is withheld.
+        ///
+        /// Stated as which states are tearing down rather than which are live, so that a connection
+        /// state added later (a dedicated server's, say) announces by default instead of going
+        /// silently unannounced until someone notices.
+        ///
+        /// "Has a session started at all" is asked of <see cref="CurrentMode"/> rather than of
+        /// CurrentState, because CurrentState's own default is Stopped. Denylisting Stopped would
+        /// have inverted the intent above for exactly the case it was written for: a new start path
+        /// that sets a mode but leaves CurrentState at its initial value would announce nothing for
+        /// the whole session, with no error and every state assertion still passing. Every start
+        /// path sets CurrentMode through PrepareToStart, and both stop paths return it to Offline.
+        /// </summary>
+        bool IsSessionLive =>
+            CurrentMode != NetworkSessionMode.Offline &&
+            CurrentState != BlockiverseConnectionState.Disconnecting &&
+            CurrentState != BlockiverseConnectionState.Disconnected &&
+            CurrentState != BlockiverseConnectionState.Failed;
 
         void HandleServerStopped(bool wasHost)
         {
@@ -455,6 +616,8 @@ namespace Blockiverse.Networking
 
         void MarkStopped()
         {
+            peerPresence.Clear();
+            pendingDepartureAnnouncements.Clear();
             CurrentMode = NetworkSessionMode.Offline;
             stopRequestedByLocalSession = false;
 
@@ -645,6 +808,7 @@ namespace Blockiverse.Networking
             networkManager.OnClientStarted += HandleClientStarted;
             networkManager.OnClientConnectedCallback += HandleClientConnected;
             networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
+            networkManager.OnConnectionEvent += HandleConnectionEvent;
             networkManager.OnServerStopped += HandleServerStopped;
             networkManager.OnClientStopped += HandleClientStopped;
             networkManager.OnTransportFailure += HandleTransportFailure;
@@ -660,6 +824,7 @@ namespace Blockiverse.Networking
             networkManager.OnClientStarted -= HandleClientStarted;
             networkManager.OnClientConnectedCallback -= HandleClientConnected;
             networkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
+            networkManager.OnConnectionEvent -= HandleConnectionEvent;
             networkManager.OnServerStopped -= HandleServerStopped;
             networkManager.OnClientStopped -= HandleClientStopped;
             networkManager.OnTransportFailure -= HandleTransportFailure;

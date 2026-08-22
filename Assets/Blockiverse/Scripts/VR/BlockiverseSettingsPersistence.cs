@@ -132,6 +132,7 @@ namespace Blockiverse.VR
                 feedbackSettings.HapticIntensity = PlayerPrefs.GetFloat(KeyPrefix + "HapticIntensity", feedbackSettings.HapticIntensity);
                 feedbackSettings.ReducedFlash = PlayerPrefs.GetInt(KeyPrefix + "ReducedFlash", feedbackSettings.ReducedFlash ? 1 : 0) != 0;
                 feedbackSettings.ReducedParticles = PlayerPrefs.GetInt(KeyPrefix + "ReducedParticles", feedbackSettings.ReducedParticles ? 1 : 0) != 0;
+                feedbackSettings.ClassicBlockSoundsEnabled = PlayerPrefs.GetInt(KeyPrefix + "ClassicBlockSounds", feedbackSettings.ClassicBlockSoundsEnabled ? 1 : 0) != 0;
             }
 
             lastSavedHash = ComputeSettingsHash();
@@ -181,6 +182,7 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetFloat(KeyPrefix + "HapticIntensity", feedbackSettings.HapticIntensity);
                 PlayerPrefs.SetInt(KeyPrefix + "ReducedFlash", feedbackSettings.ReducedFlash ? 1 : 0);
                 PlayerPrefs.SetInt(KeyPrefix + "ReducedParticles", feedbackSettings.ReducedParticles ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "ClassicBlockSounds", feedbackSettings.ClassicBlockSoundsEnabled ? 1 : 0);
             }
 
             PlayerPrefs.Save();
@@ -225,6 +227,7 @@ namespace Blockiverse.VR
                     hash = hash * 31 + feedbackSettings.HapticIntensity.GetHashCode();
                     hash = hash * 31 + (feedbackSettings.ReducedFlash ? 1 : 0);
                     hash = hash * 31 + (feedbackSettings.ReducedParticles ? 1 : 0);
+                    hash = hash * 31 + (feedbackSettings.ClassicBlockSoundsEnabled ? 1 : 0);
                 }
 
                 return hash;

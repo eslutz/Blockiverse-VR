@@ -20,7 +20,8 @@ namespace Blockiverse.Voxel
             bool bodySubmerged,
             bool headSubmerged,
             bool hasSurface,
-            int surfaceCellY)
+            int surfaceCellY,
+            bool fluidBelowFeet = false)
         {
             InFluid = inFluid;
             Family = family;
@@ -30,9 +31,21 @@ namespace Blockiverse.Voxel
             HeadSubmerged = headSubmerged;
             HasSurface = hasSurface;
             SurfaceCellY = surfaceCellY;
+            FluidBelowFeet = fluidBelowFeet;
         }
 
         public bool InFluid { get; }
+
+        /// <summary>
+        /// Whether the cell directly beneath the feet is also fluid — that is, whether the player
+        /// is floating above more fluid rather than standing on the bottom.
+        ///
+        /// This is what separates "one block of water" from "the top of a deep column". Both put
+        /// the surface cell at the feet cell, so the surface alone cannot tell them apart, and
+        /// reading only the surface makes a player who has risen to the top of deep water look
+        /// like they are standing in a puddle.
+        /// </summary>
+        public bool FluidBelowFeet { get; }
 
         // The deepest sample's family wins, so wading out of freshwater into an emberflow pool
         // reports emberflow the moment the feet reach it.
@@ -96,6 +109,11 @@ namespace Blockiverse.Voxel
             BlockPosition surfaceScanFrom = headInFluid ? head : bodyInFluid ? body : feet;
             bool hasSurface = TryFindSurfaceCellY(world, surfaceScanFrom, family, surfaceScanCells, out int surfaceCellY);
 
+            // One cell down from the feet, so "am I standing on the bottom of this" is answered
+            // from the world rather than inferred from where the surface happens to be.
+            bool fluidBelowFeet = feetInFluid &&
+                TryGetFluidFamily(world, new BlockPosition(feet.X, feet.Y - 1, feet.Z), out _);
+
             return new FluidSubmersionState(
                 inFluid: true,
                 family: family,
@@ -104,7 +122,8 @@ namespace Blockiverse.Voxel
                 bodySubmerged: bodyInFluid,
                 headSubmerged: headInFluid,
                 hasSurface: hasSurface,
-                surfaceCellY: surfaceCellY);
+                surfaceCellY: surfaceCellY,
+                fluidBelowFeet: fluidBelowFeet);
         }
 
         // Walks up from a fluid cell to the highest contiguous cell of the same family. Stops at a

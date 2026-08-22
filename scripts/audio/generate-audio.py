@@ -1,20 +1,44 @@
 #!/usr/bin/env python3
-"""Generate original interaction/UI sound effects for Blockiverse VR.
+"""Generate the original synthesized audio Blockiverse VR still ships.
 
-These are synthesized from scratch (no sampled or third-party audio) so they are
-safe to ship as original Blockiverse cues. Run from the repository root:
-python3 scripts/audio/generate-audio.py
+Everything here is synthesized from scratch — no sampled or third-party audio —
+so it is safe to ship as original Blockiverse material. Run from the repo root:
+
+    python3 scripts/audio/generate-audio.py
+
+WHAT THIS WRITES INTO THE PROJECT (see SHIPPED_CLIPS below):
+
+  music_*.wav            The music bed. Deliberately kept original; the
+                         production audio pass replaced the sound effects but
+                         not the music.
+  classic_block_*.wav    The original break/place cues, kept alive behind the
+                         Classic Block Sounds setting.
+
+Every other cue in CLIPS is still synthesized and still reproducible — ruleset
+§7 requires the generated baseline to stay buildable — but is NO LONGER written
+into `Assets/`, because those filenames now hold licensed production audio built
+by `build-audio-assets.py`. Use `--dump-legacy <dir>` to render the full
+original set somewhere outside the project for comparison or recovery.
+
+This split is deliberate: before it, a stray run of this script would silently
+overwrite every production cue with a synth placeholder.
 """
-import hashlib
+import argparse
 import math
 import os
 import random
 import struct
+import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-AUDIO_DIR = "Assets/Blockiverse/Audio"
-SAMPLE_RATE = 44100
-TARGET_PEAK = 0.82
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from audio_asset_common import (  # noqa: E402
+    ROOT,
+    AUDIO_DIR,
+    SAMPLE_RATE,
+    TARGET_PEAK,
+    stable_guid,
+    write_audio_meta,
+)
 
 
 def envelope(progress, attack=0.02, release=0.6):
@@ -660,53 +684,58 @@ def write_wav(path, samples):
         handle.write(frames)
 
 
-def stable_guid(relative_path):
-    return hashlib.md5(relative_path.encode("utf-8")).hexdigest()
+# Clips this script still owns inside `Assets/`. Anything not listed here is
+# generated for reference only — the shipping file at that name is licensed
+# production audio built by build-audio-assets.py, and overwriting it with a
+# synth placeholder would be a silent regression.
+#
+# Maps output asset name -> CLIPS key.
+SHIPPED_CLIPS = {
+    "music_menu": "music_menu",
+    "music_day": "music_day",
+    "music_night": "music_night",
+    "music_cave": "music_cave",
+    # The Classic Block Sounds easter egg. Same synthesis as the original cues,
+    # written under a distinct name so production block audio can own
+    # block_break.wav / block_place.wav.
+    "classic_block_break": "block_break",
+    "classic_block_place": "block_place",
+}
 
 
-def write_audio_meta(relative_path, streaming=False):
-    # Music tracks stream from disk instead of preloading: a 30s+ PCM bed held in
-    # memory would cost megabytes on Quest for a clip that plays once at a time.
-    guid = stable_guid(relative_path)
-    load_type = 2 if streaming else 0
-    preload = 0 if streaming else 1
-    meta = (
-        "fileFormatVersion: 2\n"
-        f"guid: {guid}\n"
-        "AudioImporter:\n"
-        "  externalObjects: {}\n"
-        "  serializedVersion: 6\n"
-        "  defaultSettings:\n"
-        "    serializedVersion: 2\n"
-        f"    loadType: {load_type}\n"
-        "    sampleRateSetting: 0\n"
-        "    sampleRateOverride: 44100\n"
-        "    compressionFormat: 1\n"
-        "    quality: 1\n"
-        "    conversionMode: 0\n"
-        f"    preloadAudioData: {preload}\n"
-        "  platformSettingOverrides: {}\n"
-        "  forceToMono: 1\n"
-        "  normalize: 1\n"
-        f"  preloadAudioData: {preload}\n"
-        "  loadInBackground: 0\n"
-        "  ambisonic: 0\n"
-        "  3D: 0\n"
-        "  userData:\n"
-        "  assetBundleName:\n"
-        "  assetBundleVariant:\n"
-    )
-    with open(os.path.join(ROOT, relative_path + ".meta"), "w", newline="\n") as handle:
-        handle.write(meta)
+def write_clip(out_dir, asset_name, samples, relative_path=None):
+    path = os.path.join(out_dir, f"{asset_name}.wav")
+    write_wav(path, samples)
+    if relative_path is not None:
+        write_audio_meta(relative_path, streaming=asset_name.startswith("music_"))
+    return path
 
 
 def main():
-    os.makedirs(os.path.join(ROOT, AUDIO_DIR), exist_ok=True)
-    for name, samples in CLIPS.items():
-        relative_path = f"{AUDIO_DIR}/{name}.wav"
-        write_wav(os.path.join(ROOT, relative_path), samples)
-        write_audio_meta(relative_path, streaming=name.startswith("music_"))
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--dump-legacy", metavar="DIR",
+                        help="Also render every original cue (including the ones production "
+                             "audio replaced) into DIR. Must be outside Assets/.")
+    args = parser.parse_args()
+
+    audio_dir = os.path.join(ROOT, AUDIO_DIR)
+    os.makedirs(audio_dir, exist_ok=True)
+    for asset_name, clip_key in SHIPPED_CLIPS.items():
+        relative_path = f"{AUDIO_DIR}/{asset_name}.wav"
+        samples = CLIPS[clip_key]
+        write_clip(audio_dir, asset_name, samples, relative_path)
         print(f"wrote {relative_path} ({len(samples)} samples)")
+
+    if args.dump_legacy:
+        target = os.path.abspath(args.dump_legacy)
+        if target.startswith(os.path.join(ROOT, "Assets")):
+            parser.error("--dump-legacy must point outside Assets/; it would overwrite "
+                         "production audio.")
+        os.makedirs(target, exist_ok=True)
+        for name, samples in CLIPS.items():
+            write_clip(target, name, samples)
+        print(f"dumped {len(CLIPS)} original cues to {target}")
 
 
 if __name__ == "__main__":
