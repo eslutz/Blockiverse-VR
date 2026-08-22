@@ -1,135 +1,205 @@
 /*
- * Base presentation shared by every Blockiverse UI Toolkit surface.
+ * Hearthstone — base presentation shared by every Blockiverse UI Toolkit surface.
  * Tokens.uss must be applied alongside this sheet; every value here resolves from it.
+ *
+ * Extrusion is the load-bearing idea: each surface is lit on its top and left edges and
+ * shadowed on its right and bottom, so a control reads as a face of a block rather than a
+ * rectangle. That is why there are four border colours per surface instead of one, and why
+ * the pressed state inverts them rather than tinting.
  */
 
-.bv-screen {
+/* ── Screen shell ───────────────────────────────────────────────────────── */
+
+.hs-screen {
     flex-grow: 1;
-    background-color: var(--bv-color-background);
-    color: var(--bv-color-text-primary);
-    padding-left: var(--bv-space-4);
-    padding-right: var(--bv-space-4);
-    padding-top: var(--bv-space-4);
-    padding-bottom: var(--bv-space-4);
-    font-size: var(--bv-type-body);
+    background-color: var(--hs-panel);
+    color: var(--hs-ink);
+    padding-left: var(--hs-space-4);
+    padding-right: var(--hs-space-4);
+    padding-top: var(--hs-space-4);
+    padding-bottom: var(--hs-space-4);
+    font-size: var(--hs-type-body);
+    border-top-width: var(--hs-edge-width);
+    border-left-width: var(--hs-edge-width);
+    border-right-width: var(--hs-edge-width);
+    border-bottom-width: var(--hs-edge-width);
+    border-top-color: var(--hs-edge-panel-lit);
+    border-left-color: var(--hs-edge-panel-mid);
+    border-right-color: var(--hs-edge-panel-dark);
+    border-bottom-color: var(--hs-edge-panel-deep);
 }
 
-.bv-screen__header {
+/* The header is recessed rather than raised — the light inverts, so the title band reads as
+   cut into the slab. */
+.hs-screen__header {
     flex-shrink: 0;
-    border-bottom-width: 2px;
-    border-bottom-color: var(--bv-color-border);
-    padding-bottom: var(--bv-space-3);
-    margin-bottom: var(--bv-space-3);
+    background-color: var(--hs-header);
+    padding-left: var(--hs-space-4);
+    padding-right: var(--hs-space-4);
+    padding-top: var(--hs-space-4);
+    padding-bottom: var(--hs-space-3);
+    margin-bottom: var(--hs-space-3);
+    border-top-width: var(--hs-edge-width);
+    border-bottom-width: var(--hs-edge-width);
+    border-top-color: var(--hs-control);
+    border-bottom-color: var(--hs-void);
 }
 
-.bv-screen__title {
-    font-size: var(--bv-type-title);
+.hs-screen__title {
+    font-size: var(--hs-type-heading);
     -unity-font-style: bold;
-    color: var(--bv-color-text-primary);
+    color: var(--hs-ink);
 }
 
-.bv-screen__content {
-    flex-grow: 1;
-}
+.hs-screen__content { flex-grow: 1; }
 
-.bv-screen__footer {
+.hs-screen__footer {
     flex-shrink: 0;
     flex-direction: row;
-    margin-top: var(--bv-space-3);
+    margin-top: var(--hs-space-3);
 }
 
-.bv-heading {
-    font-size: var(--bv-type-heading);
-    color: var(--bv-color-text-secondary);
-    margin-top: var(--bv-space-3);
-    margin-bottom: var(--bv-space-1);
+/* ── Button ─────────────────────────────────────────────────────────────── */
+
+.hs-button {
+    min-height: var(--hs-control-min-height);
+    padding-left: var(--hs-control-horizontal-padding);
+    padding-right: var(--hs-control-horizontal-padding);
+    margin-top: var(--hs-space-2);
+    margin-bottom: var(--hs-space-2);
+    font-size: var(--hs-type-control);
+    color: var(--hs-ink);
+    background-color: var(--hs-control);
+    border-top-width: var(--hs-edge-width);
+    border-left-width: var(--hs-edge-width);
+    border-right-width: var(--hs-edge-width);
+    border-bottom-width: var(--hs-edge-width);
+    border-top-color: var(--hs-edge-control-lit);
+    border-left-color: var(--hs-edge-control-mid);
+    border-right-color: var(--hs-edge-control-dark);
+    border-bottom-color: var(--hs-edge-control-deep);
 }
 
-/* Controls -------------------------------------------------------------- */
+/* Hover fills and catches ember on the lit edges. Focus outlines in bone and changes nothing
+   else. They co-occur constantly — a ray can sit on one control while focus rests on another —
+   so they must never be confusable. */
+.hs-button:hover {
+    background-color: var(--hs-hover);
+    border-top-color: var(--hs-ember);
+    border-left-color: var(--hs-ember);
+}
 
-.bv-button {
-    min-height: var(--bv-control-min-height);
-    padding-left: var(--bv-control-horizontal-padding);
-    padding-right: var(--bv-control-horizontal-padding);
-    margin-top: var(--bv-space-2);
-    margin-bottom: var(--bv-space-2);
-    font-size: var(--bv-type-control);
-    color: var(--bv-color-text-primary);
-    background-color: var(--bv-color-surface-raised);
+.hs-button:focus {
+    border-top-color: var(--hs-focus);
+    border-left-color: var(--hs-focus);
+    border-right-color: var(--hs-focus);
+    border-bottom-color: var(--hs-focus);
+}
+
+/* The only state that changes geometry rather than colour: the light inverts and the control
+   reads as pushed into the slab. It survives being looked at from an angle, which a tint does
+   not. */
+.hs-button:active {
+    background-color: var(--hs-pressed);
+    color: var(--hs-ember-lit);
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
+}
+
+/* Contrast drops, opacity holds. 5.20:1 is the floor and this is the pair that sets it. */
+.hs-button:disabled {
+    color: var(--hs-disabled);
+    background-color: var(--hs-muted);
+    opacity: 1;
+    border-top-color: var(--hs-edge-muted-lit);
+    border-left-color: var(--hs-edge-muted-mid);
+    border-right-color: var(--hs-edge-muted-dark);
+    border-bottom-color: var(--hs-edge-muted-deep);
+}
+
+.hs-button--primary {
+    background-color: var(--hs-ember);
+    color: var(--hs-on-ember);
+    -unity-font-style: bold;
+    border-top-color: var(--hs-edge-ember-lit);
+    border-left-color: var(--hs-edge-ember-mid);
+    border-right-color: var(--hs-edge-ember-dark);
+    border-bottom-color: var(--hs-edge-ember-deep);
+}
+
+.hs-button--danger { color: var(--hs-oxide-text); }
+
+.hs-button--selected {
+    background-color: var(--hs-hover);
+    border-top-color: var(--hs-ember);
+    border-left-color: var(--hs-ember);
+}
+
+/* ── Fields ─────────────────────────────────────────────────────────────── */
+
+.hs-field {
+    min-height: var(--hs-control-min-height);
+    margin-top: var(--hs-space-2);
+    margin-bottom: var(--hs-space-2);
+    font-size: var(--hs-type-control);
+    background-color: var(--hs-control);
+    border-top-width: var(--hs-edge-width);
+    border-left-width: var(--hs-edge-width);
+    border-right-width: var(--hs-edge-width);
+    border-bottom-width: var(--hs-edge-width);
+    border-top-color: var(--hs-edge-control-lit);
+    border-left-color: var(--hs-edge-control-mid);
+    border-right-color: var(--hs-edge-control-dark);
+    border-bottom-color: var(--hs-edge-control-deep);
+}
+
+/* Wells are inset: sliders, empty inventory slots, unselected halves of a segmented control.
+   The inverted light is what makes an empty slot read as a recess rather than just a darker
+   square, which is what keeps a wall of them legible as a grid. */
+.hs-well {
+    background-color: var(--hs-chip);
+    border-top-width: 2px;
     border-left-width: 2px;
     border-right-width: 2px;
-    border-top-width: 2px;
     border-bottom-width: 2px;
-    border-left-color: var(--bv-color-border);
-    border-right-color: var(--bv-color-border);
-    border-top-color: var(--bv-color-border);
-    border-bottom-color: var(--bv-color-border);
-    border-top-left-radius: var(--bv-radius-medium);
-    border-top-right-radius: var(--bv-radius-medium);
-    border-bottom-left-radius: var(--bv-radius-medium);
-    border-bottom-right-radius: var(--bv-radius-medium);
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
 }
 
-.bv-button:hover {
-    background-color: var(--bv-color-accent);
-    color: var(--bv-color-background);
+/* ── Text ───────────────────────────────────────────────────────────────── */
+
+.hs-heading {
+    font-size: var(--hs-type-heading);
+    color: var(--hs-ink);
+    margin-top: var(--hs-space-3);
+    margin-bottom: var(--hs-space-1);
 }
 
-/* Focus and hover are deliberately distinguishable rather than sharing one treatment: with a
-   controller ray, hover follows the pointer while focus stays where the last activation left it,
-   and a player who cannot tell them apart cannot tell what Submit will hit. Hover fills; focus
-   outlines. */
-.bv-button:focus {
-    border-left-color: var(--bv-color-focus);
-    border-right-color: var(--bv-color-focus);
-    border-top-color: var(--bv-color-focus);
-    border-bottom-color: var(--bv-color-focus);
-}
+.hs-body { font-size: var(--hs-type-body); color: var(--hs-ink); }
+.hs-secondary { font-size: var(--hs-type-body); color: var(--hs-ink-soft); }
+.hs-caption { font-size: var(--hs-type-caption); color: var(--hs-dim); white-space: normal; }
 
-.bv-button:active {
-    background-color: var(--bv-color-accent);
-    color: var(--bv-color-background);
-    scale: 0.98 0.98;
-}
+/* Every quantity in the game — stack counts, seeds, coordinates, LAN addresses — so columns
+   line up and digits cannot be mistaken for one another. */
+.hs-figures { -unity-font-style: normal; letter-spacing: 0.02px; }
 
-.bv-button:disabled {
-    color: var(--bv-color-disabled);
-    background-color: var(--bv-color-surface);
-    opacity: 1;
-}
+/* ── Status ─────────────────────────────────────────────────────────────── */
 
-.bv-button--primary {
-    background-color: var(--bv-color-accent);
-    color: var(--bv-color-background);
-    -unity-font-style: bold;
-}
-
-.bv-button--danger {
-    border-left-color: var(--bv-color-danger);
-    border-right-color: var(--bv-color-danger);
-    border-top-color: var(--bv-color-danger);
-    border-bottom-color: var(--bv-color-danger);
-    color: var(--bv-color-danger);
-}
-
-.bv-field {
-    min-height: var(--bv-control-min-height);
-    margin-top: var(--bv-space-2);
-    margin-bottom: var(--bv-space-2);
-    font-size: var(--bv-type-control);
-}
-
-/* Status ---------------------------------------------------------------- */
-
-.bv-status {
-    font-size: var(--bv-type-caption);
-    color: var(--bv-color-text-secondary);
+.hs-status {
+    font-size: var(--hs-type-caption);
+    color: var(--hs-ink-soft);
     white-space: normal;
     min-height: 56px;
+    padding-left: var(--hs-space-3);
+    border-left-width: 4px;
+    border-left-color: var(--hs-control);
 }
 
-/* State is never signalled by colour alone (spec §12.2): these modifiers change the colour, and
-   the controller prefixes the text with a word carrying the same meaning. */
-.bv-status--success { color: var(--bv-color-success); }
-.bv-status--warning { color: var(--bv-color-warning); }
-.bv-status--danger  { color: var(--bv-color-danger); }
+/* The tint is never the only carrier — the controller writes a word alongside it. */
+.hs-status--confirmed { border-left-color: var(--hs-moss); color: var(--hs-moss-text); }
+.hs-status--refused   { border-left-color: var(--hs-ochre); color: var(--hs-ochre-text); }
+.hs-status--rejected  { border-left-color: var(--hs-oxide); color: var(--hs-oxide-text); }

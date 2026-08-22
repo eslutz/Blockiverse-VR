@@ -153,6 +153,49 @@ DI container, event bus or accessibility package. A new dependency requires a wr
 gap analysis naming the missing Unity capability, why Meta does not provide it, and
 an exit strategy.
 
+### 8. The visual language is Hearthstone, and it is a decision rather than an inheritance
+
+Until 2026-08-22 this project had never made a design decision. What shipped was what
+accumulated: TextMesh Pro's default LiberationSans, a charcoal-and-teal palette written inline in
+the bootstrapper, and a sprite generator drawing a 2px border because something had to be drawn.
+An earlier draft of this ADR treated that as a design system to honour, which was wrong — it
+laundered defaults into doctrine.
+
+Four directions were drawn and **Hearthstone** was chosen (Eric, 2026-08-22): the panel hewn from
+the world's own material, sandstone and basalt faces with 3px extruded edges lit from above, and a
+single ember light. Its tokens live in `Assets/Blockiverse/UI/Styles/Tokens.uss`; the shared
+presentation in `Base.uss`.
+
+Three properties are load-bearing rather than decorative:
+
+- **Extrusion, not tint.** Each surface is lit on its top and left edges and shadowed on its right
+  and bottom, so a control reads as a face of a block. This is why there are four border colours
+  per surface. The pressed state *inverts* that light rather than tinting, which is the only state
+  that survives being looked at from an angle — a VR panel is rarely viewed square on.
+- **Measured contrast, not judged.** The direction's own risk note said warm-on-warm runs low
+  contrast, and it did: eight foreground/background pairs failed 4.5:1 in the first pass, including
+  disabled text at 2.91:1. The surfaces were darkened rather than the palette washed out. All 25
+  shipping pairs now clear it, worst case 5.20:1. `check-contrast.py` in the design working set
+  recomputes this; any new pair must be run through it.
+- **Four signals, none of which works alone.** Ember (act), moss (confirmed), ochre (refused),
+  oxide (rejected), each shipping in two values because the fill tones are too dark to read as
+  type. Every signal also carries an icon and a word — an accessibility floor, and also the only
+  thing that reliably separates ember from oxide at 0.95 m, since both are warm.
+
+Type is Zilla Slab for anything with a name and Barlow for everything else, with Barlow's tabular
+figures carrying every quantity rather than importing a monospace. A third family would be a third
+thing to embed in the font atlas.
+
+**What this costs, and it is not nothing:** the generated sprite set (panels, hotbar frame, slot,
+pip, toast) is drawn by `scripts/art/generate-art-assets.py` from hard-coded colours and must be
+regenerated; the runtime palette lives inline in the bootstrapper and the scene is generated from
+it, so the change lands as a regenerated scene and prefab rather than a stylesheet edit; and
+shipping a real typeface means embedding it and rebuilding its atlas, plus a non-Latin fallback
+story that the TMP default currently provides for free.
+
+**Unvalidated:** none of this has been seen in a headset, which is the only test that settles a
+typeface or a contrast ratio at 0.95 m.
+
 ## Consequences
 
 - **Both UI systems exist simultaneously for several phases.** This is deliberate —

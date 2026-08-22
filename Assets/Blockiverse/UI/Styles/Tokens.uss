@@ -1,50 +1,112 @@
 /*
- * Shared design tokens for every Blockiverse UI Toolkit surface (ADR 0010, spec §10.2).
+ * Hearthstone — shared design tokens for every Blockiverse UI Toolkit surface.
  *
- * No screen stylesheet may invent its own button colour, font scale, focus treatment or standard
- * spacing. If a value is needed twice, it belongs here.
+ * Hewn from the world's own material: sandstone and basalt faces, 3px extruded edges lit from
+ * above, and a single ember light. Chosen 2026-08-22 over three alternatives; see
+ * docs/adr/0010-ui-toolkit-runtime-ui.md and the design canvas.
  *
- * Sizes are in UI pixels. Physical size in the headset is
- *   metres = UIDocument.worldSpaceSize.x / PanelSettings.pixelsPerUnit * transform.localScale.x
+ * No screen stylesheet may invent its own colour, font scale, focus treatment or spacing step.
+ * If a value is needed twice, it belongs here.
+ *
+ * Physical size in the headset is
+ *   metres = UIDocument.worldSpaceSize / PanelSettings.pixelsPerUnit * transform.localScale
  * so at the project's 100 pixels-per-unit and 0.1 panel scale, 1000 px reads as 1.0 m wide.
- * That is why the control minimum height is 64 px: 6.4 cm of physical target, which is large
- * enough to hit reliably with controller tremor at 1.2 m. It is NOT a screen-UI number.
+ * That is why the control minimum is 64 px: 64 mm of physical target, large enough to hit
+ * reliably with controller tremor at 0.95 m. It is NOT a screen-UI number.
  */
 
 :root {
-    /* Surfaces. Deliberately opaque rather than translucent: a see-through menu over a voxel world
-       loses contrast wherever the world behind it is bright, and Quest has no cheap backdrop blur. */
-    --bv-color-background: rgb(18, 20, 24);
-    --bv-color-surface: rgb(28, 32, 38);
-    --bv-color-surface-raised: rgb(40, 45, 53);
-    --bv-color-border: rgb(72, 80, 92);
+    /* ── Surfaces ──────────────────────────────────────────────────────────
+       Deliberately opaque and deliberately dark. Translucency costs fill rate
+       the Quest has none spare of, and loses contrast exactly where the world
+       behind the panel is busiest. These values were darkened from the first
+       sketch after measurement: warm mid-tones need headroom above them, and
+       eight foreground pairs failed 4.5:1 at the lighter values. */
+    --hs-void: #120F0B;
+    --hs-panel: #2A241E;
+    --hs-header: #1E1915;
+    --hs-control: #372F27;
+    --hs-hover: #4A3F34;
+    --hs-pressed: #1E1915;
+    --hs-muted: #241F1A;
+    --hs-chip: #1A1611;
 
-    --bv-color-text-primary: rgb(240, 243, 247);
-    --bv-color-text-secondary: rgb(168, 178, 192);
+    /* ── Ink ───────────────────────────────────────────────────────────────
+       Every pair below clears 4.5:1 against every surface it is used on. The
+       worst is --hs-disabled on --hs-panel at 5.20:1. Disabled drops contrast
+       and never opacity: a faded control at 0.95 m reads as a rendering fault,
+       not as unavailable. */
+    --hs-ink: #EDE2D0;
+    --hs-ink-soft: #CBB89B;
+    --hs-dim: #B9A88F;
+    --hs-disabled: #A5947C;
 
-    --bv-color-accent: rgb(96, 176, 240);
-    --bv-color-focus: rgb(255, 206, 84);
-    --bv-color-success: rgb(126, 200, 128);
-    --bv-color-warning: rgb(232, 176, 80);
-    --bv-color-danger: rgb(224, 104, 96);
-    --bv-color-disabled: rgb(96, 102, 112);
+    /* ── Signals ───────────────────────────────────────────────────────────
+       Four earth pigments. Each ships in two values because the fill tones are
+       too dark to read as type on a dark panel. None of them works alone —
+       every signal also carries an icon and a word, which is an accessibility
+       floor and also the only thing that reliably separates ember from oxide
+       at arm's length, since both are warm. */
+    --hs-ember: #E2703A;          /* action — you can act here */
+    --hs-ember-lit: #F5A374;      /* ember as text, and the lit edge */
+    --hs-on-ember: #201408;
+    --hs-moss: #6E8043;           /* confirmed — the host accepted it */
+    --hs-moss-text: #A3B472;
+    --hs-ochre: #B5813A;          /* refused — try again differently */
+    --hs-ochre-text: #E0B475;
+    --hs-oxide: #A63A2C;          /* rejected — it will not work */
+    --hs-oxide-text: #E08878;
 
-    --bv-space-1: 4px;
-    --bv-space-2: 8px;
-    --bv-space-3: 16px;
-    --bv-space-4: 24px;
-    --bv-space-5: 32px;
-    --bv-space-6: 48px;
+    /* Focus is bone and never ember. Ember already means "act here", and a ray
+       can hover one control while focus rests on another. */
+    --hs-focus: #EDE2D0;
 
-    --bv-radius-small: 4px;
-    --bv-radius-medium: 8px;
+    /* ── Edges ─────────────────────────────────────────────────────────────
+       Every surface is lit from above and behind the player's left. 3px, never
+       rounded: a 1px hairline shimmers under reprojection, and a radius fights
+       the voxel world the panel floats in. */
+    --hs-edge-panel-lit: #55483B;
+    --hs-edge-panel-mid: #443A31;
+    --hs-edge-panel-dark: #17130F;
+    --hs-edge-panel-deep: #120F0B;
 
-    --bv-type-caption: 20px;
-    --bv-type-body: 26px;
-    --bv-type-control: 28px;
-    --bv-type-heading: 38px;
-    --bv-type-title: 54px;
+    --hs-edge-control-lit: #55483B;
+    --hs-edge-control-mid: #453B32;
+    --hs-edge-control-dark: #211C17;
+    --hs-edge-control-deep: #1A1611;
 
-    --bv-control-min-height: 64px;
-    --bv-control-horizontal-padding: 20px;
+    --hs-edge-ember-lit: #F5A374;
+    --hs-edge-ember-mid: #EE8A55;
+    --hs-edge-ember-dark: #A94D22;
+    --hs-edge-ember-deep: #8C3D1A;
+
+    --hs-edge-muted-lit: #3A3129;
+    --hs-edge-muted-mid: #2F281F;
+    --hs-edge-muted-dark: #1A1611;
+    --hs-edge-muted-deep: #15110D;
+
+    --hs-edge-width: 3px;
+
+    /* ── Space ─────────────────────────────────────────────────────────────*/
+    --hs-space-1: 4px;
+    --hs-space-2: 8px;
+    --hs-space-3: 16px;
+    --hs-space-4: 24px;
+    --hs-space-5: 32px;
+    --hs-space-6: 48px;
+
+    /* ── Type ──────────────────────────────────────────────────────────────
+       Zilla Slab carries anything with a name — screen titles, item names,
+       world names. Barlow carries everything else. Quantities use Barlow's
+       tabular figures rather than importing a monospace: a third family is a
+       third thing to embed in the font atlas, and columns of numbers only need
+       the digits to be one width. */
+    --hs-type-title: 54px;
+    --hs-type-heading: 38px;
+    --hs-type-control: 28px;
+    --hs-type-body: 26px;
+    --hs-type-caption: 20px;
+
+    --hs-control-min-height: 64px;
+    --hs-control-horizontal-padding: 22px;
 }

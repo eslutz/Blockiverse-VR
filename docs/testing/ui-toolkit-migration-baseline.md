@@ -7,9 +7,9 @@ Every later phase compares to the numbers here. A number recorded without the co
 measured on is worse than no number — three parallel sessions produced three different, all
 legitimate, test totals on the same afternoon, and each was meaningless without its tree.
 
-**Baseline commit: `4251dcca` (`main`, 2026-08-22).**
-Measurements were taken on a worktree at that commit with the Phase 0/1 changes applied; where that
-matters it is stated per row.
+**Baseline commit: `94bec837` (`main`, 2026-08-22).**
+The branch was merged up to that commit before measuring, so the totals below are comparable to
+main's rather than to an older base.
 
 ---
 
@@ -71,15 +71,14 @@ Run with `scripts/unity/run-tests.sh` (EditMode then PlayMode), editor closed.
 > differently with no graphics device. That has already been misread as a real regression once.
 > Use `--platform` / `--filter` instead.
 
-| Tree | EditMode | PlayMode | Recorded |
+| Tree | EditMode | PlayMode | Source |
 |---|---|---|---|
-| `main` @ `4251dcca` | 1125 | 142 | reported by a parallel session; second-hand, see below |
-| This branch, Phase 0 + 1 | *pending* | *pending* | this session |
+| `main` @ `94bec837` | 1145 | 146 | reported by a parallel session |
+| This branch, Phase 0 + 1 | **1182** | **146** | `TestResults/Unity/{EditMode,PlayMode}.xml`, this session |
 
-The `main` figures were measured by another session before its own work landed, so they are
-second-hand by one step. They are recorded to be checked against, not relied on. **If this
-branch's own run disagrees on an otherwise-unmodified tree, this branch's number is the one to
-believe and the discrepancy is a finding.**
+The two reconcile exactly: this branch adds 37 EditMode tests and no PlayMode tests, and
+1145 + 37 = 1182. That arithmetic is the check worth doing — a total that cannot be accounted for
+means either the count or the branch is not what it is believed to be.
 
 Phase 0/1 adds **37 EditMode tests** across two files:
 
@@ -163,16 +162,31 @@ Method: `ovrgpuprofiler` on one seed and pose, per `docs/testing/performance/REA
 
 | Criterion | Status |
 |---|---|
+| Code compiles | **met** — one error across ~1250 new lines (a named argument) |
+| Full existing suite green | **met** — EditMode 1182/1182, PlayMode 146/146 |
+| Generated configuration is what the validator accepts | **met** — asserted end to end, with a control proving the layer rule fires |
+| No custom input or rendering code introduced | **met** — the Toolkit assembly references only `Blockiverse.Core` |
 | Text renders crisply in headset | pending device run |
 | Both controllers hover and activate | pending device run |
 | One press produces one activation | pending device run |
 | Scroll works without a tiny handle | pending device run |
 | Quest keyboard opens for `TextField` | pending device run — **the least certain of these**, see below |
 | Hidden UI cannot intercept world rays | covered by EditMode test; pending device confirmation |
-| No custom input or rendering code introduced | met — see the asmdef test and ADR 0010 §2 |
-| Full existing suite green | pending run |
-| Quest 3 | pending |
-| Quest 3S | **blocked, no device** |
+| Quest 3 | pending — APK building |
+| Quest 3S | **blocked, no device attached** |
+
+### Tests were checked for discrimination, not trusted for being green
+
+With `Validate()` gutted to return an empty list, **17 of 20** validator tests failed. The three
+survivors were the correct-configuration case and the asmdef check — neither of which reads a
+finding — plus `LayerMaskArithmeticHandlesTheEdgeLayers`, which asserted only absences and so
+passed against a validator that reported nothing at all. That test now leads with a control
+showing the same rule firing on the same fixture, and the sabotage now leaves exactly the two
+expected survivors.
+
+The same check was applied to the governance test: restoring the superseded shared-Quad wording
+to the ruleset makes it fail, and removing it makes it pass. A rule that cannot be shown failing
+is not evidence of anything.
 
 **The keyboard criterion deserves separate attention.** The uGUI path needed a custom
 `BlockiverseSystemKeyboardField` component and `TMP_InputField.shouldHideSoftKeyboard = true` to
