@@ -6,9 +6,7 @@
     "Oculus.Platform"
   ],
   "includePlatforms": [],
-  "excludePlatforms": [
-    "LinuxStandalone64"
-  ],
+  "excludePlatforms": [],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],

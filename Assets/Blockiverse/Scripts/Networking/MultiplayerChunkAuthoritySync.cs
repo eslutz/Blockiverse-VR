@@ -377,7 +377,10 @@ namespace Blockiverse.Networking
                 !networkManager.IsListening ||
                 !networkManager.IsServer ||
                 !CurrentBoundary.CanServeLateJoinSync ||
-                networkManager.ConnectedClientsIds.Count <= 1)
+                // Count REMOTE peers, not entries. A host appears in its own ConnectedClientsIds,
+                // a dedicated server does not, so `<= 1` silently means "never resync" for a
+                // server with exactly one player -- weather and time then drift uncorrected.
+                CountRemoteClients(networkManager) < 1)
             {
                 environmentResyncTimer = 0.0f;
                 return;
@@ -1613,6 +1616,23 @@ namespace Blockiverse.Networking
             }
 
             bufferedChunkDeltas.Add(message);
+        }
+
+        // Remote peers only: excludes this process's own client id, which exists on a host and
+        // does not on a dedicated server.
+        static int CountRemoteClients(NetworkManager networkManager)
+        {
+            if (networkManager == null)
+                return 0;
+
+            int remote = 0;
+            foreach (ulong clientId in networkManager.ConnectedClientsIds)
+            {
+                if (clientId != networkManager.LocalClientId)
+                    remote++;
+            }
+
+            return remote;
         }
 
         void SendToRemoteClients(string messageName, FastBufferWriter writer)

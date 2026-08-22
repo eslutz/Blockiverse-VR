@@ -301,7 +301,72 @@ namespace Blockiverse.Networking
 
         readonly Dictionary<ulong, Inventory> inventoriesByClientId = new();
         readonly Dictionary<ulong, string> playerIdentityKeysByClientId = new();
+        // Inventories held for disconnected players so a reconnect reclaims them. The key is
+        // supplied by the CLIENT (its PlayerHello identity), so without a bound a peer can grow
+        // this without limit by reconnecting under fresh identities -- and it is serialized into
+        // every save, so it grows the world on disk too. Bounded and aged instead.
         readonly Dictionary<string, Inventory> stashedInventoriesByIdentityKey = new();
+        readonly List<string> stashedIdentityOrder = new();
+        public const int DefaultMaxStashedPlayers = 64;
+        int maxStashedPlayers = DefaultMaxStashedPlayers;
+
+        // Operators raise this when a server has more regular players than the default window.
+        public void ConfigureMaxStashedPlayers(int value) =>
+            maxStashedPlayers = value > 0 ? value : DefaultMaxStashedPlayers;
+
+        public int StashedPlayerCount => stashedInventoriesByIdentityKey.Count;
+
+        // Least-recently-stashed eviction. An inventory with nothing in it is not worth a slot at
+        // all, so those are dropped rather than stored -- which is also what a churn attack
+        // produces, since a fresh identity has an empty inventory.
+        void StashInventory(string identityKey, Inventory inventory)
+        {
+            if (string.IsNullOrEmpty(identityKey) || inventory == null)
+                return;
+
+            if (IsInventoryEmpty(inventory))
+            {
+                ForgetStashedInventory(identityKey);
+                return;
+            }
+
+            if (!stashedInventoriesByIdentityKey.ContainsKey(identityKey))
+                stashedIdentityOrder.Add(identityKey);
+            else
+                TouchStashOrder(identityKey);
+
+            stashedInventoriesByIdentityKey[identityKey] = inventory;
+
+            while (stashedIdentityOrder.Count > maxStashedPlayers)
+            {
+                string oldest = stashedIdentityOrder[0];
+                stashedIdentityOrder.RemoveAt(0);
+                stashedInventoriesByIdentityKey.Remove(oldest);
+            }
+        }
+
+        void TouchStashOrder(string identityKey)
+        {
+            if (stashedIdentityOrder.Remove(identityKey))
+                stashedIdentityOrder.Add(identityKey);
+        }
+
+        void ForgetStashedInventory(string identityKey)
+        {
+            stashedInventoriesByIdentityKey.Remove(identityKey);
+            stashedIdentityOrder.Remove(identityKey);
+        }
+
+        static bool IsInventoryEmpty(Inventory inventory)
+        {
+            for (int index = 0; index < inventory.SlotCount; index++)
+            {
+                if (!inventory.GetSlot(index).IsEmpty)
+                    return false;
+            }
+
+            return true;
+        }
         readonly Dictionary<ulong, ProcessedRequestWindow> processedRequestsByClientId = new();
         readonly PerClientRequestRateLimiter hostCommandRateLimiter =
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
@@ -528,6 +593,7 @@ namespace Blockiverse.Networking
 
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
+            stashedIdentityOrder.Clear();
 
             if (savedPlayers == null)
                 return;
@@ -542,8 +608,9 @@ namespace Blockiverse.Networking
                     continue;
                 }
 
-                stashedInventoriesByIdentityKey[savedPlayer.PlayerId] =
-                    WorldSaveService.CreateInventoryFromData(savedPlayer.Inventory, registry);
+                StashInventory(
+                    savedPlayer.PlayerId,
+                    WorldSaveService.CreateInventoryFromData(savedPlayer.Inventory, registry));
             }
         }
 
@@ -626,6 +693,7 @@ namespace Blockiverse.Networking
             inventoriesByClientId.Clear();
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
+            stashedIdentityOrder.Clear();
             processedRequestsByClientId.Clear();
             hostCommandRateLimiter.Clear();
             pendingCommandRequests.Clear();
@@ -2906,6 +2974,14 @@ namespace Blockiverse.Networking
                 lastAcceptedHarvestTimeByClientId[clientId] = HostCommandTimeSeconds;
         }
 
+        // True when this process owns the world but has no local player: a dedicated server.
+        // A host is a server that is also a client, so IsClient distinguishes them.
+        bool IsDedicatedServerProcess()
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            return networkManager != null && networkManager.IsServer && !networkManager.IsClient;
+        }
+
         bool TryRejectOutOfReach(
             ulong clientId,
             uint requestId,
@@ -2920,7 +2996,19 @@ namespace Blockiverse.Networking
                 return false;
 
             if (!TryResolveClientWorldPosition(clientId, out Vector3 requesterPosition))
-                return false;
+            {
+                // A host cannot resolve a peer's head only transiently -- an unspawned or
+                // just-connected player -- so it stays permissive (ruleset §16). A DEDICATED
+                // server has no local player and is permanently in this state for any client
+                // whose pose has not arrived, which would make a permissive answer equivalent to
+                // no reach validation at all. Fail closed there instead.
+                if (!IsDedicatedServerProcess())
+                    return false;
+
+                result = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.OutOfReach, requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return true;
+            }
 
             if (IsBlockWithinInteractionReach(requesterPosition, targetPosition))
                 return false;
@@ -3688,6 +3776,7 @@ namespace Blockiverse.Networking
             inventoriesByClientId.Clear();
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
+            stashedIdentityOrder.Clear();
             processedRequestsByClientId.Clear();
             hostCommandRateLimiter.Clear();
             lastAcceptedHarvestTimeByClientId.Clear();
@@ -3738,7 +3827,7 @@ namespace Blockiverse.Networking
             if (playerIdentityKeysByClientId.Remove(clientId, out string identityKey) &&
                 inventoriesByClientId.Remove(clientId, out Inventory inventory))
             {
-                stashedInventoriesByIdentityKey[identityKey] = inventory;
+                StashInventory(identityKey, inventory);
             }
         }
 
@@ -3830,6 +3919,7 @@ namespace Blockiverse.Networking
 
             playerIdentityKeysByClientId[senderClientId] = identityKey;
 
+            stashedIdentityOrder.Remove(identityKey);
             if (stashedInventoriesByIdentityKey.Remove(identityKey, out Inventory stashed))
             {
                 inventoriesByClientId[senderClientId] = stashed;

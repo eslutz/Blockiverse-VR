@@ -14,7 +14,7 @@ namespace Blockiverse.Networking
     [DisallowMultipleComponent]
     public sealed class MultiplayerWorldPersistence : MonoBehaviour
     {
-        const string DefaultSaveFileName = "multiplayer-world.vxlworld";
+        public const string DefaultSaveFileName = "multiplayer-world.vxlworld";
         const string DefaultWorldName = "Multiplayer World";
         const string DefaultWorldPreset = WorldPresetIds.SurvivalTerrain;
 
@@ -205,6 +205,9 @@ namespace Blockiverse.Networking
                     survivalSync.RestorePersistedRemoteInventories(result.Data.MultiplayerPlayerInventories);
                 }
 
+                // Remembered so a process with no vitals runtime round-trips it rather than
+                // dropping it (see BuildSaveExtras).
+                loadedPlayerState = result.Data.PlayerState;
                 vitalsRuntime?.RestorePlayerSaveState(result.Data.PlayerState);
             }
             finally
@@ -401,9 +404,20 @@ namespace Blockiverse.Networking
                 extras.SharedCrateInventory = survivalSync.BuildPersistedSharedCrateInventory();
             }
 
-            extras.PlayerState = vitalsRuntime != null ? vitalsRuntime.BuildPlayerSaveState() : null;
+            // A dedicated server has no local player and therefore no vitals runtime, so it has
+            // nothing of its own to write here. Writing null would DELETE the saved player state a
+            // LAN host had recorded -- migrating a host world to a server would silently discard
+            // that player's position and vitals on the first autosave. Carry the loaded value
+            // through untouched instead.
+            extras.PlayerState = vitalsRuntime != null
+                ? vitalsRuntime.BuildPlayerSaveState()
+                : loadedPlayerState;
             return extras;
         }
+
+        // The player state read from the world on load. Only meaningful when this process has no
+        // vitals runtime of its own to regenerate it.
+        SavedPlayerState loadedPlayerState;
 
         // Host autosave: while hosting with save authority, persist the world on the save-service
         // cadence so a crash or battery death loses at most one interval.
@@ -452,6 +466,21 @@ namespace Blockiverse.Networking
                     $"Failed to start autosave multiplayer host world file={SanitizeSavePath(path)} exception={exception.GetType().Name}",
                     context: this);
             }
+        }
+
+        // Operator-triggered save (admin console). Returns false when this process does not hold
+        // save authority, so the caller can say why nothing happened rather than reporting success.
+        public bool SaveCurrentMultiplayerWorld()
+        {
+            ResolveReferences();
+            if (!TryEnsureHostSaveAuthority(out string failureReason, "save multiplayer world on operator request"))
+            {
+                BlockiverseLog.Warning(BlockiverseLogCategory.Persistence, failureReason, this);
+                return false;
+            }
+
+            SaveCurrentMultiplayerWorld(ResolveSavePath());
+            return true;
         }
 
         void SaveCurrentMultiplayerWorld(string path)
@@ -681,11 +710,11 @@ namespace Blockiverse.Networking
 
                 string resolved = Path.GetFullPath(candidate);
 
-                if (!IsUnderRoot(resolved, Application.persistentDataPath) &&
-                    !IsUnderRoot(resolved, Path.GetTempPath()))
-                {
+                // Roots come from BlockiverseSavePathPolicy so a dedicated server can declare an
+                // operator-chosen world directory at startup. The guarantee is unchanged: the set
+                // is sealed once a session is listening, so nothing at runtime can redirect saves.
+                if (!BlockiverseSavePathPolicy.IsTrusted(resolved))
                     return false;
-                }
 
                 fullPath = resolved;
                 return true;
@@ -696,14 +725,16 @@ namespace Blockiverse.Networking
             }
         }
 
-        static bool IsUnderRoot(string fullPath, string root)
+        // Installed once so the policy knows the built-in roots without referencing UnityEngine.
+        // Same two roots the hardcoded check always used.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void InstallDefaultSaveRoots()
         {
-            if (string.IsNullOrWhiteSpace(root))
-                return false;
-
-            string normalizedRoot = Path.GetFullPath(root)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return fullPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+            BlockiverseSavePathPolicy.DefaultRootProvider ??= static () => new[]
+            {
+                Application.persistentDataPath,
+                Path.GetTempPath(),
+            };
         }
 
         string ResolveSavePath()

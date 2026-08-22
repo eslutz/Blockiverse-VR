@@ -1,14 +1,14 @@
 {
-  "name": "Blockiverse.MetaAvatars",
-  "rootNamespace": "Blockiverse.MetaAvatars",
+  "name": "Blockiverse.Server",
+  "rootNamespace": "Blockiverse.Server",
   "references": [
-    "Blockiverse.MetaPlatform",
+    "Blockiverse.Core",
     "Blockiverse.Networking",
-    "Meta.XR.MultiplayerBlocks.Shared",
-    "Oculus.AvatarSDK2",
-    "Oculus.Platform",
-    "Oculus.VR",
-    "Unity.Collections",
+    "Blockiverse.Persistence",
+    "Blockiverse.Survival",
+    "Blockiverse.Voxel",
+    "Blockiverse.WorldGen",
+    "Blockiverse.WorldRuntime",
     "Unity.Netcode.Runtime"
   ],
   "includePlatforms": [],

@@ -245,6 +245,13 @@ namespace Blockiverse.Networking
         [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Owner)]
         void SubmitAvatarPoseRpc(AvatarPose pose)
         {
+            // On a host this rig's transform is kept current by the SendTo.NotOwner leg below,
+            // because the host is also a client. A DEDICATED server is not a client, so that leg
+            // never executes here and HeadAnchor would sit at its spawn transform forever --
+            // which is what every server-side reach check reads. Apply it directly.
+            if (IsServer && !IsHost)
+                ApplyRemotePose(pose);
+
             ReceiveAvatarPoseRpc(pose);
         }
 

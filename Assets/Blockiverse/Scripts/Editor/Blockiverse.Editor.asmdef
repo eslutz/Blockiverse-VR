@@ -27,6 +27,7 @@
     "Unity.XR.OpenXR.Editor",
     "Unity.TextMeshPro",
     "UnityEngine.UI",
+    "Blockiverse.Server",
     "Blockiverse.WorldRuntime"
   ],
   "includePlatforms": [

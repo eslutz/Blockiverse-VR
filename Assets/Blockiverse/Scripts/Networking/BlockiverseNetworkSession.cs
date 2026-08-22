@@ -198,6 +198,33 @@ namespace Blockiverse.Networking
             return started;
         }
 
+        // A dedicated server: authoritative, no local player, no player seat consumed. Runs the
+        // SAME start preparation as a host -- world load, default world init, registry validation --
+        // because the authority model is identical; only the local player is absent.
+        public bool StartServer()
+        {
+            if (!PrepareToStart(NetworkSessionMode.Server))
+                return false;
+
+            if (!ApplyTransportSecurity(NetworkSessionMode.Server))
+                return false;
+
+            if (!RunPreparation(HostStartPreparing, "Unable to prepare dedicated server session."))
+            {
+                MarkFailed(LastDisconnectReason);
+                return false;
+            }
+
+            CurrentState = BlockiverseConnectionState.StartingServer;
+            ApplyConnectionData(config.Address, config.ListenAddress);
+
+            bool started = networkManager.StartServer();
+            if (!started)
+                MarkFailed("Failed to start dedicated server session.");
+
+            return started;
+        }
+
         public bool StartClient(string address)
         {
             if (!PrepareToStart(NetworkSessionMode.Client))
@@ -233,7 +260,7 @@ namespace Blockiverse.Networking
                 return;
             }
 
-            if (CurrentMode == NetworkSessionMode.Host &&
+            if (IsWorldOwningMode(CurrentMode) &&
                 networkManager.IsListening &&
                 !RunPreparation(HostShutdownPreparing, "Unable to prepare LAN host shutdown."))
             {
@@ -242,7 +269,9 @@ namespace Blockiverse.Networking
                 {
                     LastStopRequestSucceeded = false;
                     LastStopForcedAfterPreparationFailure = false;
-                    CurrentState = BlockiverseConnectionState.Hosting;
+                    CurrentState = CurrentMode == NetworkSessionMode.Server
+                        ? BlockiverseConnectionState.Serving
+                        : BlockiverseConnectionState.Hosting;
                     stopRequestedByLocalSession = false;
                     return;
                 }
@@ -361,7 +390,7 @@ namespace Blockiverse.Networking
             }
 
             unityTransport.UseEncryption = true;
-            if (mode == NetworkSessionMode.Host)
+            if (IsWorldOwningMode(mode))
                 unityTransport.SetServerSecrets(serverCertificatePem, serverPrivateKeyPem);
             else
                 unityTransport.SetClientSecrets(transportServerCommonName, clientCaCertificatePem);
@@ -425,7 +454,16 @@ namespace Blockiverse.Networking
         {
             if (CurrentMode == NetworkSessionMode.Host)
                 CurrentState = BlockiverseConnectionState.Hosting;
+            else if (CurrentMode == NetworkSessionMode.Server)
+                CurrentState = BlockiverseConnectionState.Serving;
         }
+
+        // Host and Server both own the authoritative world. The only difference is whether this
+        // process also has a local player, which matters for player-facing state, never authority.
+        public static bool IsWorldOwningMode(NetworkSessionMode mode) =>
+            mode == NetworkSessionMode.Host || mode == NetworkSessionMode.Server;
+
+        public bool IsDedicatedServer => CurrentMode == NetworkSessionMode.Server;
 
         void HandleClientStarted()
         {
