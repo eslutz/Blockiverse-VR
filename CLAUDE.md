@@ -65,7 +65,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
 - Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
 - A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
-- Only one Unity batchmode instance can hold the Unity license at a time, machine-wide — the licensing client is per-user (`Unity-LicenseClient-<user>`), one instance serving every editor. Parallel worktrees and agent sessions share it and must hand it off explicitly. See "Sharing the Unity License" below.
+- When several worktrees or agent sessions are active, coordinate Unity runs explicitly rather than starting whenever you feel like it. See "Sharing the Unity License" below.
 - A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md) — the active target changes during a PlayMode run, and the owning package rewrites its define), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
 
 Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, minutes before the PlayMode build-target switch that explains the defines. The trigger is not established; an EditMode-only run is the cheap experiment for narrowing it. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
@@ -120,9 +120,24 @@ its own. Do not leave stuck Unity batchmode processes running.
 
 ### Sharing the Unity License
 
-Only one Unity batchmode run can hold the license at a time, machine-wide. When more
-than one worktree or agent session is active, treat the license as a token that is
+When more than one worktree or agent session is active, treat a Unity run as a token
 handed off by name, not as a resource you wait for.
+
+Why, precisely — because a wrong reason gets the rule discarded by the first person
+who falsifies it:
+
+- Two editors **cannot** open the same project at once; the second fails to launch.
+- Batchmode runs are heavy (editor, import workers, shader compilers, ILPP) and
+  several at once will thrash the machine.
+- Whenever you *do* have to wait, waiting by observation does not work — see rule 4.
+
+What this is **not** based on: an earlier version of this section claimed only one
+batchmode instance can hold the license machine-wide. That is unverified and probably
+wrong — two batchmode editors on different project paths have been observed running
+concurrently without error, and the session that first asserted the constraint
+retracted it. The licensing *client* is genuinely a single per-user process
+(`Unity-LicenseClient-<user>`), which is why the recovery below is destructive to
+other worktrees, but a shared service is not the same thing as an exclusive lock.
 
 1. **Ask before you run.** Tell the current holder you need a slot, and say roughly
    how long your run is. If nobody holds it, say you are taking it.
