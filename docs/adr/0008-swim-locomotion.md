@@ -119,12 +119,82 @@ would leave gravity off forever after a reload.
   assist that moves you *up* when you asked to move *forward* is unrequested motion in
   a direction the player did not choose — a different and less defensible thing than a
   constant, predictable, physically motivated descent.
+  **Reversed 2026-08-22 — see the amendment below.**
 - **No breath or drowning.** Persisting a breath value forces a save-schema bump that
   would hard-refuse every existing save, and the pre-release policy has no migrations.
 - A water column deep enough to submerge the body no longer produces a fall, which
   changed what the existing fall-damage PlayMode test could measure; its fluid columns
   are now wade-depth so the feet-in-fluid rule it pins is exercised without waiting
   out a slow descent.
+
+
+## Amendment: ledge-climb assist, 2026-08-22
+
+**This reverses the "No ledge-climb assist" decision above.** Recorded here rather
+than applied quietly, because the original reasoning was sound and the reversal rests
+on new information rather than on changing our minds about comfort.
+
+### What the original decision got wrong
+
+It asserted that hold-jump-to-rise already gets the player out. In-headset testing
+found it does not, and the mechanism is specific:
+
+`ResolveState` leaves the Surfaced and Swimming states the moment the **body** sample
+reads dry, and that sample sits at capsule base + 0.55 × 1.8 ≈ **0.99 m**. So the swim
+provider hands control back while the player's feet are still roughly a metre below the
+bank. Gravity resumes there and pulls them straight back in.
+
+None of the three mechanisms that would normally rescue this apply:
+
+- `CharacterController.stepOffset` is 0.3 m; the lip is about 1.0 m.
+- The controller's step assist requires being grounded, and a treading player never is
+  (the fluid layer is excluded from the gravity provider's sphere cast, by design —
+  see [PR #326]).
+- `JumpProvider` is disabled while swimming, and needs grounding anyway.
+
+So the player is not merely inconvenienced at a shoreline; **they cannot get out of the
+water at the one place the terrain says they should be able to.** That is a
+functional gap, not a comfort preference, and it is what the original decision missed.
+
+### Why the comfort argument survives the reversal
+
+The ADR rejected an assist because it "moves you *up* when you asked to move
+*forward*". The shipped assist does not do that:
+
+- It fires **only while the player is actively pushing toward the bank**. With no move
+  intent there is no lift, ever. That makes it *redirected requested motion* rather
+  than motion nobody asked for — the same category as the character controller's own
+  step assist, which nobody considers a comfort hazard.
+- The direction is **quantised to one axis**, so a diagonal cannot pull the player
+  through a corner.
+- Reach is bounded so the largest possible lift is **two blocks**: a bank level with the
+  water surface, or one block above it. The bound is on the *surface* and the landing is
+  one higher again — an earlier draft bounded the landing and therefore silently allowed
+  three blocks, which a test caught by climbing onto an overhang.
+- It is queued through the same `TryQueueTransformation` path as every other swim
+  motion, so it inherits collision and the live capsule height rather than teleporting
+  the player into geometry.
+- **Comfort toggle: "Climb Out At Low Banks", default on.** On by default because the
+  alternative is a shoreline that traps you; the switch exists because it is still an
+  automatic vertical translation and some players will not want one.
+
+### What is deliberately still true
+
+- The lift runs **before** the vertical target and **while the gravity lock is still
+  held**. Releasing first would let `ExitSwimming` fire halfway up the bank, dropping
+  the player back in — the exact failure the assist exists to fix.
+- Fluids carry `isSolid: false`, so water can never be mistaken for a bank; a swimmer
+  cannot "climb out" onto the surface of the lake they are in.
+- The query is a **voxel** query (`FluidLedge`), not a physics cast: deterministic,
+  engine-free, no collider bake, and the same shape of question `FluidSubmersion`
+  already answers the same way.
+
+### Open
+
+The two-block case is **reasoned, not validated**. A ~2 m automatic vertical
+translation is a significant vection event and wants a headset comfort pass. If it
+reads badly, the conservative fallback is to bound the surface rise at 0 — water level
+only, a ~1 m lift — which is a one-constant change in `FluidLedge`.
 
 [PR #326]: https://github.com/eslutz/Blockiverse-VR/pull/326
 [PR #328]: https://github.com/eslutz/Blockiverse-VR/pull/328
