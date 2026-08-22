@@ -202,16 +202,31 @@ observed.
   an error, so it is found by wondering why so many background tasks are alive, not
   by reading a failure.
 
-Anchor on the binary path instead, and filter by `-projectPath` when you care which
-project a run belongs to:
+Two safe forms. Match on the process *name*, which no shell command line can satisfy:
 
 ```sh
-# All real editor processes
-ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+# Is anything running? (editors and their import workers; workers exit with their editor)
+pgrep -x Unity
 
-# Only this project's
-ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity " | grep "<worktree-dir>"
+# How many runs? Workers share the binary, so the name alone cannot tell them apart —
+# read the command line to drop them.
+for p in $(pgrep -x Unity); do
+  ps -p "$p" -o command= | grep -q -- "-adb2\|AssetImportWorker\|-srvPort" || echo "editor $p"
+done
 ```
+
+Or anchor on the install path, which additionally shows you *whose* run it is:
+
+```sh
+ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
+```
+
+Read that by grouping on `-projectPath`, not by counting lines — one run shows two or
+three. Two caveats when attributing a run to a worktree: a run launched with a relative
+`-projectPath .` (this repo's own bootstrapper invocation does exactly that) shows `.`
+rather than a path and will be missed by any grouping on directory names, and an import
+worker names its parent with `-parentPid` rather than repeating the project. When the
+path is ambiguous, `lsof -a -p <pid> -d cwd -Fn` gives the real working directory.
 
 Kill by PID after identifying the specific process, not by pattern.
 
