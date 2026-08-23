@@ -37,7 +37,7 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
 - Timestamp: 2026-08-13. Unity editor: `6000.5.8f1`. Target: Meta Quest 3 and Quest 3S. Local scripts and the Quest CI/alpha workflows were updated from the old `6000.3.16f1` pins on 2026-08-13.
 - Main scene: `Assets/Blockiverse/Scenes/Boot.unity` — the whole game, no scene switching. Generated scene/prefab/input wiring is owned by `BlockiverseProjectBootstrapper.Run()`; change the bootstrapper and regenerate.
 - Timestamp: 2026-08-13. Menu architecture: routed menus are direct world-space XR canvases (commit `9c6f435c`, headset-verified, tag `quest-menu-good-2026-07-02`); composition layers are used only for the startup splash. ADR 0006's shared-Quad menu decision is superseded (see its Amendment section).
-- Timestamp: 2026-08-13. The July "black screen after splash" regression (`Assets/Plans/diagnostic-black-screen.md`) does NOT reproduce in the Meta XR Simulator on the upgraded stack — verified in-runtime via Meta XR Operator (session FOCUSED, single healthy projection layer, world/UI/hands render). On-device (Quest) confirmation is still outstanding; treat the plan as closed-pending-device-check.
+- Timestamp: 2026-08-13. The July "black screen after splash" regression (`docs/plans/diagnostic-black-screen.md`) does NOT reproduce in the Meta XR Simulator on the upgraded stack — verified in-runtime via Meta XR Operator (session FOCUSED, single healthy projection layer, world/UI/hands render). On-device (Quest) confirmation is still outstanding; treat the plan as closed-pending-device-check.
 
 ## Package And Tooling State
 
