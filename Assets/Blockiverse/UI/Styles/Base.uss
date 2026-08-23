@@ -137,6 +137,25 @@
     border-left-color: var(--hs-ember);
 }
 
+/* Button-list screens (title, pause, death, settings hub) centre their actions in
+   whatever space the panel has. A fixed-size panel cannot fit its list exactly: the
+   title menu carries six actions in the editor and five on device, because CanQuit()
+   is editor-only. Top-aligned, that difference pools as dead space under the last
+   button. Centred, it splits evenly and reads as deliberate at any count. */
+.hs-action-list .unity-scroll-view__content-container {
+    flex-grow: 1;
+    justify-content: center;
+}
+
+/* An empty status line still reserved its 56px, which is most of the dead band under
+   the last title-menu button. Collapsing it is done by the controllers rather than by
+   USS (there is no :empty selector), and only when the text is blank — a status that
+   is actually showing keeps its reserved height so arriving text never reflows the
+   buttons under the player's ray. */
+.hs-status--empty {
+    display: none;
+}
+
 /* ── Fields ─────────────────────────────────────────────────────────────── */
 
 .hs-field {
@@ -250,9 +269,16 @@
     border-bottom-color: var(--hs-edge-control-lit);
 }
 
+/* Checked draws a tick INSIDE the well rather than filling it. A solid ember square
+   read as a coloured block rather than a control — it said "something is here", not
+   "this is on". The box stays the same recess in both states so only the symbol
+   changes, and the ember edge quartet keeps the state legible at distance, where the
+   tick alone would be the first thing to go. The sprite is the one the bootstrapper
+   already generates for the uGUI checkboxes. */
 .hs-field.unity-toggle:checked .unity-toggle__checkmark {
-    background-image: none;
-    background-color: var(--hs-ember);
+    background-image: url("/Assets/Blockiverse/Art/Sprites/UI/checkbox_check.png");
+    -unity-background-image-tint-color: var(--hs-ember-lit);
+    background-color: var(--hs-chip);
     border-top-color: var(--hs-edge-ember-lit);
     border-left-color: var(--hs-edge-ember-mid);
     border-right-color: var(--hs-edge-ember-dark);
@@ -278,7 +304,7 @@
 
 .hs-field .unity-base-slider__tracker {
     height: var(--hs-slider-track-height);
-    margin-top: 0;
+    margin-top: var(--hs-slider-track-offset);
     background-color: var(--hs-chip);
     border-top-width: 2px;
     border-left-width: 2px;
@@ -293,7 +319,7 @@
 .hs-field .unity-base-slider__dragger {
     width: var(--hs-slider-dragger-width);
     height: var(--hs-slider-dragger-height);
-    margin-top: 0;
+    margin-top: var(--hs-slider-dragger-offset);
     background-color: var(--hs-control);
     border-top-width: var(--hs-edge-width);
     border-left-width: var(--hs-edge-width);

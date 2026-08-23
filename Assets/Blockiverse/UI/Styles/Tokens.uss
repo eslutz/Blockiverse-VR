@@ -121,4 +121,14 @@
     --hs-slider-dragger-width: 40px;
     --hs-slider-dragger-height: 52px;
     --hs-slider-min-length: 150px;
+
+    /* Half of the two heights above, negated. UI Toolkit positions a horizontal
+       slider's tracker and dragger absolutely at top: 50%, and relies on a negative
+       top margin to pull each back by half its own height — that is what centres them
+       on the rail. Overriding the heights without also overriding these margins leaves
+       both hanging half their height low, which is the offset dragger Eric spotted.
+       USS has no calc(), so these must be updated BY HAND whenever the heights above
+       change. They are pinned by a test for exactly that reason. */
+    --hs-slider-track-offset: -7px;
+    --hs-slider-dragger-offset: -26px;
 }

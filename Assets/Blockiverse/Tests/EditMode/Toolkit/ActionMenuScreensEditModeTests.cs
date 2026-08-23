@@ -134,14 +134,16 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(attribute.ScreenId, Is.EqualTo(expectedScreenId));
             Assert.That(attribute.WidthPixels, Is.EqualTo(570));
 
-            // Title (up to 6 actions) and Pause (up to 7) are taller than the short screens.
-            // A button row is 64 px plus 8 px margins; at 700 px the content area holds about
-            // 451 px, so seven rows overflowed into a scrollbar with the last row clipped
-            // mid-glyph — seen on the title screen in the simulator. Death (3) and the settings
-            // hub (4) fit comfortably and stay at 700.
-            bool isLongList = controllerType == typeof(TitleScreenController) ||
-                controllerType == typeof(PauseScreenController);
-            Assert.That(attribute.HeightPixels, Is.EqualTo(isLongList ? 860 : 700));
+            // Each of these is sized to its own worst-case action count rather than to a
+            // shared number. A button row is 64 px plus 8 px margins. Pause carries up to
+            // seven actions and needs 860; title carries six (five on device, where
+            // CanQuit() is false) and needs 740 — it was briefly 860, which fit but left
+            // dead space under the last button. Death (3) and the settings hub (4) fit in
+            // 700. The residual slack is centred rather than pooled, see .hs-action-list.
+            int expectedHeight =
+                controllerType == typeof(PauseScreenController) ? 860 :
+                controllerType == typeof(TitleScreenController) ? 740 : 700;
+            Assert.That(attribute.HeightPixels, Is.EqualTo(expectedHeight));
             Assert.That(attribute.PlacementProfile, Is.EqualTo(UiToolkitPlacementProfile.Menu));
 
             var tree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(attribute.DocumentAssetPath);
@@ -293,6 +295,31 @@ namespace Blockiverse.Tests.EditMode
             controller.PressAction(MenuActions.SettingsOpenComfort);
 
             Assert.That(menuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.ComfortSettingsScreen));
+        }
+
+        // The blank status row collapses instead of holding an empty 56px band open under
+        // the last button. Asserted from both sides: a real message must put the row back,
+        // or "collapsed" would be indistinguishable from "permanently hidden".
+        [Test]
+        public void BlankStatusCollapsesItsRowAndARealMessageRestoresIt()
+        {
+            TitleScreenController title = CreateScreen<TitleScreenController>();
+            VisualElement root = AttachFreshTree(title);
+            Label status = root.Q<Label>("bv-status");
+
+            title.SetStatus("Loading world...");
+            Assert.That(status.ClassListContains("hs-status--empty"), Is.False,
+                "a real status must occupy its row");
+
+            title.SetStatus(string.Empty);
+            Assert.That(status.ClassListContains("hs-status--empty"), Is.True,
+                "a blank status must collapse its row");
+
+            // Whitespace is blank too — a status set to " " would otherwise hold the band open.
+            title.SetStatus("Saved.");
+            Assert.That(status.ClassListContains("hs-status--empty"), Is.False);
+            title.SetStatus("   ");
+            Assert.That(status.ClassListContains("hs-status--empty"), Is.True);
         }
 
         [Test]

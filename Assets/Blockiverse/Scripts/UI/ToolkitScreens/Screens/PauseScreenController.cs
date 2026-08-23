@@ -53,9 +53,19 @@ namespace Blockiverse.UI
         public void SetStatus(string message)
         {
             pendingStatus = message ?? string.Empty;
+            ApplyStatus();
+        }
 
-            if (statusLabel != null)
-                statusLabel.text = pendingStatus;
+        // A blank status collapses its row rather than holding an empty 56px band open —
+        // that band was most of the dead space under the last button. It reappears the
+        // moment there is something to say.
+        void ApplyStatus()
+        {
+            if (statusLabel == null)
+                return;
+
+            statusLabel.text = pendingStatus;
+            statusLabel.EnableInClassList("hs-status--empty", string.IsNullOrWhiteSpace(pendingStatus));
         }
 
         // The click path shared by every rendered action button. Public because EditMode tests
@@ -81,7 +91,7 @@ namespace Blockiverse.UI
                 titleLabel.text = pendingTitle;
 
             if (statusLabel != null && pendingStatus != null)
-                statusLabel.text = pendingStatus;
+                ApplyStatus();
 
             return allFound;
         }

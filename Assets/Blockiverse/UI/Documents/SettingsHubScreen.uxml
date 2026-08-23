@@ -9,6 +9,6 @@
         <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
             <engine:Label name="bv-title" class="hs-screen__title" picking-mode="Ignore" />
         </engine:VisualElement>
-        <engine:ScrollView name="bv-actions" class="hs-screen__content" mode="Vertical" />
+        <engine:ScrollView name="bv-actions" class="hs-screen__content hs-action-list" mode="Vertical" />
     </engine:VisualElement>
 </engine:UXML>
