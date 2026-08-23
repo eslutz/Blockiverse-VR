@@ -191,7 +191,7 @@ Hard-learned constraints:
   takes the backend URL as its first argument (`meta-xr-operator-mcp-proxy http://127.0.0.1:8720`),
   so a small JSON-RPC-over-stdio client works when the registered tools are missing. Bundled tools
   include `openxr_get_controller_pose` with `pose_type: grip|aim` and `base_space`, which is how the
-  grip→aim offset for the pointer ray was measured (see CHANGELOG, 2026-08-19).
+  grip→aim offset for the pointer ray was measured (recorded in the commit history, 2026-08-19).
 - On-device Operator sessions need a Development build, `adb shell setprop
   debug.oculus.experimentalEnabled 1`, the forward above, a worn headset (session must reach
   `FOCUSED`), and — for captures — `adb shell setprop debug.meta_xr_operator.request_capture_permission 1`.
