@@ -29,9 +29,14 @@ namespace Blockiverse.Gameplay
         // Android player and water would render magenta on device while looking right in editor.
         public const string WaterShaderKeyword = "_BLOCKIVERSE_WATER";
 
+        // Same stripping constraint as the water keyword above: it is a third state on the SAME
+        // multi_compile_local line, never a separate .shader asset.
+        public const string CutoutShaderKeyword = "_BLOCKIVERSE_CUTOUT";
+
         public const string BlockMaterialName = "Blockiverse Authored Block Atlas Material";
         public const string FluidMaterialName = "Blockiverse Authored Fluid Atlas Material";
         public const string FluidDepthPrimeMaterialName = "Blockiverse Authored Fluid Depth Prime Material";
+        public const string CutoutMaterialName = "Blockiverse Authored Cutout Atlas Material";
 
         // LightMode tag of the water depth-prime pass. Only the prime material runs it; terrain and
         // the water shading material both switch it off, so neither pays for a pass it never wants.
@@ -43,6 +48,14 @@ namespace Blockiverse.Gameplay
         // anywhere claims the pixel. Render queue is the primary sort key, so this ordering does
         // not depend on the pipeline's internal shader-tag order.
         public const int FluidDepthPrimeRenderQueue = (int)RenderQueue.Transparent - 1;
+
+        // URP's AlphaTest band: after all opaque geometry (2000) and before transparent (3000), so
+        // opaque depth still rejects hidden foliage before the alpha test costs anything.
+        public const int CutoutRenderQueue = (int)RenderQueue.AlphaTest;
+
+        // Half coverage. Deliberately not near 0: a low threshold keeps almost-transparent
+        // fringe pixels alive, which on a point-filtered atlas reads as a halo around every blade.
+        public const float DefaultAlphaCutoff = 0.5f;
 
         const float UvInsetPixels = 0.5f;
 
@@ -226,6 +239,39 @@ namespace Blockiverse.Gameplay
             material.SetShaderPassEnabled(ForwardPassName, true);
 
             material.name = FluidMaterialName;
+            return material;
+        }
+
+        // Alpha-cutout foliage: leaf canopies and cross-quad plants. Another runtime clone of the
+        // authored atlas material, so no new .mat asset ships and texture-set switching keeps
+        // working unchanged.
+        public static Material CreateCutoutMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            // Opaque blending with ZWrite on — this is alpha TEST, not alpha blend. The queue sits
+            // in URP's AlphaTest band, after all opaque geometry, so the opaque depth buffer can
+            // still reject hidden foliage before it is shaded. That ordering matters more here
+            // than usual: clip() disables early-Z for the draw on a tile GPU, so anything not
+            // rejected by prior depth gets fully shaded.
+            ApplySurfaceState(
+                material,
+                renderType: "TransparentCutout",
+                queue: CutoutRenderQueue,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f,
+                // Two-sided for two reasons: a cross quad is viewed from both sides by definition,
+                // and on a cutout cube the gaps expose the inside of the far shell, which is what
+                // gives a canopy depth without adding a single triangle.
+                cull: CullMode.Off);
+            material.EnableKeyword(CutoutShaderKeyword);
+            material.DisableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
+            SetFloatIfPresent(material, "_Cutoff", DefaultAlphaCutoff);
+
+            material.name = CutoutMaterialName;
             return material;
         }
 

@@ -65,6 +65,26 @@ namespace Blockiverse.Voxel
         VeryHard = 3
     }
 
+    // How the chunk mesher emits a block's geometry (vegetation ruleset §4a.2). Plain enum with
+    // no UnityEngine dependency: this assembly is engine-free so world generation can run off the
+    // main thread and be tested with plain NUnit.
+    public enum BlockRenderShape
+    {
+        // Six full faces sampling an opaque tile. Terrain, logs, built blocks.
+        Cube = 0,
+        // Six full faces sampling an alpha-cut tile, drawn two-sided. Leaf canopies.
+        CutoutCube = 1,
+        // Two intersecting vertical quads, alpha-cut. Grasses, flowers, shrubs, reeds, saplings.
+        Cross = 2,
+
+        // NOTE: the ruleset's fourth shape, `decal` (a single opaque quad just above the ground,
+        // for flat groundcover), is deliberately NOT declared yet. No block registers it — the
+        // species that want it (moss_carpet, fallen_leaves, snow_lichen) do not exist yet — and it
+        // needs a second, non-clipping submesh on the foliage mesh that the renderer does not have.
+        // Declaring the member early would ship a render shape that silently draws nothing, or
+        // draws through the alpha-test material its own spec says it must avoid.
+    }
+
     public sealed class BlockDefinition
     {
         public BlockDefinition(
@@ -77,7 +97,9 @@ namespace Blockiverse.Voxel
             int emissiveLight = 0,
             BlockHardnessClass hardnessClass = BlockHardnessClass.Soft,
             int harvestTierMin = 0,
-            float hardness = -1f)
+            float hardness = -1f,
+            BlockRenderShape renderShape = BlockRenderShape.Cube,
+            bool isPassable = false)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -100,6 +122,8 @@ namespace Blockiverse.Voxel
             EmissiveLight = emissiveLight;
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
+            RenderShape = renderShape;
+            IsPassable = isPassable;
             // Canonical mining hardness (voxel_survival_ruleset §2/§3). When not specified
             // explicitly, derive a representative value from the hardness class.
             Hardness = hardness >= 0f ? hardness : HardnessFromClass(hardnessClass);
@@ -122,8 +146,19 @@ namespace Blockiverse.Voxel
         public string DisplayKey => $"block.{CanonicalId}.name";
         public string Name { get; }
         public BlockCategory Category { get; }
+        // Despite the name, this gates FACE CULLING and SKYLIGHT OCCLUSION — never physics.
+        // The vegetation ruleset §4a.1 calls this property `occludes` for that reason. Collision
+        // is `IsPassable` plus the physics layer the renderer assigns; do not infer one from the
+        // other. Every existing wild plant is `isSolid: false` and was still a full solid box
+        // until passability existed, which is exactly the confusion this comment exists to stop.
         public bool IsSolid { get; }
         public bool IsRenderable { get; }
+        // Geometry emitted for this block (§4a.2).
+        public BlockRenderShape RenderShape { get; }
+        // Rendered but never obstructs movement (§4a.4). Enforced by putting the block's geometry
+        // on a dedicated physics layer, because scene queries used for grounding ignore
+        // per-collider exclusion lists.
+        public bool IsPassable { get; }
         public int EmissiveLight { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
@@ -264,7 +299,7 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Graystone,           "graystone",          "Graystone",            BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(BranchwoodLog,       "branchwood_log",     "Branchwood Log",       BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(SmoothBranchwood,    "smooth_branchwood",  "Smooth Branchwood",    BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube));
             // Natural cave light, emissive 7 (voxel_world_environment_effects.md §5.3, voxel_survival_ruleset.md §12.1).
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3, emissiveLight: 7));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
@@ -299,8 +334,8 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Frostglass,    "frostglass",     "Frostglass",     BlockCategory.Terrain, isSolid: true, isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
 
             // ── Additional canonical vegetation (atlas tiles generated) ──────
-            registry.Register(new BlockDefinition(Thornbrush, "thornbrush", "Thornbrush", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Reedgrass,  "reedgrass",  "Reedgrass",  BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Thornbrush, "thornbrush", "Thornbrush", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Reedgrass,  "reedgrass",  "Reedgrass",  BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
 
             // ── Additional canonical crafted (atlas tiles generated) ─────────
             registry.Register(new BlockDefinition(WorkPlank,     "work_plank",     "Work Plank",     BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
@@ -318,8 +353,8 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(BrightsaltCrust,  "brightsalt_crust",  "Brightsalt Crust",  BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(ShellgritBed,     "shellgrit_bed",     "Shellgrit Bed",     BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
             registry.Register(new BlockDefinition(ResinKnot,        "resin_knot",        "Resin Knot",        BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Berrybush,        "berrybush",         "Berrybush",         BlockCategory.Organic,  isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(GrainStalk,       "grain_stalk",       "Grain Stalk",       BlockCategory.Organic,  isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Berrybush,        "berrybush",         "Berrybush",         BlockCategory.Organic,  isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(GrainStalk,       "grain_stalk",       "Grain Stalk",       BlockCategory.Organic,  isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
             registry.Register(new BlockDefinition(UmbraliteNode,    "umbralite_node",    "Umbralite Node",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 5));
             // Faint natural deep light, emissive 5 (§5.3 / §12.1).
             registry.Register(new BlockDefinition(StaropalGeode,    "staropal_geode",    "Staropal Geode",    BlockCategory.Resource, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Hard, harvestTierMin: 6, emissiveLight: 5));
@@ -339,23 +374,23 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(TendedSoil,     "tended_soil",    "Tended Soil",    BlockCategory.Terrain, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
 
             // ── Crop growth stages (stage 0 = existing GrainStalk/Berrybush/Reedgrass) ─
-            registry.Register(new BlockDefinition(GrainStalk_S1, "grain_stalk_s1", "Grain Stalk S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(GrainStalk_S2, "grain_stalk_s2", "Grain Stalk S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(GrainStalk_S3, "grain_stalk_s3", "Grain Stalk S3", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(GrainStalk_S4, "grain_stalk_s4", "Grain Stalk S4", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Berrybush_S1,  "berrybush_s1",   "Berrybush S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Berrybush_S2,  "berrybush_s2",   "Berrybush S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Berrybush_S3,  "berrybush_s3",   "Berrybush S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Berrybush_S4,  "berrybush_s4",   "Berrybush S4",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Berrybush_S5,  "berrybush_s5",   "Berrybush S5",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Reedgrass_S1,  "reedgrass_s1",   "Reedgrass S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Reedgrass_S2,  "reedgrass_s2",   "Reedgrass S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Reedgrass_S3,  "reedgrass_s3",   "Reedgrass S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(GrainStalk_S1, "grain_stalk_s1", "Grain Stalk S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(GrainStalk_S2, "grain_stalk_s2", "Grain Stalk S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(GrainStalk_S3, "grain_stalk_s3", "Grain Stalk S3", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(GrainStalk_S4, "grain_stalk_s4", "Grain Stalk S4", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Berrybush_S1,  "berrybush_s1",   "Berrybush S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Berrybush_S2,  "berrybush_s2",   "Berrybush S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Berrybush_S3,  "berrybush_s3",   "Berrybush S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Berrybush_S4,  "berrybush_s4",   "Berrybush S4",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Berrybush_S5,  "berrybush_s5",   "Berrybush S5",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Reedgrass_S1,  "reedgrass_s1",   "Reedgrass S1",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Reedgrass_S2,  "reedgrass_s2",   "Reedgrass S2",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Reedgrass_S3,  "reedgrass_s3",   "Reedgrass S3",   BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
 
             // ── Sapling growth stages ─────────────────────────────────────────
-            registry.Register(new BlockDefinition(Sapling,    "sapling",    "Sapling",    BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Sapling_S1, "sapling_s1", "Sapling S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
-            registry.Register(new BlockDefinition(Sapling_S2, "sapling_s2", "Sapling S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Sapling,    "sapling",    "Sapling",    BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Sapling_S1, "sapling_s1", "Sapling S1", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(Sapling_S2, "sapling_s2", "Sapling S2", BlockCategory.Organic, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.Cross, isPassable: true));
 
             // ── Fluids (§5.4): non-solid, light-passable, not harvestable. Sources are
             // permanent; flow cells are spread/retracted by the flow simulation. Emberflow glows.

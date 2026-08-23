@@ -202,7 +202,14 @@ namespace Blockiverse.Editor
             // ground cast cannot see it; if that layer is missing from the culling mask, water
             // still collides and still raycasts but renders nowhere — invisible in the editor
             // game view and only obvious on device.
-            camera.cullingMask |= BlockiverseProject.InteractionLayerMask | BlockiverseProject.FluidLayerMask;
+            // Passable vegetation belongs here for exactly the same reason as fluid: it lives on
+            // its own layer so gravity's ground cast cannot see it, and if that layer is missing
+            // from the culling mask the grass still collides and still raycasts but renders
+            // nowhere. Relying on the camera's default mask happening to include the bit is not a
+            // guarantee — state it.
+            camera.cullingMask |= BlockiverseProject.InteractionLayerMask |
+                                  BlockiverseProject.FluidLayerMask |
+                                  BlockiverseProject.PassableLayerMask;
             camera.cullingMask &= ~(BlockiverseProject.CompositionUiLayerMask |
                                     BlockiverseProject.XrVisualProjectionLayerMask |
                                     BlockiverseProject.MirrorAvatarLayerMask);
@@ -306,7 +313,9 @@ namespace Blockiverse.Editor
             interactionRayObject.SetActive(true);
 
             XRRayInteractor interactionRay = EnsureComponent<XRRayInteractor>(interactionRayObject);
-            BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetVrUiRaycastLayerMask());
+            // Terrain + fluid + passable vegetation. The teleport ray below deliberately keeps the
+            // NARROWER mask so its arc passes through grass — see GetVoxelInteractionRaycastLayerMask.
+            BlockiverseRayDefaults.ConfigureInteractionRay(interactionRay, rayOrigin, GetVoxelInteractionRaycastLayerMask());
             interactionRay.selectInput = MakeUnusedButtonReader(interactionRay.selectInput, "Select");
             interactionRay.activateInput = MakeUnusedButtonReader(interactionRay.activateInput, "Activate");
             interactionRay.uiPressInput = MakeButtonReader(

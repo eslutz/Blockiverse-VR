@@ -1044,7 +1044,7 @@ namespace Blockiverse.VR
                     BlockiverseRayDefaults.ConfigureInteractionRay(
                         interactionRay,
                         rayOrigin,
-                        GetVrUiRaycastLayerMask());
+                        GetVoxelInteractionRaycastLayerMask());
                     ConfigureRayLineVisual(interactionRay);
                     interactionRay.uiPressInput = CreateButtonActionReader(
                         interactionRay.uiPressInput,
@@ -1195,6 +1195,21 @@ namespace Blockiverse.VR
         static LayerMask GetVrUiRaycastLayerMask()
         {
             return GetVoxelTargetingLayerMask();
+        }
+
+        // The INTERACTION ray only. Terrain + fluid + passable vegetation, so a plant can be aimed
+        // at and harvested even though it lives on the passable layer and no longer contributes to
+        // the chunk collider.
+        //
+        // Deliberately NOT folded into GetVrUiRaycastLayerMask: that helper also feeds the teleport
+        // ray, and a teleport arc must pass THROUGH grass to land on the ground beneath it
+        // (vegetation ruleset §4a.4). The two rays want different answers, which is the entire
+        // reason this is a second method.
+        static LayerMask GetVoxelInteractionRaycastLayerMask()
+        {
+            int passableLayer = LayerMask.NameToLayer(BlockiverseProject.PassableLayerName);
+            int passableMask = passableLayer >= 0 ? 1 << passableLayer : BlockiverseProject.PassableLayerMask;
+            return (LayerMask)(GetVoxelTargetingLayerMask().value | passableMask);
         }
 
         public static void ConfigureCharacterController(CharacterController controller)

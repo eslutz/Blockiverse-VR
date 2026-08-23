@@ -47,6 +47,12 @@ namespace Blockiverse.Networking
                     ((int)definition.Category).ToString(CultureInfo.InvariantCulture),
                     definition.IsSolid ? "1" : "0",
                     definition.IsRenderable ? "1" : "0",
+                    // Render shape selects which geometry both peers build from the same delta —
+                    // a cube versus a cross quad is the same class of divergence as Category
+                    // above. Passability is a physics divergence: one peer walks through a plant
+                    // the other collides with.
+                    ((int)definition.RenderShape).ToString(CultureInfo.InvariantCulture),
+                    definition.IsPassable ? "1" : "0",
                     definition.EmissiveLight.ToString(CultureInfo.InvariantCulture),
                     ((int)definition.HardnessClass).ToString(CultureInfo.InvariantCulture),
                     definition.HarvestTierMin.ToString(CultureInfo.InvariantCulture),

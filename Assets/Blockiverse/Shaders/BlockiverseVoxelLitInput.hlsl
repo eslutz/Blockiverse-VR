@@ -30,7 +30,24 @@ CBUFFER_START(UnityPerMaterial)
     float _DstBlend;
     float _ZWrite;
     float _Cull;
+
+    // Alpha-cutout threshold for foliage (_BLOCKIVERSE_CUTOUT). Lives here rather than in the
+    // ForwardLit pass because the ShadowCaster and DepthOnly passes clip against the same value —
+    // and because this CBUFFER must be identical in every pass regardless of which ones read it.
+    // Default 0.5 with the opaque terrain material never enabling the keyword, so terrain is
+    // untouched.
+    float _Cutoff;
 CBUFFER_END
+
+// Alpha cutout, shared by every pass that can draw foliage. ForwardLit clips so gaps are see
+// through; ShadowCaster clips so a lacy canopy does not cast a solid cube shadow inside the
+// 30 m shadow band, which would look worse than the opaque leaves it replaced.
+void BlockiverseClipFoliage(float alpha)
+{
+#if defined(_BLOCKIVERSE_CUTOUT)
+    clip(alpha - _Cutoff);
+#endif
+}
 
 // Water look and wave selection live here, in the shared include, because the ForwardLit water
 // variant and the depth-prime pass MUST compute the same displaced position. The prime exists to

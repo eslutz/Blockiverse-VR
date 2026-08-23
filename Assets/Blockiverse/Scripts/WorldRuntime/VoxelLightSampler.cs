@@ -207,6 +207,49 @@ namespace Blockiverse.Gameplay
             }
         }
 
+        // Emitter reach for geometry that has no face direction — cross-quad foliage, which is two
+        // intersecting planes occupying a whole cell rather than a face on its boundary.
+        //
+        // The directional overload above rejects any emitter behind the face plane before testing
+        // line of sight. Feeding it a plant's own cell with an arbitrary normal therefore discards
+        // every emitter at or below the plant: a torch set on the ground beside a bush would leave
+        // it black. Here the cell centre is the sample point and there is no rejection half-space,
+        // so reach depends only on distance and occlusion.
+        public static float SampleOmnidirectionalEmitterReach(
+            VoxelWorld world,
+            BlockRegistry registry,
+            BlockPosition cell,
+            IReadOnlyList<BlockPosition> emitters)
+        {
+            using (s_SampleEmitterReachMarker.Auto())
+            {
+                if (world == null || registry == null || emitters == null || emitters.Count == 0)
+                    return 0.0f;
+
+                BlockDefinition[] defs = registry.CachedDefinitions;
+                var samplePoint = new Vector3(cell.X + 0.5f, cell.Y + 0.5f, cell.Z + 0.5f);
+
+                for (int i = 0; i < emitters.Count; i++)
+                {
+                    BlockPosition emitter = emitters[i];
+                    BlockDefinition definition = GetDefinition(registry, defs, world.GetBlock(emitter));
+                    if (definition.EmissiveLight <= 0)
+                        continue;
+
+                    Vector3 lightPoint = new Vector3(emitter.X, emitter.Y, emitter.Z) + EmitterLightOffset;
+
+                    float reach = definition.EmissiveLight + 1.0f;
+                    if ((lightPoint - samplePoint).sqrMagnitude > reach * reach)
+                        continue;
+
+                    if (HasLineOfSight(world, registry, defs, samplePoint, lightPoint, emitter))
+                        return 1.0f;
+                }
+
+                return 0.0f;
+            }
+        }
+
         // Amanatides–Woo voxel traversal from `from` to `to`. Every cell entered before the
         // emitter's own cell must be light-passable. The start cell is the face's air neighbour,
         // which is passable by construction.

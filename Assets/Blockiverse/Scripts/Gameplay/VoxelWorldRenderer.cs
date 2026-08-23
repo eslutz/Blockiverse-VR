@@ -35,7 +35,15 @@ namespace Blockiverse.Gameplay
         readonly HashSet<ChunkCoordinate> pendingColliderSet = new();
         readonly Queue<ChunkCoordinate> pendingFluidColliderRebuilds = new();
         readonly HashSet<ChunkCoordinate> pendingFluidColliderSet = new();
+        // Per-chunk foliage child: cross-quad and decal vegetation. Same shape as the fluid child —
+        // rendered, ray-targetable so plants stay harvestable, but excluded from physics contacts
+        // so the player walks through grass instead of into it.
+        readonly Dictionary<ChunkCoordinate, GameObject> foliageObjects = new();
+        readonly Queue<ChunkCoordinate> pendingFoliageColliderRebuilds = new();
+        readonly HashSet<ChunkCoordinate> pendingFoliageColliderSet = new();
         readonly List<ChunkCoordinate> dirtyChunkScratch = new();
+        // Reused by ApplyChunkMaterials so reading a renderer's material count costs no allocation.
+        readonly List<Material> sharedMaterialScratch = new();
 
         VoxelWorld world;
         BlockRegistry registry;
@@ -47,10 +55,17 @@ namespace Blockiverse.Gameplay
         // after a depth-only prime of the same geometry so exactly one water layer blends per pixel.
         Material fluidMaterial;
         Material fluidDepthPrimeMaterial;
+        // Alpha-cutout clone of the same authored atlas material, shared by leaf canopies
+        // (submesh 1 of the chunk mesh) and the foliage child's cross quads.
+        Material cutoutMaterial;
         int interactionLayer = -1;
         // Fluid geometry sits on its own layer so gravity's ground sphere-cast never sees it.
         // Resolved by name at Configure time, falling back to the canonical index.
         int fluidLayer = -1;
+        // Passable geometry (vegetation today, any walk-through block later) sits on its own layer
+        // for the same reason as fluid: scene queries ignore Collider.excludeLayers, so contact
+        // filtering alone would still let gravity's sphere-cast read grass as solid ground.
+        int passableLayer = -1;
         int totalTriangleCount;
         VoxelRenderStats stats;
 
@@ -73,7 +88,8 @@ namespace Blockiverse.Gameplay
         public VoxelEmitterIndex EmitterIndex => emitterIndex;
 
         // Colliders awaiting a (throttled) rebake. Visual meshes are always current.
-        public int PendingColliderRebuildCount => pendingColliderRebuilds.Count + pendingFluidColliderRebuilds.Count;
+        public int PendingColliderRebuildCount =>
+            pendingColliderRebuilds.Count + pendingFluidColliderRebuilds.Count + pendingFoliageColliderRebuilds.Count;
         public int PendingVisualRebuildCount => rebuildQueue?.Count ?? 0;
 
         // Maximum MeshCollider rebakes performed per RebuildDirty call and per frame.
@@ -106,17 +122,20 @@ namespace Blockiverse.Gameplay
             DestroyGeneratedObject(chunkMaterial);
             DestroyGeneratedObject(fluidMaterial);
             DestroyGeneratedObject(fluidDepthPrimeMaterial);
+            DestroyGeneratedObject(cutoutMaterial);
 
             world = voxelWorld ?? throw new ArgumentNullException(nameof(voxelWorld));
             registry = blockRegistry ?? throw new ArgumentNullException(nameof(blockRegistry));
             BlockVisualAtlas.ValidateRenderableBlockCoverage(registry);
             chunkMaterial = BlockVisualAtlas.CreateMaterial(material, selectedAtlas, textureSetId);
-            // Both materials are created before any rebuild: CreateFluidObject reads fluidMaterial
+            // All materials are created before any rebuild: CreateFluidObject reads fluidMaterial
             // lazily during the rebuild below, and a null there renders water with no material.
             fluidMaterial = BlockVisualAtlas.CreateFluidMaterial(material, selectedAtlas, textureSetId);
             fluidDepthPrimeMaterial = BlockVisualAtlas.CreateFluidDepthPrimeMaterial(material, selectedAtlas, textureSetId);
+            cutoutMaterial = BlockVisualAtlas.CreateCutoutMaterial(material, selectedAtlas, textureSetId);
             interactionLayer = layer;
             fluidLayer = ResolveFluidLayer();
+            passableLayer = ResolvePassableLayer();
             skyLight = sharedSkyLight ?? new VoxelSkyLightMap(world, registry);
             emitterIndex = new VoxelEmitterIndex(world, registry);
             rebuildQueue = new ChunkRebuildQueue(world, skyLight, emitterIndex);
@@ -275,14 +294,17 @@ namespace Blockiverse.Gameplay
 
             // meshData aliases ChunkMeshBuilder's pooled lists, which the next Build call clears;
             // the Set* calls below copy everything into the Mesh before that can happen.
-            ChunkMeshData meshData = ChunkMeshBuilder.Build(world, registry, chunk, out ChunkMeshData fluidData, skyLight, emitterIndex);
+            ChunkMeshData meshData = ChunkMeshBuilder.Build(
+                world, registry, chunk, out ChunkMeshData fluidData, out ChunkMeshData foliageData, skyLight, emitterIndex);
 
             // R1: a chunk with no rendered faces is either all-air or fully buried — it has no
             // visible mesh and no reachable collision surface, so it needs no GameObject. Don't
             // spawn one (saves memory, culling, scene-graph cost, and a MeshCollider cook), and
             // release any object a prior state had created (e.g. a chunk just mined out to air),
             // which also deregisters its runtime TeleportationArea as the object is destroyed.
-            if (meshData.FaceCount == 0 && fluidData.FaceCount == 0)
+            // Foliage counts here too: a chunk holding only grass has no terrain and no fluid, and
+            // releasing it would delete the vegetation the builder just produced.
+            if (meshData.FaceCount == 0 && fluidData.FaceCount == 0 && foliageData.FaceCount == 0)
             {
                 ReleaseChunkObject(chunk);
                 return 0;
@@ -303,6 +325,10 @@ namespace Blockiverse.Gameplay
 
             FillMesh(mesh, meshData);
 
+            // Submesh 1 exists only when the chunk holds leaves, so a leaf-free chunk keeps exactly
+            // one material and its renderer is byte-identical to before this feature.
+            ApplyChunkMaterials(chunkObject, meshData.CutoutTriangleCount > 0);
+
             // The chunk's MeshCollider is fed only by the solid mesh. A fluid-only chunk has an
             // empty solid mesh, so queuing its solid collider would schedule a no-op recook that
             // needlessly inflates the throttled backlog (and the pending count tests observe).
@@ -313,12 +339,15 @@ namespace Blockiverse.Gameplay
                 EnqueueColliderRebuild(chunk);
 
             UpdateFluidChunkMesh(chunk, chunkObject, fluidData);
+            UpdateFoliageChunkMesh(chunk, chunkObject, foliageData);
 
             int previousTriangleCount = chunkTriangleCounts.TryGetValue(chunk, out int existingTriangleCount)
                 ? existingTriangleCount
                 : 0;
 
-            int triangleCount = meshData.TriangleCount + fluidData.TriangleCount;
+            int triangleCount =
+                meshData.TriangleCount + meshData.CutoutTriangleCount +
+                fluidData.TriangleCount + foliageData.TriangleCount;
             chunkTriangleCounts[chunk] = triangleCount;
             totalTriangleCount += triangleCount - previousTriangleCount;
 
@@ -329,12 +358,31 @@ namespace Blockiverse.Gameplay
         {
             mesh.Clear();
             mesh.SetVertices(data.Vertices);
+
+            // Submesh 0 is always the opaque stream. Submesh 1, when the chunk holds any, carries
+            // alpha-cutout indices (leaf canopies) into the SAME vertex buffer, drawn by a second
+            // entry in the renderer's shared materials. A chunk with no leaves keeps exactly one
+            // submesh and one material, so nothing changes for the common case.
+            int cutoutIndexCount = data.CutoutTriangles == null ? 0 : data.CutoutTriangles.Count;
+            mesh.subMeshCount = cutoutIndexCount > 0 ? 2 : 1;
             mesh.SetTriangles(data.Triangles, 0);
+            if (cutoutIndexCount > 0)
+                mesh.SetTriangles(data.CutoutTriangles, 1);
+
             mesh.SetUVs(0, data.Uvs);
             if (data.FluidVertexData != null && data.FluidVertexData.Count > 0)
                 mesh.SetUVs(1, data.FluidVertexData);
             mesh.SetColors(data.Colors);
-            mesh.RecalculateNormals();
+
+            // Use the stream's own normals when it supplies them. RecalculateNormals on the foliage
+            // mesh would derive sideways normals from two intersecting vertical quads, lighting
+            // grass as a pair of walls that read near-black from above; the builder writes explicit
+            // up-normals instead. Cube geometry is still happy to be recalculated.
+            if (data.Normals != null && data.Normals.Count == data.Vertices.Count)
+                mesh.SetNormals(data.Normals);
+            else
+                mesh.RecalculateNormals();
+
             mesh.RecalculateBounds();
 
             if (boundsPaddingDownY <= 0.0f)
@@ -390,6 +438,102 @@ namespace Blockiverse.Gameplay
         {
             int layer = LayerMask.NameToLayer(BlockiverseProject.FluidLayerName);
             return layer >= 0 ? layer : BlockiverseProject.FluidLayerIndex;
+        }
+
+        // Same fallback as ResolveFluidLayer: a fresh clone that has not run the bootstrapper yet
+        // has no named layer, and the canonical index keeps foliage off the ground mask regardless.
+        static int ResolvePassableLayer()
+        {
+            int layer = LayerMask.NameToLayer(BlockiverseProject.PassableLayerName);
+            return layer >= 0 ? layer : BlockiverseProject.PassableLayerIndex;
+        }
+
+        // Refills the chunk's pooled foliage mesh in place. Mirrors UpdateFluidChunkMesh, including
+        // the "most chunks have none, so never create the child" rule — without that, every chunk
+        // in the world would gain a GameObject and the MeshFilter-count tests would rightly fail.
+        void UpdateFoliageChunkMesh(ChunkCoordinate chunk, GameObject chunkObject, ChunkMeshData foliageData)
+        {
+            foliageObjects.TryGetValue(chunk, out GameObject foliageObject);
+
+            if (foliageData.FaceCount == 0)
+            {
+                if (foliageObject == null)
+                    return;
+
+                foliageObject.GetComponent<MeshFilter>().sharedMesh?.Clear();
+                foliageObject.GetComponent<MeshCollider>().sharedMesh = null;
+                return;
+            }
+
+            if (foliageObject == null)
+                foliageObject = CreateFoliageObject(chunk, chunkObject);
+
+            MeshFilter filter = foliageObject.GetComponent<MeshFilter>();
+            Mesh mesh = filter.sharedMesh;
+            if (mesh == null)
+            {
+                mesh = new Mesh { name = $"Chunk {chunk} Foliage" };
+                filter.sharedMesh = mesh;
+            }
+
+            FillMesh(mesh, foliageData);
+            EnqueueFoliageColliderRebuild(chunk);
+        }
+
+        GameObject CreateFoliageObject(ChunkCoordinate chunk, GameObject chunkObject)
+        {
+            var foliageObject = new GameObject("Foliage");
+            foliageObject.transform.SetParent(chunkObject.transform, false);
+
+            if (passableLayer >= 0)
+                foliageObject.layer = passableLayer;
+
+            foliageObject.AddComponent<MeshFilter>();
+            MeshRenderer renderer = foliageObject.AddComponent<MeshRenderer>();
+            // Grass does not cast. An alpha-tested shadow caster is the most expensive kind on a
+            // tile GPU, and the 30 m shadow band is exactly where foliage is densest on screen.
+            // Leaf canopies DO cast — they live in the chunk mesh, not here.
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = true;
+
+            if (cutoutMaterial != null)
+                renderer.sharedMaterial = cutoutMaterial;
+
+            // Contact-excluded, exactly like fluid: rays still hit it, so plants stay targetable
+            // and harvestable, but nothing ever stands on or is stopped by it. The passable LAYER
+            // is what actually keeps the player walking through — excludeLayers is defence in
+            // depth, because scene queries ignore it.
+            MeshCollider collider = foliageObject.AddComponent<MeshCollider>();
+            collider.cookingOptions = MeshColliderCookingOptions.UseFastMidphase;
+            collider.excludeLayers = ~0;
+
+            // Deliberately NO TeleportationArea. XRI stops the arc at the first collider with no
+            // registered interactable, so leaving it off is what lets the arc pass through grass
+            // and land on the ground beneath (§4a.4) — the opposite of the water behaviour.
+
+            foliageObjects[chunk] = foliageObject;
+            return foliageObject;
+        }
+
+        void EnqueueFoliageColliderRebuild(ChunkCoordinate chunk)
+        {
+            if (pendingFoliageColliderSet.Add(chunk))
+                pendingFoliageColliderRebuilds.Enqueue(chunk);
+        }
+
+        bool ProcessNextFoliageColliderRebuild()
+        {
+            ChunkCoordinate chunk = pendingFoliageColliderRebuilds.Dequeue();
+            pendingFoliageColliderSet.Remove(chunk);
+
+            if (!foliageObjects.TryGetValue(chunk, out GameObject foliageObject) || foliageObject == null)
+                return false;
+
+            Mesh currentMesh = foliageObject.GetComponent<MeshFilter>().sharedMesh;
+            MeshCollider collider = foliageObject.GetComponent<MeshCollider>();
+
+            AssignColliderMesh(collider, currentMesh);
+            return true;
         }
 
         GameObject CreateFluidObject(ChunkCoordinate chunk, GameObject chunkObject)
@@ -458,6 +602,16 @@ namespace Blockiverse.Gameplay
                 fluidObjects.Remove(chunk);
             }
 
+            if (foliageObjects.TryGetValue(chunk, out GameObject foliageObject))
+            {
+                // Same as fluid: the child goes down with its parent, but its pooled mesh is ours
+                // to destroy or it leaks.
+                if (foliageObject != null)
+                    DestroyGeneratedObject(foliageObject.GetComponent<MeshFilter>()?.sharedMesh);
+
+                foliageObjects.Remove(chunk);
+            }
+
             if (chunkObjects.TryGetValue(chunk, out GameObject chunkObject))
             {
                 if (chunkObject != null)
@@ -473,6 +627,7 @@ namespace Blockiverse.Gameplay
 
             pendingColliderSet.Remove(chunk);
             pendingFluidColliderSet.Remove(chunk);
+            pendingFoliageColliderSet.Remove(chunk);
         }
 
         void EnqueueColliderRebuild(ChunkCoordinate chunk)
@@ -492,7 +647,10 @@ namespace Blockiverse.Gameplay
         public void ProcessPendingColliderRebuilds(int budget)
         {
             int processed = 0;
-            while (processed < budget && (pendingColliderRebuilds.Count > 0 || pendingFluidColliderRebuilds.Count > 0))
+            while (processed < budget &&
+                   (pendingColliderRebuilds.Count > 0 ||
+                    pendingFluidColliderRebuilds.Count > 0 ||
+                    pendingFoliageColliderRebuilds.Count > 0))
             {
                 if (pendingColliderRebuilds.Count > 0)
                 {
@@ -501,7 +659,16 @@ namespace Blockiverse.Gameplay
                     continue;
                 }
 
-                if (ProcessNextFluidColliderRebuild())
+                if (pendingFluidColliderRebuilds.Count > 0)
+                {
+                    if (ProcessNextFluidColliderRebuild())
+                        processed++;
+                    continue;
+                }
+
+                // Foliage is last: it never blocks movement, so a frame that runs out of budget
+                // should spend it on geometry the player can actually walk into.
+                if (ProcessNextFoliageColliderRebuild())
                     processed++;
             }
         }
@@ -534,6 +701,29 @@ namespace Blockiverse.Gameplay
 
             AssignColliderMesh(collider, currentMesh);
             return true;
+        }
+
+        // A chunk renderer carries one material normally, two when the chunk holds leaves (submesh
+        // 1). Kept in one place because the array length is an observable invariant: the water
+        // tests assert it, and silently growing it for every chunk would cost a draw call per
+        // chunk for geometry most chunks do not have.
+        void ApplyChunkMaterials(GameObject chunkObject, bool hasCutoutGeometry)
+        {
+            var renderer = chunkObject.GetComponent<MeshRenderer>();
+            if (renderer == null || chunkMaterial == null)
+                return;
+
+            // GetSharedMaterials fills a reusable list; the `sharedMaterials` PROPERTY allocates a
+            // fresh Material[] on every read, which on this path would be one allocation per chunk
+            // per rebuild — a GC hitch source on Quest for a value we only want the length of.
+            renderer.GetSharedMaterials(sharedMaterialScratch);
+            int wanted = hasCutoutGeometry && cutoutMaterial != null ? 2 : 1;
+            if (sharedMaterialScratch.Count == wanted)
+                return;
+
+            renderer.sharedMaterials = wanted == 2
+                ? new[] { chunkMaterial, cutoutMaterial }
+                : new[] { chunkMaterial };
         }
 
         static void AssignColliderMesh(MeshCollider collider, Mesh currentMesh)
@@ -639,6 +829,7 @@ namespace Blockiverse.Gameplay
             DestroyGeneratedObject(chunkMaterial);
             DestroyGeneratedObject(fluidMaterial);
             DestroyGeneratedObject(fluidDepthPrimeMaterial);
+            DestroyGeneratedObject(cutoutMaterial);
         }
 
         // Destroys every generated chunk object and mesh and resets the bookkeeping — used on
@@ -654,6 +845,14 @@ namespace Blockiverse.Gameplay
                 DestroyGeneratedObject(fluidObject.GetComponent<MeshFilter>()?.sharedMesh);
             }
 
+            foreach (GameObject foliageObject in foliageObjects.Values)
+            {
+                if (foliageObject == null)
+                    continue;
+
+                DestroyGeneratedObject(foliageObject.GetComponent<MeshFilter>()?.sharedMesh);
+            }
+
             foreach (GameObject chunkObject in chunkObjects.Values)
             {
                 if (chunkObject == null)
@@ -666,11 +865,14 @@ namespace Blockiverse.Gameplay
 
             chunkObjects.Clear();
             fluidObjects.Clear();
+            foliageObjects.Clear();
             chunkTriangleCounts.Clear();
             pendingColliderRebuilds.Clear();
             pendingColliderSet.Clear();
             pendingFluidColliderRebuilds.Clear();
             pendingFluidColliderSet.Clear();
+            pendingFoliageColliderRebuilds.Clear();
+            pendingFoliageColliderSet.Clear();
             totalTriangleCount = 0;
         }
 

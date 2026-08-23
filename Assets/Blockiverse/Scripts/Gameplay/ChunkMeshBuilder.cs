@@ -17,8 +17,12 @@ namespace Blockiverse.Gameplay
             List<Vector2> uvs,
             List<Color> colors,
             int faceCount,
-            List<Vector2> fluidVertexData = null)
+            List<Vector2> fluidVertexData = null,
+            List<int> cutoutTriangles = null,
+            List<Vector3> normals = null)
         {
+            CutoutTriangles = cutoutTriangles;
+            Normals = normals;
             Vertices = vertices;
             Triangles = triangles;
             Uvs = uvs;
@@ -39,7 +43,21 @@ namespace Blockiverse.Gameplay
         // (a torch-lit pool, a glowing emberflow) exactly as much as stone does.
         public List<Vector2> FluidVertexData { get; }
 
+        // Alpha-cutout indices (leaf canopies) into the SAME Vertices list, rendered as submesh 1
+        // with the cutout material. Deliberately a second index list rather than a second mesh:
+        // the chunk's MeshCollider is fed MeshFilter.sharedMesh verbatim, so keeping leaves in the
+        // chunk mesh is what keeps them collidable — a canopy you can fall through is a worse bug
+        // than a canopy that looks solid. Null when the chunk has no cutout blocks.
+        public List<int> CutoutTriangles { get; }
+
+        // Explicit per-vertex normals. Only the foliage mesh supplies these: Mesh.RecalculateNormals
+        // on two intersecting vertical quads yields horizontal normals, which lights grass as a pair
+        // of vertical planes and reads near-black from above. Null on meshes that are happy to be
+        // recalculated (cube faces are).
+        public List<Vector3> Normals { get; }
+
         public int TriangleCount => Triangles.Count / 3;
+        public int CutoutTriangleCount => CutoutTriangles == null ? 0 : CutoutTriangles.Count / 3;
     }
 
     public static class ChunkMeshBuilder
@@ -60,6 +78,14 @@ namespace Blockiverse.Gameplay
         [ThreadStatic] static List<Color> pooledFluidColors;
         [ThreadStatic] static List<Vector2> pooledFluidVertexData;
         [ThreadStatic] static List<BlockPosition> pooledEmitters;
+        // Cutout indices share the terrain vertex buffer, so only the index list is pooled here.
+        [ThreadStatic] static List<int> pooledCutoutTriangles;
+        // Cross-quad / decal foliage is its own mesh on its own GameObject, so it needs a full set.
+        [ThreadStatic] static List<Vector3> pooledFoliageVertices;
+        [ThreadStatic] static List<int> pooledFoliageTriangles;
+        [ThreadStatic] static List<Vector2> pooledFoliageUvs;
+        [ThreadStatic] static List<Color> pooledFoliageColors;
+        [ThreadStatic] static List<Vector3> pooledFoliageNormals;
 
         static readonly BlockPosition[] NeighborOffsets =
         {
@@ -78,6 +104,9 @@ namespace Blockiverse.Gameplay
         // NeighborOffsets[3] is (0, -1, 0). Everything that is neither 2 nor 3 is a side wall.
         public const int BottomFaceIndex = 3;
 
+        // A cross block emits two quads, always. Named so the face-count arithmetic reads.
+        public const int CrossQuadsPerBlock = 2;
+
         static readonly Vector3[,] FaceVertices =
         {
             { new(1, 0, 0), new(1, 1, 0), new(1, 1, 1), new(1, 0, 1) },
@@ -95,7 +124,19 @@ namespace Blockiverse.Gameplay
             VoxelSkyLightMap skyLight = null,
             VoxelEmitterIndex emitters = null)
         {
-            return Build(world, registry, chunk, out _, skyLight, emitters);
+            return Build(world, registry, chunk, out _, out _, skyLight, emitters);
+        }
+
+        // Kept so existing two-mesh callers compile unchanged; foliage is discarded.
+        public static ChunkMeshData Build(
+            VoxelWorld world,
+            BlockRegistry registry,
+            ChunkCoordinate chunk,
+            out ChunkMeshData fluidMesh,
+            VoxelSkyLightMap skyLight = null,
+            VoxelEmitterIndex emitters = null)
+        {
+            return Build(world, registry, chunk, out fluidMesh, out _, skyLight, emitters);
         }
 
         // Builds the chunk's render geometry in one walk, split into two meshes: solid faces
@@ -109,6 +150,7 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry,
             ChunkCoordinate chunk,
             out ChunkMeshData fluidMesh,
+            out ChunkMeshData foliageMesh,
             VoxelSkyLightMap skyLight = null,
             VoxelEmitterIndex emitters = null)
         {
@@ -140,6 +182,22 @@ namespace Blockiverse.Gameplay
             fluidColors.Clear();
             fluidVertexData.Clear();
             int fluidFaceCount = 0;
+
+            List<int> cutoutTriangles = pooledCutoutTriangles ??= new();
+            cutoutTriangles.Clear();
+            int cutoutFaceCount = 0;
+
+            List<Vector3> foliageVertices = pooledFoliageVertices ??= new();
+            List<int> foliageTriangles = pooledFoliageTriangles ??= new();
+            List<Vector2> foliageUvs = pooledFoliageUvs ??= new();
+            List<Color> foliageColors = pooledFoliageColors ??= new();
+            List<Vector3> foliageNormals = pooledFoliageNormals ??= new();
+            foliageVertices.Clear();
+            foliageTriangles.Clear();
+            foliageUvs.Clear();
+            foliageColors.Clear();
+            foliageNormals.Clear();
+            int foliageFaceCount = 0;
 
             int startX = chunk.X * world.ChunkSize;
             int startY = chunk.Y * world.ChunkSize;
@@ -173,6 +231,32 @@ namespace Blockiverse.Gameplay
 
                         bool isFluid = definition.Category == BlockCategory.Fluid;
                         float selfEmission = definition.EmissiveLight / (float)VoxelLightSampler.MaxEmissiveLevel;
+                        BlockRenderShape shape = definition.RenderShape;
+
+                        // Cross blocks are not built out of faces at all: they emit fixed geometry
+                        // once per cell and skip the six-face loop entirely. Their light is sampled
+                        // from their OWN cell, because the per-face bake below samples the NEIGHBOUR
+                        // across a face direction and these have no face direction.
+                        if (shape == BlockRenderShape.Cross)
+                        {
+                            float ownSky = VoxelLightSampler.SampleSkyExposure(
+                                world, registry, position, skyLight: skyLight);
+                            // Omnidirectional, not a face sample. Passing a face normal here makes
+                            // SampleEmitterReach reject every emitter at or below the plant before
+                            // line-of-sight is even tested, so a torch on the ground beside a bush
+                            // would leave it unlit.
+                            float ownReach = emitters == null
+                                ? 1.0f
+                                : VoxelLightSampler.SampleOmnidirectionalEmitterReach(
+                                    world, registry, position, nearbyEmitters);
+                            Color foliageColor = VoxelLightSampler.ToVertexColor(ownSky, ownReach, selfEmission);
+
+                            AddCrossQuads(
+                                foliageVertices, foliageTriangles, foliageUvs, foliageColors, foliageNormals,
+                                position, definition.Id, foliageColor);
+                            foliageFaceCount += CrossQuadsPerBlock;
+                            continue;
+                        }
 
                         // Resolved on the first face this cell actually emits, not once per fluid
                         // cell: PlaceFluids fills entire submerged volumes whose interior cells
@@ -214,6 +298,15 @@ namespace Blockiverse.Gameplay
                                     position, face, definition.Id, vertexColor, fluidFamily, wallFootFollowsSurface);
                                 fluidFaceCount++;
                             }
+                            else if (shape == BlockRenderShape.CutoutCube)
+                            {
+                                // Identical geometry to a cube — only the index list differs, so
+                                // these land in submesh 1 and are drawn by the cutout material.
+                                // Sharing the vertex buffer is what keeps leaves inside the chunk
+                                // mesh, and therefore inside the chunk's collider.
+                                AddFace(vertices, cutoutTriangles, uvs, colors, position, face, definition.Id, vertexColor);
+                                cutoutFaceCount++;
+                            }
                             else
                             {
                                 AddFace(vertices, triangles, uvs, colors, position, face, definition.Id, vertexColor);
@@ -228,7 +321,16 @@ namespace Blockiverse.Gameplay
 
             fluidMesh = new ChunkMeshData(
                 fluidVertices, fluidTriangles, fluidUvs, fluidColors, fluidFaceCount, fluidVertexData);
-            return new ChunkMeshData(vertices, triangles, uvs, colors, faceCount);
+            foliageMesh = new ChunkMeshData(
+                foliageVertices, foliageTriangles, foliageUvs, foliageColors, foliageFaceCount,
+                normals: foliageNormals);
+
+            // FaceCount is the terrain face total and drives the renderer's "is this chunk empty"
+            // check, so a chunk holding ONLY leaves must not report zero — it would be released and
+            // the canopy would vanish.
+            return new ChunkMeshData(
+                vertices, triangles, uvs, colors, faceCount + cutoutFaceCount,
+                cutoutTriangles: cutoutTriangles);
         }
 
         // True when the cell under this face's (non-fluid) neighbour is the same fluid family. That
@@ -300,6 +402,85 @@ namespace Blockiverse.Gameplay
 
                 fluidVertexData.Add(new Vector2(masked ? 1.0f : 0.0f, (int)family));
             }
+        }
+
+        // Two intersecting vertical quads on the cell's diagonals — the standard voxel foliage
+        // shape. Distinct name, NOT an AddFace overload: ChunkRenderingEditModeTests reflects
+        // AddFace up by name and a second overload would throw AmbiguousMatch.
+        //
+        // Fixed planes rather than a camera-facing billboard, per vegetation ruleset §4a.2: a
+        // single billboard reads as a flat card in stereo, which this project already rejected
+        // once for the lightning bolt. Two fixed planes cost the same two quads and have no such
+        // failure mode.
+        static void AddCrossQuads(
+            List<Vector3> vertices,
+            List<int> triangles,
+            List<Vector2> uvs,
+            List<Color> colors,
+            List<Vector3> normals,
+            BlockPosition position,
+            BlockId blockId,
+            Color vertexColor)
+        {
+            Rect uvRect = BlockVisualAtlas.GetTileRect(blockId);
+            var origin = new Vector3(position.X, position.Y, position.Z);
+
+            // Corner-to-opposite-corner, so both quads stay inside the cell footprint.
+            AddFoliageQuad(vertices, triangles, uvs, colors, normals, uvRect, vertexColor,
+                origin + new Vector3(0, 0, 0),
+                origin + new Vector3(0, 1, 0),
+                origin + new Vector3(1, 1, 1),
+                origin + new Vector3(1, 0, 1));
+
+            AddFoliageQuad(vertices, triangles, uvs, colors, normals, uvRect, vertexColor,
+                origin + new Vector3(1, 0, 0),
+                origin + new Vector3(1, 1, 0),
+                origin + new Vector3(0, 1, 1),
+                origin + new Vector3(0, 0, 1));
+        }
+
+        // Shared quad emitter for the foliage stream. Writes an explicit UP normal for every
+        // vertex instead of leaving it to Mesh.RecalculateNormals: recalculated normals on two
+        // intersecting vertical planes point sideways, so grass would light as a pair of walls and
+        // read near-black from above. Shading foliage as though it faces the sky is both the
+        // cheaper and the better-looking answer.
+        static void AddFoliageQuad(
+            List<Vector3> vertices,
+            List<int> triangles,
+            List<Vector2> uvs,
+            List<Color> colors,
+            List<Vector3> normals,
+            Rect uvRect,
+            Color vertexColor,
+            Vector3 bottomLeft,
+            Vector3 topLeft,
+            Vector3 topRight,
+            Vector3 bottomRight)
+        {
+            int vertexStart = vertices.Count;
+
+            vertices.Add(bottomLeft);
+            vertices.Add(topLeft);
+            vertices.Add(topRight);
+            vertices.Add(bottomRight);
+
+            for (int i = 0; i < 4; i++)
+            {
+                colors.Add(vertexColor);
+                normals.Add(Vector3.up);
+            }
+
+            uvs.Add(new Vector2(uvRect.xMin, uvRect.yMin));
+            uvs.Add(new Vector2(uvRect.xMin, uvRect.yMax));
+            uvs.Add(new Vector2(uvRect.xMax, uvRect.yMax));
+            uvs.Add(new Vector2(uvRect.xMax, uvRect.yMin));
+
+            triangles.Add(vertexStart + 0);
+            triangles.Add(vertexStart + 1);
+            triangles.Add(vertexStart + 2);
+            triangles.Add(vertexStart + 0);
+            triangles.Add(vertexStart + 2);
+            triangles.Add(vertexStart + 3);
         }
 
         // Signature is changed in place rather than overloaded: ChunkRenderingEditModeTests looks

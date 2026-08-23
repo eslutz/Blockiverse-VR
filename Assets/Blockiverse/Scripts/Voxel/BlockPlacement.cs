@@ -18,6 +18,25 @@ namespace Blockiverse.Voxel
         // Whether a newly placed block may take this cell. Deliberately does NOT consider player
         // occupancy -- that is a separate, position-and-posture-dependent check the callers already
         // run, and folding it in here would make this impure.
+        //
+        // The registry overload is preferred. Passable vegetation is replaceable for the same
+        // reason fluids are (vegetation ruleset §4a.4: a passable block does not obstruct, so it
+        // must not obstruct building either) -- without it, every grass tile reads as solid to the
+        // builder and you cannot place a block on a meadow at all.
+        public static bool IsReplaceable(BlockId existing, BlockRegistry registry)
+        {
+            if (IsReplaceable(existing))
+                return true;
+
+            if (registry == null)
+                return false;
+
+            BlockDefinition definition = registry.Get(existing);
+            return definition != null && definition.IsPassable;
+        }
+
+        // Registry-free overload, kept for call sites that have no registry to hand. It cannot see
+        // passability, so prefer the overload above wherever a registry is available.
         public static bool IsReplaceable(BlockId existing) =>
             existing == BlockRegistry.Air || FluidBlocks.IsFluid(existing);
     }

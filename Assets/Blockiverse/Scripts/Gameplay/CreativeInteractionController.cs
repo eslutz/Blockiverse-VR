@@ -168,9 +168,9 @@ namespace Blockiverse.Gameplay
             if (!world.Bounds.Contains(position))
                 return false;
 
-            // Fluids are replaceable, not solid. Requiring Air here is what stopped the player
-            // building into a lake at all -- see BlockPlacement.
-            if (!BlockPlacement.IsReplaceable(world.GetBlock(position)))
+            // Fluids and passable vegetation are replaceable, not solid. Requiring Air here is what
+            // stopped the player building into a lake at all -- see BlockPlacement.
+            if (!BlockPlacement.IsReplaceable(world.GetBlock(position), registry))
                 return false;
 
             if (playerOccupancyPredicate != null && playerOccupancyPredicate(position))

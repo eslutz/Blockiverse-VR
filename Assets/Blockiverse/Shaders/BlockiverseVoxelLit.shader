@@ -32,6 +32,10 @@ Shader "Blockiverse/Voxel Lit"
         [HideInInspector] _DstBlend("__dst", Float) = 0.0
         [HideInInspector] _ZWrite("__zw", Float) = 1.0
         [HideInInspector] _Cull("__cull", Float) = 2.0
+
+        // Alpha-cutout threshold, read only when _BLOCKIVERSE_CUTOUT is enabled by
+        // BlockVisualAtlas.CreateCutoutMaterial. Terrain never enables the keyword.
+        _Cutoff("Alpha Cutoff", Range(0, 1)) = 0.5
     }
 
     SubShader
@@ -102,7 +106,11 @@ Shader "Blockiverse/Voxel Lit"
             // references this shader (BlockVisualAtlas swaps it in at runtime), so a
             // shader_feature variant would be stripped from the Android player and water would
             // render as opaque terrain on device while looking correct in the editor.
-            #pragma multi_compile_local _ _BLOCKIVERSE_WATER
+            //
+            // Water and cutout are three states on ONE line, not two independent keywords: they
+            // are mutually exclusive (no material is both), so this compiles 3 variants where two
+            // separate multi_compile_local lines would compile 4.
+            #pragma multi_compile_local _ _BLOCKIVERSE_WATER _BLOCKIVERSE_CUTOUT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -263,6 +271,12 @@ Shader "Blockiverse/Voxel Lit"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 half4 sampled = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+
+                // Foliage cutout. Clip before any lighting work so discarded fragments cost as
+                // little as possible; on a tile GPU the alpha test has already disabled early-Z
+                // for this draw, so shading a fragment we are about to throw away is pure waste.
+                BlockiverseClipFoliage(sampled.a);
+
                 half3 normalWS = NormalizeNormalPerPixel(input.normalWS);
 
                 // Vertex colour carries the baked per-face light data from VoxelLightSampler:
@@ -476,7 +490,9 @@ Shader "Blockiverse/Voxel Lit"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull Back
+            // Material-driven, not hardcoded Back: cutout foliage renders two-sided, and a
+            // single-sided shadow pass would drop the shadow of every back-facing cross quad.
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma target 3.5
@@ -486,6 +502,9 @@ Shader "Blockiverse/Voxel Lit"
             #pragma multi_compile_instancing
             // Directional and punctual shadow casters use different normal-bias formulas.
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            // Only the cutout state matters here — water casts no shadow — so this is 2 variants,
+            // not the 3 the ForwardLit pass needs.
+            #pragma multi_compile_local _ _BLOCKIVERSE_CUTOUT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
@@ -496,10 +515,20 @@ Shader "Blockiverse/Voxel Lit"
             float3 _LightDirection;
             float3 _LightPosition;
 
+        #if defined(_BLOCKIVERSE_CUTOUT)
+            // Only the cutout variant samples anything; the opaque shadow variant stays exactly as
+            // it was, with no texture fetch and no extra interpolator.
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+        #endif
+
             struct ShadowAttributes
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -508,6 +537,9 @@ Shader "Blockiverse/Voxel Lit"
             struct ShadowVaryings
             {
                 float4 positionCS : SV_POSITION;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -533,12 +565,20 @@ Shader "Blockiverse/Voxel Lit"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
 
                 output.positionCS = GetShadowPositionHClip(input);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+            #endif
                 return output;
             }
 
             half4 ShadowFrag(ShadowVaryings input) : SV_TARGET
             {
                 UNITY_SETUP_INSTANCE_ID(input);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                // Clip with the same threshold ForwardLit uses, or a lacy canopy casts the shadow
+                // of the solid cube it replaced — worse than the opaque leaves it is fixing.
+                BlockiverseClipFoliage(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a);
+            #endif
                 return 0;
             }
             ENDHLSL
@@ -552,26 +592,39 @@ Shader "Blockiverse/Voxel Lit"
 
             ZWrite On
             ColorMask R
-            Cull Back
+            // Material-driven for the same reason as ShadowCaster: two-sided cutout geometry.
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma target 3.5
             #pragma vertex DepthVert
             #pragma fragment DepthFrag
             #pragma multi_compile_instancing
+            #pragma multi_compile_local _ _BLOCKIVERSE_CUTOUT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "BlockiverseVoxelLitInput.hlsl"
 
+        #if defined(_BLOCKIVERSE_CUTOUT)
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+        #endif
+
             struct DepthAttributes
             {
                 float4 positionOS : POSITION;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct DepthVaryings
             {
                 float4 positionCS : SV_POSITION;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -584,6 +637,9 @@ Shader "Blockiverse/Voxel Lit"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+            #endif
                 return output;
             }
 
@@ -591,6 +647,9 @@ Shader "Blockiverse/Voxel Lit"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                BlockiverseClipFoliage(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a);
+            #endif
                 return 0;
             }
             ENDHLSL

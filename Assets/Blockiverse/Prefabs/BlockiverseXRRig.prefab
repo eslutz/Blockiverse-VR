@@ -47632,7 +47632,7 @@ MonoBehaviour:
   m_LiveConeCastDebugVisuals: 0
   m_RaycastMask:
     serializedVersion: 2
-    m_Bits: 9216
+    m_Bits: 41984
   m_RaycastTriggerInteraction: 1
   m_RaycastSnapVolumeInteraction: 0
   m_RaycastUIDocumentTriggerInteraction: 1
@@ -71161,7 +71161,7 @@ MonoBehaviour:
   m_LiveConeCastDebugVisuals: 0
   m_RaycastMask:
     serializedVersion: 2
-    m_Bits: 9216
+    m_Bits: 41984
   m_RaycastTriggerInteraction: 1
   m_RaycastSnapVolumeInteraction: 0
   m_RaycastUIDocumentTriggerInteraction: 1

@@ -49,11 +49,32 @@ namespace Blockiverse.Core
         public const string MirrorAvatarLayerName = "BlockiverseMirrorAvatar";
         public const int MirrorAvatarLayerIndex = 14;
         public const int MirrorAvatarLayerMask = 1 << MirrorAvatarLayerIndex;
+        // Passable block geometry: rendered and ray-targetable, but never obstructing movement.
+        // Vegetation is the first user; the name is deliberately general (not "foliage") because
+        // the layer index is baked into TagManager.asset and renaming it later is expensive, and
+        // open doorways or decorative props would want exactly this behaviour.
+        //
+        // Same reasoning as fluid above, and it must be enforced the same way: contact exclusion
+        // alone is not enough, because GravityProvider's ground sphere-cast is a scene query and
+        // scene queries ignore Collider.excludeLayers.
+        public const string PassableLayerName = "BlockiversePassable";
+        public const int PassableLayerIndex = 15;
+        public const int PassableLayerMask = 1 << PassableLayerIndex;
         // Ground detection: solid chunk colliders and the void safety floor only. This is the one
-        // mask that deliberately excludes fluid — widening it reintroduces walking on water.
+        // mask that deliberately excludes fluid — widening it reintroduces walking on water. It
+        // excludes the passable layer for free, by never naming it.
         public const int VoxelGroundLayerMask = InteractionLayerMask;
-        // Ray targeting: block interaction (place/mine), drink/bucket fill on water, and teleport
-        // landing. Water is a valid target for all three, so it is included here.
+        // Ray targeting for the VR UI/teleport ray: block interaction, drink/bucket fill on water,
+        // and teleport landing. Water is a valid target for all three, so it is included here.
+        //
+        // Passable geometry is deliberately ABSENT: a teleport arc must pass THROUGH grass and
+        // land on the ground beneath it (vegetation ruleset §4a.4), which is the opposite of the
+        // deliberate water behaviour. Do not widen this constant to add vegetation — the
+        // bootstrapper bakes it into the rig prefab's teleport ray as well as the interaction ray.
         public const int VrUiRaycastLayerMask = InteractionLayerMask | FluidLayerMask;
+        // Ray targeting for block interaction only (mine/place/harvest). Identical to the mask
+        // above plus passable geometry, so a plant can be targeted and harvested even though the
+        // teleport ray ignores it. This split is the whole reason it is a separate constant.
+        public const int VoxelInteractionRaycastLayerMask = VrUiRaycastLayerMask | PassableLayerMask;
     }
 }

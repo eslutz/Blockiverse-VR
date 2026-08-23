@@ -1920,7 +1920,10 @@ namespace Blockiverse.Networking
                 ? placementWorld.GetBlock(position)
                 : BlockRegistry.Air;
 
-            if (!BlockPlacement.IsReplaceable(existing))
+            // Registry overload so passable vegetation is replaceable here too. The host and the
+            // local creative path MUST answer this identically or a client places into grass, the
+            // host rejects it, and the block visibly rubber-bands.
+            if (!BlockPlacement.IsReplaceable(existing, BlockRegistry.Default))
             {
                 var occupied = SurvivalCommandResult.Reject(
                     SurvivalCommandKind.PlaceBlock,
