@@ -1004,6 +1004,271 @@ MonoBehaviour:
     m_Localized: Server password (if any)
     m_Metadata:
       m_Items: []
+  - m_Id: 204277116035072
+    m_Localized: Host
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423680
+    m_Localized: Join
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423681
+    m_Localized: Stop
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423682
+    m_Localized: Classic Block Sounds
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423683
+    m_Localized: Haptics
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423684
+    m_Localized: Mute All
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423685
+    m_Localized: Reduced Flash
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423686
+    m_Localized: Reduced Particles
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423687
+    m_Localized: Control Options
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423688
+    m_Localized: Click To Toggle Crouch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423689
+    m_Localized: Glide Motion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423690
+    m_Localized: Left-Handed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423691
+    m_Localized: Motion Vignette
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423692
+    m_Localized: Move Speed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423693
+    m_Localized: Movement Mode
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423694
+    m_Localized: Player View
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423695
+    m_Localized: Use My Real Height
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423696
+    m_Localized: Reset Height
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423697
+    m_Localized: Smooth Turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423698
+    m_Localized: Smooth Turn Speed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423699
+    m_Localized: Snap Turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423700
+    m_Localized: Click To Toggle Sprint
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423701
+    m_Localized: Climb Out At Low Banks
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423702
+    m_Localized: Sink When Not Swimming
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423703
+    m_Localized: Swim Speed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423704
+    m_Localized: Vignette While Sinking
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423705
+    m_Localized: Teleport
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423706
+    m_Localized: Comfort Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423707
+    m_Localized: Toggle To Mine
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423708
+    m_Localized: Turn Around
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423709
+    m_Localized: Turning
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423710
+    m_Localized: UI Scale
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423711
+    m_Localized: View Comfort
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423712
+    m_Localized: Strength
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423713
+    m_Localized: Walk Head-Bob
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423714
+    m_Localized: Repair Held Tool
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423715
+    m_Localized: Deposit Held
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423716
+    m_Localized: Shared Crate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423717
+    m_Localized: Environment
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423718
+    m_Localized: Region Operations
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423719
+    m_Localized: Encrypted (server must offer TLS)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423720
+    m_Localized: Saved Servers
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423721
+    m_Localized: No block
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423722
+    m_Localized: 'Dominant trigger: press UI / break
+
+      Dominant grip: place
+      / use
+
+      Support grip: blocks menu
+
+      Menu: pause
+
+      Dominant stick:
+      snap turn
+
+      Dominant stick click: toggle block editing
+
+      Dominant
+      primary button: jump / swim up
+
+      Dominant secondary button: crouch / swim
+      down
+
+      Support stick: move
+
+      Support stick click: sprint
+
+      Either
+      stick hold up: teleport aim, release to land'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423723
+    m_Localized: Balanced
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423724
+    m_Localized: Creative
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423725
+    m_Localized: Drybrush
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423726
+    m_Localized: Dunes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423727
+    m_Localized: Easy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423728
+    m_Localized: Flat Builder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423729
+    m_Localized: Hard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277124423730
+    m_Localized: Highlands
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617984
+    m_Localized: Meadow
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617985
+    m_Localized: Normal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617986
+    m_Localized: Pinewild
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617987
+    m_Localized: Survival
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617988
+    m_Localized: Survival Terrain
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617989
+    m_Localized: Tundra
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617990
+    m_Localized: Void Builder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 204277128617991
+    m_Localized: Wetland
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
