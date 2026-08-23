@@ -107,6 +107,25 @@ namespace Blockiverse.MetaAvatars
             RefreshAvatarState();
         }
 
+        /// <summary>The signed-in Meta user id, once the local profile chain has resolved it.</summary>
+        public bool TryGetLocalMetaUserId(out ulong userId)
+        {
+            ResolveReferences();
+            userId = 0;
+            return provider != null && provider.TryGetLocalUserId(out userId);
+        }
+
+        /// <summary>Ask the remote provider to load this peer's real profile avatar.</summary>
+        public void ConfigureRemoteUserAvatar(ulong userId)
+        {
+            ResolveReferences();
+
+            if (presentationMode != MetaAvatarPresentationMode.RemoteThirdPerson)
+                return;
+
+            provider?.ConfigureRemoteUserAvatar(userId);
+        }
+
         void ResolveReferences()
         {
             if (fallbackRig == null)

@@ -66,6 +66,23 @@ namespace Blockiverse.MetaAvatars
             IsAvatarReady = LastAppliedStream.Length > 0;
             FallbackReason = IsAvatarReady ? string.Empty : NotReadyReason;
         }
+
+        /// <summary>Local Meta user id reported by <see cref="TryGetLocalUserId"/>; set by tests.</summary>
+        public ulong LocalUserId { get; set; }
+
+        /// <summary>Last id handed to <see cref="ConfigureRemoteUserAvatar"/>.</summary>
+        public ulong RemoteUserId { get; private set; }
+
+        public bool TryGetLocalUserId(out ulong userId)
+        {
+            userId = LocalUserId;
+            return userId != 0;
+        }
+
+        public void ConfigureRemoteUserAvatar(ulong userId)
+        {
+            RemoteUserId = userId;
+        }
     }
 }
 #endif

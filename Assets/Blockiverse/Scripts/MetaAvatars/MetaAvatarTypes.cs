@@ -34,5 +34,17 @@ namespace Blockiverse.MetaAvatars
         void TickProvider();
         bool TryRecordStream(out byte[] streamData);
         void ApplyStreamData(byte[] streamData);
+
+        // Default implementations keep test fakes compiling: only providers that talk to the
+        // Meta platform (and the editor mock, for tests) have a real user identity to offer.
+        bool TryGetLocalUserId(out ulong userId)
+        {
+            userId = 0;
+            return false;
+        }
+
+        void ConfigureRemoteUserAvatar(ulong userId)
+        {
+        }
     }
 }

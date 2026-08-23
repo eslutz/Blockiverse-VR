@@ -434,10 +434,11 @@ namespace Blockiverse.Editor
 
         static void EnsureXrRigAvatar(GameObject rig)
         {
-            // The XRI input manager feeds OvrPlugin controller/HMD pose data to the avatar entity
-            // so that hands track the physical controllers. It must be on the rig (or a child)
-            // before the entity is instantiated at runtime.
-            EnsureComponent<BlockiverseXriAvatarInputManager>(rig);
+            // The XRI input manager feeds rig-relative head/controller poses to the avatar
+            // entity so the avatar body tracks the player. It must be on the rig (or a child)
+            // before the entity is instantiated at runtime; its sources are wired below once
+            // the rig transforms are resolved.
+            BlockiverseXriAvatarInputManager avatarInputManager = EnsureComponent<BlockiverseXriAvatarInputManager>(rig);
 
             // This component is intentionally unspawned on the local XR rig; the spawned network
             // player prefab owns the NetworkObject used for multiplayer avatar relay.
@@ -464,6 +465,10 @@ namespace Blockiverse.Editor
             avatarRig.SetMetaAvatarAvailable(false);
             avatarRig.ConfigureFallbackProxy(true);
             avatarRig.ConfigureFirstPersonFallbackVisuals(true);
+            // The rig root is the floor-level tracking origin: the avatar entity sits under
+            // it at an identity local pose, and the tracking delegate converts the head and
+            // controller poses into this space.
+            avatarInputManager.ConfigureSources(rig.transform, head, leftHand, rightHand);
             avatarPresenter.Configure(
                 avatarProvider,
                 avatarRig,
@@ -473,6 +478,7 @@ namespace Blockiverse.Editor
                 MetaAvatarPresentationMode.LocalFirstPerson);
             EditorUtility.SetDirty(avatarRig);
             EditorUtility.SetDirty(keyboardHandVisibility);
+            EditorUtility.SetDirty(avatarInputManager);
             EditorUtility.SetDirty(avatarProvider);
             EditorUtility.SetDirty(avatarPresenter);
         }

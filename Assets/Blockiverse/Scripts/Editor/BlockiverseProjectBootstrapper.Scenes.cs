@@ -529,19 +529,123 @@ namespace Blockiverse.Editor
             EnsureEventSystem(scene, BootEventSystemName);
         }
 
-        // Native Meta Avatar SDK initialization is Quest-runtime only. Keep any legacy scene
-        // manager inactive in editor-authored scenes so macOS/headless PlayMode tests do not
-        // load avatar native libraries; MetaHorizonAvatarProvider creates the singleton on Quest.
+        // Native Meta Avatar SDK initialization is Quest-runtime only. The manager object is
+        // authored INACTIVE with its full asset configuration serialized — shader
+        // configurations (the URP-capable Style-2-Avatar-Meta path), GPU-skinning shaders,
+        // and the LOD manager — so those assets ship in the player build via the scene
+        // references. MetaHorizonAvatarProvider activates it on Quest, which runs
+        // OvrAvatarManager.Initialize with real configuration; it stays inactive in the
+        // editor so macOS/headless PlayMode tests never load avatar native libraries.
+        //
+        // A bare runtime OvrAvatarManager.Instantiate() must never be the primary path: its
+        // fallback shader manager resolves Shader.Find("Standard"), which is stripped from
+        // URP Android builds, and its runtime GpuSkinningConfiguration has null compute
+        // shaders (the auto-fill is editor-only) — either alone makes every avatar
+        // permanently invisible on device.
         static void EnsureOvrAvatarManager(Scene scene)
         {
-            const string AvatarManagerName = "OvrAvatarManager";
+            const string LegacyAvatarManagerName = "OvrAvatarManager";
+            const string ShaderManagerChildName = "Style-2-Avatar-Meta";
 
-            GameObject managerObject = FindRootGameObject(scene, AvatarManagerName);
-            if (managerObject != null && managerObject.activeSelf)
+            GameObject legacyManagerObject = FindRootGameObject(scene, LegacyAvatarManagerName);
+            if (legacyManagerObject != null && legacyManagerObject.activeSelf)
+            {
+                legacyManagerObject.SetActive(false);
+                EditorUtility.SetDirty(legacyManagerObject);
+            }
+
+            GameObject managerObject = FindRootGameObject(scene, MetaHorizonAvatarProvider.SdkManagerObjectName);
+            if (managerObject == null)
+            {
+                managerObject = new GameObject(MetaHorizonAvatarProvider.SdkManagerObjectName);
+                managerObject.SetActive(false);
+                SceneManager.MoveGameObjectToScene(managerObject, scene);
+            }
+            else if (managerObject.activeSelf)
             {
                 managerObject.SetActive(false);
                 EditorUtility.SetDirty(managerObject);
             }
+
+            // Component order mirrors Meta's AvatarSdkManager sample prefab: the manager's
+            // Awake must run first on activation so its Initialize() adopts the LOD and
+            // skinning components already present on the object.
+            OvrAvatarManager avatarManager = EnsureComponent<OvrAvatarManager>(managerObject);
+            EnsureComponent<AvatarLODManager>(managerObject);
+            GpuSkinningConfiguration skinningConfiguration = EnsureComponent<GpuSkinningConfiguration>(managerObject);
+
+            Transform shaderChild = managerObject.transform.Find(ShaderManagerChildName);
+            GameObject shaderObject = shaderChild != null ? shaderChild.gameObject : null;
+            if (shaderObject == null)
+            {
+                shaderObject = new GameObject(ShaderManagerChildName);
+                shaderObject.transform.SetParent(managerObject.transform, false);
+            }
+
+            OvrAvatarShaderManagerSingle shaderManager = EnsureComponent<OvrAvatarShaderManagerSingle>(shaderObject);
+
+            bool changed = false;
+            changed |= SetSerializedReference(avatarManager, "ShaderManager", shaderManager);
+            changed |= SetSerializedReference(
+                shaderManager,
+                "DefaultShaderConfigurationInitializer",
+                LoadMetaAvatarsPackageAsset<OvrAvatarShaderConfiguration>(
+                    "Scripts/Common/Shaders/Configurations/Recommended/MetaStyle2ShaderConfiguration.asset"));
+            changed |= SetSerializedReference(
+                shaderManager,
+                "FastLoadConfigurationInitializer",
+                LoadMetaAvatarsPackageAsset<OvrAvatarShaderConfiguration>(
+                    "Scripts/Common/Shaders/Configurations/Recommended/MetaStyle2ShaderConfigurationVertex.asset"));
+            changed |= SetSerializedReference(
+                shaderManager,
+                "CelShaderConfigurationInitializer",
+                LoadMetaAvatarsPackageAsset<OvrAvatarShaderConfiguration>(
+                    "Scripts/Common/Shaders/Configurations/Recommended/MetaShaderCelConfiguration.asset"));
+            changed |= SetSerializedReference(
+                skinningConfiguration,
+                "_CombineMorphTargetsShader",
+                LoadMetaAvatarsPackageAsset<Shader>("Scripts/Skinning/GpuSkinning/Shaders/combine-morph-targets.shader"));
+            changed |= SetSerializedReference(
+                skinningConfiguration,
+                "_SkinToTextureShader",
+                LoadMetaAvatarsPackageAsset<Shader>("Scripts/Skinning/GpuSkinning/Shaders/skin-to-texture.shader"));
+            changed |= SetSerializedReference(
+                skinningConfiguration,
+                "_morphAndSkinningComputeShader",
+                LoadMetaAvatarsPackageAsset<ComputeShader>("Scripts/Skinning/GpuSkinning/Shaders/OvrApplyMorphsAndSkinning.compute"));
+
+            if (changed)
+                EditorUtility.SetDirty(managerObject);
+        }
+
+        static T LoadMetaAvatarsPackageAsset<T>(string packageRelativePath) where T : UnityEngine.Object
+        {
+            string assetPath = $"Packages/com.meta.xr.sdk.avatars/{packageRelativePath}";
+            T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
+            if (asset == null)
+                Debug.LogWarning($"[BlockiverseProjectBootstrapper] Missing Meta Avatars package asset: {assetPath}");
+            return asset;
+        }
+
+        static bool SetSerializedReference(Component component, string propertyName, UnityEngine.Object value)
+        {
+            var serializedComponent = new SerializedObject(component);
+            SerializedProperty property = serializedComponent.FindProperty(propertyName);
+            if (property == null)
+            {
+                Debug.LogWarning(
+                    $"[BlockiverseProjectBootstrapper] Serialized property '{propertyName}' not found on {component.GetType().Name}; " +
+                    "the Meta Avatars package layout may have changed.");
+                return false;
+            }
+
+            if (property.objectReferenceValue == value)
+                return false;
+
+            property.objectReferenceValue = value;
+            serializedComponent.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(component);
+            return true;
         }
 
         static void EnsureMetaPlatformCompliance(Scene scene)
