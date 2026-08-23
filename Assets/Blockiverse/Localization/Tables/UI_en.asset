@@ -1000,6 +1000,10 @@ MonoBehaviour:
     m_Localized: '{0} / {1}'
     m_Metadata:
       m_Items: []
+  - m_Id: 38742520750080
+    m_Localized: Server password (if any)
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

@@ -48,8 +48,8 @@ namespace Blockiverse.Tests.EditMode
 
             // Positive controls before any comparison: an empty fixture or an unparsed prefab
             // would make the multiset comparison pass vacuously.
-            Assert.That(expected.Values.Sum(), Is.EqualTo(133), "fixture lost components");
-            Assert.That(expected.Count, Is.EqualTo(74), "fixture lost distinct keys");
+            Assert.That(expected.Values.Sum(), Is.EqualTo(134), "fixture lost components");
+            Assert.That(expected.Count, Is.EqualTo(75), "fixture lost distinct keys");
             Assert.That(expected["ui.action.error.close"], Is.EqualTo(11),
                 "the known Close-collision count changed in the fixture itself");
 

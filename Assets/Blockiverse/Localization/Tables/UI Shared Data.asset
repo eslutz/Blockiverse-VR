@@ -1220,6 +1220,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 5195086313155461121
+  - m_Id: 38742520750080
+    m_Key: ui.generated.lan.join_secret_placeholder
+    m_Metadata:
+      m_Items:
+      - rid: 5195086314375217152
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
@@ -2197,3 +2202,7 @@ MonoBehaviour:
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
         m_CommentText: 'Keys.HealthVitalsRatio. Placeholders: {0}, {1}.'
+    - rid: 5195086314375217152
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanJoinSecretPlaceholder.
