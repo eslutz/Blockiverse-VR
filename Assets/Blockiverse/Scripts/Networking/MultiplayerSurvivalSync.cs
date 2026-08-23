@@ -473,8 +473,34 @@ namespace Blockiverse.Networking
 
         public event Action<SurvivalCommandResult, BlockPosition> CommandFeedback;
 
+        /// <summary>
+        /// The single pinned recipe (voxel_survival_menus §6.10a).
+        ///
+        /// ⚠ CLIENT-LOCAL AND SESSION-ONLY — a deliberate second carve-out from this class's
+        /// host-authoritative contract, alongside vitals. Everything else here is replication:
+        /// clients send requests and mirror host snapshots. The pin is not. It MUST NEVER enter a
+        /// survival command, a sync snapshot, or the save file.
+        ///
+        /// Stated explicitly because a client-local field living inside the replication component
+        /// reads like an oversight, and "fixing" the inconsistency would put a HUD convenience on
+        /// the wire and into the v4 player save for no gain — a pin changes no world state, so
+        /// host authority buys nothing.
+        ///
+        /// It lives here because this component is generated unconditionally into the Boot scene
+        /// (BlockiverseProjectBootstrapper.Scenes.cs), so it exists in single-player too, and it
+        /// already owns local survival state and the inventory-change events the HUD refreshes on.
+        /// </summary>
+        public RecipePinState RecipePin { get; } = new(CraftingRecipeBook.Default);
+
         void RaiseCommandFeedback(SurvivalCommandResult result, BlockPosition position)
         {
+            // Auto-unpin (§6.10a): crafting the pinned recipe is the tracked goal completing.
+            // Hooked here rather than in TrySubmitCraft because a client's craft is only ACCEPTED
+            // later, when the host's result arrives — and this is the one path both the
+            // host/single-player and deferred-client completions funnel through.
+            if (result.Accepted && result.CommandKind == SurvivalCommandKind.CraftRecipe)
+                RecipePin.OnRecipeCrafted(result.Item.ItemId);
+
             CommandFeedback?.Invoke(result, position);
         }
 

@@ -109,7 +109,7 @@ Recommended behavior:
 | Death Screen | `death_screen` | Player death | Yes | Respawn or return to title |
 | Confirmation Dialog | `confirm_dialog` | Any risky action | Inherits parent | Confirm/cancel destructive actions |
 | Item Details Popover | `item_details` | Inventory hover/focus | Inherits parent | Stats, description, actions |
-| Recipe Pin Overlay | `recipe_pin_overlay` | Crafting menu | No | Shows tracked recipe materials on HUD |
+| Recipe Pin Overlay | `recipe_pin_overlay` | Crafting menu, Campfire, Prep Board | No | Shows the one pinned recipe's materials on the HUD (§6.10a) |
 
 ---
 
@@ -203,7 +203,7 @@ flowchart TD
 | `inventory` | Open Crafting tab | Always | Same screen with `activeTab = crafting` or `crafting` |
 | `inventory` | Close | Always | `gameplay_hud` |
 | `crafting` | Craft recipe | Ingredients available | Consume inputs, add outputs |
-| `crafting` | Pin recipe | Always | Add or remove recipe from HUD tracker |
+| `crafting` | Pin recipe | Always | Pin this recipe to the HUD tracker, replacing whatever was pinned; pinning the pinned recipe clears it |
 | `container` | Close | Always | Save container state, return to HUD |
 | `clay_kiln` | Start smelt | Valid input and fuel | Begin station job |
 | `bellows_forge` | Start forge | Valid input and fuel | Begin station job |
@@ -464,7 +464,7 @@ uniquify clashing names (" (2)", " (3)", …); deleting opens the shared confirm
 | Target prompt | `hud.show_context_prompt` | Shows block name, usable action, tool warning, mine time |
 | Hotbar | `hotbar.render` | Shows 10 quick slots and selected slot |
 | Status bars | `hud.status_update` | Displays health, stamina, hunger/thirst/temperature if enabled |
-| Recipe pins | `hud.recipe_pin_update` | Shows tracked recipe requirements |
+| Recipe pin | `hud.recipe_pin_update` | Shows the pinned recipe's requirements as have/needed (§6.10a) |
 | Damage indicators | `hud.damage_feedback` | Shows directional hit/heat/fall feedback |
 | Pickup feed | `hud.pickup_feed` | Shows recently collected item stacks |
 
@@ -541,7 +541,7 @@ uniquify clashing names (" (2)", " (3)", …); deleting opens the shared confirm
 | Quick Craft                 | Details                              |
 | > Work Plank x6             | Branchwood Log                       |
 |   Stout Pole x4             | Common tree trunk.                   |
-|   Fiber Cord x2             | Actions: Use / Split / Drop / Pin    |
+|   Fiber Cord x2             | Actions: Use / Split / Drop          |
 +--------------------------------------------------------------------+
 ```
 
@@ -662,7 +662,7 @@ recipe.visible =
 | Craft 1 | `crafting.craft_one` | Crafts selected recipe once |
 | Craft 5 | `crafting.craft_five` | Crafts selected recipe up to 5 times |
 | Craft Max | `crafting.craft_max` | Crafts as many as inventory allows |
-| Pin Recipe | `crafting.toggle_pin_recipe` | Adds/removes recipe from HUD tracker |
+| Pin Recipe | `crafting.toggle_pin_recipe` | Toggles the single pinned slot (§6.10a): pins this recipe, replacing any previous pin, or clears the slot if this recipe is already pinned |
 | Show Missing Only | `crafting.toggle_missing_filter` | Shows needed items for selected recipe |
 | Back | `crafting.back` | Returns to previous screen |
 
@@ -695,6 +695,80 @@ count** — see the multi-craft note below.
 > adding a count to the host-authoritative craft command and to its validation, so that the host
 > resolves an N-craft atomically. Adding client-side repetition instead would issue N independent
 > requests and can partially succeed, leaving the UI and the authoritative inventory disagreeing.
+
+---
+
+### 6.10a Recipe Pin Overlay
+
+**Purpose:** Keep one recipe's material requirements visible on the HUD while the player is out
+gathering, so they can see what they still need without reopening a crafting screen.
+
+**Screen id:** `recipe_pin_overlay`. Does not pause. It is a HUD element, not a focusable screen:
+it never takes input and never appears in the modal stack.
+
+#### One slot, not a list
+
+**Exactly one recipe can be pinned at a time.** Pinning a second replaces the first; there is no
+list, no cap, no ordering, and no eviction rule to specify.
+
+This resolves a set of contradictions that had accumulated across the document. `crafting.toggle_pin_recipe`
+described "adds/removes", while the campfire and prep-board pin actions had no removal verb at
+all — with a single slot, "pin" from any source is unambiguous and the missing removal verb stops
+mattering, because pinning something else is the removal. The §3 table's singular "tracked recipe
+materials" and the §6.6 HUD row's plural "requirements" are reconciled in favour of the singular.
+
+**Four entry points write the same slot:**
+
+| Source | Action |
+|---|---|
+| Crafting Menu | `crafting.toggle_pin_recipe` |
+| Campfire | `campfire.pin_recipe` |
+| Prep Board | `prep_board.pin_recipe` |
+
+A station recipe and a handcraft recipe therefore compete for one slot, and the rule is simply
+last-write-wins: whichever the player pinned most recently is the one shown. The overlay records
+which source the pinned recipe came from so it can label a station requirement — a recipe pinned
+at a campfire is not craftable by hand, and the HUD must not imply otherwise.
+
+`crafting.toggle_pin_recipe` is a toggle: pinning the recipe already in the slot clears it. The
+station actions are pin-only, because a station screen has no "currently pinned" affordance to
+toggle against; to clear from a station, pin something else or unpin from the Crafting Menu.
+
+#### State and lifetime
+
+| Property | Value | Reason |
+|---|---|---|
+| Authority | **Client-local** | A pin changes no world state, so host authority buys nothing. This is the same carve-out player vitals already have, and it keeps pinning off the survival command channel entirely. |
+| Persistence | **Session-only** | Not written to the save. Avoids touching the v4 player save for a HUD convenience. |
+| On successful craft | **Auto-unpin** | Crafting the pinned recipe is the goal completing; leaving it pinned means the player must dismiss it manually every time. |
+| On world unload | Cleared | Session state does not survive leaving the world. |
+
+Auto-unpin fires only when the **pinned** recipe is successfully crafted. Crafting anything else
+leaves the pin alone.
+
+#### Contents
+
+For the pinned recipe, the overlay shows the output name and each ingredient as
+`have / needed`, with insufficient ingredients visually distinguished. It does not show craft
+buttons — it is a tracker, not a control surface.
+
+Requirement counts are recomputed whenever inventory changes, using the same craftability logic
+the Crafting Menu already uses. There is no second source of truth for "can I make this".
+
+#### Actions
+
+| Element | Action ID | Logic |
+|---|---|---|
+| (none) | `hud.recipe_pin_update` | Emitted when the pinned recipe or the player's inventory changes; refreshes the overlay |
+
+The overlay has no interactive elements of its own. Every state change comes from one of the
+three pin actions above or from an inventory update.
+
+#### Not the item pin
+
+The item-details action list previously offered a `Pin` verb on an inventory **item**. That is
+removed. It was a near-duplicate of this feature — the recipe pin already shows materials — with
+its own HUD cost and no action id of its own, which is what marked it as a leftover.
 
 ---
 
@@ -765,7 +839,7 @@ count** — see the multi-craft note below.
 | Cook input slot | `campfire.set_input` | Accepts valid cook recipe input |
 | Output slot | `campfire.take_output` | Moves completed output to player inventory |
 | Add Fuel | `campfire.quick_add_fuel` | Moves best available fuel from inventory |
-| Pin Recipe | `campfire.pin_recipe` | Pins selected campfire recipe to HUD |
+| Pin Recipe | `campfire.pin_recipe` | Pins the selected campfire recipe to the HUD, replacing any previous pin (§6.10a). Pin-only: clear it from the Crafting Menu or by pinning something else |
 | Close | `campfire.close` | Returns to HUD; campfire continues while chunk is active |
 
 **Station tick logic:**
@@ -897,7 +971,7 @@ selectedRecipe = matchingRecipes[0] ?? null;
 | Recipe row | `prep_board.select_recipe` | Selects recipe and updates detail panel |
 | Craft 1 | `prep_board.craft_one` | Crafts once if ingredients exist |
 | Craft Max | `prep_board.craft_max` | Crafts until ingredients or inventory space run out |
-| Pin Recipe | `prep_board.pin_recipe` | Pins recipe to HUD tracker |
+| Pin Recipe | `prep_board.pin_recipe` | Pins the selected recipe to the HUD, replacing any previous pin (§6.10a). Pin-only, as with the campfire |
 | Close | `prep_board.close` | Returns to HUD |
 
 ---
@@ -1301,8 +1375,8 @@ type ConfirmDialogParams = {
 | `crafting.select_recipe` | `{ recipeId }` | Updates details panel |
 | `crafting.craft` | `{ recipeId, count }` | Consumes ingredients and adds output |
 | `crafting.craft_max` | `{ recipeId }` | Crafts maximum possible count |
-| `crafting.pin_recipe` | `{ recipeId }` | Adds recipe to HUD tracker |
-| `crafting.unpin_recipe` | `{ recipeId }` | Removes recipe from HUD tracker |
+| `crafting.pin_recipe` | `{ recipeId, source }` | Sets the single pinned slot, replacing any previous pin. `source` is the screen that pinned it, so the HUD can label a station requirement |
+| `crafting.unpin_recipe` | `{}` | Clears the pinned slot. Carries no id: there is only one slot, and passing an id invites a stale-id no-op |
 | `crafting.filter` | `{ category, searchText, showCraftableOnly }` | Filters recipe list |
 
 ### 7.5 Station Actions
@@ -1352,7 +1426,10 @@ type UiState = {
   focusedElementId?: string;
   selectedItemRef?: SlotRef;
   selectedRecipeId?: string;
-  pinnedRecipeIds: string[];
+  // One slot, not a list (§6.10a). Client-local and session-only: never sent to the host,
+  // never written to the save, cleared on world unload and on crafting the pinned recipe.
+  pinnedRecipeId: string | null;
+  pinnedRecipeSource: "crafting" | "campfire" | "prep_board" | null;
   pendingSettings: Partial<GameSettings>;
 };
 ```
