@@ -13,6 +13,14 @@ namespace Blockiverse.MetaAvatars
         [SerializeField] BlockiverseMetaAvatarPresenter remotePresenter;
         [SerializeField] float streamSendRateHz = 15.0f;
 
+        // Owner-published Meta user id: remote peers load the owner's real profile avatar
+        // from it instead of posing a generic default. Zero means "not resolved" — a child
+        // account (or a failed platform chain) never publishes one, by policy.
+        readonly NetworkVariable<ulong> ownerMetaUserId = new(
+            0,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
         BlockiverseMetaAvatarPresenter localFirstPersonPresenter;
         BlockiverseNetworkAvatarRig ownerNetworkFallbackRig;
         readonly List<MetaAvatarStreamMessage> _sendBuffer = new();
@@ -31,10 +39,36 @@ namespace Blockiverse.MetaAvatars
             ownerNetworkFallbackRig = GetComponent<BlockiverseNetworkAvatarRig>();
         }
 
+        public override void OnNetworkSpawn()
+        {
+            base.OnNetworkSpawn();
+
+            if (!IsOwner)
+            {
+                ownerMetaUserId.OnValueChanged += OnOwnerMetaUserIdChanged;
+                ApplyOwnerMetaUserId(ownerMetaUserId.Value);
+            }
+        }
+
         public override void OnNetworkDespawn()
         {
+            ownerMetaUserId.OnValueChanged -= OnOwnerMetaUserIdChanged;
             _reassembler.Clear();
             base.OnNetworkDespawn();
+        }
+
+        void OnOwnerMetaUserIdChanged(ulong previousValue, ulong newValue)
+        {
+            ApplyOwnerMetaUserId(newValue);
+        }
+
+        void ApplyOwnerMetaUserId(ulong userId)
+        {
+            if (userId == 0)
+                return;
+
+            remotePresenter ??= GetComponent<BlockiverseMetaAvatarPresenter>();
+            remotePresenter?.ConfigureRemoteUserAvatar(userId);
         }
 
         public override void OnDestroy()
@@ -72,6 +106,12 @@ namespace Blockiverse.MetaAvatars
 
             if (localFirstPersonPresenter == null || NetworkManager == null)
                 return;
+
+            if (ownerMetaUserId.Value == 0 &&
+                localFirstPersonPresenter.TryGetLocalMetaUserId(out ulong localMetaUserId))
+            {
+                ownerMetaUserId.Value = localMetaUserId;
+            }
 
             double nowLocal = Time.unscaledTimeAsDouble;
             double minInterval = streamSendRateHz <= 0.0f ? 0.0f : 1.0f / streamSendRateHz;
@@ -153,11 +193,12 @@ namespace Blockiverse.MetaAvatars
             // healthy streams stale (or mask stopped ones) by the uptime difference.
             LastRemoteStreamTime = Time.unscaledTimeAsDouble;
             if (ownerNetworkFallbackRig != null)
-            {
                 ownerNetworkFallbackRig.SetStreamStale(false);
-                ownerNetworkFallbackRig.SetMetaAvatarAvailable(true);
-            }
 
+            // Availability is NOT forced true here: ApplyRemoteStream -> RefreshAvatarState
+            // asks the provider, which also requires the entity to be renderable. Forcing it
+            // used to hide the proxy while the entity had no drawable model yet, leaving the
+            // remote player invisible.
             remotePresenter ??= GetComponent<BlockiverseMetaAvatarPresenter>();
             remotePresenter?.ApplyRemoteStream(complete);
         }

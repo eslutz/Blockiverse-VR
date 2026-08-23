@@ -43,6 +43,12 @@ namespace Blockiverse.Core
         public const string FluidLayerName = "BlockiverseFluid";
         public const int FluidLayerIndex = 13;
         public const int FluidLayerMask = 1 << FluidLayerIndex;
+        // The mirror "studio": a pocket holding the loopback avatar entity and its
+        // render-texture camera (issue #340). Culled from the main camera — only the
+        // mirror camera sees this layer, and it sees nothing else.
+        public const string MirrorAvatarLayerName = "BlockiverseMirrorAvatar";
+        public const int MirrorAvatarLayerIndex = 14;
+        public const int MirrorAvatarLayerMask = 1 << MirrorAvatarLayerIndex;
         // Ground detection: solid chunk colliders and the void safety floor only. This is the one
         // mask that deliberately excludes fluid — widening it reintroduces walking on water.
         public const int VoxelGroundLayerMask = InteractionLayerMask;

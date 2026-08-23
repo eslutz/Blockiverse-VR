@@ -1,17 +1,19 @@
-using Meta.XR.MultiplayerBlocks.Shared;
 using Oculus.Avatar2;
 using UnityEngine;
 
 namespace Blockiverse.MetaAvatars
 {
     /// <summary>
-    /// Minimal <see cref="OvrAvatarInputManagerBehavior"/> for the Blockiverse XR rig.
+    /// <see cref="OvrAvatarInputManagerBehavior"/> for the Blockiverse XR rig.
     ///
-    /// This project drives head/hand transforms through native XRI (no OVRCameraRig), so
-    /// we use Meta's public multiplayer-blocks tracking delegate for controller pose data.
-    /// It reads from OVRInput/OVRNodeStateProperties, which are backed by the same Quest
-    /// runtime data source as XRI.
-    /// Body tracking and hand tracking (finger-pose) are not used in this configuration.
+    /// This project drives head/hand transforms through native XRI (no OVRCameraRig or
+    /// OVRManager), so tracking is fed to the Avatar SDK from the rig's own transforms via
+    /// <see cref="BlockiverseXriInputTrackingDelegate"/> — poses are converted into rig-root
+    /// (tracking-space) coordinates, matching the avatar entity root pinned at the rig root.
+    /// Controller trigger/grip/button state comes from the Input System XR devices via
+    /// <see cref="BlockiverseXriInputControlDelegate"/> so avatar fingers articulate.
+    /// Body tracking is intentionally null: the SDK's own body solver synthesizes the body
+    /// from head + controllers.
     ///
     /// The component must be on the same GameObject as (or reachable from)
     /// <see cref="BlockiverseMetaAvatarEntity"/> so that OvrAvatarEntity can find it
@@ -20,33 +22,71 @@ namespace Blockiverse.MetaAvatars
     [DefaultExecutionOrder(-10)]
     public sealed class BlockiverseXriAvatarInputManager : OvrAvatarInputManagerBehavior
     {
+        [SerializeField] Transform trackingOrigin;
+        [SerializeField] Transform headSource;
+        [SerializeField] Transform leftHandSource;
+        [SerializeField] Transform rightHandSource;
+
         OvrAvatarInputTrackingProviderBase trackingProvider;
+        OvrAvatarInputControlProviderBase controlProvider;
 
-        public override OvrAvatarInputTrackingProviderBase InputTrackingProvider => trackingProvider;
+        public override OvrAvatarInputTrackingProviderBase InputTrackingProvider
+        {
+            get
+            {
+                EnsureProviders();
+                return trackingProvider;
+            }
+        }
 
-        // No body-tracking rig in this project.
+        public override OvrAvatarInputControlProviderBase InputControlProvider
+        {
+            get
+            {
+                EnsureProviders();
+                return controlProvider;
+            }
+        }
+
+        // No body-tracking rig in this project; the SDK's standalone body solver runs from
+        // the tracking provider's head + controller poses.
         public override OvrAvatarBodyTrackingContextBase BodyTrackingContext => null;
 
-        // No dedicated hand-tracking (finger pose) in this project; controller shapes are
-        // driven by the animation system based on button states.
+        // No dedicated hand-tracking (finger pose); controller shapes come from the input
+        // control state via the animation system.
         public override OvrAvatarHandTrackingPoseProviderBase HandTrackingProvider => null;
 
-        void Awake()
+        public Transform TrackingOrigin => trackingOrigin;
+        public Transform HeadSource => headSource;
+        public Transform LeftHandSource => leftHandSource;
+        public Transform RightHandSource => rightHandSource;
+
+        /// <summary>
+        /// Wire the transforms the tracking delegate reads. The origin must be the rig root
+        /// (floor-level tracking space) — the same transform the avatar entity is parented
+        /// under with an identity local pose.
+        /// </summary>
+        public void ConfigureSources(Transform origin, Transform head, Transform leftHand, Transform rightHand)
         {
-            // The multiplayer-blocks delegate supports a null OVRCameraRig by reading from
-            // OVRInput and OVRNodeStateProperties directly. Keep this Android-only so editor
-            // play mode continues to use the lightweight fallback proxy.
-#if UNITY_ANDROID && !UNITY_EDITOR
-            try
+            trackingOrigin = origin;
+            headSource = head;
+            leftHandSource = leftHand;
+            rightHandSource = rightHand;
+
+            // Providers capture the transforms at construction; rebuild on rewire.
+            trackingProvider = null;
+            controlProvider = null;
+        }
+
+        void EnsureProviders()
+        {
+            if (trackingProvider == null && trackingOrigin != null && headSource != null)
             {
-                trackingProvider = new OvrAvatarInputTrackingDelegatedProvider(new InputTrackingDelegate(null));
+                trackingProvider = new OvrAvatarInputTrackingDelegatedProvider(
+                    new BlockiverseXriInputTrackingDelegate(trackingOrigin, headSource, leftHandSource, rightHandSource));
             }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"[BlockiverseXriAvatarInputManager] Failed to create Quest tracking provider: {ex.Message}. Avatar will use fallback proxy.", this);
-                trackingProvider = null;
-            }
-#endif
+
+            controlProvider ??= new OvrAvatarInputControlDelegatedProvider(new BlockiverseXriInputControlDelegate());
         }
     }
 }

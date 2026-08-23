@@ -163,6 +163,7 @@ namespace Blockiverse.Survival
             rules.RegisterForBlock(BlockRegistry.CutstoneBlock,      HarvestToolKind.Mallet);
             rules.RegisterForBlock(BlockRegistry.FiredBrickBlock,    HarvestToolKind.Mallet);
             rules.RegisterForBlock(BlockRegistry.ClearpaneGlass,     HarvestToolKind.Mallet);
+            rules.RegisterForBlock(BlockRegistry.MirrorPane,         HarvestToolKind.Mallet);
 
             // ── Crafting stations ────────────────────────────────────────────
             rules.RegisterForBlock(BlockRegistry.Campfire,           HarvestToolKind.Mallet);

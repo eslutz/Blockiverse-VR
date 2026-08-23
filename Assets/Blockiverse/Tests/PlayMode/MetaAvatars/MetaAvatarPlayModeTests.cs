@@ -155,13 +155,17 @@ namespace Blockiverse.Tests.PlayMode
             var presenter = root.AddComponent<BlockiverseMetaAvatarPresenter>();
             presenter.Configure(provider, fallbackRig, MetaAvatarTrackingSources.Empty, MetaAvatarPresentationMode.RemoteThirdPerson);
 
-            // Create Meta Horizon Avatar Entity child so we can test its visibility
+            // The meta entity's GameObject must NEVER be deactivated to hide it: the Avatar
+            // SDK only advances loading while the entity behaviour is active, so a
+            // deactivated not-yet-ready entity deadlocks. Visibility is presenter-owned and
+            // flows through IBlockiverseMetaAvatarProvider.SetEntityVisible; this dummy
+            // child pins that nothing flips its active state anymore.
             var metaEntity = new GameObject("Meta Horizon Avatar Entity");
             metaEntity.transform.SetParent(root.transform);
 
             // Set up a relay so we can trigger stream receipt
             var relay = root.AddComponent<MetaAvatarStreamRelay>();
-            
+
             // Prime local stream arrival
             presenter.ApplyRemoteStream(MakePattern(512));
             yield return null;
@@ -177,41 +181,44 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(fallbackRig.IsUsingFallbackProxy, Is.False);
             Assert.That(fallbackRig.IsPoseStale, Is.False);
             Assert.That(fallbackRig.IsStreamStale, Is.False);
+            Assert.That(provider.LastEntityVisible, Is.True);
             Assert.That(metaEntity.activeSelf, Is.True);
 
             // 1. Test Pose Staleness for Meta Avatar (not fallback proxy)
-            var lastPoseField = typeof(BlockiverseNetworkAvatarRig).GetProperty("LastRemotePoseTime", 
+            var lastPoseField = typeof(BlockiverseNetworkAvatarRig).GetProperty("LastRemotePoseTime",
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
             Assert.That(lastPoseField, Is.Not.Null);
-            
+
             // Age the pose timestamp
             lastPoseField.SetValue(fallbackRig, Time.unscaledTime - 4.0f);
             yield return null; // Let LateUpdate run
 
             Assert.That(fallbackRig.IsPoseStale, Is.True);
-            // Verify visibility is turned off on Meta Avatar Entity when stale
-            Assert.That(metaEntity.activeSelf, Is.False);
+            // Visibility is withdrawn through the provider, never via SetActive.
+            Assert.That(provider.LastEntityVisible, Is.False);
+            Assert.That(metaEntity.activeSelf, Is.True);
 
             // Receive new pose -> should restore visibility
             receivePoseMethod.Invoke(fallbackRig, new object[] { BlockiverseNetworkAvatarRig.AvatarPose.Default });
             yield return null;
 
             Assert.That(fallbackRig.IsPoseStale, Is.False);
-            Assert.That(metaEntity.activeSelf, Is.True);
+            Assert.That(provider.LastEntityVisible, Is.True);
 
             // 2. Test Stream Staleness for Meta Avatar
             fallbackRig.SetStreamStale(true);
             yield return null;
 
             Assert.That(fallbackRig.IsStreamStale, Is.True);
-            Assert.That(metaEntity.activeSelf, Is.False);
+            Assert.That(provider.LastEntityVisible, Is.False);
+            Assert.That(metaEntity.activeSelf, Is.True);
 
             // Resume stream -> restores visibility
             fallbackRig.SetStreamStale(false);
             yield return null;
 
             Assert.That(fallbackRig.IsStreamStale, Is.False);
-            Assert.That(metaEntity.activeSelf, Is.True);
+            Assert.That(provider.LastEntityVisible, Is.True);
 
             // 3. Test Staleness for Fallback Proxy (when Meta Avatar is NOT active)
             provider.IsAvatarReady = false;

@@ -80,6 +80,18 @@ namespace Blockiverse.MetaAvatars
                 fallbackRig.SetMetaAvatarAvailable(avatarReady);
             }
 
+            // The presenter owns entity visibility (via view flags, never the GameObject:
+            // an inactive entity can never finish loading). Staleness comes from the rig;
+            // the owner's own SPAWNED network player object never shows its meta entity —
+            // the owner is represented by the local first-person avatar, and the network
+            // object's remote entity receives no stream on the owner's machine (streams
+            // relay to NotOwner), so it would stand un-posed in the player's face.
+            bool streamStale = fallbackRig != null && (fallbackRig.IsStreamStale || fallbackRig.IsPoseStale);
+            bool ownedNetworkObject = fallbackRig != null &&
+                (fallbackRig.IsSpawned || fallbackRig.IsSpawnedForTest) &&
+                fallbackRig.IsOwner && !fallbackRig.IsSpawnedForTest;
+            provider?.SetEntityVisible(avatarReady && !streamStale && !ownedNetworkObject);
+
             lastFallbackReason = avatarReady
                 ? string.Empty
                 : provider?.FallbackReason ?? "Meta avatar provider is not configured.";
@@ -105,6 +117,25 @@ namespace Blockiverse.MetaAvatars
 
             provider.ApplyStreamData(streamData ?? Array.Empty<byte>());
             RefreshAvatarState();
+        }
+
+        /// <summary>The signed-in Meta user id, once the local profile chain has resolved it.</summary>
+        public bool TryGetLocalMetaUserId(out ulong userId)
+        {
+            ResolveReferences();
+            userId = 0;
+            return provider != null && provider.TryGetLocalUserId(out userId);
+        }
+
+        /// <summary>Ask the remote provider to load this peer's real profile avatar.</summary>
+        public void ConfigureRemoteUserAvatar(ulong userId)
+        {
+            ResolveReferences();
+
+            if (presentationMode != MetaAvatarPresentationMode.RemoteThirdPerson)
+                return;
+
+            provider?.ConfigureRemoteUserAvatar(userId);
         }
 
         void ResolveReferences()
