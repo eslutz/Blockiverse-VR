@@ -50355,7 +50355,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294960639
+    m_Bits: 4294944255
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -68416,6 +68416,7 @@ MonoBehaviour:
   - meadow_seed
   - meadow_turf
   - mend_bench
+  - mirror_pane
   - pale_sand
   - paletin_bar
   - pantry_jar
@@ -68554,6 +68555,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 80e97be440344f5ea47352b35b3421ed, type: 3}
   - {fileID: 21300000, guid: 2b9faa932b9faa932b9faa932b9faa93, type: 3}
   - {fileID: 21300000, guid: 65c97d0f65c97d0f65c97d0f65c97d0f, type: 3}
+  - {fileID: 21300000, guid: 29c47ce529c47ce529c47ce529c47ce5, type: 3}
   - {fileID: 21300000, guid: b2f3dcabb2f3dcabb2f3dcabb2f3dcab, type: 3}
   - {fileID: 21300000, guid: f26a2db602584444973e29f5406e5784, type: 3}
   - {fileID: 21300000, guid: 1b10add6caa3454d9c5a17b5cc5c279b, type: 3}
