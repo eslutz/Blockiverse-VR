@@ -78,17 +78,28 @@ The Survival ruleset already defines these vegetation-related blocks and resourc
 
 These are canonical additions to the block registry. They use existing item drops where possible, so they do not require a large new item catalog.
 
+> **Sapling id.** Saplings are **not** a registry addition. They already ship under the canonical
+> ids `sapling`, `sapling_s1`, and `sapling_s2`, with the growth pipeline, item, Creative entry,
+> save export, and atlas tiles all in place. This section previously listed a
+> `branchwood_sapling` addition; the shipped id is canonical, per the standing precedent that
+> where this ruleset names a resource the project already tracks under a different id, the
+> existing id wins (`flint_shard` → `flinty_shingle`, `resin_blob` → `resin_knot`,
+> `stone_pebble` → `surface_pebbles`).
+>
+> **New item required.** `frost_shard`, the 5% Frost Fern drop, has no entry in the item registry
+> and must be added alongside these blocks.
+
 | Name | ID | Description | Hardness | Tool / Tier | Drops |
 |---|---|---|---:|---|---|
-| Branchwood Sapling | `branchwood_sapling` | Young tree that can grow into biome-specific Branchwood variants. | 0.1 | Hand / 0 | `branchwood_sapling ×1` |
 | Drygrass Tuft | `drygrass_tuft` | Dry fiber plant common in warm biomes. | 0.1 | Sickle / 0 | `reed_fiber ×1`, 15% `drygrass_seed ×1` |
+| Meadow Tuft | `meadow_tuft` | Temperate grass tuft; the ordinary ground layer of meadows and open woodland. | 0.1 | Sickle / 0 | `reed_fiber ×1`, 15% `meadow_seed ×1` |
 | Moss Carpet | `moss_carpet` | Thin groundcover in damp shaded areas. | 0.1 | Sickle / 0 | 60% `leafmoss ×1` |
 | Wildflower Cluster | `wildflower_cluster` | Decorative meadow plant that supports pollinator ambience. | 0.1 | Sickle / 0 | 20% `meadow_seed ×1` |
-| Dune Sage | `dune_sage` | Sparse desert shrub with dry fibers and occasional resin. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 10% `resin_blob ×1` |
+| Dune Sage | `dune_sage` | Sparse desert shrub with dry fibers and occasional resin. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 10% `resin_knot ×1` |
 | Salt Reed | `salt_reed` | Brine-tolerant reed that grows near salty water. | 0.1 | Sickle / 0 | `reed_fiber ×1–2`, 8% `brightsalt ×1` |
 | Snow Lichen | `snow_lichen` | Hardy cold-ground plant. | 0.1 | Sickle / 0 | 40% `leafmoss ×1` |
 | Frost Fern | `frost_fern` | Cold biome plant that survives under light snow. | 0.1 | Sickle / 0 | `reed_fiber ×1`, 5% `frost_shard ×1` |
-| Windroot Shrub | `windroot_shrub` | Tough highland shrub that indicates windy exposed slopes. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 15% `resin_blob ×1` |
+| Windroot Shrub | `windroot_shrub` | Tough highland shrub that indicates windy exposed slopes. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 15% `resin_knot ×1` |
 | Hanging Reed | `hanging_reed` | Damp overhang vegetation placed under Leafmoss or cave mouths. | 0.1 | Sickle / 0 | `reed_fiber ×1–2` |
 | Fallen Leaves | `fallen_leaves` | Thin decorative ground layer that decays into soil richness. | 0.1 | Sickle / 0 | 50% `leafmoss ×1` |
 
@@ -97,6 +108,118 @@ Stack size rule:
 ```txt
 All small vegetation blocks stack to 99 unless they have metadata. Metadata variants stack only with identical metadata.
 ```
+
+---
+
+## 4a. Vegetation render and collision model
+
+Vegetation is the first content in this project that is not a solid opaque cube. This section is
+the canonical definition of how a block is drawn, whether it obstructs movement, and how tall it
+counts as. It applies to every block in §4 and to the existing wild plants.
+
+### 4a.1 Three properties, deliberately independent
+
+Historically one flag (`isSolid`) was read as if it meant all three. It does not — it gates face
+culling and sky occlusion, never physics. These are separate axes:
+
+| Property | Values | Governs |
+|---|---|---|
+| `renderShape` | `cube`, `cutout_cube`, `cross`, `decal` | The geometry emitted for the block |
+| `collision` | `solid`, `passable` | Whether an entity is stopped by the block |
+| `heightClass` | `short`, `tall` | Path/mask rules and snow burial |
+| `occludes` | `true`, `false` | Whether the block hides neighbour faces and blocks skylight |
+
+**`occludes` is what the engine's `isSolid` field has always meant.** It must not be used to infer
+collision. A block may occlude and be passable, or be non-occluding and solid.
+
+### 4a.2 Render shapes
+
+| Shape | Geometry | Used for |
+|---|---|---|
+| `cube` | Six full faces, opaque | Terrain, logs, built blocks |
+| `cutout_cube` | Six faces sampling an alpha-cut texture | Leafmoss canopies |
+| `cross` | Two intersecting vertical quads, alpha-cut | Grasses, flowers, shrubs, reeds, saplings |
+| `decal` | One quad laid just above the ground surface, opaque | Flat groundcover |
+
+`cross` uses two **fixed** intersecting planes, never a camera-facing billboard. A single
+billboard reads as a flat card in stereo — the same objection already recorded for the lightning
+bolt in `voxel_world_environment_effects.md` §"any single tall billboard reads as a flat card in
+stereo". Two fixed planes have no such failure mode and cost the same two quads.
+
+`decal` exists so flat groundcover (`moss_carpet`, `snow_lichen`, `fallen_leaves`) does not pay
+alpha-test cost. These read as ground texture rather than as blades, so a single opaque quad is
+both cheaper and more accurate. Alpha test disables early-Z on tile GPUs and is the dominant cost
+of dense foliage, so it is spent only where silhouette actually matters.
+
+### 4a.3 Assignments
+
+| Block | `renderShape` | `collision` | `heightClass` | `occludes` |
+|---|---|---|---|---|
+| `branchwood_log` | `cube` | solid | tall | yes |
+| `leafmoss` | `cutout_cube` | solid | tall | **yes** |
+| `sapling` | `cross` | passable | short | no |
+| `drygrass_tuft` | `cross` | passable | short | no |
+| `meadow_tuft` | `cross` | passable | short | no |
+| `wildflower_cluster` | `cross` | passable | short | no |
+| `dune_sage` | `cross` | passable | short | no |
+| `frost_fern` | `cross` | passable | short | no |
+| `windroot_shrub` | `cross` | passable | short | no |
+| `salt_reed` | `cross` | passable | tall | no |
+| `hanging_reed` | `cross` | passable | tall | no |
+| `reedgrass` | `cross` | passable | tall | no |
+| `grain_stalk` | `cross` | passable | tall | no |
+| `berrybush` | `cross` | passable | short | no |
+| `thornbrush` | `cross` | passable | short | no |
+| `moss_carpet` | `decal` | passable | short | no |
+| `snow_lichen` | `decal` | passable | short | no |
+| `fallen_leaves` | `decal` | passable | short | no |
+
+**Leafmoss stays occluding and solid.** This is deliberate and load-bearing:
+
+- Canopies must keep blocking skylight, or forest floors stop being shaded and Pinewild loses the
+  dense, shaded identity §13.2 gives it. Crop growth and cave detection also read skylight.
+- A player must not fall through a canopy.
+- Making leaves non-occluding renders every interior leaf-to-leaf face, roughly quadrupling canopy
+  face count — and with alpha cutout that is all real overdraw. If volumetric canopy depth is
+  wanted later, it is a separate change gated on a device capture.
+
+With `cutout_cube` and two-sided rendering, gaps in the canopy shell reveal the inside of the far
+shell, which reads as depth at no extra geometry cost.
+
+### 4a.4 Passability
+
+`passable` blocks are rendered but never obstruct movement. Required behavior:
+
+- They must not stop walking, and must not register as ground for gravity or fall damage. Contact
+  filtering alone is insufficient — scene queries used for grounding ignore per-collider exclusion
+  lists, so passable vegetation must be separated by physics layer, not by contact rules.
+- **Teleport arcs pass through passable vegetation and land on the ground beneath.** This is the
+  opposite of the deliberate fluid behavior, where the arc stops at the surface.
+- They remain directly targetable for mining and harvesting. A ray must hit the plant itself, not
+  skip past it to the ground.
+- They are replaceable by block placement, exactly as air and fluids are — building into a grass
+  cell replaces the grass.
+
+`thornbrush` is passable **and** hazardous: its contact damage is specified for an entity standing
+in the plant's own cell, which is only reachable once the plant is passable.
+
+The passable property is defined generally rather than as a vegetation-only concept, so
+non-vegetation passables (open doorways, decorative props) can reuse it without redefinition.
+
+### 4a.5 Per-face texturing
+
+A block may declare distinct `top`, `side`, and `bottom` tiles rather than sampling one tile on
+all six faces. Terrain blocks with a surface layer must do so — a turf block reads as uniformly
+coloured on every face otherwise, which is a primary cause of the world reading as flat and
+over-clean. Faces not declared fall back to the block's single tile, so existing blocks are
+unaffected.
+
+### 4a.6 Height class
+
+`short` plants are ankle-to-knee height and never obstruct a sightline or a walking path. `tall`
+plants read as obstructing at standing height. This distinction is what the `path` and
+`no_tall_plant` structure masks refer to; before this section those masks referenced a class that
+was never defined.
 
 ---
 
@@ -428,6 +551,7 @@ Biome resin modifiers:
 | Reedgrass | `reedgrass` | `river_silt`, `claybed`, `tended_soil` | Wetland, river edges | 4–10 | 3–9 | Requires freshwater within 3 blocks |
 | Thornbrush | `thornbrush` | `rootsoil`, `dry_turf`, `loose_loam` | Pinewild, Drybrush, overgrown structures | 2–8 | 1–5 | Avoids spawn starter zone paths |
 | Drygrass Tuft | `drygrass_tuft` | `dry_turf`, `pale_sand`, `loose_loam` | Drybrush, Dunes edge, Highlands dry slopes | 4–12 | 2–7 | Common fiber source in dry regions |
+| Meadow Tuft | `meadow_tuft` | `meadow_turf`, `rootsoil`, `loose_loam` | Meadow, Pinewild clearings, Wetland banks, Highlands lower slopes | 10–24 | 4–14 | The default temperate ground layer. Highest density of any plant — it should read as continuous grass a player walks through, not as scattered decoration. Suppressed under Snowpack depth ≥ 1 |
 | Moss Carpet | `moss_carpet` | `rootsoil`, `graystone`, `white_limestone` | Pinewild, Wetland, cave mouths | 6–16 | 2–12 | Requires moisture or shade |
 | Wildflower Cluster | `wildflower_cluster` | `meadow_turf`, `loose_loam` | Meadow | 3–10 | 2–8 | Decorative; light ≥ 11 |
 | Dune Sage | `dune_sage` | `pale_sand`, `dry_turf` | Dunes, Drybrush | 2–7 | 1–3 | Sparse; cannot be adjacent to another Dune Sage |
@@ -495,7 +619,7 @@ Meadow vegetation should be open and readable, with scattered Crownbranch trees 
 |---|---|
 | Tree coverage target | 8–18% canopy cover |
 | Main resources | Berrybush, Grain Stalk, Branchwood, Wildflower Cluster |
-| Groundcover | Wildflowers, Fallen Leaves near trees, occasional Moss Carpet near water |
+| Groundcover | Meadow Tuft as the continuous base layer, with Wildflowers scattered through it, Fallen Leaves near trees, and occasional Moss Carpet near water |
 | Spawn suitability | High |
 
 Special rule:
@@ -674,7 +798,7 @@ else:
 
 ```ts
 Leafmoss decay or tree leaf harvesting:
-    5% chance to drop `branchwood_sapling`;
+    5% chance to drop `sapling`;
 
 Sickle used on Leafmoss:
     sapling drop chance increases to 8%;
@@ -749,7 +873,7 @@ Decay check:
 if random() < 0.35:
     remove leafmoss;
     if random() < 0.05:
-        drop `branchwood_sapling ×1`;
+        drop `sapling ×1`;
     if random() < 0.15:
         place `fallen_leaves` on solid block below if air;
 ```

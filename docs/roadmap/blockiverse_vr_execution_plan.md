@@ -656,7 +656,7 @@ Debug chunk/stats overlay in development builds only
 ```text
 Unit: solid cube mesh has only exterior faces.
 Unit: adjacent solid blocks remove internal faces.
-Unit: transparent and non-solid blocks follow render rules.
+Unit: each block's render shape, collision class, and occlusion follow the vegetation ruleset §4a table.
 Unit: atlas contains all renderable canonical blocks.
 EditMode: missing or unrelated atlas fails validation.
 PlayMode: generated canonical terrain renders without missing materials.

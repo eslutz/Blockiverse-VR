@@ -93,7 +93,7 @@ Recommended behavior:
 | Load World Menu | `load_world` | Title Menu | Yes | Select existing save |
 | World Details Menu | `world_details` | Load World | Yes | Load, rename, duplicate, delete selected world |
 | Settings Menu | `settings` | Title, Pause | Yes | Comfort, audio/feedback, and controls |
-| Controls Menu | `controls` | Settings | Yes | View/remap controls |
+| Controls Menu | `controls` | Settings | Yes | View canonical controller mapping (no remapping) |
 | Gameplay HUD | `gameplay_hud` | World loaded | No | Health/status, hotbar, crosshair, prompts |
 | Pause Menu | `pause_menu` | Gameplay | Yes | Resume, settings, save, quit |
 | Inventory Menu | `inventory` | Gameplay | Yes by default | Player inventory, equipment, quick crafting |
@@ -668,18 +668,33 @@ recipe.visible =
 
 **Craft action logic:**
 
+Crafting is **host-authoritative**. The client never consumes ingredients or grants outputs
+locally — it submits a request and mirrors the authoritative result. The client-side
+craftability check below is a UI affordance only (to disable buttons and show a reason); it is
+not the decision, and the host re-validates everything.
+
 ```ts
 function craft(recipeId, countRequested) {
   const recipe = getRecipe(recipeId);
-  const maxCount = getMaxCraftableCount(playerInventory, recipe);
-  const count = Math.min(countRequested, maxCount);
 
-  if (count <= 0) return showToast("Missing ingredients");
-  consumeIngredients(playerInventory, recipe.inputs, count);
-  addOutputsOrDropOverflow(playerInventory, recipe.outputs, count);
-  updateRecipeDetails(recipeId);
+  // Local pre-check: drives button state and the toast only.
+  if (getMaxCraftableCount(playerInventory, recipe) <= 0)
+    return showToast("Missing ingredients");
+
+  // Host resolves: validates station + ingredients, consumes, grants output,
+  // and broadcasts the inventory snapshot the client then mirrors.
+  submitCraftRequest(recipe.outputItemId, activeStation, countRequested);
 }
 ```
+
+Implemented as `MultiplayerSurvivalSync.TrySubmitCraft(outputItemId, availableStation, out
+requestSentToHost)`, called from `SurvivalCraftingPanel`. Note the shipped command takes **no
+count** — see the multi-craft note below.
+
+> **Multi-craft is a command-layer change, not a button.** `Craft 5` and `Craft Max` require
+> adding a count to the host-authoritative craft command and to its validation, so that the host
+> resolves an N-craft atomically. Adding client-side repetition instead would issue N independent
+> requests and can partially succeed, leaving the UI and the authoritative inventory disagreeing.
 
 ---
 
@@ -1574,6 +1589,6 @@ Implement these systems in order:
 6. Crafting recipe filtering and craft execution.
 7. Container transfer rules.
 8. Station screens for Campfire, Kiln, Forge, and Mend Bench.
-9. Settings persistence and controls remapping.
+9. Settings persistence. Controller bindings are fixed to the Quest layout; see §6.20.
 10. LAN multiplayer session menu and reconnect flow.
 11. Death and respawn flow.
