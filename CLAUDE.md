@@ -68,15 +68,58 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
 - A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
 - Several worktrees or agent sessions can run Unity at the same time; the licence is not exclusive across project paths (measured — see "Sharing the Unity License" below). Announce a long run as a courtesy, never kill another worktree's run, and get agreement before the destructive licensing recovery, which takes the licence from every worktree at once.
-- A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md) — the active target changes during a PlayMode run, and the owning package rewrites its define), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **The URP one is intermittent, and not seeing it proves nothing.** It has fired on two worktrees and stayed clean across many more runs on three others, including a worktree that had never touched the asset and a second run on a worktree where it had just fired. Check every time regardless — a clean tree is the common case, not evidence that this is fixed. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
+- A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md)), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **Neither effect requires PlayMode** — both have been observed on EditMode-only runs (measured 2026-08-23; see below), so an EditMode gate is not a safe reason to skip the diff. **The URP one is intermittent, and not seeing it proves nothing.** It has fired on three worktrees and stayed clean across many more runs on three others, including a worktree that had never touched the asset and a second run on a worktree where it had just fired. Check every time regardless — a clean tree is the common case, not evidence that this is fixed. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
 
-Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, minutes before the PlayMode build-target switch that explains the defines. The trigger is not established. That the same worktree fired once and then stayed clean rules out anything fixed about the project or its path and points at something that varied between runs — a cold versus warm `Library`, or an asset reimport in the first run and not the second, are the obvious candidates. An EditMode-only run on a cold `Library` is the cheap experiment for narrowing it. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
+Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, well before any PlayMode target switch. The trigger is still not established, but the cheap experiment this section used to call for has now been run, and it removed one hypothesis and weakened another.
+
+**Measured 2026-08-23** — a third worktree, `scripts/unity/run-tests.sh --platform EditMode` only, no PlayMode at any point in the session:
+
+- The **URP deletion fired**, then did **not** re-fire on a later warm-`Library` run of the same filter. So it does not need PlayMode, and cold-vs-warm `Library` / asset reimport remains the live hypothesis — the runs that fired were doing a large import, the clean one was not. One trial: suggestive, not settled.
+- The **define churn also fired on that EditMode-only run** (`Standalone` gained `APP_UI_EDITOR_ONLY`, lost `SENTIS_ANALYTICS_ENABLED`). This **falsifies the previous explanation** that a PlayMode build-target switch is what rewrites it. Whatever the owning package does, it does during an ordinary EditMode run. The mechanism is now unknown rather than understood — do not re-add a PlayMode explanation without measuring it.
+
+The honest summary: check the whole tree after **every** run, EditMode included; a clean tree on one run predicts nothing about the next. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
 - Unity CLI (`unity`, installed at `~/.unity/bin`; experimental) is available as local developer tooling. Run `unity pipeline list` before any batchmode command to confirm no Unity Editor already has the project open — a second instance fails to launch. `unity test` and `unity build` may be used for targeted runs and CI-style builds, but the committed scripts above remain the acceptance gate. Do not install the Unity Pipeline package (`unity pipeline install`, which edits `Packages/manifest.json`) without explicit approval; treat it like MCP for Unity and Unity Skills — local-only, never committed.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
 - Verify Quest-device tooling before device work with `hzdb --version` and `hzdb device list`.
 - Use `adb` directly only when `hzdb` does not expose the needed operation or when comparing behavior against lower-level Android tooling; document why the fallback was needed.
 - Use GitHub CLI for best-effort GitHub Project updates and cleanup because connector tools may not expose all project mutations.
+
+### Batchmode Aborts With "another Unity instance is running"
+
+**Check this before reaching for the licensing recovery below.** It presents as a stuck-Unity
+problem, the licensing recovery does not fix it, and that recovery is destructive to every other
+worktree — so running it here costs someone else's build for nothing.
+
+```txt
+Aborting batchmode due to fatal error:
+It looks like another Unity instance is running with this project open.
+Multiple Unity instances cannot open the same project.
+```
+
+Measured 2026-08-23: **no Unity editor had the project open.** The holder of
+`Temp/UnityLockfile` was `adb` (`adb -L tcp:5037 fork-server server`), which had inherited the
+open file descriptor from the Unity process that spawned it for Android platform support and then
+outlived its parent. The lock persists as long as that adb lives.
+
+Distinguishing symptoms: the run exits quickly, writes **no** NUnit results file, and licensing
+succeeds normally in the log — nothing like the `505` / protocol-version failures below.
+
+```sh
+# Who actually holds it? Usually adb, not Unity.
+lsof Temp/UnityLockfile
+
+# Confirm no editor genuinely has the project open (name-anchored; cannot match your own shell)
+for p in $(pgrep -x Unity); do ps -p "$p" -o command=; done
+
+# Fix: drop the stale lockfile. Temp/ is gitignored and regenerated, and a fresh inode makes the
+# orphaned adb fd irrelevant.
+rm -f Temp/UnityLockfile
+```
+
+Prefer deleting the lockfile over killing adb: adb is a **shared per-user daemon**, so another
+worktree's session may be relying on it. Killing it also works and it respawns on demand, but it
+is the more invasive option and the same "never disturb another run's tooling" rule applies.
 
 ### Unity Licensing Recovery
 
@@ -349,13 +392,20 @@ break and expensive to debug:
 
 Bottom → top; an assembly may only reference those below it:
 
-- **Core** (logging facade `BlockiverseLog`, canonical paths/constants in `BlockiverseProject`) and **Networking** (thin LAN session over NetworkManager/UnityTransport — no gameplay knowledge)
+- **Core** (logging facade `BlockiverseLog`, canonical paths/constants in `BlockiverseProject`) — references nothing
 - **Voxel** — the data model: `VoxelWorld` (flat `BlockId[]`, `BlockChanged` event, changed-block delta set), `BlockRegistry`, `BlockMutationAuthority` (the single validation gate for world edits), `ChunkDeltaLog`, `DeterministicHash`
 - **Survival.Health** (vitals/hazards; note its rootNamespace is `Blockiverse.Survival`) and **WorldGen** (terrain presets, seed-pure `SurvivalBiomeResolver`, structures/vegetation, Markov `WeatherService`, `WorldConstants`: ChunkSize 16, WorldMaxY 127, SeaLevel 64, 20 ticks/s, 24000-tick day)
 - **Survival** — items/inventory/crafting/stations/harvest/farming; `ItemRegistry`, `ContainerInventoryStore`
-- **Persistence** (`WorldSaveService` — see save format below) and **MetaAvatars** (Meta Avatars streaming over Netcode at 15 Hz)
-- **Gameplay** — the integration hub: `CreativeWorldManager` (central world owner for both modes; `Awake()` generates a default world), `MultiplayerChunkAuthoritySync` (block mutations + late-join world distribution), `MultiplayerSurvivalSync` (the entire survival economy command channel), rendering/lighting (`VoxelWorldRenderer`, `ChunkMeshBuilder`, `VoxelSkyLightMap`, `WorldTimeClock`)
-- **VR** (XR rig, input, comfort) → **UI** (menu router/panels + `BlockiverseWorldSessionController`) → **Editor** (the bootstrapper; editor-only)
+- **Persistence** (`WorldSaveService` — see save format below)
+- **Networking** — the LAN session over NetworkManager/UnityTransport **and the host-authoritative gameplay channels**: `MultiplayerChunkAuthoritySync` (block mutations + late-join world distribution), `MultiplayerSurvivalSync` (the entire survival economy command channel), `WorldTimeClock`. It references Voxel, WorldGen, Survival, and Persistence — this is **not** a bottom-layer transport shim, and gameplay types are legitimately visible to it.
+- **WorldRuntime** — world ownership, editing, and lighting: `CreativeWorldManager` (central world owner for both modes; `Awake()` generates a default world), `VoxelSkyLightMap`, `VoxelLightSampler`, `VoxelEmitterIndex`, `WorldEditService`, environment/lightning solvers
+- **MetaPlatform** (age category, entitlement/feature policy) → **MetaAvatars** (Meta Avatars streaming over Netcode at 15 Hz)
+- **Gameplay** — the presentation/integration hub: rendering and meshing (`VoxelWorldRenderer`, `ChunkMeshBuilder`, `BlockVisualAtlas`), plus the glue that binds the layers below into a playable world
+- **Server** — headless dedicated-server entry points (Core, Networking, Persistence, Survival, Voxel, WorldGen, WorldRuntime)
+- **VR** (XR rig, input, comfort) and **UI** (menu router/panels + `BlockiverseWorldSessionController`) are **siblings** above Gameplay — neither references the other. **UI.Toolkit** depends only on Core. **Editor** (the bootstrapper; editor-only) sits above everything.
+
+To re-derive this graph rather than trusting the prose, read the `references` arrays of
+`Assets/Blockiverse/Scripts/**/Blockiverse.*.asmdef` — they are the authority.
 
 EditMode tests live per-area under `Assets/Blockiverse/Tests/EditMode/`, PlayMode (incl. real Netcode host/client sessions) under `Tests/PlayMode/`.
 
