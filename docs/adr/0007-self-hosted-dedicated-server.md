@@ -132,12 +132,32 @@ top of it — the server must produce a v2 payload, and headless needs a deliber
 `Application.version` compares against. The secret-as-HMAC-key decision is unaffected either way,
 because it is orthogonal to the payload body.
 
-`security.require_secret` prevents an operator running an open server while believing it is
-protected.
-
 What this does **not** buy: the payload body is fully predictable, so one captured payload permits
 an offline dictionary attack on the secret, and the payload is replayable. Fixing either requires a
 nonce or timestamp in the body, which is an approval-protocol version bump. Deferred deliberately.
+
+**The secret and TLS ship disabled, and configuring either is a fatal startup error.** Both have a
+complete server half and no client half: no shipped client has a field to enter a secret, and none
+has a route to obtain or trust a server certificate. Enabling either would therefore give an
+operator a server that binds its port, reports itself healthy, and refuses every join with nothing
+useful in the log — the same failure mode that got `server.tick_rate` removed outright.
+
+Rejecting at startup was chosen over the three alternatives. Deleting the code discards a finished,
+tested server half that becomes live the moment the client half lands. Warning and continuing
+reproduces exactly the silent-brick outcome the rejection exists to prevent. Documenting alone was
+the original plan and was wrong, because the boot advisory actively told operators to *set a
+secret* — the repository was recommending the one configuration guaranteed to break the server.
+
+The remaining client work is unequal, which is why neither is scheduled here. The secret needs a
+panel field, per-server storage in the bookmark list, and a decision about holding a shared password
+in plaintext on the device; the field is cheap, but wiring it to a replayable HMAC would advertise
+authentication the protocol does not provide, so it wants the nonce bump above alongside it. TLS is
+harder and not a UI problem at all: the client path currently requires the server's private key and
+must become mode-aware first, and then the server offers its own certificate as the trust root, so
+every player needs that PEM on a headset with no file picker and no practical way to type it. That
+is a certificate-distribution design, not a settings field. Until both land, the documented answer
+for access control and encryption is a VPN, which also supplies the per-device identity this
+protocol lacks in either case.
 
 Two further limitations are documented rather than fixed:
 

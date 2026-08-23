@@ -16,6 +16,11 @@ means one server build serves exactly one client version.
 **Read [security-posture.md](security-posture.md) before exposing a port.** It is specific about what
 the server protects against and, more usefully, what it does not.
 
+**There is no in-app access control yet.** The join secret and TLS are implemented on the server but
+have no client half, so configuring either stops the server at startup rather than leaving you with
+one nobody can join. Anyone who can reach the port can join, so put a reachable server behind a VPN
+or a firewall allowlist.
+
 **Four players is the supported ceiling.** `server.max_players` is honoured as you set it, but above
 four is unmeasured and unsupported.
 
@@ -200,5 +205,4 @@ socket paths, and the server logs a warning naming `admin.socket_path` as the fi
 
 ## Reporting problems
 
-Include the server version, your configuration file with the secret removed, and the relevant log
-output. Performance reports above four players are expected rather than actionable.
+Include the server version, your configuration file, and the relevant log output. Performance reports above four players are expected rather than actionable.

@@ -155,23 +155,59 @@ namespace Blockiverse.Tests.EditMode.Server
             Assert.That(resolution.Options.WorldDirectory, Is.EqualTo("/data"));
         }
 
+        // The join secret and TLS have a complete server half and no client half. A server that
+        // enables either binds its port, looks healthy, and refuses every join -- so the resolver
+        // refuses to start instead. These assert the REASON, not just the refusal: both cases were
+        // already rejected for unrelated reasons (empty secret, missing certificate material), so a
+        // test that only checked Succeeded would stay green if the new rule were deleted.
+        [TestCase("security.require_secret", "true")]
+        [TestCase("server.secret", "a-long-random-value")]
+        public void JoinSecretRefusesToStartUntilClientSupportExists(string key, string value)
+        {
+            BlockiverseServerOptionsResolver.Resolution resolution =
+                Resolve(file: new Dictionary<string, string> { [key] = value });
+
+            Assert.That(resolution.Succeeded, Is.False);
+            Assert.That(string.Join(" ", resolution.Problems), Does.Contain("no shipped client"),
+                "The operator must be told the setting is unusable, not merely that it is invalid.");
+        }
+
         [Test]
-        public void RequireSecretWithoutASecretRefusesToStart()
+        public void RequireSecretIsReportedOnceRatherThanAsAContradiction()
         {
             BlockiverseServerOptionsResolver.Resolution resolution =
                 Resolve(file: new Dictionary<string, string> { ["security.require_secret"] = "true" });
 
-            Assert.That(resolution.Succeeded, Is.False,
-                "An operator asking for a private server must never be handed an open one.");
+            // Reporting both "secret is empty, set one" and "a secret is unusable" would send the
+            // operator round a loop with no configuration that satisfies either message.
+            Assert.That(resolution.Problems.Count, Is.EqualTo(1));
         }
 
         [Test]
-        public void TlsWithoutMaterialRefusesToStart()
+        public void TlsRefusesToStartUntilClientSupportExists()
+        {
+            BlockiverseServerOptionsResolver.Resolution resolution = Resolve(
+                file: new Dictionary<string, string>
+                {
+                    ["security.tls.enabled"] = "true",
+                    ["security.tls.cert_path"] = "/etc/ssl/server.pem",
+                    ["security.tls.key_path"] = "/etc/ssl/server.key",
+                });
+
+            // Fully-specified material, so the pre-existing "missing cert or key" rule cannot be
+            // what fails here.
+            Assert.That(resolution.Succeeded, Is.False);
+            Assert.That(string.Join(" ", resolution.Problems), Does.Contain("no shipped client"));
+        }
+
+        [Test]
+        public void TlsMaterialWithoutTlsEnabledRefusesToStart()
         {
             BlockiverseServerOptionsResolver.Resolution resolution =
-                Resolve(file: new Dictionary<string, string> { ["security.tls.enabled"] = "true" });
+                Resolve(file: new Dictionary<string, string> { ["security.tls.cert_path"] = "/etc/ssl/server.pem" });
 
-            Assert.That(resolution.Succeeded, Is.False);
+            Assert.That(resolution.Succeeded, Is.False,
+                "Material nothing reads is far more likely a mistake than an intention.");
         }
 
         [Test]

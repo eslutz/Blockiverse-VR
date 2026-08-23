@@ -27,13 +27,11 @@ quoted.
 server.port = 7777
 server.name = Eric's Server
 server.max_players = 4
-server.secret = correct-horse-battery-staple-not-this-one
 
 world.dir = /data/world
 world.name = Home
 world.gamemode = survival
 
-security.require_secret = true
 persistence.autosave_seconds = 60
 log.format = json
 ```
@@ -86,16 +84,43 @@ move the old world directory aside.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `security.require_secret` | `false` | When true, the server refuses to start with the default secret and rejects clients that do not present the configured one. |
 | `security.allowlist_path` | *(empty)* | File of permitted player identifiers, one per line. When set, only listed players may join. |
 | `security.banlist_path` | *(empty)* | File of banned player identifiers, one per line. |
-| `security.tls.enabled` | `false` | Enables transport encryption. Requires cert and key. |
-| `security.tls.cert_path` | *(empty)* | PEM certificate. |
-| `security.tls.key_path` | *(empty)* | PEM private key. Keep it unreadable by other users. |
-| `security.tls.server_name` | `blockiverse-server` | Common name clients validate against. |
 
-`server.secret` is listed under Network for grouping but is a security control. **Use a long random
-value.** It is a shared password for the whole server, and a captured join can be attacked offline.
+### `server.secret` and `security.tls.*` are not usable yet
+
+**Setting either one stops the server at startup with exit `78`.** They are parsed and rejected
+rather than removed, because the server side of both is finished — only the client side is missing.
+
+The reason they cannot ship half-done is that a half-done version is worse than nothing. The join
+secret becomes the key of the HMAC over the connection-approval payload. No shipped client has a
+field to enter one, so its key stays the built-in default, every signature mismatches, and **every
+player is refused.** The server still binds its port and reports itself healthy, so what an operator
+sees is a working server that nobody can join and a log that says nothing useful. TLS fails the same
+way: a client has no route to obtain or trust the server's certificate, so the handshake never
+completes.
+
+`security.tls.cert_path` and `security.tls.key_path` are likewise rejected when set without
+`security.tls.enabled` — material nothing reads is much more likely to be a mistake than an
+intention.
+
+**Use the network layer instead.** A VPN — Tailscale, WireGuard, or similar — gives you both access
+control and encryption today, and gives you real per-device identity, which this protocol does not
+have even once the secret is wired up. A firewall allowlist covers the access half alone.
+
+**What is still needed** (tracked as future work, not scheduled):
+
+- *Secret:* a text field in the multiplayer panel, a per-server secret in the saved-server list, and
+  a decision about storing a shared password in plaintext on the device. Beyond the plumbing, the
+  scheme itself is weak — the payload body is entirely predictable, so one captured join permits an
+  offline dictionary attack on the secret and can be replayed. Making it genuinely authenticate
+  needs a nonce in the payload body, which is a protocol version bump that moves clients and servers
+  in lockstep.
+- *TLS:* the client path currently demands the server's private key, which no client can have, so
+  that check has to become mode-aware first. Then the real problem: the server offers its own
+  certificate as the trust root, so every player needs that PEM on their headset. There is no file
+  picker in-app and a PEM is far too long to type on a VR keyboard, so this needs a certificate
+  distribution design, not a settings field.
 
 ## Logging and administration
 
@@ -129,7 +154,7 @@ unban <playerId>      remove from the ban list
 | Code | Meaning |
 |---|---|
 | `0` | Clean shutdown. |
-| `78` | Configuration error. The message lists every problem found. |
+| `78` | Configuration error. The message lists every problem found. Setting `server.secret`, `security.require_secret`, or `security.tls.*` lands here. |
 
 ## Settings that deliberately do not exist
 

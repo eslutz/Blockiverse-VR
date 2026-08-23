@@ -227,17 +227,36 @@ namespace Blockiverse.Server
         // Cross-setting rules that no individual parser can see.
         static void ValidateCombination(BlockiverseServerOptions options, List<string> problems)
         {
-            if (options.RequireSecret && string.IsNullOrWhiteSpace(options.Secret))
+            // The server half of the join secret and of TLS is complete; the CLIENT half does not
+            // exist yet, and enabling either produces a server that binds its port, logs nothing
+            // wrong, and refuses every join. Refusing to start is the only honest outcome -- the
+            // alternative is an operator debugging a healthy-looking server nobody can connect to.
+            // Report the secret family once: telling an operator to set a secret and then rejecting
+            // the secret they set would be a loop with no way out.
+            if (options.RequireSecret || !string.IsNullOrWhiteSpace(options.Secret))
             {
                 problems.Add(
-                    "security.require_secret is true but server.secret is empty. An operator asking for a " +
-                    "private server must not get an open one.");
+                    "server.secret / security.require_secret are not usable yet: no shipped client has a " +
+                    "field to enter a secret, so the approval HMAC key would differ and EVERY join would " +
+                    "be refused. Leave both unset until client support ships, and restrict access at the " +
+                    "network layer (VPN or firewall) instead.");
             }
 
-            if (options.TlsEnabled &&
-                (string.IsNullOrWhiteSpace(options.TlsCertificatePath) || string.IsNullOrWhiteSpace(options.TlsKeyPath)))
+            if (options.TlsEnabled)
             {
-                problems.Add("security.tls.enabled is true but security.tls.cert_path or security.tls.key_path is empty.");
+                problems.Add(
+                    "security.tls.enabled is true, but no shipped client can negotiate TLS: it has no way " +
+                    "to obtain or trust the server certificate, so EVERY join would fail. Leave it false " +
+                    "until client support ships, and use a VPN if you need an encrypted path.");
+            }
+
+            if (!options.TlsEnabled &&
+                (!string.IsNullOrWhiteSpace(options.TlsCertificatePath) ||
+                 !string.IsNullOrWhiteSpace(options.TlsKeyPath)))
+            {
+                problems.Add(
+                    "security.tls.cert_path or security.tls.key_path is set but security.tls.enabled is " +
+                    "false. Nothing would use the material, so this is more likely a mistake than intent.");
             }
 
             if (string.IsNullOrWhiteSpace(options.WorldDirectory))

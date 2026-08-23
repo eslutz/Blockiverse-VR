@@ -103,19 +103,19 @@ namespace Blockiverse.Server
                     "unmeasured and unsupported; late-join snapshots and inventory broadcasts are not profiled there.");
             }
 
-            if (!RequireSecret && string.IsNullOrEmpty(Secret))
-            {
-                advisories.Add(
-                    "No server.secret is set and security.require_secret is false: anyone with a Blockiverse " +
-                    "client can join. Set a long random secret before exposing this server.");
-            }
+            // These two state the exposure without prescribing the fix, because the in-app fix does
+            // not exist: no shipped client can send a join secret or negotiate TLS, so the resolver
+            // refuses to start when either is configured. An advisory saying "set a secret" would be
+            // recommending the one setting guaranteed to make the server reject every player.
+            advisories.Add(
+                "Anyone with a Blockiverse client can join: the join secret has no client support yet, so " +
+                "there is no in-app access control. Restrict access at the network layer -- a VPN or a " +
+                "firewall allowlist -- if this server is reachable beyond people you trust.");
 
-            if (!TlsEnabled)
-            {
-                advisories.Add(
-                    "Transport encryption is off. Traffic, including the identity token that grants inventory " +
-                    "ownership on reconnect, is visible to anyone on the network path.");
-            }
+            advisories.Add(
+                "Traffic is unencrypted, including the identity token that grants inventory ownership on " +
+                "reconnect, and is visible to anyone on the network path. TLS has no client support yet; " +
+                "a VPN is the available encrypted path.");
 
             return advisories;
         }

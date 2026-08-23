@@ -292,6 +292,10 @@ namespace Blockiverse.Server
 
             if (session != null)
             {
+                // Secret and TLS are unreachable in a shipped build: BlockiverseServerOptionsResolver
+                // rejects both at startup because no client can satisfy either yet. The server halves
+                // are complete and tested, and stay here so enabling them is a one-rule change in the
+                // resolver once the client field and certificate-trust story land.
                 var networkConfig = new BlockiverseNetworkConfig(
                     address: options.ListenAddress,
                     listenAddress: options.ListenAddress,
@@ -300,7 +304,6 @@ namespace Blockiverse.Server
                     joinCode: string.IsNullOrEmpty(options.Secret) ? null : options.Secret);
 
                 session.Configure(networkConfig);
-
 
                 if (options.TlsEnabled && !ApplyTransportSecurity())
                     return false;
@@ -511,9 +514,9 @@ namespace Blockiverse.Server
         {
             // Covers the paths that do not go through RequestStop: a container SIGTERM Unity does
             // surface, or an editor stop. Persistence saves on this signal already; the marker
-            // records that the stop was orderly.
+            // records that the stop was orderly -- only if the save actually succeeded.
             adminConsole?.Stop();
-            if (IsRunning)
+            if (IsRunning && persistence != null && persistence.LastApplicationPauseSaveSucceeded)
                 WriteCleanShutdownMarker();
         }
 

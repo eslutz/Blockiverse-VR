@@ -383,7 +383,9 @@ namespace Blockiverse.UI
             }
 
             // Applied before StartClient: the transport reads the port from the session config.
-            if (parsed.HasExplicitPort && parsed.Port != session.Config.Port)
+            // Always update to parsed.Port, INCLUDING the default inferred for a host-only address.
+            // After joining host-a:7788, joining host-b without a port must reset to 7777, not stay on 7788.
+            if (parsed.Port != session.Config.Port)
                 session.Configure(session.Config.WithPort(parsed.Port));
 
             address = parsed.Host;

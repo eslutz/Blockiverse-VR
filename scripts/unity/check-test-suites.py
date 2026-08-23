@@ -47,6 +47,7 @@ EXPECTED_ASSEMBLIES = {
         "Blockiverse.Tests.EditMode.SurvivalHealth.dll",
         "Blockiverse.Tests.MetaAvatars.EditMode.dll",
         "Blockiverse.Tests.MetaPlatform.EditMode.dll",
+        "Blockiverse.Tests.Server.EditMode.dll",
         "Unity.Addressables.DocExampleCode.Editor.Tests.dll",
     },
 }

@@ -11,7 +11,7 @@ reassurance. Architecture rationale lives in [ADR 0007](../adr/0007-self-hosted-
 | | |
 |---|---|
 | **Safe** | A server on your LAN, or reachable only over a VPN such as Tailscale or WireGuard. |
-| **Acceptable with care** | A public server for people you know, running the server secret, with backups and a bounded blast radius (container, unprivileged user, dedicated world directory). |
+| **Acceptable with care** | A server for people you know, reachable only through a VPN or a firewall allowlist, with backups and a bounded blast radius (container, unprivileged user, dedicated world directory). |
 | **Not recommended** | A public, unrestricted server open to strangers, or a server whose world you cannot afford to lose. |
 
 Blockiverse's multiplayer protocol was designed for LAN co-op among people who trust each other. The
@@ -50,25 +50,30 @@ disconnect rather than being silently counted.
 aged out, so a client cannot grow the server's memory or its save files without limit by
 reconnecting repeatedly.
 
-**The server secret gates joining.** With `security.require_secret = true`, a client must present the
-correct shared secret to be approved. Without it, anyone with a Blockiverse client can join.
+**There is no in-app access control.** Nothing in this list gates *who* may join — see the first
+limitation below. Access control has to come from the network layer.
 
 ## What the server does NOT protect
 
 These are known, documented limitations. None of them are bugs to report.
 
-**The join secret is a shared password, not per-player authentication.** Everyone on your server uses
-the same secret. There is no account system. If you give the secret to ten people, you have ten
-people who can each give it to ten more, and revoking it means changing it for everyone.
+**Anyone with a Blockiverse client can join.** This is the most important line on this page. The
+join secret is implemented on the server but has no client half yet, so the server refuses to start
+when you configure one rather than pretending to be protected — see the [configuration
+reference](configuration.md). **Until that ships, a reachable server is an open server**, and the only
+real access control available to you is a VPN or a firewall allowlist.
 
-**The join handshake is replayable and brute-forceable offline.** The approval payload's contents are
-predictable, so anyone who can capture one join can attempt an offline dictionary attack against your
-secret, and can replay a captured payload. **Use a long, random secret** — treat it like a password,
-not like a room name.
+Two things are worth knowing about the secret even once it lands, because they bound what it will
+buy you. It is a shared password, not per-player authentication: everyone uses the same value, there
+is no account system, and revoking it means changing it for everyone. And the approval payload's
+contents are predictable, so anyone who captures one join can mount an offline dictionary attack
+against the secret and can replay the captured payload. It will be a door lock, not an identity
+system.
 
-**Traffic is not encrypted by default.** Transport encryption exists but is off unless configured
-with certificates. Assume anything on the wire — including the identity token that grants inventory
-ownership on reconnect — is visible to anyone who can observe the network path.
+**Traffic is not encrypted.** TLS is likewise server-only for now — a client has no way to obtain or
+trust the server's certificate — so the server refuses to start with it enabled. Assume anything on
+the wire, including the identity token that grants inventory ownership on reconnect, is visible to
+anyone who can observe the network path. A VPN is the available encrypted path.
 
 **Player identity is a bearer token, not a login.** A returning player is recognised by an identifier
 their client stores locally and sends on connect. Anyone who obtains that value can claim that
@@ -95,7 +100,9 @@ console. There is no reporting, no chat filtering, and no automatic abuse detect
    game protocol does not have. This is the single largest improvement available to you.
 2. **If you do expose a port**, forward only the game's UDP port. Do not expose the admin socket —
    it is a filesystem socket precisely so it cannot be reached from the network.
-3. **Set a long random secret** and `security.require_secret = true`.
+3. **Restrict access at the network layer.** There is no in-app access control yet, so a VPN or a
+   firewall allowlist is what decides who can reach the server. Do not skip this step on a
+   port-forwarded server.
 4. **Run unprivileged and contained.** Use the container image, or a dedicated non-root user. Give
    the server its own world directory and nothing else.
 5. **Back up the world directory.** Copy it while the server is stopped, or immediately after an
