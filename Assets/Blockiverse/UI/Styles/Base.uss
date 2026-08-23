@@ -203,3 +203,39 @@
 .hs-status--confirmed { border-left-color: var(--hs-moss); color: var(--hs-moss-text); }
 .hs-status--refused   { border-left-color: var(--hs-ochre); color: var(--hs-ochre-text); }
 .hs-status--rejected  { border-left-color: var(--hs-oxide); color: var(--hs-oxide-text); }
+
+/* ── Type families (ADR 0010 §8) ────────────────────────────────────────────
+   Barlow for everything, Zilla Slab for anything WITH A NAME (titles, headings,
+   item/world names). Exactly two families — a third is a third thing to embed
+   in the font atlas. The .ttf files live beside their OFL licenses in
+   Assets/Blockiverse/UI/Fonts; url() paths resolve at import.
+
+   This section sits LAST so its -unity-font-style: normal wins over the bold
+   declared earlier on .hs-screen__title / .hs-button--primary: those rules
+   predate real typefaces, and synthesizing bold on top of an actual SemiBold
+   face double-bolds. Weight now comes from the face, not the style flag.
+
+   Non-Latin fallback remains the documented gap (migration matrix §3.2):
+   UI Toolkit does not read TMP's fallback list, so localized text beyond these
+   faces' coverage renders tofu until a PanelTextSettings fallback chain is
+   authored. Tabular figures for quantities (the ADR's Barlow rationale) are an
+   OpenType feature USS cannot enable; .hs-figures' letter-spacing remains the
+   only hook until measured in headset. */
+
+.hs-screen {
+    -unity-font-definition: url("/Assets/Blockiverse/UI/Fonts/Barlow-Regular.ttf");
+}
+
+.hs-screen__title,
+.hs-heading {
+    -unity-font-definition: url("/Assets/Blockiverse/UI/Fonts/ZillaSlab-SemiBold.ttf");
+    -unity-font-style: normal;
+}
+
+.hs-button {
+    -unity-font-definition: url("/Assets/Blockiverse/UI/Fonts/Barlow-SemiBold.ttf");
+}
+
+.hs-button--primary {
+    -unity-font-style: normal;
+}
