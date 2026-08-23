@@ -7,6 +7,7 @@
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
     "Blockiverse.Networking",
+    "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
     "UnityEngine.UI",
     "Unity.TextMeshPro",
@@ -15,7 +16,9 @@
     "Unity.ResourceManager"
   ],
   "includePlatforms": [],
-  "excludePlatforms": [],
+  "excludePlatforms": [
+    "LinuxStandalone64"
+  ],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],

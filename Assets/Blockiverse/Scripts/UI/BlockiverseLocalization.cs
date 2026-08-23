@@ -201,6 +201,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
 
             public const string LanUnavailable = "ui.status.lan.unavailable";
             public const string LanJoinAddressPlaceholder = "ui.generated.lan.join_address_placeholder";
+            public const string LanJoinSecretPlaceholder = "ui.generated.lan.join_secret_placeholder";
             public const string LanStartingHost = "ui.status.lan.starting_host";
             public const string LanStartHostFailed = "ui.status.lan.start_host_failed";
             public const string LanJoining = "ui.status.lan.joining";

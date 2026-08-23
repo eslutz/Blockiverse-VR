@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.MetaPlatform",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.Networking",
     "Oculus.Platform"
   ],
   "includePlatforms": [],

@@ -1,0 +1,35 @@
+# Example deployment for a self-hosted Blockiverse server.
+#
+#   docker compose up -d          start
+#   docker compose logs -f        watch
+#   docker compose exec server blockiverse-server-admin stop                      stop cleanly
+#
+# `docker compose stop` also works, but the admin `stop` above is preferred: it saves the world and
+# writes the clean-shutdown marker before exiting, so nothing is lost and the next boot does not
+# warn about an unclean stop.
+services:
+  server:
+    image: ghcr.io/eslutz/blockiverse-server:latest
+    container_name: blockiverse-server
+    restart: unless-stopped
+    stop_grace_period: 60s
+    ports:
+      # UDP. Forward this port on your router if players are joining over the internet.
+      - "7777:7777/udp"
+    volumes:
+      # The world. Back this up; it is the only thing here you cannot rebuild.
+      #
+      # The container runs unprivileged as uid 10001, and a bind mount keeps the HOST's ownership,
+      # so run `sudo chown -R 10001:10001 ./world` once before the first start. Swap this for a
+      # named volume (blockiverse-world:/data) to have Docker seed the ownership instead.
+      - ./world:/data
+    environment:
+      BLOCKIVERSE_SERVER_NAME: "My Blockiverse Server"
+      BLOCKIVERSE_WORLD_NAME: "Home"
+      BLOCKIVERSE_SERVER_MAX_PLAYERS: "4"
+      BLOCKIVERSE_PERSISTENCE_AUTOSAVE_SECONDS: "60"
+      # Use a long random value and keep it out of version control. Players enter it in the
+      # multiplayer panel; it is verified with a challenge and never crosses the wire.
+      # Without it anyone with a client can join. See docs/server/security-posture.md.
+      # BLOCKIVERSE_SERVER_SECRET: "change-me-to-something-long-and-random"
+      BLOCKIVERSE_LOG_FORMAT: "text"

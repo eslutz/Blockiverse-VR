@@ -1,0 +1,222 @@
+name: Server Release
+
+# Builds the Linux dedicated server and publishes it two ways: an archive on a GitHub Release and
+# a container image on ghcr.io. Both come from ONE build job's artifact, so the archive and the
+# image can never be different builds.
+#
+# This lane must never receive Meta credentials. It publishes a self-hosted server, not a store
+# build, and has no reason to touch a Meta release channel.
+
+on:
+  push:
+    tags:
+      - "server-v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Trusted ref to build from
+        required: false
+        default: main
+      version:
+        description: "Server version (must match the client version it serves)"
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: server-release
+  cancel-in-progress: false
+
+env:
+  UNITY_VERSION: 6000.5.8f1
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/blockiverse-server
+
+jobs:
+  build:
+    name: Build Linux dedicated server
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.settings.outputs.version }}
+      archive: ${{ steps.settings.outputs.archive }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          lfs: true
+
+      - name: Pull Git LFS assets
+        run: git lfs pull
+
+      # Its own cache key: the Library is per-target, so sharing the Android key would make the
+      # two lanes evict each other on every run.
+      - name: Restore Unity Library cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: unity-library-server-${{ runner.os }}-LinuxServer-6000.5.8f1-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'ProjectSettings/BlockiverseVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}
+          restore-keys: |
+            unity-library-server-${{ runner.os }}-LinuxServer-6000.5.8f1-
+            unity-library-server-${{ runner.os }}-LinuxServer-
+
+      - name: Compute server version
+        id: settings
+        run: |
+          base_version="$(tr -d '[:space:]' < ProjectSettings/BlockiverseVersion.txt)"
+          if ! printf '%s' "$base_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ProjectSettings/BlockiverseVersion.txt must contain MAJOR.MINOR.PATCH without a leading v." >&2
+            exit 64
+          fi
+
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#server-v}"
+          else
+            version="${base_version}-ci.run${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "archive=blockiverse-server-${version}-linux-x86_64.tar.gz" >> "$GITHUB_OUTPUT"
+
+      # NOTE: deliberately no `docker system prune` here, unlike the Quest lanes. This job's
+      # artifact is consumed by a job that builds an image; wiping the Docker state is only safe
+      # in a lane that never touches it.
+      - name: Free runner disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk /opt/ghc /usr/local/.ghcup
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Build server
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.5.8f1
+          targetPlatform: StandaloneLinux64
+          buildMethod: Blockiverse.Editor.BlockiverseBuildSmoke.BuildLinuxServer
+          versioning: None
+          customParameters: >
+            -blockiverseBuildOutput Builds/LinuxServer/BlockiverseServer
+            -blockiverseBuildVersionName ${{ steps.settings.outputs.version }}
+
+      # A known file list, not the whole folder: a Unity build also emits
+      # BurstDebugInformation_DoNotShip, and OVRDumpBuildInfo drops RuntimeActionBindings.json in
+      # because it treats a Standalone target as "PC".
+      - name: Stage the shippable file set
+        run: |
+          sudo chown -R "$USER" Builds/LinuxServer
+          mkdir -p staging/blockiverse-server
+          cp -r Builds/LinuxServer/BlockiverseServer \
+                Builds/LinuxServer/UnityPlayer.so \
+                Builds/LinuxServer/BlockiverseServer_Data \
+                staging/blockiverse-server/
+          chmod +x staging/blockiverse-server/BlockiverseServer
+          cp docs/server/README.md docs/server/configuration.md docs/server/security-posture.md \
+             SERVER-EULA.md staging/blockiverse-server/
+          # The systemd install path. Without these the archive is "untar it and remember to run it
+          # yourself", which is not a server install -- nothing restarts it after a reboot.
+          cp scripts/server/install.sh \
+             scripts/server/blockiverse-server.service \
+             scripts/server/blockiverse-server-admin.sh \
+             staging/blockiverse-server/
+          chmod +x staging/blockiverse-server/install.sh \
+                   staging/blockiverse-server/blockiverse-server-admin.sh
+          ls -la staging/blockiverse-server
+
+      - name: Create archive and checksum
+        run: |
+          tar -czf "${{ steps.settings.outputs.archive }}" -C staging blockiverse-server
+          sha256sum "${{ steps.settings.outputs.archive }}" > "${{ steps.settings.outputs.archive }}.sha256"
+          cat "${{ steps.settings.outputs.archive }}.sha256"
+
+      # The image job consumes exactly this, so both artifacts come from one build.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: blockiverse-server-${{ steps.settings.outputs.version }}
+          path: |
+            staging/blockiverse-server
+            ${{ steps.settings.outputs.archive }}
+            ${{ steps.settings.outputs.archive }}.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish archive and container image
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          lfs: false
+
+      - name: Download the built server
+        uses: actions/download-artifact@v4
+        with:
+          name: blockiverse-server-${{ needs.build.outputs.version }}
+          path: artifact
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `latest` must only ever move on a real release tag. A workflow_dispatch run builds a
+      # `-ci.runN` version for testing, and letting that claim `latest` would silently hand every
+      # `docker pull` with no tag an untested build -- with no signal that it had happened.
+      - name: Decide image tags
+        id: tags
+        run: |
+          {
+            echo "tags<<TAGS_EOF"
+            echo "${IMAGE_NAME}:${{ needs.build.outputs.version }}"
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+              echo "${IMAGE_NAME}:latest"
+            else
+              echo "Not a tag build: publishing the version tag only, leaving :latest alone." >&2
+            fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: |
+            SERVER_DIR=artifact/staging/blockiverse-server
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.build.outputs.version }}
+            org.opencontainers.image.licenses=LicenseRef-Blockiverse-Server-EULA
+
+      - name: Publish the GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifact/${{ needs.build.outputs.archive }}
+            artifact/${{ needs.build.outputs.archive }}.sha256
+          body: |
+            Blockiverse Dedicated Server ${{ needs.build.outputs.version }} (Linux x86-64).
+
+            **The server version must match the clients it serves.** A client on a different
+            version is refused with `GameVersionMismatch`.
+
+            Container image:
+
+                docker pull ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}
+
+            Read `docs/server/security-posture.md` before exposing a port to the internet.
+
+            Distributed under the grant in `LICENSE.md` and the terms in `SERVER-EULA.md`.

@@ -29,7 +29,9 @@
     "Unity.TextMeshPro",
     "UnityEngine.UI",
     "Unity.Localization",
-    "Unity.Localization.Editor"
+    "Unity.Localization.Editor",
+    "Blockiverse.Server",
+    "Blockiverse.WorldRuntime"
   ],
   "includePlatforms": [
     "Editor"

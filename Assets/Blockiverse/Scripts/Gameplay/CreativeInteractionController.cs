@@ -97,10 +97,10 @@ namespace Blockiverse.Gameplay
 
         // The voxel cell containing a Unity world-space point (BlockPosition lives in the
         // engine-free Voxel assembly, so the Vector3 conversion belongs here in Gameplay).
-        public static BlockPosition ToBlockPosition(Vector3 worldPosition) => new(
-            Mathf.FloorToInt(worldPosition.x),
-            Mathf.FloorToInt(worldPosition.y),
-            Mathf.FloorToInt(worldPosition.z));
+        // Forwards to VoxelWorldCoordinates so the world simulation, which cannot reference this
+        // presentation-layer type, shares one implementation. Kept here for its existing callers.
+        public static BlockPosition ToBlockPosition(Vector3 worldPosition) =>
+            VoxelWorldCoordinates.ToBlockPosition(worldPosition);
 
         public static bool IsBlockWithinInteractionReach(Vector3 origin, BlockPosition target)
         {
