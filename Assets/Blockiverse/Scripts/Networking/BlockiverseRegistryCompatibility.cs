@@ -46,6 +46,7 @@ namespace Blockiverse.Networking
                     // peers disagreeing on it build different geometry from the same delta.
                     ((int)definition.Category).ToString(CultureInfo.InvariantCulture),
                     definition.IsSolid ? "1" : "0",
+                    definition.Occludes ? "1" : "0",
                     definition.IsRenderable ? "1" : "0",
                     definition.EmissiveLight.ToString(CultureInfo.InvariantCulture),
                     ((int)definition.HardnessClass).ToString(CultureInfo.InvariantCulture),

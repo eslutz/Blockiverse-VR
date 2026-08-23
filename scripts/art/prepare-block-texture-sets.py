@@ -299,6 +299,9 @@ def prepare_original_set(names: list[str], lookup: dict[str, tuple]) -> None:
         temp = Path(temp_dir)
         for name in names:
             destination = source_dir / f"{name}.png"
+            if name in ART.FOLIAGE_TILE_NAMES:
+                write_texture(destination, pixelate_to_mvp_style(ART.make_block_tile(lookup[name])))
+                continue
             legacy = canonical_to_legacy.get(name)
             if legacy is not None:
                 extracted = temp / f"{legacy}.png"
@@ -311,7 +314,7 @@ def prepare_original_set(names: list[str], lookup: dict[str, tuple]) -> None:
             write_texture(destination, pixelate_to_mvp_style(tile))
 
 
-def prepare_existing_ai_set(set_id: str, comparison_folder: str, names: list[str]) -> list[str]:
+def prepare_existing_ai_set(set_id: str, comparison_folder: str, names: list[str], lookup: dict[str, tuple]) -> list[str]:
     source_dir = TEXTURE_SET_ROOT / set_id / "Source"
     missing: list[str] = []
     for name in names:
@@ -319,12 +322,16 @@ def prepare_existing_ai_set(set_id: str, comparison_folder: str, names: list[str
         comparison = COMPARISON_DIR / comparison_folder / f"{name}.png"
         destination = source_dir / f"{name}.png"
         source = None
+        if name in ART.FOLIAGE_TILE_NAMES:
+            write_texture(destination, ART.make_block_tile(lookup[name]))
+            continue
         for candidate in (raw_generated, comparison, destination):
             if candidate.exists():
                 source = candidate
                 break
 
         if source is None:
+            write_texture(destination, ART.make_block_tile(lookup[name]))
             missing.append(name)
         elif source == destination:
             ART.write_texture_meta(relative(destination), sprite=False, max_size=TILE_PIXELS)
@@ -395,14 +402,14 @@ def write_summary(summary: dict[str, object]) -> None:
 def main() -> None:
     names = all_block_source_names()
     lookup = block_lookup()
-    if len(names) != 80:
-        raise RuntimeError(f"Expected 80 block source textures, found {len(names)}.")
+    if len(names) != 100:
+        raise RuntimeError(f"Expected 100 block source textures, found {len(names)}.")
 
     write_folder_metas()
     prepare_enhanced_set(names)
     prepare_original_set(names, lookup)
-    missing_ai_simplified = prepare_existing_ai_set("ai_simplified", "ai_simplified", names)
-    missing_ai = prepare_existing_ai_set("ai", "ai", names)
+    missing_ai_simplified = prepare_existing_ai_set("ai_simplified", "ai_simplified", names, lookup)
+    missing_ai = prepare_existing_ai_set("ai", "ai", names, lookup)
     for set_id in SET_IDS:
         ART.write_texture_set_atlas(set_id)
     write_missing_prompt_manifest("ai_simplified", missing_ai_simplified, lookup)

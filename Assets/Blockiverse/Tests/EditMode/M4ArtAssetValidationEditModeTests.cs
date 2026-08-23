@@ -62,7 +62,8 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(importer, Is.Not.Null, path);
                 Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Point), path);
                 Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp), path);
-                Assert.That(importer.mipmapEnabled, Is.False, path);
+                Assert.That(importer.mipmapEnabled, Is.True, path);
+                Assert.That(importer.mipMapsPreserveCoverage, Is.True, path);
                 Assert.That(importer.anisoLevel, Is.EqualTo(1), path);
 
                 TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
@@ -103,6 +104,16 @@ namespace Blockiverse.Tests.EditMode
                     generatorSource,
                     Does.Contain($"\"{block.CanonicalId}\""),
                     $"Art generator must produce {block.CanonicalId}; committed source tiles are not enough.");
+        }
+
+        [Test]
+        public void CutoutFoliageDoesNotOccludeItsOwnInterior()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+
+            Assert.That(registry.Get(BlockRegistry.Leafmoss).IsSolid, Is.True);
+            Assert.That(registry.Get(BlockRegistry.Leafmoss).Occludes, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Graystone).Occludes, Is.True);
         }
 
         [Test]

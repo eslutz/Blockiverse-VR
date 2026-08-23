@@ -12,7 +12,7 @@ BLOCK_TEXTURE_SET_IDS = ("original", "enhanced", "ai_simplified", "ai")
 ITEM_DIR = "Assets/Blockiverse/Art/Textures/Items"
 UI_DIR = "Assets/Blockiverse/Art/Sprites/UI"
 VFX_DIR = "Assets/Blockiverse/Art/Sprites/VFX"
-ATLAS_COLUMNS = 8
+ATLAS_COLUMNS = 10
 ATLAS_ROWS = 10
 TILE_PIXELS = 32
 ATLAS_TILE_PADDING_PIXELS = 8
@@ -98,7 +98,40 @@ BLOCKS = [
     ("brine", 74, (34, 111, 151), (164, 226, 226), "fluid_brine", 487),
     ("emberflow", 75, (91, 38, 28), (255, 116, 44), "fluid_ember", 491),
     ("bedroll", 76, (70, 88, 98), (219, 92, 83), "bedroll", 499),
+    # Foliage pass: 78 existing slots plus these 19 tiles fill 97 of a 10x10 atlas.
+    ("drygrass_tuft", 78, (132, 111, 59), (213, 181, 94), "drygrass", 523),
+    ("meadow_tuft", 79, (64, 135, 66), (142, 207, 84), "meadow_grass", 541),
+    ("wildflower_cluster", 80, (54, 120, 62), (242, 121, 132), "wildflowers", 547),
+    ("dune_sage", 81, (111, 119, 76), (184, 191, 119), "sage", 557),
+    ("salt_reed", 82, (86, 137, 111), (184, 216, 177), "salt_reeds", 563),
+    ("frost_fern", 83, (94, 143, 133), (194, 235, 226), "fern", 569),
+    ("windroot_shrub", 84, (88, 100, 66), (160, 178, 98), "shrub", 571),
+    ("hanging_reed", 85, (72, 126, 78), (159, 194, 103), "hanging_reeds", 577),
+    ("moss_carpet", 86, (54, 114, 58), (122, 178, 79), "moss_carpet", 587),
+    ("snow_lichen", 87, (154, 181, 164), (235, 246, 231), "snow_lichen", 593),
+    ("fallen_leaves", 88, (116, 76, 42), (202, 133, 62), "fallen_leaves", 599),
+    ("charred_log", 89, (45, 43, 42), (106, 82, 61), "charred_wood", 601),
+    ("snow_block", 90, (176, 210, 221), (247, 252, 255), "snow", 607),
+    ("meadow_turf_side", 91, (105, 70, 45), (122, 184, 72), "meadow_turf_side", 613),
+    ("dry_turf_side", 92, (121, 82, 42), (196, 157, 63), "dry_turf_side", 617),
+    ("snowcap_turf_side", 93, (82, 94, 86), (235, 247, 245), "snowcap_turf_side", 619),
+    ("rootsoil_side", 94, (70, 51, 35), (148, 94, 53), "roots", 631),
+    ("branchwood_log_end", 95, (143, 91, 45), (220, 161, 82), "rings", 641),
+    ("smooth_branchwood_end", 96, (145, 94, 49), (218, 158, 81), "rings", 643),
 ]
+
+FOLIAGE_TILE_NAMES = frozenset(
+    name for name, *_ in BLOCKS
+    if name in {
+        "leafmoss", "thornbrush", "reedgrass", "reedgrass_s1", "reedgrass_s2", "reedgrass_s3",
+        "berrybush", "berrybush_s1", "berrybush_s2", "berrybush_s3", "berrybush_s4", "berrybush_s5",
+        "grain_stalk", "grain_stalk_s1", "grain_stalk_s2", "grain_stalk_s3", "grain_stalk_s4",
+        "sapling", "sapling_s1", "sapling_s2", "drygrass_tuft", "meadow_tuft", "wildflower_cluster",
+        "dune_sage", "salt_reed", "frost_fern", "windroot_shrub", "hanging_reed", "moss_carpet",
+        "snow_lichen", "fallen_leaves", "charred_log", "snow_block", "meadow_turf_side", "dry_turf_side",
+        "snowcap_turf_side", "rootsoil_side", "branchwood_log_end", "smooth_branchwood_end",
+    }
+)
 
 
 BLOCK_SOURCE_ALIASES = [
@@ -309,6 +342,22 @@ def block_pixel(base, accent, pattern, seed, x, y):
     elif pattern == "snow":
         factor += 0.55 if y < TILE_PIXELS * 0.30 or h % 11 <= 1 else 0.0
         dark = cell4 % 19 == 0
+    elif pattern in ("meadow_turf_side", "dry_turf_side", "snowcap_turf_side"):
+        fringe = {"meadow_turf_side": 6, "dry_turf_side": 4, "snowcap_turf_side": 9}[pattern]
+        factor += 0.70 if y < fringe and (y < fringe - 2 or h % 4 != 0) else (0.22 if h % 9 == 0 else 0.0)
+        dark = y == fringe or h % 13 == 0
+    elif pattern == "moss_carpet":
+        factor += 0.52 if (x // 4 + y // 3 + h) % 4 == 0 else 0.18
+        dark = h % 17 == 0
+    elif pattern == "snow_lichen":
+        factor += 0.56 if h % 5 <= 1 or (x + y) % 9 <= 1 else 0.0
+    elif pattern == "fallen_leaves":
+        leaf = (x + 2 * y + h) % 13 <= 3 or (2 * x - y + h) % 17 <= 2
+        factor += 0.58 if leaf else 0.12
+        dark = leaf and h % 4 == 0
+    elif pattern == "charred_wood":
+        factor += 0.46 if y % 8 <= 1 or h % 11 == 0 else 0.0
+        dark = y % 8 == 0 or h % 5 == 0
     elif pattern == "roots":
         factor += 0.42 if (x + y + h) % 13 <= 2 or abs(math.sin(y * 0.34 + seed) * 7 + dx) < 1.6 else 0.0
         dark = h % 9 == 0
@@ -431,9 +480,57 @@ def block_pixel(base, accent, pattern, seed, x, y):
     return with_alpha(shade(color, edge * top_light), 255)
 
 
+ALPHA_FOLIAGE_PATTERNS = {
+    "leaves", "thorn", "reeds", "berries_cluster", "grain_heads", "crop_sprout",
+    "crop_mid", "crop_full", "bush_sprout", "bush_mid", "reed_sprout", "sapling",
+    "sapling_mid", "sapling_tall", "drygrass", "meadow_grass", "wildflowers", "sage",
+    "salt_reeds", "fern", "shrub", "hanging_reeds",
+}
+
+
+def foliage_mask(pattern, seed, x, y):
+    """Returns hard alpha coverage for cutout/cross foliage (never partial alpha)."""
+    dx = x - 15.5
+    h = hash_pixel(x, y, seed)
+    if pattern == "leaves":
+        return (dx * dx) / 240 + ((y - 15) * (y - 15)) / 205 < 1 and h % 7 > 2
+    if pattern in ("berries_cluster", "bush_sprout", "bush_mid", "shrub"):
+        radius = {"bush_sprout": 7, "bush_mid": 10, "shrub": 13}.get(pattern, 12)
+        return dx * dx + (y - 17) * (y - 17) < radius * radius and h % 9 > 1
+    if pattern in ("sapling", "sapling_mid", "sapling_tall"):
+        height = {"sapling": 16, "sapling_mid": 21, "sapling_tall": 27}[pattern]
+        trunk = abs(dx) <= 1 and y >= 31 - height
+        canopy = y < 21 and abs(dx) < (8 - y * 0.18) and y >= 5 and h % 5 > 0
+        return trunk or canopy
+    if pattern in ("fern", "wildflowers"):
+        stem = abs(dx) <= 1 and y >= 13
+        frond = y >= 8 and abs(abs(dx) - (y - 8) * 0.34) <= 1.2
+        flower = pattern == "wildflowers" and y < 14 and ((x - 9) ** 2 + (y - 10) ** 2 < 8 or (x - 22) ** 2 + (y - 8) ** 2 < 8)
+        return stem or frond or flower
+    if pattern == "hanging_reeds":
+        return y <= 25 and (abs(dx + 6 - math.sin(y * .35) * 2) <= 1 or abs(dx - 4 - math.sin(y * .31) * 2) <= 1)
+    if pattern == "sage":
+        return y >= 9 and (abs(dx + (y - 20) * .22) <= 1 or abs(dx - (y - 20) * .18) <= 1 or (y > 18 and abs(dx) < 10 and h % 5 == 0))
+    if pattern == "thorn":
+        return y >= 5 and (abs(dx + math.sin(y * .6) * 5) <= 1 or abs(dx - math.sin(y * .5) * 4) <= 1)
+    if pattern in ("grain_heads", "crop_sprout", "crop_mid", "crop_full", "reed_sprout", "reeds", "drygrass", "meadow_grass", "salt_reeds"):
+        density = 4 if pattern in ("meadow_grass", "drygrass") else 6
+        start = {"crop_sprout": 20, "crop_mid": 13, "crop_full": 6, "reed_sprout": 18}.get(pattern, 4)
+        blade = (x + seed) % density <= 1 and y >= start - (x % 3)
+        head = pattern in ("grain_heads", "crop_full") and y < 13 and x % 7 in (2, 3)
+        return blade or head
+    return False
+
+
 def make_block_tile(block):
     _, _, base, accent, pattern, seed = block
-    return [[block_pixel(base, accent, pattern, seed, x, y) for x in range(TILE_PIXELS)] for y in range(TILE_PIXELS)]
+    tile = [[block_pixel(base, accent, pattern, seed, x, y) for x in range(TILE_PIXELS)] for y in range(TILE_PIXELS)]
+    if pattern in ALPHA_FOLIAGE_PATTERNS:
+        for y in range(TILE_PIXELS):
+            for x in range(TILE_PIXELS):
+                if not foliage_mask(pattern, seed, x, y):
+                    tile[y][x] = (0, 0, 0, 0)
+    return tile
 
 
 def atlas_width():
@@ -763,6 +860,7 @@ def write_texture_meta(
     filter_mode=0,
     aniso=1,
     android_texture_compression=0,
+    preserve_alpha_coverage=False,
 ):
     path = os.path.join(ROOT, f"{relative_path}.meta")
     texture_type = 8 if sprite else 0
@@ -784,7 +882,7 @@ def write_texture_meta(
             "    linearTexture: 0\n"
             "    fadeOut: 0\n"
             "    borderMipMap: 0\n"
-            "    mipMapsPreserveCoverage: 0\n"
+            f"    mipMapsPreserveCoverage: {1 if preserve_alpha_coverage else 0}\n"
             "    alphaTestReferenceValue: 0.5\n"
             "    mipMapFadeDistanceStart: 1\n"
             "    mipMapFadeDistanceEnd: 3\n"
@@ -927,10 +1025,11 @@ def write_texture_set_atlas(set_id):
         atlas_path,
         sprite=False,
         max_size=atlas_max_texture_size(),
-        enable_mipmaps=False,
+        enable_mipmaps=True,
         filter_mode=0,
         aniso=1,
         android_texture_compression=0,
+        preserve_alpha_coverage=True,
     )
 
 
@@ -954,14 +1053,19 @@ def write_assets():
         tile = make_block_tile(block)
         write_png(f"{BLOCK_SOURCE_DIR}/{name}.png", tile)
         write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=TILE_PIXELS)
+        write_png(f"{BLOCK_TEXTURE_SET_ROOT}/enhanced/Source/{name}.png", tile)
+        write_texture_meta(f"{BLOCK_TEXTURE_SET_ROOT}/enhanced/Source/{name}.png", sprite=False, max_size=TILE_PIXELS)
 
     for name, _, base, accent, pattern, seed in BLOCK_SOURCE_ALIASES:
         tile = make_block_tile((name, -1, base, accent, pattern, seed))
         write_png(f"{BLOCK_SOURCE_DIR}/{name}.png", tile)
         write_texture_meta(f"{BLOCK_SOURCE_DIR}/{name}.png", sprite=False, max_size=TILE_PIXELS)
+        write_png(f"{BLOCK_TEXTURE_SET_ROOT}/enhanced/Source/{name}.png", tile)
+        write_texture_meta(f"{BLOCK_TEXTURE_SET_ROOT}/enhanced/Source/{name}.png", sprite=False, max_size=TILE_PIXELS)
 
-    for set_id in BLOCK_TEXTURE_SET_IDS:
-        write_texture_set_atlas(set_id)
+    # Enhanced is the canonical procedural set. Original/AI sets are prepared separately because
+    # their provenance-specific fallbacks must be resolved before their atlas write.
+    write_texture_set_atlas("enhanced")
 
     for item in ITEMS:
         name = item[0]

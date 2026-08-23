@@ -263,7 +263,7 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
+            return !neighborDefinition.IsRenderable || !neighborDefinition.Occludes;
         }
 
         // A distinct name, not an AddFace overload: ChunkRenderingEditModeTests reflects AddFace

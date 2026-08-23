@@ -69,7 +69,7 @@ namespace Blockiverse.Gameplay
         bool IsLightBlocking(BlockId block)
         {
             BlockDefinition definition = registry.Get(block);
-            return definition.IsRenderable && definition.IsSolid;
+            return definition.IsRenderable && definition.Occludes;
         }
 
         int Index(int x, int z) => x + world.Bounds.Width * z;
