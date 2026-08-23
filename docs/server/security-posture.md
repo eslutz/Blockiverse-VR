@@ -31,8 +31,16 @@ against what the client claims to be holding. Item counts, slot indices, and rec
 re-checked server-side.
 
 **Actions are reach-limited.** The server rejects actions targeting blocks beyond interaction range
-of the acting player's position. This check fails **closed**: if the server cannot resolve where a
-player is, the action is refused rather than allowed.
+of the acting player's position, using one shared formula and limit for every server-side gate
+(ruleset §16). Read this together with "Movement is client-authoritative" below: reach limiting
+bounds what a *confused or desynchronised* client can do, and it bounds the blast radius of a bug,
+but it is not a defence against a modified client, because the position it measures from is one the
+client reported. Treat it as an anti-accident gate, not an anti-cheat one.
+
+The two gates differ in one narrow case, deliberately. If the server cannot resolve where a player
+is at all — meaning that client has no player object, not merely that no pose has arrived yet — the
+survival command gate refuses the action, while the raw block-mutation gate allows it. Both are
+nearly unreachable in practice.
 
 **Request rate is limited per client.** Block mutations, survival commands, identity handshakes,
 crouch updates, and avatar streams are each capped per client. Sustained violations escalate to a
