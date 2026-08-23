@@ -11,7 +11,12 @@ namespace Blockiverse.UI
     public sealed class SurvivalInventoryPanel : MonoBehaviour
     {
         static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.Default;
-        static readonly string[] CachedStackCounts = BuildCachedStackCounts();
+        // Lazy, not a field initializer: this reaches into the localization table, and a static
+        // field initializer runs whenever the type is first touched — including mid-deserialization
+        // of a prefab/scene, where Unity disallows the table's EditorBuildSettings.GetConfigObject
+        // call and throws. Deferring to first real use keeps the read off that unsafe path.
+        static string[] cachedStackCounts;
+        static string[] CachedStackCounts => cachedStackCounts ??= BuildCachedStackCounts();
 
         [SerializeField] Button[] slotButtons;
         [SerializeField] TMP_Text[] slotLabels;
