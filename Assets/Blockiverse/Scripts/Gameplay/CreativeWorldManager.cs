@@ -25,6 +25,7 @@ namespace Blockiverse.Gameplay
         [SerializeField] bool initializeDefaultWorldOnAwake;
         MultiplayerChunkAuthoritySync authoritySync;
         GlowwickLightManager glowwickLightManager;
+        BlockiverseMirrorSurfaceManager mirrorSurfaceManager;
         WeatherService weatherService;
         VegetationService vegetationService;
         FarmingService farmingService;
@@ -466,6 +467,7 @@ namespace Blockiverse.Gameplay
                 deferInitialRendererRebuild);
 
             ConfigureGlowwickLights();
+            ConfigureMirrorSurfaces();
             ConfigureEnvironmentServices(settings);
             ConfigureVoidSafetyFloor();
 
@@ -473,6 +475,17 @@ namespace Blockiverse.Gameplay
                 authoritySync = authoritySyncOverride;
 
             ConfigureInteractionController(settings);
+        }
+
+        void ConfigureMirrorSurfaces()
+        {
+            if (mirrorSurfaceManager == null)
+                mirrorSurfaceManager = GetComponent<BlockiverseMirrorSurfaceManager>();
+
+            if (mirrorSurfaceManager == null)
+                mirrorSurfaceManager = gameObject.AddComponent<BlockiverseMirrorSurfaceManager>();
+
+            mirrorSurfaceManager.Configure(World, Registry);
         }
 
         void ConfigureGlowwickLights()

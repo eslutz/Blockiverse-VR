@@ -204,7 +204,8 @@ namespace Blockiverse.Editor
             // game view and only obvious on device.
             camera.cullingMask |= BlockiverseProject.InteractionLayerMask | BlockiverseProject.FluidLayerMask;
             camera.cullingMask &= ~(BlockiverseProject.CompositionUiLayerMask |
-                                    BlockiverseProject.XrVisualProjectionLayerMask);
+                                    BlockiverseProject.XrVisualProjectionLayerMask |
+                                    BlockiverseProject.MirrorAvatarLayerMask);
             EditorUtility.SetDirty(camera);
         }
 
