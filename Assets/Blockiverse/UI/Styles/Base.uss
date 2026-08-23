@@ -155,6 +155,30 @@
     border-bottom-color: var(--hs-edge-control-deep);
 }
 
+/* Focus on every control, not just buttons.
+   .hs-button:focus alone left toggles, sliders and text fields falling through to Unity's
+   default theme, which paints focus in its own blue — a colour outside this palette
+   entirely, and the one thing ADR 0010 §8 is most explicit about: focus is bone, it
+   outlines all four borders, and it changes nothing else. Seen leaking on the comfort
+   screen's toggle labels in the simulator. :focus alone would miss the toggles, whose
+   focus lands on an inner element, so the -within variant carries them. */
+.hs-field:focus,
+.hs-field:focus-within {
+    border-top-color: var(--hs-focus);
+    border-left-color: var(--hs-focus);
+    border-right-color: var(--hs-focus);
+    border-bottom-color: var(--hs-focus);
+}
+
+/* Unity tints the focused label/checkmark of a composite control from its own theme
+   variables; re-assert the palette so focus never recolours type. */
+.hs-field:focus .unity-base-field__label,
+.hs-field:focus-within .unity-base-field__label,
+.hs-field:focus .unity-text-element,
+.hs-field:focus-within .unity-text-element {
+    color: var(--hs-ink);
+}
+
 /* Wells are inset: sliders, empty inventory slots, unselected halves of a segmented control.
    The inverted light is what makes an empty slot read as a recess rather than just a darker
    square, which is what keeps a wall of them legible as a grid. */
@@ -186,6 +210,106 @@
 /* Every quantity in the game — stack counts, seeds, coordinates, LAN addresses — so columns
    line up and digits cannot be mistaken for one another. */
 .hs-figures { -unity-font-style: normal; letter-spacing: 0.02px; }
+
+/* ── Toggles ────────────────────────────────────────────────────────────────
+   Until now nothing styled the checkmark, so Unity's default theme drew it: a
+   small light system checkbox sitting immediately after the label, in a palette
+   that is not ours. The box is a WELL — the same inverted 2px light an empty
+   inventory slot uses — so an unchecked control reads as a recess cut into the
+   slab, and checking it fills that recess with ember.
+
+   Fill rather than a tick glyph, deliberately: a thin checkmark is the first
+   thing to disappear at 0.95 m, and a filled ember square survives both distance
+   and the off-axis viewing a VR panel always gets. The label is the word that
+   carries the state alongside it (ADR 0010 §8: a signal is never colour alone).
+
+   The input is pushed to the trailing edge so every checkbox in a column lines
+   up on one axis instead of hanging off the end of ragged labels. */
+
+.hs-field .unity-toggle__input {
+    flex-grow: 1;
+    justify-content: flex-end;
+}
+
+.hs-field .unity-toggle__checkmark {
+    width: var(--hs-checkbox-size);
+    height: var(--hs-checkbox-size);
+    margin-left: var(--hs-space-3);
+    margin-right: 0;
+    flex-shrink: 0;
+    /* Kill the theme's tick outright — a half-overridden image is worse than none. */
+    background-image: none;
+    background-color: var(--hs-chip);
+    border-top-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
+}
+
+.hs-field.unity-toggle:checked .unity-toggle__checkmark {
+    background-image: none;
+    background-color: var(--hs-ember);
+    border-top-color: var(--hs-edge-ember-lit);
+    border-left-color: var(--hs-edge-ember-mid);
+    border-right-color: var(--hs-edge-ember-dark);
+    border-bottom-color: var(--hs-edge-ember-deep);
+}
+
+.hs-field.unity-toggle:disabled .unity-toggle__checkmark {
+    background-color: var(--hs-muted);
+    opacity: 1;
+}
+
+/* ── Sliders ────────────────────────────────────────────────────────────────
+   Also unstyled before this, which left the default hairline track: it collapsed
+   to whatever space the label did not take, so a long label left a stub of a
+   slider. The input now grows to fill its column and carries a floor, the track
+   is a well, and the dragger is a raised control face big enough to be a
+   controller-ray target rather than a desktop mouse target. */
+
+.hs-field .unity-base-slider__input {
+    flex-grow: 1;
+    min-width: var(--hs-slider-min-length);
+}
+
+.hs-field .unity-base-slider__tracker {
+    height: var(--hs-slider-track-height);
+    margin-top: 0;
+    background-color: var(--hs-chip);
+    border-top-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
+}
+
+.hs-field .unity-base-slider__dragger {
+    width: var(--hs-slider-dragger-width);
+    height: var(--hs-slider-dragger-height);
+    margin-top: 0;
+    background-color: var(--hs-control);
+    border-top-width: var(--hs-edge-width);
+    border-left-width: var(--hs-edge-width);
+    border-right-width: var(--hs-edge-width);
+    border-bottom-width: var(--hs-edge-width);
+    border-top-color: var(--hs-edge-control-lit);
+    border-left-color: var(--hs-edge-control-mid);
+    border-right-color: var(--hs-edge-control-dark);
+    border-bottom-color: var(--hs-edge-control-deep);
+}
+
+.hs-field .unity-base-slider__dragger:hover {
+    background-color: var(--hs-hover);
+    border-top-color: var(--hs-ember);
+    border-left-color: var(--hs-ember);
+}
 
 /* ── Status ─────────────────────────────────────────────────────────────── */
 

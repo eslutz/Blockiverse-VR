@@ -45,15 +45,29 @@
 /* Quantities column: fixed width so the figures line up down the column and the slider
    track length stays constant while the number changes. */
 .comfort-slider__value {
-    min-width: 110px;
+    min-width: 90px;
     flex-shrink: 0;
     -unity-text-align: middle-right;
 }
 
-/* Field labels are set at runtime (no comfort strings exist in the table yet); the widest is
-   "Sink When Not Swimming", so give the label column room and let it wrap rather than clip.
-   The 64px control minimum from Base.uss absorbs a wrapped second line. */
+/* Labels wrap rather than clip; the 64px control minimum absorbs a second line.
+   No blanket min-width any more. A 250px floor on every label was what starved the
+   sliders: in a ~509px column, 250 of label plus 110 of value left the track about
+   150px, which is the stubby rail visible in the first simulator pass. Toggles do
+   not need a floor at all now — Base.uss grows their input and pins the checkbox to
+   the trailing edge, so the boxes line up on one axis whatever the label does. */
 .comfort-column .unity-base-field__label {
-    min-width: 250px;
     white-space: normal;
+}
+
+/* Sliders keep a modest floor so the tracks still start on a common axis down the
+   column. Their labels are the short ones ("Move Speed", "Snap Turn", "UI Scale");
+   the long strings in this screen are all toggles. */
+.comfort-slider .unity-base-field__label {
+    min-width: 130px;
+    /* Must stay shrinkable. Pinned at flex-shrink: 0 with a 170px floor, a long label
+       ("Smooth Turn Speed") kept its full natural width, and label + track floor + value
+       column overran the ~509px column — which a vertical ScrollView answers with a
+       HORIZONTAL scrollbar. Shrinking and wrapping is what keeps the row inside. */
+    flex-shrink: 1;
 }
