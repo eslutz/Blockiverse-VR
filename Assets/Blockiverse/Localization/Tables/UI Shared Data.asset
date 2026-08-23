@@ -1234,964 +1234,966 @@ MonoBehaviour:
     - rid: 5195086311953793025
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ConfirmAccept.
     - rid: 5195086311953793026
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ConfirmCancel.
     - rid: 5195086311953793027
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ConfirmOk.
     - rid: 5195086311953793028
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.DeathRespawnBedroll.
     - rid: 5195086311953793029
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.DeathRespawnWorldSpawn.
     - rid: 5195086311953793030
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.DeathReturnToTitle.
     - rid: 5195086311953793031
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ErrorClose.
     - rid: 5195086311953793032
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanReconnect.
     - rid: 5195086311953793033
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseCreativeTools.
     - rid: 5195086311953793034
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseQuit.
     - rid: 5195086311953793035
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseResume.
     - rid: 5195086311953793036
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseReturnToTitle.
     - rid: 5195086311953793037
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseSaveGame.
     - rid: 5195086311953793038
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseSettings.
     - rid: 5195086311953793039
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.PauseToggleMode.
     - rid: 5195086311953793040
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SettingsAudio.
     - rid: 5195086311953793041
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SettingsClose.
     - rid: 5195086311953793042
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SettingsComfort.
     - rid: 5195086311953793043
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SettingsControls.
     - rid: 5195086311953793044
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleContinue.
     - rid: 5195086311953793045
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleMultiplayer.
     - rid: 5195086311953793046
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleLoadWorld.
     - rid: 5195086311953793047
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleNewWorld.
     - rid: 5195086311953793048
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleQuit.
     - rid: 5195086311953793049
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleSettingsAction.
     - rid: 5195086311953793050
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WorldDetailsBack.
     - rid: 5195086311953793051
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WorldDetailsDelete.
     - rid: 5195086311953793052
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WorldDetailsDuplicate.
     - rid: 5195086311953793053
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WorldDetailsPlay.
     - rid: 5195086311953793054
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WorldDetailsRename.
     - rid: 5195086311953793055
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonActive.
     - rid: 5195086311953793056
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonEmpty.
     - rid: 5195086311953793057
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonListSeparator.
     - rid: 5195086311953793058
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CommonPage. Placeholders: {0}, {1}.'
     - rid: 5195086311953793059
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonSending.
     - rid: 5195086311953793060
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CommonStack. Placeholders: {0}, {1}.'
     - rid: 5195086311953793061
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CommonStackCount. Placeholders: {0}.'
     - rid: 5195086311953793062
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.EffectsVolume.
     - rid: 5195086311953793063
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.HapticStrength.
     - rid: 5195086311953793064
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.MasterVolume.
     - rid: 5195086311953793065
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.MusicVolume.
     - rid: 5195086311953793066
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.AudioFeedbackTitle.
     - rid: 5195086311953793067
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.UiVolume.
     - rid: 5195086311953793068
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WeatherVolume.
     - rid: 5195086311953793069
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.BlocksCategory.
     - rid: 5195086311953793070
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.BlocksSearchPlaceholder.
     - rid: 5195086311953793071
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.BlocksTitle.
     - rid: 5195086311953793072
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonCancel.
     - rid: 5195086311953793073
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonClose.
     - rid: 5195086311953793074
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CommonDelete.
     - rid: 5195086311953793075
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ControllerMapTitle.
     - rid: 5195086311953793076
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ControlsTitle.
     - rid: 5195086311953793077
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsCopy.
     - rid: 5195086311953793078
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeCyclePaused.
     - rid: 5195086311953793079
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeCycleResumed.
     - rid: 5195086311953793080
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsCycleWeather.
     - rid: 5195086311953793081
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsDaySpeed.
     - rid: 5195086311953793082
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsFill.
     - rid: 5195086311953793083
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsInitialStatus.
     - rid: 5195086311953793084
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsPaste.
     - rid: 5195086311953793085
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsPickBlock.
     - rid: 5195086311953793086
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsRedo.
     - rid: 5195086311953793087
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsReplace.
     - rid: 5195086311953793088
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsSetA.
     - rid: 5195086311953793089
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsSetB.
     - rid: 5195086311953793090
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsSpawnRuin.
     - rid: 5195086311953793091
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsSpawnTree.
     - rid: 5195086311953793092
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsTimeOfDay.
     - rid: 5195086311953793093
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsTitle.
     - rid: 5195086311953793094
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsToggleCycle.
     - rid: 5195086311953793095
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeToolsUndo.
     - rid: 5195086311953793096
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanDiscoveryEntry. Placeholders: {0}, {1}, {2}, {3},
+          {4}.'
     - rid: 5195086311953793097
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanDiscoveryEntryFull. Placeholders: {0}, {1}, {2}.'
     - rid: 5195086311953793098
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanJoinAddressPlaceholder.
     - rid: 5195086311953793099
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LoadWorldDetails.
     - rid: 5195086311953793100
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LoadWorldEntry. Placeholders: {0}, {1}.'
     - rid: 5195086311953793101
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LoadWorldLoad.
     - rid: 5195086311953793102
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LoadWorldNextPage.
     - rid: 5195086311953793103
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LoadWorldNoSaveSelected.
     - rid: 5195086311953793104
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LoadWorldPage. Placeholders: {0}, {1}.'
     - rid: 5195086311953793105
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LoadWorldPreviousPage.
     - rid: 5195086311953793106
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LoadWorldTitle.
     - rid: 5195086311953793107
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldCreate.
     - rid: 5195086311953793108
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldDifficulty.
     - rid: 5195086311953793109
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldGameMode.
     - rid: 5195086311953793110
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldName.
     - rid: 5195086311953793111
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldPreset.
     - rid: 5195086311953793112
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldSeed.
     - rid: 5195086311953793113
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldSize.
     - rid: 5195086311953793114
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldStartingBiome.
     - rid: 5195086311953793115
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldTextureSet.
     - rid: 5195086311953793116
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldTitle.
     - rid: 5195086311953793117
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationAddFuel.
     - rid: 5195086311953793118
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationAddInput.
     - rid: 5195086311953793119
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationCollect.
     - rid: 5195086311953793120
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationFuel.
     - rid: 5195086311953793121
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationIdle.
     - rid: 5195086311953793122
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationInput.
     - rid: 5195086311953793123
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationOutput.
     - rid: 5195086311953793124
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationTitle.
     - rid: 5195086311953793125
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationWithdrawFuel.
     - rid: 5195086311953793126
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationWithdrawInput.
     - rid: 5195086311953793127
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalCrafting.
     - rid: 5195086311953793128
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalHealth.
     - rid: 5195086311953793129
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalInventory.
     - rid: 5195086311953793130
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalTitle.
     - rid: 5195086311953793131
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.WorldDetailsName.
     - rid: 5195086311953793132
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.ConfirmQuitGame.
     - rid: 5195086311953793133
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.WorldDetailsDeletePrompt. Placeholders: {0}.'
     - rid: 5195086311953793134
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CatalogSearch.
     - rid: 5195086311953793135
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CraftingCannotCraft. Placeholders: {0}, {1}.'
     - rid: 5195086311953793136
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CraftingCannotRepair. Placeholders: {0}.'
     - rid: 5195086311953793137
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CraftingCrafted. Placeholders: {0}.'
     - rid: 5195086311953793138
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CraftingNeedsStation. Placeholders: {0}, {1}, {2}.'
     - rid: 5195086311953793139
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CraftingPending. Placeholders: {0}.'
     - rid: 5195086311953793140
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CraftingReady.
     - rid: 5195086311953793141
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CraftingRecipe. Placeholders: {0}, {1}.'
     - rid: 5195086311953793142
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CraftingRecipeUnavailable.
     - rid: 5195086311953793143
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CraftingRepairing.
     - rid: 5195086311953793144
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CraftingToolRepaired.
     - rid: 5195086311953793145
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CrateDeposited. Placeholders: {0}.'
     - rid: 5195086311953793146
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CrateEmptySlot.
     - rid: 5195086311953793147
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CrateNothingHeld.
     - rid: 5195086311953793148
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CrateOffline.
     - rid: 5195086311953793149
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CrateShared.
     - rid: 5195086311953793150
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CrateTransferRejected.
     - rid: 5195086311953793151
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CrateTransferring.
     - rid: 5195086311953793152
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CrateWithdrew. Placeholders: {0}.'
     - rid: 5195086311953793153
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeAimGround.
     - rid: 5195086311953793154
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeAimPick.
     - rid: 5195086311953793155
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeAimReplace.
     - rid: 5195086311953793156
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeChoosePasteOrigin.
     - rid: 5195086311953793157
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeCornerA.
     - rid: 5195086311953793158
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeCornerB.
     - rid: 5195086311953793159
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeCorners. Placeholders: {0}, {1}.'
     - rid: 5195086311953793160
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeOnly.
     - rid: 5195086311953793161
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeLanUnavailable.
     - rid: 5195086311953793162
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeMissingCatalogBlock.
     - rid: 5195086311953793163
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeNoClipboard.
     - rid: 5195086311953793164
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeNoRoomAbove.
     - rid: 5195086311953793165
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeNoWorld.
     - rid: 5195086311953793166
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeNothingToRedo.
     - rid: 5195086311953793167
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeNothingToReplace.
     - rid: 5195086311953793168
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeNothingToUndo.
     - rid: 5195086311953793169
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeOperationDone. Placeholders: {0}.'
     - rid: 5195086311953793170
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeOperationFailed. Placeholders: {0}.'
     - rid: 5195086311953793171
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeOutOfBounds. Placeholders: {0}.'
     - rid: 5195086311953793172
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativePicked. Placeholders: {0}.'
     - rid: 5195086311953793173
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeSetCorner. Placeholders: {0}, {1}.'
     - rid: 5195086311953793174
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeSetCornerAim. Placeholders: {0}.'
     - rid: 5195086311953793175
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeSetCornersFirst.
     - rid: 5195086311953793176
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeSpawnedRuin. Placeholders: {0}.'
     - rid: 5195086311953793177
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeSpawnedTree. Placeholders: {0}.'
     - rid: 5195086311953793178
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeTimeHostOnly.
     - rid: 5195086311953793179
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeVolumeLimit. Placeholders: {0}.'
     - rid: 5195086311953793180
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.CreativeWeather. Placeholders: {0}.'
     - rid: 5195086311953793181
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.CreativeWeatherHostOnly.
     - rid: 5195086311953793182
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.HealthCritical.
     - rid: 5195086311953793183
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.HealthDown.
     - rid: 5195086311953793184
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.HealthStable.
     - rid: 5195086311953793185
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.HealthVitals. Placeholders: {0}, {1}, {2}, {3}.'
     - rid: 5195086311953793186
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.InventoryHotbar. Placeholders: {0}, {1}.'
     - rid: 5195086311953793187
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.InventoryHotbarEmpty.
     - rid: 5195086311953793188
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.InventorySlotsCount. Placeholders: {0}.'
     - rid: 5195086311953793189
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.InventorySlotsRange. Placeholders: {0}, {1}, {2}.'
     - rid: 5195086311953793190
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanConnected. Placeholders: {0}, {1}.'
     - rid: 5195086311953793191
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanDiscoveryNoneFound.
     - rid: 5195086311953793192
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanDiscoverySearching.
     - rid: 5195086311953793193
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanDiscoveryUnavailable.
     - rid: 5195086311953793194
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanFailed.
     - rid: 5195086311953793195
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanHostDisconnected. Placeholders: {0}, {1}.'
     - rid: 5195086311953793196
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanHosting. Placeholders: {0}, {1}.'
     - rid: 5195086311953793197
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanJoinFailed. Placeholders: {0}, {1}, {2}.'
     - rid: 5195086311953793198
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanJoining. Placeholders: {0}, {1}.'
     - rid: 5195086311953793199
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanLastDisconnect. Placeholders: {0}, {1}.'
     - rid: 5195086311953793200
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedBlockRegistryMismatch.
     - rid: 5195086311953793201
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedGameVersionMismatch.
     - rid: 5195086311953793202
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedInvalidJoinPayload.
     - rid: 5195086311953793203
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedItemRegistryMismatch.
     - rid: 5195086311953793204
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedProtocolMismatch.
     - rid: 5195086311953793205
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedRecipeRegistryMismatch.
     - rid: 5195086311953793206
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedSessionFull.
     - rid: 5195086311953793207
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanRejectedUnsupportedWorldVersion.
     - rid: 5195086311953793208
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanStartHostFailed. Placeholders: {0}.'
     - rid: 5195086311953793209
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanStartingHost.
     - rid: 5195086311953793210
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanStopFailed.
     - rid: 5195086311953793211
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanStopFailedWithReason. Placeholders: {0}.'
     - rid: 5195086311953793212
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanStopped.
     - rid: 5195086311953793213
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanStoppedWithDefault.
     - rid: 5195086311953793214
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanStopping.
     - rid: 5195086311953793215
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanStoppingWithoutShutdownSave. Placeholders: {0}.'
     - rid: 5195086311953793216
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanUnableToReach. Placeholders: {0}, {1}.'
     - rid: 5195086311953793217
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.LanUnavailable.
     - rid: 5195086311953793218
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.NewWorldSurvivalPresetUnsupported.
     - rid: 5195086311953793219
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StationCannotCollect. Placeholders: {0}.'
     - rid: 5195086311953793220
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StationCannotDeposit. Placeholders: {0}.'
     - rid: 5195086311953793221
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StationCannotWithdraw. Placeholders: {0}.'
     - rid: 5195086311953793222
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StationCollected. Placeholders: {0}.'
     - rid: 5195086311953793223
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationFuelAdded.
     - rid: 5195086311953793224
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationHoldItem.
     - rid: 5195086311953793225
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationInputAdded.
     - rid: 5195086311953793226
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StationNoFuel.
     - rid: 5195086311953793227
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StationStack. Placeholders: {0}, {1}.'
     - rid: 5195086311953793228
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StationWithdrew. Placeholders: {0}.'
     - rid: 5195086311953793229
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalHudHarvestRejected.
     - rid: 5195086311953793230
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalHudInventoryFull.
     - rid: 5195086311953793231
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.SurvivalHudMiningProgress. Placeholders: {0}.'
     - rid: 5195086311953793232
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.SurvivalHudToolTooWeak.
     - rid: 5195086311953793233
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusAutosaveFailed.
     - rid: 5195086311953793234
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusAutosaveSucceeded.
     - rid: 5195086311953793235
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusCreateWorldFailed.
     - rid: 5195086311953793236
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusCreatingWorld.
     - rid: 5195086311953793237
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusDeleteFailed.
     - rid: 5195086311953793238
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusDuplicateFailed.
     - rid: 5195086311953793239
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusEnterWorldNameFirst.
     - rid: 5195086311953793240
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.StatusLoadFailed. Placeholders: {0}.'
     - rid: 5195086311953793241
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusLoadWorldFailed.
     - rid: 5195086311953793242
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusLoadingWorld.
     - rid: 5195086311953793243
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusWorldNameEmpty.
     - rid: 5195086311953793244
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusRenameFailed.
     - rid: 5195086311953793245
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusSaveFailed.
     - rid: 5195086311953793246
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusSaveNotFound.
     - rid: 5195086311953793247
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusSaveSucceeded.
     - rid: 5195086311953793248
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.StatusSuspendSinglePlayerFailed.
     - rid: 5195086311953793249
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.WorldDetailsMetadata. Placeholders: {0}, {1}, {2}, {3},
+          {4}, {5}.'
     - rid: 5195086311953793250
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleBlockiverse.
     - rid: 5195086311953793251
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleConfirm.
     - rid: 5195086311953793252
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleDeath.
     - rid: 5195086311953793253
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleError.
     - rid: 5195086311953793254
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitlePaused.
     - rid: 5195086311953793255
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleSettings.
     - rid: 5195086311953793256
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Keys.TitleWorldDetails.
     - rid: 5195086311953793257
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Raw-key entry (no Keys const).
     - rid: 5195086311953793258
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Raw-key entry (no Keys const).
     - rid: 5195086311953793259
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Raw-key entry (no Keys const).
     - rid: 5195086311953793260
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Raw-key entry (no Keys const).
     - rid: 5195086311953793261
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Raw-key entry (no Keys const).
     - rid: 5195086311953793262
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Raw-key entry (no Keys const).
     - rid: 5195086311953793263
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: Crafting without a station (DisplayName(CraftingStation.None)).
     - rid: 5195086313155461120
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.LanAgePolicyNotice. Placeholders: {0}.'
     - rid: 5195086313155461121
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
-        m_CommentText: Comment Text
+        m_CommentText: 'Keys.HealthVitalsRatio. Placeholders: {0}, {1}.'

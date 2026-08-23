@@ -1,0 +1,6 @@
+# UXML files allowed to carry unbound literal text, each with its reason.
+# Adding to this list is a reviewed act — the file exists so exemption is visible, not easy.
+
+# Phase 1 proof scaffolding: deliberately unlocalized diagnostics for the headset pass;
+# removed with the proof panel itself.
+UiToolkitProofScreen.uxml

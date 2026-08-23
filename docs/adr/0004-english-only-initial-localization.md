@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0011](0011-unity-localization-adoption.md) (2026-08-23).
 
 ## Decision
 

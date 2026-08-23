@@ -2,7 +2,9 @@
   "name": "Blockiverse.UI.Toolkit",
   "rootNamespace": "Blockiverse.UI.Toolkit",
   "references": [
-    "Blockiverse.Core"
+    "Blockiverse.Core",
+    "Unity.Localization",
+    "Unity.ResourceManager"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

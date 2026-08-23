@@ -37,7 +37,25 @@ namespace Blockiverse.Editor
         [MenuItem("Blockiverse/Localization/Migrate English Table")]
         public static void Run()
         {
-            IReadOnlyDictionary<string, string> english = ReadEnglishDictionary();
+            // Phase 3b deleted the compiled dictionary, so the frozen snapshot is the source for
+            // every re-run. Re-running remains useful: it re-seeds tool-shaped comments (the
+            // first run left all of them at the Comment class's "Comment Text" default) and
+            // restores migration-era values after accidental table edits.
+            IReadOnlyList<KeyValuePair<string, string>> english;
+            IReadOnlyList<KeyValuePair<string, string>> winners;
+
+            try
+            {
+                IReadOnlyDictionary<string, string> dict = ReadEnglishDictionary();
+                english = dict.ToList();
+                winners = BuildReverseWinners(dict);
+            }
+            catch (InvalidOperationException)
+            {
+                english = ReadSnapshot();
+                winners = ReadSnapshotWinners();
+            }
+
             IReadOnlyDictionary<string, string> keyToConst = MapKeysToConstNames();
 
             StringTableCollection collection =
@@ -53,8 +71,12 @@ namespace Blockiverse.Editor
             var table = (StringTable)collection.GetTable(english_locale.Identifier);
 
             // Deterministic order keeps the asset diff reviewable and re-runs byte-stable.
+            // The Handcraft entry is only appended when absent — snapshot-sourced runs already
+            // carry it.
             var allEntries = english
-                .Concat(new[] { new KeyValuePair<string, string>(HandcraftKey, HandcraftValue) })
+                .Concat(english.Any(kv => kv.Key == HandcraftKey)
+                    ? Enumerable.Empty<KeyValuePair<string, string>>()
+                    : new[] { new KeyValuePair<string, string>(HandcraftKey, HandcraftValue) })
                 .OrderBy(kv => kv.Key, StringComparer.Ordinal)
                 .ToList();
 
@@ -76,7 +98,7 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(collection);
             AssetDatabase.SaveAssets();
 
-            WriteSnapshot(allEntries, BuildReverseWinners(english));
+            WriteSnapshot(allEntries, winners);
 
             BlockiverseLog.Info(
                 BlockiverseLogCategory.Bootstrap,
@@ -178,9 +200,14 @@ namespace Blockiverse.Editor
             }
 
             // Only overwrite tool-shaped comments; a hand-enriched comment survives re-runs.
+            // "Comment Text" is the Comment class's constructor default — the first migration run
+            // left all 241 comments saying exactly that, because this guard mistook the default
+            // for a hand edit. It is tool-shaped by definition.
             if (string.IsNullOrEmpty(comment.CommentText) ||
+                comment.CommentText == "Comment Text" ||
                 comment.CommentText.StartsWith("Keys.", StringComparison.Ordinal) ||
-                comment.CommentText.StartsWith("Raw-key", StringComparison.Ordinal))
+                comment.CommentText.StartsWith("Raw-key", StringComparison.Ordinal) ||
+                comment.CommentText.StartsWith("Crafting without", StringComparison.Ordinal))
             {
                 comment.CommentText = text;
             }
@@ -202,6 +229,32 @@ namespace Blockiverse.Editor
             }
 
             return winners.ToList();
+        }
+
+        [Serializable]
+        sealed class SnapshotWinner
+        {
+            public string english;
+            public string key;
+        }
+
+        [Serializable]
+        sealed class SnapshotWinnersDocument
+        {
+            public SnapshotWinner[] reverseWinners;
+        }
+
+        static IReadOnlyList<KeyValuePair<string, string>> ReadSnapshotWinners()
+        {
+            SnapshotWinnersDocument doc = UnityEngine.JsonUtility.FromJson<SnapshotWinnersDocument>(
+                File.ReadAllText(SnapshotPath));
+
+            if (doc?.reverseWinners == null || doc.reverseWinners.Length == 0)
+                throw new InvalidOperationException($"No reverse winners in {SnapshotPath}.");
+
+            return doc.reverseWinners
+                .Select(w => new KeyValuePair<string, string>(w.english, w.key))
+                .ToList();
         }
 
         static void WriteSnapshot(
