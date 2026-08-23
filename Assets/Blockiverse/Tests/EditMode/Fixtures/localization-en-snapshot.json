@@ -165,6 +165,7 @@
     { "key": "ui.status.inventory.hotbar_empty", "value": "Hotbar -" },
     { "key": "ui.status.inventory.slots_count", "value": "Slots {0}" },
     { "key": "ui.status.inventory.slots_range", "value": "Slots {0}-{1} / {2}" },
+    { "key": "ui.status.lan.age_policy_notice", "value": "{0}\nMeta social features use fallback identity and avatar behavior for this account." },
     { "key": "ui.status.lan.connected", "value": "Connected to LAN session at {0}:{1}." },
     { "key": "ui.status.lan.discovery.none_found", "value": "No LAN sessions found. Enter the host's address to join directly." },
     { "key": "ui.status.lan.discovery.searching", "value": "Looking for LAN sessions..." },
@@ -238,7 +239,8 @@
     { "key": "ui.value.canonical.medium", "value": "Medium (192x192)" },
     { "key": "ui.value.canonical.original", "value": "Original" },
     { "key": "ui.value.canonical.small", "value": "Small (128x128)" },
-    { "key": "ui.value.crafting_station.none", "value": "Handcraft" }
+    { "key": "ui.value.crafting_station.none", "value": "Handcraft" },
+    { "key": "ui.value.vitals_ratio", "value": "{0} / {1}" }
   ],
   "reverseWinners": [
     { "english": "Blockiverse", "key": "ui.title.blockiverse" },
@@ -419,6 +421,7 @@
     { "english": "LAN session ended because the host disconnected. Use Join to reconnect to {0}:{1} when the LAN host is available again.", "key": "ui.status.lan.host_disconnected" },
     { "english": "Unable to reach LAN session at {0}:{1}. Check that the host is on the same LAN and try Join again.", "key": "ui.status.lan.unable_to_reach" },
     { "english": "{0} Last disconnect: {1}", "key": "ui.status.lan.last_disconnect" },
+    { "english": "{0}\nMeta social features use fallback identity and avatar behavior for this account.", "key": "ui.status.lan.age_policy_notice" },
     { "english": "LAN session failed.", "key": "ui.status.lan.failed" },
     { "english": "The host is running a different multiplayer protocol version. Both headsets need the same build of Blockiverse VR.", "key": "ui.status.lan.rejected.protocol_mismatch" },
     { "english": "The host is running a different version of Blockiverse VR. Update both headsets to the same version and try again.", "key": "ui.status.lan.rejected.game_version_mismatch" },
@@ -465,6 +468,7 @@
     { "english": "Down", "key": "ui.status.health.down" },
     { "english": "Critical", "key": "ui.status.health.critical" },
     { "english": "Stable", "key": "ui.status.health.stable" },
-    { "english": "{0} · Hunger {1} · Thirst {2} · Stamina {3}", "key": "ui.status.health.vitals" }
+    { "english": "{0} · Hunger {1} · Thirst {2} · Stamina {3}", "key": "ui.status.health.vitals" },
+    { "english": "{0} / {1}", "key": "ui.value.vitals_ratio" }
   ]
 }

@@ -1210,6 +1210,16 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 5195086311953793263
+  - m_Id: 19227741249536
+    m_Key: ui.status.lan.age_policy_notice
+    m_Metadata:
+      m_Items:
+      - rid: 5195086313155461120
+  - m_Id: 19227766415360
+    m_Key: ui.value.vitals_ratio
+    m_Metadata:
+      m_Items:
+      - rid: 5195086313155461121
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
@@ -2174,6 +2184,14 @@ MonoBehaviour:
       data:
         m_CommentText: Comment Text
     - rid: 5195086311953793263
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Comment Text
+    - rid: 5195086313155461120
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Comment Text
+    - rid: 5195086313155461121
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
         m_CommentText: Comment Text

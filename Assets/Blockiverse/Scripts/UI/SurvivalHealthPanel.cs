@@ -77,7 +77,9 @@ namespace Blockiverse.UI
                 lastMaxHealth = vitals.MaxHealth;
 
                 if (healthLabel != null)
-                    healthLabel.text = $"{vitals.CurrentHealth} / {vitals.MaxHealth}";
+                    healthLabel.text = BlockiverseLocalization.Format(
+                        BlockiverseLocalization.Keys.HealthVitalsRatio,
+                        vitals.CurrentHealth, vitals.MaxHealth);
 
                 if (healthSlider != null)
                 {

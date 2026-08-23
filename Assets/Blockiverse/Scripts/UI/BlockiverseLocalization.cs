@@ -6,6 +6,9 @@ using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.WorldGen;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
+using UnityEngine.Localization.Tables;
 
 namespace Blockiverse.UI
 {
@@ -213,6 +216,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
             public const string LanHostDisconnected = "ui.status.lan.host_disconnected";
             public const string LanUnableToReach = "ui.status.lan.unable_to_reach";
             public const string LanLastDisconnect = "ui.status.lan.last_disconnect";
+            public const string LanAgePolicyNotice = "ui.status.lan.age_policy_notice";
             public const string LanFailed = "ui.status.lan.failed";
 
             // Join refusals. The host sends a BlockiverseJoinRejectionReason name as the Netcode
@@ -267,6 +271,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
             public const string HealthCritical = "ui.status.health.critical";
             public const string HealthStable = "ui.status.health.stable";
             public const string HealthVitals = "ui.status.health.vitals";
+            public const string HealthVitalsRatio = "ui.value.vitals_ratio";
         }
 
         static readonly Dictionary<string, string> English = new(StringComparer.Ordinal)
@@ -475,6 +480,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
             [Keys.LanHostDisconnected] = "LAN session ended because the host disconnected. Use Join to reconnect to {0}:{1} when the LAN host is available again.",
             [Keys.LanUnableToReach] = "Unable to reach LAN session at {0}:{1}. Check that the host is on the same LAN and try Join again.",
             [Keys.LanLastDisconnect] = "{0} Last disconnect: {1}",
+            [Keys.LanAgePolicyNotice] = "{0}\nMeta social features use fallback identity and avatar behavior for this account.",
             [Keys.LanFailed] = "LAN session failed.",
 
             [Keys.LanRejectedProtocolMismatch] = "The host is running a different multiplayer protocol version. Both headsets need the same build of Blockiverse VR.",
@@ -526,11 +532,16 @@ public const string SettingsAudio = "ui.action.settings.audio";
             [Keys.HealthCritical] = "Critical",
             [Keys.HealthStable] = "Stable",
             [Keys.HealthVitals] = "{0} · Hunger {1} · Thirst {2} · Stamina {3}",
+            [Keys.HealthVitalsRatio] = "{0} / {1}",
         };
 
         static readonly Dictionary<string, string> Overrides = new(StringComparer.Ordinal);
         static readonly Dictionary<string, string> EnglishKeys = BuildEnglishKeys();
 
+        // Resolution order: test overrides, then the "UI" string table, then the caller's
+        // fallback (the dynamic ui.value.* namespaces resolve almost entirely through humanized
+        // fallbacks by design). The compiled English dictionary below is no longer consulted at
+        // runtime — it survives only as the migration tool's source until Phase 3b deletes it.
         public static string Text(string key, string fallback = null)
         {
             if (string.IsNullOrEmpty(key))
@@ -539,10 +550,63 @@ public const string SettingsAudio = "ui.action.settings.audio";
             if (Overrides.TryGetValue(key, out string localized))
                 return localized;
 
-            if (English.TryGetValue(key, out string english))
-                return english;
+            string resolved = ResolveFromTable(key);
+
+            if (resolved != null)
+                return resolved;
 
             return fallback ?? key;
+        }
+
+        const string StringTableName = "UI";
+
+        static StringTable cachedTable;
+        static bool localeChangeHookInstalled;
+
+        // Spike findings this encodes (see the LocalizationSpike tests, which pin them):
+        //  - AvailableLocales is empty until initialization is forced, so the first caller
+        //    must WaitForCompletion() on the initialization operation — including in EditMode
+        //    and batchmode, where nothing else initializes the package.
+        //  - No locale-selection pass runs outside Play mode, so the locale is always resolved
+        //    explicitly (Selected ?? Project ?? en) rather than relying on the no-argument path.
+        //  - A missing TABLE yields a diagnostic string and a missing KEY yields null from the
+        //    string database, so misses are detected via GetTable/GetEntry instead of
+        //    interpreting either shape.
+        static string ResolveFromTable(string key)
+        {
+            if (cachedTable == null)
+            {
+                LocalizationSettings.InitializationOperation.WaitForCompletion();
+
+                Locale locale = LocalizationSettings.SelectedLocale
+                    ?? LocalizationSettings.ProjectLocale
+                    ?? LocalizationSettings.AvailableLocales.GetLocale("en");
+
+                if (locale == null)
+                    return null;
+
+                cachedTable = LocalizationSettings.StringDatabase
+                    .GetTableAsync(StringTableName, locale)
+                    .WaitForCompletion();
+
+                if (!localeChangeHookInstalled)
+                {
+                    // Invalidate on language change so every later resolve reads the new
+                    // locale's table. Installed lazily, after the first successful init, so
+                    // tests that never touch localization never force the package awake.
+                    LocalizationSettings.SelectedLocaleChanged += _ => cachedTable = null;
+                    localeChangeHookInstalled = true;
+                }
+            }
+
+            if (cachedTable == null)
+                return null;
+
+            StringTableEntry entry = cachedTable.GetEntry(key);
+
+            // Raw Value, not GetLocalizedString(): migrated entries are Smart-off and Format()
+            // below applies string.Format itself, byte-identical to the pre-migration behavior.
+            return entry?.Value;
         }
 
         public static string Format(string key, params object[] args)
@@ -570,7 +634,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
         {
             string value = station.ToString();
             string key = "ui.value.crafting_station." + NormalizeKey(value);
-            return Text(key, station == CraftingStation.None ? "Handcraft" : HumanizeIdentifier(value, titleCase: true));
+            return Text(key, HumanizeIdentifier(value, titleCase: true));
         }
 
         public static string DisplayName(WeatherState state)
@@ -594,6 +658,9 @@ public const string SettingsAudio = "ui.action.settings.audio";
             return Text(key, HumanizeIdentifier(value, titleCase: true));
         }
 
+        // NOT dead API: SurvivalCraftingPanel's repair path calls this (an earlier survey said
+        // zero call sites; the compiler disagreed). Kept with the same humanize-fallback shape
+        // as its siblings.
         public static string DisplayName(RepairFailureReason reason)
         {
             string value = reason.ToString();
@@ -608,15 +675,6 @@ public const string SettingsAudio = "ui.action.settings.audio";
                 return false;
 
             return EnglishKeys.TryGetValue(defaultText, out key);
-        }
-
-        public static string GeneratedKeyForDefaultText(string defaultText)
-        {
-            if (TryGetKnownKeyForDefaultText(defaultText, out string key))
-                return key;
-
-            string normalized = NormalizeKey(defaultText);
-            return string.IsNullOrEmpty(normalized) ? null : "ui.generated." + normalized;
         }
 
         public static void SetOverrideForTesting(string key, string value)

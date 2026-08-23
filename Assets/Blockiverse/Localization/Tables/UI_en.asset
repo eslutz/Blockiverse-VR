@@ -989,6 +989,17 @@ MonoBehaviour:
     m_Localized: Handcraft
     m_Metadata:
       m_Items: []
+  - m_Id: 19227741249536
+    m_Localized: '{0}
+
+      Meta social features use fallback identity and avatar
+      behavior for this account.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 19227766415360
+    m_Localized: '{0} / {1}'
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []
