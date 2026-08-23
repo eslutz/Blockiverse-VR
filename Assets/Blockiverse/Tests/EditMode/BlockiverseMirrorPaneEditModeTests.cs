@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Reflection;
 using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
@@ -26,6 +27,9 @@ namespace Blockiverse.Tests.EditMode
             // holes into adjacent chunk geometry.
             Assert.That(definition.IsSolid, Is.False);
             Assert.That(definition.IsRenderable, Is.True);
+            // Ruleset §2 pins 0.4 (matching clearpane_glass's documented hardness); the
+            // Soft class alone would derive 0.5, so this must be passed explicitly.
+            Assert.That(definition.Hardness, Is.EqualTo(0.4f).Within(1e-4f));
 
             ItemDefinition item = ItemRegistry.Default.Get(ItemId.MirrorPane);
             Assert.That(item, Is.Not.Null);
@@ -102,6 +106,36 @@ namespace Blockiverse.Tests.EditMode
                 blockCenter, blockCenter + new Vector3(0.0f, 3.0f, 0.0f),
                 _ => true, out _);
             Assert.That(found, Is.False);
+        }
+
+        [Test]
+        public void MirrorSelectionRejectsPanesBehindOrOccludedFromTheViewer()
+        {
+            var cameraObject = new GameObject("Viewer Camera");
+            Camera camera = cameraObject.AddComponent<Camera>();
+            cameraObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+
+            MethodInfo isVisible = typeof(BlockiverseMirrorSurfaceManager).GetMethod(
+                "IsPaneVisibleToViewer", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(isVisible, Is.Not.Null);
+
+            try
+            {
+                // Directly ahead (+Z, the default camera forward), nothing blocking: visible.
+                // No collider exists anywhere in this scene, so this also proves the check does
+                // not spuriously treat an empty world as occluded.
+                bool ahead = (bool)isVisible.Invoke(null, new object[] { camera, new Vector3(0.0f, 0.0f, 5.0f) });
+                Assert.That(ahead, Is.True);
+
+                // A pane nearer than a farther one but behind the player must not win the single
+                // active-mirror slot by distance alone — the regression this test pins.
+                bool behind = (bool)isVisible.Invoke(null, new object[] { camera, new Vector3(0.0f, 0.0f, -2.0f) });
+                Assert.That(behind, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+            }
         }
     }
 }

@@ -307,7 +307,7 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(CutstoneBlock, "cutstone_block", "Cutstone Block", BlockCategory.Crafted, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(FiredBrickBlock, "fired_brick_block", "Fired Brick Block", BlockCategory.Crafted, isSolid: true, isRenderable: true, hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1, hardness: 2.6f));
             registry.Register(new BlockDefinition(ClearpaneGlass,"clearpane_glass","Clearpane Glass",BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft,  harvestTierMin: 1));
-            registry.Register(new BlockDefinition(MirrorPane,    "mirror_pane",    "Mirror Pane",    BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft,  harvestTierMin: 1));
+            registry.Register(new BlockDefinition(MirrorPane,    "mirror_pane",    "Mirror Pane",    BlockCategory.Crafted, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft,  harvestTierMin: 1, hardness: 0.4f));
 
             // ── Additional canonical resource nodes (atlas tiles generated) ──
             registry.Register(new BlockDefinition(SurfacePebbles,   "surface_pebbles",   "Surface Pebbles",   BlockCategory.Resource, isSolid: false, isRenderable: true, hardnessClass: BlockHardnessClass.Soft));

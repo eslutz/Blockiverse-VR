@@ -98,15 +98,16 @@ namespace Blockiverse.Gameplay
             if (Time.unscaledTime >= nextReselectTime)
             {
                 nextReselectTime = Time.unscaledTime + ReselectIntervalSeconds;
-                SelectMirror(viewerCamera.transform.position);
+                SelectMirror(viewerCamera);
             }
 
             if (hasActiveMirror)
                 DriveActiveMirror(viewerCamera);
         }
 
-        void SelectMirror(Vector3 viewerPosition)
+        void SelectMirror(Camera viewerCamera)
         {
+            Vector3 viewerPosition = viewerCamera.transform.position;
             BlockPosition best = default;
             Vector3Int bestNormal = default;
             float bestDistanceSq = ActivationRangeMeters * ActivationRangeMeters;
@@ -125,6 +126,13 @@ namespace Blockiverse.Gameplay
                     continue;
                 }
 
+                // Distance and an open neighbour only prove the pane COULD show, not that this
+                // viewer can currently see it: a nearer pane behind the player, or behind an
+                // intervening wall, would otherwise win the single active-mirror slot over a
+                // farther pane actually in view.
+                if (!IsPaneVisibleToViewer(viewerCamera, center))
+                    continue;
+
                 best = position;
                 bestNormal = normal;
                 bestDistanceSq = distanceSq;
@@ -139,6 +147,22 @@ namespace Blockiverse.Gameplay
 
             if (!hasActiveMirror || !best.Equals(activeMirror) || bestNormal != activeFaceNormal)
                 ActivateMirror(best, bestNormal);
+        }
+
+        // Front-hemisphere check (not the camera's actual FOV — deliberately generous, since a
+        // pane at the edge of view still visibly updates) plus a solid-geometry occlusion test.
+        // The mirror pane block itself never appears in this hit test: only solid blocks carry a
+        // collider on this layer (VoxelWorldRenderer's collider mesh is fed by the solid mesh
+        // only), and mirror_pane is isSolid: false.
+        static bool IsPaneVisibleToViewer(Camera viewerCamera, Vector3 paneCenter)
+        {
+            Transform viewerTransform = viewerCamera.transform;
+            Vector3 toPane = paneCenter - viewerTransform.position;
+            if (Vector3.Dot(viewerTransform.forward, toPane) <= 0.0f)
+                return false;
+
+            return !Physics.Linecast(
+                viewerTransform.position, paneCenter, BlockiverseProject.VoxelGroundLayerMask);
         }
 
         bool IsFaceOpen(BlockPosition position, Vector3Int normal)
