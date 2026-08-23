@@ -25,7 +25,9 @@
     "Unity.XR.CompositionLayers",
     "Unity.XR.CompositionLayers.UIInteraction",
     "Unity.XR.OpenXR",
-    "Unity.XR.OpenXR.Editor"
+    "Unity.XR.OpenXR.Editor",
+    "Unity.Localization",
+    "Unity.ResourceManager"
   ],
   "includePlatforms": [
     "Editor"

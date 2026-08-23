@@ -27,7 +27,9 @@
     "Unity.XR.OpenXR",
     "Unity.XR.OpenXR.Editor",
     "Unity.TextMeshPro",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Unity.Localization",
+    "Unity.Localization.Editor"
   ],
   "includePlatforms": [
     "Editor"
