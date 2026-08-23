@@ -1350,6 +1350,44 @@ precipitationRenderAmount *= 1.0 - indoorBlend;
 fogDensity = lerp(outdoorFogDensity, indoorFogDensity, indoorBlend);
 ```
 
+### 19.4 Water surface rendering
+
+Water is transparent and wave-animated. Folded from the retired water-surface-rendering ADR
+(2026-08-20, PR #328); where a decision went against the obvious answer, the reason is recorded so
+it is not "fixed" later.
+
+- **One voxel shader, one keyword.** `BlockiverseVoxelLit.shader` carries a `_BLOCKIVERSE_WATER`
+  `multi_compile_local` variant with material-driven `Blend`/`ZWrite`/`Cull`; `BlockVisualAtlas`
+  clones the authored atlas material transparent at runtime. **A second `.shader` file is
+  forbidden**: nothing references the runtime-cloned materials as assets, so a shader reached only
+  through `Shader.Find` is stripped from the Android player — invisible in editor and CI, magenta
+  water on device. `shader_feature_local` is forbidden for the same stripping reason.
+- **Water data rides UV1** `(surfaceMask, familyIndex)`, never vertex COLOR — R/G/B are sky
+  exposure, emitter reach, and self emission (§5), all of which water needs as much as stone does.
+  `COLOR.a` stays 1.0: it is the blend's opacity multiplier.
+- **The wave is strictly downward** (`dy = A·(s − 1)`), so a crest can never open a shoreline
+  crack. The surface mask marks emitted `+Y` faces, plus the foot of a side wall standing on a
+  lower same-family surface — without that exception the wave opens a ~5 cm see-through slit under
+  every flowing-water step. Wave normal and highlight are gated on the baked normal facing up.
+- **Depth-primed transparency: exactly one blended layer per pixel.** A `ColorMask 0`
+  `WaterDepthPrime` pass at queue `Transparent − 1` (with `Offset 1, 1`) claims each pixel for the
+  nearest water fragment; the shading pass blends at `Transparent` with `ZTest LEqual`. Both passes
+  displace through the same wave helper. Accepted consequence: water occludes transparent objects
+  behind it (particles), never opaque geometry — the seabed stays visible.
+- **Underwater is fog plus a camera-clear swap** (`BlockiverseWaterView`), with the fog write owned
+  by `BlockiverseLightingCycleController`. A camera-attached tint quad is forbidden: routed menus
+  are world-space canvases on the same camera, and a near-clip quad would tint the pause/quit
+  escape hatch. Canvas UI ignores fog, so menus stay legible underwater — a feature, not a bug.
+- **No depth texture, no opaque texture, no renderer features** — either forfeits fixed foveated
+  rendering across the whole frame. Accepted: no depth-fade shorelines, no refraction.
+- The wave is presentation-only: colliders cook from the undisplaced mesh, gameplay reads voxels.
+  Fluid mesh bounds pad downward by `VoxelWorldRenderer.MaxWaveDipMeters`; an EditMode test pins
+  shader amplitudes to that padding.
+- **Open gate:** staged `ovrgpuprofiler` captures (baseline / queue-move-only / full / prime-off)
+  on one seed and pose — procedure in `docs/testing/performance/README.md`. The queue-move-only
+  number decides whether transparent water is affordable at all. Fill-rate levers, in order:
+  raise alpha, MSAA 4x → 2x, opaque queue as last resort.
+
 ---
 
 ## 20. Save data

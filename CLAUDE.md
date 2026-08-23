@@ -5,7 +5,10 @@ This file is the single source of truth for agent instructions in this repositor
 
 Canonical game design lives in [docs/rulesets/](docs/rulesets/) and the roadmap in
 [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md).
-Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
+Architecture decisions go in [docs/adr/](docs/adr/) — reserved for cross-cutting
+architecture; feature-level design decisions belong in the ruleset that owns the system,
+which is also why ADR numbers are permanent (gaps from retired ADRs are never reused) —
+and the testing contract is
 [docs/testing/README.md](docs/testing/README.md).
 
 Current project handoff state lives in [MEMORIES.md](MEMORIES.md).

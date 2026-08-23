@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted 2026-08-23. Supersedes [ADR 0004](0004-english-only-initial-localization.md).
+Accepted 2026-08-23. Supersedes ADR 0004 (English-only initial localization, 2026-06-12; retired — this decision replaces its compiled string-key system entirely, and English remains the only shipped locale until translation is scheduled).
 
 ## Context
 

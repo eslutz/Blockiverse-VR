@@ -259,7 +259,8 @@ namespace Blockiverse.VR
         // assist needs to be grounded and a treading player never is, and jump is disabled while
         // swimming.
         //
-        // This reverses ADR 0008's "no ledge-climb assist" decision, which was taken on comfort
+        // This reverses the swim design's original "no ledge-climb assist" decision (see
+        // voxel_survival_ruleset.md §5.6, "Climbing out"), which was taken on comfort
         // grounds. The argument for reversing it: the lift only ever fires while the player is
         // pushing INTO the bank, so it is redirected requested motion rather than the unrequested
         // motion that ADR rejected -- and it is capped at two blocks. See the ADR amendment.
