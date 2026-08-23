@@ -84,6 +84,35 @@ namespace Blockiverse.Editor
                 $"snapshot at {SnapshotPath}.");
         }
 
+        [Serializable]
+        sealed class SnapshotEntry
+        {
+            public string key;
+            public string value;
+        }
+
+        [Serializable]
+        sealed class SnapshotDocument
+        {
+            public SnapshotEntry[] entries;
+        }
+
+        // Phase 3b: the dictionary is deleted, so the frozen snapshot is now the round-trip
+        // test's source of truth. Reads via JsonUtility (the snapshot's array shape exists
+        // precisely because JsonUtility cannot deserialize dictionaries).
+        public static IReadOnlyList<KeyValuePair<string, string>> ReadSnapshot()
+        {
+            SnapshotDocument doc = UnityEngine.JsonUtility.FromJson<SnapshotDocument>(
+                File.ReadAllText(SnapshotPath));
+
+            if (doc?.entries == null || doc.entries.Length == 0)
+                throw new InvalidOperationException($"Snapshot unreadable at {SnapshotPath}.");
+
+            return doc.entries
+                .Select(e => new KeyValuePair<string, string>(e.key, e.value))
+                .ToList();
+        }
+
         // Public so the round-trip test compares the table against the same source this tool
         // migrated from, with no second reflection implementation to drift.
         public static IReadOnlyDictionary<string, string> ReadEnglishDictionary()

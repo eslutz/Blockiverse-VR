@@ -115,6 +115,30 @@ namespace Blockiverse.Tests.EditMode
                 "the panel is not rendering its ratio through Keys.HealthVitalsRatio");
         }
 
+        // The reverse lookup went from a dictionary-derived map to the frozen snapshot in
+        // Phase 3b. These two English values collide with other keys and their winners are
+        // order-dependent -- they are exactly the pair that would silently flip if anyone
+        // "simplifies" the frozen map into a rebuild from table enumeration.
+        [Test]
+        public void FrozenReverseWinnersHoldTheirDeclarationOrderWinners()
+        {
+            Assert.That(
+                BlockiverseLocalization.TryGetKnownKeyForDefaultText("Settings", out string settingsKey),
+                Is.True);
+            Assert.That(settingsKey, Is.EqualTo("ui.title.settings"));
+
+            Assert.That(
+                BlockiverseLocalization.TryGetKnownKeyForDefaultText("Return to Title", out string returnKey),
+                Is.True);
+            Assert.That(returnKey, Is.EqualTo("ui.action.pause.return_to_title"));
+
+            Assert.That(
+                BlockiverseLocalization.TryGetKnownKeyForDefaultText("Close", out string closeKey),
+                Is.True);
+            Assert.That(closeKey, Is.EqualTo("ui.action.error.close"),
+                "the eleven-Close prefab binding's key changed winners");
+        }
+
         // Handcraft moved from a hardcoded fallback argument into the table; the entry itself is
         // guarded by HandcraftEntryExists, this guards the DisplayName path end to end.
         [Test]

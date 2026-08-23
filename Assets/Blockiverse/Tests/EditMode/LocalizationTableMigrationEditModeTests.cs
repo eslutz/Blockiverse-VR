@@ -6,12 +6,12 @@ using UnityEngine.Localization.Settings;
 
 namespace Blockiverse.Tests.EditMode
 {
-    // Plan Phase 2 round-trip proof: every key in the compiled English dictionary resolves
-    // BYTE-IDENTICALLY through the new table. This is the parity contract for the shim — if it
-    // holds, the ten literal-English test files cannot tell the storage moved.
-    //
-    // Compares against the SAME reflection read the migrator used, so there is no second source
-    // to drift. After Phase 3b deletes the dictionary, this pivots to the frozen JSON snapshot.
+    // Round-trip proof, snapshot edition (Phase 3b): every migration-era entry resolves
+    // BYTE-IDENTICALLY through the table. The compiled dictionary is gone; the frozen snapshot
+    // written by the migrator at migration time is the source of truth, so any later edit to a
+    // migrated table entry that changes its meaning shows up here as drift, deliberately.
+    // New keys added directly to the table (the post-migration authoring path) are not
+    // constrained -- the comparison is snapshot ⊆ table, not equality.
     public sealed class LocalizationTableMigrationEditModeTests
     {
         static Locale English()
@@ -24,14 +24,14 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void EveryDictionaryEntryResolvesIdenticallyThroughTheTable()
+        public void EverySnapshotEntryResolvesIdenticallyThroughTheTable()
         {
-            IReadOnlyDictionary<string, string> english =
-                BlockiverseLocalizationTableMigrator.ReadEnglishDictionary();
+            IReadOnlyList<KeyValuePair<string, string>> english =
+                BlockiverseLocalizationTableMigrator.ReadSnapshot();
             Locale en = English();
 
-            Assert.That(english.Count, Is.GreaterThanOrEqualTo(238),
-                "Dictionary shrank unexpectedly — migration source is not what was surveyed.");
+            Assert.That(english.Count, Is.GreaterThanOrEqualTo(241),
+                "Snapshot shrank unexpectedly — regenerate it only with the migrator.");
 
             var mismatches = new List<string>();
 
@@ -57,8 +57,8 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void PlaceholderPatternsFormatIdenticallyToStringFormat()
         {
-            IReadOnlyDictionary<string, string> english =
-                BlockiverseLocalizationTableMigrator.ReadEnglishDictionary();
+            IReadOnlyList<KeyValuePair<string, string>> english =
+                BlockiverseLocalizationTableMigrator.ReadSnapshot();
             Locale en = English();
 
             object[] sampleArgs = { 7, "Sample", 3, "Deep", 42, "End" };

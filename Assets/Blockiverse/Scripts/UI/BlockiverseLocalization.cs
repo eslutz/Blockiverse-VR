@@ -274,274 +274,12 @@ public const string SettingsAudio = "ui.action.settings.audio";
             public const string HealthVitalsRatio = "ui.value.vitals_ratio";
         }
 
-        static readonly Dictionary<string, string> English = new(StringComparer.Ordinal)
-        {
-            [Keys.TitleBlockiverse] = "Blockiverse",
-            [Keys.TitlePaused] = "Paused",
-            [Keys.TitleDeath] = "You Died",
-            [Keys.TitleConfirm] = "Confirm?",
-            [Keys.TitleError] = "Error",
-            [Keys.TitleSettings] = "Settings",
-            [Keys.TitleWorldDetails] = "World Details",
-
-            [Keys.TitleContinue] = "Continue",
-            [Keys.TitleNewWorld] = "New World",
-            [Keys.TitleLoadWorld] = "Load World",
-            [Keys.TitleMultiplayer] = "LAN Multiplayer",
-            [Keys.TitleSettingsAction] = "Settings",
-            [Keys.TitleQuit] = "Quit",
-            [Keys.LanReconnect] = "Join (Reconnect)",
-
-            [Keys.PauseResume] = "Resume",
-[Keys.PauseSaveGame] = "Save Game",
-            [Keys.PauseToggleMode] = "Switch Survival/Creative",
-            [Keys.PauseCreativeTools] = "Creative Tools",
-            [Keys.PauseSettings] = "Settings",
-            [Keys.PauseReturnToTitle] = "Return to Title",
-            [Keys.PauseQuit] = "Quit Game",
-
-            [Keys.DeathRespawnBedroll] = "Respawn at Bedroll",
-            [Keys.DeathRespawnWorldSpawn] = "Respawn at World Spawn",
-            [Keys.DeathReturnToTitle] = "Return to Title",
-
-            [Keys.ConfirmAccept] = "Confirm",
-            [Keys.ConfirmCancel] = "Cancel",
-            [Keys.ConfirmOk] = "OK",
-            [Keys.ConfirmQuitGame] = "Quit game?",
-            [Keys.ErrorClose] = "Close",
-
-            [Keys.SettingsComfort] = "Comfort",
-[Keys.SettingsAudio] = "Audio",
-            [Keys.SettingsControls] = "Controls",
-            [Keys.SettingsClose] = "Close",
-
-            [Keys.WorldDetailsPlay] = "Play",
-            [Keys.WorldDetailsRename] = "Rename",
-            [Keys.WorldDetailsDuplicate] = "Duplicate",
-            [Keys.WorldDetailsDelete] = "Delete",
-            [Keys.WorldDetailsBack] = "Back",
-            [Keys.WorldDetailsDeletePrompt] = "Delete \"{0}\"? This cannot be undone.",
-
-            [Keys.NewWorldTitle] = "New World",
-            [Keys.NewWorldName] = "World Name",
-            [Keys.NewWorldSeed] = "Seed",
-            [Keys.NewWorldGameMode] = "Game Mode",
-            [Keys.NewWorldDifficulty] = "Difficulty",
-            [Keys.NewWorldSize] = "World Size",
-            [Keys.NewWorldPreset] = "World Preset",
-            [Keys.NewWorldStartingBiome] = "Starting Biome",
-            [Keys.NewWorldTextureSet] = "Texture Set",
-            [Keys.NewWorldCreate] = "Create World",
-            ["ui.value.canonical.small"] = "Small (128x128)",
-            ["ui.value.canonical.medium"] = "Medium (192x192)",
-            ["ui.value.canonical.original"] = "Original",
-            ["ui.value.canonical.enhanced"] = "Enhanced",
-            ["ui.value.canonical.ai_simplified"] = "AI Simplified",
-            ["ui.value.canonical.ai"] = "AI",
-            [Keys.LoadWorldTitle] = "Load World",
-            [Keys.LoadWorldNoSaveSelected] = "No save selected",
-            [Keys.LoadWorldEntry] = "{0}  ·  Day {1}",
-            [Keys.LoadWorldPage] = "Page {0} / {1}",
-            [Keys.LoadWorldPreviousPage] = "Prev",
-            [Keys.LoadWorldNextPage] = "Next",
-            [Keys.LoadWorldLoad] = "Load World",
-            [Keys.LoadWorldDetails] = "Details",
-            [Keys.AudioFeedbackTitle] = "Audio & Feedback",
-            [Keys.MasterVolume] = "Master Volume",
-            [Keys.EffectsVolume] = "Effects Volume",
-            [Keys.UiVolume] = "UI Volume",
-            [Keys.WeatherVolume] = "Weather Volume",
-            [Keys.MusicVolume] = "Music Volume",
-            [Keys.HapticStrength] = "Haptic Strength",
-            [Keys.CreativeToolsTitle] = "Creative Tools",
-            [Keys.CreativeToolsInitialStatus] = "Aim at blocks to select corners.",
-            [Keys.CreativeToolsSetA] = "Set A",
-            [Keys.CreativeToolsSetB] = "Set B",
-            [Keys.CreativeToolsPickBlock] = "Pick Block",
-            [Keys.CreativeToolsFill] = "Fill",
-            [Keys.CreativeToolsReplace] = "Replace",
-            [Keys.CreativeToolsCopy] = "Copy",
-            [Keys.CreativeToolsPaste] = "Paste",
-            [Keys.CreativeToolsUndo] = "Undo Edit",
-            [Keys.CreativeToolsRedo] = "Redo Edit",
-            [Keys.CreativeToolsSpawnTree] = "Spawn Tree",
-            [Keys.CreativeToolsSpawnRuin] = "Spawn Ruin",
-            [Keys.CreativeToolsTimeOfDay] = "Time of Day",
-            [Keys.CreativeToolsDaySpeed] = "Day Speed",
-            [Keys.CreativeToolsToggleCycle] = "Pause / Resume Cycle",
-            [Keys.CreativeToolsCycleWeather] = "Cycle Weather",
-            [Keys.CreativeCyclePaused] = "Day/night cycle paused.",
-            [Keys.CreativeCycleResumed] = "Day/night cycle resumed.",
-            [Keys.ControlsTitle] = "Controls",
-            [Keys.WorldDetailsName] = "Name",
-            [Keys.StationTitle] = "Station",
-            [Keys.StationInput] = "Input",
-            [Keys.StationFuel] = "Fuel",
-            [Keys.StationOutput] = "Output",
-            [Keys.StationIdle] = "Idle",
-            [Keys.StationAddInput] = "Add Input",
-            [Keys.StationAddFuel] = "Add Fuel",
-            [Keys.StationCollect] = "Collect",
-            [Keys.StationWithdrawInput] = "Take Input",
-            [Keys.StationWithdrawFuel] = "Take Fuel",
-            [Keys.BlocksTitle] = "Blocks",
-            [Keys.BlocksCategory] = "Category",
-            [Keys.BlocksSearchPlaceholder] = "Search blocks…",
-            [Keys.ControllerMapTitle] = "Controller Map",
-            [Keys.SurvivalTitle] = "Survival",
-            [Keys.SurvivalHealth] = "Health",
-            [Keys.SurvivalInventory] = "Inventory",
-            [Keys.SurvivalCrafting] = "Crafting",
-            [Keys.CommonClose] = "Close",
-            [Keys.CommonCancel] = "Cancel",
-            [Keys.CommonDelete] = "Delete",
-            [Keys.CommonEmpty] = "Empty",
-            [Keys.CommonStack] = "{0} x{1}",
-            [Keys.CommonStackCount] = "x{0}",
-            [Keys.CommonListSeparator] = ", ",
-            [Keys.CommonActive] = "Active",
-            [Keys.CommonSending] = "Sending…",
-            [Keys.CommonPage] = "{0}/{1}",
-            [Keys.CatalogSearch] = "Search",
-            [Keys.WorldDetailsMetadata] = "Mode: {0}    Difficulty: {1}\nDay: {2}    Seed: {3}\nCreated: {4}    Last Played: {5}",
-            [Keys.NewWorldSurvivalPresetUnsupported] = "Survival worlds require the Survival Terrain preset.",
-
-            [Keys.InventoryHotbarEmpty] = "Hotbar -",
-            [Keys.InventoryHotbar] = "Hotbar {0} / {1}",
-            [Keys.InventorySlotsCount] = "Slots {0}",
-            [Keys.InventorySlotsRange] = "Slots {0}-{1} / {2}",
-            [Keys.SurvivalHudMiningProgress] = "Mining {0}%",
-            [Keys.SurvivalHudInventoryFull] = "Inventory full",
-            [Keys.SurvivalHudToolTooWeak] = "Tool is not strong enough",
-            [Keys.SurvivalHudHarvestRejected] = "Cannot harvest this block",
-
-            [Keys.CraftingReady] = "Ready",
-            [Keys.CraftingRecipeUnavailable] = "Recipe unavailable",
-            [Keys.CraftingRecipe] = "{0} - {1}",
-            [Keys.CraftingCrafted] = "Crafted {0}",
-            [Keys.CraftingCannotCraft] = "Cannot craft {0}: {1}",
-            [Keys.CraftingPending] = "Crafting {0}…",
-            [Keys.CraftingToolRepaired] = "Tool repaired",
-            [Keys.CraftingRepairing] = "Repairing…",
-            [Keys.CraftingCannotRepair] = "Cannot repair: {0}",
-            [Keys.CraftingNeedsStation] = "{0} - {1} [needs {2}]",
-
-            [Keys.CrateShared] = "Shared crate",
-            [Keys.CrateOffline] = "Crate offline",
-            [Keys.CrateNothingHeld] = "Nothing held to deposit",
-            [Keys.CrateDeposited] = "Deposited {0}",
-            [Keys.CrateEmptySlot] = "Empty slot",
-            [Keys.CrateWithdrew] = "Withdrew {0}",
-            [Keys.CrateTransferring] = "Transferring…",
-            [Keys.CrateTransferRejected] = "Transfer rejected",
-
-            [Keys.StationHoldItem] = "Hold an item to deposit",
-            [Keys.StationFuelAdded] = "Fuel added",
-            [Keys.StationInputAdded] = "Input added",
-            [Keys.StationCannotDeposit] = "Cannot deposit: {0}",
-            [Keys.StationCollected] = "Collected {0}",
-            [Keys.StationCannotCollect] = "Cannot collect: {0}",
-            [Keys.StationWithdrew] = "Withdrew {0}",
-            [Keys.StationCannotWithdraw] = "Cannot withdraw: {0}",
-            [Keys.StationNoFuel] = "No fuel",
-            [Keys.StationStack] = "{0} ×{1}",
-
-            [Keys.StatusCreatingWorld] = "Creating world...",
-            [Keys.StatusCreateWorldFailed] = "Failed to create the world.",
-            [Keys.StatusSaveNotFound] = "Save not found.",
-            [Keys.StatusEnterWorldNameFirst] = "Enter a world name first.",
-            [Keys.StatusRenameFailed] = "Failed to rename the world.",
-            [Keys.StatusDuplicateFailed] = "Failed to duplicate the world.",
-            [Keys.StatusDeleteFailed] = "Failed to delete the world.",
-            [Keys.StatusLoadingWorld] = "Loading world...",
-            [Keys.StatusLoadFailed] = "Failed to load: {0}",
-            [Keys.StatusLoadWorldFailed] = "Failed to load the world.",
-            [Keys.StatusSuspendSinglePlayerFailed] = "Unable to save the current single-player world before starting LAN.",
-            [Keys.StatusWorldNameEmpty] = "World name cannot be empty.",
-            [Keys.StatusSaveSucceeded] = "Game saved.",
-            [Keys.StatusSaveFailed] = "Save failed.",
-            [Keys.StatusAutosaveSucceeded] = "Autosaved.",
-            [Keys.StatusAutosaveFailed] = "Autosave failed.",
-
-            [Keys.LanUnavailable] = "LAN session is unavailable.",
-            [Keys.LanJoinAddressPlaceholder] = "Host LAN IP",
-            [Keys.LanStartingHost] = "Starting LAN host...",
-            [Keys.LanStartHostFailed] = "Unable to start LAN host. {0}",
-            [Keys.LanJoining] = "Joining LAN session at {0}:{1}...",
-            [Keys.LanJoinFailed] = "Unable to join LAN session at {0}:{1}. {2}",
-            [Keys.LanHosting] = "Hosting LAN session. Join at {0}:{1}.",
-            [Keys.LanConnected] = "Connected to LAN session at {0}:{1}.",
-            [Keys.LanStopping] = "Stopping LAN session...",
-            [Keys.LanStopped] = "LAN session stopped.",
-            [Keys.LanStoppedWithDefault] = "LAN session stopped. Enter the host LAN IP to join.",
-            [Keys.LanStopFailed] = "Unable to stop LAN session.",
-            [Keys.LanStopFailedWithReason] = "Unable to stop LAN session. {0}",
-            [Keys.LanStoppingWithoutShutdownSave] = "Stopping LAN session without the latest shutdown save. {0}",
-            [Keys.LanHostDisconnected] = "LAN session ended because the host disconnected. Use Join to reconnect to {0}:{1} when the LAN host is available again.",
-            [Keys.LanUnableToReach] = "Unable to reach LAN session at {0}:{1}. Check that the host is on the same LAN and try Join again.",
-            [Keys.LanLastDisconnect] = "{0} Last disconnect: {1}",
-            [Keys.LanAgePolicyNotice] = "{0}\nMeta social features use fallback identity and avatar behavior for this account.",
-            [Keys.LanFailed] = "LAN session failed.",
-
-            [Keys.LanRejectedProtocolMismatch] = "The host is running a different multiplayer protocol version. Both headsets need the same build of Blockiverse VR.",
-            [Keys.LanRejectedGameVersionMismatch] = "The host is running a different version of Blockiverse VR. Update both headsets to the same version and try again.",
-            [Keys.LanRejectedBlockRegistryMismatch] = "The host's block registry does not match this build, so blocks would not line up. Use the same version of Blockiverse VR on both headsets.",
-            [Keys.LanRejectedItemRegistryMismatch] = "The host's item registry does not match this build, so items would not line up. Use the same version of Blockiverse VR on both headsets.",
-            [Keys.LanRejectedRecipeRegistryMismatch] = "The host's crafting recipes do not match this build. Use the same version of Blockiverse VR on both headsets.",
-            [Keys.LanRejectedUnsupportedWorldVersion] = "The host's world save format does not match this build. Use the same version of Blockiverse VR on both headsets.",
-            [Keys.LanRejectedSessionFull] = "The LAN session is full. Try again when a player leaves.",
-            [Keys.LanRejectedInvalidJoinPayload] = "The host refused the join request. Check that both headsets are on the same LAN and running the same build.",
-
-            [Keys.LanDiscoverySearching] = "Looking for LAN sessions...",
-            [Keys.LanDiscoveryNoneFound] = "No LAN sessions found. Enter the host's address to join directly.",
-            [Keys.LanDiscoveryUnavailable] = "LAN discovery is unavailable on this network. Enter the host's address to join directly.",
-            [Keys.LanDiscoveryEntry] = "{0} ({1}:{2}) {3}/{4}",
-            [Keys.LanDiscoveryEntryFull] = "{0} ({1}:{2}) Full",
-
-            [Keys.CreativeWeather] = "Weather: {0}",
-            [Keys.CreativeCornerA] = "corner A",
-            [Keys.CreativeCornerB] = "corner B",
-            [Keys.CreativeSetCornerAim] = "Aim at a block to set {0}.",
-            [Keys.CreativeSetCorner] = "Set {0} to {1}.",
-            [Keys.CreativeCorners] = "A: {0}    B: {1}",
-            [Keys.CreativeAimReplace] = "Aim at a block of the type to replace.",
-            [Keys.CreativeChoosePasteOrigin] = "Set corner A (or aim at a block) to choose the paste origin.",
-            [Keys.CreativeSpawnedTree] = "Spawned tree at {0}.",
-            [Keys.CreativeSpawnedRuin] = "Spawned ruin at {0}.",
-            [Keys.CreativeAimPick] = "Aim at a block to pick it.",
-            [Keys.CreativePicked] = "Picked {0}.",
-            [Keys.CreativeMissingCatalogBlock] = "That block is not in the creative catalog.",
-            [Keys.CreativeWeatherHostOnly] = "Weather control is host/offline only.",
-            [Keys.CreativeTimeHostOnly] = "Time controls are host/offline only.",
-            [Keys.CreativeSetCornersFirst] = "Set corners A and B first.",
-            [Keys.CreativeNoWorld] = "No world loaded.",
-            [Keys.CreativeOnly] = "Region tools work in creative worlds only.",
-            [Keys.CreativeLanUnavailable] = "Region tools are unavailable during a LAN session.",
-            [Keys.CreativeAimGround] = "Aim at a ground block first.",
-            [Keys.CreativeNoRoomAbove] = "No room above the aimed block.",
-            [Keys.CreativeOperationDone] = "{0} done.",
-            [Keys.CreativeVolumeLimit] = "{0} failed: region exceeds the volume limit.",
-            [Keys.CreativeOutOfBounds] = "{0} failed: region leaves the world bounds.",
-            [Keys.CreativeNoClipboard] = "Nothing copied yet.",
-            [Keys.CreativeNothingToUndo] = "Nothing to undo.",
-            [Keys.CreativeNothingToRedo] = "Nothing to redo.",
-            [Keys.CreativeNothingToReplace] = "No blocks of that type in the region.",
-            [Keys.CreativeOperationFailed] = "{0} failed.",
-
-            [Keys.HealthDown] = "Down",
-            [Keys.HealthCritical] = "Critical",
-            [Keys.HealthStable] = "Stable",
-            [Keys.HealthVitals] = "{0} · Hunger {1} · Thirst {2} · Stamina {3}",
-            [Keys.HealthVitalsRatio] = "{0} / {1}",
-        };
-
         static readonly Dictionary<string, string> Overrides = new(StringComparer.Ordinal);
-        static readonly Dictionary<string, string> EnglishKeys = BuildEnglishKeys();
 
         // Resolution order: test overrides, then the "UI" string table, then the caller's
         // fallback (the dynamic ui.value.* namespaces resolve almost entirely through humanized
-        // fallbacks by design). The compiled English dictionary below is no longer consulted at
-        // runtime — it survives only as the migration tool's source until Phase 3b deletes it.
+        // fallbacks by design). The English strings live in the table asset and the frozen
+        // migration snapshot; the compiled dictionary this class once carried is gone.
         public static string Text(string key, string fallback = null)
         {
             if (string.IsNullOrEmpty(key))
@@ -668,14 +406,64 @@ public const string SettingsAudio = "ui.action.settings.audio";
             return Text(key, HumanizeIdentifier(value, titleCase: true));
         }
 
+        // Editor-only by nature: its single caller is the bootstrapper's label-binding pass, and
+        // both die together when the uGUI panels are deleted (UI-migration Phase 6).
+        //
+        // Reads the FROZEN winner map from the migration snapshot rather than rebuilding from the
+        // table, because the original map was first-wins over the dictionary's declaration order
+        // and rebuilding from table enumeration (alphabetical) would silently flip two collision
+        // winners -- 'Return to Title' and 'Settings' -- on the next bootstrapper regeneration.
         public static bool TryGetKnownKeyForDefaultText(string defaultText, out string key)
         {
             key = null;
             if (string.IsNullOrWhiteSpace(defaultText))
                 return false;
 
-            return EnglishKeys.TryGetValue(defaultText, out key);
+#if UNITY_EDITOR
+            frozenReverseWinners ??= LoadFrozenReverseWinners();
+            return frozenReverseWinners.TryGetValue(defaultText, out key);
+#else
+            return false;
+#endif
         }
+
+#if UNITY_EDITOR
+        static Dictionary<string, string> frozenReverseWinners;
+
+        [Serializable]
+        sealed class SnapshotWinner
+        {
+            public string english;
+            public string key;
+        }
+
+        [Serializable]
+        sealed class SnapshotFile
+        {
+            public SnapshotWinner[] reverseWinners;
+        }
+
+        static Dictionary<string, string> LoadFrozenReverseWinners()
+        {
+            const string snapshotPath =
+                "Assets/Blockiverse/Tests/EditMode/Fixtures/localization-en-snapshot.json";
+
+            SnapshotFile snapshot = UnityEngine.JsonUtility.FromJson<SnapshotFile>(
+                System.IO.File.ReadAllText(snapshotPath));
+
+            if (snapshot?.reverseWinners == null || snapshot.reverseWinners.Length == 0)
+                throw new InvalidOperationException(
+                    $"No reverse winners parsed from {snapshotPath} -- regenerate it with the " +
+                    "localization migrator before running the bootstrapper.");
+
+            var winners = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (SnapshotWinner winner in snapshot.reverseWinners)
+                winners[winner.english] = winner.key;
+
+            return winners;
+        }
+#endif
 
         public static void SetOverrideForTesting(string key, string value)
         {
@@ -691,18 +479,6 @@ public const string SettingsAudio = "ui.action.settings.audio";
         public static void ClearOverridesForTesting()
         {
             Overrides.Clear();
-        }
-
-        static Dictionary<string, string> BuildEnglishKeys()
-        {
-            var keys = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (KeyValuePair<string, string> entry in English)
-            {
-                if (!string.IsNullOrWhiteSpace(entry.Value) && !keys.ContainsKey(entry.Value))
-                    keys.Add(entry.Value, entry.Key);
-            }
-
-            return keys;
         }
 
         static string NormalizeKey(string value)
