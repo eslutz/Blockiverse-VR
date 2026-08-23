@@ -13,18 +13,20 @@ namespace Blockiverse.Gameplay
     [DefaultExecutionOrder(-9000)]
     public sealed class CreativeWorldManager : MonoBehaviour, IMultiplayerWorldContext
     {
-        [SerializeField] Material chunkMaterial;
         [SerializeField] string textureSet = BlockTextureSetIds.Default;
-        [SerializeField] string[] blockTextureSetIds;
-        [SerializeField] Texture2D[] blockTextureSetAtlases;
-        [SerializeField] int interactionLayer = -1;
-        [SerializeField] CreativeInteractionController interactionController;
-        [SerializeField] CreativeHotbar hotbar;
-        [SerializeField] PlacementPreview placementPreview;
-        [SerializeField] BlockiverseVoidSafetyFloor voidSafetyFloor;
         [SerializeField] bool initializeDefaultWorldOnAwake;
+        // The presentation half of the world root, when this process has one. Resolved from this
+        // GameObject's components rather than serialized, so the generated scene carries no extra
+        // field and there is no stale reference to keep in sync.
+        //
+        // Held as a MonoBehaviour as well as an interface because an interface-typed reference does
+        // NOT get Unity's lifetime-aware `==` overload: a destroyed presentation compares non-null
+        // through IWorldPresentation, so every guard would call into a dead object. Null-check the
+        // MonoBehaviour, never the interface.
+        MonoBehaviour presentationBehaviour;
+        IWorldPresentation presentation;
+        bool presentationResolved;
         MultiplayerChunkAuthoritySync authoritySync;
-        GlowwickLightManager glowwickLightManager;
         WeatherService weatherService;
         VegetationService vegetationService;
         FarmingService farmingService;
@@ -56,8 +58,23 @@ namespace Blockiverse.Gameplay
         public WorldGenerationSettings Settings { get; private set; }
         public CreativeWorldGenerationPreset GenerationPreset { get; private set; }
         public VoxelWorld World { get; private set; }
-        public VoxelWorldRenderer Renderer { get; private set; }
-        IVoxelWorldRenderer IMultiplayerWorldContext.Renderer => Renderer;
+        // Sky occlusion for this world. Owned by the simulation, not the renderer, because crop
+        // growth and cave detection read it and must work with no renderer in the process.
+        public VoxelSkyLightMap SkyLight { get; private set; }
+
+        // Null on a dedicated server, and null once the presentation object has been destroyed.
+        // The Unity lifetime check lives here so callers can safely use `?.` on the result.
+        public IWorldPresentation Presentation
+        {
+            get
+            {
+                if (!presentationResolved)
+                    ResolvePresentation();
+
+                return presentationBehaviour != null ? presentation : null;
+            }
+        }
+        IVoxelWorldRenderer IMultiplayerWorldContext.Renderer => Presentation;
         public string TextureSet => BlockTextureSetIds.Normalize(textureSet);
         public BlockPosition SpawnPosition => Settings != null ? Settings.SpawnPosition : new BlockPosition(0, 64, 0);
 
@@ -72,12 +89,6 @@ namespace Blockiverse.Gameplay
 
         public void SetGameMode(WorldGameMode mode) => GameMode = mode;
         public void SetTextureSet(string textureSetId) => textureSet = BlockTextureSetIds.Normalize(textureSetId);
-
-        public void ConfigureBlockTextureAtlases(string[] textureSetIds, Texture2D[] atlasTextures)
-        {
-            blockTextureSetIds = textureSetIds ?? Array.Empty<string>();
-            blockTextureSetAtlases = atlasTextures ?? Array.Empty<Texture2D>();
-        }
 
         public static WorldGameMode ParseGameMode(string gameMode) =>
             string.Equals(gameMode, "creative", StringComparison.OrdinalIgnoreCase)
@@ -131,12 +142,11 @@ namespace Blockiverse.Gameplay
         // the player is in a cave. False when there is no sky map or the cell is out of bounds.
         public bool IsHeadUnderground(Vector3 headWorldPosition)
         {
-            VoxelSkyLightMap skyLight = Renderer != null ? Renderer.SkyLight : null;
-            if (skyLight == null || World == null)
+            if (SkyLight == null || World == null)
                 return false;
 
-            BlockPosition cell = CreativeInteractionController.ToBlockPosition(headWorldPosition);
-            return World.Bounds.Contains(cell) && !skyLight.HasSkyAccess(cell);
+            BlockPosition cell = VoxelWorldCoordinates.ToBlockPosition(headWorldPosition);
+            return World.Bounds.Contains(cell) && !SkyLight.HasSkyAccess(cell);
         }
 
         // Whether a world position sits inside a fluid cell, and which family. The shared answer
@@ -153,7 +163,7 @@ namespace Blockiverse.Gameplay
             if (world == null)
                 return false;
 
-            BlockPosition cell = CreativeInteractionController.ToBlockPosition(worldPosition);
+            BlockPosition cell = VoxelWorldCoordinates.ToBlockPosition(worldPosition);
             if (!world.Bounds.Contains(cell))
                 return false;
 
@@ -360,33 +370,6 @@ namespace Blockiverse.Gameplay
             }
         }
 
-        public void Configure(
-            Material material,
-            int layer,
-            CreativeInteractionController controller = null,
-            CreativeHotbar creativeHotbar = null,
-            PlacementPreview preview = null)
-        {
-            chunkMaterial = material;
-            interactionLayer = layer;
-            interactionController = controller;
-            hotbar = creativeHotbar;
-            placementPreview = preview;
-        }
-
-        Texture2D ResolveSelectedBlockAtlas()
-        {
-            string selected = TextureSet;
-            int count = Math.Min(blockTextureSetIds?.Length ?? 0, blockTextureSetAtlases?.Length ?? 0);
-            for (int i = 0; i < count; i++)
-            {
-                if (string.Equals(BlockTextureSetIds.Normalize(blockTextureSetIds[i]), selected, StringComparison.OrdinalIgnoreCase))
-                    return blockTextureSetAtlases[i];
-            }
-
-            return null;
-        }
-
         public void InitializeDefaultWorld()
         {
             InitializeGeneratedWorld(CreateDefaultGeneratedWorld());
@@ -425,10 +408,10 @@ namespace Blockiverse.Gameplay
 
             // ConfigureWorldRuntime queues the full world rebuild; eagerly bake the spawn
             // neighbourhood so the rig lands on visible, collidable ground before it is positioned.
-            if (Renderer != null && settings != null)
-                Renderer.RebuildSpawnRegion(settings.SpawnPosition);
+            if (settings != null)
+                Presentation?.RebuildSpawnRegion(settings.SpawnPosition);
 
-            PositionRigAtSpawn(settings.SpawnPosition);
+            Presentation?.PositionRigAtSpawn(settings.SpawnPosition);
         }
 
         public void ConfigureAuthoritySync(MultiplayerChunkAuthoritySync sync)
@@ -439,7 +422,7 @@ namespace Blockiverse.Gameplay
             authoritySync = sync;
 
             if (World != null && Registry != null)
-                ConfigureInteractionController(Settings);
+                Presentation?.ConfigureAuthority(sync);
         }
 
         void ConfigureWorldRuntime(
@@ -450,40 +433,47 @@ namespace Blockiverse.Gameplay
             if (World == null)
                 throw new InvalidOperationException("Creative world runtime requires voxel data.");
 
-            BlockiverseLightingRuntime.EnsureSceneLighting();
-            Renderer = GetComponent<VoxelWorldRenderer>();
+            // Built before the presentation is configured so the renderer shares this instance
+            // rather than constructing a second map that could drift from the simulation's.
+            SkyLight = new VoxelSkyLightMap(World, Registry);
 
-            if (Renderer == null)
-                Renderer = gameObject.AddComponent<VoxelWorldRenderer>();
-
-            Renderer.Configure(
-                World,
-                Registry,
-                chunkMaterial,
-                interactionLayer,
-                ResolveSelectedBlockAtlas(),
-                TextureSet,
-                deferInitialRendererRebuild);
-
-            ConfigureGlowwickLights();
-            ConfigureEnvironmentServices(settings);
-            ConfigureVoidSafetyFloor();
+            ResolvePresentation();
 
             if (authoritySyncOverride != null)
                 authoritySync = authoritySyncOverride;
 
-            ConfigureInteractionController(settings);
+            // Presentation first: it ensures the scene sun, which is what currently owns the
+            // WorldTimeClock that ConfigureEnvironmentServices looks for.
+            Presentation?.ConfigureForWorld(
+                World,
+                Registry,
+                SkyLight,
+                settings,
+                TextureSet,
+                authoritySync,
+                deferInitialRendererRebuild);
+
+            ConfigureEnvironmentServices(settings);
         }
 
-        void ConfigureGlowwickLights()
+        // Finds the presentation component on this GameObject, if the build has one at all.
+        // Always rescans: a world root built in code may gain its presentation after the manager.
+        void ResolvePresentation()
         {
-            if (glowwickLightManager == null)
-                glowwickLightManager = GetComponent<GlowwickLightManager>();
+            presentationResolved = true;
 
-            if (glowwickLightManager == null)
-                glowwickLightManager = gameObject.AddComponent<GlowwickLightManager>();
+            foreach (Component component in GetComponents<Component>())
+            {
+                if (component is not IWorldPresentation candidate)
+                    continue;
 
-            glowwickLightManager.Configure(World, Registry);
+                presentation = candidate;
+                presentationBehaviour = component as MonoBehaviour;
+                return;
+            }
+
+            presentation = null;
+            presentationBehaviour = null;
         }
 
         void ConfigureEnvironmentServices(WorldGenerationSettings settings)
@@ -575,6 +565,13 @@ namespace Blockiverse.Gameplay
 
         void OnBlockChanged(BlockChange change)
         {
+            // The renderer's rebuild queue applies edits to the sky map whenever a presentation
+            // exists. With none — a dedicated server — nothing else would, and crop growth reads
+            // it. Applied ONLY in that case: a double apply would hand the rebuild queue a wrong
+            // previousTop/newTop verdict and silently under-invalidate lighting.
+            if (SkyLight != null && Presentation == null)
+                SkyLight.ApplyChange(change, out _, out _);
+
             BlockId b = change.NewBlock;
 
             // Fluid simulation reacts to every edit: placed/removed fluids and new openings
@@ -731,8 +728,7 @@ namespace Blockiverse.Gameplay
 
                 // World-sim mutations only mark chunks dirty; repaint them here so growth and
                 // flow are visible without waiting for a player edit to trigger a rebuild.
-                if (Renderer != null)
-                    Renderer.RebuildDirty();
+                Presentation?.RebuildDirty();
             }
         }
 
@@ -742,8 +738,7 @@ namespace Blockiverse.Gameplay
                 return CropGrowthConditions.Favorable;
 
             BlockRegistry registry = Registry ?? BlockRegistry.Default;
-            VoxelSkyLightMap skyLight = Renderer != null ? Renderer.SkyLight : null;
-            float sampledLight = VoxelLightSampler.SampleAirLight(World, registry, cropPosition, skyLight: skyLight);
+            float sampledLight = VoxelLightSampler.SampleAirLight(World, registry, cropPosition, skyLight: SkyLight);
             int lightLevel = Mathf.RoundToInt(Mathf.Clamp01(sampledLight) * 15.0f);
 
             var soilPosition = new BlockPosition(cropPosition.X, cropPosition.Y - 1, cropPosition.Z);
@@ -763,64 +758,6 @@ namespace Blockiverse.Gameplay
             }
         }
 
-        void ConfigureInteractionController(WorldGenerationSettings settings)
-        {
-            if (interactionController == null)
-                return;
-
-            if (hotbar == null)
-                hotbar = FindFirstObjectByType<CreativeHotbar>();
-
-            if (placementPreview == null)
-                placementPreview = FindFirstObjectByType<PlacementPreview>();
-
-            if (placementPreview == null)
-                placementPreview = CreatePlacementPreview();
-
-            interactionController.Configure(
-                World,
-                Registry,
-                hotbar,
-                placementPreview,
-                settings != null
-                    ? new Bounds(new Vector3(settings.SpawnPosition.X + 0.5f, settings.SpawnPosition.Y + 0.5f, settings.SpawnPosition.Z + 0.5f), Vector3.one)
-                    : null,
-                Renderer,
-                authoritySync: authoritySync);
-        }
-
-        void ConfigureVoidSafetyFloor()
-        {
-            if (voidSafetyFloor == null)
-                voidSafetyFloor = GetComponentInChildren<BlockiverseVoidSafetyFloor>(true);
-
-            if (voidSafetyFloor == null)
-            {
-                var floorObject = new GameObject("Void Safety Floor");
-                floorObject.transform.SetParent(transform, false);
-                voidSafetyFloor = floorObject.AddComponent<BlockiverseVoidSafetyFloor>();
-            }
-
-            voidSafetyFloor.Configure(
-                World.Bounds,
-                BlockiverseVoidSafetyFloor.DefaultFallAllowanceMeters,
-                BlockiverseVoidSafetyFloor.DefaultThicknessMeters,
-                BlockiverseVoidSafetyFloor.DefaultHorizontalMarginMeters,
-                interactionLayer,
-                ResolveVoidRecoverySpawnPosition());
-        }
-
-        BlockPosition ResolveVoidRecoverySpawnPosition()
-        {
-            if (Settings != null)
-                return Settings.SpawnPosition;
-
-            int x = World.Bounds.Width / 2;
-            int z = World.Bounds.Depth / 2;
-            int surfaceY = StructureService.FindSurfaceY(World, x, z);
-            return new BlockPosition(x, surfaceY >= 0 ? surfaceY + 1 : 1, z);
-        }
-
         public static GeneratedCreativeWorld CreateDefaultGeneratedWorld(int seed = 6401)
         {
             return WorldSaveGeneration.GenerateDefaultWorld(seed);
@@ -830,75 +767,6 @@ namespace Blockiverse.Gameplay
         {
             if (initializeDefaultWorldOnAwake && World == null)
                 InitializeDefaultWorld();
-        }
-
-        // Shared by world load (BlockiverseWorldSessionController, separate assembly) and survival
-        // respawn (SurvivalVitalsRuntime) — public because no InternalsVisibleTo covers the UI assembly.
-        public static void PositionRigAtSpawn(BlockPosition spawnPosition)
-        {
-            if (!BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig))
-                return;
-
-            Vector3 position = new(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
-            float yawDegrees = rig.eulerAngles.y;
-            if (!BlockiverseComfortTransition.TryMoveRigWithComfort(rig, position, yawDegrees))
-                rig.position = position;
-        }
-
-        // Places the rig at a saved player position/heading (world load with saved player state).
-        public static void PositionRig(Vector3 position, float yawDegrees)
-        {
-            if (!BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig))
-                return;
-
-            if (!BlockiverseComfortTransition.TryMoveRigWithComfort(rig, position, yawDegrees))
-                rig.SetPositionAndRotation(position, Quaternion.Euler(0f, yawDegrees, 0f));
-        }
-
-        PlacementPreview CreatePlacementPreview()
-        {
-            GameObject previewObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            previewObject.name = "Placement Preview";
-            previewObject.transform.SetParent(transform, false);
-
-            Collider collider = previewObject.GetComponent<Collider>();
-
-            if (collider != null)
-            {
-                if (Application.isPlaying)
-                    Destroy(collider);
-                else
-                    DestroyImmediate(collider);
-            }
-
-            MeshRenderer renderer = previewObject.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = CreatePreviewMaterial();
-            // CreatePrimitive defaults to casting shadows. URP/Unlit happens to ship no ShadowCaster
-            // pass today, so this is belt-and-braces rather than load-bearing — but the aim ghost
-            // must never throw a solid block shadow if this material is ever swapped for a lit one.
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-
-            PlacementPreview preview = previewObject.AddComponent<PlacementPreview>();
-            preview.Configure(renderer);
-            return preview;
-        }
-
-        static Material CreatePreviewMaterial()
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null)
-                shader = Shader.Find("Sprites/Default");
-            if (shader == null)
-                shader = Shader.Find("Standard");
-            var material = new Material(shader);
-
-            if (material.HasProperty("_BaseColor"))
-                material.SetColor("_BaseColor", new Color(0.34f, 0.84f, 0.52f, 0.42f));
-            else
-                material.color = new Color(0.34f, 0.84f, 0.52f, 0.42f);
-
-            return material;
         }
     }
 }

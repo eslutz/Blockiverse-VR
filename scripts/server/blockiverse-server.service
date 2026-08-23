@@ -1,0 +1,64 @@
+# systemd unit for the Blockiverse dedicated server.
+#
+# Installed to /etc/systemd/system/blockiverse-server.service by install.sh, which rewrites the
+# paths below if you chose non-default locations.
+
+[Unit]
+Description=Blockiverse dedicated server
+Documentation=https://github.com/eslutz/Blockiverse-VR/blob/main/docs/server/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=blockiverse
+Group=blockiverse
+WorkingDirectory=/opt/blockiverse-server
+
+# -batchmode -nographics are required: there is no display, and without them the Unity player
+# looks for one and fails. Everything after them reaches the server's own option parser.
+ExecStart=/opt/blockiverse-server/BlockiverseServer -batchmode -nographics --config /etc/blockiverse-server/blockiverse-server.properties
+
+# Stop through the admin socket rather than relying on the signal.
+#
+# This is not belt-and-braces. Unity's Linux player signal handling is unreliable, and the server's
+# clean-shutdown path (save the world, then mark the shutdown clean) hangs off Unity's own quit
+# handling. The admin `stop` command drives that path deliberately instead of hoping a SIGTERM is
+# delivered and handled. systemd still sends SIGTERM afterwards, so this is a best-effort upgrade
+# and never a hang: the helper exits non-zero if the socket is gone, and `-` ignores that.
+ExecStop=-/usr/local/bin/blockiverse-server-admin --socket /var/lib/blockiverse-server/admin.sock stop
+
+# The world save happens during shutdown. The default 90s is enough for the worlds this server
+# supports, but a stop that is killed mid-write is exactly the case the clean-shutdown marker
+# exists to make visible.
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+Restart=on-failure
+RestartSec=5
+
+# A configuration error exits 78 (EX_CONFIG) on purpose: restarting on a typo'd config file would
+# just loop, so let it stay down where the operator can see it.
+RestartPreventExitStatus=78
+
+# Hardening. The server needs exactly one writable directory and two socket families.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/blockiverse-server
+
+# DELIBERATELY ABSENT: MemoryDenyWriteExecute=true.
+# The server uses the Mono scripting backend, whose JIT maps memory write+execute. Setting it makes
+# the process die on startup. Do not add it "for consistency" with other hardened units.
+
+[Install]
+WantedBy=multi-user.target

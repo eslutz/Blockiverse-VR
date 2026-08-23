@@ -4,6 +4,7 @@
   "references": [
     "Blockiverse.Core",
     "Blockiverse.Networking",
+    "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
     "Blockiverse.Survival",
     "Blockiverse.Persistence",

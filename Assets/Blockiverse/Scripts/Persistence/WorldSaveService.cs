@@ -237,7 +237,12 @@ namespace Blockiverse.Persistence
 
         public const int CurrentSchemaVersion = 4;
         public const string SaveFormatVersion = "1.0.0";
-        public const float AutoSaveIntervalSeconds = 300f;
+        public const float DefaultAutoSaveIntervalSeconds = 300f;
+
+        // Settable so a dedicated server can save more often than an in-headset host: an
+        // unattended server that dies should lose seconds, not five minutes. Values below 30s are
+        // refused rather than clamped silently.
+        public static float AutoSaveIntervalSeconds { get; set; } = DefaultAutoSaveIntervalSeconds;
 
         const int RegionSizeChunks = 32;
         const int SectionSize = 16;

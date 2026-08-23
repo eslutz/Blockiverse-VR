@@ -10,6 +10,7 @@ namespace Blockiverse.Networking
         public const string DefaultListenAddress = "0.0.0.0";
         public const ushort DefaultPort = 7777;
         public const int DefaultMaxPlayers = 2;
+        // The count this protocol is measured and supported at, not a ceiling.
         public const int MaxSupportedPlayers = 4;
         public const string DefaultJoinCode = "blockiverse-lan";
 
@@ -75,7 +76,11 @@ namespace Blockiverse.Networking
             return new BlockiverseNetworkConfig(Address, ListenAddress, Port, MaxPlayers, newJoinCode);
         }
 
+        // Deliberately NOT clamped to MaxSupportedPlayers. An operator running a dedicated server
+        // may set any positive count; above MaxSupportedPlayers it is honoured but unmeasured and
+        // unsupported (late join sends a whole-world delta per joiner, and inventory snapshots
+        // broadcast per client at 4 KB reliable-fragmented). The server warns at boot instead.
         static int ClampMaxPlayers(int value) =>
-            Math.Min(MaxSupportedPlayers, Math.Max(1, value <= 0 ? DefaultMaxPlayers : value));
+            Math.Max(1, value <= 0 ? DefaultMaxPlayers : value);
     }
 }

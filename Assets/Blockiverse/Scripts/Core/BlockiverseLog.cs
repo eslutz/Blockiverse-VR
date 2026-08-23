@@ -77,10 +77,15 @@ namespace Blockiverse.Core
             Write(category, LogType.Error, message, exception, context);
         }
 
-        public static void SetSinkForTesting(IBlockiverseLogSink testSink)
+        // Redirects every log line. Named for production use because it has one: a dedicated
+        // server replaces the UnityEngine.Debug sink with one that writes to stdout, where an
+        // operator and a container log driver can actually see it.
+        public static void SetSink(IBlockiverseLogSink replacement)
         {
-            sink = testSink ?? throw new ArgumentNullException(nameof(testSink));
+            sink = replacement ?? throw new ArgumentNullException(nameof(replacement));
         }
+
+        public static void SetSinkForTesting(IBlockiverseLogSink testSink) => SetSink(testSink);
 
         public static void ResetSinkForTesting()
         {

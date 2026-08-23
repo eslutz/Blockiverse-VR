@@ -420,7 +420,7 @@ namespace Blockiverse.Tests.EditMode
                     name = BlockVisualAtlas.AuthoredAtlasName
                 };
                 blockMaterial = new Material(Shader.Find("Sprites/Default")) { mainTexture = atlasTexture };
-                Manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(Manager, blockMaterial, -1);
 
                 BlockRegistry registry = BlockRegistry.CreateDefault();
                 World = new FlatBuilderPreset(registry, settings).Generate();

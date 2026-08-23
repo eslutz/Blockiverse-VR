@@ -7,6 +7,7 @@
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
     "Blockiverse.Survival.Health",
+    "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
     "Unity.Netcode.Runtime",
@@ -15,7 +16,9 @@
     "UnityEngine.UI"
   ],
   "includePlatforms": [],
-  "excludePlatforms": [],
+  "excludePlatforms": [
+    "LinuxStandalone64"
+  ],
   "allowUnsafeCode": false,
   "overrideReferences": false,
   "precompiledReferences": [],

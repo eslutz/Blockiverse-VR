@@ -4,7 +4,13 @@
 **Project:** Blockiverse VR
 **Primary target:** Meta Quest 3 / Quest 3S
 **Engine/runtime target:** Unity 6, C#, URP, OpenXR, Meta XR SDK, Netcode for GameObjects, Unity Transport
-**Primary multiplayer scope:** Local LAN co-op first; cloud-hosted persistent private worlds later
+**Primary multiplayer scope:** Local LAN co-op and self-hosted dedicated servers; paid hosted worlds later
+
+> **Amendment 2026-08-21 — dedicated server mode.** This ruleset originally described two session
+> modes (host and client) on a LAN. It now also covers a **self-hosted dedicated server**: a headless
+> process that owns the authoritative world with no local player. See
+> [ADR 0007](../adr/0007-self-hosted-dedicated-server.md). Sections marked *(amended 2026-08-21)*
+> carry the change; everything else is unchanged and still binding.
 
 This document defines the multiplayer/networking rules for the canonical Blockiverse VR world. The runtime should reuse proven Unity/C# patterns such as host-authoritative mutation validation, compact custom messages, and Meta avatar integration while replacing temporary world data with the registries and schemas defined in the ruleset documents.
 
@@ -16,8 +22,10 @@ This document defines the multiplayer/networking rules for the canonical Blockiv
 |---|---|
 | VR comfort first | Local head/controller tracking and locomotion must remain responsive and should not wait on network round trips. |
 | Host-authoritative world | The host owns world generation, block mutation validation, authoritative world state, survival command validation, and multiplayer save state. |
-| LAN-first release | The first shippable multiplayer mode is LAN host/client co-op. No public matchmaking or cloud persistence is required for the initial release. |
+| LAN-first release | The first shippable multiplayer mode is LAN host/client co-op. No public matchmaking or paid hosting is required for the initial release. |
+| Self-hosted servers | A dedicated server build must run the same authoritative simulation headlessly, with no local player, renderer, or XR. It is operator-run software, not a managed service. |
 | Two-player first | The implementation target is host + one client. Protocols should not hard-code assumptions that prevent later 3–4 player testing. |
+| Operator-set player count *(amended 2026-08-21)* | The dedicated server does not enforce a player ceiling. Counts above 4 are operator's risk and unsupported: late-join sends a whole-world delta snapshot per joiner and inventory snapshots broadcast at 4 KB reliable-fragmented, neither of which is measured beyond 4. |
 | Command-based gameplay | Clients send intent commands. The host validates commands and broadcasts accepted authoritative state changes. |
 | Comfort without prediction | LAN round trips are short enough that host-authoritative edits already feel immediate. Speculative prediction is deferred rather than shipped (§7.5). |
 | Bounded in-flight work | A client never accumulates unbounded unanswered commands, and recovers by resync when its view may have drifted (§7.5). |
@@ -50,6 +58,7 @@ Default port: 7777
 Default discovery port: 7778
 Initial max players: 2
 Recommended protocol headroom: 4 players
+Dedicated server max players: operator-configured, unenforced, unsupported above 4
 ```
 
 ### Transport configuration
@@ -88,9 +97,15 @@ batched or bounded accordingly — see §6 and §14.
 enum NetworkSessionMode {
   Offline = 0,
   Host = 1,
-  Client = 2
+  Client = 2,
+  Server = 3   // dedicated server: authoritative, no local player (amended 2026-08-21)
 }
 ```
+
+`Host` and `Server` share every authority power. They differ only in whether the process also owns a
+local player. Authority checks must therefore test `IsServer`, never `IsHost` — a host is a server
+that additionally has a client attached. Code gated on `CurrentMode == Host` must be re-read as
+"host or server" unless it genuinely concerns the local player.
 
 ### Session states
 
@@ -103,9 +118,13 @@ enum BlockiverseConnectionState {
   ConnectedClient = 4,
   Disconnecting = 5,
   Disconnected = 6,
-  Failed = 7
+  Failed = 7,
+  StartingServer = 8,  // amended 2026-08-21
+  Serving = 9          // amended 2026-08-21
 }
 ```
+
+New values are appended so existing persisted and logged values keep their meaning.
 
 ---
 
@@ -120,6 +139,11 @@ stateDiagram-v2
     StartingHost --> Failed: host start fails
     Hosting --> Disconnecting: Stop Session
     Disconnecting --> Stopped: shutdown complete
+
+    Stopped --> StartingServer: Start Dedicated Server
+    StartingServer --> Serving: NetworkManager.StartServer succeeds
+    StartingServer --> Failed: server start fails
+    Serving --> Disconnecting: Stop Session
 
     Stopped --> StartingClient: Join LAN Session
     StartingClient --> ConnectedClient: connected to host
@@ -151,6 +175,32 @@ function StartLanHost(): bool {
 
 Host-start preparation must run before `StartHost`. It may load a saved host world, initialize the default world, validate registry compatibility, or reject host start if authoritative save state cannot be restored.
 
+### Dedicated server start rules *(amended 2026-08-21)*
+
+```ts
+function StartDedicatedServer(): bool {
+  if networkManager.IsListening || networkManager.ShutdownInProgress:
+    return false
+
+  if !RunHostStartPreparation():        // same preparation contract as the host
+    state = Failed
+    return false
+
+  state = StartingServer
+  transport.SetConnectionData(config.address, config.port, config.listenAddress)
+  return networkManager.StartServer()
+}
+```
+
+The dedicated server runs the **same** start preparation as the host: world load, default world
+initialization, and registry validation are identical, and a preparation failure must refuse the
+start the same way. The differences are that no player object is created for the server itself, and
+`Serving` is reached from the server-started callback rather than from a local client connecting.
+
+`MaxPlayers` counts **seats**, not connections, in both modes. Connection approval runs before the
+joining client is added, so a host seats itself plus `MaxPlayers - 1` remote players while a server
+seats `MaxPlayers` remote players.
+
 ### Client start rules
 
 ```ts
@@ -171,10 +221,34 @@ function StartLanClient(address): bool {
 |---|---|
 | Offline | Set state to `Stopped`; no network action. |
 | Host | Run host-shutdown preparation, save world if allowed, then call `NetworkManager.Shutdown()`. |
+| Server *(amended 2026-08-21)* | Identical to Host: run shutdown preparation and save the world before `NetworkManager.Shutdown()`. Skipping this for a dedicated server loses the world on every stop. |
 | Client | Call `NetworkManager.Shutdown()` and discard pending commands. |
-| Shutdown preparation fails | Leave session in `Hosting` and show the failure reason. |
+| Shutdown preparation fails | Leave session in `Hosting` (or `Serving`) and report the failure reason. |
 | Transport failure | Set state to `Failed` with disconnect reason. |
 | Host lost by client | Set client state to `Disconnected`; show reconnect UI. |
+
+### Request limits and abuse handling *(amended 2026-08-22)*
+
+Every client-to-server channel is rate limited per client, not only the command channel:
+
+| Channel | Limit |
+|---|---|
+| Block mutation requests | 30 / second |
+| Survival command requests | 30 / second |
+| Player hello (identity bind) | 5 / 10 seconds |
+| Player crouch state | 20 / second |
+
+Exceeding a limit drops the message and records a violation. **Violations must be acted on, not
+only counted**: sustained abuse escalates to `DisconnectClient`. Violation scores decay so a single
+bad network moment cannot accumulate into a disconnect later.
+
+Client-asserted state must never be able to make a server-side check more permissive. The crouch
+flag carried on a placement request may only make the player-overlap check stricter; the
+authoritative value is the separately tracked, rate-limited crouch state.
+
+Death-drop is **cooldown-limited, not validated**. Vitals are per-peer local simulation by design,
+so a server has no authoritative death state to check against. The cooldown bounds the request as a
+world-spam primitive; it does not make it authentic. Genuine validation requires server-side vitals.
 
 ---
 
@@ -961,24 +1035,70 @@ LAN co-op is not a hostile competitive environment, but the host must still vali
 | Client edits a block it could not reach | Reject with `OutOfReach`. |
 | Client modifies save locally | Ignored in multiplayer; host save is authoritative. |
 
-### Implemented host reach check
+### What the reach check is for *(amended 2026-08-22)*
+
+**Reach validation is an anti-accident and anti-desync gate. It is not a defence against a
+modified client, and must not be described or relied upon as one** — including on a self-hosted
+dedicated server, where the temptation to read it as a security boundary is strongest.
+
+The reason is structural, not a gap to be closed by tuning the number. The position the check
+validates against is **authored by the client being validated**. There is no `NetworkTransform`
+anywhere in the project; a player's server-side transform is written entirely from the
+`AvatarPose` values that client publishes, with no speed, continuity, collision, or ground
+validation. A modified client can therefore place its own head next to any loaded block, wait one
+30 Hz pose tick, and submit an edit that both server-side gates accept. This is identical on a LAN
+host and on a dedicated server.
+
+What the check does buy, and why it stays: it catches desynchronised or stale client state, bounds
+the blast radius of an ordinary bug, and stops a confused client from editing across the world. Those
+are real and worth keeping.
+
+Actual cheat-resistance needs server-side movement validation or a server-authoritative transform.
+That is a separate piece of work with its own design cost, and it must not be smuggled in under the
+heading of reach validation.
+
+### One formula, one tolerance *(amended 2026-08-22)*
+
+**Every server-side reach gate MUST call `BlockiverseInteractionLimits.IsWithinReach` with
+`MaxHostValidatedReachMeters`.** No gate may define its own distance formula or its own limit.
 
 | Rule | Value |
 |---|---:|
 | Local interaction reach | 6.0 m (`BlockiverseInteractionLimits.MaxBlockInteractionReachMeters`) |
-| Host tolerance on top of it | 1.5 m |
-| Enforced host-side limit | 7.5 m from the requesting player's head to the edited block's box |
+| Host tolerance on top of it | 1.5 m (`HostReachToleranceMeters`) |
+| Enforced server-side limit | 7.5 m (`MaxHostValidatedReachMeters`), measured to the edited block's **box**, never its centre |
 
-The tolerance exists because the host's view of a remote head arrives at 30 Hz over unreliable
+The tolerance exists because the server's view of a remote head arrives at 30 Hz over unreliable
 delivery and therefore trails the client's own view by up to a frame or two of locomotion;
-enforcing exactly the local limit would reject legitimate edits made while moving. The local
-preview and the host check share one implementation in `Blockiverse.Core` so they cannot drift
-apart.
+enforcing exactly the local limit would reject legitimate edits made while moving. Measuring to the
+box rather than the centre means the limit means the same thing regardless of which face the player
+faces.
 
-The check **fails open** when the host cannot resolve the requester's head — an unspawned or
-just-connected player must not have legitimate edits dropped because presence data has not
-arrived yet. That is the right trade for cooperative LAN play; a hostile-client topology should
-revisit it.
+An earlier version of this section claimed the local preview and the host check "share one
+implementation in `Blockiverse.Core` so they cannot drift apart." **They drifted.** The survival
+command gate carried its own `Vector3.Distance` to the block *centre* at a hardcoded 6.0 m — tighter
+than the chunk gate by the entire 1.5 m tolerance plus up to sqrt(3)/2 ≈ 0.87 m of centre-versus-box.
+The visible symptom was a survival harvest or placement at the far end of reach being rejected as
+`OutOfReach` while the identical creative edit succeeded. Sharing a helper is not the same as being
+required to use it, which is why this is now a rule rather than an observation.
+
+Gates currently bound by it: `MultiplayerChunkAuthoritySync.IsWithinHostValidatedReach` and
+`MultiplayerSurvivalSync.IsBlockWithinInteractionReach`.
+
+### Unresolvable requester position *(amended 2026-08-22)*
+
+A requester's position fails to resolve only when that client has no player object or has left the
+connected set. It is **not** related to whether an avatar pose has arrived: the head anchor is
+created on spawn and the resolver falls back to the player object's transform, so a position
+resolves whether or not any pose was ever published.
+
+- On a **host**, the gate fails **open**. This is a transient startup state and a cooperative peer
+  must not have legitimate edits dropped because presence data has not landed yet.
+- On a **dedicated server**, the survival gate fails **closed**. A server with no local player has
+  no reason to accept an edit from a client that has no avatar at all.
+
+This asymmetry is deliberate but nearly unreachable in practice, and it is not a security control —
+see "What the reach check is for" above.
 
 Recommended additional host checks before public/cloud multiplayer:
 

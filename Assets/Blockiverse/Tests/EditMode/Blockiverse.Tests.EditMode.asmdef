@@ -9,6 +9,7 @@
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
     "Blockiverse.Survival.Health",
+    "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
     "Blockiverse.Editor",

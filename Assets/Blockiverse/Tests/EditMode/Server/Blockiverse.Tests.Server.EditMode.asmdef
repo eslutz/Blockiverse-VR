@@ -1,0 +1,27 @@
+{
+  "name": "Blockiverse.Tests.Server.EditMode",
+  "rootNamespace": "Blockiverse.Tests.EditMode.Server",
+  "references": [
+    "Blockiverse.Core",
+    "Blockiverse.Networking",
+    "Blockiverse.Persistence",
+    "Blockiverse.Server",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

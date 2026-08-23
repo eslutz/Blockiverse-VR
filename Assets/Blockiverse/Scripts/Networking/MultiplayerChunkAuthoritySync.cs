@@ -361,6 +361,12 @@ namespace Blockiverse.Networking
         void OnDestroy()
         {
             UnsubscribeNetworkCallbacks();
+
+            if (authGate != null && authGateSubscribed)
+            {
+                authGate.ClientAuthorized -= HandleClientAuthorized;
+                authGateSubscribed = false;
+            }
         }
 
         void Update()
@@ -377,7 +383,10 @@ namespace Blockiverse.Networking
                 !networkManager.IsListening ||
                 !networkManager.IsServer ||
                 !CurrentBoundary.CanServeLateJoinSync ||
-                networkManager.ConnectedClientsIds.Count <= 1)
+                // Count REMOTE peers, not entries. A host appears in its own ConnectedClientsIds,
+                // a dedicated server does not, so `<= 1` silently means "never resync" for a
+                // server with exactly one player -- weather and time then drift uncorrected.
+                CountRemoteClients(networkManager) < 1)
             {
                 environmentResyncTimer = 0.0f;
                 return;
@@ -519,6 +528,62 @@ namespace Blockiverse.Networking
                 return;
             }
 
+            // On a secret-protected server the world snapshot is withheld until the client passes
+            // the join-secret challenge -- otherwise an unauthenticated connection receives the
+            // entire world before being disconnected, and the secret protects nothing that
+            // matters. The gate raises ClientAuthorized (subscribed below) once the challenge
+            // completes, and disconnects the client itself on failure or timeout.
+            BlockiverseServerAuthGate gate = ResolveAuthGateOrNull();
+            if (gate != null && !gate.IsClientAuthorized(clientId))
+                return;
+
+            SendLateJoinSnapshot(clientId);
+            SendEnvironmentSnapshot(clientId);
+        }
+
+        BlockiverseServerAuthGate authGate;
+        bool authGateSubscribed;
+
+        /// <summary>Server-side only: a client mid-challenge (or failed) may not act.</summary>
+        bool IsSenderUnauthorized(ulong senderClientId)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return false;
+
+            BlockiverseServerAuthGate gate = ResolveAuthGateOrNull();
+            return gate != null && !gate.IsClientAuthorized(senderClientId);
+        }
+
+        BlockiverseServerAuthGate ResolveAuthGateOrNull()
+        {
+            if (authGate == null)
+                authGate = GetComponent<BlockiverseServerAuthGate>();
+
+            if (authGate != null && !authGateSubscribed)
+            {
+                authGate.ClientAuthorized += HandleClientAuthorized;
+                authGateSubscribed = true;
+            }
+
+            return authGate;
+        }
+
+        void HandleClientAuthorized(ulong clientId)
+        {
+            RefreshAuthorityBoundary();
+
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+
+            if (networkManager == null ||
+                !networkManager.IsServer ||
+                clientId == networkManager.LocalClientId ||
+                !CurrentBoundary.CanServeLateJoinSync ||
+                !IsClientConnected(networkManager, clientId))
+            {
+                return;
+            }
+
             SendLateJoinSnapshot(clientId);
             SendEnvironmentSnapshot(clientId);
         }
@@ -584,6 +649,12 @@ namespace Blockiverse.Networking
         void HandleMutationRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
             using ProfilerMarker.AutoScope scope = HandleMutationRequestMarker.Auto();
+
+            // A client that has not passed the join-secret challenge gets no say in the world.
+            // Silent drop, not a response: the gate is about to disconnect it anyway, and a reply
+            // channel to an unauthenticated peer is attack surface.
+            if (IsSenderUnauthorized(senderClientId))
+                return;
 
             RefreshAuthorityBoundary();
 
@@ -1226,6 +1297,9 @@ namespace Blockiverse.Networking
 
         void HandleResyncRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             RefreshAuthorityBoundary();
 
             if (!CurrentBoundary.CanServeLateJoinSync)
@@ -1613,6 +1687,23 @@ namespace Blockiverse.Networking
             }
 
             bufferedChunkDeltas.Add(message);
+        }
+
+        // Remote peers only: excludes this process's own client id, which exists on a host and
+        // does not on a dedicated server.
+        static int CountRemoteClients(NetworkManager networkManager)
+        {
+            if (networkManager == null)
+                return 0;
+
+            int remote = 0;
+            foreach (ulong clientId in networkManager.ConnectedClientsIds)
+            {
+                if (clientId != networkManager.LocalClientId)
+                    remote++;
+            }
+
+            return remote;
         }
 
         void SendToRemoteClients(string messageName, FastBufferWriter writer)

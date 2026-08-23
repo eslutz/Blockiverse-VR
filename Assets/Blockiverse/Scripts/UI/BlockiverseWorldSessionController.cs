@@ -562,7 +562,7 @@ namespace Blockiverse.UI
             // is synchronous, so this normally passes on the first check; the loop honours the gate
             // contract and guards against any future async spawn-region bake. Skipped on failure so a
             // half-entered world can never soft-lock locomotion.
-            while (entered && Application.isPlaying && worldManager?.Renderer != null && !worldManager.Renderer.SpawnRegionReady)
+            while (entered && Application.isPlaying && worldManager?.Presentation != null && !worldManager.Presentation.SpawnRegionReady)
                 yield return null;
 
             SetTransitionLocomotionBlocked(false);
@@ -865,7 +865,7 @@ namespace Blockiverse.UI
             // collidable before unblocking locomotion. The eager bake is synchronous so this normally
             // passes immediately; the loop honours the gate contract and guards against any future
             // async bake. Skipped on failure so a half-entered world can never soft-lock locomotion.
-            while (entered && Application.isPlaying && worldManager?.Renderer != null && !worldManager.Renderer.SpawnRegionReady)
+            while (entered && Application.isPlaying && worldManager?.Presentation != null && !worldManager.Presentation.SpawnRegionReady)
                 yield return null;
 
             SetTransitionLocomotionBlocked(false);
@@ -973,7 +973,7 @@ namespace Blockiverse.UI
 
             if (!deferRendererRebuild)
             {
-                worldManager.Renderer?.RebuildAll();
+                worldManager.Presentation?.RebuildAll();
             }
             else
             {
@@ -982,7 +982,7 @@ namespace Blockiverse.UI
                 // any edited spawn chunks dirty. Re-bake the spawn neighbourhood so loaded edits at
                 // spawn are solid before the player lands; the rest of the dirty world keeps
                 // draining incrementally under the per-frame budgets (no unbounded RebuildAll here).
-                worldManager.Renderer?.RebuildSpawnRegion(ResolveSpawnPosition());
+                worldManager.Presentation?.RebuildSpawnRegion(ResolveSpawnPosition());
             }
 
             RestoreInventory(result, data);
@@ -1040,7 +1040,7 @@ namespace Blockiverse.UI
         {
             if (state == null || vitalsRuntime == null)
             {
-                CreativeWorldManager.PositionRigAtSpawn(ResolveSpawnPosition());
+                BlockiverseRigPlacement.PositionAtSpawn(ResolveSpawnPosition());
                 vitalsRuntime?.ResetVitalsToFull();
                 return;
             }

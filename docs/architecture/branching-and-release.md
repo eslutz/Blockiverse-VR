@@ -19,6 +19,14 @@ Release channels use SemVer-derived Android `versionName` values.
 | `quest-ci.yml` | Pull requests and manual dispatch | Validate Unity tests and an Android smoke APK | No |
 | `quest-alpha.yml` | Pushes to `main` and manual trusted dispatch | Build a release-signed Quest APK and upload it to Meta `alpha` | Yes, `meta-alpha` |
 | `quest-promote.yml` | Manual dispatch only | Promote a selected Meta build ID through `alpha -> beta`, `beta -> rc`, or `rc -> store` | Yes, destination environment |
+| `server-release.yml` | `server-v*` tags and manual trusted dispatch | Build the Linux dedicated server, publish the archive to a GitHub Release, and push the container image to `ghcr.io` | No |
+
+`server-release.yml` is a separate distribution lane for self-hosted servers. It must not
+publish to Meta or receive Meta secrets, it needs `packages: write` permission for `ghcr.io`,
+and it must build the server exactly once — the release archive and the container image are cut
+from the same build artifact so the two can never drift. See
+[ADR 0007](../adr/0007-self-hosted-dedicated-server.md); the compiled server is distributed under
+the grant in [LICENSE.md](../../LICENSE.md) and [SERVER-EULA.md](../../SERVER-EULA.md).
 
 `quest-ci.yml` must not publish to Meta or receive Meta secrets. `quest-alpha.yml`
 is the only workflow that builds and uploads a new Meta channel APK. It uses

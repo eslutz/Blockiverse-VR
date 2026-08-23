@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using Blockiverse.Core;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
 namespace Blockiverse.Editor
@@ -16,6 +17,7 @@ namespace Blockiverse.Editor
         const string SigningConfigPathArgument = "-blockiverseSigningConfigPath";
         const string DefaultBuildOutputPath = "Builds/Android/BlockiverseVR-development.apk";
         const string DefaultReleaseBuildOutputPath = "Builds/Android/BlockiverseVR-release.apk";
+        const string DefaultLinuxServerOutputPath = "Builds/LinuxServer/BlockiverseServer";
         const string BaseVersionFilePath = "ProjectSettings/BlockiverseVersion.txt";
         const string MetaAvatarSamplePresetDirectory = "Assets/Oculus/Avatar2_SampleAssets/SampleAssets/SampleAssets";
         const string MetaAvatarSamplePresetMarkerFile = ".blockiverse-no-sample-presets";
@@ -122,6 +124,76 @@ namespace Blockiverse.Editor
                         $"Android release build failed with {summary.result}. Errors: {summary.totalErrors}");
                 }
             }
+        }
+
+        // Builds the Linux x86-64 dedicated server. Distributed as an archive and as the
+        // container image, both cut from this one artifact so the two cannot drift.
+        //
+        // Deliberately calls RunServer(), not Run(): Run() calls ConfigureAndroidPlayer, which
+        // switches the active build target to Android and would churn the Library mid-build.
+        public static void BuildLinuxServer()
+        {
+            string outputPath = GetArgumentValue(BuildOutputArgument) ?? DefaultLinuxServerOutputPath;
+            string outputDirectory = Path.GetDirectoryName(outputPath);
+
+            if (!string.IsNullOrEmpty(outputDirectory))
+                Directory.CreateDirectory(outputDirectory);
+
+            BlockiverseProjectBootstrapper.RunServer();
+            ConfigureServerVersion();
+
+            StandaloneBuildSubtarget previousSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+            EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Server;
+
+            try
+            {
+                var options = new BuildPlayerOptions
+                {
+                    scenes = new[] { BlockiverseProject.ServerScenePath },
+                    locationPathName = outputPath,
+                    target = BuildTarget.StandaloneLinux64,
+                    targetGroup = BuildTargetGroup.Standalone,
+                    subtarget = (int)StandaloneBuildSubtarget.Server,
+                    options = BuildOptions.None
+                };
+
+                using (PrepareOptionalMetaAvatarSamplePresets())
+                {
+                    BuildReport report = BuildPipeline.BuildPlayer(options);
+                    BuildSummary summary = report.summary;
+
+                    if (summary.result != BuildResult.Succeeded)
+                    {
+                        throw new InvalidOperationException(
+                            $"Linux dedicated server build failed with {summary.result}. Errors: {summary.totalErrors}");
+                    }
+                }
+            }
+            finally
+            {
+                EditorUserBuildSettings.standaloneBuildSubtarget = previousSubtarget;
+            }
+        }
+
+        // The version a server advertises in its approval payload. A client whose LocalGameVersion
+        // differs is refused with GameVersionMismatch, so a server built without an explicit
+        // version would announce "0.0.0-dev" and reject every real client.
+        static void ConfigureServerVersion()
+        {
+            string versionName = GetArgumentValue(BuildVersionNameArgument) ??
+                                 Environment.GetEnvironmentVariable("BLOCKIVERSE_SERVER_VERSION");
+
+            if (string.IsNullOrWhiteSpace(versionName))
+                versionName = ReadBaseVersion();
+
+            if (string.IsNullOrWhiteSpace(versionName))
+            {
+                throw new InvalidOperationException(
+                    "The dedicated server needs an explicit version: it must match the clients it serves, " +
+                    $"or every join is refused. Pass {BuildVersionNameArgument} or set BLOCKIVERSE_SERVER_VERSION.");
+            }
+
+            PlayerSettings.bundleVersion = versionName;
         }
 
         static IDisposable PrepareOptionalMetaAvatarSamplePresets()
