@@ -3,6 +3,7 @@
   "rootNamespace": "Blockiverse.Gameplay",
   "references": [
     "Blockiverse.Core",
+    "Blockiverse.MetaAvatars",
     "Blockiverse.Networking",
     "Blockiverse.Persistence",
     "Blockiverse.Survival",
@@ -11,8 +12,8 @@
     "Blockiverse.Voxel",
     "Blockiverse.WorldGen",
     "Unity.Netcode.Runtime",
-    "Unity.XR.Interaction.Toolkit",
     "Unity.TextMeshPro",
+    "Unity.XR.Interaction.Toolkit",
     "UnityEngine.UI"
   ],
   "includePlatforms": [],

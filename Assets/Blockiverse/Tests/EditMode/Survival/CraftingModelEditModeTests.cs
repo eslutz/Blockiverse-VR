@@ -12,9 +12,10 @@ namespace Blockiverse.Tests.Survival.EditMode
             ItemRegistry itemRegistry = ItemRegistry.CreateDefault();
             CraftingRecipeBook recipeBook = CraftingRecipeBook.CreateDefault(itemRegistry);
 
-            // 8 handcraft + 13 build-table + 7 kiln + 6 forge + 48 tools + 3 utility +
-            // 2 campfire fluid recipes + 4 food recipes (§9, §5.4, §12.2).
-            Assert.That(recipeBook.All.Count, Is.EqualTo(91));
+            // 8 handcraft + 13 build-table + 8 kiln + 6 forge + 48 tools + 3 utility +
+            // 2 campfire fluid recipes + 4 food recipes (§9, §5.4, §12.2; kiln includes
+            // the mirror_pane recipe, issue #340).
+            Assert.That(recipeBook.All.Count, Is.EqualTo(92));
 
             // §9.1 basics are handcraft (no station).
             AssertRecipe(recipeBook, ItemId.WorkPlank, CraftingStation.None, new ItemStack(ItemId.WorkPlank, 6), new ItemStack(ItemId.BranchwoodLog, 1));

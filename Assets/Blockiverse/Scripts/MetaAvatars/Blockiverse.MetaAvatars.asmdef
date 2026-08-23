@@ -4,12 +4,12 @@
   "references": [
     "Blockiverse.MetaPlatform",
     "Blockiverse.Networking",
-    "Meta.XR.MultiplayerBlocks.Shared",
     "Oculus.AvatarSDK2",
     "Oculus.Platform",
-    "Oculus.VR",
     "Unity.Collections",
-    "Unity.Netcode.Runtime"
+    "Unity.InputSystem",
+    "Unity.Netcode.Runtime",
+    "Unity.RenderPipelines.Universal.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

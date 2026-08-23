@@ -1,5 +1,6 @@
 using System;
 using Blockiverse.Core;
+using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
@@ -8,12 +9,14 @@ using UnityEngine;
 namespace Blockiverse.Gameplay
 {
     // The presentation half of the world root: chunk rendering, scene lighting, emitter lights, the
-    // void safety floor, and the interaction/placement rig. CreativeWorldManager owns the simulation
-    // and drives this through IWorldPresentation, so the simulation never names a type that depends
-    // on XRI, TextMeshPro, or uGUI.
+    // mirror-pane avatar surface, the void safety floor, and the interaction/placement rig.
+    // CreativeWorldManager owns the simulation and drives this through IWorldPresentation, so the
+    // simulation never names a type that depends on XRI, TextMeshPro, uGUI, or Meta Avatars.
     //
     // Lives on the same GameObject as CreativeWorldManager. Absent by construction on a dedicated
-    // server, where this whole assembly is excluded from the build (ADR 0007).
+    // server, where this whole assembly is excluded from the build (ADR 0007) — the mirror (issue
+    // #340) is presentation-only for the same reason the void floor and glowwick lights are: none
+    // of them mean anything with no renderer or local player.
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-8900)]
     public sealed class BlockiverseWorldPresentation : MonoBehaviour, IWorldPresentation
@@ -29,6 +32,7 @@ namespace Blockiverse.Gameplay
 
         VoxelWorldRenderer worldRenderer;
         GlowwickLightManager glowwickLightManager;
+        BlockiverseMirrorSurfaceManager mirrorSurfaceManager;
         VoxelWorld world;
         BlockRegistry registry;
         WorldGenerationSettings settings;
@@ -112,6 +116,7 @@ namespace Blockiverse.Gameplay
                 skyLight);
 
             ConfigureGlowwickLights();
+            ConfigureMirrorSurfaces();
             ConfigureVoidSafetyFloor();
             ConfigureInteractionController();
         }
@@ -166,6 +171,17 @@ namespace Blockiverse.Gameplay
                 glowwickLightManager = gameObject.AddComponent<GlowwickLightManager>();
 
             glowwickLightManager.Configure(world, registry);
+        }
+
+        void ConfigureMirrorSurfaces()
+        {
+            if (mirrorSurfaceManager == null)
+                mirrorSurfaceManager = GetComponent<BlockiverseMirrorSurfaceManager>();
+
+            if (mirrorSurfaceManager == null)
+                mirrorSurfaceManager = gameObject.AddComponent<BlockiverseMirrorSurfaceManager>();
+
+            mirrorSurfaceManager.Configure(world, registry);
         }
 
         void ConfigureVoidSafetyFloor()

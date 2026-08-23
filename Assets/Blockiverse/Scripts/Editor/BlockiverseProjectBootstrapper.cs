@@ -307,6 +307,7 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
             EnsureFluidLayer();
+            EnsureMirrorAvatarLayer();
             ConfigureFluidLayerCollisionMatrix();
             EnsureInteractionMaterials();
             EnsureInputActions();
@@ -316,6 +317,7 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureXrVisualProjectionLayer();
             EnsureCompositionUiLayer();
             EnsureFluidLayer();
+            EnsureMirrorAvatarLayer();
             ConfigureScriptingDefineSymbols();
 
             AssetDatabase.SaveAssets();
@@ -1094,6 +1096,11 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
         static int EnsureFluidLayer()
         {
             return EnsureUnityLayer(BlockiverseProject.FluidLayerName, BlockiverseProject.FluidLayerIndex);
+        }
+
+        static int EnsureMirrorAvatarLayer()
+        {
+            return EnsureUnityLayer(BlockiverseProject.MirrorAvatarLayerName, BlockiverseProject.MirrorAvatarLayerIndex);
         }
 
         // Clears the fluid layer's row in the physics collision matrix so the player's

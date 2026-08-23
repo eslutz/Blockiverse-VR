@@ -512,6 +512,7 @@ The canonical block registry maps block IDs to feedback families.
 | `leafmoss` | Leaf | Soft rustle | Green flecks. |
 | `lumen_quartz_cluster` | Crystal | Bright chip | Cyan shards, low brightness. |
 | `clearpane_glass` | Glass | Bright chip | Pale transparent shards. |
+| `mirror_pane` | Glass | Bright chip | Silvered shards with a pale glint. |
 | `embercoal_seam` | Ore/stone | Dense grit | Dark chips with ember specks. |
 | `rosycopper_bloom` | Ore/stone | Metallic grit | Gray/orange flecks. |
 | `rustcore_ore` | Ore/stone | Heavy metallic grit | Gray/pale flecks. |

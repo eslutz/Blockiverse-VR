@@ -168,10 +168,29 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
             Assert.That(entity.IsCreated, Is.False);
             Assert.That(entity.IsRenderableReady, Is.False);
             Assert.That(entity.InputManager, Is.Null);
+            // Full-body policy: FirstPerson view shows hands/arms/torso to the local player
+            // (the SDK's first-person geometry never includes head or legs); Full
+            // manifestation loads the whole body so remote viewers of the recorded stream
+            // and third-person views get legs.
             Assert.That(GetCreationInfoRenderFilters(entity).viewFlags, Is.EqualTo(CAPI.ovrAvatar2EntityViewFlags.FirstPerson));
             Assert.That(
                 GetCreationInfoRenderFilters(entity).manifestationFlags,
-                Is.EqualTo(CAPI.ovrAvatar2EntityManifestationFlags.Hands));
+                Is.EqualTo(CAPI.ovrAvatar2EntityManifestationFlags.Full));
+            Assert.That(
+                GetCreationInfoFeatures(entity),
+                Is.EqualTo(CAPI.ovrAvatar2EntityFeatures.Preset_Default),
+                "Local avatars need the Animation feature (part of Preset_Default) for body animation.");
+
+            entity.ConfigurePresentation(MetaAvatarPresentationMode.RemoteThirdPerson, hideHeadForFirstPerson: false);
+
+            Assert.That(GetCreationInfoRenderFilters(entity).viewFlags, Is.EqualTo(CAPI.ovrAvatar2EntityViewFlags.ThirdPerson));
+            Assert.That(
+                GetCreationInfoRenderFilters(entity).manifestationFlags,
+                Is.EqualTo(CAPI.ovrAvatar2EntityManifestationFlags.Full));
+            Assert.That(
+                GetCreationInfoFeatures(entity),
+                Is.EqualTo(CAPI.ovrAvatar2EntityFeatures.Preset_Remote),
+                "Remote avatars are posed purely by ApplyStreamData; live-tracking features stay off.");
             LogAssert.NoUnexpectedReceived();
         }
 
@@ -269,15 +288,27 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
 
         static CAPI.ovrAvatar2EntityFilters GetCreationInfoRenderFilters(BlockiverseMetaAvatarEntity entity)
         {
+            object creationInfo = GetCreationInfo(entity);
+            FieldInfo renderFiltersField = creationInfo.GetType().GetField("renderFilters");
+            Assert.That(renderFiltersField, Is.Not.Null);
+            return (CAPI.ovrAvatar2EntityFilters)renderFiltersField.GetValue(creationInfo);
+        }
+
+        static CAPI.ovrAvatar2EntityFeatures GetCreationInfoFeatures(BlockiverseMetaAvatarEntity entity)
+        {
+            object creationInfo = GetCreationInfo(entity);
+            FieldInfo featuresField = creationInfo.GetType().GetField("features");
+            Assert.That(featuresField, Is.Not.Null);
+            return (CAPI.ovrAvatar2EntityFeatures)featuresField.GetValue(creationInfo);
+        }
+
+        static object GetCreationInfo(BlockiverseMetaAvatarEntity entity)
+        {
             FieldInfo creationInfoField = typeof(OvrAvatarEntity).GetField(
                 "_creationInfo",
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(creationInfoField, Is.Not.Null);
-
-            object creationInfo = creationInfoField.GetValue(entity);
-            FieldInfo renderFiltersField = creationInfo.GetType().GetField("renderFilters");
-            Assert.That(renderFiltersField, Is.Not.Null);
-            return (CAPI.ovrAvatar2EntityFilters)renderFiltersField.GetValue(creationInfo);
+            return creationInfoField.GetValue(entity);
         }
 
         sealed class FakeMetaAvatarProvider : MonoBehaviour, IBlockiverseMetaAvatarProvider

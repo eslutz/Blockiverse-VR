@@ -81,6 +81,7 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.FiredBrick, "Fired Brick", ItemKind.Resource, BlockStackSize));
             registry.Register(new ItemDefinition(ItemId.FiredBrickBlock, "Fired Brick Block", ItemKind.Resource, BlockStackSize, BlockRegistry.FiredBrickBlock));
             registry.Register(new ItemDefinition(ItemId.ClearpaneGlass, "Clearpane Glass", ItemKind.Resource, BlockStackSize, BlockRegistry.ClearpaneGlass));
+            registry.Register(new ItemDefinition(ItemId.MirrorPane, "Mirror Pane", ItemKind.Placeable, BlockStackSize, BlockRegistry.MirrorPane));
 
             // ── Block items (placeable stations/lights) ───────────────────────
             registry.Register(new ItemDefinition(ItemId.BuildTable, "Build Table", ItemKind.Placeable, StationStackSize, BlockRegistry.BuildTable));

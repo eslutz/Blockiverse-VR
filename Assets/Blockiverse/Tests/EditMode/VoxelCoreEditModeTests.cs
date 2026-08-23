@@ -16,7 +16,8 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(registry.All.Count, Is.EqualTo(81));
+            Assert.That(registry.All.Count, Is.EqualTo(82));
+            Assert.That(registry.Get(BlockRegistry.MirrorPane).Category, Is.EqualTo(BlockCategory.Crafted));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
             Assert.That(registry.Get(BlockRegistry.BranchwoodLog).Category, Is.EqualTo(BlockCategory.Organic));

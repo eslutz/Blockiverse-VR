@@ -738,11 +738,18 @@ function ProcessCrateTransfer(clientId, itemId, count, direction): SurvivalComma
 
 | Player Type | Representation |
 |---|---|
-| Local player | Meta Horizon avatar in first-person when available. |
-| Remote player | Meta Horizon avatar in third-person when available. |
-| Avatar unavailable | Use Blockiverse fallback proxy avatar. |
-| Child account or child-restricted Meta profile path | Use Blockiverse fallback proxy avatar; do not request Meta profile/avatar lookup from Blockiverse code unless current Meta policy review explicitly permits it. |
+| Local player | Meta Horizon avatar in first-person when available: Full manifestation with FirstPerson view — hands, arms, and torso. The Avatars SDK's first-person geometry never includes the head or legs (deliberate SDK design with no override; the SDK is End-of-Feature at 40.0.1, so this is final). |
+| Remote player | Meta Horizon avatar in third-person when available: Full manifestation with ThirdPerson view — complete body including legs. The owner's Meta user id is synced (owner-written `NetworkVariable`) so peers load each other's real profile avatars; before it resolves, the stream poses the SDK default avatar. |
+| Profile avatar unavailable (platform failure, no created avatar) | Present the SDK default Meta avatar once the first load attempt settles; keep retrying the profile load with backoff in the background. The fallback proxy shows only until the entity has something drawable. |
+| Avatar SDK unavailable (editor, load failure) | Use Blockiverse fallback proxy avatar. |
+| Child account or child-restricted Meta profile path | Use Blockiverse fallback proxy avatar; do not request Meta profile/avatar lookup from Blockiverse code unless current Meta policy review explicitly permits it. A child device also never publishes a Meta user id and never fetches peers' profile avatars (its platform token chain never runs). |
 | NPC/mob | Original Blockiverse voxel character; never Meta Horizon avatar. |
+
+The Avatar SDK manager is a scene-authored, asset-configured object (bootstrapper-owned,
+inactive until Quest runtime activates it): its serialized references to the Style-2 shader
+configurations and GPU-skinning shaders are what ship those assets in the Android build.
+The avatar entity root is the floor-level tracking origin — identity local pose under the
+rig root (local) or the network player object (remote); it must never be moved to the head.
 
 ### Fallback proxy pose sync
 
@@ -764,7 +771,9 @@ function ProcessCrateTransfer(clientId, itemId, count, direction): SurvivalComma
 | Stream source | Owner records local first-person avatar stream. |
 | Send rate | 15 Hz target. |
 | Relay | Owner sends to server; server relays to remote clients. |
+| Identity | Owner publishes its Meta user id once resolved (owner-written `NetworkVariable`, zero = unresolved); remote peers use it to load the owner's real profile avatar. Child devices never publish one. |
 | Owner display | Hide fallback proxy when Meta avatar is ready. |
+| Remote display | The proxy hides only when the remote entity is actually renderable AND a stream frame has posed it — a stream applied to a model-less entity must not hide the proxy (that renders the player invisible). |
 | Failure mode | Continue showing fallback proxy when avatar stream is unavailable. |
 
 ### Gameplay authority separation

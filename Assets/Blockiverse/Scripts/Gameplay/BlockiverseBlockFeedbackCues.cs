@@ -100,6 +100,7 @@ namespace Blockiverse.Gameplay
 
             // Glass and fired ceramic — bright shatter
             ["clearpane_glass"] = BlockiverseMaterialFamily.Glass,
+            ["mirror_pane"] = BlockiverseMaterialFamily.Glass,
             ["frostglass"] = BlockiverseMaterialFamily.Glass,
             ["pantry_jar"] = BlockiverseMaterialFamily.Glass,
 

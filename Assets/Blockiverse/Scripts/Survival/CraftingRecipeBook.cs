@@ -86,6 +86,8 @@ namespace Blockiverse.Survival
                 new[] { new ItemStack(ItemId.PaleSand, 2) }));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.ClearpaneGlass, 1), CraftingStation.ClayKiln, Seconds(10),
                 new[] { new ItemStack(ItemId.GlassShard, 4), new ItemStack(ItemId.Shellgrit, 1) }));
+            book.Register(new CraftingRecipe(new ItemStack(ItemId.MirrorPane, 1), CraftingStation.ClayKiln, Seconds(12),
+                new[] { new ItemStack(ItemId.ClearpaneGlass, 1), new ItemStack(ItemId.PaletinBar, 1) }));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.RosycopperBar, 1), CraftingStation.ClayKiln, Seconds(12),
                 new[] { new ItemStack(ItemId.RawRosycopper, 2) }));
             book.Register(new CraftingRecipe(new ItemStack(ItemId.PaletinBar, 1), CraftingStation.ClayKiln, Seconds(12),

@@ -154,6 +154,7 @@ Blocks stack to `99` unless otherwise noted.
 | Cutstone Block | `cutstone_block` | Refined stone building block. | 2.8 | Mallet / 1 | `cutstone_block ×1` |
 | Fired Brick | `fired_brick_block` | Strong clay brick block. | 2.6 | Mallet / 1 | `fired_brick_block ×1` |
 | Clearpane Glass | `clearpane_glass` | Transparent glass block. Fragile. | 0.4 | Mallet / 1 | 50% `glass_shard ×1–2` |
+| Mirror Pane | `mirror_pane` | Silvered glass pane. Shows the player their own avatar (issue #340). Fragile. | 0.4 | Mallet / 1 | `mirror_pane ×1` |
 
 ---
 
@@ -647,6 +648,7 @@ Kiln consumes fuel normally. Forge consumes fuel at `2×` speed.
 | `fired_brick ×1` | Clay Kiln | `clay_lump ×2` | 8 sec | Brick crafting |
 | `glass_shard ×2` | Clay Kiln | `pale_sand ×2` | 8 sec | Glass component |
 | `clearpane_glass ×1` | Clay Kiln | `glass_shard ×4`, `shellgrit ×1` | 10 sec | Transparent block |
+| `mirror_pane ×1` | Clay Kiln | `clearpane_glass ×1`, `paletin_bar ×1` | 12 sec | Silvered avatar mirror |
 | `rosycopper_bar ×1` | Clay Kiln | `raw_rosycopper ×2` | 12 sec | Copper tools |
 | `paletin_bar ×1` | Clay Kiln | `raw_paletin ×2` | 12 sec | Bronze ingredient |
 | `lumen_dust ×2` | Clay Kiln | `lumen_crystal ×1` | 6 sec | Lamps and advanced recipes |
