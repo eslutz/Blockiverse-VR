@@ -91,6 +91,52 @@ batched or bounded accordingly — see §6 and §14.
 | Expiry | A session disappears from the list after 3 seconds without a beacon. |
 | Failure mode | If the socket cannot bind or broadcast is filtered (AP client isolation), the list stays empty and manual address entry is unaffected. |
 
+### Session security *(added 2026-08-23)*
+
+Join secret, transport encryption, and Meta identity verification for a self-hosted dedicated
+server exposed beyond the LAN. A LAN-only host/join session is unaffected — these are opt-in per
+server.
+
+**Join secret: a post-connect challenge, not an approval-payload signature.** Netcode's connection
+approval is a single client-to-server message with no round trip, so there is nowhere in it to put
+a server-chosen nonce; a static signature over a fully predictable payload would be replayable and
+offline-attackable from one captured join. The secret is instead verified after connect:
+
+```ts
+1. Client connects; server generates a random 32-byte nonce and sends it.
+2. Client responds with HMAC-SHA256(secret, "blockiverse-join-v1" || nonce || clientId).
+3. Server verifies with a constant-time comparison.
+4. World state (late-join snapshot, survival channels, mutations) is withheld until authorized.
+   Mismatch or timeout disconnects the client.
+```
+
+The join secret is deliberately **not** the approval-payload HMAC key, which stays at its default
+so approval keeps passing for stock clients — keying approval with the join secret would make that
+key replayable and offline-attackable exactly the way the challenge avoids, and would reject every
+client that doesn't know the secret before it could even receive the challenge.
+
+**Transport encryption (TLS).** UnityTLS has no OS trust store, so the client validates the server
+certificate against ISRG (Let's Encrypt) root certificates **embedded in the client build**; a
+server with an ACME-issued certificate needs zero player-side setup. Session setup is mode-aware:
+the client path must never require or reference the server's private key.
+
+**Meta identity verification.** When enabled, a claimed Meta user id is checked by verifying a
+`Users.GetUserProof` nonce against Meta's `graph.oculus.com/user_nonce_validate` endpoint —
+**fail-closed**: a network error or invalid proof rejects the join, it never falls through as
+unverified. Verified identities can be banned in the form `meta:<userId>`; the ban check runs after
+proof verification so an unverified id can't probe ban state.
+
+**Client UI.** The LAN/server panel offers a "Server password" field and an "Encrypted" toggle
+alongside address/port entry. Each server the player has joined is remembered per-address by a
+bookmark store (address, port, encrypted flag, saved password) — **stored in plaintext by
+decision**: it is a room key on a single-user device, not an account credential. A changed server
+password is a matter of retyping it; the freshly typed password always wins over a stale bookmarked
+one for the current join attempt.
+
+**Join-port rule.** A bare or empty address always means the discovery/session default port — a
+port adopted from a previous join (typed manually, or picked up from the discovery beacon) must
+never leak into the next join attempt typed without one.
+
 ### Session modes
 
 ```ts

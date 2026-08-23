@@ -307,6 +307,46 @@ Minimums:
 | Full-moon clear night | 4 |
 | New-moon storm night | 0 |
 
+### 5.5 Rendered shadow occlusion (presentation, not simulation)
+
+The 0–15 sky/block light model above is the simulation's light level — what crop growth reads
+(`SampleAirLight`, an axis-probe max of sky and emissive, unchanged by anything below) and what
+this section otherwise governs. Separately, the voxel renderer bakes a **per-face RGB occlusion
+channel** purely for how shadows look, and the two must not be confused: nothing in §5.1–5.4 depends
+on it, and it never feeds back into gameplay light levels.
+
+Each face bakes three channels: **R** sky exposure (floor 0 — sealed rooms are black, tunnels fade
+to 0 by 12 blocks; `_BakedLightFloor` is the one tuning knob if true black proves unplayable on
+device), **G** emitter reach (a voxel line-of-sight ray from the face to each candidate emitter in
+range), **B** self-emission. The shader gates the sun/moon/ambient terms by R.
+
+**Each punctual light (glowwick, campfire, lumen lamp, etc.) gets exactly one occlusion term, never
+two:**
+
+```ts
+if light.ownsShadowSlice:     // GetAdditionalLightShadowParams(i).w >= 0
+    occlusion = light.shadowMap;   // ~4 cm resolution
+else:
+    occlusion = G;                 // 1 sample per face, ~1 m resolution
+```
+
+Applying both was a real bug: multiplying a 1 m term by a 4 cm term let the coarser one zero the
+finer one and stepped emitter shadows onto block boundaries. `shadowStrength` is `1.0` for lights
+that own a slice — a lower value never governed anything while G was also hard-zeroing the term, so
+raising it back to 1.0 changed nothing observable.
+
+Only the nearest `GlowwickLightManager.MaxShadowCastingLights` (currently **1**) emitters actually
+cast a shadow map; every other emitter is occluded by G alone, so its occlusion edge lands on a
+block boundary rather than following geometry exactly. The escalation if that reads badly on device
+is raising `MaxShadowCastingLights`, not per-corner sampling — 16 line-of-sight walks per face on
+the main-thread chunk rebuild was measured as too expensive.
+
+**Fails safe:** with the shadow keyword stripped from a build, every light reports no owned slice
+and G gates everything — the same behavior every emitter had before this model existed.
+
+Known gap: baked light is time-of-day independent. The sun/moon still do the actual darkening: the
+bake only gates whether they're allowed to light a face at all.
+
 ---
 
 ## 6. Temperature rules

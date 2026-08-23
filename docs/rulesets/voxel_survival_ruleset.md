@@ -116,6 +116,44 @@ type DropRule = {
 };
 ```
 
+### 1.4 Difficulty Model
+
+World creation offers `easy` / `normal` / `hard` (`SurvivalDifficultyProfile`, selected per-world and
+persisted; the New World and multiplayer host-world flows both configure vitals from it). Every
+number below is a multiplier or offset against the Normal baseline in §1.5; Normal is exactly that
+baseline, unchanged.
+
+| Effect | Easy | Normal | Hard |
+|---|---:|---:|---:|
+| Hunger drain rate | ×0.5 (half speed) | ×1 | ×2 |
+| Thirst drain rate | ×0.5 (half speed) | ×1 | ×2 |
+| Stamina regen rate | ×1 | ×1 | ×1 |
+| Starvation damage interval | ×2 (half as often) | ×1 | ×0.5 |
+| Starvation damage per interval | ×1 | ×1 | ×2 |
+| Hazard damage (lava, cactus, etc.) | 50% | 100% | 150% |
+| Environment exposure damage interval | ×2 (half as often) | ×1 | ×0.5 |
+| Environment exposure damage per interval | ×1 | ×1 | ×2 |
+| Fall damage | 50% | 100% | 150% |
+
+Difficulty does not change mining times, tool durability, crafting costs, drop tables, world
+generation, or mob-equivalent hazards beyond the damage scaling above — it is a survival-pressure
+dial, not a content gate. Stamina regen is intentionally identical across all three: it governs
+mining/sprint pacing, not survival pressure. Hazard and fall damage are scaled per-hit
+(`ScaleHazardDamage`/`ScaleFallDamage`, rounding up, floor of 1 damage) rather than by changing the
+hazard's base damage value, so the same hazard table in §12 applies at every difficulty.
+
+### 1.5 Baseline (Normal) Vitals Constants
+
+```ts
+hungerTicksPerPoint = 240;                    // 12 sec per hunger point at 20 ticks/sec
+thirstTicksPerPoint = 180;                    // 9 sec per thirst point
+staminaRegenTicksPerPoint = 20;               // 1 sec per stamina point
+starvationDamageIntervalTicks = 600;          // 30 sec between starvation ticks
+starvationDamagePerInterval = 2;
+environmentExposureDamageIntervalTicks = 600; // 30 sec between exposure ticks (§5.6 cold gate)
+environmentExposureDamagePerInterval = 1;
+```
+
 ---
 
 ## 2. Terrain and Block Catalog
