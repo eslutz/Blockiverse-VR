@@ -229,7 +229,7 @@ namespace Blockiverse.Tests.Networking.EditMode
             Assert.That(session.IsTransportEncryptionConfigured, Is.False);
             Assert.That(session.StartHost(), Is.False);
             Assert.That(session.CurrentState, Is.EqualTo(BlockiverseConnectionState.Failed));
-            Assert.That(session.LastDisconnectReason, Does.Contain("Encrypted LAN transport requires"));
+            Assert.That(session.LastDisconnectReason, Does.Contain("Encrypted transport requires"));
             Assert.That(session.UnityTransport.UseEncryption, Is.False);
         }
 

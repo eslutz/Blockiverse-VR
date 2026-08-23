@@ -53,7 +53,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Gameplay code, UI labels, registries, save data, and tests should use canonical IDs from the rulesets. Legacy IDs must be handled through explicit migration code or marked as historical validation artifacts.
 - Never commit secrets, keystores, signing credentials, API keys, `.env` files, Unity `Library`, `Temp`, `Logs`, local generated folders, device logs, screenshots, recordings, Perfetto traces, APKs, or other generated validation artifacts unless a tracked artifact is explicitly required.
 - Keystores and production signing material stay outside the repo and in GitHub Actions secrets.
-- Current licensing state is source-available / All Rights Reserved. Keep `LICENSE.md`, `NOTICE.md`, and related docs aligned with that posture.
+- Current licensing state is source-available / All Rights Reserved, with one carve-out: the compiled dedicated server binary and container image are distributable under the grant in `LICENSE.md` and the terms in `SERVER-EULA.md`. Source is never covered by that grant. Keep `LICENSE.md`, `NOTICE.md`, `SERVER-EULA.md`, and related docs aligned with that posture.
 
 ### Tooling Policy
 
@@ -65,7 +65,7 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 - Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
 - Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
 - A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
-- When several worktrees or agent sessions are active, coordinate Unity runs explicitly rather than starting whenever you feel like it. See "Sharing the Unity License" below.
+- Several worktrees or agent sessions can run Unity at the same time; the licence is not exclusive across project paths (measured — see "Sharing the Unity License" below). Announce a long run as a courtesy, never kill another worktree's run, and get agreement before the destructive licensing recovery, which takes the licence from every worktree at once.
 - A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md) — the active target changes during a PlayMode run, and the owning package rewrites its define), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **The URP one is intermittent, and not seeing it proves nothing.** It has fired on two worktrees and stayed clean across many more runs on three others, including a worktree that had never touched the asset and a second run on a worktree where it had just fired. Check every time regardless — a clean tree is the common case, not evidence that this is fixed. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
 
 Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, minutes before the PlayMode build-target switch that explains the defines. The trigger is not established. That the same worktree fired once and then stayed clean rules out anything fixed about the project or its path and points at something that varied between runs — a cold versus warm `Library`, or an asset reimport in the first run and not the second, are the obvious candidates. An EditMode-only run on a cold `Library` is the cheap experiment for narrowing it. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
@@ -94,13 +94,18 @@ ps -eo command= | grep "^/Applications/Unity/Hub/Editor/.*MacOS/Unity "
 Read this by **grouping on `-projectPath`, not by counting lines**. One run
 routinely shows two or three: the editor itself launches import workers from the
 same binary (`-adb2 ... -name AssetImportWorkerHW0`), and those match too. That is
-wanted — a busy worker still means the license is taken — but three lines sharing a
-`-projectPath` is one run, not three. To attribute a line whose path is ambiguous,
+wanted — a busy worker still means a run is in progress there — but three lines sharing
+a `-projectPath` is one run, not three. To attribute a line whose path is ambiguous,
 `lsof -d cwd -p <pid>` gives the owning working directory.
 
-Proceed only when the projects listed are just this one (or there are none). Do not
-use `pgrep -f`/`pkill -f` with a bare `Unity` pattern for this check — see "Matching
-Unity Processes Safely" below.
+Note what this pre-flight is and is not for. Another worktree's live run does **not**
+block yours — start it. This check exists because the recovery below kills the shared
+per-user licensing client, which would take the licence out from under that run too.
+
+Proceed with **the recovery** only when the projects listed are just this one (or there
+are none); otherwise coordinate with the other run's owner first. This constraint is on
+the recovery, not on starting an ordinary run. Do not use `pgrep -f`/`pkill -f` with a
+bare `Unity` pattern for this check — see "Matching Unity Processes Safely" below.
 
 If Unity batchmode logs `ResponseCode: 505`, `Unsupported protocol version '1.18.1'`,
 or waits on `LicenseClient-ericslutz-6000.5`, and the pre-flight shows no other
@@ -139,81 +144,72 @@ its own. Do not leave stuck Unity batchmode processes running.
 
 ### Sharing the Unity License
 
-When more than one worktree or agent session is active, treat a Unity run as a token
-handed off by name, not as a resource you wait for.
+**There is no licence token, and you do not need anyone's permission to run Unity in
+your own worktree. Just run it.** Announce a long run as a courtesy so others know the
+machine is loaded; do not wait for a reply.
 
-Why, precisely — because a wrong reason gets the rule discarded by the first person
-who falsifies it:
+This reverses earlier guidance in this file, so here is the measurement rather than an
+assertion. On 2026-08-22, two batchmode editors ran concurrently on different project
+paths, both fully licensed:
 
-- Two editors **cannot** open the same project at once; the second fails to launch.
-- Batchmode runs are heavy (editor, import workers, shader compilers, ILPP) and
-  several at once will thrash the machine.
-- Whenever you *do* have to wait, waiting by observation does not work — see rule 4.
+```txt
+pid=97104 elapsed=05:27 EDITOR worktrees/emitter-shadow-edges-fb81e3   (Android APK build)
+pid=99355 elapsed=01:25 EDITOR worktrees/blockiverse-self-hosted-server-734ac2
+```
 
-What this is **not** based on: an earlier version of this section claimed only one
-batchmode instance can hold the license machine-wide. That is unverified and probably
-wrong — two batchmode editors on different project paths have been observed running
-concurrently without error, and the session that first asserted the constraint
-retracted it. The licensing *client* is genuinely a single per-user process
-(`Unity-LicenseClient-<user>`), which is why the recovery below is destructive to
-other worktrees, but a shared service is not the same thing as an exclusive lock.
+The second editor's log shows `Successfully connected to LicensingClient` and
+`Successfully resolved entitlement details` while the first was mid-build — no `505`,
+no `Unsupported protocol version`, no wait. Reproduce it the same way before believing
+any future claim of exclusivity: start a run while another worktree's is live and read
+the `[Licensing::` lines.
 
-1. **Ask before you run.** Tell the current holder you need a slot, and say roughly
-   how long your run is. If nobody holds it, say you are taking it.
-2. **Announce when you finish**, and **hand off by name** to the next session that
-   asked. Do not just go quiet — the next session cannot tell "finished" from
-   "between two runs". **Only the holder announces a release, and only ever to one
-   named successor.** A broadcast "it's free" is a fact about a moment sent to an
-   audience that reads it at different times, with nothing to invalidate it once
-   someone claims — so it quietly decays into a false statement. This has already
-   caused a near-collision: a session acted on a "free, nothing queued" broadcast that
-   two claims had overtaken. A named hand-off has exactly one valid recipient, and any
-   second claimant knows immediately that they are not it. If you did not receive the
-   hand-off, ask the current holder rather than acting on an announcement.
+Three things ARE real, and they are the only reasons to coordinate:
 
-   Announcements and `ps` answer different questions and neither substitutes for the
-   other. **Announcements are the authority for "may I claim"** — absence of a process
-   cannot distinguish *free* from *between two of someone's runs*, so no amount of
-   looking earns you the licence. **`ps` is the authority for "who holds it right
-   now"** — presence is definitive and names the holder. So: never claim on `ps`
-   alone, and always confirm the current holder with `ps` before believing any message
-   about who has it. The near-collision above was a stale announcement believed where
-   a live check would have answered correctly.
-3. **Want a second run while someone is queued?** Hand off first and rejoin the back
-   of the queue. A queued session gets a turn before you take another slot.
-   **Leaving the queue is never permanent** — say so when you leave, and rejoin the
-   same way you joined, at the back. Review feedback and follow-up fixes routinely
-   mean a session that announced it was finished needs another slot, and a protocol
-   that reads as one-way leaves it blocked and silent rather than asking.
-4. **Never poll for a gap and claim it.** A session's sequential Unity invocations
-   are not atomic — one run's editor exits before the next one starts — so "no Unity
-   is running" cannot distinguish *free* from *between two of someone else's runs*.
-   Claiming the license in that gap kills the run that was mid-sequence. This has
-   destroyed an in-flight build.
-5. **Only ever kill processes you started.** If a run must be stopped, ask its owner.
-6. **If the holder goes silent, take over deliberately.** Rules 4 and 5 otherwise
-   deadlock when a holder crashes or its session ends mid-run: no hand-off is ever
-   announced, and nobody is allowed to clear the stale process. So: ping the holder;
-   if **10 minutes** pass with no reply *and* no live Unity process under its
-   `-projectPath`, presume it dead, **announce the takeover** to everyone, and then
-   clean up. Ten minutes is far longer than the seconds-long gap between one
-   session's sequential runs, so this cannot fire on a live holder mid-sequence. The
-   number matters more than its value — an unstated timeout means every session picks
-   its own and you are racing again.
+1. **Two editors cannot open the same project path.** The second fails to launch. This
+   is a genuine lock, but it is per-project, so it constrains *your own* worktree — a
+   stale editor of your own is the usual cause — not anyone else's.
+2. **Concurrent runs are heavy** (editor, import workers, shader compilers, ILPP) and
+   will slow each other down. That is a reason to mention a long run, and a reason to
+   avoid stacking four of them. It is not a reason to block.
+3. **The licensing *client* is a single per-user process** (`Unity-LicenseClient-<user>`).
+   A shared service is not an exclusive lock — runs coexist through it fine — but it
+   does mean the recovery above is destructive to every worktree at once. **That is the
+   one action requiring agreement before you take it.**
 
-Recovery is the one place rule 5 does not hold: the licensing recovery below kills the
-shared per-user licensing client by construction, which is precisely what it is for.
-It may be run by the session that has announced a takeover under rule 6, or by the
-holder on its own stuck run — not by a queued session acting unilaterally. Run the
-pre-flight first either way.
+**Never kill another worktree's run.** This is the rule that actually protects people,
+and it is now the whole of the etiquette. A poller once destroyed an in-flight APK
+build here by claiming a momentary gap. If a run genuinely must be stopped, ask its
+owner; if the owner's session is gone and a stale editor is blocking *its own* project
+path, only that project's next user needs to clear it.
 
-The reason for hand-off rather than polling is worth keeping with the rule, because a
-rule without it gets optimised back into a poll loop: no observation of the process
-table can establish that the license is free, only that it is momentarily unused. The
-holder is the only party that knows whether it is done.
+If you want to know who is running what — before the recovery, or to explain why the
+machine is slow — `ps` answers it directly and is the authority for *who holds what
+right now*. Use the anchored forms below rather than `pgrep -f`. You no longer need to
+infer permission from it, which was the source of every past failure here: absence of
+a process could never distinguish *free* from *between two of someone else's runs*, and
+sessions kept trying to make that inference carry weight it could not bear.
 
-Where a check is genuinely needed — confirming a stuck run before recovery, say — use
-the anchored forms below rather than `pgrep -f`.
+Historical note, kept because the reasoning recurs and the failure mode is general:
+this section previously specified a named hand-off queue, a "never poll for a gap"
+rule, and a 10-minute silent-holder takeover. All of it existed to ration an exclusive
+resource that turned out not to be exclusive. Two separate sessions independently
+asserted the exclusivity and then retracted it, and the queue survived both retractions.
+
+**Why it survived is the part worth keeping.** Nothing could contradict it. Every
+session that respected the queue observed exactly what the queue predicted — waited,
+got the licence, ran fine — so compliance was mistaken for confirmation. A rule that is
+never violated produces no evidence about whether it is true, and an unviolated protocol
+and a green test suite are the same epistemic object: absence of contradiction, read as
+proof.
+
+The way out is the same in both cases — **measure the constraint itself, not compliance
+with it.** Break the thing deliberately and check that the alarm sounds. Here that meant
+starting a second editor on another project path and reading the `[Licensing::` lines
+instead of politely waiting one more time. It is the same move as gutting an
+implementation to prove its tests can actually fail.
+
+So: before you write a rule that serialises work, or trust a suite that has never gone
+red, go and falsify it once.
 
 ### Matching Unity Processes Safely
 
@@ -300,6 +296,15 @@ scripts/unity/run-tests.sh --platform EditMode \
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
 # Release-signed APKs are built by .github/workflows/quest-alpha.yml only.
 
+# Linux dedicated server (generates the server scene, then builds it)
+scripts/unity/build-linux-server.sh
+# Needs the linux-server editor module. The build refuses to run without an explicit version:
+# a server advertises it in the approval payload and clients on another version are refused.
+
+# After any gate that touches assembly definitions: assert the test assemblies were DISCOVERED.
+# A mis-resolved asmdef reference drops a whole assembly silently and the run still reports green.
+scripts/unity/check-test-suites.py
+
 # Generated original assets (never hand-author; regenerate instead)
 python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
 python3 scripts/audio/generate-audio.py           # music bed + classic block cues ONLY
@@ -323,6 +328,20 @@ render the full original set for comparison.
 ## Architecture
 
 VR voxel sandbox for Meta Quest 3/3S. Unity 6, URP, OpenXR + Meta XR SDK 205 (core embedded with a local `entityId` compile fix — see docs/testing/meta-xr-simulator-and-mcp.md), XRI, Netcode for GameObjects 2.13.1. LAN host-authoritative co-op. No scene switching: `Assets/Blockiverse/Scenes/Boot.unity` is the whole game.
+
+### Dedicated server
+
+A headless Linux server build ships alongside the Quest client; see
+[ADR 0007](docs/adr/0007-self-hosted-dedicated-server.md) and [docs/server/](docs/server/).
+`NetworkSessionMode.Server` is authoritative with no local player. Two rules that are easy to
+break and expensive to debug:
+
+- Presentation assemblies are kept out of the server with `excludePlatforms`, **never** with
+  `defineConstraints: ["!UNITY_SERVER"]` — that define is set for Editor scripts too, which stops
+  `Blockiverse.Editor` compiling and makes `-executeMethod` unrunnable, including the build itself.
+- `Blockiverse.MetaAvatars` ships in the server build despite being useless to it: its components
+  are on the shared network player prefab and one is a `NetworkBehaviour`, so excluding it would
+  change the spawn contract between server and client.
 
 ### Assembly layering (Assets/Blockiverse/Scripts/)
 

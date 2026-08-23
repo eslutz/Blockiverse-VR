@@ -238,10 +238,21 @@ namespace Blockiverse.Editor
             RemoveGeneratedNetworkPrefabLists(networkManager.NetworkConfig);
             networkManager.NetworkConfig.EnableSceneManagement = false;
             networkManager.NetworkConfig.ConnectionApproval = true;
+            // Load-bearing beyond performance: Netcode hashes TickRate into the connection config
+            // hash (NetworkConfig.GetConfig writes it), and a mismatch makes Netcode drop the
+            // client BEFORE connection approval -- so no BlockiverseJoinRejectionReason is produced
+            // and the refusal is close to undiagnosable from either side.
+            //
+            // This one line is why server and client agree: the dedicated server scene instantiates
+            // this same prefab through this same method. Do NOT make it per-mode configurable, and
+            // if the value ever changes it must change here for both, never on one side.
             networkManager.NetworkConfig.TickRate = 30;
 
             EnsureComponent<BlockiverseNetworkSession>(managerObject);
             EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
+            // Inert until a secret is configured; must sit on the same object as the session so
+            // both syncs can resolve it with GetComponent and defer world state until authorized.
+            EnsureComponent<BlockiverseServerAuthGate>(managerObject);
             EnsureComponent<MultiplayerChunkAuthoritySync>(managerObject);
             EnsureComponent<MultiplayerSurvivalSync>(managerObject);
             // Lives on the always-active NetworkManager object, not the LAN panel: the host has
@@ -898,11 +909,15 @@ namespace Blockiverse.Editor
             PerformanceStatsOverlay performanceOverlay = EnsureComponent<PerformanceStatsOverlay>(worldObject);
             CreativeInteractionController controller = EnsureComponent<CreativeInteractionController>(worldObject);
             CreativeWorldManager manager = EnsureComponent<CreativeWorldManager>(worldObject);
+            // The presentation half of the world root. CreativeWorldManager finds it by interface,
+            // so it must exist on the same object; on a dedicated server this component's whole
+            // assembly is excluded and the manager simply resolves null (ADR 0007).
+            BlockiverseWorldPresentation presentation = EnsureComponent<BlockiverseWorldPresentation>(worldObject);
             CreativeHotbar hotbar = FindBootSceneHotbar(scene);
             performanceOverlay.Configure(renderer);
             manager.InitializeDefaultWorldOnAwake = true;
-            manager.Configure(worldMaterial, interactionLayer, controller, hotbar);
-            manager.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
+            presentation.Configure(worldMaterial, interactionLayer, controller, hotbar);
+            presentation.ConfigureBlockTextureAtlases(BlockTextureSetIds.All, LoadBlockTextureSetAtlases());
 
             BlockiverseCreativeInputBridge staleWorldBridge = worldObject.GetComponent<BlockiverseCreativeInputBridge>();
 
@@ -916,6 +931,7 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(performanceOverlay);
             EditorUtility.SetDirty(controller);
             EditorUtility.SetDirty(manager);
+            EditorUtility.SetDirty(presentation);
         }
 
         static CreativeHotbar FindBootSceneHotbar(Scene scene)

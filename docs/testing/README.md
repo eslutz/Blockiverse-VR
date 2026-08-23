@@ -202,6 +202,39 @@ scripts/unity/run-tests.sh
 
 With no arguments, the script remains the canonical full gate. It runs EditMode then PlayMode and writes `TestResults/Unity/EditMode.xml` and `TestResults/Unity/PlayMode.xml`.
 
+#### Test Suite Discovery Check
+
+A green run is not proof the whole suite ran. **An asmdef whose reference fails to resolve drops out
+of test discovery entirely rather than failing to compile loudly** — the assembly is simply absent,
+every test that did run passed, and the gate reports success against a silently smaller suite.
+Totals do not reliably catch it either, because a change that adds cases can net out an assembly
+that vanished.
+
+Run this after the gate whenever a change touches assembly definitions, moves files between
+assemblies, or adds a new one:
+
+```sh
+scripts/unity/check-test-suites.py
+```
+
+It parses the NUnit XML for `test-suite type="Assembly"` and asserts all nine expected assemblies
+were discovered (seven EditMode, two PlayMode). Exit 1 on any missing assembly.
+
+Three EditMode assemblies are small enough — `MetaPlatform` (8), `MetaAvatars` (16),
+`SurvivalHealth` (28) — to disappear without visibly moving an ~880 total, which is why the
+assembly name set is asserted rather than the total.
+
+To also catch a single test class failing to compile while its assembly survives, compare
+per-assembly counts against a recorded baseline. Counts are branch-specific, so the baseline is
+local rather than committed:
+
+```sh
+scripts/unity/check-test-suites.py --record --against /tmp/suite-baseline.json   # before
+scripts/unity/check-test-suites.py --against /tmp/suite-baseline.json            # after; fails if any shrank
+```
+
+Add `--exact` when the change should add no tests at all, so an unexpected growth also fails.
+
 Run the combined local validation wrapper before moving a Unity-impacting pull request to review or merge when an APK build is also needed:
 
 ```sh

@@ -269,6 +269,7 @@ GameObject:
   - component: {fileID: 220185976}
   - component: {fileID: 220185975}
   - component: {fileID: 220185979}
+  - component: {fileID: 220185980}
   m_Layer: 10
   m_Name: Creative World
   m_TagString: Untagged
@@ -288,23 +289,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8cfa68dcc6134fb7b7ed4184e1542c77, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.CreativeWorldManager
-  chunkMaterial: {fileID: 2100000, guid: 4d5cd674d4ec742bfa27f01c9b1f16fe, type: 2}
   textureSet: enhanced
-  blockTextureSetIds:
-  - original
-  - enhanced
-  - ai_simplified
-  - ai
-  blockTextureSetAtlases:
-  - {fileID: 2800000, guid: 15631b2615631b2615631b2615631b26, type: 3}
-  - {fileID: 2800000, guid: ae56d699ae56d699ae56d699ae56d699, type: 3}
-  - {fileID: 2800000, guid: af0a82beaf0a82beaf0a82beaf0a82be, type: 3}
-  - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
-  interactionLayer: 10
-  interactionController: {fileID: 220185976}
-  hotbar: {fileID: 0}
-  placementPreview: {fileID: 0}
-  voidSafetyFloor: {fileID: 0}
   initializeDefaultWorldOnAwake: 1
 --- !u!114 &220185976
 MonoBehaviour:
@@ -361,6 +346,34 @@ MonoBehaviour:
   visible: 1
   sampleWindow: 90
   logIntervalSeconds: 5
+--- !u!114 &220185980
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 220185974}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb805e4c6835c44df97f731d4f0ee051, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.Gameplay::Blockiverse.Gameplay.BlockiverseWorldPresentation
+  chunkMaterial: {fileID: 2100000, guid: 4d5cd674d4ec742bfa27f01c9b1f16fe, type: 2}
+  blockTextureSetIds:
+  - original
+  - enhanced
+  - ai_simplified
+  - ai
+  blockTextureSetAtlases:
+  - {fileID: 2800000, guid: 15631b2615631b2615631b2615631b26, type: 3}
+  - {fileID: 2800000, guid: ae56d699ae56d699ae56d699ae56d699, type: 3}
+  - {fileID: 2800000, guid: af0a82beaf0a82beaf0a82beaf0a82be, type: 3}
+  - {fileID: 2800000, guid: 9d90b76d9d90b76d9d90b76d9d90b76d, type: 3}
+  interactionLayer: 10
+  interactionController: {fileID: 220185976}
+  hotbar: {fileID: 0}
+  placementPreview: {fileID: 0}
+  voidSafetyFloor: {fileID: 0}
 --- !u!1 &253304833
 GameObject:
   m_ObjectHideFlags: 0
@@ -2883,6 +2896,8 @@ MonoBehaviour:
   reconnectButton: {fileID: 0}
   stopButton: {fileID: 681260479}
   addressInput: {fileID: 477340633}
+  secretInput: {fileID: 0}
+  encryptionToggle: {fileID: 0}
   statusText: {fileID: 270811748}
   statusBadge: {fileID: 1141035280}
   worldSessionController: {fileID: 0}

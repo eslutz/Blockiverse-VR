@@ -90,8 +90,8 @@ namespace Blockiverse.Tests.EditMode
             manager.InitializeDefaultWorld();
 
             Assert.That(manager.World, Is.Not.Null);
-            Assert.That(manager.Renderer, Is.Not.Null);
-            Assert.That(manager.Renderer.SpawnRegionReady, Is.True,
+            Assert.That(manager.Presentation, Is.Not.Null);
+            Assert.That(manager.Presentation.SpawnRegionReady, Is.True,
                 "The title mini-world must have collidable spawn geometry before normal queued chunk draining.");
             Assert.That(
                 manager.gameObject.GetComponentsInChildren<MeshFilter>(includeInactive: true),
@@ -317,7 +317,7 @@ namespace Blockiverse.Tests.EditMode
         {
             Material material = AssetDatabase.LoadAssetAtPath<Material>(BlockiverseProject.ChunkAtlasMaterialPath);
             Assert.That(material, Is.Not.Null, "Creative world tests should use the committed authored chunk material.");
-            manager.Configure(material, layer: -1, controller: controller);
+            BlockiverseWorldPresentation.Attach(manager, material, layer: -1, controller: controller);
         }
 
         Slider CreateSlider(string name, float min, float max)

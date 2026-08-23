@@ -136,12 +136,17 @@ controller.ConfigureStationPanel(stationPanel);
             RectTransform bgRect = bg.GetComponent<RectTransform>(); bgRect.anchorMin = Vector2.zero; bgRect.anchorMax = Vector2.one; bgRect.offsetMin = Vector2.zero; bgRect.offsetMax = Vector2.zero;
             Image bgImage = EnsureComponent<Image>(bg); Sprite rounded = GetRoundedSprite(); if (rounded != null) { bgImage.sprite = rounded; bgImage.type = Image.Type.Sliced; } bgImage.color = PanelBaseColor;
             EnsureLabel(bg.transform, "Title", "LAN Multiplayer", 30, TextAnchor.MiddleLeft, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(MenuPanelInset, -18.0f), TitleSizeWithClose(width, 48.0f));
-            TMP_InputField addressInput = EnsureInputFieldControl(bg.transform, "Address Input", BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder), string.Empty, new Vector2(28.0f, -100.0f), new Vector2(width - 56.0f, 58.0f));
+            // Address and the optional server password share the row: a dedicated server may
+            // require a join secret (see docs/server/security-posture.md), and one row keeps the
+            // panel from reflowing for the common LAN case where the password field stays empty.
+            TMP_InputField addressInput = EnsureInputFieldControl(bg.transform, "Address Input", BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder), string.Empty, new Vector2(28.0f, -100.0f), new Vector2(width - 56.0f - 252.0f, 58.0f));
+            TMP_InputField secretInput = EnsureInputFieldControl(bg.transform, "Secret Input", BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinSecretPlaceholder), string.Empty, new Vector2(width - 268.0f, -100.0f), new Vector2(240.0f, 58.0f));
             Button hostButton = EnsureButtonControl(bg.transform, "Host Button", "Host", new Vector2(28.0f, -180.0f), new Vector2(120.0f, 54.0f));
             Button joinButton = EnsureButtonControl(bg.transform, "Join Button", "Join", new Vector2(168.0f, -180.0f), new Vector2(120.0f, 54.0f));
             Button reconnectButton = EnsureButtonControl(bg.transform, "Reconnect Button", "Reconnect", new Vector2(308.0f, -180.0f), new Vector2(140.0f, 54.0f));
             Button stopButton = EnsureButtonControl(bg.transform, "Stop Button", "Stop", new Vector2(468.0f, -180.0f), new Vector2(120.0f, 54.0f));
-            TextMeshProUGUI statusText = EnsureLabel(bg.transform, "Status", BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault), 22, TextAnchor.UpperLeft, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(28.0f, -256.0f), new Vector2(width - 56.0f, 120.0f), TextDimColor);
+            Toggle encryptionToggle = EnsureToggleControl(bg.transform, "Encryption Toggle", "Encrypted (server must offer TLS)", false, new Vector2(28.0f, -238.0f));
+            TextMeshProUGUI statusText = EnsureLabel(bg.transform, "Status", BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault), 22, TextAnchor.UpperLeft, new Vector2(0, 1), new Vector2(0, 1), new Vector2(0, 1), new Vector2(28.0f, -292.0f), new Vector2(width - 56.0f, 84.0f), TextDimColor);
             Button closeButton = EnsureButtonControl(bg.transform, "Close Button", "Close", TopRightClosePosition(width), MenuCloseButtonSize);
             GameObject badgeObject = EnsureRectChild(bg.transform, "Status Badge");
             ConfigureTopLeftRect(badgeObject.GetComponent<RectTransform>(), new Vector2(width - MenuPanelInset - MenuCloseButtonSize.x - 44.0f, -22.0f), new Vector2(28.0f, 28.0f));
@@ -181,7 +186,7 @@ controller.ConfigureStationPanel(stationPanel);
                 TextDimColor);
 
             BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(panelRoot);
-            menu.ConfigureControls(hostButton, joinButton, reconnectButton, stopButton, addressInput, statusText);
+            menu.ConfigureControls(hostButton, joinButton, reconnectButton, stopButton, addressInput, statusText, secretInput, encryptionToggle);
             menu.ConfigureStatusBadge(statusBadge);
             menu.ConfigureDiscovery(
                 UnityEngine.Object.FindFirstObjectByType<BlockiverseLanDiscovery>(FindObjectsInactive.Include),

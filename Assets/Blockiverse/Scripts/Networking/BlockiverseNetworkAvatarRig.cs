@@ -245,6 +245,19 @@ namespace Blockiverse.Networking
         [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Owner)]
         void SubmitAvatarPoseRpc(AvatarPose pose)
         {
+            // No explicit server-side apply here, and do not add one back.
+            //
+            // The fan-out below already applies the pose on a dedicated server. SendTo.NotOwner
+            // does not mean "clients other than the owner" -- NotOwnerRpcTarget re-adds the server
+            // whenever the owner is not the server, ServerRpcTarget selects LocalSendRpcTarget when
+            // IsServer, and that invokes the handler in-process. So ReceiveAvatarPoseRpc runs here
+            // on host AND dedicated server alike, and IsOwner is false for a remote player's rig.
+            //
+            // An earlier version added `if (IsServer && !IsHost) ApplyRemotePose(pose);` on the
+            // belief that a dedicated server never received this leg. It did receive it; the extra
+            // call was discarded by the pose-sequence guard in ApplyRemotePose, so the line was a
+            // no-op whose comment was the actual harm -- it was quoted as evidence elsewhere that
+            // server-side head positions go stale, which they do not.
             ReceiveAvatarPoseRpc(pose);
         }
 

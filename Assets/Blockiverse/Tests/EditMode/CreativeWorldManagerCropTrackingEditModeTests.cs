@@ -40,7 +40,7 @@ namespace Blockiverse.Tests.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
 
                 BlockRegistry registry = BlockRegistry.CreateDefault();
                 var initialSettings = new WorldGenerationSettings(
@@ -129,7 +129,7 @@ namespace Blockiverse.Tests.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
 
                 BlockRegistry registry = BlockRegistry.CreateDefault();
                 var settings = new WorldGenerationSettings(
@@ -241,7 +241,7 @@ namespace Blockiverse.Tests.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
 
                 BlockRegistry registry = BlockRegistry.CreateDefault();
                 var settings = new WorldGenerationSettings(
@@ -313,7 +313,7 @@ namespace Blockiverse.Tests.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
                 VoxelWorld world = new FlatBuilderPreset(registry, settings).Generate();
                 manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(
                     registry,
@@ -353,7 +353,7 @@ namespace Blockiverse.Tests.EditMode
 
                 CreativeWorldManager restored = restoredObject.AddComponent<CreativeWorldManager>();
                 restoredBlockMaterial = CreateBlockAtlasMaterial(out restoredAtlasTexture);
-                restored.Configure(restoredBlockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(restored, restoredBlockMaterial, -1);
                 restored.InitializeGeneratedWorld(new GeneratedCreativeWorld(
                     registry,
                     settings,
@@ -425,7 +425,7 @@ namespace Blockiverse.Tests.EditMode
 
                 CreativeWorldManager manager = worldObject.AddComponent<CreativeWorldManager>();
                 blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                manager.Configure(blockMaterial, -1);
+                BlockiverseWorldPresentation.Attach(manager, blockMaterial, -1);
                 manager.InitializeGeneratedWorld(new GeneratedCreativeWorld(
                     registry,
                     settings,

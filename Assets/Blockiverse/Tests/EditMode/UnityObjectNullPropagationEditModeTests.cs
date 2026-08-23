@@ -9,10 +9,22 @@ namespace Blockiverse.Tests.EditMode
         static readonly (string Path, string[] Patterns)[] GuardedSources =
         {
             (
-                "Assets/Blockiverse/Scripts/Gameplay/CreativeWorldManager.cs",
+                "Assets/Blockiverse/Scripts/WorldRuntime/CreativeWorldManager.cs",
                 new[]
                 {
-                    @"\bRenderer\s*\?\.",
+                    // The `presentation` FIELD must never be dereferenced directly: only the
+                    // `Presentation` property applies the Unity lifetime check, and an
+                    // interface-typed reference to a destroyed MonoBehaviour compares non-null.
+                    @"\bpresentation\s*\?\.",
+                    @"\bpresentation\s*\?\?",
+                    @"Shader\.Find\([^\r\n]+\)\s*\?\?",
+                }),
+            (
+                "Assets/Blockiverse/Scripts/Gameplay/BlockiverseWorldPresentation.cs",
+                new[]
+                {
+                    @"\bworldRenderer\s*\?\.",
+                    @"\b(interactionController|hotbar|placementPreview|voidSafetyFloor|glowwickLightManager)\s*\?\.",
                     @"Shader\.Find\([^\r\n]+\)\s*\?\?",
                 }),
             (

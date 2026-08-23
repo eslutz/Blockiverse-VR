@@ -9,6 +9,7 @@ namespace Blockiverse.Core
         public const string CreativeWorldRootName = "Creative World";
         public const string BootScenePath = "Assets/Blockiverse/Scenes/Boot.unity";
         public const string MultiplayerTestScenePath = "Assets/Blockiverse/Scenes/MultiplayerTest.unity";
+        public const string ServerScenePath = "Assets/Blockiverse/Scenes/Server.unity";
         public const string XrRigPrefabPath = "Assets/Blockiverse/Prefabs/BlockiverseXRRig.prefab";
         public const string NetworkManagerPrefabPath = "Assets/Blockiverse/Prefabs/Networking/BlockiverseNetworkManager.prefab";
         public const string NetworkPlayerPrefabPath = "Assets/Blockiverse/Prefabs/Networking/BlockiverseNetworkPlayer.prefab";

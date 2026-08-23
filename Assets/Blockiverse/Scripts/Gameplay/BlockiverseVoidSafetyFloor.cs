@@ -112,7 +112,7 @@ namespace Blockiverse.Gameplay
             if (!rigReachedFloor && !headReachedFloor)
                 return false;
 
-            CreativeWorldManager.PositionRigAtSpawn(recoverySpawnPosition);
+            BlockiverseRigPlacement.PositionAtSpawn(recoverySpawnPosition);
             return true;
         }
 

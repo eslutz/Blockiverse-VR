@@ -69,7 +69,11 @@ namespace Blockiverse.Networking
         OutOfReach,
         // The client already has the maximum number of unanswered commands in flight
         // (ruleset §14); the command is refused locally and never sent.
-        PendingRequestLimitReached
+        PendingRequestLimitReached,
+        // Appended, so existing values keep their ordinals on the wire.
+        // A death drop was requested again inside the cooldown. The server has no authoritative
+        // death state to validate against, so this bounds the request rather than judging it.
+        DeathDropCooldown
     }
 
     public readonly struct SurvivalCommandResult
@@ -301,8 +305,132 @@ namespace Blockiverse.Networking
 
         readonly Dictionary<ulong, Inventory> inventoriesByClientId = new();
         readonly Dictionary<ulong, string> playerIdentityKeysByClientId = new();
+        // Inventories held for disconnected players so a reconnect reclaims them. The key is
+        // supplied by the CLIENT (its PlayerHello identity), so without a bound a peer can grow
+        // this without limit by reconnecting under fresh identities -- and it is serialized into
+        // every save, so it grows the world on disk too. Bounded and aged instead.
         readonly Dictionary<string, Inventory> stashedInventoriesByIdentityKey = new();
+        readonly List<string> stashedIdentityOrder = new();
+        public const int DefaultMaxStashedPlayers = 64;
+        int maxStashedPlayers = DefaultMaxStashedPlayers;
+
+        // Operators raise this when a server has more regular players than the default window.
+        public void ConfigureMaxStashedPlayers(int value) =>
+            maxStashedPlayers = value > 0 ? value : DefaultMaxStashedPlayers;
+
+        public int StashedPlayerCount => stashedInventoriesByIdentityKey.Count;
+
+        // Least-recently-stashed eviction. An inventory with nothing in it is not worth a slot at
+        // all, so those are dropped rather than stored -- which is also what a churn attack
+        // produces, since a fresh identity has an empty inventory.
+        void StashInventory(string identityKey, Inventory inventory)
+        {
+            if (string.IsNullOrEmpty(identityKey) || inventory == null)
+                return;
+
+            if (IsInventoryEmpty(inventory))
+            {
+                ForgetStashedInventory(identityKey);
+                return;
+            }
+
+            if (!stashedInventoriesByIdentityKey.ContainsKey(identityKey))
+                stashedIdentityOrder.Add(identityKey);
+            else
+                TouchStashOrder(identityKey);
+
+            stashedInventoriesByIdentityKey[identityKey] = inventory;
+
+            while (stashedIdentityOrder.Count > maxStashedPlayers)
+            {
+                string oldest = stashedIdentityOrder[0];
+                stashedIdentityOrder.RemoveAt(0);
+                stashedInventoriesByIdentityKey.Remove(oldest);
+            }
+        }
+
+        void TouchStashOrder(string identityKey)
+        {
+            if (stashedIdentityOrder.Remove(identityKey))
+                stashedIdentityOrder.Add(identityKey);
+        }
+
+        void ForgetStashedInventory(string identityKey)
+        {
+            stashedInventoriesByIdentityKey.Remove(identityKey);
+            stashedIdentityOrder.Remove(identityKey);
+        }
+
+        static bool IsInventoryEmpty(Inventory inventory)
+        {
+            for (int index = 0; index < inventory.SlotCount; index++)
+            {
+                if (!inventory.GetSlot(index).IsEmpty)
+                    return false;
+            }
+
+            return true;
+        }
         readonly Dictionary<ulong, ProcessedRequestWindow> processedRequestsByClientId = new();
+        // PlayerHello was unlimited and is the most attractive channel to abuse: each one can
+        // create a stashed-inventory entry. Crouch state was unlimited and is now trusted for
+        // placement validation (see ProcessHostPlace), so it must not be floodable either.
+        readonly PerClientRequestRateLimiter playerHelloRateLimiter = new(maxRequests: 5, windowSeconds: 10.0);
+        readonly PerClientRequestRateLimiter crouchStateRateLimiter = new(maxRequests: 20, windowSeconds: 1.0);
+
+        // Counting violations without acting on them means a client can hammer a channel forever
+        // and the server just absorbs it. Sustained abuse now ends the connection.
+        readonly BlockiverseAbuseLedger abuseLedger = new();
+
+        // The player guid a connected client authenticated as, for operator tooling. `ban` takes a
+        // player id, so a server that never reveals one makes its own moderation commands unusable.
+        public bool TryGetPlayerIdForClient(ulong clientId, out string playerId)
+        {
+            playerId = null;
+            if (!playerIdentityKeysByClientId.TryGetValue(clientId, out string identityKey) ||
+                string.IsNullOrEmpty(identityKey))
+            {
+                return false;
+            }
+
+            // The key is "{guid}_{secret}"; only the guid is the operator-facing identity, and the
+            // secret is a bearer token that must never be printed or written to a ban file.
+            int separator = identityKey.IndexOf('_');
+            playerId = separator > 0 ? identityKey.Substring(0, separator) : identityKey;
+            return true;
+        }
+
+        // Disconnects any connected client authenticated as this player. Adding an id to a ban file
+        // without this leaves the banned player in the world until they choose to leave.
+        public int DisconnectPlayer(string playerId, string reason)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer || string.IsNullOrEmpty(playerId))
+                return 0;
+
+            var targets = new List<ulong>();
+            foreach (ulong clientId in networkManager.ConnectedClientsIds)
+            {
+                if (clientId != networkManager.LocalClientId &&
+                    TryGetPlayerIdForClient(clientId, out string candidate) &&
+                    string.Equals(candidate, playerId, StringComparison.OrdinalIgnoreCase))
+                {
+                    targets.Add(clientId);
+                }
+            }
+
+            foreach (ulong clientId in targets)
+                networkManager.DisconnectClient(clientId, reason);
+
+            return targets.Count;
+        }
+
+        // Installed by a dedicated server to enforce its allow/ban lists; null in LAN play, where
+        // there is no operator and no list. A player's identity is not in the connection-approval
+        // payload -- it arrives with PlayerHello -- so this is the earliest point a ban can be
+        // applied without a protocol change.
+        public static Func<string, bool> PlayerAccessCheck { get; set; }
+
         readonly PerClientRequestRateLimiter hostCommandRateLimiter =
             new(HostCommandRateLimitMaxRequests, HostCommandRateLimitWindowSeconds);
         readonly Dictionary<uint, (SurvivalCommandKind kind, BlockPosition position, float createdAtSeconds)> pendingCommandRequests = new();
@@ -528,6 +656,7 @@ namespace Blockiverse.Networking
 
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
+            stashedIdentityOrder.Clear();
 
             if (savedPlayers == null)
                 return;
@@ -542,8 +671,9 @@ namespace Blockiverse.Networking
                     continue;
                 }
 
-                stashedInventoriesByIdentityKey[savedPlayer.PlayerId] =
-                    WorldSaveService.CreateInventoryFromData(savedPlayer.Inventory, registry);
+                StashInventory(
+                    savedPlayer.PlayerId,
+                    WorldSaveService.CreateInventoryFromData(savedPlayer.Inventory, registry));
             }
         }
 
@@ -626,11 +756,10 @@ namespace Blockiverse.Networking
             inventoriesByClientId.Clear();
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
-            processedRequestsByClientId.Clear();
-            hostCommandRateLimiter.Clear();
+            stashedIdentityOrder.Clear();
+            ClearPerClientEnforcementState();
             pendingCommandRequests.Clear();
             ClearExpiredCommandRequests();
-            lastAcceptedHarvestTimeByClientId.Clear();
             ClearKnownCrouchState();
             stationModels.Clear();
             nextCommandRequestId = 1;
@@ -1740,7 +1869,20 @@ namespace Blockiverse.Networking
             bool requesterCrouching)
         {
             ReceivedPlaceRequestCount++;
-            lastKnownCrouchStateByClientId[clientId] = requesterCrouching;
+            // The crouch flag on a REMOTE placement request is client-asserted. Taking it verbatim
+            // lets a client claim "crouching" to place a block inside its own head volume, because
+            // a crouching player occupies fewer cells and so passes the overlap check. Trust the
+            // separately tracked (and rate-limited) crouch state instead, and let the request's
+            // claim only make the check stricter, never more permissive.
+            //
+            // sendResponse false is the host's OWN command, where the value came from
+            // ResolveLocalCrouchActive() rather than off the wire -- there is no one to lie, and
+            // distrusting it would reject the host's own legitimate crouch-placements.
+            if (sendResponse)
+            {
+                bool trackedCrouching = lastKnownCrouchStateByClientId.TryGetValue(clientId, out bool tracked) && tracked;
+                requesterCrouching = trackedCrouching && requesterCrouching;
+            }
 
             if (TryRejectDuplicate(clientId, requestId, SurvivalCommandKind.PlaceBlock, sendResponse, out SurvivalCommandResult duplicate))
                 return duplicate;
@@ -1837,6 +1979,11 @@ namespace Blockiverse.Networking
 
             if (TryRejectOutOfReach(clientId, requestId, SurvivalCommandKind.DeathDropInventory, preferredPosition, sendResponse, out SurvivalCommandResult reachFailure))
                 return reachFailure;
+
+            // Checked after reach so a legitimate death is not refused for a stale cooldown when
+            // the request was going to be rejected anyway.
+            if (TryRejectDeathDropCooldown(clientId, requestId, sendResponse, out SurvivalCommandResult cooldownFailure))
+                return cooldownFailure;
 
             Inventory inventory = GetInventory(clientId);
             if (!InventoryHasItems(inventory))
@@ -2906,6 +3053,14 @@ namespace Blockiverse.Networking
                 lastAcceptedHarvestTimeByClientId[clientId] = HostCommandTimeSeconds;
         }
 
+        // True when this process owns the world but has no local player: a dedicated server.
+        // A host is a server that is also a client, so IsClient distinguishes them.
+        bool IsDedicatedServerProcess()
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            return networkManager != null && networkManager.IsServer && !networkManager.IsClient;
+        }
+
         bool TryRejectOutOfReach(
             ulong clientId,
             uint requestId,
@@ -2920,7 +3075,25 @@ namespace Blockiverse.Networking
                 return false;
 
             if (!TryResolveClientWorldPosition(clientId, out Vector3 requesterPosition))
-                return false;
+            {
+                // Fail closed on a dedicated server. NOT for the reason an earlier version of this
+                // comment gave: pose arrival has NO bearing on whether a position resolves, because
+                // the head anchor is created in Awake and the resolver falls back to the player
+                // object's transform regardless. Poses also do reach a dedicated server -- NGO's
+                // SendTo.NotOwner adds the server back whenever the owner is not the server, and
+                // that resolves to an in-process invoke.
+                //
+                // The real reason is narrower: resolution fails only when the client has no player
+                // object or has left ConnectedClients. On a host that is a transient startup state
+                // worth tolerating; a dedicated server has no reason to accept an edit from a
+                // client with no avatar at all.
+                if (!IsDedicatedServerProcess())
+                    return false;
+
+                result = SurvivalCommandResult.Reject(commandKind, SurvivalCommandFailureReason.OutOfReach, requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return true;
+            }
 
             if (IsBlockWithinInteractionReach(requesterPosition, targetPosition))
                 return false;
@@ -2988,6 +3161,20 @@ namespace Blockiverse.Networking
         }
 
         bool ResolveLocalCrouchActive() => localCrouchStateProvider != null && localCrouchStateProvider();
+
+        // Every per-client enforcement store, cleared together. Kept as one method rather than
+        // parallel .Clear() calls at each lifecycle boundary: those drift, and a limiter that
+        // quietly stops being reset is invisible until someone abuses the channel it guards.
+        void ClearPerClientEnforcementState()
+        {
+            hostCommandRateLimiter.Clear();
+            playerHelloRateLimiter.Clear();
+            crouchStateRateLimiter.Clear();
+            abuseLedger.Clear();
+            lastDeathDropTimeByClientId.Clear();
+            lastAcceptedHarvestTimeByClientId.Clear();
+            processedRequestsByClientId.Clear();
+        }
 
         void ClearKnownCrouchState()
         {
@@ -3073,12 +3260,16 @@ namespace Blockiverse.Networking
 
         void HandleCommandRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             if (!CanProcessHostRequests())
                 return;
 
             if (!hostCommandRateLimiter.TryConsume(senderClientId, HostCommandTimeSeconds))
             {
                 RateLimitedCommandRequestCount++;
+                NoteViolation(senderClientId, "survival command flood");
                 return;
             }
 
@@ -3688,9 +3879,8 @@ namespace Blockiverse.Networking
             inventoriesByClientId.Clear();
             playerIdentityKeysByClientId.Clear();
             stashedInventoriesByIdentityKey.Clear();
-            processedRequestsByClientId.Clear();
-            hostCommandRateLimiter.Clear();
-            lastAcceptedHarvestTimeByClientId.Clear();
+            stashedIdentityOrder.Clear();
+            ClearPerClientEnforcementState();
             ClearKnownCrouchState();
             groundItems = new GroundItemStore(itemRegistry);
             stationModels.Clear();
@@ -3738,7 +3928,7 @@ namespace Blockiverse.Networking
             if (playerIdentityKeysByClientId.Remove(clientId, out string identityKey) &&
                 inventoriesByClientId.Remove(clientId, out Inventory inventory))
             {
-                stashedInventoriesByIdentityKey[identityKey] = inventory;
+                StashInventory(identityKey, inventory);
             }
         }
 
@@ -3746,8 +3936,46 @@ namespace Blockiverse.Networking
         {
             processedRequestsByClientId.Remove(clientId);
             hostCommandRateLimiter.RemoveClient(clientId);
+            playerHelloRateLimiter.RemoveClient(clientId);
+            crouchStateRateLimiter.RemoveClient(clientId);
+            abuseLedger.RemoveClient(clientId);
             lastAcceptedHarvestTimeByClientId.Remove(clientId);
             lastKnownCrouchStateByClientId.Remove(clientId);
+            lastDeathDropTimeByClientId.Remove(clientId);
+        }
+
+        // Death-drop cooldown. Vitals are simulated per-peer by design, so the server has NO
+        // authoritative death state to check against -- a client can ask to dump its inventory at
+        // any reachable position at any time. This does not fix that; it bounds it, so the request
+        // cannot be used as a repeatable world-spam primitive. The real fix needs server-side
+        // vitals, which is a larger change than this one.
+        readonly Dictionary<ulong, double> lastDeathDropTimeByClientId = new();
+        public const double DeathDropCooldownSeconds = 30.0;
+
+        bool TryRejectDeathDropCooldown(
+            ulong clientId,
+            uint requestId,
+            bool sendResponse,
+            out SurvivalCommandResult result)
+        {
+            result = default;
+
+            if (!sendResponse)
+                return false;
+
+            double now = HostCommandTimeSeconds;
+            if (lastDeathDropTimeByClientId.TryGetValue(clientId, out double last) &&
+                now - last < DeathDropCooldownSeconds)
+            {
+                NoteViolation(clientId, "death drop cooldown");
+                result = SurvivalCommandResult.Reject(
+                    SurvivalCommandKind.DeathDropInventory, SurvivalCommandFailureReason.DeathDropCooldown, requestId);
+                SendCommandFailure(clientId, result, sendResponse);
+                return true;
+            }
+
+            lastDeathDropTimeByClientId[clientId] = now;
+            return false;
         }
 
         static string ResolveLocalPlayerGuid()
@@ -3815,8 +4043,19 @@ namespace Blockiverse.Networking
 
         void HandlePlayerHelloMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             if (!CanProcessHostRequests())
                 return;
+
+            // Each accepted hello can bind an identity and reclaim a stashed inventory, so this is
+            // the channel where a flood is worth the most to an attacker.
+            if (!playerHelloRateLimiter.TryConsume(senderClientId, HostCommandTimeSeconds))
+            {
+                NoteViolation(senderClientId, "player hello flood");
+                return;
+            }
 
             if (!SurvivalSyncWireCodec.TryReadBoundedNetworkString(ref reader, MaxNetworkPlayerGuidChars, out string guid))
                 return;
@@ -3825,11 +4064,30 @@ namespace Blockiverse.Networking
             if (!TryBuildPlayerIdentityKey(guid, secret, out string identityKey))
                 return;
 
+            // Enforced here rather than at connection approval because approval has no identity to
+            // judge. Without this the admin 'ban' command reports success and the player rejoins
+            // immediately -- a moderation surface that lies is worse than none.
+            if (PlayerAccessCheck != null && !PlayerAccessCheck(guid))
+            {
+                NetworkManager networkManager = ResolveNetworkManagerOrNull();
+                if (networkManager != null && networkManager.IsServer)
+                {
+                    BlockiverseLog.Warning(
+                        BlockiverseLogCategory.Networking,
+                        $"Refusing player {guid}: not permitted by the server's access lists.",
+                        this);
+                    networkManager.DisconnectClient(senderClientId, "Not permitted on this server.");
+                }
+
+                return;
+            }
+
             if (IsPlayerIdentityBoundToDifferentClient(senderClientId, identityKey))
                 return;
 
             playerIdentityKeysByClientId[senderClientId] = identityKey;
 
+            stashedIdentityOrder.Remove(identityKey);
             if (stashedInventoriesByIdentityKey.Remove(identityKey, out Inventory stashed))
             {
                 inventoriesByClientId[senderClientId] = stashed;
@@ -3839,11 +4097,41 @@ namespace Blockiverse.Networking
 
         void HandlePlayerCrouchStateMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             if (!CanProcessHostRequests())
                 return;
 
+            if (!crouchStateRateLimiter.TryConsume(senderClientId, HostCommandTimeSeconds))
+            {
+                NoteViolation(senderClientId, "crouch state flood");
+                return;
+            }
+
             reader.ReadValueSafe(out bool crouching);
             lastKnownCrouchStateByClientId[senderClientId] = crouching;
+        }
+
+        // Records a protocol violation and disconnects the client once sustained abuse crosses the
+        // ledger's threshold. Violations decay, so a single bad network moment does not accumulate
+        // into a disconnect an hour later.
+        void NoteViolation(ulong clientId, string reason)
+        {
+            if (!abuseLedger.RecordViolation(clientId, HostCommandTimeSeconds))
+                return;
+
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return;
+
+            BlockiverseLog.Warning(
+                BlockiverseLogCategory.Networking,
+                $"Disconnecting client {clientId} for sustained protocol abuse ({reason}).",
+                this);
+
+            abuseLedger.RemoveClient(clientId);
+            networkManager.DisconnectClient(clientId, "Disconnected for sustained protocol abuse.");
         }
 
         bool IsPlayerIdentityBoundToDifferentClient(ulong clientId, string identityKey)
@@ -4018,6 +4306,25 @@ namespace Blockiverse.Networking
             return networkManager;
         }
 
+        BlockiverseServerAuthGate survivalAuthGate;
+
+        /// <summary>
+        /// Server-side only: survival commands, hellos, and crouch updates from a client that has
+        /// not passed the join-secret challenge are dropped. Everything downstream of PlayerHello
+        /// hands out inventory state, which is exactly what the secret exists to protect.
+        /// </summary>
+        bool IsSenderUnauthorized(ulong senderClientId)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return false;
+
+            if (survivalAuthGate == null)
+                survivalAuthGate = GetComponent<BlockiverseServerAuthGate>();
+
+            return survivalAuthGate != null && !survivalAuthGate.IsClientAuthorized(senderClientId);
+        }
+
         NetworkManager ResolveNetworkManagerOrNull()
         {
             if (session == null)
@@ -4144,10 +4451,26 @@ namespace Blockiverse.Networking
                 Mathf.FloorToInt(worldPosition.z));
         }
 
-        private static bool IsBlockWithinInteractionReach(Vector3 requesterPosition, BlockPosition targetPosition)
+        // ONE formula and ONE tolerance for every server-side reach gate (ruleset §16). This used
+        // to measure to the block's CENTRE at a hardcoded 6.0 m, which rejected legitimate edits
+        // the client had already accepted -- it was tighter than the chunk-path gate by the whole
+        // 1.5 m pose-lag tolerance plus up to sqrt(3)/2 ≈ 0.87 m of centre-versus-box. A survival
+        // harvest at the far end of reach failed while the identical creative edit succeeded.
+        //
+        // CreativeInteractionController.IsBlockWithinInteractionReach states the contract that was
+        // being broken: the client shares the Core implementation "so a locally legal edit is never
+        // rejected as out of reach by the host on a mismatched formula". Do not reintroduce a
+        // second formula here; change BlockiverseInteractionLimits instead.
+        public static bool IsBlockWithinInteractionReach(Vector3 requesterPosition, BlockPosition targetPosition)
         {
-            Vector3 center = new Vector3(targetPosition.X + 0.5f, targetPosition.Y + 0.5f, targetPosition.Z + 0.5f);
-            return Vector3.Distance(requesterPosition, center) <= 6.0f;
+            return BlockiverseInteractionLimits.IsWithinReach(
+                requesterPosition.x,
+                requesterPosition.y,
+                requesterPosition.z,
+                targetPosition.X,
+                targetPosition.Y,
+                targetPosition.Z,
+                BlockiverseInteractionLimits.MaxHostValidatedReachMeters);
         }
 
         private static bool IsPlayerOccupyingBlock(BlockPosition targetPosition, BlockPosition playerHeadPosition, bool crouching)
