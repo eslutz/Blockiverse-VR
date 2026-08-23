@@ -116,6 +116,44 @@ type DropRule = {
 };
 ```
 
+### 1.4 Difficulty Model
+
+World creation offers `easy` / `normal` / `hard` (`SurvivalDifficultyProfile`, selected per-world and
+persisted; the New World and multiplayer host-world flows both configure vitals from it). Every
+number below is a multiplier or offset against the Normal baseline in §1.5; Normal is exactly that
+baseline, unchanged.
+
+| Effect | Easy | Normal | Hard |
+|---|---:|---:|---:|
+| Hunger drain rate | ×0.5 (half speed) | ×1 | ×2 |
+| Thirst drain rate | ×0.5 (half speed) | ×1 | ×2 |
+| Stamina regen rate | ×1 | ×1 | ×1 |
+| Starvation damage interval | ×2 (half as often) | ×1 | ×0.5 |
+| Starvation damage per interval | ×1 | ×1 | ×2 |
+| Hazard damage (lava, cactus, etc.) | 50% | 100% | 150% |
+| Environment exposure damage interval | ×2 (half as often) | ×1 | ×0.5 |
+| Environment exposure damage per interval | ×1 | ×1 | ×2 |
+| Fall damage | 50% | 100% | 150% |
+
+Difficulty does not change mining times, tool durability, crafting costs, drop tables, world
+generation, or mob-equivalent hazards beyond the damage scaling above — it is a survival-pressure
+dial, not a content gate. Stamina regen is intentionally identical across all three: it governs
+mining/sprint pacing, not survival pressure. Hazard and fall damage are scaled per-hit
+(`ScaleHazardDamage`/`ScaleFallDamage`, rounding up, floor of 1 damage) rather than by changing the
+hazard's base damage value, so the same hazard table in §12 applies at every difficulty.
+
+### 1.5 Baseline (Normal) Vitals Constants
+
+```ts
+hungerTicksPerPoint = 240;                    // 12 sec per hunger point at 20 ticks/sec
+thirstTicksPerPoint = 180;                    // 9 sec per thirst point
+staminaRegenTicksPerPoint = 20;               // 1 sec per stamina point
+starvationDamageIntervalTicks = 600;          // 30 sec between starvation ticks
+starvationDamagePerInterval = 2;
+environmentExposureDamageIntervalTicks = 600; // 30 sec between exposure ticks (§5.6 cold gate)
+environmentExposureDamagePerInterval = 1;
+```
+
 ---
 
 ## 2. Terrain and Block Catalog
@@ -373,8 +411,13 @@ Wading deliberately keeps normal gravity, so a puddle and the one-block shorelin
 §5.4 stay walkable rather than becoming swimmable.
 
 **Swimming is negatively buoyant by default.** A player who is not actively swimming sinks:
-the surface is not a resting state, and treading water is an active act. Descent is constant
-speed rather than accelerating, so it can never build into a fall, and it stops at the bed.
+the surface is not a resting state, and treading water is an active act. Descent is a constant
+**velocity** target (never a spring, never an acceleration), so it cannot overshoot, bob, or build
+into a fall, and it stops at the bed. This deliberately inverts default-to-comfort guidance for one
+specific motion, so the escape hatch is first-class: the off switch is the accommodation (see
+Comfort below). The 0.35 m/s default is reasoned, not headset-validated. There is **no breath or
+drowning meter**: persisting one forces a save-schema bump that would hard-refuse every existing
+save, and the pre-release policy has no migrations.
 
 | Verb | Input | Freshwater / brine | Emberflow |
 |---|---|---:|---:|
@@ -413,8 +456,13 @@ So a swimmer pushing toward a low bank is lifted onto it:
 
 Requiring active forward intent is what makes this **redirected requested motion** rather than
 motion nobody asked for, which is the distinction the comfort argument rests on. It reverses an
-earlier decision against any ledge assist; [ADR 0008](../adr/0008-swim-locomotion.md) carries the
-reasoning and records that the two-block case still wants a headset comfort pass.
+earlier decision against any ledge assist: in-headset testing showed hold-jump-to-rise does not get
+the player out (swim control returns while the feet are still ~1 m below the bank, and none of the
+usual rescues — step offset, grounded step assist, jump — apply to a treading player), so a
+shoreline the terrain says is climbable was inescapable. **The two-block lift still wants a headset
+comfort pass**; the conservative fallback is bounding the surface rise at water level (~1 m lift).
+The engine-level gravity/locomotion traps behind this live in
+`docs/architecture/quest-runtime-engineering-standards.md`.
 
 **Comfort.** Passive sinking is unrequested vertical motion, so the accommodation is
 first-class rather than buried: turning it off restores exact neutral buoyancy — with no input

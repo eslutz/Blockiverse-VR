@@ -34,7 +34,6 @@ The canonical target is defined by the Blockiverse ruleset documents. Existing c
 - [voxel_save_versioning_schema.md](../rulesets/voxel_save_versioning_schema.md)
 - [voxel_multiplayer_networking_ruleset.md](../rulesets/voxel_multiplayer_networking_ruleset.md)
 - [voxel_audio_vfx_ruleset.md](../rulesets/voxel_audio_vfx_ruleset.md)
-- [voxel_git_known_good_tagging_policy.md](../rulesets/voxel_git_known_good_tagging_policy.md)
 - [voxel_implementation_alignment_matrix.md](../rulesets/voxel_implementation_alignment_matrix.md)
 
 ### Implementation policy
@@ -243,9 +242,7 @@ README.md
 LICENSE.md
 NOTICE.md
 CONTRIBUTING.md
-CODE_OF_CONDUCT.md
 SECURITY.md
-CHANGELOG.md
 CLAUDE.md
 docs/
   architecture/
@@ -397,7 +394,6 @@ Add ruleset docs under docs/rulesets/ or equivalent
 Document canonical world replacement strategy
 Document temporary ID migration strategy
 Keep CLAUDE.md aligned with roadmap
-Keep CHANGELOG.md updated for material changes
 Use source-available / All Rights Reserved until licensing posture changes
 ```
 
@@ -1351,7 +1347,7 @@ meta-promotion-summary.json
 meta-promotion-output.txt
 BlockiverseVR-v0.1.0-symbols.zip
 checksums.txt
-CHANGELOG.md excerpt
+release notes excerpt
 test-results.zip
 performance-summary.md
 ```

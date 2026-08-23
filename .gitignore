@@ -486,6 +486,13 @@ worktrees/
 coverage/
 TestResults/
 
+# Ad-hoc Unity test logs written outside TestResults/. `TempTestResults.txt` and
+# `editmode_test_results.txt` were both committed and had to be removed later;
+# the directory rule above never covered them because they were written to the
+# repository root under one-off names.
+*TestResults.txt
+*_test_results.txt
+
 # Full-resolution AI texture generation cache. Normalized 32x32 texture-set
 # assets under Assets/Blockiverse/Art/Textures/Blocks/TextureSets are tracked.
 /docs/art/block-texture-set-generation/raw/

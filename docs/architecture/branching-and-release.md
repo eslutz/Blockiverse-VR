@@ -52,10 +52,6 @@ Alpha uses workflow-level GitHub Actions concurrency with
 running Alpha build/upload run. GitHub Actions keeps at most one pending run for
 a concurrency group; that is an intentional simplification tradeoff.
 
-Known-good engineering checkpoint tags use the `kg/...` family and are governed by
-[Voxel Known-Good Git Tagging Policy](../rulesets/voxel_git_known_good_tagging_policy.md).
-They are recovery points, not player-facing releases.
-
 The `main` ruleset must require the `Repository checks` status check, require
 branches to be up to date before merge, require linear history, require
 conversation resolution, and block force pushes and branch deletion. Do not

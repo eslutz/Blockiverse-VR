@@ -31,4 +31,4 @@
 ## Release notes
 
 Per-release player-facing notes are drafted from `release-notes-template.md` and the
-`Unreleased` section of the top-level `CHANGELOG.md`.
+commit history since the previous release tag.

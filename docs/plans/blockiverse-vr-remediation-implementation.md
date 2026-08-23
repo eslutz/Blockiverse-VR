@@ -1,6 +1,6 @@
 # Blockiverse VR — Remediation Implementation Plan
 
-**Companion to:** `Assets/Plans/blockiverse-vr-technical-audit.md` (findings, rationale, priorities).
+**Companion to:** `docs/plans/blockiverse-vr-technical-audit.md` (findings, rationale, priorities).
 **Target:** Meta Quest 3 / 3S · Unity 6000.3.16f1 · URP · OpenXR + Meta XR SDK · Netcode for GameObjects.
 **Posture:** Unreleased project — breaking changes allowed, no back-compat, no legacy save support.
 

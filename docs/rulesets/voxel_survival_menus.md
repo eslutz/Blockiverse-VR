@@ -970,7 +970,11 @@ canRepair =
 
 ### 6.18 LAN Multiplayer Menu
 
-**Purpose:** Host, join, or stop a local LAN co-op session while keeping the host authoritative over world state.
+**Purpose:** Host, join, or stop a LAN co-op session — or a self-hosted dedicated server reachable
+beyond the LAN — while keeping the host/server authoritative over world state. Session security
+(join secret, encryption, Meta identity, bans) is defined in
+[voxel_multiplayer_networking_ruleset.md](voxel_multiplayer_networking_ruleset.md) §2 "Session
+security"; this section covers only the menu surface for it.
 
 **State fields:**
 
@@ -978,13 +982,30 @@ canRepair =
 type LanMultiplayerMenuState = {
   sessionMode: "offline" | "host" | "client";
   connectionState: "stopped" | "starting_host" | "hosting" | "starting_client" | "connected_client" | "disconnecting" | "disconnected" | "failed";
-  address: string;        // default: 127.0.0.1
-  listenAddress: string;  // default: 0.0.0.0
-  port: number;           // configured default: 7777
+  address: string;         // default: 127.0.0.1; host:port form accepted, and always overrides
+                            // any port picked up from a bookmark or the discovery beacon
+  listenAddress: string;   // default: 0.0.0.0
+  port: number;            // configured default: 7777; a bare/empty address always means this
+  serverPassword: string;  // join secret; empty for an unauthenticated LAN session
+  encrypted: boolean;      // TLS toggle for a session reachable beyond the LAN
+  discoveredSessions: DiscoveredSession[];  // populated only while this menu is open
   lastDisconnectReason?: string;
   lastHostSaveError?: string;
 };
+
+type DiscoveredSession = {
+  address: string;   // taken from the beacon packet's sender, never from its payload
+  port: number;
+  hostName: string;
+  playerCount: number;
+  maxPlayers: number;
+};
 ```
+
+Joining a discovered session fills the address/port fields from it; the player may still type a
+password before joining if the discovered session requires one. Each server previously joined is
+remembered by address (address, port, encrypted flag, saved password) so rejoining is one tap —
+see the bookmark-store rule in the networking ruleset.
 
 **Mockup:**
 
@@ -994,7 +1015,12 @@ type LanMultiplayerMenuState = {
 |------------------------------------------------|
 | Status: LAN session stopped.                   |
 |                                                |
+| Discovered:                                    |
+|   [ Eric's World   2/4 players   Join ]        |
+|                                                |
 | Host Address: [ 127.0.0.1                 ]    |
+| Server Password: [                        ]    |
+| [ ] Encrypted                                  |
 |                                                |
 | [ Host LAN Session ] [ Join LAN Session ]      |
 | [ Stop Session ] [ Close ]                     |
@@ -1009,9 +1035,12 @@ type LanMultiplayerMenuState = {
 | Element | Action ID | Enabled When | Logic |
 |---|---|---|---|
 | Host LAN Session | `multiplayer.host_lan` | No active session; local world can load/generate | Loads or initializes canonical world state, then starts host session. |
-| Join LAN Session | `multiplayer.join_lan` | No active session; address is valid | Starts client connection to `address` on the configured default port. |
+| Join LAN Session | `multiplayer.join_lan` | No active session; address is valid | Starts client connection to `address`, using `port` from a `host:port` address or the configured default otherwise. |
+| Join discovered session | `multiplayer.join_discovered` | No active session; a beacon is listed | Fills address/port from the beacon and joins. |
 | Stop Session | `multiplayer.stop_session` | Host/client session active or disconnecting | Host attempts save-on-shutdown, then stops session; client disconnects. |
-| Address input | `multiplayer.set_address` | No active session | Updates pending join address. |
+| Address input | `multiplayer.set_address` | No active session | Updates pending join address (host:port accepted). |
+| Password input | `multiplayer.set_password` | No active session | Updates the pending join secret; a freshly typed password wins over a bookmarked one. |
+| Encrypted toggle | `multiplayer.toggle_encrypted` | No active session | Sets whether the pending join validates the server's TLS certificate. |
 | Close | `lan_multiplayer.close` | Always | Returns to previous screen. |
 
 **Status text rules:**

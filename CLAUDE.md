@@ -5,7 +5,10 @@ This file is the single source of truth for agent instructions in this repositor
 
 Canonical game design lives in [docs/rulesets/](docs/rulesets/) and the roadmap in
 [docs/roadmap/blockiverse_vr_execution_plan.md](docs/roadmap/blockiverse_vr_execution_plan.md).
-Architecture decisions go in [docs/adr/](docs/adr/), and the testing contract is
+Architecture decisions go in [docs/adr/](docs/adr/) — reserved for cross-cutting
+architecture; feature-level design decisions belong in the ruleset that owns the system,
+which is also why ADR numbers are permanent (gaps from retired ADRs are never reused) —
+and the testing contract is
 [docs/testing/README.md](docs/testing/README.md).
 
 Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
@@ -43,7 +46,6 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
   - `.github/workflows/quest-alpha.yml`, which builds a release-signed Quest APK from `main` pushes or manual trusted refs and uploads it to Meta `alpha`;
   - `.github/workflows/quest-promote.yml`, which manually promotes a selected tested Meta build ID through `alpha -> beta`, `beta -> rc`, or `rc -> store` without rebuilding.
 - Promotion to `beta`, `rc`, and `store` must preserve the exact tested Meta build artifact. Store promotion requires the `meta-store` environment approval gate.
-- Known-good engineering checkpoint tags use the `kg/...` family and follow [docs/rulesets/voxel_git_known_good_tagging_policy.md](docs/rulesets/voxel_git_known_good_tagging_policy.md). They are recovery checkpoints, not release tags.
 
 ### Project Guardrails
 

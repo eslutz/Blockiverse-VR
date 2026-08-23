@@ -1,7 +1,7 @@
 # Release Notes — v<version>
 
 > Player-facing release notes for the store listing. Keep these short and benefit-focused;
-> derive them from the `Unreleased` section of the top-level `CHANGELOG.md`.
+> derive them from the commit history since the previous release tag.
 
 **Release date:** <date>
 

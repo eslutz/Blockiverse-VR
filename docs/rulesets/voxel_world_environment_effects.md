@@ -307,6 +307,46 @@ Minimums:
 | Full-moon clear night | 4 |
 | New-moon storm night | 0 |
 
+### 5.5 Rendered shadow occlusion (presentation, not simulation)
+
+The 0–15 sky/block light model above is the simulation's light level — what crop growth reads
+(`SampleAirLight`, an axis-probe max of sky and emissive, unchanged by anything below) and what
+this section otherwise governs. Separately, the voxel renderer bakes a **per-face RGB occlusion
+channel** purely for how shadows look, and the two must not be confused: nothing in §5.1–5.4 depends
+on it, and it never feeds back into gameplay light levels.
+
+Each face bakes three channels: **R** sky exposure (floor 0 — sealed rooms are black, tunnels fade
+to 0 by 12 blocks; `_BakedLightFloor` is the one tuning knob if true black proves unplayable on
+device), **G** emitter reach (a voxel line-of-sight ray from the face to each candidate emitter in
+range), **B** self-emission. The shader gates the sun/moon/ambient terms by R.
+
+**Each punctual light (glowwick, campfire, lumen lamp, etc.) gets exactly one occlusion term, never
+two:**
+
+```ts
+if light.ownsShadowSlice:     // GetAdditionalLightShadowParams(i).w >= 0
+    occlusion = light.shadowMap;   // ~4 cm resolution
+else:
+    occlusion = G;                 // 1 sample per face, ~1 m resolution
+```
+
+Applying both was a real bug: multiplying a 1 m term by a 4 cm term let the coarser one zero the
+finer one and stepped emitter shadows onto block boundaries. `shadowStrength` is `1.0` for lights
+that own a slice — a lower value never governed anything while G was also hard-zeroing the term, so
+raising it back to 1.0 changed nothing observable.
+
+Only the nearest `GlowwickLightManager.MaxShadowCastingLights` (currently **1**) emitters actually
+cast a shadow map; every other emitter is occluded by G alone, so its occlusion edge lands on a
+block boundary rather than following geometry exactly. The escalation if that reads badly on device
+is raising `MaxShadowCastingLights`, not per-corner sampling — 16 line-of-sight walks per face on
+the main-thread chunk rebuild was measured as too expensive.
+
+**Fails safe:** with the shadow keyword stripped from a build, every light reports no owned slice
+and G gates everything — the same behavior every emitter had before this model existed.
+
+Known gap: baked light is time-of-day independent. The sun/moon still do the actual darkening: the
+bake only gates whether they're allowed to light a face at all.
+
 ---
 
 ## 6. Temperature rules
@@ -1349,6 +1389,44 @@ indoorBlend = hasOpenSky(player.pos) ? 0.0 : 1.0;
 precipitationRenderAmount *= 1.0 - indoorBlend;
 fogDensity = lerp(outdoorFogDensity, indoorFogDensity, indoorBlend);
 ```
+
+### 19.4 Water surface rendering
+
+Water is transparent and wave-animated. Folded from the retired water-surface-rendering ADR
+(2026-08-20, PR #328); where a decision went against the obvious answer, the reason is recorded so
+it is not "fixed" later.
+
+- **One voxel shader, one keyword.** `BlockiverseVoxelLit.shader` carries a `_BLOCKIVERSE_WATER`
+  `multi_compile_local` variant with material-driven `Blend`/`ZWrite`/`Cull`; `BlockVisualAtlas`
+  clones the authored atlas material transparent at runtime. **A second `.shader` file is
+  forbidden**: nothing references the runtime-cloned materials as assets, so a shader reached only
+  through `Shader.Find` is stripped from the Android player — invisible in editor and CI, magenta
+  water on device. `shader_feature_local` is forbidden for the same stripping reason.
+- **Water data rides UV1** `(surfaceMask, familyIndex)`, never vertex COLOR — R/G/B are sky
+  exposure, emitter reach, and self emission (§5), all of which water needs as much as stone does.
+  `COLOR.a` stays 1.0: it is the blend's opacity multiplier.
+- **The wave is strictly downward** (`dy = A·(s − 1)`), so a crest can never open a shoreline
+  crack. The surface mask marks emitted `+Y` faces, plus the foot of a side wall standing on a
+  lower same-family surface — without that exception the wave opens a ~5 cm see-through slit under
+  every flowing-water step. Wave normal and highlight are gated on the baked normal facing up.
+- **Depth-primed transparency: exactly one blended layer per pixel.** A `ColorMask 0`
+  `WaterDepthPrime` pass at queue `Transparent − 1` (with `Offset 1, 1`) claims each pixel for the
+  nearest water fragment; the shading pass blends at `Transparent` with `ZTest LEqual`. Both passes
+  displace through the same wave helper. Accepted consequence: water occludes transparent objects
+  behind it (particles), never opaque geometry — the seabed stays visible.
+- **Underwater is fog plus a camera-clear swap** (`BlockiverseWaterView`), with the fog write owned
+  by `BlockiverseLightingCycleController`. A camera-attached tint quad is forbidden: routed menus
+  are world-space canvases on the same camera, and a near-clip quad would tint the pause/quit
+  escape hatch. Canvas UI ignores fog, so menus stay legible underwater — a feature, not a bug.
+- **No depth texture, no opaque texture, no renderer features** — either forfeits fixed foveated
+  rendering across the whole frame. Accepted: no depth-fade shorelines, no refraction.
+- The wave is presentation-only: colliders cook from the undisplaced mesh, gameplay reads voxels.
+  Fluid mesh bounds pad downward by `VoxelWorldRenderer.MaxWaveDipMeters`; an EditMode test pins
+  shader amplitudes to that padding.
+- **Open gate:** staged `ovrgpuprofiler` captures (baseline / queue-move-only / full / prime-off)
+  on one seed and pose — procedure in `docs/testing/performance/README.md`. The queue-move-only
+  number decides whether transparent water is affordable at all. Fill-rate levers, in order:
+  raise alpha, MSAA 4x → 2x, opaque queue as last resort.
 
 ---
 

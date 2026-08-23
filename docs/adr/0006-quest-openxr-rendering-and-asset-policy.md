@@ -2,11 +2,39 @@
 
 ## Status
 
-Accepted; menu-surface decision amended 2026-08-13, lighting/shadow policy amended 2026-08-19, and emitter occlusion amended 2026-08-22 (see Amendments below)
+Accepted; menu-surface decision amended 2026-08-13, lighting/shadow policy amended 2026-08-19, emitter occlusion amended 2026-08-22, and the avatar-mirror RenderTexture exception recorded 2026-08-23 (see Amendments below)
 
 ## Date
 
-2026-06-16 (amended 2026-08-13, 2026-08-19 and 2026-08-22)
+2026-06-16 (amended 2026-08-13, 2026-08-19, 2026-08-22 and 2026-08-23)
+
+## Amendment 2026-08-23: The Avatar Mirror Is The One Sanctioned RenderTexture Camera
+
+This policy bars casual camera+RT use after the on-headset failures that reversed the
+composition-menu model. The placeable avatar mirror (`mirror_pane`, issue
+[#340](https://github.com/eslutz/Blockiverse-VR/issues/340)) is the single sanctioned exception,
+with a deliberately narrow shape (folded from the retired avatar-mirror ADR, 2026-08-22):
+
+- **Loopback avatar, not a scene reflection.** A second remote-style avatar entity (`ThirdPerson`
+  + `Full` — the configuration with legs, which first person never shows; SDK design, final at the
+  40.0.1 EOF release) is posed by the local player's own `RecordStreamData` stream at 24 Hz, in a
+  "studio" pocket floating 12 m above the active pane. A true reflected avatar fails structurally
+  in a voxel world: the reflected position sits inside the wall the mirror hangs on.
+- **One small camera renders only the studio**: culling mask exactly layer 14
+  (`BlockiverseMirrorAvatar`), 512² RenderTexture, shadows and post off, solid clear. The main
+  camera culls layer 14 (bootstrapper-owned), so nothing renders twice.
+- **One mirror active at a time** (`BlockiverseMirrorSurfaceManager`): nearest pane within 6 m with
+  an open viewer-side face. Reflection = rig-root pose reflected across the pane plane
+  (`MirrorPoseMath`) + the pane sampling the RT X-flipped — the geometric half plus the image flip
+  together make the improper transform a mirror needs.
+- Accepted v1 approximations: fixed 60° FOV from the pane centre (no off-axis projection yet);
+  tracking-space offsets not themselves reflected; editor shows the studio backdrop (avatar
+  entities are device-only); remote players' mirrors reflect only that player.
+- The mirror inherits every avatar-pipeline dependency, including the child-account policy: no
+  stream is recorded for a suppressed avatar, so a child's mirror stays dark.
+- **Device gate before shipping:** `ovrgpuprofiler` frame cost of the active-mirror camera on
+  Quest 3 plus an in-headset visual pass. Mirrors are a classic mobile-VR trap; the budget is one
+  512² avatar-only pass, and the number must be measured, not reasoned.
 
 ## Amendment 2026-08-22: Each Punctual Light Gets One Occlusion Term, Not Two
 

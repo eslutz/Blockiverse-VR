@@ -355,7 +355,8 @@ namespace Blockiverse.VR
 
         // GravityProvider auto-populates its controller list exactly once, from components already
         // present, so a provider added to a runtime-built rig is never consulted without this --
-        // the failure ADR 0008 documents for swimming, and it would bite identically here.
+        // the failure documented for swimming in quest-runtime-engineering-standards.md
+        // ("XRI Locomotion And Gravity"), and it would bite identically here.
         void RegisterAsGravityController()
         {
             if (registeredAsGravityController || inputRig == null || inputRig.GravityProvider == null)
