@@ -195,7 +195,7 @@ namespace Blockiverse.UI
             if (menuController != null)
             {
                 menuController.RequestConfirm(
-                    BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeToolsFill),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsFill),
                     BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmAccept),
                     BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmCancel),
                     accepted =>
@@ -262,7 +262,7 @@ namespace Blockiverse.UI
             if (menuController != null)
             {
                 menuController.RequestConfirm(
-                    BlockiverseLocalization.Format(BlockiverseLocalization.Keys.CreativeToolsReplace),
+                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CreativeToolsReplace),
                     BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmAccept),
                     BlockiverseLocalization.Text(BlockiverseLocalization.Keys.ConfirmCancel),
                     accepted =>

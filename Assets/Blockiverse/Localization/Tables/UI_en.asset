@@ -1,0 +1,1009 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: UI_en
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: en
+  m_SharedData: {fileID: 11400000, guid: 17e1064f8074e4aeca0f44bd0a7ee472, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 4562345984
+    m_Localized: Confirm
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4587511808
+    m_Localized: Cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4587511809
+    m_Localized: OK
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4587511810
+    m_Localized: Respawn at Bedroll
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706112
+    m_Localized: Respawn at World Spawn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706113
+    m_Localized: Return to Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706114
+    m_Localized: Close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706115
+    m_Localized: Join (Reconnect)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706116
+    m_Localized: Creative Tools
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706117
+    m_Localized: Quit Game
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706118
+    m_Localized: Resume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706119
+    m_Localized: Return to Title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706120
+    m_Localized: Save Game
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706121
+    m_Localized: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706122
+    m_Localized: Switch Survival/Creative
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706123
+    m_Localized: Audio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706124
+    m_Localized: Close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706125
+    m_Localized: Comfort
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706126
+    m_Localized: Controls
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706127
+    m_Localized: Continue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706128
+    m_Localized: LAN Multiplayer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706129
+    m_Localized: Load World
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706130
+    m_Localized: New World
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706131
+    m_Localized: Quit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706132
+    m_Localized: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706133
+    m_Localized: Back
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4591706134
+    m_Localized: Delete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900416
+    m_Localized: Duplicate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900417
+    m_Localized: Play
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900418
+    m_Localized: Rename
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900419
+    m_Localized: Active
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900420
+    m_Localized: Empty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900421
+    m_Localized: ', '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900422
+    m_Localized: '{0}/{1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900423
+    m_Localized: "Sending\u2026"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900424
+    m_Localized: '{0} x{1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900425
+    m_Localized: x{0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900426
+    m_Localized: Effects Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900427
+    m_Localized: Haptic Strength
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900428
+    m_Localized: Master Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900429
+    m_Localized: Music Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900430
+    m_Localized: Audio & Feedback
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900431
+    m_Localized: UI Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900432
+    m_Localized: Weather Volume
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900433
+    m_Localized: Category
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900434
+    m_Localized: "Search blocks\u2026"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900435
+    m_Localized: Blocks
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900436
+    m_Localized: Cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900437
+    m_Localized: Close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900438
+    m_Localized: Delete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900439
+    m_Localized: Controller Map
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900440
+    m_Localized: Controls
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900441
+    m_Localized: Copy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900442
+    m_Localized: Day/night cycle paused.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900443
+    m_Localized: Day/night cycle resumed.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900444
+    m_Localized: Cycle Weather
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900445
+    m_Localized: Day Speed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900446
+    m_Localized: Fill
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900447
+    m_Localized: Aim at blocks to select corners.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900448
+    m_Localized: Paste
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900449
+    m_Localized: Pick Block
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900450
+    m_Localized: Redo Edit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900451
+    m_Localized: Replace
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900452
+    m_Localized: Set A
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900453
+    m_Localized: Set B
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900454
+    m_Localized: Spawn Ruin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900455
+    m_Localized: Spawn Tree
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900456
+    m_Localized: Time of Day
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4595900457
+    m_Localized: Creative Tools
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094720
+    m_Localized: Pause / Resume Cycle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094721
+    m_Localized: Undo Edit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094722
+    m_Localized: '{0} ({1}:{2}) {3}/{4}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094723
+    m_Localized: '{0} ({1}:{2}) Full'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094724
+    m_Localized: Host LAN IP
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094725
+    m_Localized: Details
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094726
+    m_Localized: "{0}  \xB7  Day {1}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094727
+    m_Localized: Load World
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094728
+    m_Localized: Next
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094729
+    m_Localized: No save selected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094730
+    m_Localized: Page {0} / {1}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094731
+    m_Localized: Prev
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094732
+    m_Localized: Load World
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094733
+    m_Localized: Create World
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094734
+    m_Localized: Difficulty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094735
+    m_Localized: Game Mode
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094736
+    m_Localized: World Name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094737
+    m_Localized: World Preset
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094738
+    m_Localized: Seed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094739
+    m_Localized: World Size
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094740
+    m_Localized: Starting Biome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094741
+    m_Localized: Texture Set
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094742
+    m_Localized: New World
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094743
+    m_Localized: Add Fuel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094744
+    m_Localized: Add Input
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094745
+    m_Localized: Collect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094746
+    m_Localized: Fuel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094747
+    m_Localized: Idle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094748
+    m_Localized: Input
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094749
+    m_Localized: Output
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094750
+    m_Localized: Station
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094751
+    m_Localized: Take Fuel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094752
+    m_Localized: Take Input
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094753
+    m_Localized: Crafting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094754
+    m_Localized: Health
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094755
+    m_Localized: Inventory
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094756
+    m_Localized: Survival
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094757
+    m_Localized: Name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094758
+    m_Localized: Quit game?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094759
+    m_Localized: Delete "{0}"? This cannot be undone.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094760
+    m_Localized: Search
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094761
+    m_Localized: 'Cannot craft {0}: {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094762
+    m_Localized: 'Cannot repair: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094763
+    m_Localized: Crafted {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094764
+    m_Localized: '{0} - {1} [needs {2}]'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094765
+    m_Localized: "Crafting {0}\u2026"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094766
+    m_Localized: Ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094767
+    m_Localized: '{0} - {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094768
+    m_Localized: Recipe unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094769
+    m_Localized: "Repairing\u2026"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094770
+    m_Localized: Tool repaired
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094771
+    m_Localized: Deposited {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094772
+    m_Localized: Empty slot
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094773
+    m_Localized: Nothing held to deposit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094774
+    m_Localized: Crate offline
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094775
+    m_Localized: Shared crate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094776
+    m_Localized: Transfer rejected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094777
+    m_Localized: "Transferring\u2026"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094778
+    m_Localized: Withdrew {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094779
+    m_Localized: Aim at a ground block first.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094780
+    m_Localized: Aim at a block to pick it.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094781
+    m_Localized: Aim at a block of the type to replace.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094782
+    m_Localized: Set corner A (or aim at a block) to choose the paste origin.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094783
+    m_Localized: corner A
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094784
+    m_Localized: corner B
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094785
+    m_Localized: 'A: {0}    B: {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094786
+    m_Localized: Region tools work in creative worlds only.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094787
+    m_Localized: Region tools are unavailable during a LAN session.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094788
+    m_Localized: That block is not in the creative catalog.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094789
+    m_Localized: Nothing copied yet.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094790
+    m_Localized: No room above the aimed block.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094791
+    m_Localized: No world loaded.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094792
+    m_Localized: Nothing to redo.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094793
+    m_Localized: No blocks of that type in the region.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094794
+    m_Localized: Nothing to undo.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094795
+    m_Localized: '{0} done.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094796
+    m_Localized: '{0} failed.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094797
+    m_Localized: '{0} failed: region leaves the world bounds.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094798
+    m_Localized: Picked {0}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094799
+    m_Localized: Set {0} to {1}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094800
+    m_Localized: Aim at a block to set {0}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094801
+    m_Localized: Set corners A and B first.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094802
+    m_Localized: Spawned ruin at {0}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094803
+    m_Localized: Spawned tree at {0}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094804
+    m_Localized: Time controls are host/offline only.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094805
+    m_Localized: '{0} failed: region exceeds the volume limit.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094806
+    m_Localized: 'Weather: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094807
+    m_Localized: Weather control is host/offline only.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094808
+    m_Localized: Critical
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094809
+    m_Localized: Down
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094810
+    m_Localized: Stable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094811
+    m_Localized: "{0} \xB7 Hunger {1} \xB7 Thirst {2} \xB7 Stamina {3}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4600094812
+    m_Localized: Hotbar {0} / {1}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289024
+    m_Localized: Hotbar -
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289025
+    m_Localized: Slots {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289026
+    m_Localized: Slots {0}-{1} / {2}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289027
+    m_Localized: Connected to LAN session at {0}:{1}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289028
+    m_Localized: No LAN sessions found. Enter the host's address to join directly.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289029
+    m_Localized: Looking for LAN sessions...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289030
+    m_Localized: LAN discovery is unavailable on this network. Enter the host's address
+      to join directly.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289031
+    m_Localized: LAN session failed.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289032
+    m_Localized: LAN session ended because the host disconnected. Use Join to reconnect
+      to {0}:{1} when the LAN host is available again.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289033
+    m_Localized: Hosting LAN session. Join at {0}:{1}.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289034
+    m_Localized: Unable to join LAN session at {0}:{1}. {2}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289035
+    m_Localized: Joining LAN session at {0}:{1}...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289036
+    m_Localized: '{0} Last disconnect: {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289037
+    m_Localized: The host's block registry does not match this build, so blocks would
+      not line up. Use the same version of Blockiverse VR on both headsets.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289038
+    m_Localized: The host is running a different version of Blockiverse VR. Update
+      both headsets to the same version and try again.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289039
+    m_Localized: The host refused the join request. Check that both headsets are
+      on the same LAN and running the same build.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289040
+    m_Localized: The host's item registry does not match this build, so items would
+      not line up. Use the same version of Blockiverse VR on both headsets.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289041
+    m_Localized: The host is running a different multiplayer protocol version. Both
+      headsets need the same build of Blockiverse VR.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289042
+    m_Localized: The host's crafting recipes do not match this build. Use the same
+      version of Blockiverse VR on both headsets.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289043
+    m_Localized: The LAN session is full. Try again when a player leaves.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289044
+    m_Localized: The host's world save format does not match this build. Use the
+      same version of Blockiverse VR on both headsets.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289045
+    m_Localized: Unable to start LAN host. {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289046
+    m_Localized: Starting LAN host...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289047
+    m_Localized: Unable to stop LAN session.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289048
+    m_Localized: Unable to stop LAN session. {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4604289049
+    m_Localized: LAN session stopped.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483328
+    m_Localized: LAN session stopped. Enter the host LAN IP to join.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483329
+    m_Localized: Stopping LAN session...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483330
+    m_Localized: Stopping LAN session without the latest shutdown save. {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483331
+    m_Localized: Unable to reach LAN session at {0}:{1}. Check that the host is on
+      the same LAN and try Join again.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483332
+    m_Localized: LAN session is unavailable.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483333
+    m_Localized: Survival worlds require the Survival Terrain preset.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483334
+    m_Localized: 'Cannot collect: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483335
+    m_Localized: 'Cannot deposit: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483336
+    m_Localized: 'Cannot withdraw: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483337
+    m_Localized: Collected {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483338
+    m_Localized: Fuel added
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483339
+    m_Localized: Hold an item to deposit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483340
+    m_Localized: Input added
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483341
+    m_Localized: No fuel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483342
+    m_Localized: "{0} \xD7{1}"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483343
+    m_Localized: Withdrew {0}
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483344
+    m_Localized: Cannot harvest this block
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483345
+    m_Localized: Inventory full
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483346
+    m_Localized: Mining {0}%
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483347
+    m_Localized: Tool is not strong enough
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4608483348
+    m_Localized: Autosave failed.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677632
+    m_Localized: Autosaved.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677633
+    m_Localized: Failed to create the world.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677634
+    m_Localized: Creating world...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677635
+    m_Localized: Failed to delete the world.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677636
+    m_Localized: Failed to duplicate the world.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677637
+    m_Localized: Enter a world name first.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677638
+    m_Localized: 'Failed to load: {0}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677639
+    m_Localized: Failed to load the world.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677640
+    m_Localized: Loading world...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677641
+    m_Localized: World name cannot be empty.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677642
+    m_Localized: Failed to rename the world.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677643
+    m_Localized: Save failed.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677644
+    m_Localized: Save not found.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677645
+    m_Localized: Game saved.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677646
+    m_Localized: Unable to save the current single-player world before starting LAN.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677647
+    m_Localized: 'Mode: {0}    Difficulty: {1}
+
+      Day: {2}    Seed: {3}
+
+      Created:
+      {4}    Last Played: {5}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677648
+    m_Localized: Blockiverse
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677649
+    m_Localized: Confirm?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677650
+    m_Localized: You Died
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677651
+    m_Localized: Error
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677652
+    m_Localized: Paused
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677653
+    m_Localized: Settings
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677654
+    m_Localized: World Details
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677655
+    m_Localized: AI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677656
+    m_Localized: AI Simplified
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677657
+    m_Localized: Enhanced
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677658
+    m_Localized: Medium (192x192)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677659
+    m_Localized: Original
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677660
+    m_Localized: Small (128x128)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4612677661
+    m_Localized: Handcraft
+    m_Metadata:
+      m_Items: []
+  - m_Id: 19227741249536
+    m_Localized: '{0}
+
+      Meta social features use fallback identity and avatar
+      behavior for this account.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 19227766415360
+    m_Localized: '{0} / {1}'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 38742520750080
+    m_Localized: Server password (if any)
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

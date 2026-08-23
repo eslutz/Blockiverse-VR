@@ -1,0 +1,2208 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: UI Shared Data
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
+  m_TableCollectionName: UI
+  m_TableCollectionNameGuidString: 17e1064f8074e4aeca0f44bd0a7ee472
+  m_Entries:
+  - m_Id: 4562345984
+    m_Key: ui.action.confirm.accept
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793025
+  - m_Id: 4587511808
+    m_Key: ui.action.confirm.cancel
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793026
+  - m_Id: 4587511809
+    m_Key: ui.action.confirm.ok
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793027
+  - m_Id: 4587511810
+    m_Key: ui.action.death.respawn_bedroll
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793028
+  - m_Id: 4591706112
+    m_Key: ui.action.death.respawn_world_spawn
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793029
+  - m_Id: 4591706113
+    m_Key: ui.action.death.return_to_title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793030
+  - m_Id: 4591706114
+    m_Key: ui.action.error.close
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793031
+  - m_Id: 4591706115
+    m_Key: ui.action.lan.reconnect
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793032
+  - m_Id: 4591706116
+    m_Key: ui.action.pause.creative_tools
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793033
+  - m_Id: 4591706117
+    m_Key: ui.action.pause.quit
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793034
+  - m_Id: 4591706118
+    m_Key: ui.action.pause.resume
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793035
+  - m_Id: 4591706119
+    m_Key: ui.action.pause.return_to_title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793036
+  - m_Id: 4591706120
+    m_Key: ui.action.pause.save_game
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793037
+  - m_Id: 4591706121
+    m_Key: ui.action.pause.settings
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793038
+  - m_Id: 4591706122
+    m_Key: ui.action.pause.toggle_mode
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793039
+  - m_Id: 4591706123
+    m_Key: ui.action.settings.audio
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793040
+  - m_Id: 4591706124
+    m_Key: ui.action.settings.close
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793041
+  - m_Id: 4591706125
+    m_Key: ui.action.settings.comfort
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793042
+  - m_Id: 4591706126
+    m_Key: ui.action.settings.controls
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793043
+  - m_Id: 4591706127
+    m_Key: ui.action.title.continue
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793044
+  - m_Id: 4591706128
+    m_Key: ui.action.title.lan_multiplayer
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793045
+  - m_Id: 4591706129
+    m_Key: ui.action.title.load_world
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793046
+  - m_Id: 4591706130
+    m_Key: ui.action.title.new_world
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793047
+  - m_Id: 4591706131
+    m_Key: ui.action.title.quit
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793048
+  - m_Id: 4591706132
+    m_Key: ui.action.title.settings
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793049
+  - m_Id: 4591706133
+    m_Key: ui.action.world_details.back
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793050
+  - m_Id: 4591706134
+    m_Key: ui.action.world_details.delete
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793051
+  - m_Id: 4595900416
+    m_Key: ui.action.world_details.duplicate
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793052
+  - m_Id: 4595900417
+    m_Key: ui.action.world_details.play
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793053
+  - m_Id: 4595900418
+    m_Key: ui.action.world_details.rename
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793054
+  - m_Id: 4595900419
+    m_Key: ui.common.active
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793055
+  - m_Id: 4595900420
+    m_Key: ui.common.empty
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793056
+  - m_Id: 4595900421
+    m_Key: ui.common.list_separator
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793057
+  - m_Id: 4595900422
+    m_Key: ui.common.page
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793058
+  - m_Id: 4595900423
+    m_Key: ui.common.sending
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793059
+  - m_Id: 4595900424
+    m_Key: ui.common.stack
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793060
+  - m_Id: 4595900425
+    m_Key: ui.common.stack_count
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793061
+  - m_Id: 4595900426
+    m_Key: ui.generated.audio_feedback.effects_volume
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793062
+  - m_Id: 4595900427
+    m_Key: ui.generated.audio_feedback.haptic_strength
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793063
+  - m_Id: 4595900428
+    m_Key: ui.generated.audio_feedback.master_volume
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793064
+  - m_Id: 4595900429
+    m_Key: ui.generated.audio_feedback.music_volume
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793065
+  - m_Id: 4595900430
+    m_Key: ui.generated.audio_feedback.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793066
+  - m_Id: 4595900431
+    m_Key: ui.generated.audio_feedback.ui_volume
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793067
+  - m_Id: 4595900432
+    m_Key: ui.generated.audio_feedback.weather_volume
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793068
+  - m_Id: 4595900433
+    m_Key: ui.generated.blocks.category
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793069
+  - m_Id: 4595900434
+    m_Key: ui.generated.blocks.search_placeholder
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793070
+  - m_Id: 4595900435
+    m_Key: ui.generated.blocks.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793071
+  - m_Id: 4595900436
+    m_Key: ui.generated.common.cancel
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793072
+  - m_Id: 4595900437
+    m_Key: ui.generated.common.close
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793073
+  - m_Id: 4595900438
+    m_Key: ui.generated.common.delete
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793074
+  - m_Id: 4595900439
+    m_Key: ui.generated.controller_map.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793075
+  - m_Id: 4595900440
+    m_Key: ui.generated.controls.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793076
+  - m_Id: 4595900441
+    m_Key: ui.generated.creative_tools.copy
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793077
+  - m_Id: 4595900442
+    m_Key: ui.generated.creative_tools.cycle_paused
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793078
+  - m_Id: 4595900443
+    m_Key: ui.generated.creative_tools.cycle_resumed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793079
+  - m_Id: 4595900444
+    m_Key: ui.generated.creative_tools.cycle_weather
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793080
+  - m_Id: 4595900445
+    m_Key: ui.generated.creative_tools.day_speed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793081
+  - m_Id: 4595900446
+    m_Key: ui.generated.creative_tools.fill
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793082
+  - m_Id: 4595900447
+    m_Key: ui.generated.creative_tools.initial_status
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793083
+  - m_Id: 4595900448
+    m_Key: ui.generated.creative_tools.paste
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793084
+  - m_Id: 4595900449
+    m_Key: ui.generated.creative_tools.pick_block
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793085
+  - m_Id: 4595900450
+    m_Key: ui.generated.creative_tools.redo
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793086
+  - m_Id: 4595900451
+    m_Key: ui.generated.creative_tools.replace
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793087
+  - m_Id: 4595900452
+    m_Key: ui.generated.creative_tools.set_a
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793088
+  - m_Id: 4595900453
+    m_Key: ui.generated.creative_tools.set_b
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793089
+  - m_Id: 4595900454
+    m_Key: ui.generated.creative_tools.spawn_ruin
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793090
+  - m_Id: 4595900455
+    m_Key: ui.generated.creative_tools.spawn_tree
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793091
+  - m_Id: 4595900456
+    m_Key: ui.generated.creative_tools.time_of_day
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793092
+  - m_Id: 4595900457
+    m_Key: ui.generated.creative_tools.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793093
+  - m_Id: 4600094720
+    m_Key: ui.generated.creative_tools.toggle_cycle
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793094
+  - m_Id: 4600094721
+    m_Key: ui.generated.creative_tools.undo
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793095
+  - m_Id: 4600094722
+    m_Key: ui.generated.lan.discovery_entry
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793096
+  - m_Id: 4600094723
+    m_Key: ui.generated.lan.discovery_entry_full
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793097
+  - m_Id: 4600094724
+    m_Key: ui.generated.lan.join_address_placeholder
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793098
+  - m_Id: 4600094725
+    m_Key: ui.generated.load_world.details
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793099
+  - m_Id: 4600094726
+    m_Key: ui.generated.load_world.entry
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793100
+  - m_Id: 4600094727
+    m_Key: ui.generated.load_world.load
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793101
+  - m_Id: 4600094728
+    m_Key: ui.generated.load_world.next_page
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793102
+  - m_Id: 4600094729
+    m_Key: ui.generated.load_world.no_save_selected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793103
+  - m_Id: 4600094730
+    m_Key: ui.generated.load_world.page
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793104
+  - m_Id: 4600094731
+    m_Key: ui.generated.load_world.previous_page
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793105
+  - m_Id: 4600094732
+    m_Key: ui.generated.load_world.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793106
+  - m_Id: 4600094733
+    m_Key: ui.generated.new_world.create
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793107
+  - m_Id: 4600094734
+    m_Key: ui.generated.new_world.difficulty
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793108
+  - m_Id: 4600094735
+    m_Key: ui.generated.new_world.game_mode
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793109
+  - m_Id: 4600094736
+    m_Key: ui.generated.new_world.name
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793110
+  - m_Id: 4600094737
+    m_Key: ui.generated.new_world.preset
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793111
+  - m_Id: 4600094738
+    m_Key: ui.generated.new_world.seed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793112
+  - m_Id: 4600094739
+    m_Key: ui.generated.new_world.size
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793113
+  - m_Id: 4600094740
+    m_Key: ui.generated.new_world.starting_biome
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793114
+  - m_Id: 4600094741
+    m_Key: ui.generated.new_world.texture_set
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793115
+  - m_Id: 4600094742
+    m_Key: ui.generated.new_world.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793116
+  - m_Id: 4600094743
+    m_Key: ui.generated.station.add_fuel
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793117
+  - m_Id: 4600094744
+    m_Key: ui.generated.station.add_input
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793118
+  - m_Id: 4600094745
+    m_Key: ui.generated.station.collect
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793119
+  - m_Id: 4600094746
+    m_Key: ui.generated.station.fuel
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793120
+  - m_Id: 4600094747
+    m_Key: ui.generated.station.idle
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793121
+  - m_Id: 4600094748
+    m_Key: ui.generated.station.input
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793122
+  - m_Id: 4600094749
+    m_Key: ui.generated.station.output
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793123
+  - m_Id: 4600094750
+    m_Key: ui.generated.station.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793124
+  - m_Id: 4600094751
+    m_Key: ui.generated.station.withdraw_fuel
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793125
+  - m_Id: 4600094752
+    m_Key: ui.generated.station.withdraw_input
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793126
+  - m_Id: 4600094753
+    m_Key: ui.generated.survival.crafting
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793127
+  - m_Id: 4600094754
+    m_Key: ui.generated.survival.health
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793128
+  - m_Id: 4600094755
+    m_Key: ui.generated.survival.inventory
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793129
+  - m_Id: 4600094756
+    m_Key: ui.generated.survival.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793130
+  - m_Id: 4600094757
+    m_Key: ui.generated.world_details.name
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793131
+  - m_Id: 4600094758
+    m_Key: ui.prompt.confirm.quit_game
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793132
+  - m_Id: 4600094759
+    m_Key: ui.prompt.world_details.delete
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793133
+  - m_Id: 4600094760
+    m_Key: ui.status.catalog.search
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793134
+  - m_Id: 4600094761
+    m_Key: ui.status.crafting.cannot_craft
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793135
+  - m_Id: 4600094762
+    m_Key: ui.status.crafting.cannot_repair
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793136
+  - m_Id: 4600094763
+    m_Key: ui.status.crafting.crafted
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793137
+  - m_Id: 4600094764
+    m_Key: ui.status.crafting.needs_station
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793138
+  - m_Id: 4600094765
+    m_Key: ui.status.crafting.pending
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793139
+  - m_Id: 4600094766
+    m_Key: ui.status.crafting.ready
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793140
+  - m_Id: 4600094767
+    m_Key: ui.status.crafting.recipe
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793141
+  - m_Id: 4600094768
+    m_Key: ui.status.crafting.recipe_unavailable
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793142
+  - m_Id: 4600094769
+    m_Key: ui.status.crafting.repairing
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793143
+  - m_Id: 4600094770
+    m_Key: ui.status.crafting.tool_repaired
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793144
+  - m_Id: 4600094771
+    m_Key: ui.status.crate.deposited
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793145
+  - m_Id: 4600094772
+    m_Key: ui.status.crate.empty_slot
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793146
+  - m_Id: 4600094773
+    m_Key: ui.status.crate.nothing_held
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793147
+  - m_Id: 4600094774
+    m_Key: ui.status.crate.offline
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793148
+  - m_Id: 4600094775
+    m_Key: ui.status.crate.shared
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793149
+  - m_Id: 4600094776
+    m_Key: ui.status.crate.transfer_rejected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793150
+  - m_Id: 4600094777
+    m_Key: ui.status.crate.transferring
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793151
+  - m_Id: 4600094778
+    m_Key: ui.status.crate.withdrew
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793152
+  - m_Id: 4600094779
+    m_Key: ui.status.creative.aim_ground
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793153
+  - m_Id: 4600094780
+    m_Key: ui.status.creative.aim_pick
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793154
+  - m_Id: 4600094781
+    m_Key: ui.status.creative.aim_replace
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793155
+  - m_Id: 4600094782
+    m_Key: ui.status.creative.choose_paste_origin
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793156
+  - m_Id: 4600094783
+    m_Key: ui.status.creative.corner_a
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793157
+  - m_Id: 4600094784
+    m_Key: ui.status.creative.corner_b
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793158
+  - m_Id: 4600094785
+    m_Key: ui.status.creative.corners
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793159
+  - m_Id: 4600094786
+    m_Key: ui.status.creative.creative_only
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793160
+  - m_Id: 4600094787
+    m_Key: ui.status.creative.lan_unavailable
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793161
+  - m_Id: 4600094788
+    m_Key: ui.status.creative.missing_catalog_block
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793162
+  - m_Id: 4600094789
+    m_Key: ui.status.creative.no_clipboard
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793163
+  - m_Id: 4600094790
+    m_Key: ui.status.creative.no_room_above
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793164
+  - m_Id: 4600094791
+    m_Key: ui.status.creative.no_world
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793165
+  - m_Id: 4600094792
+    m_Key: ui.status.creative.nothing_to_redo
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793166
+  - m_Id: 4600094793
+    m_Key: ui.status.creative.nothing_to_replace
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793167
+  - m_Id: 4600094794
+    m_Key: ui.status.creative.nothing_to_undo
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793168
+  - m_Id: 4600094795
+    m_Key: ui.status.creative.operation_done
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793169
+  - m_Id: 4600094796
+    m_Key: ui.status.creative.operation_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793170
+  - m_Id: 4600094797
+    m_Key: ui.status.creative.out_of_bounds
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793171
+  - m_Id: 4600094798
+    m_Key: ui.status.creative.picked
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793172
+  - m_Id: 4600094799
+    m_Key: ui.status.creative.set_corner
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793173
+  - m_Id: 4600094800
+    m_Key: ui.status.creative.set_corner_aim
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793174
+  - m_Id: 4600094801
+    m_Key: ui.status.creative.set_corners_first
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793175
+  - m_Id: 4600094802
+    m_Key: ui.status.creative.spawned_ruin
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793176
+  - m_Id: 4600094803
+    m_Key: ui.status.creative.spawned_tree
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793177
+  - m_Id: 4600094804
+    m_Key: ui.status.creative.time_host_only
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793178
+  - m_Id: 4600094805
+    m_Key: ui.status.creative.volume_limit
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793179
+  - m_Id: 4600094806
+    m_Key: ui.status.creative.weather
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793180
+  - m_Id: 4600094807
+    m_Key: ui.status.creative.weather_host_only
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793181
+  - m_Id: 4600094808
+    m_Key: ui.status.health.critical
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793182
+  - m_Id: 4600094809
+    m_Key: ui.status.health.down
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793183
+  - m_Id: 4600094810
+    m_Key: ui.status.health.stable
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793184
+  - m_Id: 4600094811
+    m_Key: ui.status.health.vitals
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793185
+  - m_Id: 4600094812
+    m_Key: ui.status.inventory.hotbar
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793186
+  - m_Id: 4604289024
+    m_Key: ui.status.inventory.hotbar_empty
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793187
+  - m_Id: 4604289025
+    m_Key: ui.status.inventory.slots_count
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793188
+  - m_Id: 4604289026
+    m_Key: ui.status.inventory.slots_range
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793189
+  - m_Id: 4604289027
+    m_Key: ui.status.lan.connected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793190
+  - m_Id: 4604289028
+    m_Key: ui.status.lan.discovery.none_found
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793191
+  - m_Id: 4604289029
+    m_Key: ui.status.lan.discovery.searching
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793192
+  - m_Id: 4604289030
+    m_Key: ui.status.lan.discovery.unavailable
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793193
+  - m_Id: 4604289031
+    m_Key: ui.status.lan.failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793194
+  - m_Id: 4604289032
+    m_Key: ui.status.lan.host_disconnected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793195
+  - m_Id: 4604289033
+    m_Key: ui.status.lan.hosting
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793196
+  - m_Id: 4604289034
+    m_Key: ui.status.lan.join_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793197
+  - m_Id: 4604289035
+    m_Key: ui.status.lan.joining
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793198
+  - m_Id: 4604289036
+    m_Key: ui.status.lan.last_disconnect
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793199
+  - m_Id: 4604289037
+    m_Key: ui.status.lan.rejected.block_registry_mismatch
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793200
+  - m_Id: 4604289038
+    m_Key: ui.status.lan.rejected.game_version_mismatch
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793201
+  - m_Id: 4604289039
+    m_Key: ui.status.lan.rejected.invalid_join_payload
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793202
+  - m_Id: 4604289040
+    m_Key: ui.status.lan.rejected.item_registry_mismatch
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793203
+  - m_Id: 4604289041
+    m_Key: ui.status.lan.rejected.protocol_mismatch
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793204
+  - m_Id: 4604289042
+    m_Key: ui.status.lan.rejected.recipe_registry_mismatch
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793205
+  - m_Id: 4604289043
+    m_Key: ui.status.lan.rejected.session_full
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793206
+  - m_Id: 4604289044
+    m_Key: ui.status.lan.rejected.unsupported_world_version
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793207
+  - m_Id: 4604289045
+    m_Key: ui.status.lan.start_host_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793208
+  - m_Id: 4604289046
+    m_Key: ui.status.lan.starting_host
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793209
+  - m_Id: 4604289047
+    m_Key: ui.status.lan.stop_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793210
+  - m_Id: 4604289048
+    m_Key: ui.status.lan.stop_failed_with_reason
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793211
+  - m_Id: 4604289049
+    m_Key: ui.status.lan.stopped
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793212
+  - m_Id: 4608483328
+    m_Key: ui.status.lan.stopped_with_default
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793213
+  - m_Id: 4608483329
+    m_Key: ui.status.lan.stopping
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793214
+  - m_Id: 4608483330
+    m_Key: ui.status.lan.stopping_without_shutdown_save
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793215
+  - m_Id: 4608483331
+    m_Key: ui.status.lan.unable_to_reach
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793216
+  - m_Id: 4608483332
+    m_Key: ui.status.lan.unavailable
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793217
+  - m_Id: 4608483333
+    m_Key: ui.status.new_world.survival_preset_unsupported
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793218
+  - m_Id: 4608483334
+    m_Key: ui.status.station.cannot_collect
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793219
+  - m_Id: 4608483335
+    m_Key: ui.status.station.cannot_deposit
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793220
+  - m_Id: 4608483336
+    m_Key: ui.status.station.cannot_withdraw
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793221
+  - m_Id: 4608483337
+    m_Key: ui.status.station.collected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793222
+  - m_Id: 4608483338
+    m_Key: ui.status.station.fuel_added
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793223
+  - m_Id: 4608483339
+    m_Key: ui.status.station.hold_item
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793224
+  - m_Id: 4608483340
+    m_Key: ui.status.station.input_added
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793225
+  - m_Id: 4608483341
+    m_Key: ui.status.station.no_fuel
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793226
+  - m_Id: 4608483342
+    m_Key: ui.status.station.stack
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793227
+  - m_Id: 4608483343
+    m_Key: ui.status.station.withdrew
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793228
+  - m_Id: 4608483344
+    m_Key: ui.status.survival.harvest_rejected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793229
+  - m_Id: 4608483345
+    m_Key: ui.status.survival.inventory_full
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793230
+  - m_Id: 4608483346
+    m_Key: ui.status.survival.mining_progress
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793231
+  - m_Id: 4608483347
+    m_Key: ui.status.survival.tool_too_weak
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793232
+  - m_Id: 4608483348
+    m_Key: ui.status.world.autosave_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793233
+  - m_Id: 4612677632
+    m_Key: ui.status.world.autosave_succeeded
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793234
+  - m_Id: 4612677633
+    m_Key: ui.status.world.create_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793235
+  - m_Id: 4612677634
+    m_Key: ui.status.world.creating
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793236
+  - m_Id: 4612677635
+    m_Key: ui.status.world.delete_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793237
+  - m_Id: 4612677636
+    m_Key: ui.status.world.duplicate_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793238
+  - m_Id: 4612677637
+    m_Key: ui.status.world.enter_name_first
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793239
+  - m_Id: 4612677638
+    m_Key: ui.status.world.load_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793240
+  - m_Id: 4612677639
+    m_Key: ui.status.world.load_world_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793241
+  - m_Id: 4612677640
+    m_Key: ui.status.world.loading
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793242
+  - m_Id: 4612677641
+    m_Key: ui.status.world.name_empty
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793243
+  - m_Id: 4612677642
+    m_Key: ui.status.world.rename_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793244
+  - m_Id: 4612677643
+    m_Key: ui.status.world.save_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793245
+  - m_Id: 4612677644
+    m_Key: ui.status.world.save_not_found
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793246
+  - m_Id: 4612677645
+    m_Key: ui.status.world.save_succeeded
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793247
+  - m_Id: 4612677646
+    m_Key: ui.status.world.suspend_single_player_failed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793248
+  - m_Id: 4612677647
+    m_Key: ui.status.world_details.metadata
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793249
+  - m_Id: 4612677648
+    m_Key: ui.title.blockiverse
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793250
+  - m_Id: 4612677649
+    m_Key: ui.title.confirm
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793251
+  - m_Id: 4612677650
+    m_Key: ui.title.death
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793252
+  - m_Id: 4612677651
+    m_Key: ui.title.error
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793253
+  - m_Id: 4612677652
+    m_Key: ui.title.paused
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793254
+  - m_Id: 4612677653
+    m_Key: ui.title.settings
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793255
+  - m_Id: 4612677654
+    m_Key: ui.title.world_details
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793256
+  - m_Id: 4612677655
+    m_Key: ui.value.canonical.ai
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793257
+  - m_Id: 4612677656
+    m_Key: ui.value.canonical.ai_simplified
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793258
+  - m_Id: 4612677657
+    m_Key: ui.value.canonical.enhanced
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793259
+  - m_Id: 4612677658
+    m_Key: ui.value.canonical.medium
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793260
+  - m_Id: 4612677659
+    m_Key: ui.value.canonical.original
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793261
+  - m_Id: 4612677660
+    m_Key: ui.value.canonical.small
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793262
+  - m_Id: 4612677661
+    m_Key: ui.value.crafting_station.none
+    m_Metadata:
+      m_Items:
+      - rid: 5195086311953793263
+  - m_Id: 19227741249536
+    m_Key: ui.status.lan.age_policy_notice
+    m_Metadata:
+      m_Items:
+      - rid: 5195086313155461120
+  - m_Id: 19227766415360
+    m_Key: ui.value.vitals_ratio
+    m_Metadata:
+      m_Items:
+      - rid: 5195086313155461121
+  - m_Id: 38742520750080
+    m_Key: ui.generated.lan.join_secret_placeholder
+    m_Metadata:
+      m_Items:
+      - rid: 5195086314375217152
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 5195086311953793024
+  references:
+    version: 2
+    RefIds:
+    - rid: 5195086311953793024
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1787452384597
+    - rid: 5195086311953793025
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ConfirmAccept.
+    - rid: 5195086311953793026
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ConfirmCancel.
+    - rid: 5195086311953793027
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ConfirmOk.
+    - rid: 5195086311953793028
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.DeathRespawnBedroll.
+    - rid: 5195086311953793029
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.DeathRespawnWorldSpawn.
+    - rid: 5195086311953793030
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.DeathReturnToTitle.
+    - rid: 5195086311953793031
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ErrorClose.
+    - rid: 5195086311953793032
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanReconnect.
+    - rid: 5195086311953793033
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseCreativeTools.
+    - rid: 5195086311953793034
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseQuit.
+    - rid: 5195086311953793035
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseResume.
+    - rid: 5195086311953793036
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseReturnToTitle.
+    - rid: 5195086311953793037
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseSaveGame.
+    - rid: 5195086311953793038
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseSettings.
+    - rid: 5195086311953793039
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.PauseToggleMode.
+    - rid: 5195086311953793040
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SettingsAudio.
+    - rid: 5195086311953793041
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SettingsClose.
+    - rid: 5195086311953793042
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SettingsComfort.
+    - rid: 5195086311953793043
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SettingsControls.
+    - rid: 5195086311953793044
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleContinue.
+    - rid: 5195086311953793045
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleMultiplayer.
+    - rid: 5195086311953793046
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleLoadWorld.
+    - rid: 5195086311953793047
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleNewWorld.
+    - rid: 5195086311953793048
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleQuit.
+    - rid: 5195086311953793049
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleSettingsAction.
+    - rid: 5195086311953793050
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WorldDetailsBack.
+    - rid: 5195086311953793051
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WorldDetailsDelete.
+    - rid: 5195086311953793052
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WorldDetailsDuplicate.
+    - rid: 5195086311953793053
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WorldDetailsPlay.
+    - rid: 5195086311953793054
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WorldDetailsRename.
+    - rid: 5195086311953793055
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonActive.
+    - rid: 5195086311953793056
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonEmpty.
+    - rid: 5195086311953793057
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonListSeparator.
+    - rid: 5195086311953793058
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CommonPage. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793059
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonSending.
+    - rid: 5195086311953793060
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CommonStack. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793061
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CommonStackCount. Placeholders: {0}.'
+    - rid: 5195086311953793062
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.EffectsVolume.
+    - rid: 5195086311953793063
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.HapticStrength.
+    - rid: 5195086311953793064
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.MasterVolume.
+    - rid: 5195086311953793065
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.MusicVolume.
+    - rid: 5195086311953793066
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.AudioFeedbackTitle.
+    - rid: 5195086311953793067
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.UiVolume.
+    - rid: 5195086311953793068
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WeatherVolume.
+    - rid: 5195086311953793069
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.BlocksCategory.
+    - rid: 5195086311953793070
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.BlocksSearchPlaceholder.
+    - rid: 5195086311953793071
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.BlocksTitle.
+    - rid: 5195086311953793072
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonCancel.
+    - rid: 5195086311953793073
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonClose.
+    - rid: 5195086311953793074
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CommonDelete.
+    - rid: 5195086311953793075
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ControllerMapTitle.
+    - rid: 5195086311953793076
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ControlsTitle.
+    - rid: 5195086311953793077
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsCopy.
+    - rid: 5195086311953793078
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeCyclePaused.
+    - rid: 5195086311953793079
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeCycleResumed.
+    - rid: 5195086311953793080
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsCycleWeather.
+    - rid: 5195086311953793081
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsDaySpeed.
+    - rid: 5195086311953793082
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsFill.
+    - rid: 5195086311953793083
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsInitialStatus.
+    - rid: 5195086311953793084
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsPaste.
+    - rid: 5195086311953793085
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsPickBlock.
+    - rid: 5195086311953793086
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsRedo.
+    - rid: 5195086311953793087
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsReplace.
+    - rid: 5195086311953793088
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsSetA.
+    - rid: 5195086311953793089
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsSetB.
+    - rid: 5195086311953793090
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsSpawnRuin.
+    - rid: 5195086311953793091
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsSpawnTree.
+    - rid: 5195086311953793092
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsTimeOfDay.
+    - rid: 5195086311953793093
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsTitle.
+    - rid: 5195086311953793094
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsToggleCycle.
+    - rid: 5195086311953793095
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeToolsUndo.
+    - rid: 5195086311953793096
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanDiscoveryEntry. Placeholders: {0}, {1}, {2}, {3},
+          {4}.'
+    - rid: 5195086311953793097
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanDiscoveryEntryFull. Placeholders: {0}, {1}, {2}.'
+    - rid: 5195086311953793098
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanJoinAddressPlaceholder.
+    - rid: 5195086311953793099
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LoadWorldDetails.
+    - rid: 5195086311953793100
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LoadWorldEntry. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793101
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LoadWorldLoad.
+    - rid: 5195086311953793102
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LoadWorldNextPage.
+    - rid: 5195086311953793103
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LoadWorldNoSaveSelected.
+    - rid: 5195086311953793104
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LoadWorldPage. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793105
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LoadWorldPreviousPage.
+    - rid: 5195086311953793106
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LoadWorldTitle.
+    - rid: 5195086311953793107
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldCreate.
+    - rid: 5195086311953793108
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldDifficulty.
+    - rid: 5195086311953793109
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldGameMode.
+    - rid: 5195086311953793110
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldName.
+    - rid: 5195086311953793111
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldPreset.
+    - rid: 5195086311953793112
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldSeed.
+    - rid: 5195086311953793113
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldSize.
+    - rid: 5195086311953793114
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldStartingBiome.
+    - rid: 5195086311953793115
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldTextureSet.
+    - rid: 5195086311953793116
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldTitle.
+    - rid: 5195086311953793117
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationAddFuel.
+    - rid: 5195086311953793118
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationAddInput.
+    - rid: 5195086311953793119
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationCollect.
+    - rid: 5195086311953793120
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationFuel.
+    - rid: 5195086311953793121
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationIdle.
+    - rid: 5195086311953793122
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationInput.
+    - rid: 5195086311953793123
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationOutput.
+    - rid: 5195086311953793124
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationTitle.
+    - rid: 5195086311953793125
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationWithdrawFuel.
+    - rid: 5195086311953793126
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationWithdrawInput.
+    - rid: 5195086311953793127
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalCrafting.
+    - rid: 5195086311953793128
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalHealth.
+    - rid: 5195086311953793129
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalInventory.
+    - rid: 5195086311953793130
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalTitle.
+    - rid: 5195086311953793131
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.WorldDetailsName.
+    - rid: 5195086311953793132
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.ConfirmQuitGame.
+    - rid: 5195086311953793133
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.WorldDetailsDeletePrompt. Placeholders: {0}.'
+    - rid: 5195086311953793134
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CatalogSearch.
+    - rid: 5195086311953793135
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CraftingCannotCraft. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793136
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CraftingCannotRepair. Placeholders: {0}.'
+    - rid: 5195086311953793137
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CraftingCrafted. Placeholders: {0}.'
+    - rid: 5195086311953793138
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CraftingNeedsStation. Placeholders: {0}, {1}, {2}.'
+    - rid: 5195086311953793139
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CraftingPending. Placeholders: {0}.'
+    - rid: 5195086311953793140
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CraftingReady.
+    - rid: 5195086311953793141
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CraftingRecipe. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793142
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CraftingRecipeUnavailable.
+    - rid: 5195086311953793143
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CraftingRepairing.
+    - rid: 5195086311953793144
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CraftingToolRepaired.
+    - rid: 5195086311953793145
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CrateDeposited. Placeholders: {0}.'
+    - rid: 5195086311953793146
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CrateEmptySlot.
+    - rid: 5195086311953793147
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CrateNothingHeld.
+    - rid: 5195086311953793148
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CrateOffline.
+    - rid: 5195086311953793149
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CrateShared.
+    - rid: 5195086311953793150
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CrateTransferRejected.
+    - rid: 5195086311953793151
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CrateTransferring.
+    - rid: 5195086311953793152
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CrateWithdrew. Placeholders: {0}.'
+    - rid: 5195086311953793153
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeAimGround.
+    - rid: 5195086311953793154
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeAimPick.
+    - rid: 5195086311953793155
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeAimReplace.
+    - rid: 5195086311953793156
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeChoosePasteOrigin.
+    - rid: 5195086311953793157
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeCornerA.
+    - rid: 5195086311953793158
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeCornerB.
+    - rid: 5195086311953793159
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeCorners. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793160
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeOnly.
+    - rid: 5195086311953793161
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeLanUnavailable.
+    - rid: 5195086311953793162
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeMissingCatalogBlock.
+    - rid: 5195086311953793163
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeNoClipboard.
+    - rid: 5195086311953793164
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeNoRoomAbove.
+    - rid: 5195086311953793165
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeNoWorld.
+    - rid: 5195086311953793166
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeNothingToRedo.
+    - rid: 5195086311953793167
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeNothingToReplace.
+    - rid: 5195086311953793168
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeNothingToUndo.
+    - rid: 5195086311953793169
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeOperationDone. Placeholders: {0}.'
+    - rid: 5195086311953793170
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeOperationFailed. Placeholders: {0}.'
+    - rid: 5195086311953793171
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeOutOfBounds. Placeholders: {0}.'
+    - rid: 5195086311953793172
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativePicked. Placeholders: {0}.'
+    - rid: 5195086311953793173
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeSetCorner. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793174
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeSetCornerAim. Placeholders: {0}.'
+    - rid: 5195086311953793175
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeSetCornersFirst.
+    - rid: 5195086311953793176
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeSpawnedRuin. Placeholders: {0}.'
+    - rid: 5195086311953793177
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeSpawnedTree. Placeholders: {0}.'
+    - rid: 5195086311953793178
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeTimeHostOnly.
+    - rid: 5195086311953793179
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeVolumeLimit. Placeholders: {0}.'
+    - rid: 5195086311953793180
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.CreativeWeather. Placeholders: {0}.'
+    - rid: 5195086311953793181
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.CreativeWeatherHostOnly.
+    - rid: 5195086311953793182
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.HealthCritical.
+    - rid: 5195086311953793183
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.HealthDown.
+    - rid: 5195086311953793184
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.HealthStable.
+    - rid: 5195086311953793185
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.HealthVitals. Placeholders: {0}, {1}, {2}, {3}.'
+    - rid: 5195086311953793186
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.InventoryHotbar. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793187
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.InventoryHotbarEmpty.
+    - rid: 5195086311953793188
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.InventorySlotsCount. Placeholders: {0}.'
+    - rid: 5195086311953793189
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.InventorySlotsRange. Placeholders: {0}, {1}, {2}.'
+    - rid: 5195086311953793190
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanConnected. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793191
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanDiscoveryNoneFound.
+    - rid: 5195086311953793192
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanDiscoverySearching.
+    - rid: 5195086311953793193
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanDiscoveryUnavailable.
+    - rid: 5195086311953793194
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanFailed.
+    - rid: 5195086311953793195
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanHostDisconnected. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793196
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanHosting. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793197
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanJoinFailed. Placeholders: {0}, {1}, {2}.'
+    - rid: 5195086311953793198
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanJoining. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793199
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanLastDisconnect. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793200
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedBlockRegistryMismatch.
+    - rid: 5195086311953793201
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedGameVersionMismatch.
+    - rid: 5195086311953793202
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedInvalidJoinPayload.
+    - rid: 5195086311953793203
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedItemRegistryMismatch.
+    - rid: 5195086311953793204
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedProtocolMismatch.
+    - rid: 5195086311953793205
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedRecipeRegistryMismatch.
+    - rid: 5195086311953793206
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedSessionFull.
+    - rid: 5195086311953793207
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanRejectedUnsupportedWorldVersion.
+    - rid: 5195086311953793208
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanStartHostFailed. Placeholders: {0}.'
+    - rid: 5195086311953793209
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanStartingHost.
+    - rid: 5195086311953793210
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanStopFailed.
+    - rid: 5195086311953793211
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanStopFailedWithReason. Placeholders: {0}.'
+    - rid: 5195086311953793212
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanStopped.
+    - rid: 5195086311953793213
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanStoppedWithDefault.
+    - rid: 5195086311953793214
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanStopping.
+    - rid: 5195086311953793215
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanStoppingWithoutShutdownSave. Placeholders: {0}.'
+    - rid: 5195086311953793216
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanUnableToReach. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793217
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanUnavailable.
+    - rid: 5195086311953793218
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.NewWorldSurvivalPresetUnsupported.
+    - rid: 5195086311953793219
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StationCannotCollect. Placeholders: {0}.'
+    - rid: 5195086311953793220
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StationCannotDeposit. Placeholders: {0}.'
+    - rid: 5195086311953793221
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StationCannotWithdraw. Placeholders: {0}.'
+    - rid: 5195086311953793222
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StationCollected. Placeholders: {0}.'
+    - rid: 5195086311953793223
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationFuelAdded.
+    - rid: 5195086311953793224
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationHoldItem.
+    - rid: 5195086311953793225
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationInputAdded.
+    - rid: 5195086311953793226
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StationNoFuel.
+    - rid: 5195086311953793227
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StationStack. Placeholders: {0}, {1}.'
+    - rid: 5195086311953793228
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StationWithdrew. Placeholders: {0}.'
+    - rid: 5195086311953793229
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalHudHarvestRejected.
+    - rid: 5195086311953793230
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalHudInventoryFull.
+    - rid: 5195086311953793231
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.SurvivalHudMiningProgress. Placeholders: {0}.'
+    - rid: 5195086311953793232
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.SurvivalHudToolTooWeak.
+    - rid: 5195086311953793233
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusAutosaveFailed.
+    - rid: 5195086311953793234
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusAutosaveSucceeded.
+    - rid: 5195086311953793235
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusCreateWorldFailed.
+    - rid: 5195086311953793236
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusCreatingWorld.
+    - rid: 5195086311953793237
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusDeleteFailed.
+    - rid: 5195086311953793238
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusDuplicateFailed.
+    - rid: 5195086311953793239
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusEnterWorldNameFirst.
+    - rid: 5195086311953793240
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.StatusLoadFailed. Placeholders: {0}.'
+    - rid: 5195086311953793241
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusLoadWorldFailed.
+    - rid: 5195086311953793242
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusLoadingWorld.
+    - rid: 5195086311953793243
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusWorldNameEmpty.
+    - rid: 5195086311953793244
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusRenameFailed.
+    - rid: 5195086311953793245
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusSaveFailed.
+    - rid: 5195086311953793246
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusSaveNotFound.
+    - rid: 5195086311953793247
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusSaveSucceeded.
+    - rid: 5195086311953793248
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.StatusSuspendSinglePlayerFailed.
+    - rid: 5195086311953793249
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.WorldDetailsMetadata. Placeholders: {0}, {1}, {2}, {3},
+          {4}, {5}.'
+    - rid: 5195086311953793250
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleBlockiverse.
+    - rid: 5195086311953793251
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleConfirm.
+    - rid: 5195086311953793252
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleDeath.
+    - rid: 5195086311953793253
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleError.
+    - rid: 5195086311953793254
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitlePaused.
+    - rid: 5195086311953793255
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleSettings.
+    - rid: 5195086311953793256
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.TitleWorldDetails.
+    - rid: 5195086311953793257
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Raw-key entry (no Keys const).
+    - rid: 5195086311953793258
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Raw-key entry (no Keys const).
+    - rid: 5195086311953793259
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Raw-key entry (no Keys const).
+    - rid: 5195086311953793260
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Raw-key entry (no Keys const).
+    - rid: 5195086311953793261
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Raw-key entry (no Keys const).
+    - rid: 5195086311953793262
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Raw-key entry (no Keys const).
+    - rid: 5195086311953793263
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Crafting without a station (DisplayName(CraftingStation.None)).
+    - rid: 5195086313155461120
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.LanAgePolicyNotice. Placeholders: {0}.'
+    - rid: 5195086313155461121
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Keys.HealthVitalsRatio. Placeholders: {0}, {1}.'
+    - rid: 5195086314375217152
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Keys.LanJoinSecretPlaceholder.

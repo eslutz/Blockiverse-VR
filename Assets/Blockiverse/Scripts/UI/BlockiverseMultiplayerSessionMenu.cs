@@ -981,7 +981,8 @@ namespace Blockiverse.UI
             if (BlockiverseMetaSocialPolicy.CanUseMetaSocialFeature)
                 return message;
 
-            return $"{message}\nMeta social features use fallback identity and avatar behavior for this account.";
+            return BlockiverseLocalization.Format(
+                BlockiverseLocalization.Keys.LanAgePolicyNotice, message);
         }
 
         void ComputeControlState(out bool canStart, out bool canStop)
