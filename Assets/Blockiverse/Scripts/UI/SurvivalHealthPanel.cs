@@ -2,6 +2,7 @@ using System;
 using Blockiverse.Core;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 namespace Blockiverse.UI
@@ -125,6 +126,21 @@ namespace Blockiverse.UI
             lastBaseState = null;
         }
 
+        void OnEnable()
+        {
+            // Live language switching: the health ratio and state line are both gated on
+            // last-displayed VALUES (health/hunger/thirst/stamina), not locale, so a locale
+            // change with unchanged vitals would leave the previous language on screen.
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged += OnSelectedLocaleChanged;
+        }
+
+        void OnDisable()
+        {
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged -= OnSelectedLocaleChanged;
+        }
+
         void OnDestroy()
         {
             if (vitals != null)
@@ -133,6 +149,12 @@ namespace Blockiverse.UI
 
         void OnHealthChanged()
         {
+            Refresh();
+        }
+
+        void OnSelectedLocaleChanged(UnityEngine.Localization.Locale locale)
+        {
+            InvalidateDisplayCache();
             Refresh();
         }
 
