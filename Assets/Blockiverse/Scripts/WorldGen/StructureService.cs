@@ -215,12 +215,12 @@ namespace Blockiverse.WorldGen
                     // the fluid top — ruins don't float on water or emberflow (§5.4).
                     if (FluidBlocks.IsFluid(world.GetBlock(new BlockPosition(worldX, surfaceY, worldZ)))) continue;
 
-                    var degradation = (StructureDegradation)(Math.Min((int)def.MaxDegradation, (int)(regionHash % 4u)));
+                    var degradation = RollDegradation(regionHash, def.MaxDegradation);
                     bool placed;
 
                     if (def.Id == "cave_shrine")
                     {
-                        PlaceCaveShrine(world, worldX, surfaceY, worldZ, seed, def, lootSink);
+                        PlaceCaveShrine(world, worldX, surfaceY, worldZ, seed, def, degradation, lootSink);
                         placed = true;
                     }
                     else if (def.Id == "bridge_segment")
@@ -260,7 +260,10 @@ namespace Blockiverse.WorldGen
             int anchorZ,
             int seed = 0,
             List<StructureContainerLoot> lootSink = null,
-            bool trackChange = false)
+            bool trackChange = false,
+            // Explicit placements default to pristine. Overridable so callers (and tests) can
+            // exercise a specific age state, which is otherwise chosen by the region hash.
+            StructureDegradation degradation = StructureDegradation.Intact)
         {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (string.IsNullOrWhiteSpace(structureId)) return false;
@@ -271,20 +274,20 @@ namespace Blockiverse.WorldGen
 
             if (def.Id == "cave_shrine")
             {
-                PlaceCaveShrine(world, anchorX, surfaceY, anchorZ, seed, def, lootSink);
+                PlaceCaveShrine(world, anchorX, surfaceY, anchorZ, seed, def, degradation, lootSink);
                 return true;
             }
 
             if (def.Id == "bridge_segment")
             {
-                PlaceBridgeSegment(world, anchorX, surfaceY + 1, anchorZ, StructureDegradation.Intact, seed);
+                PlaceBridgeSegment(world, anchorX, surfaceY + 1, anchorZ, degradation, seed);
                 return true;
             }
 
             if (def.PlacementKind != StructurePlacementKind.Surface)
-                return PlaceUndergroundStructure(world, anchorX, surfaceY, anchorZ, StructureDegradation.Intact, seed, def, lootSink);
+                return PlaceUndergroundStructure(world, anchorX, surfaceY, anchorZ, degradation, seed, def, lootSink);
 
-            PlaceRuin(world, anchorX, surfaceY + 1, anchorZ, StructureDegradation.Intact, seed, def, lootSink, trackChange);
+            PlaceRuin(world, anchorX, surfaceY + 1, anchorZ, degradation, seed, def, lootSink, trackChange);
             return true;
         }
 
@@ -335,7 +338,7 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(baseX + 2, baseY, baseZ + 2);
                 if (world.Bounds.Contains(lootPos) && world.GetBlock(lootPos) == BlockRegistry.Air)
-                    PlaceLootCrate(world, lootPos, BlockRegistry.StorageCrate, seed, baseX, baseY, baseZ, def, lootSink, trackChange);
+                    PlaceLootCrate(world, lootPos, BlockRegistry.StorageCrate, seed, baseX, baseY, baseZ, def, degradation, lootSink, trackChange);
             }
 
             if (def != null && def.HasStation)
@@ -357,7 +360,7 @@ namespace Blockiverse.WorldGen
         // Small shrine: 3×3 cutstone base with four corner pillars and a lumen lamp, set into the
         // first cave pocket beneath the column (the surface when the column has no cave). The
         // loot crate sits beside the lamp.
-        static void PlaceCaveShrine(VoxelWorld world, int centerX, int surfaceY, int centerZ, int seed, StructureDefinition def, List<StructureContainerLoot> lootSink)
+        static void PlaceCaveShrine(VoxelWorld world, int centerX, int surfaceY, int centerZ, int seed, StructureDefinition def, StructureDegradation degradation, List<StructureContainerLoot> lootSink)
         {
             int baseY = FindCaveFloorY(world, centerX, centerZ, surfaceY) ?? surfaceY + 1;
 
@@ -398,7 +401,7 @@ namespace Blockiverse.WorldGen
             {
                 var lootPos = new BlockPosition(centerX + 1, baseY, centerZ);
                 if (world.Bounds.Contains(lootPos))
-                    PlaceLootCrate(world, lootPos, BlockRegistry.StorageCrate, seed, centerX, baseY, centerZ, def, lootSink);
+                    PlaceLootCrate(world, lootPos, BlockRegistry.StorageCrate, seed, centerX, baseY, centerZ, def, degradation, lootSink);
             }
 }
 
@@ -411,6 +414,7 @@ namespace Blockiverse.WorldGen
             int anchorY,
             int anchorZ,
             StructureDefinition def,
+            StructureDegradation degradation,
             List<StructureContainerLoot> lootSink,
             bool trackChange = false)
         {
@@ -427,10 +431,29 @@ namespace Blockiverse.WorldGen
             {
                 uint lootSeed = Hash(seed, anchorX, anchorY, anchorZ, salt: 6151);
                 StructureLootTable table = StructureLootTable.GetById(def.LootTableId);
-                List<ContainerLootItem> items = table.Roll(lootSeed);
+                List<ContainerLootItem> items = ScaleLootForAge(table.Roll(lootSeed), degradation);
                 if (items.Count > 0)
                     lootSink.Add(new StructureContainerLoot(lootPos, items));
             }
+        }
+
+        // Applies §14's per-age loot modifier to rolled stack counts. A stack that was rolled at
+        // all keeps at least one item — the modifier reduces quantity, it does not delete entries,
+        // so a Crumbled structure still yields what its table promised, just less of it.
+        static List<ContainerLootItem> ScaleLootForAge(List<ContainerLootItem> items, StructureDegradation degradation)
+        {
+            float modifier = LootQuantityModifier(degradation);
+            if (items == null || items.Count == 0 || modifier >= 1.0f)
+                return items;
+
+            var scaled = new List<ContainerLootItem>(items.Count);
+            foreach (ContainerLootItem item in items)
+            {
+                int count = Math.Max(1, (int)Math.Round(item.Count * modifier, MidpointRounding.AwayFromZero));
+                scaled.Add(new ContainerLootItem(item.ItemId, count));
+            }
+
+            return scaled;
         }
 
         // First walkable cave pocket beneath the column: ≥2 cells of air over a solid floor,
@@ -535,7 +558,7 @@ namespace Blockiverse.WorldGen
 
                         if (wall)
                         {
-                            int skipChance = Math.Min(45, (int)degradation * 12);
+                            int skipChance = MissingBlockChancePercent(degradation);
                             if (skipChance > 0 && Hash(seed, cell.X, cell.Y, cell.Z, salt: 6221) % 100u < (uint)skipChance)
                                 world.SetBlock(cell, BlockRegistry.Air, trackChange: false);
                             else
@@ -563,7 +586,7 @@ namespace Blockiverse.WorldGen
                 if (world.Bounds.Contains(bed)) world.SetBlock(bed, BlockRegistry.Bedroll, trackChange: false);
                 
                 if (def.HasLoot)
-                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.ReedBasket, seed, centerX, baseY, centerZ, def, lootSink);
+                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.ReedBasket, seed, centerX, baseY, centerZ, def, degradation, lootSink);
             }
             else if (roomType == 1) // Laboratory
             {
@@ -571,19 +594,56 @@ namespace Blockiverse.WorldGen
                 if (world.Bounds.Contains(station)) world.SetBlock(station, def.StationBlock, trackChange: false);
                 
                 if (def.HasLoot)
-                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.ToolRack, seed, centerX, baseY, centerZ, def, lootSink);
+                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.ToolRack, seed, centerX, baseY, centerZ, def, degradation, lootSink);
             }
             else // Storage
             {
                 if (def.HasLoot)
                 {
-                    PlaceLootCrate(world, new BlockPosition(centerX - 1, baseY, centerZ + 1), BlockRegistry.StorageCrate, seed, centerX, baseY, centerZ, def, lootSink);
-                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.PantryJar, seed, centerX, baseY, centerZ, def, lootSink);
+                    PlaceLootCrate(world, new BlockPosition(centerX - 1, baseY, centerZ + 1), BlockRegistry.StorageCrate, seed, centerX, baseY, centerZ, def, degradation, lootSink);
+                    PlaceLootCrate(world, new BlockPosition(centerX + 1, baseY, centerZ - 1), BlockRegistry.PantryJar, seed, centerX, baseY, centerZ, def, degradation, lootSink);
                 }
             }
 
             return true;
         }
+
+        // The three §14 tables below are public so tests can assert them directly. They are pure
+        // functions of the age state; exposing them is what stops the ruleset's numbers drifting
+        // out of the generator unnoticed, which is exactly how the previous uniform roll survived.
+
+        // §14 age distribution: intact 20%, weathered 45%, ruined 27%, collapsed 8%. A uniform
+        // roll (the previous `hash % 4`) gives each state ~25%, which over-produces both intact
+        // and collapsed structures relative to the ruleset.
+        public static StructureDegradation RollDegradation(uint hash, StructureDegradation cap)
+        {
+            uint roll = hash % 100u;
+            StructureDegradation state =
+                roll < 20u ? StructureDegradation.Intact    :
+                roll < 65u ? StructureDegradation.Weathered :
+                roll < 92u ? StructureDegradation.Ruined    :
+                             StructureDegradation.Crumbled;
+
+            return (StructureDegradation)Math.Min((int)cap, (int)state);
+        }
+
+        // §14 "Missing Block Chance" per age state.
+        public static int MissingBlockChancePercent(StructureDegradation degradation) => degradation switch
+        {
+            StructureDegradation.Intact    => 0,
+            StructureDegradation.Weathered => 4,
+            StructureDegradation.Ruined    => 12,
+            _                              => 24,
+        };
+
+        // §14 "Loot Modifier" per age state — older structures yield slightly less.
+        public static float LootQuantityModifier(StructureDegradation degradation) => degradation switch
+        {
+            StructureDegradation.Intact    => 1.00f,
+            StructureDegradation.Weathered => 1.00f,
+            StructureDegradation.Ruined    => 0.85f,
+            _                              => 0.70f,
+        };
 
         static void TryPlaceWallBlock(
             VoxelWorld world,
@@ -594,7 +654,7 @@ namespace Blockiverse.WorldGen
             BlockId solidBlock,
             bool trackChange = false)
         {
-            int skipChance = (int)degradation * 20;
+            int skipChance = MissingBlockChancePercent(degradation);
             if (skipChance > 0 && Hash(seed, pos.X, pos.Y, pos.Z, salt: 4093 + wall) % 100u < (uint)skipChance)
                 return;
 
@@ -806,7 +866,7 @@ namespace Blockiverse.WorldGen
             {
                 new StructureLootEntry("berry_cluster",    2, 8, 14),
                 new StructureLootEntry("grain_bundle",     2, 6, 12),
-                new StructureLootEntry("meadow_seed",      1, 3,  7),
+                new StructureLootEntry("trail_ration",     1, 3,  7),
                 new StructureLootEntry("clean_water_flask",1, 2,  5),
                 new StructureLootEntry("brightsalt",       1, 4,  4),
                 new StructureLootEntry("field_bandage",    1, 2,  3),
@@ -815,45 +875,48 @@ namespace Blockiverse.WorldGen
         public static readonly StructureLootTable BuilderCache = new(BuilderCacheId, 3, 6,
             new[]
             {
-                new StructureLootEntry("work_plank",        2, 8, 14),
-                new StructureLootEntry("cutstone_block",    1, 6, 10),
-                new StructureLootEntry("fired_brick",       2, 6,  8),
-                new StructureLootEntry("fiber_cord",        1, 4,  7),
-                new StructureLootEntry("clay_lump",         2, 6,  6),
-                new StructureLootEntry("glowwick",          1, 2,  3),
+                new StructureLootEntry("work_plank",        4, 16, 12),
+                new StructureLootEntry("branchwood_log",    2,  8, 10),
+                new StructureLootEntry("stone_rubble",      6, 18, 10),
+                new StructureLootEntry("clay_lump",         3, 12,  8),
+                new StructureLootEntry("fired_brick",       2, 10,  7),
+                new StructureLootEntry("glass_shard",       1,  6,  5),
+                new StructureLootEntry("resin_knot",        1,  5,  5),
             });
 
+        // §15.1 also lists `small_blast_charge` (1, weight 1) here. That item is not registered
+        // in ItemId.cs, so the entry is omitted rather than rolling an id no registry can resolve.
+        // Restore it when the item exists.
         public static readonly StructureLootTable MinerCache = new(MinerCacheId, 2, 5,
             new[]
             {
-                new StructureLootEntry("stone_rubble",      2, 8, 14),
-                new StructureLootEntry("flinty_shingle",    1, 5, 11),
-                new StructureLootEntry("spark_niter",       1, 4,  8),
-                new StructureLootEntry("embercoal",         1, 4,  7),
-                new StructureLootEntry("raw_paletin",       1, 2,  4),
-                new StructureLootEntry("lumen_dust",        1, 3,  3),
+                new StructureLootEntry("embercoal",         2, 8, 12),
+                new StructureLootEntry("spark_niter",       1, 5,  8),
+                new StructureLootEntry("raw_rosycopper",    1, 4,  6),
+                new StructureLootEntry("raw_paletin",       1, 3,  4),
+                new StructureLootEntry("raw_rustcore",      1, 2,  2),
             });
 
         public static readonly StructureLootTable MetalCache = new(MetalCacheId, 1, 4,
             new[]
             {
-                new StructureLootEntry("raw_rosycopper",    1, 3, 10),
-                new StructureLootEntry("raw_paletin",       1, 3,  8),
-                new StructureLootEntry("raw_rustcore",      1, 2,  6),
-                new StructureLootEntry("rosycopper_bar",    1, 2,  5),
-                new StructureLootEntry("paletin_bar",       1, 2,  4),
-                new StructureLootEntry("ironroot_bar",      1, 1,  3),
+                new StructureLootEntry("rosycopper_bar",    1, 3, 10),
+                new StructureLootEntry("paletin_bar",       1, 2,  6),
+                new StructureLootEntry("bronze_bar",        1, 2,  4),
+                new StructureLootEntry("ironroot_bar",      1, 1,  2),
+                new StructureLootEntry("lumen_crystal",     1, 2,  2),
                 new StructureLootEntry("sunmetal_bar",      1, 1,  1),
             });
 
         public static readonly StructureLootTable DeepCache = new(DeepCacheId, 2, 4,
             new[]
             {
-                new StructureLootEntry("raw_umbralite",     1, 3, 10),
-                new StructureLootEntry("staropal_shard",    1, 2,  8),
-                new StructureLootEntry("lumen_crystal",     1, 2,  6),
-                new StructureLootEntry("deepsteel_bar",     1, 1,  3),
-                new StructureLootEntry("starforged_core",   1, 1,  1),
+                new StructureLootEntry("raw_umbralite",     1, 2,  6),
+                new StructureLootEntry("lumen_crystal",     1, 3,  6),
+                new StructureLootEntry("lumen_dust",        2, 5,  5),
+                new StructureLootEntry("field_bandage",     1, 3,  4),
+                new StructureLootEntry("deepsteel_bar",     1, 1,  2),
+                new StructureLootEntry("staropal_shard",    1, 1,  1),
             });
 
         public static readonly StructureLootTable EmptyRuin = new(EmptyRuinId, 0, 1,
