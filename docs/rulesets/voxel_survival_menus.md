@@ -1018,6 +1018,9 @@ see the bookmark-store rule in the networking ruleset.
 | Discovered:                                    |
 |   [ Eric's World   2/4 players   Join ]        |
 |                                                |
+| Saved Servers:                                 |
+|   [ Eric's Server — play.example.com:7777 ]    |
+|                                                |
 | Host Address: [ 127.0.0.1                 ]    |
 | Server Password: [                        ]    |
 | [ ] Encrypted                                  |
@@ -1037,6 +1040,7 @@ see the bookmark-store rule in the networking ruleset.
 | Host LAN Session | `multiplayer.host_lan` | No active session; local world can load/generate | Loads or initializes canonical world state, then starts host session. |
 | Join LAN Session | `multiplayer.join_lan` | No active session; address is valid | Starts client connection to `address`, using `port` from a `host:port` address or the configured default otherwise. |
 | Join discovered session | `multiplayer.join_discovered` | No active session; a beacon is listed | Fills address/port from the beacon and joins. |
+| Join saved server | `multiplayer.join_remembered` | No active session; a bookmark exists | One tap: seeds address, saved password and TLS setting from the bookmark, then joins. Rows list the bookmark store most-recent-first (up to four shown); a server enters the store on every successful join. |
 | Stop Session | `multiplayer.stop_session` | Host/client session active or disconnecting | Host attempts save-on-shutdown, then stops session; client disconnects. |
 | Address input | `multiplayer.set_address` | No active session | Updates pending join address (host:port accepted). |
 | Password input | `multiplayer.set_password` | No active session | Updates the pending join secret; a freshly typed password wins over a bookmarked one. |
