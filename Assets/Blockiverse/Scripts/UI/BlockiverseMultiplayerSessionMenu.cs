@@ -654,6 +654,11 @@ namespace Blockiverse.UI
             if (menuController == null)
                 return;
 
+            // Coexistence (ADR 0010): the toolkit LAN screen controller owns this routing
+            // side-effect while a frontend is registered — see EnsureSessionEndedMenuAvailable.
+            if (menuController.HasFrontend)
+                return;
+
             enteredGameplayForCurrentSession = true;
             menuController.EnterGameplay();
         }
@@ -1024,6 +1029,12 @@ namespace Blockiverse.UI
                 return;
 
             DiscoverMenuController();
+
+            // Coexistence (ADR 0010): while the UI Toolkit frontend is registered, its LAN
+            // screen controller owns these routing side-effects; a second driver here races
+            // it on every session transition.
+            if (menuController != null && menuController.HasFrontend)
+                return;
             
             if (enteredGameplayForCurrentSession)
             {

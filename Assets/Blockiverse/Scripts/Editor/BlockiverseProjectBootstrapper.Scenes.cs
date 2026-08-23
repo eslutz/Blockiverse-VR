@@ -72,6 +72,10 @@ namespace Blockiverse.Editor
             EnsureMetaPlatformCompliance(scene);
             EnsureBootSceneCreativeWorld(scene);
             EnsureBootSceneNetworkStack(scene);
+            // ADR 0010 Phases 2–5: the UI Toolkit menu backend. Boot-scene only — the rig
+            // prefab (and its uGUI menus, the dev fallback) is untouched. Must run after
+            // EnsureBootSceneRig so the host can wire the rig's BlockiverseMenuController.
+            EnsureUiToolkitMenus(scene);
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);

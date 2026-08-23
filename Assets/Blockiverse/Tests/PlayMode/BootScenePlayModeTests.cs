@@ -78,31 +78,43 @@ namespace Blockiverse.Tests.PlayMode
             {
                 yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-                GameObject popup = FindGameObjectIncludingInactive("Controller Mapping Popup");
-                Assert.That(popup, Is.Not.Null);
-                GameObject titleMenu = FindGameObjectIncludingInactive("Title Menu");
-                Assert.That(titleMenu, Is.Not.Null);
+                // ADR 0010 coexistence: the UI Toolkit host is the active backend, so the
+                // first-run popup surfaces as the toolkit ControllerMappingScreen while the
+                // uGUI popup stays present-but-hidden as the development fallback. This test
+                // was rewritten from its uGUI-presenter assertions per the matrix rule
+                // (uGUI-specific tests are rewritten, never deleted).
+                BlockiverseMenuController menuController =
+                    UnityEngine.Object.FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
+                Assert.That(menuController, Is.Not.Null);
+                Assert.That(menuController.HasFrontend, Is.True,
+                    "The generated Boot scene must register the UI Toolkit host as the menu frontend.");
+                Assert.That(menuController.IsActiveScreen(MenuActions.ControllerMappingScreen), Is.True,
+                    "First run must route to the controller-mapping screen.");
 
+                GameObject popup = FindGameObjectIncludingInactive("Controller Mapping Popup");
+                Assert.That(popup, Is.Not.Null, "The uGUI fallback popup must still exist in the rig.");
                 BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
                 Assert.That(presenter, Is.Not.Null);
-                Assert.That(presenter.IsVisible, Is.True);
-                Assert.That(presenter.ShowOnStart, Is.False);
-                // Since the world-space menu pivot, routed menus hide by disabling
-                // their Canvas via the presenter; the GameObject stays active.
-                BlockiverseWorldSpacePanelPresenter titlePresenter =
-                    titleMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-                Assert.That(titlePresenter, Is.Not.Null);
-                Assert.That(titlePresenter.IsVisible, Is.False,
-                    "The title menu must wait until the first-run controller map is dismissed.");
+                Assert.That(presenter.IsVisible, Is.False,
+                    "With a frontend registered the uGUI popup must stay hidden.");
 
-                Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
-                Assert.That(closeButton, Is.Not.Null);
+                UiToolkitScreenController mappingScreen = null;
+                foreach (UiToolkitScreenController screen in UnityEngine.Object.FindObjectsByType<UiToolkitScreenController>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (screen.ScreenId == MenuActions.ControllerMappingScreen)
+                        mappingScreen = screen;
+                }
 
-                closeButton.onClick.Invoke();
+                Assert.That(mappingScreen, Is.Not.Null, "The toolkit controller-mapping screen is missing from the scene.");
+                Assert.That(mappingScreen.IsVisible, Is.True,
+                    "The toolkit controller-mapping screen must be the visible first-run surface.");
+
+                menuController.CloseControllerMappingScreen();
                 yield return null;
 
-                Assert.That(presenter.IsVisible, Is.False);
-                Assert.That(titlePresenter.IsVisible, Is.True);
+                Assert.That(mappingScreen.IsVisible, Is.False);
+                Assert.That(menuController.IsActiveScreen(MenuActions.TitleScreen), Is.True);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally
