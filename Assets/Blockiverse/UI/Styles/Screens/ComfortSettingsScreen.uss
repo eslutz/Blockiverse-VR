@@ -1,0 +1,59 @@
+/*
+ * ComfortSettingsScreen — layout only. Every colour, font size, spacing step and focus
+ * treatment comes from Tokens.uss/Base.uss; this sheet arranges the two-column grid the
+ * uGUI comfort panel used (left: movement / control options / player view, right: turning /
+ * view comfort + swim rows) and the slider-plus-value rows.
+ */
+
+.comfort-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comfort-header .hs-button {
+    flex-shrink: 0;
+}
+
+.comfort-columns {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.comfort-column {
+    flex-basis: 0;
+    flex-grow: 1;
+}
+
+.comfort-column--left {
+    margin-right: var(--hs-space-4);
+}
+
+.comfort-group {
+    margin-bottom: var(--hs-space-3);
+}
+
+.comfort-slider-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.comfort-slider {
+    flex-grow: 1;
+}
+
+/* Quantities column: fixed width so the figures line up down the column and the slider
+   track length stays constant while the number changes. */
+.comfort-slider__value {
+    min-width: 110px;
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+}
+
+/* Field labels are set at runtime (no comfort strings exist in the table yet); the widest is
+   "Sink When Not Swimming", so give the label column room and let it wrap rather than clip.
+   The 64px control minimum from Base.uss absorbs a wrapped second line. */
+.comfort-column .unity-base-field__label {
+    min-width: 250px;
+    white-space: normal;
+}

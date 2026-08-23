@@ -1,0 +1,46 @@
+/*
+ * Creative Tools — layout only. Every colour, spacing step, font size and focus treatment
+ * resolves from Tokens.uss through Base.uss; this sheet arranges the Hearthstone pieces for a
+ * 1000x760 panel and adds nothing to the design system.
+ */
+
+#bv-tools-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#bv-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+#bv-close {
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}
+
+.ctl-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Commands in a row share the width evenly; the last one drops its trailing gutter. */
+.ctl-command {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    margin-right: var(--hs-space-3);
+}
+
+.ctl-command--last {
+    margin-right: 0;
+}
+
+#bv-weather {
+    margin-top: var(--hs-space-2);
+}
+
+#bv-status {
+    flex-grow: 1;
+}

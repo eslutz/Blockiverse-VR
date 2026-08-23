@@ -1,0 +1,25 @@
+/*
+ * Confirm modal (600×460). Screen-specific layout only; every value resolves from Tokens.
+ */
+
+/* Prompts are full sentences ("Return to Title?" with a consequence clause); labels do not
+   wrap by default. */
+#bv-confirm-prompt {
+    white-space: normal;
+}
+
+/* The two actions sit in one row pinned to the bottom edge of the dialog. */
+#bv-confirm-content {
+    justify-content: flex-end;
+}
+
+#bv-confirm-actions {
+    flex-direction: row;
+}
+
+#bv-confirm-actions > .hs-button {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: var(--hs-space-2);
+    margin-right: var(--hs-space-2);
+}

@@ -1,0 +1,61 @@
+/*
+ * Survival crafting screen — layout only. Every colour, spacing step, font size and focus
+ * treatment resolves from Tokens.uss through Base.uss; this sheet arranges the Hearthstone
+ * pieces for a 1000x760 panel and adds nothing to the design system.
+ */
+
+#bv-crafting-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#bv-crafting-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+#bv-crafting-close {
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}
+
+/* A recipe row is one wide button: output icon, then the marker + recipe text. */
+.crafting-recipe-row {
+    flex-direction: row;
+    align-items: center;
+    -unity-text-align: middle-left;
+}
+
+.crafting-recipe-icon {
+    width: var(--hs-space-6);
+    height: var(--hs-space-6);
+    margin-right: var(--hs-space-3);
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.crafting-recipe-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.crafting-paging-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.crafting-page-button {
+    flex-shrink: 0;
+}
+
+.crafting-page-label {
+    flex-grow: 1;
+    -unity-text-align: middle-center;
+}
+
+#bv-crafting-status {
+    flex-grow: 1;
+}

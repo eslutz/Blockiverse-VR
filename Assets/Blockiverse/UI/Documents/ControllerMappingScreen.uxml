@@ -1,0 +1,34 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        First-run controller mapping screen (MenuActions.ControllerMappingScreen). Ports the
+        generated uGUI "Controller Mapping Popup" (BlockiverseProjectBootstrapper.Menus.cs):
+        title, the canonical 11-line mapping copy, one Close button.
+
+        The mapping body carries no static text here: the copy has no localization table entry
+        yet (the uGUI popup authors it as a raw literal), so ControllerMappingScreenController
+        sets it at runtime via UiText. The first-run PlayerPrefs seen flag and the
+        depth-aware close routing live in BlockiverseMenuController.CloseControllerMappingScreen,
+        not in this screen.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-mapping-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-mapping-title" text="Controller Map" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.controller_map.title" />
+                </Bindings>
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-mapping-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-mapping-body" picking-mode="Ignore" class="hs-body" />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-mapping-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Button name="bv-mapping-close" text="Close" class="hs-button hs-button--primary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

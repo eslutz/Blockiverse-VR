@@ -1,0 +1,30 @@
+/*
+ * Error modal (600×460). Screen-specific layout only; every value resolves from Tokens.
+ */
+
+/* ShowError callers may pass a long custom title; labels do not wrap by default. */
+#bv-error-title {
+    white-space: normal;
+}
+
+/* Message at the top, close row pinned to the bottom edge of the dialog. */
+#bv-error-content {
+    justify-content: space-between;
+}
+
+/* The message is the dialog's body, not a footer annotation: body-scale type, keeping the
+   rejected signal treatment (oxide bar + tint) from Base — the title carries the word. */
+#bv-error-message {
+    font-size: var(--hs-type-body);
+}
+
+#bv-error-actions {
+    flex-direction: row;
+}
+
+#bv-error-actions > .hs-button {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: var(--hs-space-2);
+    margin-right: var(--hs-space-2);
+}

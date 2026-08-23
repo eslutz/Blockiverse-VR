@@ -1,0 +1,12 @@
+/*
+ * ControllerMappingScreen — screen-specific layout only; all look comes from Tokens/Base.
+ *
+ * Labels do not soft-wrap by default (Base.uss opts hs-caption/hs-status in explicitly), and
+ * the runtime-assigned mapping copy has lines near the 760 px panel width at body size —
+ * longer still in other locales — so the body opts into wrapping. The embedded newlines
+ * always hard-break regardless.
+ */
+
+#bv-mapping-body {
+    white-space: normal;
+}

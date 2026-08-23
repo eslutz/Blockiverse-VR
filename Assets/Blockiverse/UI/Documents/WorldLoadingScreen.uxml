@@ -1,0 +1,28 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Routed world-loading surface (screen id world_loading). This is NOT the startup
+        splash: BlockiverseStartupOverlay and its auto-hide timer stay on the uGUI side.
+        This screen is shown by the router during world create/load transitions and is
+        dismissed by EnterGameplay/ShowTitleScreen, never by a timer.
+
+        The screen must never take input (Overlay placement profile; the host also excludes
+        world_loading from input targeting), so every element — including the root — is
+        picking-mode Ignore and nothing here is interactive. The block strip is decorative:
+        static recessed sockets, deliberately not a progress bar, because a frozen partial
+        fill would read as a hang.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen" picking-mode="Ignore">
+        <engine:VisualElement name="bv-loading-body" class="wl-body" picking-mode="Ignore">
+            <engine:Label name="bv-loading-title" text="Loading world..." picking-mode="Ignore" class="hs-heading wl-title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.status.world.loading" />
+                </Bindings>
+            </engine:Label>
+            <engine:VisualElement name="bv-loading-blocks" class="wl-blocks" picking-mode="Ignore">
+                <engine:VisualElement name="bv-loading-block-1" class="hs-well wl-block" picking-mode="Ignore" />
+                <engine:VisualElement name="bv-loading-block-2" class="hs-well wl-block" picking-mode="Ignore" />
+                <engine:VisualElement name="bv-loading-block-3" class="hs-well wl-block" picking-mode="Ignore" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

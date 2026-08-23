@@ -1,0 +1,9 @@
+/*
+ * StatusToast — layout only. A single status line, vertically centred in its 640×120
+ * strip. Presentation comes entirely from hs-status.
+ */
+
+.st-label {
+    flex-grow: 1;
+    -unity-text-align: middle-left;
+}

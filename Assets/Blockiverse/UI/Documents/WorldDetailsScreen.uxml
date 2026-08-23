@@ -1,0 +1,32 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        World Details screen (voxel_survival_menus §6.5) — UI Toolkit port of
+        BlockiverseWorldDetailsPanel plus its bootstrapper-built action menu. The world name,
+        metadata block and rename field render the pushed WorldSaveSummary at runtime; the
+        Play/Rename/Duplicate/Delete/Back buttons are built by WorldDetailsScreenController into
+        bv-action-list from SetActionMenu pushes (availability changes re-push the list), so only
+        the fixed captions carry LocalizedString bindings. Stylesheets are assigned by the
+        bootstrapper from the [UiToolkitScreen] declaration, never referenced from here.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" text="World Details" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.title.world_details" />
+                </Bindings>
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-world-name" picking-mode="Ignore" class="hs-heading" />
+            <engine:Label name="bv-metadata" picking-mode="Ignore" class="hs-body hs-figures bv-metadata" />
+            <engine:Label name="bv-rename-label" text="Name" picking-mode="Ignore" class="hs-caption">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.world_details.name" />
+                </Bindings>
+            </engine:Label>
+            <engine:TextField name="bv-rename-field" class="hs-field" />
+            <engine:VisualElement name="bv-action-list" class="bv-action-list" picking-mode="Ignore" />
+        </engine:ScrollView>
+    </engine:VisualElement>
+</engine:UXML>

@@ -1,0 +1,91 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Comfort settings screen (matrix row 11). Ports the uGUI BlockiverseComfortMenu layout:
+        two columns of grouped controls, exactly the groups and orders the generated uGUI panel
+        used (Movement Mode / Control Options / Player View on the left, Turning / View Comfort
+        plus the appended swim rows on the right).
+
+        Control and heading labels carry no literal text: none of the comfort strings exist in
+        the UI table yet, so ComfortSettingsScreenController sets every one at runtime through
+        UiText.Get with the requested ui.generated.comfort.* keys (see the migration task's
+        new_key_requests). The Close button is the one string with an existing entry, so it
+        binds natively. Slider ranges mirror the BlockiverseComfortSettings clamps verbatim.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-comfort-header" class="hs-screen__header comfort-header" picking-mode="Ignore">
+            <engine:Label name="bv-comfort-title" class="hs-screen__title" picking-mode="Ignore" />
+            <engine:Button name="bv-comfort-close" text="Close" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-comfort-content" class="hs-screen__content" mode="Vertical">
+            <engine:VisualElement name="bv-comfort-columns" class="comfort-columns" picking-mode="Ignore">
+                <engine:VisualElement name="bv-comfort-column-left" class="comfort-column comfort-column--left" picking-mode="Ignore">
+                    <engine:VisualElement name="bv-comfort-group-movement" class="comfort-group" picking-mode="Ignore">
+                        <engine:Label name="bv-comfort-movement-heading" class="hs-heading" picking-mode="Ignore" />
+                        <engine:Toggle name="bv-comfort-glide" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-teleport" class="hs-field" />
+                        <engine:VisualElement name="bv-comfort-move-speed-row" class="comfort-slider-row" picking-mode="Ignore">
+                            <engine:Slider name="bv-comfort-move-speed" low-value="0.5" high-value="4" value="1.8" show-input-field="false" class="hs-field comfort-slider" />
+                            <engine:Label name="bv-comfort-move-speed-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />
+                        </engine:VisualElement>
+                        <engine:Toggle name="bv-comfort-glide-bob" class="hs-field" />
+                    </engine:VisualElement>
+
+                    <engine:VisualElement name="bv-comfort-group-control-options" class="comfort-group" picking-mode="Ignore">
+                        <engine:Label name="bv-comfort-control-options-heading" class="hs-heading" picking-mode="Ignore" />
+                        <engine:Toggle name="bv-comfort-left-hand" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-toggle-to-mine" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-sprint-toggle" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-crouch-toggle" class="hs-field" />
+                    </engine:VisualElement>
+
+                    <engine:VisualElement name="bv-comfort-group-player-view" class="comfort-group" picking-mode="Ignore">
+                        <engine:Label name="bv-comfort-player-view-heading" class="hs-heading" picking-mode="Ignore" />
+                        <engine:Button name="bv-comfort-height-reset" class="hs-button" />
+                        <engine:Toggle name="bv-comfort-real-height" class="hs-field" />
+                        <engine:VisualElement name="bv-comfort-swim-speed-row" class="comfort-slider-row" picking-mode="Ignore">
+                            <engine:Slider name="bv-comfort-swim-speed" low-value="0.3" high-value="1" value="0.55" show-input-field="false" class="hs-field comfort-slider" />
+                            <engine:Label name="bv-comfort-swim-speed-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />
+                        </engine:VisualElement>
+                    </engine:VisualElement>
+                </engine:VisualElement>
+
+                <engine:VisualElement name="bv-comfort-column-right" class="comfort-column" picking-mode="Ignore">
+                    <engine:VisualElement name="bv-comfort-group-turning" class="comfort-group" picking-mode="Ignore">
+                        <engine:Label name="bv-comfort-turning-heading" class="hs-heading" picking-mode="Ignore" />
+                        <engine:Toggle name="bv-comfort-smooth-turn" class="hs-field" />
+                        <engine:VisualElement name="bv-comfort-snap-turn-row" class="comfort-slider-row" picking-mode="Ignore">
+                            <engine:Slider name="bv-comfort-snap-turn" low-value="15" high-value="90" value="45" show-input-field="false" class="hs-field comfort-slider" />
+                            <engine:Label name="bv-comfort-snap-turn-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />
+                        </engine:VisualElement>
+                        <engine:Toggle name="bv-comfort-turn-around" class="hs-field" />
+                        <engine:VisualElement name="bv-comfort-smooth-turn-speed-row" class="comfort-slider-row" picking-mode="Ignore">
+                            <engine:Slider name="bv-comfort-smooth-turn-speed" low-value="30" high-value="180" value="60" show-input-field="false" class="hs-field comfort-slider" />
+                            <engine:Label name="bv-comfort-smooth-turn-speed-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />
+                        </engine:VisualElement>
+                    </engine:VisualElement>
+
+                    <engine:VisualElement name="bv-comfort-group-view-comfort" class="comfort-group" picking-mode="Ignore">
+                        <engine:Label name="bv-comfort-view-comfort-heading" class="hs-heading" picking-mode="Ignore" />
+                        <engine:Toggle name="bv-comfort-vignette" class="hs-field" />
+                        <engine:VisualElement name="bv-comfort-vignette-strength-row" class="comfort-slider-row" picking-mode="Ignore">
+                            <engine:Slider name="bv-comfort-vignette-strength" low-value="0" high-value="1" value="0.3" show-input-field="false" class="hs-field comfort-slider" />
+                            <engine:Label name="bv-comfort-vignette-strength-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />
+                        </engine:VisualElement>
+                        <engine:VisualElement name="bv-comfort-ui-scale-row" class="comfort-slider-row" picking-mode="Ignore">
+                            <engine:Slider name="bv-comfort-ui-scale" low-value="0.85" high-value="1.35" value="1" show-input-field="false" class="hs-field comfort-slider" />
+                            <engine:Label name="bv-comfort-ui-scale-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />
+                        </engine:VisualElement>
+                        <engine:Toggle name="bv-comfort-swim-sink" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-swim-vignette" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-swim-climb-out" class="hs-field" />
+                    </engine:VisualElement>
+                </engine:VisualElement>
+            </engine:VisualElement>
+        </engine:ScrollView>
+    </engine:VisualElement>
+</engine:UXML>

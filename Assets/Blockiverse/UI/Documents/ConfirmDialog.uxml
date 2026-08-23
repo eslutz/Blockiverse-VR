@@ -1,0 +1,21 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Confirm modal (MenuActions.ConfirmModal). Every string on this screen is runtime data:
+        the prompt arrives as the SetActionMenu title (BlockiverseMenuController.RequestConfirm
+        owns the copy and the confirm callback), and the two buttons are built by
+        ConfirmDialogController from the pushed MenuAction list — so no element here carries a
+        static literal or a LocalizedString binding.
+
+        Stylesheets are attached by the controller/bootstrapper from serialized references
+        (Tokens.uss, Base.uss, Styles/Screens/ConfirmDialog.uss); a UXML <Style src> would need
+        pre-import GUIDs and is banned.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-confirm-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-confirm-prompt" class="hs-screen__title" picking-mode="Ignore" />
+        </engine:VisualElement>
+        <engine:VisualElement name="bv-confirm-content" class="hs-screen__content" picking-mode="Ignore">
+            <engine:VisualElement name="bv-confirm-actions" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

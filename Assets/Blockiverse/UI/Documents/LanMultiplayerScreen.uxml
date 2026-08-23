@@ -1,0 +1,74 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        LAN multiplayer screen (MenuActions.LanMultiplayerScreen, migration matrix row 14).
+        Structure only: presentation comes from Tokens.uss/Base.uss plus LanMultiplayerScreen.uss,
+        attached by the generated panel, never by a <Style> element (pre-import GUIDs do not exist).
+
+        Elements with no text literal here are written at runtime by LanMultiplayerScreenController:
+        the Host/Join/Stop labels and the encryption-toggle label render via UiText, the input
+        placeholders come from ui.generated.lan.join_address_placeholder / join_secret_placeholder,
+        and the status/discovery labels are dynamic. Dynamic labels deliberately carry no
+        LocalizedString binding — a binding would rewrite them behind the controller's back on
+        locale change.
+
+        Discovery slots start display:none; RefreshDiscoveryList shows a slot only while a beacon
+        fills it, so the panel never lists stale hosts.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-lan-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-lan-title" text="LAN Multiplayer" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.action.title.lan_multiplayer" />
+                </Bindings>
+            </engine:Label>
+            <engine:Button name="bv-lan-close" text="Close" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-lan-content" class="hs-screen__content" mode="Vertical">
+            <engine:VisualElement name="bv-lan-connect-row" class="lan-row" picking-mode="Ignore">
+                <engine:TextField name="bv-lan-address" class="hs-field hs-figures lan-address" />
+                <engine:TextField name="bv-lan-secret" class="hs-field lan-secret" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-lan-command-row" class="lan-row" picking-mode="Ignore">
+                <engine:Button name="bv-lan-host" class="hs-button lan-command" />
+                <engine:Button name="bv-lan-join" class="hs-button lan-command" />
+                <engine:Button name="bv-lan-reconnect" text="Join (Reconnect)" class="hs-button lan-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.action.lan.reconnect" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-lan-stop" class="hs-button lan-command lan-command--last" />
+            </engine:VisualElement>
+
+            <engine:Toggle name="bv-lan-encryption" class="hs-field" />
+
+            <engine:Label name="bv-lan-discovery-status" class="hs-caption" picking-mode="Ignore" />
+            <engine:Button name="bv-lan-discovery-slot-1" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+            <engine:Button name="bv-lan-discovery-slot-2" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+            <engine:Button name="bv-lan-discovery-slot-3" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+            <engine:Button name="bv-lan-discovery-slot-4" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+
+            <!--
+                Saved servers (the bookmark store): every server previously joined, most recent
+                first, so rejoining a dedicated server across the internet — which discovery can
+                never find — is one tap. Rows are runtime-populated identifiers (nickname/address),
+                so no bindings; the whole section hides when the store is empty. Heading text comes
+                from ui.generated.lan.saved_servers via UiText.
+            -->
+            <engine:Label name="bv-lan-bookmark-heading" class="hs-heading" picking-mode="Ignore" style="display: none;" />
+            <engine:Button name="bv-lan-bookmark-slot-1" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+            <engine:Button name="bv-lan-bookmark-slot-2" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+            <engine:Button name="bv-lan-bookmark-slot-3" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+            <engine:Button name="bv-lan-bookmark-slot-4" class="hs-button hs-figures lan-discovery-slot" style="display: none;" />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-lan-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-lan-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

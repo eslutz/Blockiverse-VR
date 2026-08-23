@@ -1,0 +1,100 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Smelting station screen (MenuActions.StationMenuScreen, migration matrix row 20) — the
+        Clay Kiln / Bellows Forge panel. Structure only: presentation comes from Tokens.uss/
+        Base.uss plus StationScreen.uss, attached by the generated panel, never by a <Style>
+        element (pre-import GUIDs do not exist).
+
+        The title is dynamic (the open station's display name — "Clay Kiln", "Bellows Forge" —
+        with ui.generated.station.title as the never-opened default), so it carries no binding.
+        Slot values, the status line and the progress slider mirror the bound
+        SmeltingStationModel and are written by StationScreenController; "—" placeholders are
+        letterless and byte-match the empty-slot rendering. Three input rows are always present
+        (SmeltingStationModel.MaxInputSlots); slots beyond the open station's InputSlotCount
+        render "—", exactly like the uGUI BlockiverseStationPanel.
+
+        The progress slider is display-only: the host owns station ticking and the controller
+        force-ignores picking on every part of the slider at attach.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-station-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-station-title" picking-mode="Ignore" class="hs-screen__title" />
+            <engine:Button name="bv-station-close" text="Close" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-station-content" class="hs-screen__content" mode="Vertical">
+            <engine:VisualElement name="bv-station-inputs" class="station-slot-row" picking-mode="Ignore">
+                <engine:Label name="bv-station-input-caption" text="Input" class="hs-secondary station-slot-caption" picking-mode="Ignore">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.input" />
+                    </Bindings>
+                </engine:Label>
+                <engine:VisualElement name="bv-station-input-slots" class="station-slot-stack" picking-mode="Ignore">
+                    <engine:Label name="bv-station-input-1" text="—" class="hs-well hs-body hs-figures station-slot-value" picking-mode="Ignore" />
+                    <engine:Label name="bv-station-input-2" text="—" class="hs-well hs-body hs-figures station-slot-value" picking-mode="Ignore" />
+                    <engine:Label name="bv-station-input-3" text="—" class="hs-well hs-body hs-figures station-slot-value" picking-mode="Ignore" />
+                </engine:VisualElement>
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-station-fuel-row" class="station-slot-row" picking-mode="Ignore">
+                <engine:Label name="bv-station-fuel-caption" text="Fuel" class="hs-secondary station-slot-caption" picking-mode="Ignore">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.fuel" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Label name="bv-station-fuel" class="hs-well hs-body hs-figures station-slot-value" picking-mode="Ignore" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-station-output-row" class="station-slot-row" picking-mode="Ignore">
+                <engine:Label name="bv-station-output-caption" text="Output" class="hs-secondary station-slot-caption" picking-mode="Ignore">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.output" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Label name="bv-station-output" text="—" class="hs-well hs-body hs-figures station-slot-value" picking-mode="Ignore" />
+            </engine:VisualElement>
+
+            <engine:Slider name="bv-station-progress" low-value="0" high-value="1" value="0" show-input-field="false" focusable="false" picking-mode="Ignore" class="hs-field station-progress" />
+
+            <engine:VisualElement name="bv-station-command-row-1" class="station-command-row" picking-mode="Ignore">
+                <engine:Button name="bv-station-add-input" text="Add Input" class="hs-button station-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.add_input" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-station-withdraw-input" text="Take Input" class="hs-button station-command station-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.withdraw_input" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-station-command-row-2" class="station-command-row" picking-mode="Ignore">
+                <engine:Button name="bv-station-add-fuel" text="Add Fuel" class="hs-button station-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.add_fuel" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-station-withdraw-fuel" text="Take Fuel" class="hs-button station-command station-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.withdraw_fuel" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:Button name="bv-station-collect" text="Collect" class="hs-button hs-button--primary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.station.collect" />
+                </Bindings>
+            </engine:Button>
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-station-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-station-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

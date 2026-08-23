@@ -1,0 +1,81 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Audio &amp; feedback settings screen (settings_audio). UI Toolkit port of
+        BlockiverseAudioSettingsPanel: six 0..1 sliders and five toggles binding straight to
+        BlockiverseFeedbackSettings, plus a Close row. Design-time slider/toggle values mirror
+        the settings component's serialized defaults (music 0.5, haptics on, everything else
+        1.0/off) so the UI Builder preview matches a fresh install.
+
+        The toggle rows carry no literal label text: their ui.generated.audio_feedback.* keys do
+        not exist yet, so AudioSettingsScreenController writes the labels at runtime via UiText
+        with the requested keys. Stylesheets are applied by the controller/bootstrapper, never by
+        a <Style src> element (asset GUIDs do not exist pre-import).
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-audio-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-audio-title" text="Audio &amp; Feedback" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.title" />
+                </Bindings>
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-audio-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-audio-master-volume-label" text="Master Volume" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.master_volume" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-audio-master-volume" low-value="0" high-value="1" value="1" show-input-field="false" class="hs-field" />
+
+            <engine:Label name="bv-audio-effects-volume-label" text="Effects Volume" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.effects_volume" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-audio-effects-volume" low-value="0" high-value="1" value="1" show-input-field="false" class="hs-field" />
+
+            <engine:Label name="bv-audio-ui-volume-label" text="UI Volume" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.ui_volume" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-audio-ui-volume" low-value="0" high-value="1" value="1" show-input-field="false" class="hs-field" />
+
+            <engine:Label name="bv-audio-weather-volume-label" text="Weather Volume" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.weather_volume" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-audio-weather-volume" low-value="0" high-value="1" value="1" show-input-field="false" class="hs-field" />
+
+            <engine:Label name="bv-audio-music-volume-label" text="Music Volume" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.music_volume" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-audio-music-volume" low-value="0" high-value="1" value="0.5" show-input-field="false" class="hs-field" />
+
+            <engine:Label name="bv-audio-haptic-strength-label" text="Haptic Strength" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.audio_feedback.haptic_strength" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-audio-haptic-strength" low-value="0" high-value="1" value="1" show-input-field="false" class="hs-field" />
+
+            <engine:Toggle name="bv-audio-mute-all" class="hs-field" />
+            <engine:Toggle name="bv-audio-haptics" value="true" class="hs-field" />
+            <engine:Toggle name="bv-audio-reduced-flash" class="hs-field" />
+            <engine:Toggle name="bv-audio-reduced-particles" class="hs-field" />
+            <engine:Toggle name="bv-audio-classic-block-sounds" class="hs-field" />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-audio-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Button name="bv-audio-close" text="Close" class="hs-button" style="flex-grow: 1;">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>
