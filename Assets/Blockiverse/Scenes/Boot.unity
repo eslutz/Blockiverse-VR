@@ -538,7 +538,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 0
   serializedVersion: 3
-  m_Size: {x: 5.7, y: 8.6, z: 0.01}
+  m_Size: {x: 5.7, y: 7.4, z: 0.01}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &163172429
 MonoBehaviour:
@@ -559,7 +559,7 @@ MonoBehaviour:
   m_Position: 0
   m_WorldSpaceSizeMode: 1
   m_WorldSpaceWidth: 570
-  m_WorldSpaceHeight: 860
+  m_WorldSpaceHeight: 740
   m_PivotReferenceSize: 0
   m_Pivot: 0
   m_WorldSpaceCollider: {fileID: 0}
