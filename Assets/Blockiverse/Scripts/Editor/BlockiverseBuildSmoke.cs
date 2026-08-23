@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using Blockiverse.Core;
 using UnityEditor;
+using UnityEditor.AddressableAssets.Build;
+using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
@@ -45,6 +47,8 @@ namespace Blockiverse.Editor
                 options = BuildOptions.Development | BuildOptions.CompressWithLz4 | BuildOptions.AutoRunPlayer
             };
 
+            BuildAddressablesContentOrThrow();
+
             using (PrepareOptionalMetaAvatarSamplePresets())
             {
                 BuildReport report = BuildPipeline.BuildPlayer(options);
@@ -79,6 +83,8 @@ namespace Blockiverse.Editor
                 options = BuildOptions.Development | BuildOptions.CompressWithLz4
             };
 
+            BuildAddressablesContentOrThrow();
+
             using (PrepareOptionalMetaAvatarSamplePresets())
             {
                 BuildReport report = BuildPipeline.BuildPlayer(options);
@@ -112,6 +118,8 @@ namespace Blockiverse.Editor
                 targetGroup = BuildTargetGroup.Android,
                 options = BuildOptions.None
             };
+
+            BuildAddressablesContentOrThrow();
 
             using (PrepareOptionalMetaAvatarSamplePresets())
             {
@@ -178,6 +186,27 @@ namespace Blockiverse.Editor
         // The version a server advertises in its approval payload. A client whose LocalGameVersion
         // differs is refused with GameVersionMismatch, so a server built without an explicit
         // version would announce "0.0.0-dev" and reject every real client.
+        // Phase 7: the "UI" String Table Collection ships through Addressables, and nothing
+        // builds its content automatically -- the player-build-time Addressables setting is a
+        // global editor preference, not something this project's build methods can rely on.
+        // Skipping this call ships an APK with no catalog to load, so every localized string
+        // falls back to its raw key (e.g. "ui.title.paused"). Called explicitly, every time,
+        // before BuildPipeline.BuildPlayer on any target that carries Blockiverse.UI.
+        static void BuildAddressablesContentOrThrow()
+        {
+            AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
+
+            if (!string.IsNullOrEmpty(result.Error))
+            {
+                throw new InvalidOperationException(
+                    $"Addressables content build failed, so the player would ship without the localization catalog: {result.Error}");
+            }
+
+            BlockiverseLog.Info(
+                BlockiverseLogCategory.Bootstrap,
+                $"Addressables content build succeeded: {result.LocationCount} locations in {result.Duration:0.00}s.");
+        }
+
         static void ConfigureServerVersion()
         {
             string versionName = GetArgumentValue(BuildVersionNameArgument) ??

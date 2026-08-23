@@ -30,6 +30,8 @@
     "UnityEngine.UI",
     "Unity.Localization",
     "Unity.Localization.Editor",
+    "Unity.Addressables",
+    "Unity.Addressables.Editor",
     "Blockiverse.Server",
     "Blockiverse.WorldRuntime"
   ],
