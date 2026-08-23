@@ -43,6 +43,17 @@ namespace Blockiverse.Server
             return !HasAllowlist || allowed.Contains(playerId);
         }
 
+        /// <summary>
+        /// Ban check alone, without the allowlist: used for "meta:&lt;userId&gt;" identity bans,
+        /// where an operator's player-GUID allowlist must not implicitly lock out every verified
+        /// account that is not ALSO listed by GUID.
+        /// </summary>
+        public bool IsBanned(string playerId)
+        {
+            Reload();
+            return !string.IsNullOrEmpty(playerId) && banned.Contains(playerId);
+        }
+
         public string Ban(string playerId)
         {
             if (string.IsNullOrWhiteSpace(playerId))

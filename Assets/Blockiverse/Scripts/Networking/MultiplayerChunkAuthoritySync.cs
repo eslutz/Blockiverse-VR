@@ -361,6 +361,12 @@ namespace Blockiverse.Networking
         void OnDestroy()
         {
             UnsubscribeNetworkCallbacks();
+
+            if (authGate != null && authGateSubscribed)
+            {
+                authGate.ClientAuthorized -= HandleClientAuthorized;
+                authGateSubscribed = false;
+            }
         }
 
         void Update()
@@ -522,6 +528,62 @@ namespace Blockiverse.Networking
                 return;
             }
 
+            // On a secret-protected server the world snapshot is withheld until the client passes
+            // the join-secret challenge -- otherwise an unauthenticated connection receives the
+            // entire world before being disconnected, and the secret protects nothing that
+            // matters. The gate raises ClientAuthorized (subscribed below) once the challenge
+            // completes, and disconnects the client itself on failure or timeout.
+            BlockiverseServerAuthGate gate = ResolveAuthGateOrNull();
+            if (gate != null && !gate.IsClientAuthorized(clientId))
+                return;
+
+            SendLateJoinSnapshot(clientId);
+            SendEnvironmentSnapshot(clientId);
+        }
+
+        BlockiverseServerAuthGate authGate;
+        bool authGateSubscribed;
+
+        /// <summary>Server-side only: a client mid-challenge (or failed) may not act.</summary>
+        bool IsSenderUnauthorized(ulong senderClientId)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return false;
+
+            BlockiverseServerAuthGate gate = ResolveAuthGateOrNull();
+            return gate != null && !gate.IsClientAuthorized(senderClientId);
+        }
+
+        BlockiverseServerAuthGate ResolveAuthGateOrNull()
+        {
+            if (authGate == null)
+                authGate = GetComponent<BlockiverseServerAuthGate>();
+
+            if (authGate != null && !authGateSubscribed)
+            {
+                authGate.ClientAuthorized += HandleClientAuthorized;
+                authGateSubscribed = true;
+            }
+
+            return authGate;
+        }
+
+        void HandleClientAuthorized(ulong clientId)
+        {
+            RefreshAuthorityBoundary();
+
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+
+            if (networkManager == null ||
+                !networkManager.IsServer ||
+                clientId == networkManager.LocalClientId ||
+                !CurrentBoundary.CanServeLateJoinSync ||
+                !IsClientConnected(networkManager, clientId))
+            {
+                return;
+            }
+
             SendLateJoinSnapshot(clientId);
             SendEnvironmentSnapshot(clientId);
         }
@@ -587,6 +649,12 @@ namespace Blockiverse.Networking
         void HandleMutationRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
             using ProfilerMarker.AutoScope scope = HandleMutationRequestMarker.Auto();
+
+            // A client that has not passed the join-secret challenge gets no say in the world.
+            // Silent drop, not a response: the gate is about to disconnect it anyway, and a reply
+            // channel to an unauthenticated peer is attack surface.
+            if (IsSenderUnauthorized(senderClientId))
+                return;
 
             RefreshAuthorityBoundary();
 
@@ -1229,6 +1297,9 @@ namespace Blockiverse.Networking
 
         void HandleResyncRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             RefreshAuthorityBoundary();
 
             if (!CurrentBoundary.CanServeLateJoinSync)

@@ -121,43 +121,46 @@ silently defaulting.
 
 ### Server-side security posture is honest but not complete
 
-The server secret replaces the compile-time HMAC key and is backward-compatible by construction:
-it changes only the HMAC *key*, leaving the approval protocol version, payload body, and default
-join code untouched, so LAN hosts and unconfigured clients stay byte-identical.
+The approval payload (protocol v2: game version, world-save schema, registry hashes, signed with
+the compile-time default key) is untouched by everything below, so LAN hosts and unconfigured
+clients stay byte-identical to a build without the server work.
 
-Note on sequencing: concurrent LAN-multiplayer work raises `ApprovalPayloadProtocolVersion` to **2**
-and adds game version, world-save schema, and registry hashes to the payload, along with a
-`BlockiverseJoinRejectionReason` result. That change lands first and the dedicated server builds on
-top of it — the server must produce a v2 payload, and headless needs a deliberate answer for what
-`Application.version` compares against. The secret-as-HMAC-key decision is unaffected either way,
-because it is orthogonal to the payload body.
+### Authentication and encryption: challenge-response, platform identity, ACME TLS
 
-What this does **not** buy: the payload body is fully predictable, so one captured payload permits
-an offline dictionary attack on the secret, and the payload is replayable. Fixing either requires a
-nonce or timestamp in the body, which is an approval-protocol version bump. Deferred deliberately.
+An earlier revision keyed the approval-payload HMAC with the operator's secret and, when that
+proved unusable (the payload body is fully predictable, so a static signature is replayable and
+offline-attackable — and no client had a field to enter a secret), gated both settings off as fatal
+startup errors. This revision replaces that scheme outright; the gating came out with it.
 
-**The secret and TLS ship disabled, and configuring either is a fatal startup error.** Both have a
-complete server half and no client half: no shipped client has a field to enter a secret, and none
-has a route to obtain or trust a server certificate. Enabling either would therefore give an
-operator a server that binds its port, reports itself healthy, and refuses every join with nothing
-useful in the log — the same failure mode that got `server.tick_rate` removed outright.
+**The join secret is verified with a post-connect challenge, not the approval payload.** Netcode's
+connection approval is a single client-to-server message with no round trip, so a server nonce
+cannot reach the client before it. Instead, `BlockiverseServerAuthGate` (on the shared network
+stack, inert unless configured) sends a random 32-byte nonce on connect; the client answers
+HMAC-SHA256(secret, nonce ‖ clientId) from the multiplayer panel's password field (stored
+per-server in the bookmark file — plaintext by decision: it is a shared room key on a single-user
+device, and client-side encryption with a key stored beside it would be theatre). Verification is
+constant-time; failure, a wrong length, or silence past the deadline disconnects with a named
+reason. Until a client is authorized, both syncs drop its inbound traffic and the late-join world
+snapshot is withheld — an unauthenticated connection must not download the world and then get
+kicked. The approval-payload HMAC stays on the default key precisely so approval still passes and
+the challenge can run.
 
-Rejecting at startup was chosen over the three alternatives. Deleting the code discards a finished,
-tested server half that becomes live the moment the client half lands. Warning and continuing
-reproduces exactly the silent-brick outcome the rejection exists to prevent. Documenting alone was
-the original plan and was wrong, because the boot advisory actively told operators to *set a
-secret* — the repository was recommending the one configuration guaranteed to break the server.
+**Per-account identity delegates to Meta.** `security.identity = meta` requires each join to
+present the signed-in account's id plus a one-shot proof (`Users.GetUserProof`); the server
+validates the pair against `graph.oculus.com/user_nonce_validate` with the operator's app
+credentials (`security.meta.app_id` + a secret file, path-only in config). Transport failures fail
+closed. Verified ids are logged and bannable as `meta:<userId>` — revocable, reinstall-proof, and
+unspoofable, which the local player GUID is not. The validator's HTTP transport is injected, so its
+decisions are EditMode-tested without the network.
 
-The remaining client work is unequal, which is why neither is scheduled here. The secret needs a
-panel field, per-server storage in the bookmark list, and a decision about holding a shared password
-in plaintext on the device; the field is cheap, but wiring it to a replayable HMAC would advertise
-authentication the protocol does not provide, so it wants the nonce bump above alongside it. TLS is
-harder and not a UI problem at all: the client path currently requires the server's private key and
-must become mode-aware first, and then the server offers its own certificate as the trust root, so
-every player needs that PEM on a headset with no file picker and no practical way to type it. That
-is a certificate-distribution design, not a settings field. Until both land, the documented answer
-for access control and encryption is a VPN, which also supplies the per-device identity this
-protocol lacks in either case.
+**TLS validates against roots shipped in the client.** UnityTLS has no operating-system trust
+store, so the client build embeds the ISRG root certificates (`BlockiverseTrustedRoots`, fetched
+from letsencrypt.org and fingerprint-verified). An operator with a DNS name and any ACME
+certificate therefore distributes nothing to players; they tick "Encrypted" on the join panel. The
+session's transport-security entry points are mode-aware — the earlier single entry point demanded
+the server's private key on the client path, which made client TLS impossible by construction. A
+pinned per-bookmark CA (`tlsPinnedCaPem`) remains for private-CA operators, with the friction
+documented.
 
 Two further limitations are documented rather than fixed:
 

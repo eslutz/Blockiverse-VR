@@ -292,21 +292,47 @@ namespace Blockiverse.Server
 
             if (session != null)
             {
-                // Secret and TLS are unreachable in a shipped build: BlockiverseServerOptionsResolver
-                // rejects both at startup because no client can satisfy either yet. The server halves
-                // are complete and tested, and stay here so enabling them is a one-rule change in the
-                // resolver once the client field and certificate-trust story land.
+                // The secret deliberately does NOT become the approval-payload HMAC key. The
+                // approval payload is a single predictable message with no round trip: keying it
+                // with the secret is replayable, offline-attackable, and rejects every stock
+                // client before any better mechanism can run. The default key stays, approval
+                // passes, and the post-connect challenge gate (below) is what the secret feeds.
                 var networkConfig = new BlockiverseNetworkConfig(
                     address: options.ListenAddress,
                     listenAddress: options.ListenAddress,
                     port: options.Port,
                     maxPlayers: options.MaxPlayers,
-                    joinCode: string.IsNullOrEmpty(options.Secret) ? null : options.Secret);
+                    joinCode: null);
 
                 session.Configure(networkConfig);
 
                 if (options.TlsEnabled && !ApplyTransportSecurity())
                     return false;
+
+                // The join secret is enforced post-connect by the challenge gate, not by the
+                // approval payload: approval has no round trip, so a static signature there would
+                // be replayable. The gate withholds world state until the challenge passes and
+                // disconnects clients that fail or stall.
+                var authGate = session.GetComponent<BlockiverseServerAuthGate>();
+                bool gateNeeded = !string.IsNullOrEmpty(options.Secret) || options.RequiresMetaIdentity;
+                if (authGate == null && gateNeeded)
+                {
+                    BlockiverseLog.Error(
+                        BlockiverseLogCategory.Bootstrap,
+                        "Authentication is configured but the network stack has no " +
+                        "BlockiverseServerAuthGate; refusing to run an open server the operator " +
+                        "believes is protected.");
+                    Quit(ExitConfigurationError);
+                    return false;
+                }
+
+                if (authGate != null)
+                {
+                    authGate.ConfigureServer(options.Secret, options.RequireSecret || !string.IsNullOrEmpty(options.Secret));
+
+                    if (options.RequiresMetaIdentity && !ConfigureMetaIdentity(authGate))
+                        return false;
+                }
             }
 
             if (survivalSync != null)
@@ -359,6 +385,43 @@ namespace Blockiverse.Server
                 Quit(ExitConfigurationError);
                 return false;
             }
+        }
+
+        BlockiverseMetaIdentityValidator metaIdentityValidator;
+
+        bool ConfigureMetaIdentity(BlockiverseServerAuthGate authGate)
+        {
+            string appSecret;
+            try
+            {
+                appSecret = File.ReadAllText(options.MetaAppSecretPath).Trim();
+            }
+            catch (Exception exception)
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Bootstrap,
+                    $"Could not read the Meta app secret from '{options.MetaAppSecretPath}': " +
+                    $"{exception.Message}. Refusing to start with identity verification that " +
+                    "cannot run.");
+                Quit(ExitConfigurationError);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(appSecret))
+            {
+                BlockiverseLog.Error(
+                    BlockiverseLogCategory.Bootstrap,
+                    $"The Meta app secret file '{options.MetaAppSecretPath}' is empty.");
+                Quit(ExitConfigurationError);
+                return false;
+            }
+
+            metaIdentityValidator = new BlockiverseMetaIdentityValidator(options.MetaAppId, appSecret);
+            authGate.ConfigureIdentityRequirement(
+                required: true,
+                validator: metaIdentityValidator.Validate,
+                banCheck: id => adminConsole != null && adminConsole.AccessControl.IsBanned(id));
+            return true;
         }
 
         bool StartSession()

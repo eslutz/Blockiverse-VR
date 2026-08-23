@@ -3260,6 +3260,9 @@ namespace Blockiverse.Networking
 
         void HandleCommandRequestMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             if (!CanProcessHostRequests())
                 return;
 
@@ -4040,6 +4043,9 @@ namespace Blockiverse.Networking
 
         void HandlePlayerHelloMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             if (!CanProcessHostRequests())
                 return;
 
@@ -4091,6 +4097,9 @@ namespace Blockiverse.Networking
 
         void HandlePlayerCrouchStateMessage(ulong senderClientId, FastBufferReader reader)
         {
+            if (IsSenderUnauthorized(senderClientId))
+                return;
+
             if (!CanProcessHostRequests())
                 return;
 
@@ -4295,6 +4304,25 @@ namespace Blockiverse.Networking
                 throw new InvalidOperationException("Multiplayer survival sync requires a network session.");
 
             return networkManager;
+        }
+
+        BlockiverseServerAuthGate survivalAuthGate;
+
+        /// <summary>
+        /// Server-side only: survival commands, hellos, and crouch updates from a client that has
+        /// not passed the join-secret challenge are dropped. Everything downstream of PlayerHello
+        /// hands out inventory state, which is exactly what the secret exists to protect.
+        /// </summary>
+        bool IsSenderUnauthorized(ulong senderClientId)
+        {
+            NetworkManager networkManager = ResolveNetworkManagerOrNull();
+            if (networkManager == null || !networkManager.IsServer)
+                return false;
+
+            if (survivalAuthGate == null)
+                survivalAuthGate = GetComponent<BlockiverseServerAuthGate>();
+
+            return survivalAuthGate != null && !survivalAuthGate.IsClientAuthorized(senderClientId);
         }
 
         NetworkManager ResolveNetworkManagerOrNull()

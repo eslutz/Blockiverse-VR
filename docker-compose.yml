@@ -28,8 +28,8 @@ services:
       BLOCKIVERSE_WORLD_NAME: "Home"
       BLOCKIVERSE_SERVER_MAX_PLAYERS: "4"
       BLOCKIVERSE_PERSISTENCE_AUTOSAVE_SECONDS: "60"
-      # There is deliberately no secret here. The join secret has no client support yet, so setting
-      # it stops the server at startup rather than leaving you with a server nobody can join.
-      # Anyone who can reach this port can join: put it behind a VPN or a firewall allowlist.
-      # See docs/server/security-posture.md.
+      # Use a long random value and keep it out of version control. Players enter it in the
+      # multiplayer panel; it is verified with a challenge and never crosses the wire.
+      # Without it anyone with a client can join. See docs/server/security-posture.md.
+      # BLOCKIVERSE_SERVER_SECRET: "change-me-to-something-long-and-random"
       BLOCKIVERSE_LOG_FORMAT: "text"

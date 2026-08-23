@@ -198,6 +198,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
 
             public const string LanUnavailable = "ui.status.lan.unavailable";
             public const string LanJoinAddressPlaceholder = "ui.generated.lan.join_address_placeholder";
+            public const string LanJoinSecretPlaceholder = "ui.generated.lan.join_secret_placeholder";
             public const string LanStartingHost = "ui.status.lan.starting_host";
             public const string LanStartHostFailed = "ui.status.lan.start_host_failed";
             public const string LanJoining = "ui.status.lan.joining";
@@ -460,6 +461,7 @@ public const string SettingsAudio = "ui.action.settings.audio";
 
             [Keys.LanUnavailable] = "LAN session is unavailable.",
             [Keys.LanJoinAddressPlaceholder] = "Host LAN IP",
+            [Keys.LanJoinSecretPlaceholder] = "Server password (if any)",
             [Keys.LanStartingHost] = "Starting LAN host...",
             [Keys.LanStartHostFailed] = "Unable to start LAN host. {0}",
             [Keys.LanJoining] = "Joining LAN session at {0}:{1}...",

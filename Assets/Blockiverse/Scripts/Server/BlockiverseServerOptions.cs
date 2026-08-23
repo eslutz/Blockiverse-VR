@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -51,6 +52,18 @@ namespace Blockiverse.Server
         public string TlsKeyPath { get; set; } = string.Empty;
         public string TlsServerName { get; set; } = "blockiverse-server";
 
+        // "none" or "meta". With "meta", clients must prove a Meta account (Users.GetUserProof)
+        // and the server validates the proof against Meta's endpoint, giving real per-account
+        // identity and bans by "meta:<userId>" entries in the ban list.
+        public string IdentityProvider { get; set; } = "none";
+        public string MetaAppId { get; set; } = string.Empty;
+        // A PATH, not the secret itself: the secret must not sit in a config file that operators
+        // paste into bug reports, so it lives in its own tightly-permissioned file.
+        public string MetaAppSecretPath { get; set; } = string.Empty;
+
+        public bool RequiresMetaIdentity =>
+            string.Equals(IdentityProvider, "meta", StringComparison.OrdinalIgnoreCase);
+
         public BlockiverseServerLogLevel LogLevel { get; set; } = BlockiverseServerLogLevel.Info;
         public BlockiverseServerLogFormat LogFormat { get; set; } = BlockiverseServerLogFormat.Text;
 
@@ -86,6 +99,7 @@ namespace Blockiverse.Server
             Line("secret", string.IsNullOrEmpty(Secret) ? "(default -- NOT private)" : "(set)");
             Line("require secret", RequireSecret);
             Line("tls", TlsEnabled);
+            Line("identity", RequiresMetaIdentity ? $"meta (app {MetaAppId})" : "none");
             Line("log", $"{LogLevel.ToString().ToLowerInvariant()} / {LogFormat.ToString().ToLowerInvariant()}");
             Line("admin socket", string.IsNullOrEmpty(AdminSocketPath) ? "(default)" : AdminSocketPath);
             return text.ToString();
@@ -103,19 +117,21 @@ namespace Blockiverse.Server
                     "unmeasured and unsupported; late-join snapshots and inventory broadcasts are not profiled there.");
             }
 
-            // These two state the exposure without prescribing the fix, because the in-app fix does
-            // not exist: no shipped client can send a join secret or negotiate TLS, so the resolver
-            // refuses to start when either is configured. An advisory saying "set a secret" would be
-            // recommending the one setting guaranteed to make the server reject every player.
-            advisories.Add(
-                "Anyone with a Blockiverse client can join: the join secret has no client support yet, so " +
-                "there is no in-app access control. Restrict access at the network layer -- a VPN or a " +
-                "firewall allowlist -- if this server is reachable beyond people you trust.");
+            if (string.IsNullOrEmpty(Secret))
+            {
+                advisories.Add(
+                    "No server.secret is set: anyone with a Blockiverse client can join. Players enter the " +
+                    "secret in the multiplayer panel's password field; it is verified with a per-connection " +
+                    "challenge, never sent in the clear.");
+            }
 
-            advisories.Add(
-                "Traffic is unencrypted, including the identity token that grants inventory ownership on " +
-                "reconnect, and is visible to anyone on the network path. TLS has no client support yet; " +
-                "a VPN is the available encrypted path.");
+            if (!TlsEnabled)
+            {
+                advisories.Add(
+                    "Transport encryption is off. Traffic, including the identity token that grants inventory " +
+                    "ownership on reconnect, is visible to anyone on the network path. With a DNS name and an " +
+                    "ACME certificate, clients validate it with no setup on their side.");
+            }
 
             return advisories;
         }

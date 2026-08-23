@@ -2677,6 +2677,8 @@ MonoBehaviour:
   reconnectButton: {fileID: 0}
   stopButton: {fileID: 681260479}
   addressInput: {fileID: 477340633}
+  secretInput: {fileID: 0}
+  encryptionToggle: {fileID: 0}
   statusText: {fileID: 270811748}
   statusBadge: {fileID: 1141035280}
   worldSessionController: {fileID: 0}

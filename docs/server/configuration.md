@@ -84,43 +84,64 @@ move the old world directory aside.
 
 | Setting | Default | Notes |
 |---|---|---|
+| `security.require_secret` | `false` | When true, the server refuses to start without a `server.secret`. |
+| `security.identity` | `none` | `none` or `meta`. With `meta`, every joining player must prove a Meta account and the server verifies the proof with Meta. See below. |
+| `security.meta.app_id` | *(empty)* | Your Meta app id. Required when `security.identity = meta`. |
+| `security.meta.app_secret_path` | *(empty)* | Path to a file holding the Meta app secret. A path on purpose — the secret must not sit in a config file you might paste into a bug report. Keep the file readable by the server user only. |
 | `security.allowlist_path` | *(empty)* | File of permitted player identifiers, one per line. When set, only listed players may join. |
-| `security.banlist_path` | *(empty)* | File of banned player identifiers, one per line. |
+| `security.banlist_path` | *(empty)* | File of banned player identifiers, one per line. `meta:<userId>` entries ban a verified Meta account. |
+| `security.tls.enabled` | `false` | Enables DTLS transport encryption. Requires cert and key. |
+| `security.tls.cert_path` | *(empty)* | PEM certificate **chain** (leaf plus intermediates — for Let's Encrypt, `fullchain.pem`). |
+| `security.tls.key_path` | *(empty)* | PEM private key. Keep it unreadable by other users. |
+| `security.tls.server_name` | `blockiverse-server` | Name clients validate against. Must match the DNS name on your certificate. |
 
-### `server.secret` and `security.tls.*` are not usable yet
+### The join secret
 
-**Setting either one stops the server at startup with exit `78`.** They are parsed and rejected
-rather than removed, because the server side of both is finished — only the client side is missing.
+`server.secret` is the server's shared password. Players type it once into the multiplayer panel's
+password field; it is remembered per server after a successful join. It is verified with a
+per-connection challenge — the server sends a random nonce and the client answers with an HMAC over
+it — so **the secret itself never crosses the wire**, a captured join cannot be replayed, and one
+observation is not enough for an offline dictionary attack. A client that fails or ignores the
+challenge is disconnected within ten seconds and receives no world data.
 
-The reason they cannot ship half-done is that a half-done version is worse than nothing. The join
-secret becomes the key of the HMAC over the connection-approval payload. No shipped client has a
-field to enter one, so its key stays the built-in default, every signature mismatches, and **every
-player is refused.** The server still binds its port and reports itself healthy, so what an operator
-sees is a working server that nobody can join and a log that says nothing useful. TLS fails the same
-way: a client has no route to obtain or trust the server's certificate, so the handshake never
-completes.
+Use a long random value. It is still one password shared by everyone you invite; revoking it means
+changing it for all of them. For per-person control, use `security.identity = meta`.
 
-`security.tls.cert_path` and `security.tls.key_path` are likewise rejected when set without
-`security.tls.enabled` — material nothing reads is much more likely to be a mistake than an
-intention.
+Setting `security.require_secret = true` without a `server.secret` is a fatal startup error: an
+operator asking for a private server must not get an open one.
 
-**Use the network layer instead.** A VPN — Tailscale, WireGuard, or similar — gives you both access
-control and encryption today, and gives you real per-device identity, which this protocol does not
-have even once the secret is wired up. A firewall allowlist covers the access half alone.
+### Meta identity (`security.identity = meta`)
 
-**What is still needed** (tracked as future work, not scheduled):
+With identity on, every joining headset proves which Meta account it is signed into: the client
+fetches a one-shot proof from the platform (`Users.GetUserProof`), and the server verifies it
+directly with Meta's `user_nonce_validate` endpoint using your app credentials. This is real,
+revocable, per-account identity:
 
-- *Secret:* a text field in the multiplayer panel, a per-server secret in the saved-server list, and
-  a decision about storing a shared password in plaintext on the device. Beyond the plumbing, the
-  scheme itself is weak — the payload body is entirely predictable, so one captured join permits an
-  offline dictionary attack on the secret and can be replayed. Making it genuinely authenticate
-  needs a nonce in the payload body, which is a protocol version bump that moves clients and servers
-  in lockstep.
-- *TLS:* the client path currently demands the server's private key, which no client can have, so
-  that check has to become mode-aware first. Then the real problem: the server offers its own
-  certificate as the trust root, so every player needs that PEM on their headset. There is no file
-  picker in-app and a PEM is far too long to type on a VR keyboard, so this needs a certificate
-  distribution design, not a settings field.
+- The server log names the verified account on every join.
+- Ban an account by adding `meta:<userId>` to the ban-list file — the ban survives reinstalls and
+  cannot be dodged by wiping local data, unlike GUID bans.
+- If Meta's endpoint cannot be reached, the join is **refused**, not waved through.
+
+Requires outbound HTTPS from the server to `graph.oculus.com`, and both `security.meta.app_id` and
+`security.meta.app_secret_path`. Missing either is a fatal startup error, as is `security.meta.*`
+set while `security.identity` is `none`.
+
+### TLS
+
+With a DNS name pointed at your server and a certificate from any ACME provider (Let's Encrypt),
+players need **zero setup**: the client ships the ISRG root certificates and validates your
+certificate chain against them, exactly like a browser. Players tick "Encrypted" in the multiplayer
+panel when joining; tell them to, since the client cannot detect it. Set `security.tls.server_name`
+to the DNS name on the certificate, and renew certificates the same way you would for a web server
+(the server reads the files at startup, so restart after renewal).
+
+A self-signed certificate also works but pushes trust distribution onto you: each player's
+`servers.json` bookmark must carry your CA certificate in its `tlsPinnedCaPem` field, which today
+means editing a file on the headset. Prefer the ACME path.
+
+`security.tls.cert_path`, `security.tls.key_path`, and `security.tls.server_name` are rejected when
+set without `security.tls.enabled` — material nothing reads is much more likely to be a mistake
+than an intention.
 
 ## Logging and administration
 
@@ -154,7 +175,7 @@ unban <playerId>      remove from the ban list
 | Code | Meaning |
 |---|---|
 | `0` | Clean shutdown. |
-| `78` | Configuration error. The message lists every problem found. Setting `server.secret`, `security.require_secret`, or `security.tls.*` lands here. |
+| `78` | Configuration error. The message lists every problem found. |
 
 ## Settings that deliberately do not exist
 

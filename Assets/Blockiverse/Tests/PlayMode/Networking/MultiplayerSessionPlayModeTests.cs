@@ -81,7 +81,10 @@ namespace Blockiverse.Tests.Networking.PlayMode
             StringAssert.Contains("Hosting LAN session", hostMenu.StatusText.text);
             Assert.That(hostMenuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
 
-            clientMenu.AddressInput.text = string.Empty;
+            // An empty field would join on the DEFAULT port (a bare or empty address always
+            // means default now, so a stale port from a previous join can never leak into the
+            // next one); this host is on a test port, so type it like a player would.
+            clientMenu.AddressInput.text = $"{BlockiverseNetworkConfig.DefaultAddress}:{port}";
             clientMenu.JoinButton.onClick.Invoke();
             yield return WaitFor(
                 () => clientSession.NetworkManager.IsConnectedClient &&
@@ -89,7 +92,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 "Client menu did not connect to host.");
 
             clientMenu.RefreshStatus();
-            Assert.That(clientMenu.ResolveJoinAddress(), Is.EqualTo(BlockiverseNetworkConfig.DefaultAddress));
+            Assert.That(clientMenu.ResolveJoinAddress(),
+                Is.EqualTo($"{BlockiverseNetworkConfig.DefaultAddress}:{port}"));
             StringAssert.Contains("Connected to LAN session", clientMenu.StatusText.text);
             Assert.That(clientMenuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
 
@@ -287,7 +291,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
-            clientMenu.AddressInput.text = BlockiverseNetworkConfig.DefaultAddress;
+            // A bare address joins on the default port by design; this host is on a test port.
+            clientMenu.AddressInput.text = $"{BlockiverseNetworkConfig.DefaultAddress}:{port}";
 
             hostMenu.HostButton.onClick.Invoke();
             yield return WaitFor(

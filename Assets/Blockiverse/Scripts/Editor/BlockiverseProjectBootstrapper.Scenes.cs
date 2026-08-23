@@ -250,6 +250,9 @@ namespace Blockiverse.Editor
 
             EnsureComponent<BlockiverseNetworkSession>(managerObject);
             EnsureComponent<BlockiverseNetworkBootstrap>(managerObject);
+            // Inert until a secret is configured; must sit on the same object as the session so
+            // both syncs can resolve it with GetComponent and defer world state until authorized.
+            EnsureComponent<BlockiverseServerAuthGate>(managerObject);
             EnsureComponent<MultiplayerChunkAuthoritySync>(managerObject);
             EnsureComponent<MultiplayerSurvivalSync>(managerObject);
             // Lives on the always-active NetworkManager object, not the LAN panel: the host has

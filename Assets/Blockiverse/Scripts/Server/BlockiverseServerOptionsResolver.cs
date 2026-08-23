@@ -70,6 +70,16 @@ namespace Blockiverse.Server
                 ["security.tls.cert_path"] = (o, v, p) => o.TlsCertificatePath = v,
                 ["security.tls.key_path"] = (o, v, p) => o.TlsKeyPath = v,
                 ["security.tls.server_name"] = (o, v, p) => o.TlsServerName = v,
+                ["security.identity"] = (o, v, p) =>
+                {
+                    if (string.Equals(v, "none", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(v, "meta", StringComparison.OrdinalIgnoreCase))
+                        o.IdentityProvider = v.ToLowerInvariant();
+                    else
+                        p.Add($"security.identity must be 'none' or 'meta', not '{v}'.");
+                },
+                ["security.meta.app_id"] = (o, v, p) => o.MetaAppId = v,
+                ["security.meta.app_secret_path"] = (o, v, p) => o.MetaAppSecretPath = v,
 
                 ["log.level"] = (o, v, p) => { if (TryLogLevel(v, p, out BlockiverseServerLogLevel x)) o.LogLevel = x; },
                 ["log.format"] = (o, v, p) => { if (TryLogFormat(v, p, out BlockiverseServerLogFormat x)) o.LogFormat = x; },
@@ -227,27 +237,17 @@ namespace Blockiverse.Server
         // Cross-setting rules that no individual parser can see.
         static void ValidateCombination(BlockiverseServerOptions options, List<string> problems)
         {
-            // The server half of the join secret and of TLS is complete; the CLIENT half does not
-            // exist yet, and enabling either produces a server that binds its port, logs nothing
-            // wrong, and refuses every join. Refusing to start is the only honest outcome -- the
-            // alternative is an operator debugging a healthy-looking server nobody can connect to.
-            // Report the secret family once: telling an operator to set a secret and then rejecting
-            // the secret they set would be a loop with no way out.
-            if (options.RequireSecret || !string.IsNullOrWhiteSpace(options.Secret))
+            if (options.RequireSecret && string.IsNullOrWhiteSpace(options.Secret))
             {
                 problems.Add(
-                    "server.secret / security.require_secret are not usable yet: no shipped client has a " +
-                    "field to enter a secret, so the approval HMAC key would differ and EVERY join would " +
-                    "be refused. Leave both unset until client support ships, and restrict access at the " +
-                    "network layer (VPN or firewall) instead.");
+                    "security.require_secret is true but server.secret is empty. An operator asking for a " +
+                    "private server must not get an open one.");
             }
 
-            if (options.TlsEnabled)
+            if (options.TlsEnabled &&
+                (string.IsNullOrWhiteSpace(options.TlsCertificatePath) || string.IsNullOrWhiteSpace(options.TlsKeyPath)))
             {
-                problems.Add(
-                    "security.tls.enabled is true, but no shipped client can negotiate TLS: it has no way " +
-                    "to obtain or trust the server certificate, so EVERY join would fail. Leave it false " +
-                    "until client support ships, and use a VPN if you need an encrypted path.");
+                problems.Add("security.tls.enabled is true but security.tls.cert_path or security.tls.key_path is empty.");
             }
 
             if (!options.TlsEnabled &&
@@ -257,6 +257,24 @@ namespace Blockiverse.Server
                 problems.Add(
                     "security.tls.cert_path or security.tls.key_path is set but security.tls.enabled is " +
                     "false. Nothing would use the material, so this is more likely a mistake than intent.");
+            }
+
+            if (options.RequiresMetaIdentity &&
+                (string.IsNullOrWhiteSpace(options.MetaAppId) || string.IsNullOrWhiteSpace(options.MetaAppSecretPath)))
+            {
+                problems.Add(
+                    "security.identity is 'meta' but security.meta.app_id or " +
+                    "security.meta.app_secret_path is empty. Identity verification cannot run " +
+                    "without the app credentials, and an identity requirement that silently " +
+                    "cannot run is an open server.");
+            }
+
+            if (!options.RequiresMetaIdentity &&
+                (!string.IsNullOrWhiteSpace(options.MetaAppId) || !string.IsNullOrWhiteSpace(options.MetaAppSecretPath)))
+            {
+                problems.Add(
+                    "security.meta.* is set but security.identity is not 'meta'. Nothing would " +
+                    "use the credentials, so this is more likely a mistake than intent.");
             }
 
             if (string.IsNullOrWhiteSpace(options.WorldDirectory))

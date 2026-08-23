@@ -19,6 +19,8 @@ namespace Blockiverse.UI
         [SerializeField] Button reconnectButton;
         [SerializeField] Button stopButton;
         [SerializeField] TMP_InputField addressInput;
+        [SerializeField] TMP_InputField secretInput;
+        [SerializeField] Toggle encryptionToggle;
         [SerializeField] TMP_Text statusText;
         [SerializeField] Image statusBadge;
         [SerializeField] BlockiverseWorldSessionController worldSessionController;
@@ -59,6 +61,8 @@ namespace Blockiverse.UI
             discovery != null ? discovery.DiscoveredSessions : Array.Empty<BlockiverseDiscoveredSession>();
         public TMP_Text StatusText => statusText;
         public TMP_InputField AddressInput => addressInput;
+        public TMP_InputField SecretInput => secretInput;
+        public Toggle EncryptionToggle => encryptionToggle;
         public Button HostButton => hostButton;
         public Button JoinButton => joinButton;
         public Button StopButton => stopButton;
@@ -197,13 +201,19 @@ namespace Blockiverse.UI
                 return;
             }
 
-            // The address field is filled in as well as joined, so a failed auto-join leaves the
-            // player one Join press away from retrying rather than back at a blank field.
+            // Joined with the EXPLICIT host:port, not the bare address: a bare address means
+            // "default port" to JoinSessionInternal, which would immediately undo the port this
+            // method just adopted from the beacon. The address field is filled in as well, so a
+            // failed auto-join leaves the player one Join press away from retrying rather than
+            // back at a blank field.
+            string joinTarget = discovered.Port != 0
+                ? $"{discovered.Address}:{discovered.Port}"
+                : discovered.Address;
             if (addressInput != null)
-                addressInput.text = discovered.Address;
+                addressInput.text = joinTarget;
 
-            LastJoinAddress = discovered.Address;
-            JoinSessionInternal(discovered.Address);
+            LastJoinAddress = joinTarget;
+            JoinSessionInternal(joinTarget);
         }
 
         /// <summary>
@@ -299,13 +309,17 @@ namespace Blockiverse.UI
             Button targetReconnectButton,
             Button targetStopButton,
             TMP_InputField targetAddressInput,
-            TMP_Text targetStatusText)
+            TMP_Text targetStatusText,
+            TMP_InputField targetSecretInput = null,
+            Toggle targetEncryptionToggle = null)
         {
             hostButton = targetHostButton;
             joinButton = targetJoinButton;
             reconnectButton = targetReconnectButton;
             stopButton = targetStopButton;
             addressInput = targetAddressInput;
+            secretInput = targetSecretInput;
+            encryptionToggle = targetEncryptionToggle;
             statusText = targetStatusText;
             RegisterControlCallbacks();
             ApplyDefaultAddressText();
@@ -389,6 +403,7 @@ namespace Blockiverse.UI
                 session.Configure(session.Config.WithPort(parsed.Port));
 
             address = parsed.Host;
+            ApplySecurityForJoin(parsed);
             bool started = session.StartClient(address);
             SetStatus(started
                 ? BlockiverseLocalization.Format(BlockiverseLocalization.Keys.LanJoining, address, session.Config.Port)
@@ -397,9 +412,14 @@ namespace Blockiverse.UI
                     address,
                     session.Config.Port,
                     DescribeSessionState()));
-            // Remembered only on a successful start, so a typo never enters the list.
+            // Remembered only on a successful start, so a typo never enters the list. The typed
+            // secret is stored with the bookmark (null when the field is empty, which preserves a
+            // previously stored one rather than wiping it on a plain re-join).
             if (started)
-                BlockiverseServerBookmarkStore.Remember(parsed.ToString());
+                BlockiverseServerBookmarkStore.Remember(
+                    parsed.ToString(),
+                    secret: string.IsNullOrEmpty(TypedSecretOrNull()) ? null : TypedSecretOrNull(),
+                    useTls: encryptionToggle != null ? encryptionToggle.isOn : (bool?)null);
 
             PlayFeedback(started ? BlockiverseAudioCue.UiConfirm : BlockiverseAudioCue.UiCancel);
             RefreshStatus();
@@ -423,6 +443,12 @@ namespace Blockiverse.UI
             string address = servers[index].address;
             if (addressInput != null)
                 addressInput.text = address;
+            // Seed the security controls from the bookmark so what is about to be used is what
+            // the player sees, and a re-join with a changed password is one edit away.
+            if (secretInput != null)
+                secretInput.text = servers[index].secret ?? string.Empty;
+            if (encryptionToggle != null)
+                encryptionToggle.isOn = servers[index].useTls;
 
             LastJoinAddress = address;
             JoinSessionInternal(address);
@@ -442,6 +468,48 @@ namespace Blockiverse.UI
             SetStatus(DescribeStopSessionResult(wasActive));
             PlayFeedback(BlockiverseAudioCue.UiCancel);
             RefreshControls();
+        }
+
+        string TypedSecretOrNull()
+        {
+            string typed = secretInput != null ? secretInput.text : null;
+            return string.IsNullOrWhiteSpace(typed) ? null : typed.Trim();
+        }
+
+        /// <summary>
+        /// Sets up the join-secret answer and transport security for one join. The typed secret
+        /// wins over the bookmarked one so a changed server password is a matter of retyping it,
+        /// and both fall through to empty, which leaves the challenge unanswered and the server
+        /// free to say "secret required". TLS comes only from the bookmark (there is no per-join
+        /// toggle): pinned CA when the operator supplied one, the shipped public roots otherwise.
+        /// </summary>
+        void ApplySecurityForJoin(BlockiverseServerAddress parsed)
+        {
+            BlockiverseServerBookmark bookmark = BlockiverseServerBookmarkStore.Find(parsed.ToString());
+
+            var authGate = session.GetComponent<BlockiverseServerAuthGate>();
+            if (authGate != null)
+                authGate.ConfigureClientSecret(TypedSecretOrNull() ?? bookmark?.secret ?? string.Empty);
+
+            bool useTls = encryptionToggle != null
+                ? encryptionToggle.isOn
+                : bookmark != null && bookmark.useTls;
+            string serverName = !string.IsNullOrWhiteSpace(bookmark?.tlsServerName)
+                ? bookmark.tlsServerName.Trim()
+                : parsed.Host;
+            string caBundle = !string.IsNullOrWhiteSpace(bookmark?.tlsPinnedCaPem)
+                ? bookmark.tlsPinnedCaPem
+                : BlockiverseTrustedRoots.CaBundlePem;
+
+            try
+            {
+                session.ConfigureClientTransportSecurity(useTls, serverName, caBundle);
+            }
+            catch (InvalidOperationException)
+            {
+                // A live session's transport is immutable; StartClient will fail on its own
+                // terms and the status text explains it.
+            }
         }
 
         public string ResolveJoinAddress()

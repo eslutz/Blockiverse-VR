@@ -11,7 +11,7 @@ reassurance. Architecture rationale lives in [ADR 0007](../adr/0007-self-hosted-
 | | |
 |---|---|
 | **Safe** | A server on your LAN, or reachable only over a VPN such as Tailscale or WireGuard. |
-| **Acceptable with care** | A server for people you know, reachable only through a VPN or a firewall allowlist, with backups and a bounded blast radius (container, unprivileged user, dedicated world directory). |
+| **Acceptable with care** | A server for people you know, with a join secret set (and ideally Meta identity on), backups, and a bounded blast radius (container, unprivileged user, dedicated world directory). |
 | **Not recommended** | A public, unrestricted server open to strangers, or a server whose world you cannot afford to lose. |
 
 Blockiverse's multiplayer protocol was designed for LAN co-op among people who trust each other. The
@@ -50,30 +50,40 @@ disconnect rather than being silently counted.
 aged out, so a client cannot grow the server's memory or its save files without limit by
 reconnecting repeatedly.
 
-**There is no in-app access control.** Nothing in this list gates *who* may join — see the first
-limitation below. Access control has to come from the network layer.
+**The join secret gates joining.** With `server.secret` set, every connection must answer a
+challenge: the server sends a random nonce and the client proves knowledge of the secret with an
+HMAC over it. The secret never crosses the wire, a captured exchange is worthless for replay, and a
+client that fails or stalls is disconnected within ten seconds having received no world data.
+
+**Meta identity verification is available.** With `security.identity = meta`, every join must prove
+which Meta account it is signed into, verified server-side against Meta's endpoint. Bans by
+`meta:<userId>` are per-account and survive reinstalls. If Meta cannot be reached the join is
+refused, never waved through.
+
+**Transport can be encrypted.** With `security.tls.*` configured, traffic runs over DTLS. Using an
+ACME (Let's Encrypt) certificate on a DNS name means players validate it with zero setup — the
+client ships the public roots.
 
 ## What the server does NOT protect
 
 These are known, documented limitations. None of them are bugs to report.
 
-**Anyone with a Blockiverse client can join.** This is the most important line on this page. The
-join secret is implemented on the server but has no client half yet, so the server refuses to start
-when you configure one rather than pretending to be protected — see the [configuration
-reference](configuration.md). **Until that ships, a reachable server is an open server**, and the only
-real access control available to you is a VPN or a firewall allowlist.
+**Without a secret, anyone with a Blockiverse client can join.** The gate only exists when you
+configure it. A reachable server with no `server.secret` and no identity requirement is an open
+server.
 
-Two things are worth knowing about the secret even once it lands, because they bound what it will
-buy you. It is a shared password, not per-player authentication: everyone uses the same value, there
-is no account system, and revoking it means changing it for everyone. And the approval payload's
-contents are predictable, so anyone who captures one join can mount an offline dictionary attack
-against the secret and can replay the captured payload. It will be a door lock, not an identity
-system.
+**The join secret is a shared password, not per-player authentication.** Everyone uses the same
+value, and revoking it means changing it for everyone. The challenge protocol means it cannot be
+captured off the wire or replayed — but anyone you told it to can tell someone else. Per-person
+control is what `security.identity = meta` is for.
 
-**Traffic is not encrypted.** TLS is likewise server-only for now — a client has no way to obtain or
-trust the server's certificate — so the server refuses to start with it enabled. Assume anything on
-the wire, including the identity token that grants inventory ownership on reconnect, is visible to
-anyone who can observe the network path. A VPN is the available encrypted path.
+**Identity verification trusts Meta's endpoint.** With identity on, the server can only be as
+available as `graph.oculus.com`; an outage there refuses joins (deliberately — fail closed). It
+also means the server operator holds Meta app credentials; guard the app secret file.
+
+**Traffic is unencrypted unless you enable TLS.** Without it, assume anything on the wire —
+including the identity token that grants inventory ownership on reconnect — is visible to anyone
+who can observe the network path.
 
 **Player identity is a bearer token, not a login.** A returning player is recognised by an identifier
 their client stores locally and sends on connect. Anyone who obtains that value can claim that
@@ -100,9 +110,9 @@ console. There is no reporting, no chat filtering, and no automatic abuse detect
    game protocol does not have. This is the single largest improvement available to you.
 2. **If you do expose a port**, forward only the game's UDP port. Do not expose the admin socket —
    it is a filesystem socket precisely so it cannot be reached from the network.
-3. **Restrict access at the network layer.** There is no in-app access control yet, so a VPN or a
-   firewall allowlist is what decides who can reach the server. Do not skip this step on a
-   port-forwarded server.
+3. **Set a long random `server.secret`.** On a port-forwarded server, also consider
+   `security.identity = meta` for per-account bans, and `security.tls.*` for encryption — with an
+   ACME certificate, players need no setup for either.
 4. **Run unprivileged and contained.** Use the container image, or a dedicated non-root user. Give
    the server its own world directory and nothing else.
 5. **Back up the world directory.** Copy it while the server is stopped, or immediately after an

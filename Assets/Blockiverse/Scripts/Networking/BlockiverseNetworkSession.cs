@@ -92,7 +92,12 @@ namespace Blockiverse.Networking
         public UnityTransport UnityTransport => ResolveUnityTransport();
         public BlockiverseNetworkConfig Config => config;
         public bool IsTransportEncryptionRequested => useEncryptedTransport;
-        public bool IsTransportEncryptionConfigured => HasTransportEncryptionSecrets();
+        // "Configured" is mode-relative now that the client path needs no private key: true when
+        // EITHER side's material is complete. The start-time check in ApplyTransportSecurity is
+        // what actually enforces the right half for the mode being started.
+        public bool IsTransportEncryptionConfigured =>
+            (!string.IsNullOrWhiteSpace(serverCertificatePem) && !string.IsNullOrWhiteSpace(serverPrivateKeyPem)) ||
+            (!string.IsNullOrWhiteSpace(transportServerCommonName) && !string.IsNullOrWhiteSpace(clientCaCertificatePem));
         public ulong LocalClientId => networkManager != null ? networkManager.LocalClientId : 0;
         public bool IsServer => networkManager != null && networkManager.IsServer;
 
@@ -172,6 +177,24 @@ namespace Blockiverse.Networking
             clientCaCertificatePem = string.IsNullOrWhiteSpace(clientCaCertificate)
                 ? serverCertificate
                 : clientCaCertificate;
+        }
+
+        /// <summary>
+        /// Client-side transport security: hostname to validate plus the CA bundle to validate it
+        /// against. Deliberately has no certificate/key parameters -- a client must never hold the
+        /// server's private key, and the previous single entry point implied it should.
+        /// </summary>
+        public void ConfigureClientTransportSecurity(bool enabled, string serverName, string caCertificateBundle)
+        {
+            ResolveDependencies();
+            if (networkManager.IsListening)
+                throw new InvalidOperationException("Cannot change multiplayer transport security while a session is active.");
+
+            useEncryptedTransport = enabled;
+            serverCertificatePem = null;
+            serverPrivateKeyPem = null;
+            transportServerCommonName = string.IsNullOrWhiteSpace(serverName) ? null : serverName.Trim();
+            clientCaCertificatePem = caCertificateBundle;
         }
 
         public bool StartHost()
@@ -375,6 +398,10 @@ namespace Blockiverse.Networking
             ApplyConnectionApprovalSettings();
         }
 
+        // Mode-aware on purpose: the two sides hold different material. A server (or host) needs
+        // its certificate and private key; a client needs only the hostname to validate and a CA
+        // bundle to validate against. The earlier all-four check made client-side encryption
+        // impossible by construction, because no client can (or should) hold the server's key.
         bool ApplyTransportSecurity(NetworkSessionMode mode)
         {
             if (!useEncryptedTransport)
@@ -383,26 +410,32 @@ namespace Blockiverse.Networking
                 return true;
             }
 
-            if (!HasTransportEncryptionSecrets())
+            if (IsWorldOwningMode(mode))
             {
-                MarkFailed("Encrypted LAN transport requires server certificate, private key, and client CA certificate.");
+                if (string.IsNullOrWhiteSpace(serverCertificatePem) || string.IsNullOrWhiteSpace(serverPrivateKeyPem))
+                {
+                    MarkFailed("Encrypted transport requires the server certificate and private key.");
+                    return false;
+                }
+
+                unityTransport.UseEncryption = true;
+                unityTransport.SetServerSecrets(serverCertificatePem, serverPrivateKeyPem);
+                return true;
+            }
+
+            // UnityTLS has no operating-system trust store, so an empty CA bundle would mean an
+            // unvalidated server certificate. Refuse rather than connect with encryption the
+            // player believes is authenticated and is not.
+            if (string.IsNullOrWhiteSpace(transportServerCommonName) || string.IsNullOrWhiteSpace(clientCaCertificatePem))
+            {
+                MarkFailed("Encrypted transport requires the server name and a CA bundle to validate it against.");
                 return false;
             }
 
             unityTransport.UseEncryption = true;
-            if (IsWorldOwningMode(mode))
-                unityTransport.SetServerSecrets(serverCertificatePem, serverPrivateKeyPem);
-            else
-                unityTransport.SetClientSecrets(transportServerCommonName, clientCaCertificatePem);
-
+            unityTransport.SetClientSecrets(transportServerCommonName, clientCaCertificatePem);
             return true;
         }
-
-        bool HasTransportEncryptionSecrets() =>
-            !string.IsNullOrWhiteSpace(serverCertificatePem) &&
-            !string.IsNullOrWhiteSpace(serverPrivateKeyPem) &&
-            !string.IsNullOrWhiteSpace(transportServerCommonName) &&
-            !string.IsNullOrWhiteSpace(clientCaCertificatePem);
 
         void ApplyConnectionApprovalSettings()
         {
