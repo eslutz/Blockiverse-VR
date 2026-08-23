@@ -133,7 +133,15 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(attribute, Is.Not.Null);
             Assert.That(attribute.ScreenId, Is.EqualTo(expectedScreenId));
             Assert.That(attribute.WidthPixels, Is.EqualTo(570));
-            Assert.That(attribute.HeightPixels, Is.EqualTo(700));
+
+            // Title (up to 6 actions) and Pause (up to 7) are taller than the short screens.
+            // A button row is 64 px plus 8 px margins; at 700 px the content area holds about
+            // 451 px, so seven rows overflowed into a scrollbar with the last row clipped
+            // mid-glyph — seen on the title screen in the simulator. Death (3) and the settings
+            // hub (4) fit comfortably and stay at 700.
+            bool isLongList = controllerType == typeof(TitleScreenController) ||
+                controllerType == typeof(PauseScreenController);
+            Assert.That(attribute.HeightPixels, Is.EqualTo(isLongList ? 860 : 700));
             Assert.That(attribute.PlacementProfile, Is.EqualTo(UiToolkitPlacementProfile.Menu));
 
             var tree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(attribute.DocumentAssetPath);

@@ -11,7 +11,7 @@ namespace Blockiverse.UI
     // and the availability-filtered action list through SetActionMenu, and the continue/load
     // status line through SetStatus; nothing on this screen is static.
     [UiToolkitScreen(MenuActions.TitleScreen, "Assets/Blockiverse/UI/Documents/TitleScreen.uxml",
-        570, 700, UiToolkitPlacementProfile.Menu)]
+        570, 860, UiToolkitPlacementProfile.Menu)]
     public sealed class TitleScreenController : UiToolkitScreenController,
         IUiToolkitActionMenuScreen, IUiToolkitStatusScreen
     {

@@ -107,6 +107,50 @@ namespace Blockiverse.UI
             AttachTo(root);
         }
 
+        // How many pixels of content do not fit, i.e. how far the panel is from holding its
+        // own content without scrolling. Positive means it scrolls.
+        //
+        // Measured rather than modelled: counting rows in the UXML gets this wrong, because a
+        // row of buttons laid out horizontally looks like N rows to a parser and is one row on
+        // screen. Only a real layout pass knows, so this is Play-mode only — outside it, and
+        // before the first layout, it returns 0 and reports false.
+        public bool TryMeasureContentOverflow(out float overflowPixels)
+        {
+            overflowPixels = 0f;
+
+            if (screenRoot == null || float.IsNaN(screenRoot.layout.height))
+                return false;
+
+            ScrollView scroll = screenRoot.Q<ScrollView>();
+
+            if (scroll != null)
+            {
+                float content = scroll.contentContainer.layout.height;
+                float viewport = scroll.contentViewport.layout.height;
+
+                if (float.IsNaN(content) || float.IsNaN(viewport))
+                    return false;
+
+                overflowPixels = content - viewport;
+                return true;
+            }
+
+            // No ScrollView: content cannot scroll, so overflow is what spills past the root.
+            float needed = 0f;
+
+            foreach (VisualElement child in screenRoot.Children())
+            {
+                if (!float.IsNaN(child.layout.height))
+                    needed += child.layout.height + child.resolvedStyle.marginTop + child.resolvedStyle.marginBottom;
+            }
+
+            float available = screenRoot.layout.height
+                - screenRoot.resolvedStyle.paddingTop
+                - screenRoot.resolvedStyle.paddingBottom;
+            overflowPixels = needed - available;
+            return true;
+        }
+
         void Attach()
         {
             if (document == null)

@@ -11,7 +11,7 @@ namespace Blockiverse.UI
     // permission-filtered action list through SetActionMenu — creative entries appear only when
     // ConfigurePauseMenuPermissions allows them — and save/autosave feedback through SetStatus.
     [UiToolkitScreen(MenuActions.PauseScreen, "Assets/Blockiverse/UI/Documents/PauseScreen.uxml",
-        570, 700, UiToolkitPlacementProfile.Menu)]
+        570, 860, UiToolkitPlacementProfile.Menu)]
     public sealed class PauseScreenController : UiToolkitScreenController,
         IUiToolkitActionMenuScreen, IUiToolkitStatusScreen
     {

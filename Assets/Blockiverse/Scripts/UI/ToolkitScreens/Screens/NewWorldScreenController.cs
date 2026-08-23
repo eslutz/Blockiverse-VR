@@ -13,7 +13,7 @@ namespace Blockiverse.UI
     // plays no feedback cues of its own — show/hide cues come from the host, and the config
     // itself has no per-interaction cue.
     [UiToolkitScreen(MenuActions.NewWorldScreen, "Assets/Blockiverse/UI/Documents/NewWorldScreen.uxml",
-        900, 860, UiToolkitPlacementProfile.Menu)]
+        900, 1280, UiToolkitPlacementProfile.Menu)]
     public sealed class NewWorldScreenController : UiToolkitScreenController, IUiToolkitNewWorldScreen
     {
         // Row order is the uGUI panel's CycleRowNames order; the three tables below and the
