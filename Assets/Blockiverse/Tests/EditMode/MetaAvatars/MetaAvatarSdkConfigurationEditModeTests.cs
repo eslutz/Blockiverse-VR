@@ -138,6 +138,13 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
 
                     // Shader manager: reaching Style-2-Avatar-Meta through serialized
                     // references is what includes the URP avatar shader in device builds.
+                    // Both SDK components self-repair on deserialize in the editor
+                    // (OnValidate auto-fill), so in-memory non-null checks alone would pass
+                    // on a broken scene while the device build — which has no OnValidate —
+                    // ships Shader.Find("Standard")/null compute shaders. The references
+                    // must therefore be PERSISTENT assets from the Meta package, and the
+                    // GPU-skinning shader GUIDs must be present in the serialized scene
+                    // text itself.
                     Assert.That(avatarManager.ShaderManager, Is.Not.Null,
                         $"{scenePath}: OvrAvatarManager.ShaderManager must be wired; the runtime fallback " +
                         "resolves Shader.Find(\"Standard\"), which is stripped from URP Android builds.");
@@ -151,22 +158,33 @@ namespace Blockiverse.Tests.MetaAvatars.EditMode
                     {
                         SerializedProperty property = serializedShaderManager.FindProperty(configurationField);
                         Assert.That(property, Is.Not.Null, configurationField);
-                        Assert.That(property.objectReferenceValue, Is.Not.Null,
+                        UnityEngine.Object configuration = property.objectReferenceValue;
+                        Assert.That(configuration, Is.Not.Null,
                             $"{scenePath}: {configurationField} must reference a Meta shader configuration asset.");
-
-                        var serializedConfiguration = new SerializedObject(property.objectReferenceValue);
-                        SerializedProperty shaderProperty = serializedConfiguration.FindProperty("Shader");
-                        Assert.That(shaderProperty?.objectReferenceValue, Is.Not.Null,
-                            $"{scenePath}: {configurationField} must carry a real avatar shader.");
+                        Assert.That(EditorUtility.IsPersistent(configuration), Is.True,
+                            $"{scenePath}: {configurationField} must be a persistent asset, not a transient " +
+                            "auto-generated configuration (whose shader is the stripped Built-in Standard).");
+                        Assert.That(
+                            AssetDatabase.GetAssetPath(configuration),
+                            Does.StartWith("Packages/com.meta.xr.sdk.avatars/"),
+                            $"{scenePath}: {configurationField} must come from the Meta Avatars package.");
                     }
 
-                    var skinningConfiguration = managerObject.GetComponent<GpuSkinningConfiguration>();
-                    Assert.That(skinningConfiguration, Is.Not.Null);
-                    Assert.That(skinningConfiguration.CombineMorphTargetsShader, Is.Not.Null,
-                        $"{scenePath}: GPU skinning shaders must be serialized — the runtime auto-fill is editor-only.");
-                    Assert.That(skinningConfiguration.SkinToTextureShader, Is.Not.Null);
-                    Assert.That(skinningConfiguration.MorphAndSkinningComputeShader, Is.Not.Null,
-                        $"{scenePath}: without the compute shader the Quest-default OVR_COMPUTE skinner cannot animate any avatar.");
+                    Assert.That(managerObject.GetComponent<GpuSkinningConfiguration>(), Is.Not.Null);
+
+                    string sceneText = System.IO.File.ReadAllText(scenePath);
+                    foreach ((string shaderName, string guid) in new[]
+                    {
+                        ("combine-morph-targets.shader", "bef2973cf0137a04fbdd59ed0bab09bc"),
+                        ("skin-to-texture.shader", "ee1f1406edf162945868fafc408691aa"),
+                        ("OvrApplyMorphsAndSkinning.compute", "6593496738c8e8045badc49f0ef2917a"),
+                    })
+                    {
+                        Assert.That(sceneText, Does.Contain(guid),
+                            $"{scenePath}: the serialized scene must reference {shaderName} ({guid}) on " +
+                            "GpuSkinningConfiguration — the editor-only OnValidate auto-fill masks a missing " +
+                            "reference here while the device build gets null compute shaders.");
+                    }
                 }
             }
             finally

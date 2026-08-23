@@ -49,10 +49,21 @@ namespace Blockiverse.MetaAvatars
         /// <summary>The user id handed to the most recent TryLoadUserAvatar call.</summary>
         public ulong RequestedUserId { get; private set; }
 
+        /// <summary>A CDN/preset avatar (not the generic default) is loaded and drawable.
+        /// Poll this alongside the events: the SDK's OnUserAvatarLoadedEvent fires only on
+        /// the FIRST transition into the UserAvatar state, so a second successful load on
+        /// the same entity completes without any event.</summary>
+        public bool HasUserAvatarModel => CurrentState == AvatarState.UserAvatar;
+
+        bool presentationVisible = true;
+        MetaAvatarPresentationMode configuredMode = MetaAvatarPresentationMode.RemoteThirdPerson;
+
         /// <summary>
-        /// Set presentation flags. View/manifestation/features only apply to the native
-        /// entity when staged before creation; view and manifestation can also be switched
-        /// on an already-created entity.
+        /// Set presentation flags. View/manifestation/features apply to the native entity
+        /// only when staged before creation: this entity loads exactly one view's geometry
+        /// (per its render filters), so switching mode on a live entity would select a view
+        /// with nothing loaded and the avatar would silently vanish. A post-creation call
+        /// with the SAME mode is a harmless no-op; a different mode is refused.
         /// </summary>
         public void ConfigurePresentation(MetaAvatarPresentationMode mode, bool hideHeadForFirstPerson)
         {
@@ -62,6 +73,18 @@ namespace Blockiverse.MetaAvatars
 
             bool isLocal = mode == MetaAvatarPresentationMode.LocalFirstPerson;
 
+            if (IsCreated)
+            {
+                if (mode != configuredMode)
+                {
+                    Debug.LogWarning(
+                        $"[BlockiverseMetaAvatarEntity] Refusing to switch presentation mode from {configuredMode} " +
+                        $"to {mode} on a created entity: only {configuredMode}'s view geometry is loaded.", this);
+                }
+                return;
+            }
+
+            configuredMode = mode;
             _creationInfo.renderFilters.viewFlags = isLocal
                 ? CAPI.ovrAvatar2EntityViewFlags.FirstPerson
                 : CAPI.ovrAvatar2EntityViewFlags.ThirdPerson;
@@ -69,22 +92,33 @@ namespace Blockiverse.MetaAvatars
             _creationInfo.renderFilters.quality = isLocal
                 ? CAPI.ovrAvatar2EntityQuality.Standard
                 : CAPI.ovrAvatar2EntityQuality.Light;
-
-            if (!IsCreated)
-            {
-                // Local avatars animate from live tracking (Preset_Default includes the
-                // Animation feature); remote avatars are posed purely by ApplyStreamData.
-                _creationInfo.features = isLocal
-                    ? CAPI.ovrAvatar2EntityFeatures.Preset_Default
-                    : CAPI.ovrAvatar2EntityFeatures.Preset_Remote;
-            }
+            // Local avatars animate from live tracking (Preset_Default includes the
+            // Animation feature); remote avatars are posed purely by ApplyStreamData.
+            _creationInfo.features = isLocal
+                ? CAPI.ovrAvatar2EntityFeatures.Preset_Default
+                : CAPI.ovrAvatar2EntityFeatures.Preset_Remote;
 
             SetIsLocal(isLocal);
-            if (IsCreated)
-            {
-                SetActiveView(_creationInfo.renderFilters.viewFlags);
-                SetActiveManifestation(_creationInfo.renderFilters.manifestationFlags);
-            }
+        }
+
+        /// <summary>
+        /// Show or hide the avatar without touching the GameObject's active state. The SDK
+        /// only advances an entity's load pipeline while its behaviour is active, so
+        /// deactivating the object to hide a not-yet-ready avatar deadlocks the load; view
+        /// flags hide every primitive while updates keep running.
+        /// </summary>
+        public void SetPresentationVisible(bool visible)
+        {
+            if (presentationVisible == visible)
+                return;
+
+            presentationVisible = visible;
+            if (!IsCreated)
+                return;
+
+            SetActiveView(visible
+                ? _creationInfo.renderFilters.viewFlags
+                : CAPI.ovrAvatar2EntityViewFlags.None);
         }
 
         public bool CreateConfiguredEntity(OvrAvatarInputManagerBehavior inputManager = null)
@@ -99,6 +133,10 @@ namespace Blockiverse.MetaAvatars
 
             SubscribeLoadEvents();
             CreateEntity();
+
+            if (IsCreated && !presentationVisible)
+                SetActiveView(CAPI.ovrAvatar2EntityViewFlags.None);
+
             return IsCreated;
         }
 
@@ -116,11 +154,36 @@ namespace Blockiverse.MetaAvatars
 
             SubscribeLoadEvents();
             RequestedUserId = userId;
+            _userId = userId;
+
+            // LoadUserWithFilters returns false — with no load request registered and
+            // therefore no failure event ever arriving — when the access token is invalid
+            // or the native call rejects immediately. The in-flight flag may only be set
+            // when a request actually exists, or the trackers wedge forever.
+            if (!LoadUserWithFilters(in _creationInfo.renderFilters))
+            {
+                UserAvatarLoadInFlight = false;
+                UserAvatarLoadFailed = true;
+                return false;
+            }
+
             UserAvatarLoadInFlight = true;
             UserAvatarLoadFailed = false;
-            _userId = userId;
-            LoadUser();
             return true;
+        }
+
+        /// <summary>
+        /// Abandon tracking of an in-flight user-avatar load (the SDK never reports
+        /// cancelled requests, and success events fire only once per entity). Marks the
+        /// attempt failed so retry logic re-engages.
+        /// </summary>
+        public void AbandonUserAvatarLoadTracking()
+        {
+            if (!UserAvatarLoadInFlight)
+                return;
+
+            UserAvatarLoadInFlight = false;
+            UserAvatarLoadFailed = true;
         }
 
         public bool TryLoadPresetAvatar(string presetPath)
@@ -149,9 +212,11 @@ namespace Blockiverse.MetaAvatars
 
         void HandleLoadFailed(OvrAvatarEntity entity, CAPI.ovrAvatar2LoadRequestInfo requestInfo)
         {
-            // Any failed load request while a user-avatar load is pending ends that attempt;
-            // the provider owns retry policy and backoff.
-            if (!UserAvatarLoadInFlight)
+            // Only user (CDN) request failures end the tracked attempt: the SDK raises this
+            // event for every failed load request on the entity, including preset zips and
+            // asset requests, and attributing those to the profile load schedules spurious
+            // retries. The provider owns retry policy and backoff.
+            if (!UserAvatarLoadInFlight || requestInfo.type != CAPI.ovrAvatar2LoadRequestType.User)
                 return;
 
             UserAvatarLoadInFlight = false;

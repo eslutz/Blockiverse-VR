@@ -39,6 +39,7 @@ namespace Blockiverse.MetaAvatars
 #if UNITY_ANDROID && !UNITY_EDITOR
         BlockiverseMetaAvatarEntity entity;
         ulong requestedLikenessUserId;
+        float nextLikenessAttemptTime;
 #endif
 
         public RenderTexture Texture => texture;
@@ -178,6 +179,7 @@ namespace Blockiverse.MetaAvatars
             // resolved it; until then (or for accounts that never resolve — child policy
             // keeps the token chain from running at all) the default avatar stands in.
             if (requestedLikenessUserId != 0 ||
+                Time.unscaledTime < nextLikenessAttemptTime ||
                 !OvrAvatarEntitlement.AccessTokenIsValid() ||
                 localPresenter == null ||
                 !localPresenter.TryGetLocalMetaUserId(out ulong userId))
@@ -185,6 +187,7 @@ namespace Blockiverse.MetaAvatars
                 return;
             }
 
+            nextLikenessAttemptTime = Time.unscaledTime + 10.0f;
             if (entity.TryLoadUserAvatar(userId))
                 requestedLikenessUserId = userId;
         }
@@ -197,8 +200,14 @@ namespace Blockiverse.MetaAvatars
             if (studioCamera != null)
                 studioCamera.enabled = mirrorActive;
 
-            if (entityRoot != null && entityRoot.gameObject.activeSelf != (mirrorActive && streamFresh))
-                entityRoot.gameObject.SetActive(mirrorActive && streamFresh);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // Hide via view flags, never by deactivating the entity's GameObject: the SDK
+            // only advances an inactive entity's load pipeline once reactivated, so a
+            // deactivated not-yet-loaded entity could never become showable.
+            entity?.SetPresentationVisible(mirrorActive && streamFresh);
+#else
+            _ = streamFresh;
+#endif
         }
 
         static BlockiverseMetaAvatarPresenter FindLocalFirstPersonPresenter()

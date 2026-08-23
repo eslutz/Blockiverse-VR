@@ -7,9 +7,13 @@ namespace Blockiverse.MetaAvatars
     /// Feeds the Meta Avatars body solver from the XRI rig's own transforms instead of
     /// OVRInput. The Avatar SDK expects poses in tracking space — relative to the entity
     /// root, which Blockiverse pins to the XR Origin (rig root, floor level) — so every
-    /// pose is converted from world space into rig-local space here. This removes the
-    /// dependency on OVRManager/OVRInput entirely: the rig transforms are already driven
-    /// by XRI TrackedPoseDriver from the same OpenXR runtime data.
+    /// pose is converted from world space into rig-local space here.
+    ///
+    /// Deliberate consequence: everything between the rig root and the source transforms
+    /// counts as tracking data, including synthetic Camera Offset motion — the glide walk
+    /// bob (BlockiverseGlideBobController, ±1.5 cm) rides into the avatar pose and the
+    /// network stream. That is wanted (the presented body bobs in step with the view);
+    /// any future system writing larger offsets into Camera Offset should revisit this.
     /// </summary>
     public sealed class BlockiverseXriInputTrackingDelegate : OvrAvatarInputTrackingDelegate
     {

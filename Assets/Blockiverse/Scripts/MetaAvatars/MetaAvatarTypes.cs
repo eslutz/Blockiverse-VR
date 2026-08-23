@@ -46,5 +46,13 @@ namespace Blockiverse.MetaAvatars
         void ConfigureRemoteUserAvatar(ulong userId)
         {
         }
+
+        /// <summary>Show or hide the presented avatar. Implementations must never toggle
+        /// the entity GameObject's active state: the Avatar SDK only advances loading while
+        /// the entity behaviour is active, so deactivating a hidden-but-loading avatar
+        /// deadlocks it (it can never become ready enough to be shown again).</summary>
+        void SetEntityVisible(bool visible)
+        {
+        }
     }
 }

@@ -314,18 +314,16 @@ namespace Blockiverse.Networking
 
         public void UpdateStalenessVisibility()
         {
-            bool metaVisible = metaAvatarAvailable && !IsStreamStale && !IsPoseStale;
+            // Meta entity visibility is presenter-owned (BlockiverseMetaAvatarPresenter ->
+            // provider -> entity view flags). The rig must never SetActive the entity node:
+            // the Avatar SDK only advances an entity's load pipeline while the behaviour is
+            // active, so deactivating a not-yet-renderable entity deadlocks it — it can
+            // never load, so it can never become available, so it is never reactivated.
             bool fallbackVisible = fallbackProxyEnabled && (IsStreamStale || !metaAvatarAvailable) && !IsPoseStale;
 
             if (fallbackRoot != null)
             {
                 fallbackRoot.gameObject.SetActive(fallbackVisible);
-            }
-
-            Transform metaEntityNode = transform.Find("Meta Horizon Avatar Entity");
-            if (metaEntityNode != null)
-            {
-                metaEntityNode.gameObject.SetActive(metaVisible);
             }
 
             // The fallback proxy serves both the never-available and the stale-stream

@@ -83,6 +83,15 @@ namespace Blockiverse.MetaAvatars
         {
             RemoteUserId = userId;
         }
+
+        /// <summary>Last visibility the presenter pushed; lets tests assert the meta
+        /// entity's show/hide policy without a device-only entity.</summary>
+        public bool? LastEntityVisible { get; private set; }
+
+        public void SetEntityVisible(bool visible)
+        {
+            LastEntityVisible = visible;
+        }
     }
 }
 #endif

@@ -4,9 +4,6 @@ using Oculus.Avatar2;
 using Oculus.Platform;
 using Oculus.Platform.Models;
 using UnityEngine;
-#if UNITY_ANDROID && !UNITY_EDITOR
-using UnityEngine.SceneManagement;
-#endif
 
 namespace Blockiverse.MetaAvatars
 {
@@ -73,10 +70,20 @@ namespace Blockiverse.MetaAvatars
         int retryAttempt;
         float nextRetryTime;
         float phaseStartedTime;
-        float nextRemoteLoadRetryTime;
         bool presetStopgapRequested;
+        // Platform callbacks cannot be cancelled; a timed-out attempt's late callback must
+        // not re-enter the machine (it could clobber a healthy successor chain, or restart
+        // a settled one and wedge on the SDK's first-time-only success event). Every issued
+        // request captures the generation; stale generations are dropped.
+        int platformAttemptGeneration;
+        float ageCategoryWaitDeadline;
+        int remoteRetryAttempt;
+        float nextRemoteLoadRetryTime;
+        float remoteLoadStartedTime;
 
         const float PlatformCallbackTimeoutSeconds = 30.0f;
+        const float UserAvatarLoadTimeoutSeconds = 90.0f;
+        const float AgeCategoryWaitTimeoutSeconds = 20.0f;
 #endif
 
         public bool PreferLoggedInUserAvatar => preferLoggedInUserAvatar;
@@ -184,7 +191,25 @@ namespace Blockiverse.MetaAvatars
 
         public void ConfigureRemoteUserAvatar(ulong userId)
         {
+            if (remoteUserId == userId)
+                return;
+
             remoteUserId = userId;
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // A new peer identity deserves a fresh retry budget.
+            remoteRetryAttempt = 0;
+            nextRemoteLoadRetryTime = 0.0f;
+#endif
+        }
+
+        /// <summary>
+        /// Presentation-owned visibility for the avatar entity. Never toggles the entity's
+        /// GameObject: the SDK only advances loading while the behaviour is active, so
+        /// deactivating a not-yet-ready entity deadlocks it into never becoming ready.
+        /// </summary>
+        public void SetEntityVisible(bool visible)
+        {
+            avatarEntity?.SetPresentationVisible(visible);
         }
 
         void RefreshPresentationUnlock()
@@ -285,15 +310,23 @@ namespace Blockiverse.MetaAvatars
                 // runs OvrAvatarManager.Initialize with real shader configurations, which a
                 // bare runtime-instantiated manager lacks (its Shader.Find("Standard")
                 // fallback is stripped from URP Android builds and every avatar load aborts).
-                GameObject configured = FindConfiguredSceneManager();
-                if (configured != null && !configured.activeSelf)
+                //
+                // The search must include inactive objects AND must not walk scenes: during
+                // the very first Awake, Scene.isLoaded is still false for the loading Boot
+                // scene, and after activation the singleton reparents to DontDestroyOnLoad —
+                // a scene-root walk misses the manager in both states and would fall back to
+                // the bare (device-fatal) manager exactly once per session, permanently.
+                OvrAvatarManager configured =
+                    FindAnyObjectByType<OvrAvatarManager>(FindObjectsInactive.Include);
+                if (configured != null)
                 {
-                    configured.SetActive(true);
+                    if (!configured.gameObject.activeSelf)
+                        configured.gameObject.SetActive(true);
                 }
-                else if (!OvrAvatarManager.hasInstance)
+                else
                 {
                     Debug.LogWarning(
-                        $"[MetaHorizonAvatarProvider] '{SdkManagerObjectName}' not found in the scene; " +
+                        $"[MetaHorizonAvatarProvider] '{SdkManagerObjectName}' not found; " +
                         "falling back to an unconfigured runtime OvrAvatarManager. Avatars will not " +
                         "render without shader configuration — rerun the project bootstrapper.");
                     OvrAvatarManager.Instantiate();
@@ -307,24 +340,6 @@ namespace Blockiverse.MetaAvatars
             manager.MaxConcurrentAvatarsLoading = AvatarManagerMaxConcurrentAvatarsLoading;
             manager.MaxConcurrentResourcesLoading = AvatarManagerMaxConcurrentResourcesLoading;
             return OvrAvatarManager.initialized;
-        }
-
-        static GameObject FindConfiguredSceneManager()
-        {
-            for (int sceneIndex = 0; sceneIndex < SceneManager.sceneCount; sceneIndex++)
-            {
-                Scene scene = SceneManager.GetSceneAt(sceneIndex);
-                if (!scene.isLoaded)
-                    continue;
-
-                foreach (GameObject rootObject in scene.GetRootGameObjects())
-                {
-                    if (rootObject.name == SdkManagerObjectName)
-                        return rootObject;
-                }
-            }
-
-            return null;
         }
 
         void TickLocalAvatarLoad()
@@ -349,7 +364,15 @@ namespace Blockiverse.MetaAvatars
                     break;
 
                 case LocalLoadPhase.LoadingUserAvatar:
-                    if (!avatarEntity.UserAvatarLoadInFlight)
+                    // State poll first: the SDK's success event fires only on the FIRST
+                    // transition into UserAvatar, so a re-load after an earlier success (or
+                    // a race with a preset) completes eventlessly.
+                    if (avatarEntity.HasUserAvatarModel)
+                    {
+                        localLoadPhase = LocalLoadPhase.Loaded;
+                        fallbackReason = string.Empty;
+                    }
+                    else if (!avatarEntity.UserAvatarLoadInFlight)
                     {
                         if (avatarEntity.UserAvatarLoadFailed)
                         {
@@ -360,6 +383,13 @@ namespace Blockiverse.MetaAvatars
                             localLoadPhase = LocalLoadPhase.Loaded;
                             fallbackReason = string.Empty;
                         }
+                    }
+                    else if (Time.unscaledTime - phaseStartedTime > UserAvatarLoadTimeoutSeconds)
+                    {
+                        // The SDK never reports cancelled load requests; without this the
+                        // machine waits on a dead flag for the whole session.
+                        avatarEntity.AbandonUserAvatarLoadTracking();
+                        ScheduleRetry("Meta Horizon avatar download timed out.");
                     }
                     break;
 
@@ -382,6 +412,24 @@ namespace Blockiverse.MetaAvatars
                 return;
             }
 
+            // The age category resolves asynchronously and starts as Unknown, which passes
+            // the child gate — starting immediately would race a child account's category
+            // resolution and issue the profile lookup the policy forbids. Hold (bounded, so
+            // an offline adult is not bricked) until the service reports any resolved
+            // source; the offline/cache fallbacks all count as resolved.
+            BlockiverseUserAgeCategoryState ageState = BlockiverseUserAgeCategoryService.Current;
+            if (ageState.Source == BlockiverseUserAgeCategorySource.None)
+            {
+                if (ageCategoryWaitDeadline <= 0.0f)
+                    ageCategoryWaitDeadline = Time.unscaledTime + AgeCategoryWaitTimeoutSeconds;
+
+                if (Time.unscaledTime < ageCategoryWaitDeadline)
+                {
+                    fallbackReason = "Meta Horizon avatar is waiting for the account age category.";
+                    return; // Stays NotStarted; retried next tick.
+                }
+            }
+
             if (!CanRequestLoggedInUserAvatarForCurrentAgeCategory(out string ageGateFallbackReason))
             {
                 // Policy, not an error: child accounts keep the fallback proxy and no
@@ -394,11 +442,16 @@ namespace Blockiverse.MetaAvatars
 
             try
             {
-                Core.Initialize();
+                // Core.Initialize has no already-initialized guard and leaks a persistent
+                // CallbackRunner object per call; with retries in play it must be guarded.
+                if (!Core.IsInitialized())
+                    Core.Initialize();
+
                 localLoadPhase = LocalLoadPhase.RequestingAccessToken;
                 phaseStartedTime = Time.unscaledTime;
                 fallbackReason = "Meta Horizon avatar is waiting for the signed-in Quest profile.";
-                Users.GetAccessToken().OnComplete(OnAccessTokenResolved);
+                int generation = ++platformAttemptGeneration;
+                Users.GetAccessToken().OnComplete(message => OnAccessTokenResolved(message, generation));
             }
             catch (Exception exception)
             {
@@ -410,27 +463,31 @@ namespace Blockiverse.MetaAvatars
         {
             fallbackReason = reason;
             localLoadPhase = LocalLoadPhase.FailedWaitingForRetry;
+            // Invalidate any outstanding platform callback from the abandoned attempt.
+            platformAttemptGeneration++;
             float delay = RetryDelaysSeconds[Mathf.Min(retryAttempt, RetryDelaysSeconds.Length - 1)];
             retryAttempt++;
             nextRetryTime = Time.unscaledTime + delay;
             Debug.LogWarning($"[MetaHorizonAvatarProvider] {reason} Retrying in {delay:0}s (attempt {retryAttempt}).", this);
-
-            // A preset avatar (when enabled) is a nicer stopgap than the generic default
-            // while retries continue in the background; requesting it does not stop the
-            // profile chain.
-            TryStartPresetStopgap();
         }
 
         void TryStartPresetStopgap()
         {
+            // Deliberately only used when the profile avatar is disabled outright: a preset
+            // load races the profile chain otherwise — presets transition the entity to the
+            // same UserAvatar state and share its load-event channel, corrupting the
+            // profile-load tracking.
             if (!loadFallbackPreset || presetStopgapRequested || avatarEntity == null)
                 return;
 
             presetStopgapRequested = avatarEntity.TryLoadPresetAvatar(fallbackPresetPath);
         }
 
-        void OnAccessTokenResolved(Message<string> message)
+        void OnAccessTokenResolved(Message<string> message, int generation)
         {
+            if (generation != platformAttemptGeneration)
+                return; // A newer attempt owns the machine; this callback timed out earlier.
+
             if (message.IsError)
             {
                 Error error = message.GetError();
@@ -441,11 +498,14 @@ namespace Blockiverse.MetaAvatars
             OvrAvatarEntitlement.SetAccessToken(message.Data);
             localLoadPhase = LocalLoadPhase.RequestingLoggedInUser;
             phaseStartedTime = Time.unscaledTime;
-            Users.GetLoggedInUser().OnComplete(OnLoggedInUserResolved);
+            Users.GetLoggedInUser().OnComplete(userMessage => OnLoggedInUserResolved(userMessage, generation));
         }
 
-        void OnLoggedInUserResolved(Message<User> message)
+        void OnLoggedInUserResolved(Message<User> message, int generation)
         {
+            if (generation != platformAttemptGeneration)
+                return;
+
             if (message.IsError)
             {
                 Error error = message.GetError();
@@ -467,6 +527,7 @@ namespace Blockiverse.MetaAvatars
             if (avatarEntity != null && avatarEntity.TryLoadUserAvatar(localUserId))
             {
                 localLoadPhase = LocalLoadPhase.LoadingUserAvatar;
+                phaseStartedTime = Time.unscaledTime;
                 fallbackReason = "Meta Horizon avatar is loading from the signed-in Quest profile.";
                 Debug.Log($"[MetaHorizonAvatarProvider] Loading signed-in user avatar {localUserId}.", this);
             }
@@ -486,15 +547,35 @@ namespace Blockiverse.MetaAvatars
                 return;
             }
 
-            if (avatarEntity.RequestedUserId == remoteUserId && !avatarEntity.UserAvatarLoadFailed)
+            if (avatarEntity.UserAvatarLoadInFlight)
+            {
+                if (avatarEntity.RequestedUserId == remoteUserId &&
+                    Time.unscaledTime - remoteLoadStartedTime > UserAvatarLoadTimeoutSeconds)
+                {
+                    avatarEntity.AbandonUserAvatarLoadTracking();
+                }
                 return;
+            }
+
+            if (avatarEntity.RequestedUserId == remoteUserId &&
+                (avatarEntity.HasUserAvatarModel || !avatarEntity.UserAvatarLoadFailed))
+            {
+                return;
+            }
 
             if (Time.unscaledTime < nextRemoteLoadRetryTime)
                 return;
 
-            nextRemoteLoadRetryTime = Time.unscaledTime + 15.0f;
+            // Same capped backoff as the local chain: a permanently failing peer id must
+            // not turn into an every-few-seconds CDN request for the whole session.
+            float delay = RetryDelaysSeconds[Mathf.Min(remoteRetryAttempt, RetryDelaysSeconds.Length - 1)];
+            remoteRetryAttempt++;
+            nextRemoteLoadRetryTime = Time.unscaledTime + delay;
             if (avatarEntity.TryLoadUserAvatar(remoteUserId))
+            {
+                remoteLoadStartedTime = Time.unscaledTime;
                 Debug.Log($"[MetaHorizonAvatarProvider] Loading remote player avatar {remoteUserId}.", this);
+            }
         }
 #endif
     }
