@@ -3,8 +3,13 @@
 Companion to [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md). This is the per-screen migration
 checklist: what exists, where it goes, and what must not be lost on the way.
 
-**Status: Phase 0 (baseline). No production screen has been migrated.** The tree contains zero
-`.uxml`/`.uss` outside the Phase 1 proof scaffolding.
+**Status: Phases 2–5 implemented (2026-08-23), device validation pending.** All 25 documents in
+§2 exist with dedicated controllers under `Assets/Blockiverse/Scripts/UI/ToolkitScreens/`; the
+Boot scene generates one world-space panel per `[UiToolkitScreen]` declaration and the UI Toolkit
+backend is active by default (uGUI presenters hide while a `UiToolkitMenuHost` is registered —
+disabling that component is the fallback switch). The rig prefab and its uGUI menus are untouched
+pending the post-device-validation cutover. The LAN screen additionally gained the saved-servers
+bookmark rows (previously a dead API — see §2 note on row 14).
 
 Line references are against `main` at `4251dcca` and will drift; treat them as "look here", not as
 addresses.

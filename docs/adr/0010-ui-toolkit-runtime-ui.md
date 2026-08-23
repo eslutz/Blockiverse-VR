@@ -5,6 +5,32 @@
 Accepted 2026-08-22. Supersedes the framework half of [ADR 0006](0006-quest-openxr-rendering-and-asset-policy.md)'s
 2026-08-13 menu amendment; that amendment's *placement* findings survive intact and are restated below.
 
+**Amended 2026-08-23 — Phases 2–5 implemented.** All 25 screen documents, their controllers,
+and the host/coordinator seam shipped in one branch at Eric's direction (single batch gate
+rather than per-phase gates). The shape differs from the phase plan in three deliberate ways:
+
+- **The rig prefab is untouched.** UI Toolkit panels are generated into the Boot scene only
+  (`BlockiverseProjectBootstrapper.UiToolkitMenus.cs`, table-driven from `[UiToolkitScreen]`
+  attributes), so the #324 unreviewable-prefab-diff failure mode cannot recur. The uGUI menus
+  remain in the rig prefab as the development fallback.
+- **`BlockiverseMenuController` is not yet dismantled.** During coexistence it remains the
+  coordinator; a registered `IBlockiverseMenuFrontend` (implemented by `UiToolkitMenuHost`)
+  receives every outward push and answers every pending-state read, and its presence hides
+  every uGUI presenter. Disabling the host component is the whole fallback switch. The
+  §5 redistribution completes at cutover, when the uGUI half is deleted.
+- **Zilla Slab and Barlow are embedded** (OFL 1.1, license files beside the .ttfs in
+  `Assets/Blockiverse/UI/Fonts/`), wired in `Base.uss`; weight comes from the SemiBold faces,
+  not the bold style flag. Non-Latin fallback (matrix §3.2) remains open. Tabular figures are
+  an OpenType feature USS cannot enable — measured judgement deferred to headset.
+
+One validator exemption was added with the HUD family: a `NonInteractive` screen declaration
+generates **no collider at all** (mining bar, status toast — read-only strips sharing the
+routed gameplay screen; an enabled trigger collider would intercept the XRI ray all session).
+
+Everything below the amendment stands, including the Open section: **no headset evidence
+exists yet**, the cutover (uGUI deletion, shim death, controller dismantling, characterization
+fixture retirement) happens only after device validation.
+
 ## Context
 
 Blockiverse VR's runtime menus, dialogs and HUD are uGUI: world-space `Canvas` +
