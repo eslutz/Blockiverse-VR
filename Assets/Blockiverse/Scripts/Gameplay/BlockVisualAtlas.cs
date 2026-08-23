@@ -125,6 +125,7 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Brine.Value,               74 },
             { BlockRegistry.Emberflow.Value,           75 },
             { BlockRegistry.Bedroll.Value,             76 },
+            { BlockRegistry.MirrorPane.Value,          77 },
             // Flowing cells render with their family's source tile.
             { BlockRegistry.FreshwaterFlow.Value,      73 },
             { BlockRegistry.BrineFlow.Value,           74 },
