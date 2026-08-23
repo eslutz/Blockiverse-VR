@@ -9,6 +9,7 @@
     "Blockiverse.Networking",
     "Blockiverse.Survival",
     "Blockiverse.UI",
+    "Blockiverse.UI.Toolkit",
     "Blockiverse.VR",
     "Oculus.AvatarSDK2",
     "Oculus.VR.Editor",
@@ -27,6 +28,10 @@
     "Unity.XR.OpenXR.Editor",
     "Unity.TextMeshPro",
     "UnityEngine.UI",
+    "Unity.Localization",
+    "Unity.Localization.Editor",
+    "Unity.Addressables",
+    "Unity.Addressables.Editor",
     "Blockiverse.Server",
     "Blockiverse.WorldRuntime"
   ],

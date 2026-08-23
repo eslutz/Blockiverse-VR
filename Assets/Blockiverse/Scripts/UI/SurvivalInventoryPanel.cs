@@ -3,6 +3,7 @@ using Blockiverse.Gameplay;
 using Blockiverse.Survival;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 using Blockiverse.Core;
 
@@ -11,7 +12,12 @@ namespace Blockiverse.UI
     public sealed class SurvivalInventoryPanel : MonoBehaviour
     {
         static readonly ItemRegistry DefaultItemRegistry = ItemRegistry.Default;
-        static readonly string[] CachedStackCounts = BuildCachedStackCounts();
+        // Lazy, not a field initializer: this reaches into the localization table, and a static
+        // field initializer runs whenever the type is first touched — including mid-deserialization
+        // of a prefab/scene, where Unity disallows the table's EditorBuildSettings.GetConfigObject
+        // call and throws. Deferring to first real use keeps the read off that unsafe path.
+        static string[] cachedStackCounts;
+        static string[] CachedStackCounts => cachedStackCounts ??= BuildCachedStackCounts();
 
         [SerializeField] Button[] slotButtons;
         [SerializeField] TMP_Text[] slotLabels;
@@ -372,12 +378,28 @@ namespace Blockiverse.UI
         {
             if (enableFeedbackReady)
                 PlayFeedback(BlockiverseAudioCue.InventoryOpen);
+
+            // Live language switching: the static stack-count cache and the per-slot render
+            // cache both key off stack contents, not locale, so neither one notices a locale
+            // change on its own -- Refresh() would silently keep rendering the old language.
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged += OnSelectedLocaleChanged;
         }
 
         void OnDisable()
         {
             if (enableFeedbackReady)
                 PlayFeedback(BlockiverseAudioCue.InventoryClose);
+
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged -= OnSelectedLocaleChanged;
+        }
+
+        void OnSelectedLocaleChanged(UnityEngine.Localization.Locale locale)
+        {
+            cachedStackCounts = null;
+            InvalidateRenderCache();
+            Refresh();
         }
 
         void PlayFeedback(BlockiverseAudioCue cue)

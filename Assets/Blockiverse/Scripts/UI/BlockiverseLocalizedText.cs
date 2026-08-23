@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization.Settings;
 
 namespace Blockiverse.UI
 {
@@ -37,6 +38,23 @@ namespace Blockiverse.UI
         }
 
         void OnEnable()
+        {
+            RefreshText();
+
+            // Live language switching: these components previously refreshed only on enable, so
+            // a runtime locale change left every visible label stale. Guarded on HasSettings so
+            // scenes and tests that never touch localization never force the package awake.
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged += OnSelectedLocaleChanged;
+        }
+
+        void OnDisable()
+        {
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged -= OnSelectedLocaleChanged;
+        }
+
+        void OnSelectedLocaleChanged(UnityEngine.Localization.Locale locale)
         {
             RefreshText();
         }

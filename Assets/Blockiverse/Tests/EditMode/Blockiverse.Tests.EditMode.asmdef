@@ -14,6 +14,7 @@
     "Blockiverse.WorldGen",
     "Blockiverse.Editor",
     "Blockiverse.UI",
+    "Blockiverse.UI.Toolkit",
     "Blockiverse.VR",
     "Unity.InputSystem",
     "Unity.Netcode.Runtime",
@@ -25,7 +26,10 @@
     "Unity.XR.CompositionLayers",
     "Unity.XR.CompositionLayers.UIInteraction",
     "Unity.XR.OpenXR",
-    "Unity.XR.OpenXR.Editor"
+    "Unity.XR.OpenXR.Editor",
+    "Unity.Localization",
+    "Unity.ResourceManager",
+    "Unity.Localization.Editor"
   ],
   "includePlatforms": [
     "Editor"

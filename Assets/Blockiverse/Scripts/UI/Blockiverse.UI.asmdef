@@ -11,7 +11,9 @@
     "Blockiverse.Voxel",
     "UnityEngine.UI",
     "Unity.TextMeshPro",
-    "Unity.Netcode.Runtime"
+    "Unity.Netcode.Runtime",
+    "Unity.Localization",
+    "Unity.ResourceManager"
   ],
   "includePlatforms": [],
   "excludePlatforms": [

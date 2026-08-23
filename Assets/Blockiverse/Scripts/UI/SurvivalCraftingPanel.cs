@@ -6,6 +6,7 @@ using Blockiverse.Networking;
 using Blockiverse.Survival;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 namespace Blockiverse.UI
@@ -318,6 +319,27 @@ namespace Blockiverse.UI
             WireRecipeButtons();
             WireRepairButton();
             WirePagingButtons();
+        }
+
+        void OnEnable()
+        {
+            // Live language switching: the recipe-row render cache is keyed on recipe/station/
+            // inventory state, not locale, so it would keep returning stale-language text after
+            // a runtime locale change with nothing else invalidating it.
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged += OnSelectedLocaleChanged;
+        }
+
+        void OnDisable()
+        {
+            if (LocalizationSettings.HasSettings)
+                LocalizationSettings.SelectedLocaleChanged -= OnSelectedLocaleChanged;
+        }
+
+        void OnSelectedLocaleChanged(UnityEngine.Localization.Locale locale)
+        {
+            InvalidateRecipeRowCache();
+            Refresh();
         }
 
         public void ShowNextRecipePage()
