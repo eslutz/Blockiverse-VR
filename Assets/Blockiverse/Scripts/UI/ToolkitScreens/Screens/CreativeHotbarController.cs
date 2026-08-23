@@ -108,6 +108,36 @@ namespace Blockiverse.UI
                 playHaptic: true);
         }
 
+        // Pulls the scene hotbar's selection back into this controller WITHOUT mirroring it
+        // out again or playing a cue. The catalog browser writes straight to the scene
+        // CreativeHotbar, so without an inbound path this controller kept a stale
+        // selectedIndex: reopening the quick menu highlighted the old block, and SelectNext
+        // then advanced from the stale index and silently replaced the catalog's choice.
+        // Syncing on show rather than point-fixing the catalog covers every other writer too.
+        public void SyncSelectionFromSceneHotbar()
+        {
+            if (blockIds.Count == 0)
+                return;
+
+            if (sceneHotbar == null)
+                sceneHotbar = BlockiverseSceneLookup.Find<CreativeHotbar>(FindObjectsInactive.Include);
+
+            if (sceneHotbar == null)
+                return;
+
+            BlockId current = sceneHotbar.SelectedBlockId;
+
+            for (int i = 0; i < blockIds.Count; i++)
+            {
+                if (blockIds[i] != current || i == selectedIndex)
+                    continue;
+
+                selectedIndex = i;
+                RefreshSelection();
+                return;
+            }
+        }
+
         public void SelectNext()
         {
             if (blockIds.Count == 0)
@@ -156,6 +186,12 @@ namespace Blockiverse.UI
         protected override void OnUnregisterCallbacks()
         {
             UnregisterSlotCallbacks();
+        }
+
+        // Opening the quick menu is the moment its selection has to agree with the world.
+        protected override void OnShown()
+        {
+            SyncSelectionFromSceneHotbar();
         }
 
         protected override void OnDetach()

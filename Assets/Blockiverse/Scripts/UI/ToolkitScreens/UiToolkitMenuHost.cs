@@ -104,13 +104,32 @@ namespace Blockiverse.UI
             RegisterWithController();
         }
 
+        // Disabling this component IS the documented fallback switch back to the uGUI
+        // menus, so the teardown has to be complete or the switch does not switch. Merely
+        // unregistering left the router subscription live and the panels on screen: the
+        // "disabled" host went on driving Toolkit screens through every later navigation
+        // while uGUI was also visible, and a LAN screen left visible kept its discovery
+        // socket listening. Unsubscribe, then hide everything including the quick menu.
         void OnDisable()
         {
-            if (menuController != null && registered)
-            {
-                menuController.UnregisterFrontend(this);
-                registered = false;
-            }
+            DetachFromController();
+
+            foreach (var (_, controller) in screens)
+                controller.SetVisible(false, false);
+
+            quickBlockMenu?.SetQuickMenuVisible(false);
+        }
+
+        void DetachFromController()
+        {
+            if (menuController == null || !registered)
+                return;
+
+            if (menuController.Router != null)
+                menuController.Router.Changed -= ApplyRouterState;
+
+            menuController.UnregisterFrontend(this);
+            registered = false;
         }
 
         void DiscoverScreens()
@@ -150,11 +169,22 @@ namespace Blockiverse.UI
             comfortSettings = BlockiverseSceneLookup.Find<BlockiverseComfortSettings>(FindObjectsInactive.Include);
 
             foreach (var (_, controller) in screens)
-            {
-                WorldSpaceUiPlacementController placement = controller.GetComponent<WorldSpaceUiPlacementController>();
-                if (placement != null)
-                    placement.ConfigureComfortSettings(comfortSettings);
-            }
+                ConfigureComfortFor(controller);
+
+            // The quick menu is excluded from `screens`, so a loop over that list silently
+            // skips it — the same omission that left it un-parented until AttachHudPanels
+            // was given its own case. Without this it is the one panel that ignores the
+            // comfort UI scale, which is an accessibility setting, not a preference.
+            if (quickBlockMenuController != null)
+                ConfigureComfortFor(quickBlockMenuController);
+        }
+
+        void ConfigureComfortFor(UiToolkitScreenController controller)
+        {
+            WorldSpaceUiPlacementController placement = controller.GetComponent<WorldSpaceUiPlacementController>();
+
+            if (placement != null)
+                placement.ConfigureComfortSettings(comfortSettings);
         }
 
         void ResolveMenuController()
@@ -175,11 +205,7 @@ namespace Blockiverse.UI
 
         void OnDestroy()
         {
-            if (menuController != null && menuController.Router != null)
-                menuController.Router.Changed -= ApplyRouterState;
-
-            if (menuController != null && registered)
-                menuController.UnregisterFrontend(this);
+            DetachFromController();
         }
 
         // Mirror of BlockiverseMenuController.ApplyRouterState's presenter loop, on UI
@@ -198,6 +224,15 @@ namespace Blockiverse.UI
 
             UiToolkitScreenController anchor = FindVisibleAnchoredScreen();
 
+            // Counted across the whole pass, not per panel. Three controllers share the
+            // gameplay_hud route, so playing inside the loop stacked three identical
+            // one-shot cues and three haptic ticks on a single entry to or exit from
+            // gameplay. uGUI could not hit this — one presenter per screen id meant its
+            // per-presenter cue was already once per transition, which is the behaviour
+            // being restored here.
+            bool anyShown = false;
+            bool anyHidden = false;
+
             foreach (var (screenId, controller) in screens)
             {
                 bool isModal = screenId == MenuActions.ConfirmModal || screenId == MenuActions.ErrorModal;
@@ -211,15 +246,22 @@ namespace Blockiverse.UI
                 if (visible && !controller.IsVisible)
                 {
                     ApplyPlacementFor(screenId, controller, anchor);
-                    BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiConfirm);
+                    anyShown = true;
                 }
                 else if (!visible && controller.IsVisible)
                 {
-                    BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiCancel);
+                    anyHidden = true;
                 }
 
                 controller.SetVisible(visible, acceptsInput);
             }
+
+            // A route that reveals something reads as a confirm; one that only closes
+            // things reads as a cancel. Never both, and never more than one of either.
+            if (anyShown)
+                BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiConfirm);
+            else if (anyHidden)
+                BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiCancel);
 
             if (quickBlockMenu != null && !CanUseQuickBlockMenu())
                 quickBlockMenu.SetQuickMenuVisible(false);
