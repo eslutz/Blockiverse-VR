@@ -69,13 +69,32 @@ float4 BlockiverseSelectFluidTint(float familyIndex)
 #define BLOCKIVERSE_WAVE_FULL_DISTANCE 28.0
 #define BLOCKIVERSE_WAVE_FADE_DISTANCE 90.0
 
+// The dip amplitude every family's MEAN surface is levelled to.
+//
+// The displacement is strictly non-positive (see below), so a family rests at -amplitude — and the
+// amplitudes deliberately differ per fluid (0.025 freshwater, 0.020 brine, 0.012 emberflow, since
+// lava should barely move). That made the RESTING LEVEL differ too: brine sat 5 mm proud of
+// freshwater, so where the two met one body read as thicker than the other even though the wave
+// ran continuously across both. Eric saw exactly that on device.
+//
+// Levelling to a shared reference keeps the per-fluid MOTION (which is the point) while removing
+// the per-fluid HEIGHT (which was an accident of the same number). The reference is the cap the
+// shader properties already document — VoxelWorldRenderer.MaxWaveDipMeters * 0.5 — so the
+// deepest-moving family is unchanged and quieter ones simply sit lower rather than higher, which
+// is what preserves the non-positive invariant.
+#define BLOCKIVERSE_WAVE_REFERENCE_AMPLITUDE 0.025
+
 void BlockiverseApplyFluidWave(float mask, float4 wave, inout float3 positionWS, out float3 waveNormal)
 {
     float cameraDistance = distance(positionWS, GetCameraPositionWS());
     float distanceFade = 1.0 - smoothstep(
         BLOCKIVERSE_WAVE_FULL_DISTANCE, BLOCKIVERSE_WAVE_FADE_DISTANCE, cameraDistance);
 
-    float amp = wave.x * mask * distanceFade;
+    // Everything that displaces this vertex is multiplied by the same gate, so an unmasked vertex
+    // (a side wall that is not riding a surface) and a far-field vertex stay exactly where the CPU
+    // put them — the levelling bias below must not be an exception to that.
+    float gate = mask * distanceFade;
+    float amp = wave.x * gate;
     float k = wave.y;
     float t = _Time.y * wave.z;
 
@@ -88,7 +107,18 @@ void BlockiverseApplyFluidWave(float mask, float4 wave, inout float3 positionWS,
     // the surface it stands on down by exactly the same amount -- the displacement is a pure
     // function of x and z.
     float s = 0.5 * (sinX + sinZ);
-    positionWS.y += amp * (s - 1.0);
+
+    // Level the mean. `amp * (s - 1.0)` alone puts this family's mean at -amp, so families with
+    // different amplitudes rest at different heights and step against each other at a boundary.
+    // Biasing by (reference - wave.x) drops every family's mean to -reference regardless of how
+    // far it swings, and the bias carries the same mask/distance gate as the wave so an unmasked
+    // vertex still never moves.
+    //
+    // Still strictly non-positive: at the crest (s = 1) the wave term is 0 and the bias is
+    // -(reference - wave.x) * gate <= 0 because wave.x is capped at the reference. A crest can no
+    // more poke above the voxel face than before.
+    float levellingBias = (BLOCKIVERSE_WAVE_REFERENCE_AMPLITUDE - wave.x) * gate;
+    positionWS.y += amp * (s - 1.0) - levellingBias;
 
     // The CPU-baked flat normal cannot follow a GPU displacement, which would light the whole
     // animated surface as one rigid sliding sheet. Rebuild it from the wave derivative and amplify
