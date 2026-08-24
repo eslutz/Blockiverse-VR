@@ -20,7 +20,7 @@ namespace Blockiverse.UI
     // gameplay HUD is the routed screen, and re-discovering on every show picks up replaced
     // bridge/sync instances the way uGUI's rebind did.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/MiningProgress.uxml",
-        400, 90, UiToolkitPlacementProfile.Hud, HudLocalY = 1.05f, NonInteractive = true)]
+        400, 90, UiToolkitPlacementProfile.Hud, HudLocalY = -0.16f, NonInteractive = true)]
     public sealed class MiningProgressController : UiToolkitScreenController
     {
         static class Keys

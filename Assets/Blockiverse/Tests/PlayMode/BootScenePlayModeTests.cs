@@ -47,14 +47,21 @@ namespace Blockiverse.Tests.PlayMode
             yield return null;
 
             GameplayHudController hud = FindScreenIncludingInactive<GameplayHudController>();
+            // The stats readout is a separate panel since the HUD split (action bar low, stats
+            // top-right). It generates from its own [UiToolkitScreen] declaration, so a document
+            // that failed to generate or bind would otherwise go unnoticed — the action bar would
+            // still be there and the test would still pass.
+            GameplayStatsController stats = FindScreenIncludingInactive<GameplayStatsController>();
             InventoryScreenController inventoryScreen = FindScreenIncludingInactive<InventoryScreenController>();
             CraftingScreenController craftingScreen = FindScreenIncludingInactive<CraftingScreenController>();
 
             Assert.That(hud, Is.Not.Null);
+            Assert.That(stats, Is.Not.Null, "The gameplay stats panel was not generated into the Boot scene.");
             Assert.That(inventoryScreen, Is.Not.Null);
             Assert.That(craftingScreen, Is.Not.Null);
 
             Assert.That(hud.IsBound, Is.True, "The generated gameplay HUD did not find its elements.");
+            Assert.That(stats.IsBound, Is.True, "The generated gameplay stats panel did not find its elements.");
             Assert.That(inventoryScreen.IsBound, Is.True, "The generated inventory screen did not find its elements.");
             Assert.That(craftingScreen.IsBound, Is.True, "The generated crafting screen did not find its elements.");
 
@@ -69,8 +76,9 @@ namespace Blockiverse.Tests.PlayMode
             AssertScreenRendersText(inventoryScreen, "Empty");
             AssertScreenRendersText(craftingScreen, "Work Plank x6");
             AssertScreenRendersText(craftingScreen, "Ready");
-            AssertScreenRendersText(hud, "100 / 100");
-            AssertScreenRendersText(hud, "Stable");
+            // The ratio renders on the stats panel now, not the action bar.
+            AssertScreenRendersText(stats, "100 / 100");
+            AssertScreenRendersText(stats, "Stable");
         }
 
         static T FindScreenIncludingInactive<T>() where T : UiToolkitScreenController =>

@@ -181,6 +181,49 @@
    outlines all four borders, and it changes nothing else. Seen leaking on the comfort
    screen's toggle labels in the simulator. :focus alone would miss the toggles, whose
    focus lands on an inner element, so the -within variant carries them. */
+/* A TextField is a composite, and the element you can see is NOT the one you style.
+   `.hs-field` above paints the OUTER field; the inner input draws its own background from the
+   default theme and owns the text. Styling only the outer one leaves the stock near-white input
+   sitting on top of our panel colour, and the text inherits --hs-ink (bone) — so the field reads
+   as a bright white rectangle with nothing in it. That is exactly what shipped to the headset.
+   Every EditMode test passed, because EditMode has no panel and resolves no styles at all: the
+   suite asserts structure and behaviour and can say nothing about appearance.
+   The toggle and slider inner elements below were styled from the start, only because someone
+   looked at those on screen and nobody had looked at a text field.
+   Both selectors are deliberate: UI Toolkit gives the input the NAME unity-text-input and the
+   CLASS unity-base-text-field__input, and matching either alone would fail silently if a Unity
+   version changed one. ToolkitTextFieldStyleEditModeTests asserts a real TextField still carries
+   both. */
+.hs-field #unity-text-input,
+.hs-field .unity-base-text-field__input {
+    background-color: var(--hs-control);
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    padding-left: var(--hs-control-horizontal-padding);
+    padding-right: var(--hs-control-horizontal-padding);
+    color: var(--hs-ink);
+    -unity-text-align: middle-left;
+}
+
+/* The caret and selection come from the theme too, and a dark-on-dark caret is invisible even
+   once the background is right. */
+.hs-field #unity-text-input {
+    /* --unity- prefixed VARIABLES, not plain properties. `cursor-color` and `selection-color`
+       parse as unknown and Unity logs "Unknown style property" at runtime, which a PlayMode test
+       turned into a failure — the styling silently did nothing while the sheet still loaded. The
+       engine's own deprecation text names these as the correct spelling. */
+    --unity-cursor-color: var(--hs-ink);
+    --unity-selection-color: var(--hs-focus);
+}
+
+/* Placeholder text must stay distinguishable from a real value, or an empty seed field looks
+   filled in. */
+.hs-field .unity-text-element--inner-input-field-component {
+    color: var(--hs-dim);
+}
+
 .hs-field:focus,
 .hs-field:focus-within {
     border-top-color: var(--hs-focus);

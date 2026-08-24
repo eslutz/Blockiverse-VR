@@ -4285,6 +4285,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.VR::Blockiverse.VR.BlockiverseKeyboardHandVisibilityController
   avatarRig: {fileID: 5968352841279429918}
+  avatarPresenter: {fileID: 5176223294892901774}
 --- !u!114 &1413307024714837992
 MonoBehaviour:
   m_ObjectHideFlags: 0

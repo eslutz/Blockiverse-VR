@@ -1,3 +1,4 @@
+using Blockiverse.MetaAvatars;
 using Blockiverse.Networking;
 using UnityEngine;
 
@@ -23,6 +24,7 @@ namespace Blockiverse.VR
     public sealed class BlockiverseKeyboardHandVisibilityController : MonoBehaviour
     {
         [SerializeField] BlockiverseNetworkAvatarRig avatarRig;
+        [SerializeField] BlockiverseMetaAvatarPresenter avatarPresenter;
 
         bool lastAppliedVisible;
 
@@ -59,19 +61,36 @@ namespace Blockiverse.VR
         {
             lastAppliedVisible = visible;
             ResolveAvatarRig();
+
+            // BOTH bodies, because a player only ever has one of them and telling the wrong one
+            // hides nothing. The fallback call was the whole implementation while block hands were
+            // all anyone saw; once Meta avatars load, it suppresses a proxy that is not being
+            // rendered while the real avatar stays on screen — which is what Eric saw, with the
+            // hands frozen because the entity holds its last pose once the keyboard overlay takes
+            // focus.
             avatarRig?.SetFirstPersonFallbackVisualsSuppressed(visible);
+            avatarPresenter?.SetFirstPersonVisualsSuppressed(visible);
         }
 
         void ResolveAvatarRig()
         {
-            if (avatarRig != null)
-                return;
+            if (avatarRig == null)
+            {
+                avatarRig = GetComponent<BlockiverseNetworkAvatarRig>();
+                if (avatarRig == null)
+                    avatarRig = GetComponentInParent<BlockiverseNetworkAvatarRig>(includeInactive: true);
+                if (avatarRig == null)
+                    avatarRig = GetComponentInChildren<BlockiverseNetworkAvatarRig>(includeInactive: true);
+            }
 
-            avatarRig = GetComponent<BlockiverseNetworkAvatarRig>();
-            if (avatarRig == null)
-                avatarRig = GetComponentInParent<BlockiverseNetworkAvatarRig>(includeInactive: true);
-            if (avatarRig == null)
-                avatarRig = GetComponentInChildren<BlockiverseNetworkAvatarRig>(includeInactive: true);
+            if (avatarPresenter == null)
+            {
+                avatarPresenter = GetComponent<BlockiverseMetaAvatarPresenter>();
+                if (avatarPresenter == null)
+                    avatarPresenter = GetComponentInParent<BlockiverseMetaAvatarPresenter>(includeInactive: true);
+                if (avatarPresenter == null)
+                    avatarPresenter = GetComponentInChildren<BlockiverseMetaAvatarPresenter>(includeInactive: true);
+            }
         }
     }
 }

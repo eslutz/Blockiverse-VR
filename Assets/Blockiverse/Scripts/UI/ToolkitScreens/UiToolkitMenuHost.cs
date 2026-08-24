@@ -26,8 +26,8 @@ namespace Blockiverse.UI
         IUiToolkitQuickBlockMenu quickBlockMenu;
         UiToolkitScreenController quickBlockMenuController;
         BlockiverseComfortSettings comfortSettings;
-        BlockiverseAudioCuePlayer audioCuePlayer;
-        IBlockiverseInteractionHaptics interactionHaptics;
+        // No audio fields here any more: the host plays nothing. Route changes are silent by
+        // design, and every remaining cue lives with the screen that knows the outcome.
         Pose titleMenuPose;
         bool hasTitleMenuPose;
         bool registered;
@@ -50,9 +50,21 @@ namespace Blockiverse.UI
             ApplyRouterState();
         }
 
-        // Hud-profile panels ride the rig like the uGUI HUD did: parented under Camera
-        // Offset at a fixed local pose, never recentered, never world-placed. Runtime
-        // parenting keeps the generated Boot scene free of rig-instance overrides.
+        // Hud-profile panels ride the HEAD, at a fixed local pose, never recentered, never
+        // world-placed. Runtime parenting keeps the generated Boot scene free of rig-instance
+        // overrides.
+        //
+        // They used to hang off Camera Offset, which is the rig's floor anchor — the head camera
+        // is a CHILD of it, so the panels were the head's siblings. That tracks where the player
+        // stands but not where they look: turn your head and the HUD stays behind in rig space.
+        // It was survivable while everything sat dead ahead, and became the whole problem the
+        // moment the HUD moved to the edge of vision, because anything off-centre leaves the view
+        // entirely unless you happen to be facing the rig's forward axis. Eric reported both
+        // symptoms together — misplaced AND not following his head — and they are one bug.
+        //
+        // Head-locking is right for THIS content specifically: small, read-at-a-glance strips that
+        // should hold a constant place in the field of view. It is not a licence to head-lock the
+        // routed menus, which are large, dwelt on, and world-placed on purpose.
         void AttachHudPanels()
         {
             if (hudPanelsAttached)
@@ -65,18 +77,22 @@ namespace Blockiverse.UI
             if (cameraOffset == null)
                 return;
 
+            // Fall back to Camera Offset if the head is missing rather than dropping the HUD
+            // entirely: a mispositioned HUD is recoverable, an absent one is not.
+            Transform head = cameraOffset.Find("Main Camera") ?? cameraOffset;
+
             foreach (var (_, controller) in screens)
-                AttachHudPanel(controller, cameraOffset);
+                AttachHudPanel(controller, head);
 
             // The quick block menu is excluded from the routed screens list but is still a
-            // HUD-family panel and must ride the rig at its declared local pose.
+            // HUD-family panel and must ride the head at its declared local pose.
             if (quickBlockMenuController != null)
-                AttachHudPanel(quickBlockMenuController, cameraOffset);
+                AttachHudPanel(quickBlockMenuController, head);
 
             hudPanelsAttached = true;
         }
 
-        void AttachHudPanel(UiToolkitScreenController controller, Transform cameraOffset)
+        void AttachHudPanel(UiToolkitScreenController controller, Transform head)
         {
             if (!screenAttributes.TryGetValue(controller, out UiToolkitScreenAttribute attribute) ||
                 attribute.PlacementProfile != UiToolkitPlacementProfile.Hud)
@@ -84,8 +100,11 @@ namespace Blockiverse.UI
                 return;
             }
 
+            // HudLocal* are now HEAD-relative: Y = 0 is eye level, not floor level. The declared
+            // values were rebased when the parent changed — a floor-relative 1.55 would otherwise
+            // put a panel a metre and a half above the player's eyes.
             Transform panel = controller.transform;
-            panel.SetParent(cameraOffset, worldPositionStays: false);
+            panel.SetParent(head, worldPositionStays: false);
             panel.localPosition = new Vector3(attribute.HudLocalX, attribute.HudLocalY, attribute.HudLocalZ);
             panel.localRotation = Quaternion.Euler(attribute.HudPitchDegrees, 0f, 0f);
         }
@@ -222,15 +241,6 @@ namespace Blockiverse.UI
 
             UiToolkitScreenController anchor = FindVisibleAnchoredScreen();
 
-            // Counted across the whole pass, not per panel. Three controllers share the
-            // gameplay_hud route, so playing inside the loop stacked three identical
-            // one-shot cues and three haptic ticks on a single entry to or exit from
-            // gameplay. uGUI could not hit this — one presenter per screen id meant its
-            // per-presenter cue was already once per transition, which is the behaviour
-            // being restored here.
-            bool anyShown = false;
-            bool anyHidden = false;
-
             foreach (var (screenId, controller) in screens)
             {
                 bool isModal = screenId == MenuActions.ConfirmModal || screenId == MenuActions.ErrorModal;
@@ -242,24 +252,25 @@ namespace Blockiverse.UI
                     string.Equals(screenId, inputTarget, StringComparison.Ordinal);
 
                 if (visible && !controller.IsVisible)
-                {
                     ApplyPlacementFor(screenId, controller, anchor);
-                    anyShown = true;
-                }
-                else if (!visible && controller.IsVisible)
-                {
-                    anyHidden = true;
-                }
 
                 controller.SetVisible(visible, acceptsInput);
             }
 
-            // A route that reveals something reads as a confirm; one that only closes
-            // things reads as a cancel. Never both, and never more than one of either.
-            if (anyShown)
-                BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiConfirm);
-            else if (anyHidden)
-                BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiCancel);
+            // NO SOUND ON NAVIGATION. Eric's ruling (2026-08-24): a confirm noise belongs on an
+            // actual confirmation, a cancel noise on an actual cancel, and every other button just
+            // clicks. Moving between screens is not an outcome and does not need announcing.
+            //
+            // This used to play UiConfirm whenever a route revealed anything and UiCancel whenever
+            // one only closed things — so the heaviest cue in the set fired on every single menu
+            // step, layered on top of the button's own click. It is why softening ui_select changed
+            // nothing audible: the sound being complained about was this one, 8 dB louder at peak
+            // and 20 dB brighter, drowning the click underneath it.
+            //
+            // The genuine outcome cues are untouched and live where the outcome is known: the LAN
+            // screen plays UiConfirm when a session actually starts and UiCancel when it fails, and
+            // the crate screen plays UiCancel on a rejected transfer. Those mean something. A
+            // screen appearing does not.
 
             if (quickBlockMenu != null && !CanUseQuickBlockMenu())
                 quickBlockMenu.SetQuickMenuVisible(false);

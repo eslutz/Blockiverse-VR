@@ -136,10 +136,19 @@ namespace Blockiverse.Tests.EditMode
             return width.value.value;
         }
 
-        [TestCase(typeof(GameplayHudController), 590, 190, 1.30f)]
-        [TestCase(typeof(MiningProgressController), 400, 90, 1.05f)]
-        [TestCase(typeof(StatusToastController), 640, 120, 1.55f)]
-        [TestCase(typeof(CreativeHotbarController), 590, 500, 0.9f)]
+        // The action bar sits LOW and the stats readout sits top-right; they used to be one panel
+        // at the Hud profile default (dead centre, 1.30 eye height), which is what Eric reported as
+        // the HUD blocking his view. These numbers are the split, not a tuning nudge.
+        // HudLocalY is HEAD-relative: 0 is eye level, negative is below it. These were
+        // floor-relative until the HUD was reparented from Camera Offset to the head — panels
+        // followed where the player stood but not where they looked, so anything off-centre left
+        // the view the moment they turned. A floor-relative 1.55 read as eye-level-plus-1.55m
+        // after the reparent, which is why every value here changed at once.
+        [TestCase(typeof(GameplayHudController), 590, 150, -0.40f)]
+        [TestCase(typeof(GameplayStatsController), 460, 190, 0.24f)]
+        [TestCase(typeof(MiningProgressController), 400, 90, -0.16f)]
+        [TestCase(typeof(StatusToastController), 640, 120, 0.34f)]
+        [TestCase(typeof(CreativeHotbarController), 590, 500, -0.50f)]
         public void HudFamilyDeclaresTheSharedScreenIdAndHudProfile(Type controllerType, int width, int height, float hudLocalY)
         {
             var attribute = (UiToolkitScreenAttribute)Attribute.GetCustomAttribute(
@@ -167,7 +176,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void HealthRatioBarAndStateFollowVitalsTransitions()
         {
-            GameplayHudController controller = CreateScreen<GameplayHudController>();
+            GameplayStatsController controller = CreateScreen<GameplayStatsController>();
             VisualElement root = AttachFreshTree(controller);
             Assert.That(controller.IsBound, Is.True);
 
@@ -203,7 +212,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void StateLineIncludesHungerThirstStaminaWhenSurvivalVitalsBound()
         {
-            GameplayHudController controller = CreateScreen<GameplayHudController>();
+            GameplayStatsController controller = CreateScreen<GameplayStatsController>();
             VisualElement root = AttachFreshTree(controller);
 
             controller.Bind(new PlayerVitals(currentHealth: 75));

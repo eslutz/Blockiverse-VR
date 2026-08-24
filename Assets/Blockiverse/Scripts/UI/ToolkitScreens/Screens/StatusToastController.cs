@@ -20,7 +20,7 @@ namespace Blockiverse.UI
     // is unchanged: only FINAL harvest rejections (not accepted, not pending, not duplicate)
     // produce a toast.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/StatusToast.uxml",
-        640, 120, UiToolkitPlacementProfile.Hud, HudLocalY = 1.55f, NonInteractive = true)]
+        640, 120, UiToolkitPlacementProfile.Hud, HudLocalY = 0.34f, NonInteractive = true)]
     public sealed class StatusToastController : UiToolkitScreenController
     {
         // uGUI serialized default (statusMessageSeconds).

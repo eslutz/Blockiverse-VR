@@ -60,7 +60,7 @@ namespace Blockiverse.UI
         // way: rig-relative, never recentered. Ignored for other profiles. Defaults put a
         // panel 1.15 m forward at chest-to-eye height with a 12° downward tilt.
         public float HudLocalX { get; set; } = 0f;
-        public float HudLocalY { get; set; } = 1.30f;
+        public float HudLocalY { get; set; } = 0f;   // eye level: HudLocal* are HEAD-relative
         public float HudLocalZ { get; set; } = 1.15f;
         public float HudPitchDegrees { get; set; } = 12f;
 

@@ -214,11 +214,52 @@ namespace Blockiverse.UI
                     root.styleSheets.Add(sheet);
             }
 
+            // One handler on the root rather than one per button: a pointer click must not leave
+            // focus behind.
+            //
+            // A ray click focuses the button and nothing ever takes that focus away, so
+            // `.hs-button:focus` keeps rendering — Eric cycled an option on the New World screen
+            // and the arrow stayed depressed and outlined as though it were still selected. On a
+            // desktop that persistence is correct (it is where the keyboard is), but a VR ray is a
+            // pointer: pressing a thing is not the same as parking on it.
+            //
+            // Focus styling itself stays. It is the only affordance a gamepad or keyboard user
+            // has, and ADR 0010 §8 fixes its colour deliberately (bone, never ember). This clears
+            // focus only when a POINTER caused it.
+            root.RegisterCallback<ClickEvent>(ClearPointerFocusAfterClick);
+
+            // Every text field in the tree, not a per-screen opt-in. The keyboard only reopening
+            // once is a property of how UI Toolkit reads focus on a headset, so it applies to any
+            // field that ever ships — making each screen remember to opt in guarantees the next
+            // one forgets. Attach is idempotent, and the tree is rebuilt on every attach, so
+            // handlers cannot accumulate.
+            foreach (TextField field in root.Query<TextField>().Build())
+                ToolkitKeyboardField.Attach(field);
+
             AttachTo(root);
 
             // Re-apply the current visibility to the freshly built tree, or a panel hidden
             // before a rebuild comes back visible.
             SetVisible(visible, acceptsInput);
+        }
+
+        static void ClearPointerFocusAfterClick(ClickEvent evt)
+        {
+            // pointerId < 0 is a synthesized click (keyboard Return/Space on a focused control).
+            // Blurring there would take focus away from a player navigating without a pointer.
+            if (evt.pointerId < 0)
+                return;
+
+            if (evt.target is not VisualElement clicked)
+                return;
+
+            // Text fields are the exception that matters: a tap on one is the player asking for
+            // the keyboard, and blurring it here would fight ToolkitKeyboardField and close the
+            // keyboard the moment it opened.
+            if (clicked is TextField || clicked.GetFirstAncestorOfType<TextField>() != null)
+                return;
+
+            clicked.focusController?.focusedElement?.Blur();
         }
 
         void AttachTo(VisualElement root)

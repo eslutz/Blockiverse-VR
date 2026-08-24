@@ -22,7 +22,7 @@ namespace Blockiverse.UI
     // UiSelect feedback only when no scene hotbar exists; either way exactly one audio cue
     // per selection, plus the haptic the uGUI hotbar never had.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/CreativeHotbar.uxml",
-        590, 500, UiToolkitPlacementProfile.Hud, HudLocalY = 0.9f)]
+        590, 500, UiToolkitPlacementProfile.Hud, HudLocalY = -0.50f)]
     public sealed class CreativeHotbarController : UiToolkitScreenController, IUiToolkitQuickBlockMenu
     {
         static class Keys
