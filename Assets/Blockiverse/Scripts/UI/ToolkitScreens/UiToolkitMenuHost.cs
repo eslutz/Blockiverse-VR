@@ -11,9 +11,8 @@ namespace Blockiverse.UI
     // The UI Toolkit menu backend (ADR 0010: UiToolkitMenuHost). Owns screen lifecycle and
     // nothing else: BlockiverseMenuController keeps the router, action handling, first-run
     // flows and domain commands; this host renders its state through per-screen controllers
-    // and answers its pending-state reads. While an enabled host is present the controller
-    // hides every uGUI presenter — disabling this component is the whole dev fallback switch
-    // back to the uGUI menus.
+    // and answers its pending-state reads. It is now the only menu frontend — with no host
+    // registered the controller still routes correctly but nothing draws.
     [DisallowMultipleComponent]
     public sealed class UiToolkitMenuHost : MonoBehaviour, IBlockiverseMenuFrontend
     {
@@ -104,12 +103,11 @@ namespace Blockiverse.UI
             RegisterWithController();
         }
 
-        // Disabling this component IS the documented fallback switch back to the uGUI
-        // menus, so the teardown has to be complete or the switch does not switch. Merely
-        // unregistering left the router subscription live and the panels on screen: the
-        // "disabled" host went on driving Toolkit screens through every later navigation
-        // while uGUI was also visible, and a LAN screen left visible kept its discovery
-        // socket listening. Unsubscribe, then hide everything including the quick menu.
+        // The teardown has to be complete, not just a deregistration. Merely unregistering
+        // left the router subscription live and the panels on screen: the "disabled" host
+        // went on driving Toolkit screens through every later navigation, and a LAN screen
+        // left visible kept its discovery socket listening. Unsubscribe, then hide
+        // everything including the quick menu.
         void OnDisable()
         {
             DetachFromController();
@@ -208,11 +206,11 @@ namespace Blockiverse.UI
             DetachFromController();
         }
 
-        // Mirror of BlockiverseMenuController.ApplyRouterState's presenter loop, on UI
-        // Toolkit screens. The semantics are copied deliberately, not redesigned: modal
-        // screens are visible iff a modal is open and they are the input target; normal
-        // screens are visible iff they are the routed screen; only the input target accepts
-        // input; the world-loading overlay never does.
+        // Screen visibility for the whole menu system. The semantics were copied from the
+        // uGUI presenter loop this replaced rather than redesigned, and they still hold:
+        // modal screens are visible iff a modal is open and they are the input target;
+        // normal screens are visible iff they are the routed screen; only the input target
+        // accepts input; the world-loading overlay never does.
         void ApplyRouterState()
         {
             if (menuController == null || menuController.Router == null)

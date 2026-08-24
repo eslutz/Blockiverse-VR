@@ -19,7 +19,6 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
 using InputTrackingState = UnityEngine.XR.InputTrackingState;
 
 namespace Blockiverse.Tests.PlayMode
@@ -290,20 +289,33 @@ namespace Blockiverse.Tests.PlayMode
             }
         }
 
+        // Retargeted from the uGUI comfort menu at the uGUI cutover. What survives is the part
+        // no EditMode test can cover: that the GENERATED Boot scene actually contains a comfort
+        // screen which found its named elements. A screen that generates but never binds renders
+        // as a healthy blank panel, so IsBound is the assertion that matters here.
+        //
+        // Initial visibility is deliberately not asserted: the first-run comfort route makes it
+        // depend on a PlayerPrefs flag, where the uGUI menu was only ever toggled by input.
+        //
+        // The configure-after-Awake callback-registration guard that used to sit alongside this
+        // is now ComfortSettingsScreenEditModeTests' Attach/Reattach pair.
         [UnityTest]
-        public IEnumerator BootSceneContainsComfortSettingsMenu()
+        public IEnumerator BootSceneContainsComfortSettingsScreen()
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle("Boot");
 
-            BlockiverseComfortMenu menu = Object.FindFirstObjectByType<BlockiverseComfortMenu>(FindObjectsInactive.Include);
-            Assert.That(menu, Is.Not.Null);
-            Assert.That(menu.IsVisible, Is.False);
+            ComfortSettingsScreenController screen =
+                Object.FindFirstObjectByType<ComfortSettingsScreenController>(FindObjectsInactive.Include);
+            Assert.That(screen, Is.Not.Null);
+            Assert.That(screen.IsBound, Is.True,
+                "The generated comfort screen did not find its elements — the UXML did not load, " +
+                "or its element names drifted from the controller.");
 
-            menu.Show();
-            Assert.That(menu.IsVisible, Is.True);
+            screen.SetVisible(true, true);
+            Assert.That(screen.IsVisible, Is.True);
 
-            menu.Hide();
-            Assert.That(menu.IsVisible, Is.False);
+            screen.SetVisible(false, false);
+            Assert.That(screen.IsVisible, Is.False);
 
             Scene cleanupScene = SceneManager.CreateScene("LocomotionTestCleanup");
             SceneManager.SetActiveScene(cleanupScene);
@@ -311,57 +323,6 @@ namespace Blockiverse.Tests.PlayMode
 
             if (unload != null)
                 yield return unload;
-        }
-
-        [Test]
-        public void ComfortMenuRegistersCallbacksWhenControlsAreConfiguredAfterAwake()
-        {
-            var settingsObject = new GameObject("Comfort Settings");
-            var menuObject = new GameObject("Comfort Menu");
-            var glideObject = new GameObject("Glide Toggle");
-            var teleportObject = new GameObject("Teleport Toggle");
-            var smoothTurnObject = new GameObject("Smooth Turn Toggle");
-            var snapTurnObject = new GameObject("Snap Turn Slider");
-
-            try
-            {
-                var settings = settingsObject.AddComponent<BlockiverseComfortSettings>();
-                var menu = menuObject.AddComponent<BlockiverseComfortMenu>();
-                var canvas = menuObject.AddComponent<Canvas>();
-                var glideToggle = glideObject.AddComponent<Toggle>();
-                var teleportToggle = teleportObject.AddComponent<Toggle>();
-                var smoothTurnToggle = smoothTurnObject.AddComponent<Toggle>();
-                var snapTurnSlider = snapTurnObject.AddComponent<Slider>();
-
-                // Start in Glide mode
-                glideToggle.isOn = true;
-                teleportToggle.isOn = false;
-                smoothTurnToggle.isOn = false;
-                snapTurnSlider.minValue = 15.0f;
-                snapTurnSlider.maxValue = 90.0f;
-                snapTurnSlider.value = 45.0f;
-
-                menu.Configure(canvas, settings);
-                menu.ConfigureControls(glideToggle, teleportToggle, smoothTurnToggle, snapTurnSlider);
-
-                // Switch to Teleport mode via the glide toggle
-                glideToggle.isOn = false;
-                smoothTurnToggle.isOn = true;
-                snapTurnSlider.value = 60.0f;
-
-                Assert.That(settings.LocomotionMode, Is.EqualTo(BlockiverseLocomotionMode.Teleport));
-                Assert.That(settings.SmoothTurnEnabled, Is.True);
-                Assert.That(settings.SnapTurnDegrees, Is.EqualTo(60.0f).Within(0.01f));
-            }
-            finally
-            {
-                Object.DestroyImmediate(snapTurnObject);
-                Object.DestroyImmediate(smoothTurnObject);
-                Object.DestroyImmediate(teleportObject);
-                Object.DestroyImmediate(glideObject);
-                Object.DestroyImmediate(menuObject);
-                Object.DestroyImmediate(settingsObject);
-            }
         }
 
         static GameObject CreateXrOrigin(out XROrigin origin)
@@ -475,10 +436,9 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ConfiguredInputActionsDriveLocomotionAndComfortMenu()
+        public IEnumerator ConfiguredInputActionsDriveLocomotionAndMenuToggle()
         {
             GameObject rigObject = CreateXrOrigin(out XROrigin origin);
-            GameObject menuObject = new("Comfort Menu");
             InputActionAsset actions = CreateTestActions();
             Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
 
@@ -503,10 +463,12 @@ namespace Blockiverse.Tests.PlayMode
                 inputRig.Configure(actions);
                 inputRig.ConfigureLocomotion(teleport, snapTurn, heightReset, continuousMove, mediator, bodyTransformer, settings);
 
-                var canvas = menuObject.AddComponent<Canvas>();
-                var menu = menuObject.AddComponent<BlockiverseComfortMenu>();
-                menu.Configure(canvas, settings);
-                inputRig.MenuPressed.AddListener(menu.ToggleVisible);
+                // The tail of this test is about MenuPressed edges, not about a menu: one press
+                // toggles once, holding does not re-toggle, and release-then-press toggles back.
+                // A plain flag is the whole contract; it used to be the uGUI comfort menu's
+                // ToggleVisible, which pinned an input test to a menu backend.
+                bool menuVisible = false;
+                inputRig.MenuPressed.AddListener(() => menuVisible = !menuVisible);
 
                 Set(gamepad.rightStick, Vector2.right);
                 yield return null;
@@ -527,23 +489,22 @@ namespace Blockiverse.Tests.PlayMode
                 Release(gamepad.leftShoulder);
                 yield return null;
 
-                Assert.That(menu.IsVisible, Is.False);
+                Assert.That(menuVisible, Is.False);
                 Press(gamepad.startButton);
                 yield return null;
-                Assert.That(menu.IsVisible, Is.True);
+                Assert.That(menuVisible, Is.True);
 
                 yield return null;
-                Assert.That(menu.IsVisible, Is.True);
+                Assert.That(menuVisible, Is.True);
 
                 Release(gamepad.startButton);
                 yield return null;
                 Press(gamepad.startButton);
                 yield return null;
-                Assert.That(menu.IsVisible, Is.False);
+                Assert.That(menuVisible, Is.False);
             }
             finally
             {
-                Object.DestroyImmediate(menuObject);
                 DestroyRigImmediate(rigObject);
                 Object.DestroyImmediate(actions);
             }

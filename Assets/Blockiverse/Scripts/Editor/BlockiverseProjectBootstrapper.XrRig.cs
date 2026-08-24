@@ -101,12 +101,13 @@ namespace Blockiverse.Editor
             EnsureComponent<BlockiverseFoveatedRenderingController>(rig);
             EnsureComponent<BlockiverseComfortTransition>(rig);
             EnsureComponent<BlockiverseTmpFontFallbackBootstrapper>(rig);
-            EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
             EnsureXrRigTunnelingVignette(rig);
+            // The boot splash stays uGUI-side deliberately: WorldLoadingScreenController is a
+            // routed screen and its header says the splash and its 2.25 s auto-hide timer are a
+            // separate object that was not ported.
             EnsureXrRigStartupLoadingOverlay(rig);
-            EnsureXrRigControllerMappingPopup(rig);
-            EnsureXrRigSurvivalHud(rig);
+            EnsureXrRigSubtitleToast(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             EnsureXrRigCreativeFlight(rig, inputRig);
             EnsureXrRigFeedback(rig, inputRig);
@@ -181,16 +182,50 @@ namespace Blockiverse.Editor
             EnsureComponent<BlockiverseFoveatedRenderingController>(rig);
             EnsureComponent<BlockiverseComfortTransition>(rig);
             EnsureComponent<BlockiverseTmpFontFallbackBootstrapper>(rig);
-            EnsureXrRigComfortMenu(rig, inputRig);
             EnsureXrRigInteraction(rig, inputRig);
             EnsureXrRigTunnelingVignette(rig);
+            // The boot splash stays uGUI-side deliberately: WorldLoadingScreenController is a
+            // routed screen and its header says the splash and its 2.25 s auto-hide timer are a
+            // separate object that was not ported.
             EnsureXrRigStartupLoadingOverlay(rig);
-            EnsureXrRigControllerMappingPopup(rig);
-            EnsureXrRigSurvivalHud(rig);
+            EnsureXrRigSubtitleToast(rig);
             EnsureXrRigCreativeInputBridge(rig, inputRig);
             EnsureXrRigCreativeFlight(rig, inputRig);
             EnsureXrRigFeedback(rig, inputRig);
             EnsureXrRigGameMenus(rig, inputRig);
+            RemoveMissingScriptComponents(rig);
+        }
+
+        // Strips components whose script no longer exists, anywhere under the rig.
+        //
+        // Deleting a MonoBehaviour's .cs does not remove the component from an object that already
+        // had it: this pass re-authors the existing prefab rather than rebuilding it, so the object
+        // survives carrying a missing-script entry. Unity then warns on every load and drops it
+        // silently at build time, which is a bad way to find out.
+        //
+        // Retiring the uGUI menus removed most of them with their whole GameObjects
+        // (RetiredUguiMenuPanelNames), but that only helps a component whose object also died. The
+        // catalog browser shared the Block Menu with CreativeHotbar — the object SURVIVES because
+        // the hotbar is gameplay state — so nothing would have taken the browser off it. Sweeping
+        // by missing-script rather than by type also means this keeps working after the class is
+        // gone, which a typed RemoveComponentIfPresent<T> cannot do.
+        static void RemoveMissingScriptComponents(GameObject root)
+        {
+            if (root == null)
+                return;
+
+            int removed = 0;
+
+            foreach (Transform child in root.GetComponentsInChildren<Transform>(includeInactive: true))
+                removed += GameObjectUtility.RemoveMonoBehavioursWithMissingScript(child.gameObject);
+
+            if (removed > 0)
+            {
+                EditorUtility.SetDirty(root);
+                BlockiverseLog.Info(
+                    BlockiverseLogCategory.General,
+                    $"Removed {removed} component(s) with missing scripts from {root.name}.");
+            }
         }
 
         static void ConfigureXrMainCamera(Camera camera)
@@ -447,6 +482,15 @@ namespace Blockiverse.Editor
             BlockiverseKeyboardHandVisibilityController keyboardHandVisibility =
                 EnsureComponent<BlockiverseKeyboardHandVisibilityController>(rig);
             keyboardHandVisibility.Configure(avatarRig);
+
+            // Item icons are rig state, not menu state: the library is a component on the rig that
+            // screens look up by scene search. Its generator used to be called from
+            // EnsureXrRigSurvivalHud — the uGUI survival HUD builder — which was its only call
+            // site, so removing the uGUI menus would have stopped the component being generated at
+            // all and left the surviving UI Toolkit inventory and crafting screens with no icons.
+            // Nothing would have failed loudly; the icons would just be missing.
+            EnsureItemIconLibrary(rig);
+
             MetaHorizonAvatarProvider avatarProvider = EnsureComponent<MetaHorizonAvatarProvider>(rig);
             BlockiverseMetaAvatarPresenter avatarPresenter = EnsureComponent<BlockiverseMetaAvatarPresenter>(rig);
             Transform cameraOffset = rig.transform.Find("Camera Offset");
@@ -482,322 +526,6 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(avatarInputManager);
             EditorUtility.SetDirty(avatarProvider);
             EditorUtility.SetDirty(avatarPresenter);
-        }
-
-        static void EnsureXrRigComfortMenu(GameObject rig, BlockiverseInputRig inputRig)
-        {
-            Transform cameraOffset = rig.transform.Find("Camera Offset");
-            Transform leftController = cameraOffset != null ? cameraOffset.Find("Left Controller") : null;
-            Transform head = cameraOffset != null ? cameraOffset.Find("Main Camera") : null;
-
-            if (cameraOffset == null)
-                return;
-
-            BlockiverseComfortSettings settings = rig.GetComponent<BlockiverseComfortSettings>();
-            BlockiverseHeightReset heightReset = rig.GetComponent<BlockiverseHeightReset>();
-            GameObject menuObject = EnsureWorldSpaceMenuRectChild(cameraOffset, leftController, ComfortMenuName);
-            const float comfortMenuScale = 0.00105f;
-            menuObject.transform.localPosition = new Vector3(0.0f, 1.42f, 1.18f);
-            menuObject.transform.localRotation = Quaternion.Euler(0.0f, 0.0f, 0.0f);
-            menuObject.transform.localScale = Vector3.one * comfortMenuScale;
-
-            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
-            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, ComfortMenuSize.x);
-            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, ComfortMenuSize.y);
-
-            Canvas canvas = EnsureComponent<Canvas>(menuObject);
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 10;
-            canvas.enabled = false;
-            ConfigureCanvasWorldCamera(canvas, head);
-
-            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            scaler.dynamicPixelsPerUnit = 10.0f;
-
-            EnsureTrackedDeviceRaycaster(menuObject);
-
-            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
-            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-            RemoveStaleChild(panelObject.transform, "Dominant Hand Only Toggle");
-            Image panelImage = EnsureComponent<Image>(panelObject);
-            Sprite comfortPanelSprite = GetRoundedSprite();
-            if (comfortPanelSprite != null)
-            {
-                panelImage.sprite = comfortPanelSprite;
-                panelImage.type = Image.Type.Sliced;
-            }
-            panelImage.color = ComfortMenuPanelColor;
-
-            EnsureLabel(
-                panelObject.transform,
-                "Title",
-                "Comfort Settings",
-                32,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -36.0f),
-                TitleSizeWithClose(ComfortMenuSize.x, 56.0f));
-
-            EnsureButtonControl(
-                panelObject.transform,
-                "Close Button",
-                "Close",
-                TopRightClosePosition(ComfortMenuSize.x),
-                MenuCloseButtonSize);
-
-            // --- Movement Mode (Glide / Teleport) ---
-            EnsureLabel(panelObject.transform, "Movement Label", "Movement Mode", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -100.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle glideToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Glide Toggle",
-                "Glide Motion",
-                settings == null || settings.LocomotionMode == BlockiverseLocomotionMode.Glide,
-                new Vector2(32.0f, -140.0f));
-
-            Toggle teleportToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Teleport Toggle",
-                "Teleport",
-                settings != null && settings.LocomotionMode == BlockiverseLocomotionMode.Teleport,
-                new Vector2(32.0f, -188.0f));
-
-            Slider moveSpeedSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "Move Speed Slider",
-                "Move Speed",
-                settings != null ? settings.ContinuousMoveSpeed : 1.8f,
-                new Vector2(32.0f, -252.0f),
-                minValue: 0.5f,
-                maxValue: 4.0f);
-
-            Toggle glideBobToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Glide Bob Toggle",
-                "Walk Head-Bob",
-                settings != null && settings.GlideStyle == GlideStyle.Bobbing,
-                new Vector2(32.0f, -316.0f));
-
-            // --- Turning ---
-            EnsureLabel(panelObject.transform, "Turning Label", "Turning", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(532.0f, -100.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle smoothTurnToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Smooth Turn Toggle",
-                "Smooth Turn",
-                settings != null && settings.SmoothTurnEnabled,
-                new Vector2(532.0f, -140.0f));
-
-            Slider snapTurnSlider = EnsureSnapTurnSlider(
-                panelObject.transform,
-                settings != null ? settings.SnapTurnDegrees : 45.0f,
-                new Vector2(532.0f, -204.0f));
-
-            Toggle turnAroundToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Turn Around Toggle",
-                "Turn Around",
-                settings == null || settings.SnapTurnAroundEnabled,
-                new Vector2(532.0f, -300.0f));
-
-            Slider smoothTurnSpeedSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "Smooth Turn Speed Slider",
-                "Smooth Turn Speed",
-                settings != null ? settings.ContinuousTurnSpeed : 60.0f,
-                new Vector2(532.0f, -364.0f),
-                minValue: 30.0f,
-                maxValue: 180.0f);
-
-            // --- Hand Roles ---
-            EnsureLabel(panelObject.transform, "Control Options Label", "Control Options", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -384.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle leftHandToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Left Hand Toggle",
-                "Left-Handed",
-                settings != null && settings.DominantHand == BlockiverseControllerRole.Left,
-                new Vector2(32.0f, -424.0f));
-
-            Toggle toggleToMineToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Toggle To Mine Toggle",
-                "Toggle To Mine",
-                settings != null && settings.ToggleToMineEnabled,
-                new Vector2(32.0f, -472.0f));
-
-            // Sprint and crouch default to click-and-hold. These opt each one into click-to-toggle
-            // independently, so a player can hold to sprint while crouch stays a toggle.
-            Toggle sprintToggleToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Sprint Toggle Toggle",
-                "Click To Toggle Sprint",
-                settings != null && settings.SprintToggleEnabled,
-                new Vector2(32.0f, -520.0f));
-
-            Toggle crouchToggleToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Crouch Toggle Toggle",
-                "Click To Toggle Crouch",
-                settings != null && settings.CrouchToggleEnabled,
-                new Vector2(32.0f, -568.0f));
-
-            // --- Vignette ---
-            EnsureLabel(panelObject.transform, "View Comfort Label", "View Comfort", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(532.0f, -500.0f), new Vector2(300.0f, 36.0f));
-
-            Toggle vignetteToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Vignette Toggle",
-                "Motion Vignette",
-                settings != null && settings.VignetteEnabled,
-                new Vector2(532.0f, -540.0f));
-
-            Slider vignetteSlider = EnsureVignetteSlider(
-                panelObject.transform,
-                settings != null ? settings.VignetteStrength : 0.0f,
-                new Vector2(532.0f, -604.0f));
-
-            EnsureLabel(panelObject.transform, "Player View Label", "Player View", 22,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f), new Vector2(0.0f, 1.0f),
-                new Vector2(32.0f, -620.0f), new Vector2(300.0f, 36.0f));
-
-
-            // Off by default: everyone is the same size in the world. On, the player's own
-            // height drives collision and view, so tall players duck where short players walk.
-            Toggle realPlayerHeightToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Real Player Height Toggle",
-                "Use My Real Height",
-                settings != null && settings.RealPlayerHeightEnabled,
-                new Vector2(32.0f, -772.0f));
-
-            // The eye-height slider was removed: letting players dial the view height independently
-            // of the collision capsule is what made them feel too tall. Height is now one choice —
-            // the fixed player size, or "Use My Real Height".
-            RemoveStaleChild(panelObject.transform, "Eye Height Slider");
-
-            Slider uiScaleSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "UI Scale Slider",
-                "UI Scale",
-                settings != null ? settings.UiScale : 1.0f,
-                new Vector2(532.0f, -724.0f),
-                minValue: 0.85f,
-                maxValue: 1.35f);
-
-            // --- Height Reset ---
-            Button heightResetButton = EnsureButtonControl(
-                panelObject.transform,
-                "Height Reset Button",
-                "Reset Height",
-                new Vector2(32.0f, -724.0f));
-
-            if (heightReset != null)
-            {
-                RemovePersistentListeners(
-                    heightResetButton.onClick,
-                    heightReset,
-                    nameof(BlockiverseHeightReset.ResetHeight));
-                UnityEventTools.AddPersistentListener(heightResetButton.onClick, heightReset.ResetHeight);
-                EditorUtility.SetDirty(heightResetButton);
-            }
-
-            // Swimming. Placed below the lowest existing rows in each column: the panel is 1040x980
-            // with hand-placed coordinates and no reflow, the left column's lowest row is the
-            // 64-tall toggle at -772 and the right column's is at -724, so these three clear both.
-            Toggle swimPassiveSinkToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Swim Sink Toggle",
-                "Sink When Not Swimming",
-                settings == null || settings.SwimPassiveSinkEnabled,
-                new Vector2(532.0f, -800.0f));
-            Toggle swimVignetteToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Swim Vignette Toggle",
-                "Vignette While Sinking",
-                settings == null || settings.SwimVignetteBoost,
-                new Vector2(532.0f, -864.0f));
-            Toggle swimClimbOutToggle = EnsureToggleControl(
-                panelObject.transform,
-                "Swim Climb Out Toggle",
-                "Climb Out At Low Banks",
-                settings == null || settings.SwimClimbOutEnabled,
-                new Vector2(532.0f, -928.0f));
-            Slider swimSpeedSlider = EnsureSettingsSlider(
-                panelObject.transform,
-                "Swim Speed Slider",
-                "Swim Speed",
-                settings != null ? settings.SwimSpeedFactor : 0.55f,
-                new Vector2(32.0f, -848.0f),
-                minValue: 0.30f,
-                maxValue: 1.00f);
-
-            BlockiverseComfortMenu menu = EnsureComponent<BlockiverseComfortMenu>(menuObject);
-            menu.Configure(canvas, settings, heightReset);
-            menu.ConfigureControls(
-                glideToggle,
-                teleportToggle,
-                smoothTurnToggle,
-                snapTurnSlider,
-                turnAroundToggle,
-                vignetteToggle,
-                vignetteSlider,
-                leftHandToggle,
-                toggleToMineToggle,
-                moveSpeedSlider,
-                smoothTurnSpeedSlider,
-                uiScaleSlider,
-                targetGlideBobToggle: glideBobToggle,
-                targetRealPlayerHeightToggle: realPlayerHeightToggle,
-                targetSprintToggleToggle: sprintToggleToggle,
-                targetCrouchToggleToggle: crouchToggleToggle,
-                targetSwimPassiveSinkToggle: swimPassiveSinkToggle,
-                targetSwimSpeedSlider: swimSpeedSlider,
-                targetSwimVignetteToggle: swimVignetteToggle,
-                targetSwimClimbOutToggle: swimClimbOutToggle);
-            BlockiverseWorldSpacePanelPresenter presenter = EnsureComponent<BlockiverseWorldSpacePanelPresenter>(menuObject);
-            ConfigureRoutedMenuPresenter(presenter, canvas, head, comfortMenuScale);
-            presenter.ConfigureComfortSettings(settings);
-            presenter.ConfigureFeedback(BlockiverseAudioCue.UiConfirm, BlockiverseAudioCue.UiCancel);
-
-            if (inputRig != null)
-            {
-                // Hardware Menu is owned by BlockiverseMenuController's pause/back route.
-                // Comfort settings open through the Settings menu, so scrub stale direct toggles.
-                RemovePersistentListeners(
-                    inputRig.MenuPressed,
-                    menu,
-                    nameof(BlockiverseComfortMenu.ToggleVisible));
-                RemovePersistentListeners(
-                    inputRig.MenuPressed,
-                    presenter,
-                    nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
-                EditorUtility.SetDirty(inputRig);
-            }
-
-            EditorUtility.SetDirty(menuObject);
-            EditorUtility.SetDirty(menu);
-            EditorUtility.SetDirty(presenter);
         }
 
         static void EnsureXrRigTunnelingVignette(GameObject rig)
@@ -1131,25 +859,12 @@ namespace Blockiverse.Editor
             BlockiverseAudioCuePlayer audioCuePlayer,
             BlockiverseInteractionHaptics interactionHaptics)
         {
-            // The audio panel is built before the rig's feedback settings component is guaranteed
-            // to exist, so its settings reference is (re)asserted here rather than at build time.
-            BlockiverseFeedbackSettings feedbackSettings = rig.GetComponent<BlockiverseFeedbackSettings>();
-            foreach (BlockiverseAudioSettingsPanel audioPanel in rig.GetComponentsInChildren<BlockiverseAudioSettingsPanel>(true))
-            {
-                audioPanel.ConfigureFeedbackSettings(feedbackSettings);
-                EditorUtility.SetDirty(audioPanel);
-            }
-
+            // The uGUI audio-settings panel and comfort menu used to be configured here too; both
+            // are UI Toolkit screens now and read BlockiverseFeedbackSettings themselves.
             foreach (CreativeHotbar hotbar in rig.GetComponentsInChildren<CreativeHotbar>(true))
             {
                 hotbar.ConfigureFeedback(audioCuePlayer);
                 EditorUtility.SetDirty(hotbar);
-            }
-
-            foreach (BlockiverseComfortMenu menu in rig.GetComponentsInChildren<BlockiverseComfortMenu>(true))
-            {
-                menu.ConfigureFeedback(audioCuePlayer, interactionHaptics);
-                EditorUtility.SetDirty(menu);
             }
 
             foreach (BlockiverseWorldSpacePanelPresenter presenter in rig.GetComponentsInChildren<BlockiverseWorldSpacePanelPresenter>(true))

@@ -137,7 +137,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ControllerMappingCloseRunsTheFirstRunVerbOnTheMenuController()
         {
-            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseMenuController.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
@@ -170,7 +170,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void ControllerMappingClosePopsWhenStackedInsteadOfClearingToRoot()
         {
-            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseMenuController.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
@@ -226,7 +226,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void CloseWithoutAHostIsInertAndNeverStampsTheSeenFlag()
         {
-            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseMenuController.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try

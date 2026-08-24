@@ -3,13 +3,30 @@
 Companion to [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md). This is the per-screen migration
 checklist: what exists, where it goes, and what must not be lost on the way.
 
-**Status: Phases 2–5 implemented (2026-08-23), device validation pending.** All 25 documents in
-§2 exist with dedicated controllers under `Assets/Blockiverse/Scripts/UI/ToolkitScreens/`; the
-Boot scene generates one world-space panel per `[UiToolkitScreen]` declaration and the UI Toolkit
-backend is active by default (uGUI presenters hide while a `UiToolkitMenuHost` is registered —
-disabling that component is the fallback switch). The rig prefab and its uGUI menus are untouched
-pending the post-device-validation cutover. The LAN screen additionally gained the saved-servers
+**Status: cut over (2026-08-23). UI Toolkit is the only menu frontend; device validation still
+pending.** All 25 documents in §2 exist with dedicated controllers under
+`Assets/Blockiverse/Scripts/UI/ToolkitScreens/`, and the Boot scene generates one world-space
+panel per `[UiToolkitScreen]` declaration. The LAN screen additionally gained the saved-servers
 bookmark rows (previously a dead API — see §2 note on row 14).
+
+The uGUI menus are **gone**: 20 routed panels and the Survival HUD removed from the rig prefab
+(96,949 → 6,760 lines), their bootstrapper generators deleted, 17 panel classes deleted, and the
+dual-backend mirroring taken out of `BlockiverseMenuController`. Eric directed this ahead of
+device validation; [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md) records the overridden
+ordering and what it costs.
+
+Two consequences that change how to read the rest of this document:
+
+- **There is no fallback switch any more.** "Disable `UiToolkitMenuHost`" used to hand the menus
+  back to uGUI. It does not; nothing else draws them. The way back is reverting the removal commit.
+- **`IBlockiverseMenuFrontend` stayed.** It is not the shim it looks like — `UiToolkitMenuHost`
+  implements it, and it is how the router is initialised outside Play mode, which nine Toolkit
+  test fixtures rely on. Only the *dual-backend mirroring* died with the panels.
+
+Some world-space uGUI deliberately survives and is not an oversight: the boot splash
+(`BlockiverseStartupOverlay`), and the Block Menu, which despite the name is not a menu — it
+carries the scene `CreativeHotbar` that decides which block gets placed. `Blockiverse.UI.asmdef`
+therefore still references `UnityEngine.UI` and `Unity.TextMeshPro`.
 
 Line references are against `main` at `4251dcca` and will drift; treat them as "look here", not as
 addresses.
@@ -228,15 +245,30 @@ Ordered by consequence. Each is a rewrite hazard, not a style preference.
 
 ## 5. Existing tests as a rewrite oracle
 
-These pin current behaviour and are the parity contract. Framework-neutral ones must keep passing
-unchanged; uGUI-specific ones are rewritten, never deleted to make a phase pass.
+These pinned the pre-migration behaviour and were the parity contract. Framework-neutral ones kept
+passing unchanged; uGUI-specific ones were rewritten against the Toolkit screens, never deleted to
+make a phase pass. The uGUI oracles have now been consumed — each name below that no longer exists
+is followed by the file that inherited its assertions, and every one of those files carries a
+header comment naming the oracle it came from, so the trail stays walkable.
 
-`ActionMenuEditModeTests`, `UiScreenRouterEditModeTests`, `SaveListModelEditModeTests`,
+Still present and unchanged: `UiScreenRouterEditModeTests`, `SaveListModelEditModeTests`,
 `NewWorldConfigEditModeTests`, `BlockiversePanelPlacementEditModeTests`,
-`SurvivalCraftingPanelEditModeTests`, `SurvivalUiEditModeTests`, `SurvivalHudFeedbackEditModeTests`,
-`MenuRuntimeWiringEditModeTests`, `WorldSessionControllerEditModeTests`,
-`CompositionLayerUiEditModeTests`, `BlockiverseTmpFontFallbackEditModeTests` — all under
-`Assets/Blockiverse/Tests/EditMode/`.
+`WorldSessionControllerEditModeTests`, `CompositionLayerUiEditModeTests`,
+`BlockiverseTmpFontFallbackEditModeTests`.
+
+Consumed at the uGUI removal:
+
+| uGUI oracle | Inherited by |
+| --- | --- |
+| `ActionMenuEditModeTests` | `MenuActionsEditModeTests`, `Toolkit/ModalDialogsEditModeTests`, `Toolkit/ActionMenuScreensEditModeTests` |
+| `MenuRuntimeWiringEditModeTests` | `MenuControllerRoutingEditModeTests`, `BlockiverseKeyboardHandVisibilityEditModeTests`, `WorldSessionControllerEditModeTests`, `Toolkit/ControlsScreensEditModeTests`, `Toolkit/WorldManageScreensEditModeTests` |
+| `SurvivalUiEditModeTests` | `Toolkit/HudFamilyEditModeTests`, `Toolkit/InventoryCrateScreensEditModeTests`, `Toolkit/ToolkitScreenFeedbackEditModeTests` |
+| `SurvivalCraftingPanelEditModeTests` | `Toolkit/CraftingStationScreensEditModeTests` |
+| `SurvivalHudFeedbackEditModeTests` | `Toolkit/HudFamilyEditModeTests` |
+| `BlockiverseMultiplayerSessionMenuEditModeTests` | `Toolkit/LanMultiplayerScreenEditModeTests` |
+| `LocalizationPrefabCharacterizationEditModeTests` | retired with the rig prefab's uGUI menus (it counted `localizationKey:` lines in a subtree that no longer exists) |
+
+All under `Assets/Blockiverse/Tests/EditMode/`.
 
 ---
 

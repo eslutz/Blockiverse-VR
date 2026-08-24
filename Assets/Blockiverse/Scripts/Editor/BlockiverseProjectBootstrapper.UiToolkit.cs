@@ -12,17 +12,21 @@ namespace Blockiverse.Editor
 {
     // UI Toolkit scene generation (ADR 0010).
     //
-    // Deliberately a separate partial, and deliberately NOT called from Run():
+    // Two halves with different lifetimes, which is why the file reads as mixed:
     //
-    //  * Run() regenerates the XR rig prefab and the whole uGUI menu tree. PR #324 rewrote 76,309
-    //    lines of that prefab and became impossible to review; this file touches the Boot scene
-    //    only and never the rig prefab, so its diff stays legible.
-    //  * The Phase 1 proof panel is scaffolding. Wiring it into Run() would ship it, and would
-    //    also put an unvalidated PanelInputConfiguration into a headset-validated uGUI scene
-    //    before the proof has established that the two coexist.
+    //  * The INFRASTRUCTURE half — folders, the PanelSettings asset, XRUIToolkitManager and
+    //    PanelInputConfiguration, the stylesheet loaders and the panel-geometry constants — is
+    //    shipped. EnsureUiToolkitMenus (the menus partial) calls into it, and that runs from
+    //    Run() via EnsureBootScene.
+    //  * The PHASE 1 PROOF half — BootstrapUiToolkitProof / RemoveUiToolkitProof and everything
+    //    they build — is scaffolding reachable only from its own menu items. It has never been in
+    //    the committed Boot scene. It is kept for now because nine tests in
+    //    UiToolkitBootstrapEditModeTests hang off EnsureUiToolkitProofPanel, and one of them
+    //    (GeneratedConfigurationSatisfiesTheValidator) is the only place real generated objects
+    //    are fed through XrUiToolkitConfigurationValidator. Retiring the proof means re-pointing
+    //    those at EnsureUiToolkitMenus first.
     //
-    // Promotion of the infrastructure half into Run() happens in Phase 2, after the proof passes
-    // on hardware.
+    // Constants used by BOTH halves live above the proof section, not inside it.
     public static partial class BlockiverseProjectBootstrapper
     {
         public const string UiToolkitFolderPath = "Assets/Blockiverse/UI";
@@ -54,21 +58,25 @@ namespace Blockiverse.Editor
         public const float UiToolkitPanelWidthPixels = 1000f;
         public const float UiToolkitPanelHeightPixels = 700f;
 
-        // Placement mirrors the routed uGUI menus closely enough to be comparable in headset:
-        // 1.2 m forward, centre 0.2 m below a 1.6 m standing eye height.
-        static readonly Vector3 UiToolkitProofPanelPosition = new(0f, 1.4f, 1.2f);
-
-        // 0.01 local units — one millimetre at the 0.1 panel scale. The XRI sample ships a
-        // zero-depth collider, but its collider backs a poke filter rather than a ray, and a
-        // degenerate PhysX box is an unnecessary risk to take on the one thing the proof exists to
-        // establish: if zero depth works, a millimetre works too; if it does not, the proof fails
-        // and reads as "UI Toolkit does not accept controller rays".
+        // 0.01 local units — one millimetre at the 0.1 panel scale. Every generated menu panel's
+        // box collider uses this (EnsureUiToolkitScreenPanel in the menus partial), so it is
+        // shipped geometry, not proof scaffolding, and must not move back down into the proof
+        // section below. The reasoning is from the proof: the XRI sample ships a zero-depth
+        // collider, but its collider backs a poke filter rather than a ray, and a degenerate PhysX
+        // box was an unnecessary risk to take on the one thing the proof existed to establish — if
+        // zero depth works, a millimetre works too.
         const float UiToolkitPanelColliderDepth = 0.01f;
 
         // Quest is memory-constrained and this project's UI iconography is small. 2048 is a
         // starting point reasoned from Unity's mobile guidance, not measured — the XRI sample ships
         // 4096. Revisit with the UI Toolkit Debugger's atlas view once real screens exist.
         public const int UiToolkitMaxAtlasSize = 2048;
+
+        // ---- Phase 1 proof scaffolding (see the file header) ----
+
+        // Placement mirrored the routed uGUI menus closely enough to be comparable in headset:
+        // 1.2 m forward, centre 0.2 m below a 1.6 m standing eye height.
+        static readonly Vector3 UiToolkitProofPanelPosition = new(0f, 1.4f, 1.2f);
 
         [MenuItem("Blockiverse/UI Toolkit/Bootstrap Phase 1 Proof")]
         public static void BootstrapUiToolkitProof()

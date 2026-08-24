@@ -26,8 +26,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
-using TMPro;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace Blockiverse.Tests.Networking.PlayMode
 {
@@ -40,70 +39,62 @@ namespace Blockiverse.Tests.Networking.PlayMode
         readonly List<string> tempSavePaths = new();
 
         [UnityTest]
-        public IEnumerator MultiplayerTestSceneSessionMenuHostsAndJoinsLocalClient()
+        public IEnumerator LanScreenHostsAndJoinsLocalClientAgainstALiveSession()
         {
             yield return LoadMultiplayerTestScene();
 
             BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
-            BlockiverseMultiplayerSessionMenu hostMenu = UnityEngine.Object.FindFirstObjectByType<BlockiverseMultiplayerSessionMenu>();
             Assert.That(hostSession, Is.Not.Null);
-            Assert.That(hostMenu, Is.Not.Null);
-            Assert.That(hostMenu.Session, Is.SameAs(hostSession));
-            Assert.That(hostMenu.HostButton, Is.Not.Null);
-            Assert.That(hostMenu.JoinButton, Is.Not.Null);
-            Assert.That(hostMenu.StopButton, Is.Not.Null);
-            Assert.That(hostMenu.AddressInput, Is.Not.Null);
-            Assert.That(hostMenu.StatusText, Is.Not.Null);
             AssertSceneHasUiInputSystem();
 
-            BlockiverseMenuController hostMenuController =
-                UnityEngine.Object.FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
-            hostMenuController ??= CreateMenuController("Host Menu Controller");
-            Assert.That(hostMenuController, Is.Not.Null);
-            hostMenu.ConfigureMenuController(hostMenuController);
+            // Both peers' screens are built here. The MultiplayerTest scene used to ship a uGUI
+            // LAN menu for the host side and the client side was constructed in-test; the scene
+            // is now a headless network testbed, so the two sides are symmetric.
+            BlockiverseMenuController hostMenuController = CreateMenuController("Host Menu Controller");
+            LanMultiplayerScreenController hostMenu = CreateLanScreen("Host LAN Screen", hostSession, hostMenuController);
+            Assert.That(hostMenu.Session, Is.SameAs(hostSession));
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
             BlockiverseMenuController clientMenuController = CreateMenuController("Client Menu Controller");
-            clientMenu.ConfigureMenuController(clientMenuController);
+            LanMultiplayerScreenController clientMenu = CreateLanScreen("Client LAN Screen", clientSession, clientMenuController);
             ushort port = NextPort();
             var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
 
-            hostMenu.HostButton.onClick.Invoke();
+            hostMenu.StartLanHost();
             yield return WaitFor(
                 () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
-                "Host menu did not start host.");
+                "Host screen did not start host.");
 
             hostMenu.RefreshStatus();
-            StringAssert.Contains("Hosting LAN session", hostMenu.StatusText.text);
+            StringAssert.Contains("Hosting LAN session", LanStatusText(hostMenu));
             Assert.That(hostMenuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
 
             // An empty field would join on the DEFAULT port (a bare or empty address always
             // means default now, so a stale port from a previous join can never leak into the
             // next one); this host is on a test port, so type it like a player would.
-            clientMenu.AddressInput.text = $"{BlockiverseNetworkConfig.DefaultAddress}:{port}";
-            clientMenu.JoinButton.onClick.Invoke();
+            LanAddressField(clientMenu).value = $"{BlockiverseNetworkConfig.DefaultAddress}:{port}";
+            clientMenu.JoinLanSession();
             yield return WaitFor(
                 () => clientSession.NetworkManager.IsConnectedClient &&
                       hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
-                "Client menu did not connect to host.");
+                "Client screen did not connect to host.");
 
             clientMenu.RefreshStatus();
             Assert.That(clientMenu.ResolveJoinAddress(),
                 Is.EqualTo($"{BlockiverseNetworkConfig.DefaultAddress}:{port}"));
-            StringAssert.Contains("Connected to LAN session", clientMenu.StatusText.text);
+            StringAssert.Contains("Connected to LAN session", LanStatusText(clientMenu));
             Assert.That(clientMenuController.Router.ActiveScreen.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen));
 
-            hostMenu.StopButton.onClick.Invoke();
+            hostMenu.StopSession();
             yield return WaitFor(
                 () => !hostSession.NetworkManager.IsListening && !clientSession.NetworkManager.IsListening,
-                "Host menu shutdown did not stop all local session managers.");
+                "Host screen shutdown did not stop all local session managers.");
 
             hostMenu.RefreshStatus();
-            StringAssert.Contains("LAN session stopped", hostMenu.StatusText.text);
+            StringAssert.Contains("LAN session stopped", LanStatusText(hostMenu));
         }
 
         [UnityTest]
@@ -280,36 +271,31 @@ namespace Blockiverse.Tests.Networking.PlayMode
             yield return LoadMultiplayerTestScene();
 
             BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
-            BlockiverseMultiplayerSessionMenu hostMenu = UnityEngine.Object.FindFirstObjectByType<BlockiverseMultiplayerSessionMenu>();
             Assert.That(hostSession, Is.Not.Null);
-            Assert.That(hostMenu, Is.Not.Null);
+            LanMultiplayerScreenController hostMenu = CreateLanScreen("Host LAN Screen", hostSession);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
+            LanMultiplayerScreenController clientMenu = CreateLanScreen("Client LAN Screen", clientSession);
             ushort port = NextPort();
             var testConfig = CreateTestNetworkConfig(port);
 
             hostSession.Configure(testConfig);
             clientSession.Configure(testConfig);
             // A bare address joins on the default port by design; this host is on a test port.
-            clientMenu.AddressInput.text = $"{BlockiverseNetworkConfig.DefaultAddress}:{port}";
+            LanAddressField(clientMenu).value = $"{BlockiverseNetworkConfig.DefaultAddress}:{port}";
 
-            hostMenu.HostButton.onClick.Invoke();
+            hostMenu.StartLanHost();
             yield return WaitFor(
                 () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
-                "Host menu did not start host.");
+                "Host screen did not start host.");
 
-            clientMenu.JoinButton.onClick.Invoke();
+            clientMenu.JoinLanSession();
             yield return WaitFor(
                 () => clientSession.NetworkManager.IsConnectedClient &&
                       hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
-                "Client menu did not connect before host shutdown.");
+                "Client screen did not connect before host shutdown.");
 
-            GameObject hiddenMenuRoot = CreateDisabledMenuRoot(clientMenu.transform);
-            Canvas recoveryCanvas = hiddenMenuRoot.GetComponent<Canvas>();
-            GraphicRaycaster recoveryRaycaster = hiddenMenuRoot.GetComponent<GraphicRaycaster>();
-
-            hostMenu.StopButton.onClick.Invoke();
+            hostMenu.StopSession();
             yield return WaitFor(
                 () => hostSession.CurrentState == BlockiverseConnectionState.Stopped &&
                       clientSession.CurrentState == BlockiverseConnectionState.Disconnected &&
@@ -321,33 +307,37 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             clientMenu.RefreshStatus();
             Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.True);
-            Assert.That(clientMenu.gameObject.activeInHierarchy, Is.True);
-            Assert.That(recoveryCanvas.enabled, Is.True);
-            Assert.That(recoveryRaycaster.enabled, Is.True);
-            StringAssert.Contains("LAN session ended because the host disconnected", clientMenu.StatusText.text);
-            StringAssert.Contains($"Use Join to reconnect to {BlockiverseNetworkConfig.DefaultAddress}:{port}", clientMenu.StatusText.text);
-            string lowerStatusText = clientMenu.StatusText.text.ToLowerInvariant();
+            // The uGUI version parented the menu under a deliberately disabled Canvas here and
+            // asserted the recovery path re-enabled it, because a client whose menu had been
+            // switched off with the gameplay HUD had no way back. A routed UI Toolkit screen is
+            // shown by the host from router state instead, so the equivalent guarantee is that
+            // the screen is still bound and still repainting its status after the session died.
+            Assert.That(clientMenu.IsBound, Is.True,
+                "The LAN screen must survive the session ending — it is the reconnect surface.");
+            StringAssert.Contains("LAN session ended because the host disconnected", LanStatusText(clientMenu));
+            StringAssert.Contains($"Use Join to reconnect to {BlockiverseNetworkConfig.DefaultAddress}:{port}", LanStatusText(clientMenu));
+            string lowerStatusText = LanStatusText(clientMenu).ToLowerInvariant();
             Assert.That(lowerStatusText, Does.Not.Contain("matchmaking"));
             Assert.That(lowerStatusText, Does.Not.Contain("relay"));
             Assert.That(lowerStatusText, Does.Not.Contain("lobby"));
-            Assert.That(clientMenu.JoinButton.interactable, Is.True);
-            Assert.That(clientMenu.StopButton.interactable, Is.False);
+            Assert.That(LanButton(clientMenu, "bv-lan-join").enabledSelf, Is.True);
+            Assert.That(LanButton(clientMenu, "bv-lan-stop").enabledSelf, Is.False);
 
-            hostMenu.HostButton.onClick.Invoke();
+            hostMenu.StartLanHost();
             yield return WaitFor(
                 () => hostSession.NetworkManager.IsHost && hostSession.CurrentState == BlockiverseConnectionState.Hosting,
-                "Host menu did not restart host.");
+                "Host screen did not restart host.");
 
-            clientMenu.JoinButton.onClick.Invoke();
+            clientMenu.JoinLanSession();
             yield return WaitFor(
                 () => clientSession.NetworkManager.IsConnectedClient &&
                       clientSession.CurrentState == BlockiverseConnectionState.ConnectedClient &&
                       hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
-                "Client menu did not reconnect after the LAN host restarted.");
+                "Client screen did not reconnect after the LAN host restarted.");
 
             clientMenu.RefreshStatus();
             Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.False);
-            StringAssert.Contains("Connected to LAN session", clientMenu.StatusText.text);
+            StringAssert.Contains("Connected to LAN session", LanStatusText(clientMenu));
         }
 
         [UnityTest]
@@ -359,17 +349,17 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
+            LanMultiplayerScreenController clientMenu = CreateLanScreen("Client LAN Screen", clientSession);
             ushort port = NextPort();
             var testConfig = CreateTestNetworkConfig(port);
 
             clientSession.Configure(testConfig);
             clientSession.UnityTransport.ConnectTimeoutMS = 50;
             clientSession.UnityTransport.MaxConnectAttempts = 1;
-            clientMenu.AddressInput.text = BlockiverseNetworkConfig.DefaultAddress;
+            LanAddressField(clientMenu).value = BlockiverseNetworkConfig.DefaultAddress;
 
             LogAssert.Expect(LogType.Error, "Failed to connect to server.");
-            clientMenu.JoinButton.onClick.Invoke();
+            clientMenu.JoinLanSession();
             yield return WaitFor(
                 () => clientSession.CurrentState == BlockiverseConnectionState.Disconnected &&
                       !clientSession.NetworkManager.IsListening &&
@@ -379,10 +369,10 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             clientMenu.RefreshStatus();
             Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.False);
-            StringAssert.Contains("Unable to reach LAN session", clientMenu.StatusText.text);
-            Assert.That(clientMenu.StatusText.text, Does.Not.Contain("host disconnected"));
-            Assert.That(clientMenu.JoinButton.interactable, Is.True);
-            Assert.That(clientMenu.StopButton.interactable, Is.False);
+            StringAssert.Contains("Unable to reach LAN session", LanStatusText(clientMenu));
+            Assert.That(LanStatusText(clientMenu), Does.Not.Contain("host disconnected"));
+            Assert.That(LanButton(clientMenu, "bv-lan-join").enabledSelf, Is.True);
+            Assert.That(LanButton(clientMenu, "bv-lan-stop").enabledSelf, Is.False);
         }
 
         [UnityTest]
@@ -394,7 +384,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(hostSession, Is.Not.Null);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
-            BlockiverseMultiplayerSessionMenu clientMenu = CreateSessionMenu("Client Session Menu", clientSession);
+            LanMultiplayerScreenController clientMenu = CreateLanScreen("Client LAN Screen", clientSession);
             ushort port = NextPort();
             var testConfig = CreateTestNetworkConfig(port);
 
@@ -412,7 +402,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                       hostSession.NetworkManager.ConnectedClientsIds.Count == 2,
                 "Client did not connect to host.");
 
-            clientMenu.StopButton.onClick.Invoke();
+            clientMenu.StopSession();
             yield return WaitFor(
                 () => clientSession.CurrentState == BlockiverseConnectionState.Stopped &&
                       !clientSession.NetworkManager.IsListening &&
@@ -421,8 +411,8 @@ namespace Blockiverse.Tests.Networking.PlayMode
 
             clientMenu.RefreshStatus();
             Assert.That(clientMenu.IsShowingSessionEndedMessage, Is.False);
-            StringAssert.Contains("LAN session stopped", clientMenu.StatusText.text);
-            Assert.That(clientMenu.StatusText.text, Does.Not.Contain("host disconnected"));
+            StringAssert.Contains("LAN session stopped", LanStatusText(clientMenu));
+            Assert.That(LanStatusText(clientMenu), Does.Not.Contain("host disconnected"));
         }
 
         [UnityTest]
@@ -671,8 +661,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
             BlockiverseNetworkSession hostSession = UnityEngine.Object.FindFirstObjectByType<BlockiverseNetworkSession>();
             Assert.That(hostSession, Is.Not.Null);
 
-            BlockiverseMultiplayerSessionMenu hostMenu = UnityEngine.Object.FindFirstObjectByType<BlockiverseMultiplayerSessionMenu>();
-            Assert.That(hostMenu, Is.Not.Null);
+            LanMultiplayerScreenController hostMenu = CreateLanScreen("Host LAN Screen", hostSession);
 
             BlockiverseNetworkSession clientSession = CreateClientSession(hostSession);
             CreativeWorldManager worldManager = CreateCreativeWorldManager("Host Save Failure World");
@@ -705,7 +694,7 @@ namespace Blockiverse.Tests.Networking.PlayMode
                 LogType.Error,
                 new Regex(@"\[Blockiverse\]\[Persistence\] Failed to save multiplayer host world before shutdown.*exception=IOException"));
 
-            hostMenu.StopButton.onClick.Invoke();
+            hostMenu.StopSession();
             yield return null;
 
             Assert.That(hostSession.LastStopRequestSucceeded, Is.False);
@@ -719,21 +708,21 @@ namespace Blockiverse.Tests.Networking.PlayMode
             Assert.That(persistence.LastShutdownSaveSucceeded, Is.False);
             StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostSession.LastDisconnectReason);
             hostMenu.RefreshStatus();
-            StringAssert.Contains("Unable to stop LAN session", hostMenu.StatusText.text);
-            StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostMenu.StatusText.text);
+            StringAssert.Contains("Unable to stop LAN session", LanStatusText(hostMenu));
+            StringAssert.Contains("Unable to save multiplayer world before host shutdown", LanStatusText(hostMenu));
 
             LogAssert.Expect(
                 LogType.Error,
                 new Regex(@"\[Blockiverse\]\[Persistence\] Failed to save multiplayer host world before shutdown.*exception=IOException"));
 
-            hostMenu.StopButton.onClick.Invoke();
+            hostMenu.StopSession();
             yield return null;
 
             Assert.That(hostSession.LastStopRequestSucceeded, Is.True);
             Assert.That(hostSession.LastStopForcedAfterPreparationFailure, Is.True);
             Assert.That(hostSession.ConsecutiveHostShutdownPreparationFailures, Is.EqualTo(BlockiverseNetworkSession.ForcedHostShutdownPreparationFailureThreshold));
-            StringAssert.Contains("Stopping LAN session without the latest shutdown save", hostMenu.StatusText.text);
-            StringAssert.Contains("Unable to save multiplayer world before host shutdown", hostMenu.StatusText.text);
+            StringAssert.Contains("Stopping LAN session without the latest shutdown save", LanStatusText(hostMenu));
+            StringAssert.Contains("Unable to save multiplayer world before host shutdown", LanStatusText(hostMenu));
 
             yield return WaitFor(
                 () => !hostSession.NetworkManager.IsListening &&
@@ -3531,8 +3520,12 @@ namespace Blockiverse.Tests.Networking.PlayMode
             }
         }
 
+        // The only live-host coverage of the crafting/crate accept path: every UI Toolkit mirror
+        // of these two screens is EditMode, so nothing else proves that a screen's craft or
+        // transfer actually lands in MultiplayerSurvivalSync's authoritative state with a real
+        // NetworkManager running. The screens are only the driver here; the subject is the sync.
         [UnityTest]
-        public IEnumerator SurvivalHudPanelsRouteCraftAndCrateThroughAuthoritativeSync()
+        public IEnumerator SurvivalScreensRouteCraftAndCrateThroughAuthoritativeSync()
         {
             yield return LoadMultiplayerTestScene();
 
@@ -3556,36 +3549,34 @@ namespace Blockiverse.Tests.Networking.PlayMode
             hostSurvivalSync.LocalInventory.SetSlot(0, new ItemStack(ItemId.BranchwoodLog, 2));
             hostSurvivalSync.SelectedHotbarSlotIndex = 0;
 
-            // Crafting panel → authoritative TrySubmitCraft (Work Plank: branchwood_log ×1 → ×6, §9.1).
-            var craftingObject = new GameObject("Test Crafting Panel");
-            SurvivalCraftingPanel craftingPanel = craftingObject.AddComponent<SurvivalCraftingPanel>();
+            // Crafting screen → authoritative TrySubmitCraft (Work Plank: branchwood_log ×1 → ×6, §9.1).
+            CraftingScreenController craftingPanel = CreateDetachedScreen<CraftingScreenController>("Test Crafting Screen");
             craftingPanel.ConfigureSurvivalSync(hostSurvivalSync);
             craftingPanel.Bind(CraftingRecipeBook.CreateDefault(itemRegistry), hostSurvivalSync.LocalInventory, itemRegistry, CraftingStation.BuildTable);
             craftingPanel.TryCraftByOutput(ItemId.WorkPlank);
 
             Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.WorkPlank), Is.EqualTo(6),
-                "Crafting panel should craft through the authoritative sync into the shared inventory.");
+                "Crafting screen should craft through the authoritative sync into the shared inventory.");
             Assert.That(hostSurvivalSync.Diagnostics.AcceptedCraftCount, Is.EqualTo(1));
 
-            // Crate panel → authoritative deposit/withdraw of the held item (the remaining branchwood_log).
-            var crateObject = new GameObject("Test Crate Panel");
-            SurvivalCratePanel cratePanel = crateObject.AddComponent<SurvivalCratePanel>();
+            // Crate screen → authoritative deposit/withdraw of the held item (the remaining branchwood_log).
+            CrateScreenController cratePanel = CreateDetachedScreen<CrateScreenController>("Test Crate Screen");
             cratePanel.Bind(hostSurvivalSync, itemRegistry);
 
             cratePanel.DepositHeld();
             Assert.That(hostSurvivalSync.SharedCrateInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1),
-                "Crate panel deposit should move the held item into the shared crate.");
+                "Crate screen deposit should move the held item into the shared crate.");
             Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(0));
 
             int crateSlot = FindSlotWith(hostSurvivalSync.SharedCrateInventory, ItemId.BranchwoodLog);
             Assert.That(crateSlot, Is.GreaterThanOrEqualTo(0));
             cratePanel.WithdrawSlot(crateSlot);
             Assert.That(hostSurvivalSync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(1),
-                "Crate panel withdraw should return the item to the player inventory.");
+                "Crate screen withdraw should return the item to the player inventory.");
             Assert.That(hostSurvivalSync.Diagnostics.AcceptedCrateTransferCount, Is.EqualTo(2));
 
-            UnityEngine.Object.Destroy(craftingObject);
-            UnityEngine.Object.Destroy(crateObject);
+            UnityEngine.Object.Destroy(craftingPanel.gameObject);
+            UnityEngine.Object.Destroy(cratePanel.gameObject);
         }
 
         static int FindSlotWith(Inventory inventory, ItemId itemId)
@@ -3938,20 +3929,67 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return material;
         }
 
-        static BlockiverseMultiplayerSessionMenu CreateSessionMenu(string name, BlockiverseNetworkSession session)
-        {
-            GameObject menuObject = new(name);
-            BlockiverseMultiplayerSessionMenu menu = menuObject.AddComponent<BlockiverseMultiplayerSessionMenu>();
-            Button hostButton = CreateButton("Host Button", menuObject.transform);
-            Button joinButton = CreateButton("Join Button", menuObject.transform);
-            Button stopButton = CreateButton("Stop Button", menuObject.transform);
-            TMP_InputField addressInput = CreateInputField("Address Input", menuObject.transform);
-            TMP_Text statusText = CreateText("Status", menuObject.transform);
+        const string LanScreenDocumentPath = "Assets/Blockiverse/UI/Documents/LanMultiplayerScreen.uxml";
 
-            menu.Configure(session);
-            menu.ConfigureControls(hostButton, joinButton, null, stopButton, addressInput, statusText);
-            return menu;
+        // A UI Toolkit screen controller stood up outside a UIDocument panel, for tests that
+        // need the controller's behaviour against a live Netcode session rather than a rendered
+        // panel. The GameObject is created INACTIVE before the component is added, and that is
+        // load-bearing twice over: [RequireComponent(typeof(UIDocument))] gives the object a
+        // UIDocument with no PanelSettings and no source asset, so letting OnEnable run would
+        // have the base class bind against an empty tree and log its missing-elements error
+        // (a PlayMode test failure on its own); and several screens self-bind to whatever
+        // survival sync and world manager they can find in OnAwake, which would silently
+        // overwrite the explicit Bind the caller is about to perform.
+        static T CreateDetachedScreen<T>(string name) where T : UiToolkitScreenController
+        {
+            GameObject screenObject = new(name);
+            screenObject.SetActive(false);
+            return screenObject.AddComponent<T>();
         }
+
+        // The LAN screen additionally needs its real element tree, because these tests assert
+        // the status copy the player reads. It comes from the shipped UXML through AttachForTest,
+        // the same seam the EditMode screen tests use — dispatching real ClickEvents would need
+        // a live panel, so the button verbs are called directly.
+        static LanMultiplayerScreenController CreateLanScreen(
+            string name,
+            BlockiverseNetworkSession session,
+            BlockiverseMenuController menuController = null)
+        {
+            LanMultiplayerScreenController screen = CreateDetachedScreen<LanMultiplayerScreenController>(name);
+            screen.AttachForTest(LoadUiDocument(LanScreenDocumentPath).Instantiate());
+            Assert.That(screen.IsBound, Is.True,
+                "LanMultiplayerScreen.uxml did not bind — every status assertion would silently no-op.");
+
+            if (menuController != null)
+                screen.ConfigureHost(CreateMenuHost(menuController));
+
+            screen.Configure(session);
+            return screen;
+        }
+
+        static VisualTreeAsset LoadUiDocument(string documentPath)
+        {
+#if UNITY_EDITOR
+            VisualTreeAsset tree = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(documentPath);
+            Assert.That(tree, Is.Not.Null, $"{documentPath} did not load — the document path drifted.");
+            return tree;
+#else
+            // UXML documents are not under Resources, so a player build cannot reach one by path.
+            // On device the screens come from the scene's own UIDocument instead.
+            Assert.Ignore($"{documentPath} is only reachable through AssetDatabase.");
+            return null;
+#endif
+        }
+
+        static TextField LanAddressField(LanMultiplayerScreenController screen) =>
+            screen.Root.Q<TextField>("bv-lan-address");
+
+        static string LanStatusText(LanMultiplayerScreenController screen) =>
+            screen.Root.Q<Label>("bv-lan-status").text;
+
+        static Button LanButton(LanMultiplayerScreenController screen, string elementName) =>
+            screen.Root.Q<Button>(elementName);
 
         static BlockiverseMenuController CreateMenuController(string name)
         {
@@ -3961,38 +3999,18 @@ namespace Blockiverse.Tests.Networking.PlayMode
             return controller;
         }
 
-        static GameObject CreateDisabledMenuRoot(Transform child)
+        // The screen reaches the router through UiToolkitMenuHost, exactly as the shipped scene
+        // wires it. Inactive again on purpose: an enabled host resolves its menu controller by
+        // scene lookup in OnEnable, and in a two-peer fixture that binds the client's screen to
+        // whichever controller the lookup happens to find first.
+        static UiToolkitMenuHost CreateMenuHost(BlockiverseMenuController controller)
         {
-            GameObject rootObject = new("Disabled Menu Root", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
-            Canvas canvas = rootObject.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.enabled = false;
-            rootObject.GetComponent<GraphicRaycaster>().enabled = false;
-            child.SetParent(rootObject.transform, false);
-            return rootObject;
-        }
-
-        static Button CreateButton(string name, Transform parent)
-        {
-            GameObject buttonObject = new(name, typeof(RectTransform));
-            buttonObject.transform.SetParent(parent, false);
-            return buttonObject.AddComponent<Button>();
-        }
-
-        static TMP_InputField CreateInputField(string name, Transform parent)
-        {
-            GameObject inputObject = new(name, typeof(RectTransform));
-            inputObject.transform.SetParent(parent, false);
-            TMP_InputField input = inputObject.AddComponent<TMP_InputField>();
-            input.textComponent = CreateText("Text", inputObject.transform);
-            return input;
-        }
-
-        static TextMeshProUGUI CreateText(string name, Transform parent)
-        {
-            GameObject textObject = new(name, typeof(RectTransform));
-            textObject.transform.SetParent(parent, false);
-            return textObject.AddComponent<TextMeshProUGUI>();
+            GameObject hostObject = new($"{controller.name} Toolkit Host");
+            hostObject.SetActive(false);
+            UiToolkitMenuHost host = hostObject.AddComponent<UiToolkitMenuHost>();
+            host.Configure(controller);
+            controller.RegisterFrontend(host);
+            return host;
         }
 
         static ushort NextPort()

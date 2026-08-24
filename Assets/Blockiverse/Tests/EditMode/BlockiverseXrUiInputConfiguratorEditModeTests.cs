@@ -13,6 +13,11 @@ namespace Blockiverse.Tests.EditMode
     // the ray interactor already turns UI Press into a pointer click, so the XRUIInputModule
     // must never route the same action through Submit (which invokes the auto-selected
     // Button's onClick a second time, on press, before the pointer click fires on release).
+    //
+    // The guard outlived the uGUI menus it was written for. UI Toolkit's panel event handler
+    // turns a Submit dispatch into a NavigationSubmitEvent on the focused element, and a
+    // UIElements Button fires its clickable from that as well as from the pointer click — the
+    // same double-dispatch through a different framework, so the rule is unchanged.
     public sealed class BlockiverseXrUiInputConfiguratorEditModeTests
     {
         GameObject eventSystemObject;
@@ -92,6 +97,12 @@ namespace Blockiverse.Tests.EditMode
             // Documents the uGUI behavior behind the guard above: a Button that became the
             // EventSystem selection on pointer-down runs onClick from OnSubmit as well as
             // from OnPointerClick, so any Submit dispatch doubles every ray click.
+            //
+            // Kept on the uGUI Button after the menu cutover because that is where the bug was
+            // actually observed and where it can still be demonstrated in EditMode — UI Toolkit
+            // needs a live panel to dispatch a navigation event. The uGUI package remains in the
+            // project (CreativeHotbar, the subtitle toast, the system keyboard field), so this
+            // is a real mechanism, not a museum piece.
             EventSystem eventSystem = eventSystemObject.GetComponent<EventSystem>();
             buttonObject = new GameObject("Next", typeof(RectTransform), typeof(Button));
             Button button = buttonObject.GetComponent<Button>();

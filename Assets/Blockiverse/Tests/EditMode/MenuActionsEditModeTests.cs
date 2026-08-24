@@ -6,86 +6,19 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
 {
-    public sealed class ActionMenuEditModeTests
+    // Was ActionMenuEditModeTests. The four tests that built a BlockiverseActionMenu or a
+    // BlockiverseLocalizedText went with the uGUI panels; what is left never touched uGUI at
+    // all — it is the MenuActions catalogue and the BlockiverseLocalization display-name
+    // contract, both of which the UI Toolkit frontend consumes unchanged.
+    public sealed class MenuActionsEditModeTests
     {
-        readonly List<GameObject> objectsToDestroy = new();
-
         [TearDown]
         public void TearDown()
         {
             BlockiverseLocalization.ClearOverridesForTesting();
-
-            foreach (GameObject target in objectsToDestroy)
-                if (target != null)
-                    Object.DestroyImmediate(target);
-            objectsToDestroy.Clear();
-        }
-
-        [Test]
-        public void ActionMenuSetsTitleAndLabelsAndEmitsActionOnClick()
-        {
-            BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("PauseMenu");
-            Button[] buttons = CreateButtons(7);
-            TMP_Text[] labels = CreateTexts(7);
-            TMP_Text title = CreateText("Title");
-            menu.Configure(title, buttons, labels);
-
-            menu.SetMenu(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused),
-                MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true));
-
-            Assert.That(title.text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused)));
-            Assert.That(labels[0].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseResume)));
-            Assert.That(labels[2].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseToggleMode)));
-            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
-            Assert.That(labels[5].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseReturnToTitle)));
-
-            string invoked = null;
-            menu.ActionInvoked += id => invoked = id;
-
-            buttons[0].onClick.Invoke();
-            Assert.That(invoked, Is.EqualTo(MenuActions.PauseResume));
-
-            buttons[2].onClick.Invoke();
-            Assert.That(invoked, Is.EqualTo(MenuActions.PauseToggleMode));
-
-            buttons[5].onClick.Invoke();
-            Assert.That(invoked, Is.EqualTo(MenuActions.PauseReturnToTitle));
-        }
-
-        [Test]
-        public void ActionMenuHidesSurplusButtonsAndIgnoresTheirClicks()
-        {
-            BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("Menu");
-            Button[] buttons = CreateButtons(6);
-            TMP_Text[] labels = CreateTexts(6);
-            menu.Configure(CreateText("Title"), buttons, labels);
-
-            // Confirmation dialog only uses two buttons.
-            menu.SetMenu(
-                BlockiverseLocalization.Format(BlockiverseLocalization.Keys.WorldDetailsDeletePrompt, "Test World"),
-                MenuActions.Confirm(
-                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonDelete),
-                    BlockiverseLocalization.Text(BlockiverseLocalization.Keys.CommonCancel)));
-
-            Assert.That(buttons[0].gameObject.activeSelf, Is.True);
-            Assert.That(buttons[1].gameObject.activeSelf, Is.True);
-            for (int i = 2; i < buttons.Length; i++)
-                Assert.That(buttons[i].gameObject.activeSelf, Is.False, $"Surplus button {i} should be hidden.");
-
-            int invocations = 0;
-            menu.ActionInvoked += _ => invocations++;
-            buttons[3].onClick.Invoke(); // hidden / no action
-            Assert.That(invocations, Is.EqualTo(0));
-
-            buttons[0].onClick.Invoke();
-            Assert.That(invocations, Is.EqualTo(1));
         }
 
         [Test]
@@ -149,43 +82,6 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void BuiltInMenuLabelsResolveThroughLocalizationKeys()
-        {
-            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PauseResume, "Continuar");
-            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.PauseToggleMode, "Cambiar modo");
-
-            BlockiverseActionMenu menu = CreateComponent<BlockiverseActionMenu>("PauseMenu");
-            Button[] buttons = CreateButtons(7);
-            TMP_Text[] labels = CreateTexts(7);
-            menu.Configure(CreateText("Title"), buttons, labels);
-
-            menu.SetMenu(
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitlePaused),
-                MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true));
-
-            Assert.That(labels[0].text, Is.EqualTo("Continuar"));
-            Assert.That(labels[2].text, Is.EqualTo("Cambiar modo"));
-            Assert.That(labels[3].text, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.PauseCreativeTools)));
-        }
-
-        [Test]
-        public void LocalizedTextBindingAppliesKeyOverrides()
-        {
-            BlockiverseLocalization.SetOverrideForTesting(BlockiverseLocalization.Keys.TitleSettings, "Ajustes");
-
-            TMP_Text label = CreateText("Generated Label");
-            BlockiverseLocalizedText binding = label.gameObject.AddComponent<BlockiverseLocalizedText>();
-            binding.Configure(BlockiverseLocalization.Keys.TitleSettings, "Settings");
-
-            Assert.That(label.text, Is.EqualTo("Ajustes"));
-
-            BlockiverseLocalization.ClearOverridesForTesting();
-            binding.RefreshText();
-
-            Assert.That(label.text, Is.EqualTo("Settings"));
-        }
-
-        [Test]
         public void RuntimeDisplayNamesAvoidRawCanonicalIdsAndEnumMembers()
         {
             Assert.That(
@@ -205,6 +101,9 @@ namespace Blockiverse.Tests.EditMode
                 Is.EqualTo("Heavy Rain"));
         }
 
+        // The only test anywhere of the ui.value.canonical.* / ui.value.<enum>.* override path.
+        // The Toolkit screens each reimplement that prefix+humanize resolution locally rather
+        // than calling DisplayName*, so this is what keeps the contract they copied honest.
         [Test]
         public void RuntimeDisplayNamesUseGeneratedOverrideKeys()
         {
@@ -240,30 +139,5 @@ namespace Blockiverse.Tests.EditMode
             MenuAction reconnect = withReconnect.First(a => a.ActionId == MenuActions.LanReconnect);
             Assert.That(reconnect.Label, Is.EqualTo(BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanReconnect)));
         }
-
-        T CreateComponent<T>(string name) where T : Component
-{
-            var gameObject = new GameObject(name);
-            objectsToDestroy.Add(gameObject);
-            return gameObject.AddComponent<T>();
-        }
-
-        Button[] CreateButtons(int count)
-        {
-            var buttons = new Button[count];
-            for (int i = 0; i < count; i++)
-                buttons[i] = CreateComponent<Button>($"Button{i}");
-            return buttons;
-        }
-
-        TMP_Text[] CreateTexts(int count)
-        {
-            var labels = new TMP_Text[count];
-            for (int i = 0; i < count; i++)
-                labels[i] = CreateText($"Text{i}");
-            return labels;
-        }
-
-        TMP_Text CreateText(string name) => CreateComponent<TextMeshProUGUI>(name);
     }
 }

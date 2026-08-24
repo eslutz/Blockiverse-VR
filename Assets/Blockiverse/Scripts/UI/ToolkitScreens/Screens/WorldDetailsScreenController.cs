@@ -14,8 +14,8 @@ namespace Blockiverse.UI
     // BlockiverseActionMenu. The action list arrives via SetActionMenu pushes and is rebuilt
     // wholesale on every push (availability changes re-push it); the session controller reads
     // CurrentSave/PendingRenameText through the frontend when it performs the file operations.
-    // Metadata text goes through BlockiverseWorldDetailsPanel.BuildMetadataText so the two
-    // backends cannot drift on keys or culture-formatted dates while both ship.
+    // Metadata text goes through WorldSaveMetadataText, which owns the §6.5 key set and the
+    // culture-formatted dates.
     [UiToolkitScreen(
         MenuActions.WorldDetailsScreen,
         "Assets/Blockiverse/UI/Documents/WorldDetailsScreen.uxml",
@@ -144,7 +144,7 @@ namespace Blockiverse.UI
 
             if (metadataLabel != null)
                 metadataLabel.text = CurrentSave.HasValue
-                    ? BlockiverseWorldDetailsPanel.BuildMetadataText(CurrentSave.Value)
+                    ? WorldSaveMetadataText.Build(CurrentSave.Value)
                     : string.Empty;
         }
 
