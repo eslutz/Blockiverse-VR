@@ -1,3 +1,5 @@
+using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using System;
 using System.Collections.Generic;
 using Blockiverse.UI.Toolkit;
@@ -182,17 +184,51 @@ namespace Blockiverse.UI
             statusLabel = null;
         }
 
-        void OnEntryClicked(ClickEvent evt, int slotIndex) => SelectEntry(slotIndex);
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
 
-        void OnPreviousPageClicked(ClickEvent evt) => ChangePage(-1);
+        void PlayCue(BlockiverseAudioCue cue) =>
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
 
-        void OnNextPageClicked(ClickEvent evt) => ChangePage(1);
+        // Cues live in these ClickEvent-only handlers, not in the Request*/Select* seams the
+        // tests drive directly. Load commits entering a world, so like Create on the New World
+        // screen it earns the confirm cue; Cancel earns the cancel; everything else is the plain
+        // click (Eric's ruling, 2026-08-23).
+        void OnEntryClicked(ClickEvent evt, int slotIndex)
+        {
+            PlayCue(BlockiverseAudioCue.UiSelect);
+            SelectEntry(slotIndex);
+        }
 
-        void OnLoadClicked(ClickEvent evt) => RequestLoad();
+        void OnPreviousPageClicked(ClickEvent evt)
+        {
+            PlayCue(BlockiverseAudioCue.UiSelect);
+            ChangePage(-1);
+        }
 
-        void OnDetailsClicked(ClickEvent evt) => RequestDetails();
+        void OnNextPageClicked(ClickEvent evt)
+        {
+            PlayCue(BlockiverseAudioCue.UiSelect);
+            ChangePage(1);
+        }
 
-        void OnCancelClicked(ClickEvent evt) => RequestCancel();
+        void OnLoadClicked(ClickEvent evt)
+        {
+            PlayCue(BlockiverseAudioCue.UiConfirm);
+            RequestLoad();
+        }
+
+        void OnDetailsClicked(ClickEvent evt)
+        {
+            PlayCue(BlockiverseAudioCue.UiSelect);
+            RequestDetails();
+        }
+
+        void OnCancelClicked(ClickEvent evt)
+        {
+            PlayCue(BlockiverseAudioCue.UiCancel);
+            RequestCancel();
+        }
 
         // Rows, page counter and selection status are dynamic strings cached in element text;
         // static bindings update natively on locale change but these must be re-rendered.

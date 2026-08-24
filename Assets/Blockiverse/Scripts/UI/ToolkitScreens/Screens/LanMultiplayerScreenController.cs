@@ -1164,6 +1164,11 @@ namespace Blockiverse.UI
 
         void OnCloseClicked()
         {
+            // Close is plain navigation: the plain click. Every other button on this screen cues
+            // by OUTCOME (UiConfirm on a session starting, UiCancel on failure), which is why
+            // this was the one silent button here.
+            PlayFeedback(BlockiverseAudioCue.UiSelect);
+
             // Same routing the bootstrapper wires for the uGUI close button: a persistent
             // listener on BlockiverseMenuController, not an action id through HandleAction.
             BlockiverseMenuController controller = MenuController;

@@ -269,9 +269,11 @@ namespace Blockiverse.UI
                 slotButtons[i]?.RegisterCallback(slotClickCallbacks[i]);
             }
 
-            previousPageCallback = _ => ShowPreviousPage();
-            nextPageCallback = _ => ShowNextPage();
-            closeCallback = _ => OnClosePressed();
+            previousPageCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); ShowPreviousPage(); };
+            nextPageCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); ShowNextPage(); };
+            // Click cue plus the InventoryClose hide cue — deliberately the same pairing as the
+            // HUD's open buttons (UiSelect + InventoryOpen).
+            closeCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); OnClosePressed(); };
             previousPageButton?.RegisterCallback(previousPageCallback);
             nextPageButton?.RegisterCallback(nextPageCallback);
             closeButton?.RegisterCallback(closeCallback);

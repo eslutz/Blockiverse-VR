@@ -1,3 +1,5 @@
+using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.UI.Toolkit;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
@@ -34,6 +36,16 @@ namespace Blockiverse.UI
         Label bodyLabel;
         Button closeButton;
 
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
+        // Close is navigation, not a confirmation, so it takes the plain click cue.
+        void OnCloseButtonClicked()
+        {
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiSelect);
+            OnClosePressed();
+        }
+
         public override string ScreenId => MenuActions.ControllerMappingScreen;
 
         protected override bool OnAttach(VisualElement root)
@@ -50,7 +62,7 @@ namespace Blockiverse.UI
         protected override void OnRegisterCallbacks()
         {
             if (closeButton != null)
-                closeButton.clicked += OnClosePressed;
+                closeButton.clicked += OnCloseButtonClicked;
 
             // The body is cached dynamic text, so static-binding locale updates do not cover
             // it. HasSettings guards both ends: touching the event must never force settings
@@ -62,7 +74,7 @@ namespace Blockiverse.UI
         protected override void OnUnregisterCallbacks()
         {
             if (closeButton != null)
-                closeButton.clicked -= OnClosePressed;
+                closeButton.clicked -= OnCloseButtonClicked;
 
             if (LocalizationSettings.HasSettings)
                 LocalizationSettings.SelectedLocaleChanged -= OnSelectedLocaleChanged;

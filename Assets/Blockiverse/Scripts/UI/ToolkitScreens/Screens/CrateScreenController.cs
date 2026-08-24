@@ -208,7 +208,9 @@ namespace Blockiverse.UI
             }
 
             depositCallback = _ => DepositHeld();
-            closeCallback = _ => OnClosePressed();
+            // Slot and deposit clicks cue by transfer OUTCOME (UiSelect/UiCancel above);
+            // close is plain navigation and takes the plain click.
+            closeCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); OnClosePressed(); };
             depositButton?.RegisterCallback(depositCallback);
             closeButton?.RegisterCallback(closeCallback);
 

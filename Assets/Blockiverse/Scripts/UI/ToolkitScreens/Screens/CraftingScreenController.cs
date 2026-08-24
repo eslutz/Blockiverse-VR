@@ -240,9 +240,12 @@ namespace Blockiverse.UI
             }
 
             repairClickCallback = _ => TryRepairHeldTool();
-            previousPageClickCallback = _ => ShowPreviousRecipePage();
-            nextPageClickCallback = _ => ShowNextRecipePage();
-            closeClickCallback = _ => CloseScreen();
+            // These three had no cue of their own and were audible only through the host's
+            // route-change sound, which Eric's 2026-08-23 ruling removed — deleting it silenced
+            // them by accident. Craft/repair rows keep outcome cues instead of a click.
+            previousPageClickCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); ShowPreviousRecipePage(); };
+            nextPageClickCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); ShowNextRecipePage(); };
+            closeClickCallback = _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); CloseScreen(); };
             repairButton?.RegisterCallback(repairClickCallback);
             previousPageButton?.RegisterCallback(previousPageClickCallback);
             nextPageButton?.RegisterCallback(nextPageClickCallback);

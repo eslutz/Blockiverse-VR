@@ -181,8 +181,10 @@ namespace Blockiverse.UI
             onTeleportChanged ??= changeEvent => ApplyTeleportToggled(changeEvent.newValue);
             onToggleChanged ??= _ => ApplyOtherControlsWithFeedback();
             onSliderChanged ??= _ => ApplyOtherControlsWithFeedback();
-            onCloseClicked ??= _ => RequestClose();
-            onHeightResetClicked ??= _ => ResetPlayerHeight();
+            // Both take the plain click: close is navigation, and the height reset's outcome
+            // is felt (the world shifts) rather than heard, so without this it was silent.
+            onCloseClicked ??= _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); RequestClose(); };
+            onHeightResetClicked ??= _ => { PlayFeedback(BlockiverseAudioCue.UiSelect); ResetPlayerHeight(); };
 
             RegisterToggle(glideToggle, onGlideChanged);
             RegisterToggle(teleportToggle, onTeleportChanged);

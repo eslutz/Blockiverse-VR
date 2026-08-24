@@ -1,4 +1,6 @@
 using System;
+using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.UI.Toolkit;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
@@ -123,6 +125,12 @@ namespace Blockiverse.UI
             return allFound;
         }
 
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
+        void PlayCue(BlockiverseAudioCue cue) =>
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
+
         protected override void OnRegisterCallbacks()
         {
             nameChangedCallback = evt => config?.SetName(evt.newValue);
@@ -136,14 +144,18 @@ namespace Blockiverse.UI
             for (int i = 0; i < SelectorElementPrefixes.Length; i++)
             {
                 int index = i;
-                backClickCallbacks[i] = _ => CycleSelector(index, forward: false);
-                nextClickCallbacks[i] = _ => CycleSelector(index, forward: true);
+                // The cue rides the CLICK, not CycleSelector/SubmitCreate — those are the public
+                // seams the EditMode tests drive directly, and they must not need an audio rig.
+                backClickCallbacks[i] = _ => { PlayCue(BlockiverseAudioCue.UiSelect); CycleSelector(index, forward: false); };
+                nextClickCallbacks[i] = _ => { PlayCue(BlockiverseAudioCue.UiSelect); CycleSelector(index, forward: true); };
                 backButtons[i]?.RegisterCallback(backClickCallbacks[i]);
                 nextButtons[i]?.RegisterCallback(nextClickCallbacks[i]);
             }
 
-            createClickCallback = _ => SubmitCreate();
-            cancelClickCallback = _ => SubmitCancel();
+            // Create really is a confirmation and Cancel really is a cancel, so these two earn the
+            // distinct cues; every arrow above stays a plain click (Eric's ruling, 2026-08-23).
+            createClickCallback = _ => { PlayCue(BlockiverseAudioCue.UiConfirm); SubmitCreate(); };
+            cancelClickCallback = _ => { PlayCue(BlockiverseAudioCue.UiCancel); SubmitCancel(); };
             createButton?.RegisterCallback(createClickCallback);
             cancelButton?.RegisterCallback(cancelClickCallback);
 

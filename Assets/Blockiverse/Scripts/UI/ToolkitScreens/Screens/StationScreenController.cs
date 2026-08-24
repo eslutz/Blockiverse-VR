@@ -1,3 +1,5 @@
+using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -164,14 +166,21 @@ namespace Blockiverse.UI
             return allFound;
         }
 
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
+        // Cue rides the click, never the Submit*/Cycle* seams the tests drive directly.
+        void PlayCue() =>
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiSelect);
+
         protected override void OnRegisterCallbacks()
         {
-            closeClickCallback = _ => CloseRequested?.Invoke();
-            depositInputClickCallback = _ => SubmitDepositInput();
-            depositFuelClickCallback = _ => SubmitDepositFuel();
-            collectClickCallback = _ => SubmitCollect();
-            withdrawInputClickCallback = _ => SubmitWithdrawInput();
-            withdrawFuelClickCallback = _ => SubmitWithdrawFuel();
+            closeClickCallback = _ => { PlayCue(); CloseRequested?.Invoke(); };
+            depositInputClickCallback = _ => { PlayCue(); SubmitDepositInput(); };
+            depositFuelClickCallback = _ => { PlayCue(); SubmitDepositFuel(); };
+            collectClickCallback = _ => { PlayCue(); SubmitCollect(); };
+            withdrawInputClickCallback = _ => { PlayCue(); SubmitWithdrawInput(); };
+            withdrawFuelClickCallback = _ => { PlayCue(); SubmitWithdrawFuel(); };
 
             closeButton?.RegisterCallback(closeClickCallback);
             depositInputButton?.RegisterCallback(depositInputClickCallback);

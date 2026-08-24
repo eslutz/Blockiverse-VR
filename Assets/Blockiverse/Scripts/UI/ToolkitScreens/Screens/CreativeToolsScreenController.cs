@@ -192,7 +192,10 @@ namespace Blockiverse.UI
         {
             RegisterClick(setCornerAButton, SetCornerA);
             RegisterClick(setCornerBButton, SetCornerB);
-            RegisterClick(pickButton, PickBlock);
+            // Pick plays no cue here: a successful pick lands in hotbar.SelectBlock, which plays
+            // UiSelect itself — the same double-play the Catalog's entry grid had. A failed pick
+            // (aimed at air) stays silent, which reads as "nothing happened".
+            RegisterClick(pickButton, PickBlock, playCue: false);
             RegisterClick(fillButton, FillRegion);
             RegisterClick(replaceButton, ReplaceRegion);
             RegisterClick(deleteButton, DeleteRegion);
@@ -270,12 +273,23 @@ namespace Blockiverse.UI
                 lastTarget = target;
         }
 
-        void RegisterClick(Button button, Action handler)
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
+        // Cue rides the click, never the handler: the handlers are the seams tests drive
+        // directly, and they must not need an audio rig.
+        void RegisterClick(Button button, Action handler, bool playCue = true)
         {
             if (button == null)
                 return;
 
-            EventCallback<ClickEvent> callback = _ => handler();
+            EventCallback<ClickEvent> callback = playCue
+                ? _ =>
+                {
+                    BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiSelect);
+                    handler();
+                }
+                : _ => handler();
             button.RegisterCallback(callback);
             registeredClicks.Add((button, callback));
         }

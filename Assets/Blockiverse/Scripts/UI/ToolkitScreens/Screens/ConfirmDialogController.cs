@@ -58,9 +58,20 @@ namespace Blockiverse.UI
             if (string.IsNullOrEmpty(actionId))
                 return;
 
-            // Same cue at the same moment as BlockiverseActionMenu.InvokeActionAt; the
-            // show/hide cues stay with the host's visibility transitions.
-            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiSelect);
+            // THIS is where a confirm and a cancel sound belong — on an actual confirmation and an
+            // actual cancel, not on navigation. The host no longer plays anything for a route
+            // change (see UiToolkitMenuHost), so these two are the only place a player hears
+            // either cue from a button press, which is what makes them mean something.
+            //
+            // Every other button in the game keeps the plain click.
+            BlockiverseAudioCue cue = actionId switch
+            {
+                MenuActions.ConfirmAccept => BlockiverseAudioCue.UiConfirm,
+                MenuActions.ConfirmCancel => BlockiverseAudioCue.UiCancel,
+                _ => BlockiverseAudioCue.UiSelect,
+            };
+
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
             DispatchAction(actionId);
         }
 

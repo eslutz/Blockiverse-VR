@@ -16,8 +16,10 @@ namespace Blockiverse.UI
     // categories, page through a 3x4 grid of the category's blocks, or search the whole catalog
     // by display name. Picking an entry selects that block in the scene's CreativeHotbar — the
     // same consumer the uGUI panel feeds, and the source CreativeInteractionController reads for
-    // placement. Like the uGUI panel, this screen plays no feedback cues of its own: the hotbar
-    // plays UiSelect inside SelectBlock, and show/hide cues come from the host.
+    // placement. Cue split: category/page/close play the click here, but ENTRY PICKS DO NOT — the
+    // hotbar plays UiSelect inside SelectBlock, and a cue here too double-plays the same clip in
+    // the same frame (~+6 dB louder than every other click). CreativeHotbarController solved the
+    // identical collision with playAudio:!mirrored; here the hotbar's cue is simply the only one.
     [UiToolkitScreen(MenuActions.CatalogScreen, "Assets/Blockiverse/UI/Documents/CatalogScreen.uxml",
         1000, 760, UiToolkitPlacementProfile.Menu)]
     public sealed class CatalogScreenController : UiToolkitScreenController
@@ -108,12 +110,19 @@ namespace Blockiverse.UI
             return allFound;
         }
 
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
+        // Cue rides the click, never the Submit*/Cycle* seams the tests drive directly.
+        void PlayCue() =>
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiSelect);
+
         protected override void OnRegisterCallbacks()
         {
-            categoryClickCallback = _ => CycleCategory();
-            previousPageClickCallback = _ => PreviousPage();
-            nextPageClickCallback = _ => NextPage();
-            closeClickCallback = _ => SubmitClose();
+            categoryClickCallback = _ => { PlayCue(); CycleCategory(); };
+            previousPageClickCallback = _ => { PlayCue(); PreviousPage(); };
+            nextPageClickCallback = _ => { PlayCue(); NextPage(); };
+            closeClickCallback = _ => { PlayCue(); SubmitClose(); };
             categoryButton?.RegisterCallback(categoryClickCallback);
             previousPageButton?.RegisterCallback(previousPageClickCallback);
             nextPageButton?.RegisterCallback(nextPageClickCallback);
@@ -123,6 +132,7 @@ namespace Blockiverse.UI
             for (int i = 0; i < EntryCount; i++)
             {
                 int index = i;
+                // No PlayCue: SelectEntry -> hotbar.SelectBlock -> hotbar plays UiSelect.
                 entryClickCallbacks[i] = _ => SelectEntry(index);
                 entryButtons[i]?.RegisterCallback(entryClickCallbacks[i]);
             }

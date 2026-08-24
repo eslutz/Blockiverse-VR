@@ -42,6 +42,16 @@ namespace Blockiverse.UI
         Toggle classicBlockSoundsToggle;
         Button closeButton;
 
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
+        // Close is navigation, not a confirmation, so it takes the plain click cue.
+        void OnCloseButtonClicked()
+        {
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, BlockiverseAudioCue.UiSelect);
+            OnCloseClicked();
+        }
+
         BlockiverseFeedbackSettings feedbackSettings;
 
         public override string ScreenId => MenuActions.AudioSettingsScreen;
@@ -115,7 +125,7 @@ namespace Blockiverse.UI
                 classicBlockSoundsToggle.RegisterValueChangedCallback(OnClassicBlockSoundsChanged);
 
             if (closeButton != null)
-                closeButton.clicked += OnCloseClicked;
+                closeButton.clicked += OnCloseButtonClicked;
 
             // Toggle labels are cached dynamic text (UiText), so they must re-resolve on
             // locale change; the statically bound labels update natively.
@@ -159,7 +169,7 @@ namespace Blockiverse.UI
                 classicBlockSoundsToggle.UnregisterValueChangedCallback(OnClassicBlockSoundsChanged);
 
             if (closeButton != null)
-                closeButton.clicked -= OnCloseClicked;
+                closeButton.clicked -= OnCloseButtonClicked;
 
             if (LocalizationSettings.HasSettings)
                 LocalizationSettings.SelectedLocaleChanged -= OnSelectedLocaleChanged;
