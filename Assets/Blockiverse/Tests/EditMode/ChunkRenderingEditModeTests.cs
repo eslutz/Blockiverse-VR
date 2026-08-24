@@ -15,6 +15,91 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class ChunkRenderingEditModeTests
     {
+        // The two tests below pin the CONSUMERS of the occlusion split, not the flags. Asserting
+        // only that leafmoss has OccludesFaces:false / BlocksLight:true is not enough: swap which
+        // property the mesher and the sky map read and those flag assertions stay green, because
+        // every block except leafmoss has OccludesFaces == BlocksLight == IsSolid, making the swap
+        // a no-op everywhere else. These fail on that swap.
+
+        [Test]
+        public void CutoutLeavesEmitTheirInteriorFacesInsteadOfAHollowShell()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+
+            // 2x2x2 solid block of leaves: 8 cells, 48 total faces. A shell would cull the 24
+            // interior ones and emit 24; non-occluding leaves emit all 48.
+            for (int x = 0; x < 2; x++)
+            for (int y = 0; y < 2; y++)
+            for (int z = 0; z < 2; z++)
+                world.SetBlock(new BlockPosition(1 + x, 1 + y, 1 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            Assert.That(mesh.CutoutTriangleCount, Is.EqualTo(48 * 2),
+                "Leaves must emit interior faces — a canopy read through its alpha gaps is a hollow " +
+                "shell otherwise. If the mesher starts culling on BlocksLight this drops to 24 faces.");
+            Assert.That(mesh.TriangleCount, Is.EqualTo(0),
+                "Leaf geometry belongs to the cutout submesh, never the opaque one.");
+        }
+
+        [Test]
+        public void CutoutLeavesStillShadeTheGroundBeneathThem()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+            var canopy = new BlockPosition(4, 10, 4);
+            world.SetBlock(canopy, BlockRegistry.Leafmoss, trackChange: false);
+
+            var skyLight = new VoxelSkyLightMap(world, registry);
+
+            // Directly beneath the canopy is shaded; an adjacent open column is not. Reading
+            // OccludesFaces here (false for leaves) would let full sky through and both would match.
+            Assert.That(
+                VoxelLightSampler.SampleSkyExposure(world, registry, new BlockPosition(4, 9, 4), skyLight: skyLight),
+                Is.LessThan(1.0f),
+                "A canopy must shade the ground beneath it (Pinewild §13.2), even though it hides no faces.");
+            Assert.That(
+                VoxelLightSampler.SampleSkyExposure(world, registry, new BlockPosition(6, 9, 6), skyLight: skyLight),
+                Is.EqualTo(1.0f),
+                "An open column beside the tree must still see full sky, or the fixture proves nothing.");
+        }
+
+        [Test]
+        public void InteriorLeafFacesAreDimmedRatherThanBlack()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+
+            for (int x = 0; x < 3; x++)
+            for (int y = 0; y < 3; y++)
+            for (int z = 0; z < 3; z++)
+                world.SetBlock(new BlockPosition(2 + x, 2 + y, 2 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // Leaves stopped occluding faces but still block light, so an interior face looks into
+            // another leaf cell. Sampling light there returns cave darkness and paints the whole
+            // canopy interior pure black — the mesher must walk out to a lit cell instead.
+            //
+            // Count vertices baked to ZERO sky, not the brightest vertex. The canopy's EXTERIOR
+            // faces sample air and always bake full sky, so a max-brightness assertion reads 1.0
+            // whether or not every interior face is black — it cannot fail. (Established by
+            // mutation: removing the outward light walk left that version of this test green.)
+            int blackVertices = 0;
+            foreach (Color c in mesh.Colors)
+            {
+                if (c.r <= 0.0f)
+                    blackVertices++;
+            }
+
+            Assert.That(mesh.Colors, Is.Not.Empty);
+            Assert.That(blackVertices, Is.EqualTo(0),
+                $"{blackVertices} of {mesh.Colors.Count} canopy vertices baked to zero sky light: interior " +
+                "faces are sampling inside a light-blocking leaf cell instead of walking out to one " +
+                "that transmits light.");
+        }
+
         [Test]
         public void MeshBuilderEmitsOnlyExteriorFacesForSingleSolidBlock()
         {

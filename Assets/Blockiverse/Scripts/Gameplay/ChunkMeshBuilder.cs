@@ -271,10 +271,26 @@ namespace Blockiverse.Gameplay
                             if (!ShouldRenderFace(world, registry, definition, neighbor))
                                 continue;
 
-                            float skyExposure = VoxelLightSampler.SampleSkyExposure(world, registry, neighbor, skyLight: skyLight);
+                            // The cell a face looks into is normally air, because a face was only
+                            // ever emitted toward something that did not occlude. Cutout leaves
+                            // broke that: they stopped occluding FACES but still block LIGHT, so
+                            // an interior canopy face now looks into another leaf cell — and
+                            // sampling there returns cave darkness, painting every interior leaf
+                            // (and every trunk face inside a canopy) pure black.
+                            //
+                            // Walk outward along the face normal to the first cell that actually
+                            // transmits light, and dim by how far we had to go, so interior leaves
+                            // read darker than the canopy surface instead of black.
+                            BlockPosition lightCell = ResolveLightSampleCell(
+                                world, registry, neighbor, NeighborOffsets[face], out int blockedSteps);
+                            float depthFade = InteriorLightFalloff(blockedSteps);
+
+                            float skyExposure = depthFade * VoxelLightSampler.SampleSkyExposure(
+                                world, registry, lightCell, skyLight: skyLight);
                             float emitterReach = emitters == null
                                 ? 1.0f
-                                : VoxelLightSampler.SampleEmitterReach(world, registry, neighbor, NeighborOffsets[face], nearbyEmitters);
+                                : depthFade * VoxelLightSampler.SampleEmitterReach(
+                                    world, registry, lightCell, NeighborOffsets[face], nearbyEmitters);
                             Color vertexColor = VoxelLightSampler.ToVertexColor(skyExposure, emitterReach, selfEmission);
 
                             if (isFluid)
@@ -365,7 +381,7 @@ namespace Blockiverse.Gameplay
                 return false;
             }
 
-            return !neighborDefinition.IsRenderable || !neighborDefinition.IsSolid;
+            return !neighborDefinition.IsRenderable || !neighborDefinition.OccludesFaces;
         }
 
         // A distinct name, not an AddFace overload: ChunkRenderingEditModeTests reflects AddFace
@@ -402,6 +418,58 @@ namespace Blockiverse.Gameplay
 
                 fluidVertexData.Add(new Vector2(masked ? 1.0f : 0.0f, (int)family));
             }
+        }
+
+        // How far outward the light search will walk before giving up. A canopy is a few cells
+        // thick; beyond that the fragment is genuinely buried and the floor below is the right
+        // answer anyway. Bounded because this runs per emitted face.
+        const int MaxInteriorLightSteps = 4;
+
+        // Per-cell dimming for a face buried inside light-blocking geometry. Not physical
+        // attenuation — just enough separation that an interior leaf reads dimmer than the canopy
+        // surface rather than identical to it or black.
+        const float InteriorLightStepFalloff = 0.65f;
+
+        // Walks outward from `start` along `offset` until it finds a cell that transmits light,
+        // returning that cell and how many blockers it passed through. Returns `start` unchanged
+        // (with zero steps) in the overwhelmingly common case where `start` is already passable,
+        // so ordinary terrain pays one predicate call and nothing else.
+        static BlockPosition ResolveLightSampleCell(
+            VoxelWorld world,
+            BlockRegistry registry,
+            BlockPosition start,
+            BlockPosition offset,
+            out int blockedSteps)
+        {
+            blockedSteps = 0;
+            BlockPosition cell = start;
+
+            for (int step = 0; step < MaxInteriorLightSteps; step++)
+            {
+                if (!world.Bounds.Contains(cell))
+                    return cell;
+
+                BlockDefinition definition = registry.Get(world.GetBlock(cell));
+                if (VoxelLightSampler.IsLightPassable(definition))
+                    return cell;
+
+                blockedSteps++;
+                cell += offset;
+            }
+
+            return cell;
+        }
+
+        static float InteriorLightFalloff(int blockedSteps)
+        {
+            if (blockedSteps <= 0)
+                return 1.0f;
+
+            float falloff = 1.0f;
+            for (int i = 0; i < blockedSteps; i++)
+                falloff *= InteriorLightStepFalloff;
+
+            return falloff;
         }
 
         // Two intersecting vertical quads on the cell's diagonals — the standard voxel foliage

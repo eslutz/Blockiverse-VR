@@ -117,20 +117,33 @@ Vegetation is the first content in this project that is not a solid opaque cube.
 the canonical definition of how a block is drawn, whether it obstructs movement, and how tall it
 counts as. It applies to every block in §4 and to the existing wild plants.
 
-### 4a.1 Three properties, deliberately independent
+### 4a.1 Independent properties
 
-Historically one flag (`isSolid`) was read as if it meant all three. It does not — it gates face
-culling and sky occlusion, never physics. These are separate axes:
+Historically one flag (`isSolid`) stood in for all of these. It does not mean any of them on its
+own — it is the general "substantial block" flag the others default to, and it never implies
+physics. Each axis below is read only by the system that means it:
 
 | Property | Values | Governs |
 |---|---|---|
 | `renderShape` | `cube`, `cutout_cube`, `cross`, `decal` | The geometry emitted for the block |
 | `collision` | `solid`, `passable` | Whether an entity is stopped by the block |
 | `heightClass` | `short`, `tall` | Path/mask rules and snow burial |
-| `occludes` | `true`, `false` | Whether the block hides neighbour faces and blocks skylight |
+| `occludesFaces` | `true`, `false` | Whether the block hides a neighbour's face (mesher only) |
+| `blocksLight` | `true`, `false` | Whether the block stops skylight and emitter line-of-sight (lighting only) |
 
-**`occludes` is what the engine's `isSolid` field has always meant.** It must not be used to infer
-collision. A block may occlude and be passable, or be non-occluding and solid.
+**Face occlusion and light occlusion are separate axes, and both default to the engine's `isSolid`
+field — which is what `isSolid` has always actually meant.** Neither may be used to infer collision.
+
+They are separate because **leaves are the one block that needs different answers**, and a single
+flag cannot give them: a canopy must hide **no** faces, so its alpha gaps reveal its own interior
+and it reads as volume rather than a hollow shell, while still **blocking** light, so forest floors
+stay shaded (§13.2) and a torch does not shine through a tree. Collapsing them back into one
+property reintroduces exactly that conflict.
+
+One consequence the mesher must handle: because a non-occluding block can still block light, a face
+may now be emitted looking *into* a light-blocking cell. Sampling light there returns cave darkness,
+so the mesher walks outward to the first cell that transmits light and dims by the distance
+travelled — interior leaves read darker than the canopy surface, never black.
 
 ### 4a.2 Render shapes
 
@@ -153,26 +166,26 @@ of dense foliage, so it is spent only where silhouette actually matters.
 
 ### 4a.3 Assignments
 
-| Block | `renderShape` | `collision` | `heightClass` | `occludes` |
-|---|---|---|---|---|
-| `branchwood_log` | `cube` | solid | tall | yes |
-| `leafmoss` | `cutout_cube` | solid | tall | **yes** |
-| `sapling` | `cross` | passable | short | no |
-| `drygrass_tuft` | `cross` | passable | short | no |
-| `meadow_tuft` | `cross` | passable | short | no |
-| `wildflower_cluster` | `cross` | passable | short | no |
-| `dune_sage` | `cross` | passable | short | no |
-| `frost_fern` | `cross` | passable | short | no |
-| `windroot_shrub` | `cross` | passable | short | no |
-| `salt_reed` | `cross` | passable | tall | no |
-| `hanging_reed` | `cross` | passable | tall | no |
-| `reedgrass` | `cross` | passable | tall | no |
-| `grain_stalk` | `cross` | passable | tall | no |
-| `berrybush` | `cross` | passable | short | no |
-| `thornbrush` | `cross` | passable | short | no |
-| `moss_carpet` | `decal` | passable | short | no |
-| `snow_lichen` | `decal` | passable | short | no |
-| `fallen_leaves` | `decal` | passable | short | no |
+| Block | `renderShape` | `collision` | `heightClass` | `occludesFaces` | `blocksLight` |
+|---|---|---|---|---|---|
+| `branchwood_log` | `cube` | solid | tall | yes | yes |
+| `leafmoss` | `cutout_cube` | solid | tall | **no** | **yes** |
+| `sapling` | `cross` | passable | short | no | no |
+| `drygrass_tuft` | `cross` | passable | short | no | no |
+| `meadow_tuft` | `cross` | passable | short | no | no |
+| `wildflower_cluster` | `cross` | passable | short | no | no |
+| `dune_sage` | `cross` | passable | short | no | no |
+| `frost_fern` | `cross` | passable | short | no | no |
+| `windroot_shrub` | `cross` | passable | short | no | no |
+| `salt_reed` | `cross` | passable | tall | no | no |
+| `hanging_reed` | `cross` | passable | tall | no | no |
+| `reedgrass` | `cross` | passable | tall | no | no |
+| `grain_stalk` | `cross` | passable | tall | no | no |
+| `berrybush` | `cross` | passable | short | no | no |
+| `thornbrush` | `cross` | passable | short | no | no |
+| `moss_carpet` | `decal` | passable | short | no | no |
+| `snow_lichen` | `decal` | passable | short | no | no |
+| `fallen_leaves` | `decal` | passable | short | no | no |
 
 **Leafmoss stays occluding and solid.** This is deliberate and load-bearing:
 

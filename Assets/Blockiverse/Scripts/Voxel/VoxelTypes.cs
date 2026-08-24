@@ -99,7 +99,12 @@ namespace Blockiverse.Voxel
             int harvestTierMin = 0,
             float hardness = -1f,
             BlockRenderShape renderShape = BlockRenderShape.Cube,
-            bool isPassable = false)
+            bool isPassable = false,
+            // Both null mean "same as isSolid", which is what every block wanted before cutout
+            // leaves existed. They are SEPARATE parameters because leaves are the first block that
+            // needs different answers: hide no faces, but still block light.
+            bool? occludesFaces = null,
+            bool? blocksLight = null)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -119,6 +124,8 @@ namespace Blockiverse.Voxel
             Category = category;
             IsSolid = isSolid;
             IsRenderable = isRenderable;
+            OccludesFaces = occludesFaces ?? isSolid;
+            BlocksLight = blocksLight ?? isSolid;
             EmissiveLight = emissiveLight;
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
@@ -146,12 +153,24 @@ namespace Blockiverse.Voxel
         public string DisplayKey => $"block.{CanonicalId}.name";
         public string Name { get; }
         public BlockCategory Category { get; }
-        // Despite the name, this gates FACE CULLING and SKYLIGHT OCCLUSION — never physics.
-        // The vegetation ruleset §4a.1 calls this property `occludes` for that reason. Collision
-        // is `IsPassable` plus the physics layer the renderer assigns; do not infer one from the
-        // other. Every existing wild plant is `isSolid: false` and was still a full solid box
-        // until passability existed, which is exactly the confusion this comment exists to stop.
+        // Properties that used to be one flag, and must not be re-conflated (§4a.1). Each is read
+        // only by the system that means it:
+        //
+        //   IsSolid       — the general "substantial block" flag; the default the others inherit.
+        //   OccludesFaces — hides a neighbour's face. Read ONLY by the mesher.
+        //   BlocksLight   — stops skylight and emitter line-of-sight. Read ONLY by the lighting.
+        //   IsPassable    — whether an entity is stopped. None of the above implies it; collision
+        //                   is the physics layer the renderer assigns, not a flag.
+        //
+        // Leaves are why the middle two are separate, and are the only block that differs today:
+        // a canopy must hide NO faces (so the alpha gaps reveal its own interior and it reads as
+        // volume rather than a hollow shell) while still blocking light (so the forest floor stays
+        // shaded and Pinewild keeps the dense, shaded identity §13.2 gives it, and so a torch does
+        // not shine through a tree). One flag cannot answer both; conflating them is the same
+        // mistake IsSolid made, one level up.
         public bool IsSolid { get; }
+        public bool OccludesFaces { get; }
+        public bool BlocksLight { get; }
         public bool IsRenderable { get; }
         // Geometry emitted for this block (§4a.2).
         public BlockRenderShape RenderShape { get; }
@@ -299,7 +318,10 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Graystone,           "graystone",          "Graystone",            BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(BranchwoodLog,       "branchwood_log",     "Branchwood Log",       BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(SmoothBranchwood,    "smooth_branchwood",  "Smooth Branchwood",    BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube));
+            // Leaves need all three answers to differ: solid (you do not fall through a canopy),
+            // cutout-cube geometry, and non-occluding so the alpha gaps reveal the canopy's own
+            // interior faces instead of a hollow shell.
+            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube, occludesFaces: false));
             // Natural cave light, emissive 7 (voxel_world_environment_effects.md §5.3, voxel_survival_ruleset.md §12.1).
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3, emissiveLight: 7));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));

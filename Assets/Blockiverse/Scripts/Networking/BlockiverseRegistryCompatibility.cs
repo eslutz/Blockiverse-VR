@@ -46,6 +46,8 @@ namespace Blockiverse.Networking
                     // peers disagreeing on it build different geometry from the same delta.
                     ((int)definition.Category).ToString(CultureInfo.InvariantCulture),
                     definition.IsSolid ? "1" : "0",
+                    definition.OccludesFaces ? "1" : "0",
+                    definition.BlocksLight ? "1" : "0",
                     definition.IsRenderable ? "1" : "0",
                     // Render shape selects which geometry both peers build from the same delta —
                     // a cube versus a cross quad is the same class of divergence as Category

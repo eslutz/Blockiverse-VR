@@ -390,7 +390,7 @@ namespace Blockiverse.Gameplay
         }
 
         public static bool IsLightPassable(BlockDefinition definition) =>
-            !definition.IsRenderable || !definition.IsSolid;
+            !definition.IsRenderable || !definition.BlocksLight;
 
         static BlockDefinition GetDefinition(BlockRegistry registry, BlockDefinition[] defs, BlockId id)
         {
