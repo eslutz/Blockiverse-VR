@@ -69,6 +69,35 @@ namespace Blockiverse.MetaAvatars
                 mode);
         }
 
+        bool firstPersonVisualsSuppressed;
+
+        /// <summary>
+        /// Hides the avatar entity while something outside the game owns the player's view of
+        /// their own body — today, the Quest system keyboard overlay.
+        /// </summary>
+        /// <remarks>
+        /// BlockiverseNetworkAvatarRig.SetFirstPersonFallbackVisualsSuppressed does the same job
+        /// for the block-hand proxy, and for a long time it was the whole story because the proxy
+        /// was all anyone saw. With Meta avatars loading, that call suppresses nothing a player
+        /// with a real avatar can see: Eric reported his hands staying put while the keyboard was
+        /// up, and frozen rather than tracking, because the entity keeps its last pose when the
+        /// overlay takes focus. Both paths have to be told, or "hide the hands" hides whichever
+        /// body the player does not have.
+        ///
+        /// Routed through the presenter rather than the provider directly, because the presenter
+        /// owns entity visibility — it is computed from several inputs at once and set through
+        /// view flags, never by deactivating the GameObject, which would stall a loading entity
+        /// forever.
+        /// </remarks>
+        public void SetFirstPersonVisualsSuppressed(bool suppressed)
+        {
+            if (firstPersonVisualsSuppressed == suppressed)
+                return;
+
+            firstPersonVisualsSuppressed = suppressed;
+            RefreshAvatarState();
+        }
+
         public void RefreshAvatarState()
         {
             ResolveReferences();
@@ -90,7 +119,8 @@ namespace Blockiverse.MetaAvatars
             bool ownedNetworkObject = fallbackRig != null &&
                 (fallbackRig.IsSpawned || fallbackRig.IsSpawnedForTest) &&
                 fallbackRig.IsOwner && !fallbackRig.IsSpawnedForTest;
-            provider?.SetEntityVisible(avatarReady && !streamStale && !ownedNetworkObject);
+            provider?.SetEntityVisible(
+                avatarReady && !streamStale && !ownedNetworkObject && !firstPersonVisualsSuppressed);
 
             lastFallbackReason = avatarReady
                 ? string.Empty
