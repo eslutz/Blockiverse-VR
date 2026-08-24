@@ -12,7 +12,7 @@ namespace Blockiverse.Gameplay
 {
     public static class BlockVisualAtlas
     {
-        public const int Columns = 10;
+        public const int Columns = 12;
         public const int Rows = 10;
         public const int TilePixels = 32;
         public const int TilePaddingPixels = 8;

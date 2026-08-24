@@ -216,7 +216,7 @@ namespace Blockiverse.Gameplay
             if (world == null)
                 return;
 
-            new VegetationService().PlaceStandardTree(world, basePos, trackChange: true);
+            new VegetationService().PlaceCrownbranchTree(world, basePos, trackChange: true);
         }
 
         // Places a seeded structure at the given base position (tracked as an edit).
@@ -536,7 +536,10 @@ namespace Blockiverse.Gameplay
             if (settings != null && World != null && GenerationPreset == CreativeWorldGenerationPreset.SurvivalLite)
             {
                 biomeResolver = new SurvivalBiomeResolver(settings.Seed, World.Bounds.Height);
-                vegetationService.Configure(biomeResolver.BiomeIndexAt);
+                // The seed rides along because Windbranch bends downwind and the wind is
+                // seed-derived: a sapling maturing on a highland ridge has to bend the same way as
+                // the wild trees generated around it.
+                vegetationService.Configure(biomeResolver.BiomeIndexAt, settings.Seed);
             }
 
             vegetationService.ScanAndTrackSaplings(World);

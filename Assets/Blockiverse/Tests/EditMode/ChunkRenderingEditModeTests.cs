@@ -142,6 +142,39 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void ThickCanopyInteriorIsStillDimmedRatherThanBlack()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(24, 24, 24), chunkSize: 24, seed: 1);
+
+            // Deliberately THICKER than the mesher's outward light-search budget. The 3x3x3 fixture
+            // used by the sibling test sits inside that budget, so it cannot reach this case — and
+            // real canopies do: PlaceCanopyRound uses radius 3 (seven cells across) and adjacent
+            // trees overlap into thicker masses still. Measuring against the convenient fixture
+            // rather than what the world generates is exactly how this stayed hidden.
+            const int size = 11;
+            for (int x = 0; x < size; x++)
+            for (int y = 0; y < size; y++)
+            for (int z = 0; z < size; z++)
+                world.SetBlock(new BlockPosition(6 + x, 6 + y, 6 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            int blackVertices = 0;
+            foreach (Color c in mesh.Colors)
+            {
+                if (c.r <= 0.0f)
+                    blackVertices++;
+            }
+
+            Assert.That(mesh.Colors, Is.Not.Empty);
+            Assert.That(blackVertices, Is.EqualTo(0),
+                $"{blackVertices} of {mesh.Colors.Count} vertices baked to zero sky light. A face buried " +
+                "deeper than the outward light search can reach must fall back to the depth falloff, " +
+                "not multiply it by a cave-dark sample and collapse to black.");
+        }
+
+        [Test]
         public void TurfSamplesGrassOnTopDirtOnTheSidesAndLoamUnderneath()
         {
             // The reason the world reads uniformly green: without per-face tiles a turf block

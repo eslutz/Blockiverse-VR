@@ -280,6 +280,53 @@ Recommended first playable setting:
 normalizeHarvestedTreeMetadata = true;
 ```
 
+### 5.1 Implementation status — which bits actually exist
+
+The schema above is the target. The engine stores block state as a single `int` per block
+(`Blockiverse.Voxel.BlockState`), sparse: only blocks that differ from `BlockState.Default` cost
+anything, and everything else answers `Default` without an entry. Save schema **v5** carries it as
+an optional `BlockStates` array per 16-block section, index-aligned with `ChangePositions` and left
+empty when a section has nothing to record. (Unity's `JsonUtility` writes a null array as `[]`, so
+the field is always present; what the empty form avoids is one zero per delta, which is the cost
+that scales with how much a world has been edited.)
+
+Only bits with a live consumer are declared. A named-but-unread bit reads as supported and
+silently does nothing — this project has already shipped one such declaration and had to remove
+it, so the rule is now explicit.
+
+| Field above | Bit | Status |
+|---|---|---|
+| `LeafmossState.persistent` | `BlockState.Persistent` | **Live.** Set by the mutation gate on any player-placed block whose definition declares `DecaysWithoutSupport` (today: leafmoss only). Exempts it from leaf decay, so a hand-built hedge does not rot. |
+| `BranchwoodLogState.treeVariant` / `LeafmossState.leafVariant` | — | **Not declared.** Needs per-species leaf and log tiles; all seven species currently share one leaf tile and one log tile. The 12×10 atlas has the free slots for it. |
+| `BranchwoodLogState.axis` | — | **Not declared.** Needs horizontal log placement, which no tool produces yet. |
+| `BranchwoodLogState.stripped` / `natural` | — | **Not declared.** `smooth_branchwood` is a distinct block rather than a log state, and nothing reads `natural`. |
+| `LeafmossState.decayDistance` | — | **Not declared.** Decay searches for a nearby log per sweep instead of caching a distance; the cached form is an optimisation with no observable difference. |
+
+Two invariants hold regardless of which bits are declared:
+
+- **State never outlives its block.** Changing the block at a position clears its state, so a
+  replacement can never inherit behaviour nobody set on it.
+- **State only exists where a delta does.** Regions store state on the block delta, so state at a
+  position with no delta would save cleanly and vanish on reload. The mutation gate records state
+  only when the block actually changed, which makes that true by construction rather than by
+  argument.
+
+**Block state is replicated to every peer**, and must stay that way. The world simulation runs on
+all peers in lockstep from identical inputs — environment mutations are never broadcast — so any
+sim input that is not derivable from (seed, clock, world) has to travel or the peers diverge.
+
+That was learned the hard way: the first version of this feature left the bit host-only, on the
+stated grounds that decay is host-authoritative. **It is not.** `CreativeWorldManager.OnWorldTick`
+ticks the whole world sim on every peer with no authority gate, so the host skipped a player-placed
+leaf while the client deleted it, permanently and with nothing to repair it — the host made no
+change, so it emitted no delta. Every one of the three client apply paths (chunk delta, late-join
+snapshot, mutation-result correction) now carries state.
+
+Gating decay to the host instead would NOT have worked: the host's own decay removals are not
+broadcast either, so clients would have kept leaves the host destroyed. Replication is the fix that
+matches the architecture; changing decay to be authoritative would mean changing the lockstep design
+itself.
+
 ---
 
 ## 6. Vegetation generation pipeline
@@ -896,6 +943,27 @@ Player-placed Leafmoss should default to:
 ```ts
 persistent = true;
 ```
+
+### 16.1 Implementation status
+
+**`persistent` is live** (see §5.1). Every player placement of a block that declares
+`DecaysWithoutSupport` is marked at the mutation gate, which is the only path a player edit takes —
+worldgen writes to the world directly, so "grown" and "built" are distinguished by mechanism rather
+than by a flag someone has to remember to set.
+
+Three details of the pseudocode above differ from what shipped, and each is a deliberate
+simplification rather than an oversight:
+
+| Spec | Shipped | Why |
+|---|---|---|
+| `state.natural=true` on the log | Any `branchwood_log` or `smooth_branchwood` counts | `natural` has no consumer and nothing sets it; requiring it would make the search always fail. |
+| Probabilistic decay (`random() < 0.35`) per check | Unsupported leaves are removed on the sweep that finds them | The roll spreads one removal over several sweeps without changing the outcome, and a wall-clock roll in a host-authoritative sweep is a determinism liability for no visible gain. |
+| Sapling and `fallen_leaves` drops on decay | Not implemented | Decay currently removes the block only. |
+
+The decay sweep runs on **every peer**, not just the host — `CreativeWorldManager.OnWorldTick` is
+ungated, unlike the container-loot path in the same file. That is why `BlockState.Persistent` must
+be replicated (see §5.1); a host-only bit would make the two peers reach different decisions about
+the same leaf.
 
 ---
 

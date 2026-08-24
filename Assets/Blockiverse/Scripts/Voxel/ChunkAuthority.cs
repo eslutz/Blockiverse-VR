@@ -335,6 +335,28 @@ namespace Blockiverse.Voxel
 
             var command = new SetBlockCommand(request.Position, request.NewBlock);
             BlockChange change = command.Execute(world);
+
+            // This gate is the only way a PLAYER edit reaches the world — worldgen writes to
+            // VoxelWorld directly — so it is the one place that can tell "someone built this" from
+            // "the generator grew this". Blocks that decay without support need that distinction:
+            // a felled tree's orphaned canopy should rot, a hand-built hedge should not.
+            //
+            // Recorded only for blocks that actually decay. Marking every placement would be a
+            // truer reading of the bit's name but would put one dictionary entry on every block a
+            // creative session places, to answer a question nothing asks of them.
+            // Recorded only for blocks that actually decay. Marking every placement would be a
+            // truer reading of the bit's name but would put one dictionary entry on every block a
+            // creative session places, to answer a question nothing asks of them.
+            //
+            // NOT gated on "a delta exists here". An earlier version was, on the theory that state
+            // riding on the delta could then never be orphaned — but VoxelWorld.RecordChangedBlock
+            // DELETES the delta when an edit reverts a position to its original block, so breaking
+            // a worldgen leaf and placing one back left state with no delta and lost the bit on
+            // reload. Persistence now stores state independently of the delta set, which removes
+            // the coupling instead of guarding it.
+            if (registry.TryGet(request.NewBlock, out BlockDefinition placed) && placed.DecaysWithoutSupport)
+                world.SetBlockState(request.Position, BlockState.Persistent);
+
             appliedCommand = command;
             return BlockMutationResult.Accept(change, validation.Chunk);
         }

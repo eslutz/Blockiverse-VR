@@ -297,15 +297,23 @@ namespace Blockiverse.Gameplay
                             // transmits light, and dim by how far we had to go, so interior leaves
                             // read darker than the canopy surface instead of black.
                             BlockPosition lightCell = ResolveLightSampleCell(
-                                world, registry, neighbor, NeighborOffsets[face], out int blockedSteps);
+                                world, registry, neighbor, NeighborOffsets[face],
+                                out int blockedSteps, out bool foundLitCell);
                             float depthFade = InteriorLightFalloff(blockedSteps);
 
-                            float skyExposure = depthFade * VoxelLightSampler.SampleSkyExposure(
-                                world, registry, lightCell, skyLight: skyLight);
+                            // Deeply buried: no lit cell within the budget. Use the falloff itself
+                            // as the exposure rather than multiplying it by a zero sample, so the
+                            // face reads as dim interior rather than collapsing back to black.
+                            float skyExposure = foundLitCell
+                                ? depthFade * VoxelLightSampler.SampleSkyExposure(
+                                    world, registry, lightCell, skyLight: skyLight)
+                                : depthFade;
                             float emitterReach = emitters == null
                                 ? 1.0f
-                                : depthFade * VoxelLightSampler.SampleEmitterReach(
-                                    world, registry, lightCell, NeighborOffsets[face], nearbyEmitters);
+                                : foundLitCell
+                                    ? depthFade * VoxelLightSampler.SampleEmitterReach(
+                                        world, registry, lightCell, NeighborOffsets[face], nearbyEmitters)
+                                    : 0.0f;
                             Color vertexColor = VoxelLightSampler.ToVertexColor(skyExposure, emitterReach, selfEmission);
 
                             if (isFluid)
@@ -477,7 +485,8 @@ namespace Blockiverse.Gameplay
             BlockRegistry registry,
             BlockPosition start,
             BlockPosition offset,
-            out int blockedSteps)
+            out int blockedSteps,
+            out bool foundLitCell)
         {
             blockedSteps = 0;
             BlockPosition cell = start;
@@ -485,16 +494,29 @@ namespace Blockiverse.Gameplay
             for (int step = 0; step < MaxInteriorLightSteps; step++)
             {
                 if (!world.Bounds.Contains(cell))
+                {
+                    foundLitCell = true;
                     return cell;
+                }
 
                 BlockDefinition definition = registry.Get(world.GetBlock(cell));
                 if (VoxelLightSampler.IsLightPassable(definition))
+                {
+                    foundLitCell = true;
                     return cell;
+                }
 
                 blockedSteps++;
                 cell += offset;
             }
 
+            // Budget exhausted while still inside light-blocking geometry. Sampling here would
+            // return cave darkness and multiply the falloff by zero, putting the interior straight
+            // back to pure black — the exact bug the walk exists to fix, just relocated to
+            // canopies thicker than the budget. A radius-3 canopy is seven cells across and two
+            // overlapping trees are thicker, so this is reachable in ordinary worlds even though a
+            // small test fixture never reaches it.
+            foundLitCell = false;
             return cell;
         }
 

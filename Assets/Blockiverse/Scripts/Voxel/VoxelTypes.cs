@@ -108,7 +108,8 @@ namespace Blockiverse.Voxel
             // leaves existed. They are SEPARATE parameters because leaves are the first block that
             // needs different answers: hide no faces, but still block light.
             bool? occludesFaces = null,
-            bool? blocksLight = null)
+            bool? blocksLight = null,
+            bool decaysWithoutSupport = false)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -135,6 +136,7 @@ namespace Blockiverse.Voxel
             HarvestTierMin = harvestTierMin;
             RenderShape = renderShape;
             IsPassable = isPassable;
+            DecaysWithoutSupport = decaysWithoutSupport;
             // Canonical mining hardness (voxel_survival_ruleset §2/§3). When not specified
             // explicitly, derive a representative value from the hardness class.
             Hardness = hardness >= 0f ? hardness : HardnessFromClass(hardnessClass);
@@ -182,6 +184,13 @@ namespace Blockiverse.Voxel
         // on a dedicated physics layer, because scene queries used for grounding ignore
         // per-collider exclusion lists.
         public bool IsPassable { get; }
+
+        /// <summary>This block is removed by a support/decay sweep when it loses whatever holds it
+        /// up. Only leafmoss does today, but the mutation gate needs to ask the question without
+        /// naming a species: it is what decides whether a player placement is worth recording
+        /// BlockState.Persistent for, and recording it for every block would turn a deliberately
+        /// sparse map into one entry per placed block.</summary>
+        public bool DecaysWithoutSupport { get; }
         public int EmissiveLight { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
@@ -341,7 +350,7 @@ namespace Blockiverse.Voxel
             // Leaves need all three answers to differ: solid (you do not fall through a canopy),
             // cutout-cube geometry, and non-occluding so the alpha gaps reveal the canopy's own
             // interior faces instead of a hollow shell.
-            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube, occludesFaces: false));
+            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube, occludesFaces: false, decaysWithoutSupport: true));
             // Natural cave light, emissive 7 (voxel_world_environment_effects.md §5.3, voxel_survival_ruleset.md §12.1).
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3, emissiveLight: 7));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));

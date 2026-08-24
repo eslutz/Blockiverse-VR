@@ -372,6 +372,104 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void HostAuthorityMarksPlayerPlacedDecayingBlocksPersistent()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 23);
+            var leafPosition = new BlockPosition(1, 1, 1);
+            var stonePosition = new BlockPosition(2, 1, 1);
+
+            BlockMutationAuthority authority = BlockMutationAuthority.CreateHost(world, registry);
+            Assert.That(authority.TryCommit(new BlockMutationRequest(7, leafPosition, BlockRegistry.Leafmoss)).Accepted, Is.True);
+            Assert.That(authority.TryCommit(new BlockMutationRequest(7, stonePosition, BlockRegistry.Graystone)).Accepted, Is.True);
+
+            Assert.That(world.GetBlockState(leafPosition), Is.EqualTo(BlockState.Persistent),
+                "A player-placed leaf was not marked persistent, so it will decay like a felled tree's canopy.");
+
+            // Graystone does not decay, so recording state for it would be pure cost: one
+            // dictionary entry per block a creative session places, answering a question nothing
+            // asks. This half is what keeps the sparse map sparse.
+            Assert.That(world.GetBlockState(stonePosition), Is.EqualTo(BlockState.Default),
+                "A non-decaying block was given state.");
+        }
+
+        [Test]
+        public void WorldgenPlacedLeavesAreNotMarkedPersistent()
+        {
+            // Worldgen writes to VoxelWorld directly rather than through the mutation gate. That is
+            // the entire mechanism separating "grown" from "built" — if generation ever routed
+            // through TryCommit, every canopy in the world would become decay-exempt and the
+            // decay system would silently stop doing anything.
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 29);
+            var position = new BlockPosition(1, 1, 1);
+
+            world.SetBlock(position, BlockRegistry.Leafmoss);
+
+            Assert.That(world.GetBlockState(position), Is.EqualTo(BlockState.Default));
+        }
+
+        [Test]
+        public void ChangingABlockClearsTheStateTheOldBlockCarried()
+        {
+            var world = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 31);
+            var position = new BlockPosition(1, 1, 1);
+
+            world.SetBlock(position, BlockRegistry.Leafmoss);
+            world.SetBlockState(position, BlockState.Persistent);
+
+            // Break it, then place something else in the same cell.
+            world.SetBlock(position, BlockRegistry.Air);
+            world.SetBlock(position, BlockRegistry.Leafmoss);
+
+            Assert.That(world.GetBlockState(position), Is.EqualTo(BlockState.Default),
+                "State outlived the block that owned it and was inherited by whatever replaced it.");
+        }
+
+        [Test]
+        public void ChunkDeltaReplayCarriesBlockStateToTheReceivingWorld()
+        {
+            // The client's ONLY inputs are the block id and whatever else the delta carries. Leaf
+            // decay runs on every peer in lockstep — environment mutations are never broadcast —
+            // so a delta that drops state makes the host skip a player-placed leaf while the client
+            // deletes it, and nothing ever repairs the divergence because the host made no change.
+            var hostWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 41);
+            var clientWorld = new VoxelWorld(new WorldBounds(4, 4, 4), chunkSize: 2, seed: 41);
+            var position = new BlockPosition(1, 1, 1);
+
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            BlockMutationAuthority authority = BlockMutationAuthority.CreateHost(hostWorld, registry);
+            BlockMutationResult result = authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Leafmoss));
+            Assert.That(result.Accepted, Is.True);
+            Assert.That(hostWorld.GetBlockState(position), Is.EqualTo(BlockState.Persistent));
+
+            var log = new ChunkDeltaLog();
+            ChunkDelta delta = log.Record(result.Change, hostWorld.ChunkSize, hostWorld.GetBlockState(position));
+
+            ChunkDeltaLog.Replay(clientWorld, new[] { delta });
+
+            Assert.That(clientWorld.GetBlock(position), Is.EqualTo(BlockRegistry.Leafmoss));
+            Assert.That(clientWorld.GetBlockState(position), Is.EqualTo(BlockState.Persistent),
+                "The client received the block but not its state. Leaf decay runs on every peer, so " +
+                "the client will delete this leaf while the host keeps it — a permanent desync.");
+        }
+
+        [Test]
+        public void ChunkDeltasDifferingOnlyInBlockStateAreNotEqual()
+        {
+            // Equality feeds dedup and the test suite's own comparisons. If state were left out of
+            // it, a state-only correction would compare equal to the delta it corrects and could be
+            // silently discarded as a duplicate.
+            var change = new BlockChange(new BlockPosition(1, 1, 1), BlockRegistry.Air, BlockRegistry.Leafmoss);
+            var chunk = new ChunkCoordinate(0, 0, 0);
+
+            var plain = new ChunkDelta(1, chunk, change, BlockState.Default);
+            var persistent = new ChunkDelta(1, chunk, change, BlockState.Persistent);
+
+            Assert.That(plain, Is.Not.EqualTo(persistent));
+            Assert.That(plain.GetHashCode(), Is.Not.EqualTo(persistent.GetHashCode()));
+        }
+
+        [Test]
         public void HostAuthorityRejectsInvalidMutationRequestsPredictably()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

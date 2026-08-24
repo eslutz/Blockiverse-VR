@@ -20,6 +20,13 @@ namespace Blockiverse.Persistence
         public int Y;
         public int Z;
         public string CanonicalId;  // canonical string block ID
+
+        // Per-block state bits (schema v5). 0 = BlockState.Default, which is what all but a
+        // handful of blocks carry. The region writer sends null instead of a run of zeros when a
+        // whole section is default; JsonUtility still emits that as [], a fixed ~17 bytes per
+        // section, NOT nothing. What the null buys is avoiding one zero PER DELTA, which is the
+        // cost that scales — a full section would otherwise carry ~8 KB of zeros.
+        public int State;
     }
 
     [Serializable]
@@ -210,10 +217,13 @@ namespace Blockiverse.Persistence
                     continue;
                 }
 
-                world.SetBlock(
-                    new BlockPosition(delta.X, delta.Y, delta.Z),
-                    def.Id,
-                    trackChange: preserveLoadedBlockChanges);
+                var position = new BlockPosition(delta.X, delta.Y, delta.Z);
+                world.SetBlock(position, def.Id, trackChange: preserveLoadedBlockChanges);
+
+                // Order matters: SetBlock clears any state at the position, so restoring before it
+                // would silently drop every loaded bit.
+                if (delta.State != BlockState.Default)
+                    world.SetBlockState(position, delta.State);
             }
 
             if (!preserveLoadedBlockChanges)
@@ -235,7 +245,7 @@ namespace Blockiverse.Persistence
     {
         readonly ItemRegistry itemRegistry;
 
-        public const int CurrentSchemaVersion = 4;
+        public const int CurrentSchemaVersion = 5;
         public const string SaveFormatVersion = "1.0.0";
         public const float DefaultAutoSaveIntervalSeconds = 300f;
 
@@ -727,7 +737,7 @@ namespace Blockiverse.Persistence
 
         void WriteRegionFiles(string savePath, WorldSaveSnapshot snapshot)
         {
-            var regionMap = new Dictionary<(int rx, int rz), Dictionary<(int cx, int cz), Dictionary<int, List<(int pos, string canonicalId)>>>>();
+            var regionMap = new Dictionary<(int rx, int rz), Dictionary<(int cx, int cz), Dictionary<int, List<(int pos, string canonicalId, int state)>>>>();
 
             foreach (SavedBlockDelta delta in snapshot.ChangedBlocks)
             {
@@ -744,16 +754,16 @@ namespace Blockiverse.Persistence
 
                 var rKey = (regionX, regionZ);
                 if (!regionMap.TryGetValue(rKey, out var chunkMap))
-                    regionMap[rKey] = chunkMap = new Dictionary<(int, int), Dictionary<int, List<(int, string)>>>();
+                    regionMap[rKey] = chunkMap = new Dictionary<(int, int), Dictionary<int, List<(int, string, int)>>>();
 
                 var cKey = (chunkX, chunkZ);
                 if (!chunkMap.TryGetValue(cKey, out var sectionMap))
-                    chunkMap[cKey] = sectionMap = new Dictionary<int, List<(int, string)>>();
+                    chunkMap[cKey] = sectionMap = new Dictionary<int, List<(int, string, int)>>();
 
                 if (!sectionMap.TryGetValue(sectionY, out var changes))
-                    sectionMap[sectionY] = changes = new List<(int, string)>();
+                    sectionMap[sectionY] = changes = new List<(int, string, int)>();
 
-                changes.Add((pos, delta.CanonicalId));
+                changes.Add((pos, delta.CanonicalId, delta.State));
             }
 
             string regionsDir = Path.Combine(savePath, "dimensions", "main", "regions");
@@ -782,7 +792,10 @@ namespace Blockiverse.Persistence
                         var positions = new List<int>();
                         var indices = new List<int>();
 
-                        foreach (var (pos, canonicalId) in changeList)
+                        var states = new List<int>();
+                        bool anyState = false;
+
+                        foreach (var (pos, canonicalId, state) in changeList)
                         {
                             if (!paletteIndex.TryGetValue(canonicalId, out int idx))
                             {
@@ -792,6 +805,8 @@ namespace Blockiverse.Persistence
                             }
                             positions.Add(pos);
                             indices.Add(idx);
+                            states.Add(state);
+                            anyState |= state != BlockState.Default;
                         }
 
                         sectionList.Add(new VxlwSectionData
@@ -799,7 +814,11 @@ namespace Blockiverse.Persistence
                             SectionY = sectionY,
                             BlockPalette = palette.ToArray(),
                             ChangePositions = positions.ToArray(),
-                            PaletteIndices = indices.ToArray()
+                            PaletteIndices = indices.ToArray(),
+                            // Omitted entirely when every block in the section is default, which is
+                            // the overwhelming case. A parallel run of zeros on every section would
+                            // roughly double region size to record nothing.
+                            BlockStates = anyState ? states.ToArray() : null
                         });
                     }
 
@@ -906,12 +925,19 @@ namespace Blockiverse.Persistence
                                 return deltas;
                             }
 
+                            // A shorter or absent BlockStates array is not corruption — it is what
+                            // a section with nothing but default state writes.
+                            int state = section.BlockStates != null && i < section.BlockStates.Length
+                                ? section.BlockStates[i]
+                                : BlockState.Default;
+
                             deltas.Add(new SavedBlockDelta
                             {
                                 X = worldX,
                                 Y = worldY,
                                 Z = worldZ,
-                                CanonicalId = canonicalId
+                                CanonicalId = canonicalId,
+                                State = state
                             });
                         }
                     }
@@ -1436,18 +1462,52 @@ namespace Blockiverse.Persistence
         static SavedBlockDelta[] BuildChangedBlockDeltas(VoxelWorld world, BlockRegistry blockRegistry)
         {
             var deltas = new List<SavedBlockDelta>();
+            var written = new HashSet<BlockPosition>();
+
             foreach (BlockChange change in world.GetChangedBlocks())
             {
                 string canonicalId = blockRegistry.TryGet(change.NewBlock, out BlockDefinition def)
                     ? def.CanonicalId
                     : "air";
 
+                written.Add(change.Position);
                 deltas.Add(new SavedBlockDelta
                 {
                     X = change.Position.X,
                     Y = change.Position.Y,
                     Z = change.Position.Z,
-                    CanonicalId = canonicalId
+                    CanonicalId = canonicalId,
+                    State = world.GetBlockState(change.Position)
+                });
+            }
+
+            // Block state rides on the delta list, so every position carrying state needs a delta
+            // to ride on — and the changed-block set is NOT guaranteed to have one.
+            // VoxelWorld.RecordChangedBlock deletes a delta when an edit reverts a position to its
+            // original block, so a player who breaks a worldgen leaf and places one back holds
+            // state at a position the world no longer considers changed. Without this pass that
+            // state saves cleanly and vanishes on load, and the hand-placed leaf rots.
+            //
+            // The emitted delta is redundant by design: it writes the block that is already there,
+            // which regeneration would produce anyway. Applying it on load is a no-op for the block
+            // and carries the state, which is the whole point. There are only ever a handful.
+            foreach (KeyValuePair<BlockPosition, int> stateEntry in world.BlockStates)
+            {
+                if (stateEntry.Value == BlockState.Default || !written.Add(stateEntry.Key))
+                    continue;
+
+                BlockId block = world.GetBlock(stateEntry.Key);
+                string canonicalId = blockRegistry.TryGet(block, out BlockDefinition def)
+                    ? def.CanonicalId
+                    : "air";
+
+                deltas.Add(new SavedBlockDelta
+                {
+                    X = stateEntry.Key.X,
+                    Y = stateEntry.Key.Y,
+                    Z = stateEntry.Key.Z,
+                    CanonicalId = canonicalId,
+                    State = stateEntry.Value
                 });
             }
 

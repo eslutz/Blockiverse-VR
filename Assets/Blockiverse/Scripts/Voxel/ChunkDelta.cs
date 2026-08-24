@@ -6,7 +6,7 @@ namespace Blockiverse.Voxel
 {
     public readonly struct ChunkDelta : IEquatable<ChunkDelta>
     {
-        public ChunkDelta(uint sequenceId, ChunkCoordinate chunk, BlockChange change)
+        public ChunkDelta(uint sequenceId, ChunkCoordinate chunk, BlockChange change, int newBlockState = BlockState.Default)
         {
             if (sequenceId == 0)
                 throw new ArgumentOutOfRangeException(nameof(sequenceId), "Chunk delta sequence IDs must be nonzero.");
@@ -14,11 +14,22 @@ namespace Blockiverse.Voxel
             SequenceId = sequenceId;
             Chunk = chunk;
             Change = change;
+            NewBlockState = newBlockState;
         }
 
         public uint SequenceId { get; }
         public ChunkCoordinate Chunk { get; }
         public BlockChange Change { get; }
+
+        /// <summary>Block state at the position AFTER the change (schema v5 / vegetation ruleset §5).
+        ///
+        /// This rides on the delta because the world simulation runs on EVERY peer in lockstep from
+        /// identical inputs — environment mutations are never broadcast — and leaf decay is the
+        /// first sim whose input is not derivable from (seed, clock, world). Without it the host
+        /// skips a player-placed leaf while the client, seeing Default, deletes it: a permanent
+        /// divergence that nothing repairs, because the host made no change and so emits no
+        /// delta.</summary>
+        public int NewBlockState { get; }
 
         public bool Equals(ChunkDelta other)
         {
@@ -26,7 +37,8 @@ namespace Blockiverse.Voxel
                    Chunk == other.Chunk &&
                    Change.Position == other.Change.Position &&
                    Change.PreviousBlock == other.Change.PreviousBlock &&
-                   Change.NewBlock == other.Change.NewBlock;
+                   Change.NewBlock == other.Change.NewBlock &&
+                   NewBlockState == other.NewBlockState;
         }
 
         public override bool Equals(object obj)
@@ -36,7 +48,7 @@ namespace Blockiverse.Voxel
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(SequenceId, Chunk, Change.Position, Change.PreviousBlock, Change.NewBlock);
+            return HashCode.Combine(SequenceId, Chunk, Change.Position, Change.PreviousBlock, Change.NewBlock, NewBlockState);
         }
 
         public static bool operator ==(ChunkDelta left, ChunkDelta right)
@@ -63,13 +75,14 @@ namespace Blockiverse.Voxel
         public IReadOnlyList<ChunkDelta> Deltas => deltas;
         public uint LastSequenceId { get; private set; }
 
-        public ChunkDelta Record(BlockChange change, int chunkSize)
+        public ChunkDelta Record(BlockChange change, int chunkSize, int newBlockState = BlockState.Default)
         {
             uint sequenceId = AllocateSequenceId();
             var delta = new ChunkDelta(
                 sequenceId,
                 ChunkCoordinate.FromBlockPosition(change.Position, chunkSize),
-                change);
+                change,
+                newBlockState);
 
             deltas.Add(delta);
             LastSequenceId = sequenceId;
@@ -93,7 +106,13 @@ namespace Blockiverse.Voxel
                 throw new ArgumentNullException(nameof(sourceDeltas));
 
             foreach (ChunkDelta delta in sourceDeltas)
+            {
+                // SetBlock clears state at the position it writes, so the state must be restored
+                // after it, never before.
                 world.SetBlock(delta.Change.Position, delta.Change.NewBlock, trackChange);
+                if (delta.NewBlockState != BlockState.Default)
+                    world.SetBlockState(delta.Change.Position, delta.NewBlockState);
+            }
         }
 
         uint AllocateSequenceId()

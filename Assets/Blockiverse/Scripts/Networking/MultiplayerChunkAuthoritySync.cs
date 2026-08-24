@@ -103,7 +103,14 @@ namespace Blockiverse.Networking
         public const float EnvironmentResyncIntervalSeconds = 5.0f;
         const int SnapshotHeaderBytes = WorldSnapshotHeaderBytes;
         // The wire format is 3 ints of position plus 1 int of block id.
-        public const int SnapshotBlockBytes = 16;
+        // 12 (position) + 4 (block id) + 4 (block state, schema v5).
+        //
+        // The state is carried per block rather than as a separate sparse list because the batches
+        // are ordered against the header by ReliableFragmentedSequenced, and a second message type
+        // would need its own ordering guarantee against the completion routine. The cost is 25% on
+        // a one-time late-join transfer whose size is already warned about above
+        // LateJoinSnapshotWarningBlockCount.
+        public const int SnapshotBlockBytes = 20;
         // snapshotId + batchIndex + batchCount + blockCount.
         public const int SnapshotBatchHeaderBytes = 16;
 
@@ -818,7 +825,8 @@ namespace Blockiverse.Networking
             {
                 BlockPosition position = ReadBlockPosition(ref reader);
                 reader.ReadValueSafe(out int blockId);
-                snapshot.Blocks.Add((position, blockId));
+                reader.ReadValueSafe(out int blockState);
+                snapshot.Blocks.Add((position, blockId, blockState));
             }
 
             snapshot.ReceivedBatchCount++;
@@ -837,7 +845,7 @@ namespace Blockiverse.Networking
             public int BatchCount;
             public int ReceivedBatchCount;
             public float WaitingForBatchesSeconds;
-            public List<(BlockPosition position, int blockId)> Blocks;
+            public List<(BlockPosition position, int blockId, int blockState)> Blocks;
             public Task<GeneratedSnapshotWorld> GenerationTask;
 
             public bool HasAllBatches => ReceivedBatchCount >= BatchCount;
@@ -873,7 +881,7 @@ namespace Blockiverse.Networking
                 SnapshotId = snapshotId,
                 BatchCount = batchCount,
                 ReceivedBatchCount = 0,
-                Blocks = new List<(BlockPosition position, int blockId)>(changedBlockCount),
+                Blocks = new List<(BlockPosition position, int blockId, int blockState)>(changedBlockCount),
                 // World generation is pure C# over engine-free types, safe off the main thread.
                 GenerationTask = Task.Run(() => GenerateSnapshotWorld(preset, settings)),
             };
@@ -962,12 +970,14 @@ namespace Blockiverse.Networking
 
             // Batch the renderer rebuild: applying the snapshot block-by-block would otherwise
             // rebuild every dirty chunk mesh once per block (O(blocks × rebuild)).
-            foreach ((BlockPosition position, int blockId) in snapshot.Blocks)
+            foreach ((BlockPosition position, int blockId, int blockState) in snapshot.Blocks)
             {
                 if (blockId < 0)
                     continue;
 
-                ApplyAuthoritativeBlock(position, new BlockId(blockId), trackChange: false, rebuildRenderer: false);
+                ApplyAuthoritativeBlock(
+                    position, new BlockId(blockId), trackChange: false, rebuildRenderer: false,
+                    blockState: blockState);
                 AppliedSnapshotBlockCount++;
             }
 
@@ -992,6 +1002,7 @@ namespace Blockiverse.Networking
             reader.ReadValueSafe(out int rejectionReason);
             reader.ReadValueSafe(out bool hasAuthoritativeBlock);
             reader.ReadValueSafe(out int authoritativeBlock);
+            reader.ReadValueSafe(out int authoritativeBlockState);
 
             ChunkCoordinate chunk = ChunkCoordinate.FromBlockPosition(position, ResolveWorld().ChunkSize);
             LastMutationResult = BlockMutationResult.Reject(
@@ -1003,7 +1014,14 @@ namespace Blockiverse.Networking
             TryCompletePendingMutationRequest(CurrentBoundary.LocalClientId, requestId);
 
             if (hasAuthoritativeBlock)
-                ApplyAuthoritativeBlock(position, new BlockId(authoritativeBlock), trackChange: false);
+            {
+                // The rejection correction is the third path that overwrites a client block, and it
+                // must carry state for the same reason the other two do — otherwise a rejected
+                // request silently strips the Persistent bit off whatever was already there.
+                ApplyAuthoritativeBlock(
+                    position, new BlockId(authoritativeBlock), trackChange: false,
+                    blockState: authoritativeBlockState);
+            }
         }
 
         void SendMutationRequest(uint requestId, BlockMutationRequest request)
@@ -1056,7 +1074,9 @@ namespace Blockiverse.Networking
 
             try
             {
-                ChunkDelta delta = chunkDeltaLog.Record(change, ResolveWorld().ChunkSize);
+                VoxelWorld world = ResolveWorld();
+                ChunkDelta delta = chunkDeltaLog.Record(
+                    change, world.ChunkSize, world.GetBlockState(change.Position));
                 LastBroadcastChunkDeltaSequence = delta.SequenceId;
                 writer.WriteValueSafe(requestingClientId);
                 writer.WriteValueSafe(requestId);
@@ -1087,6 +1107,7 @@ namespace Blockiverse.Networking
             BlockPosition position = request.Position;
             bool hasAuthoritativeBlock = world.Bounds.Contains(position);
             BlockId authoritativeBlock = hasAuthoritativeBlock ? world.GetBlock(position) : default;
+            int authoritativeBlockState = hasAuthoritativeBlock ? world.GetBlockState(position) : BlockState.Default;
             var writer = new FastBufferWriter(MutationResultMessageBytes, Allocator.Temp);
 
             try
@@ -1096,6 +1117,7 @@ namespace Blockiverse.Networking
                 writer.WriteValueSafe((int)result.RejectionReason);
                 writer.WriteValueSafe(hasAuthoritativeBlock);
                 writer.WriteValueSafe(authoritativeBlock.Value);
+                writer.WriteValueSafe(authoritativeBlockState);
                 networkManager.CustomMessagingManager.SendNamedMessage(MutationResultMessage, clientId, writer);
             }
             finally
@@ -1380,7 +1402,14 @@ namespace Blockiverse.Networking
             // Copy the changed set now: the paced send spans frames and the world keeps
             // mutating underneath it. The header has already committed to this count, so the
             // batches must describe the same set the header announced.
-            var blocks = new List<BlockChange>(changedBlocks);
+            //
+            // Block state is captured HERE for the same reason, not read from the world inside the
+            // coroutine: a leaf placed or broken mid-send would otherwise pair one frame's state
+            // with another frame's block.
+            VoxelWorld snapshotWorld = ResolveWorld();
+            var blocks = new List<(BlockChange Change, int State)>(changedBlocks.Count);
+            foreach (BlockChange changed in changedBlocks)
+                blocks.Add((changed, snapshotWorld.GetBlockState(changed.Position)));
 
             if (snapshotSendRoutines.TryGetValue(clientId, out Coroutine existing) && existing != null)
                 StopCoroutine(existing);
@@ -1391,7 +1420,8 @@ namespace Blockiverse.Networking
 
         // Paced so a large world cannot overflow the transport's send queue in one frame; see
         // SnapshotBatchesPerFrame for why a dropped batch is worse than a slow one.
-        IEnumerator SendSnapshotBatches(ulong clientId, uint snapshotId, int batchCount, List<BlockChange> blocks)
+        IEnumerator SendSnapshotBatches(
+            ulong clientId, uint snapshotId, int batchCount, List<(BlockChange Change, int State)> blocks)
         {
             NetworkManager networkManager = ResolveNetworkManagerOrNull();
             int sentThisFrame = 0;
@@ -1423,8 +1453,9 @@ namespace Blockiverse.Networking
 
                     for (int index = offset; index < offset + count; index++)
                     {
-                        WriteBlockPosition(ref writer, blocks[index].Position);
-                        writer.WriteValueSafe(blocks[index].NewBlock.Value);
+                        WriteBlockPosition(ref writer, blocks[index].Change.Position);
+                        writer.WriteValueSafe(blocks[index].Change.NewBlock.Value);
+                        writer.WriteValueSafe(blocks[index].State);
                     }
 
                     networkManager.CustomMessagingManager.SendNamedMessage(
@@ -1573,7 +1604,12 @@ namespace Blockiverse.Networking
             AppliedEnvironmentSnapshotCount++;
         }
 
-        void ApplyAuthoritativeBlock(BlockPosition position, BlockId block, bool trackChange = true, bool rebuildRenderer = true)
+        void ApplyAuthoritativeBlock(
+            BlockPosition position,
+            BlockId block,
+            bool trackChange = true,
+            bool rebuildRenderer = true,
+            int blockState = BlockState.Default)
         {
             VoxelWorld world = ResolveWorld();
 
@@ -1581,6 +1617,13 @@ namespace Blockiverse.Networking
                 return;
 
             world.SetBlock(position, block, trackChange);
+
+            // After SetBlock, which clears state for the position it writes. Mirroring the host's
+            // state is what keeps the lockstep world simulation running from identical inputs on
+            // every peer: leaf decay reads BlockState.Persistent, and a client that saw only the
+            // block id would delete a hand-built hedge the host keeps, with no delta to repair it.
+            if (blockState != BlockState.Default)
+                world.SetBlockState(position, blockState);
             if (rebuildRenderer && worldManager.Renderer != null)
                 worldManager.Renderer.RebuildDirty();
         }
@@ -1591,7 +1634,9 @@ namespace Blockiverse.Networking
 
             if (delta.SequenceId == NextChunkDeltaSequence(LastAppliedChunkDeltaSequence))
             {
-                ApplyAuthoritativeBlock(delta.Change.Position, delta.Change.NewBlock, trackChange: false);
+                ApplyAuthoritativeBlock(
+                    delta.Change.Position, delta.Change.NewBlock, trackChange: false,
+                    blockState: delta.NewBlockState);
                 LastAppliedChunkDeltaSequence = delta.SequenceId;
                 AppliedChunkDeltaCount++;
                 return ChunkDeltaApplyState.Applied;
@@ -2114,6 +2159,9 @@ namespace Blockiverse.Networking
             writer.WriteValueSafe(delta.SequenceId);
             WriteChunkCoordinate(ref writer, delta.Chunk);
             WriteBlockChange(ref writer, delta.Change);
+            // Written OUTSIDE WriteBlockChange: state belongs to the world at a position, not to
+            // the change record, and WriteBlockChange is shared with messages that carry no world.
+            writer.WriteValueSafe(delta.NewBlockState);
         }
 
         static ChunkDelta ReadChunkDelta(ref FastBufferReader reader)
@@ -2121,7 +2169,8 @@ namespace Blockiverse.Networking
             reader.ReadValueSafe(out uint sequenceId);
             ChunkCoordinate chunk = ReadChunkCoordinate(ref reader);
             BlockChange change = ReadBlockChange(ref reader);
-            return new ChunkDelta(sequenceId, chunk, change);
+            reader.ReadValueSafe(out int newBlockState);
+            return new ChunkDelta(sequenceId, chunk, change, newBlockState);
         }
 
         static BlockChange ReadBlockChange(ref FastBufferReader reader)

@@ -51,6 +51,217 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void BlockStateSurvivesTheSaveLoadRoundTrip()
+        {
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2402, groundHeight: 2);
+            var preset = new FlatBuilderPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+
+            var persistent = new BlockPosition(4, 5, 6);
+            var ordinary = new BlockPosition(5, 5, 6);
+            world.SetBlock(persistent, BlockRegistry.Leafmoss);
+            world.SetBlockState(persistent, BlockState.Persistent);
+            world.SetBlock(ordinary, BlockRegistry.Leafmoss);
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "blockstate-roundtrip", world);
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+
+                VoxelWorld loaded = preset.Generate();
+                result.ApplyTo(loaded);
+
+                Assert.That(loaded.GetBlockState(persistent), Is.EqualTo(BlockState.Persistent),
+                    "Persistent state was lost across save/load; the leaf will start decaying after a reload.");
+
+                // The negative half matters as much: if the reader defaulted everything to
+                // Persistent, or the writer stamped whole sections, the assertion above would pass
+                // for the wrong reason.
+                Assert.That(loaded.GetBlockState(ordinary), Is.EqualTo(BlockState.Default),
+                    "A block that was never marked came back with state.");
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void BlockStateSurvivesWhenTheWorldDroppedItsDelta()
+        {
+            // The case that made the old "state only exists where a delta exists" invariant false.
+            // VoxelWorld.RecordChangedBlock DELETES a delta when an edit reverts a position to its
+            // original block. Break a worldgen leaf and place one back and the world holds state at
+            // a position it no longer considers changed — so the save must emit a delta for it
+            // anyway, or the bit is lost and the hand-placed leaf rots on the next load.
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2702, groundHeight: 2);
+            var preset = new FlatBuilderPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+
+            var position = new BlockPosition(4, 6, 4);
+
+            // Stand in for a worldgen block: written untracked, exactly as generation writes.
+            world.SetBlock(position, BlockRegistry.Leafmoss, trackChange: false);
+
+            // Break it, then place it back. The second edit reverts to the original block, so the
+            // world drops the delta entirely.
+            world.SetBlock(position, BlockRegistry.Air);
+            var authority = BlockMutationAuthority.CreateHost(world, registry);
+            Assert.That(authority.TryCommit(new BlockMutationRequest(7, position, BlockRegistry.Leafmoss)).Accepted, Is.True);
+
+            Assert.That(world.GetBlockState(position), Is.EqualTo(BlockState.Persistent));
+            Assert.That(world.GetChangedBlocks().Any(c => c.Position.Equals(position)), Is.False,
+                "Precondition failed: the world still tracks a delta here, so this test is not " +
+                "exercising the orphaned-state case it exists for.");
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "state-without-delta", world);
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+
+                VoxelWorld loaded = preset.Generate();
+                loaded.SetBlock(position, BlockRegistry.Leafmoss, trackChange: false); // regenerated terrain
+                result.ApplyTo(loaded);
+
+                Assert.That(loaded.GetBlockState(position), Is.EqualTo(BlockState.Persistent),
+                    "State was lost because the world held no delta at this position. The leaf will " +
+                    "start decaying after a reload even though a player placed it by hand.");
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SectionsWithNoBlockStateWriteNoPerBlockZeros()
+        {
+            // The original form of this test asserted the region JSON did not contain the literal
+            // "BlockStates":[ — which assumed Unity's JsonUtility omits a null array. It does not:
+            // a null int[] serialises as []. The test caught that, which is the only reason the
+            // claim "an ordinary save is byte-identical to v4" did not ship as documentation.
+            //
+            // What actually matters is unchanged and is what this now asserts: a section with no
+            // block state must not carry one zero PER DELTA. The empty array is a fixed ~17 bytes
+            // per section; a zero run scales with delta count (a full section would be ~8 KB of
+            // zeros). Parsed rather than string-matched, so it fails on the shape rather than on
+            // incidental formatting.
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2502, groundHeight: 2);
+            var preset = new FlatBuilderPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+
+            // Several deltas in one section, none of them carrying state.
+            for (int i = 0; i < 8; i++)
+                world.SetBlock(new BlockPosition(2 + i, 2, 2), BlockRegistry.Glowwick);
+
+            try
+            {
+                new WorldSaveService().Save(path, "blockstate-no-zero-run", world);
+
+                string regionsDir = Path.Combine(path, "dimensions", "main", "regions");
+                string[] regionFiles = Directory.GetFiles(regionsDir, "*.vxlr");
+                Assert.That(regionFiles, Is.Not.Empty, "No region file was written.");
+
+                int sectionsSeen = 0;
+                foreach (string file in regionFiles)
+                {
+                    var region = JsonUtility.FromJson<VxlwRegionFile>(File.ReadAllText(file));
+                    Assert.That(region?.Chunks, Is.Not.Null, $"{Path.GetFileName(file)} did not parse.");
+
+                    foreach (VxlwChunkData chunk in region.Chunks)
+                    {
+                        foreach (VxlwSectionData section in chunk.Sections)
+                        {
+                            sectionsSeen++;
+                            Assert.That(section.BlockStates, Is.Null.Or.Empty,
+                                $"Section {section.SectionY} wrote {section.BlockStates?.Length} state entries " +
+                                $"for {section.ChangePositions.Length} deltas that carry no state. " +
+                                "A zero per delta scales with world edits to record nothing.");
+                        }
+                    }
+                }
+
+                // Without this the test would pass vacuously on a save that wrote no sections at
+                // all — which is exactly how the first version of it could have gone green.
+                Assert.That(sectionsSeen, Is.GreaterThan(0), "No sections were written, so nothing was actually asserted.");
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SectionsWithBlockStateWriteOneEntryPerDelta()
+        {
+            // The negative of the test above, and the one that proves the writer is not simply
+            // never emitting states: when a section DOES carry state, the array must be present and
+            // index-aligned with ChangePositions, because the reader pairs them by index.
+            string path = CreateTempSavePath();
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var settings = new WorldGenerationSettings(width: 16, height: 32, depth: 16, chunkSize: 16, seed: 2602, groundHeight: 2);
+            var preset = new FlatBuilderPreset(registry, settings);
+            VoxelWorld world = preset.Generate();
+
+            for (int i = 0; i < 4; i++)
+                world.SetBlock(new BlockPosition(2 + i, 2, 2), BlockRegistry.Leafmoss);
+
+            var marked = new BlockPosition(3, 2, 2);
+            world.SetBlockState(marked, BlockState.Persistent);
+
+            try
+            {
+                new WorldSaveService().Save(path, "blockstate-aligned", world);
+
+                string regionsDir = Path.Combine(path, "dimensions", "main", "regions");
+                bool foundPersistent = false;
+
+                foreach (string file in Directory.GetFiles(regionsDir, "*.vxlr"))
+                {
+                    var region = JsonUtility.FromJson<VxlwRegionFile>(File.ReadAllText(file));
+                    foreach (VxlwChunkData chunk in region.Chunks)
+                    {
+                        foreach (VxlwSectionData section in chunk.Sections)
+                        {
+                            if (section.BlockStates == null || section.BlockStates.Length == 0)
+                                continue;
+
+                            Assert.That(section.BlockStates.Length, Is.EqualTo(section.ChangePositions.Length),
+                                "BlockStates is not index-aligned with ChangePositions; the reader pairs them by index, " +
+                                "so a length mismatch silently attaches state to the wrong blocks.");
+
+                            foreach (int state in section.BlockStates)
+                            {
+                                if (state == BlockState.Persistent)
+                                    foundPersistent = true;
+                            }
+                        }
+                    }
+                }
+
+                Assert.That(foundPersistent, Is.True,
+                    "No section carried the Persistent bit, so the save path never wrote block state at all. " +
+                    "The round-trip test would still pass if BOTH the writer and reader were broken symmetrically.");
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void SaveSnapshotFreezesChangedBlocksBeforeBackgroundWrite()
         {
             string path = CreateTempSavePath();

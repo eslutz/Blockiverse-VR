@@ -31,31 +31,46 @@ namespace Blockiverse.WorldGen
 
         Func<int, int, int> biomeResolver; // (x, z) → TerrainBiome as int; null = default Meadow
 
-        public void Configure(Func<int, int, int> biomeAt)
+        // Windbranch bends downwind, and the wind is seed-derived. A sapling maturing into one has
+        // to reach the same answer worldgen did, so the seed lives here rather than being passed in
+        // at each call.
+        int worldSeed;
+
+        public void Configure(Func<int, int, int> biomeAt, int seed = 0)
         {
             biomeResolver = biomeAt;
+            worldSeed = seed;
         }
 
         public static bool IsLeafSupportBlock(BlockId block) =>
             block == BlockRegistry.BranchwoodLog || block == BlockRegistry.SmoothBranchwood;
 
-        // ── 7 tree variants ─────────────────────────────────────────────────
+        // ── The seven canonical species (ruleset §9) ─────────────────────────
+        //
+        // Named for the species rather than the silhouette, because the ruleset's per-biome tables,
+        // drops and audio hooks all key off these names. Three of them carry mechanics the generic
+        // shapes never had: Leanbranch leans toward water, Windbranch bends with the prevailing
+        // wind, and Fanbranch is rare except near brine.
 
-        public void PlaceStandardTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        /// <summary>§9.1 Crownbranch — the temperate round-crowned tree of Meadow.</summary>
+        public void PlaceCrownbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 4)) return;
             PlaceTrunk(world, basePos, trunkHeight: 4, trackChange: trackChange);
             PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 2, layers: 2, trackChange: trackChange);
         }
 
-        public void PlaceTallTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        /// <summary>§9.7 Windbranch — Highlands. Bends with the prevailing wind; see the overload
+        /// that takes a wind direction.</summary>
+        public void PlaceWindbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 7)) return;
             PlaceTrunk(world, basePos, trunkHeight: 7, trackChange: trackChange);
             PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 7, basePos.Z), radius: 1, layers: 2, trackChange: trackChange);
         }
 
-        public void PlaceConicalTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        /// <summary>§9.2 Needlebranch — the conifer of Pinewild.</summary>
+        public void PlaceNeedlebranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 6)) return;
             PlaceTrunk(world, basePos, trunkHeight: 6, trackChange: trackChange);
@@ -68,14 +83,17 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        public void PlaceShrubTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        /// <summary>§9.4 Scrubbranch — the low, wide shrub-tree of Drybrush.</summary>
+        public void PlaceScrubbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 2)) return;
             PlaceTrunk(world, basePos, trunkHeight: 2, trackChange: trackChange);
             PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 2, basePos.Z), radius: 3, layers: 1, trackChange: trackChange);
         }
 
-        public void PlaceWillowTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        /// <summary>§9.3 Leanbranch — Wetland. Leans toward water; see the overload that takes a
+        /// lean direction.</summary>
+        public void PlaceLeanbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 5)) return;
             PlaceTrunk(world, basePos, trunkHeight: 5, trackChange: trackChange);
@@ -85,7 +103,8 @@ namespace Blockiverse.WorldGen
             PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 2, layers: 1, trackChange: trackChange);
         }
 
-        public void PlaceSparseTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        /// <summary>§9.6 Frostbranch — the tall, sparse-crowned tree of Tundra.</summary>
+        public void PlaceFrostbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
             if (!TrunkClear(world, basePos, trunkHeight: 8)) return;
             PlaceTrunk(world, basePos, trunkHeight: 8, trackChange: trackChange);
@@ -93,19 +112,181 @@ namespace Blockiverse.WorldGen
             PlaceCanopySquare(world, new BlockPosition(basePos.X, basePos.Y + 9, basePos.Z), radius: 1, trackChange: trackChange);
         }
 
+        /// <summary>§9.5 Fanbranch — Dunes. A fan of fronds on a bare trunk, and the only species
+        /// whose RARITY is part of its identity: common only near brine, absent elsewhere. The
+        /// caller owns that gate (see IsNearBrine) because it needs the world, not just a base.</summary>
+        public void PlaceFanbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
+        {
+            if (!TrunkClear(world, basePos, trunkHeight: 5)) return;
+            PlaceTrunk(world, basePos, trunkHeight: 5, trackChange: trackChange);
+
+            // A flat crown of fronds rather than a volume: four arms and a cap, so it reads as a
+            // palm silhouette instead of a small round tree.
+            var crown = new BlockPosition(basePos.X, basePos.Y + 5, basePos.Z);
+            TrySetBlock(world, crown, BlockRegistry.Leafmoss, trackChange);
+            foreach (BlockPosition arm in FrondOffsets)
+            {
+                TrySetBlock(world, new BlockPosition(crown.X + arm.X, crown.Y, crown.Z + arm.Z), BlockRegistry.Leafmoss, trackChange);
+                TrySetBlock(world, new BlockPosition(crown.X + arm.X * 2, crown.Y - 1, crown.Z + arm.Z * 2), BlockRegistry.Leafmoss, trackChange);
+            }
+        }
+
+        static readonly BlockPosition[] FrondOffsets =
+        {
+            new(1, 0, 0), new(-1, 0, 0), new(0, 0, 1), new(0, 0, -1),
+        };
+
+        /// <summary>§9.3 Leanbranch with an explicit lean. The canopy is offset one cell toward
+        /// <paramref name="leanX"/>/<paramref name="leanZ"/> so a waterside stand visibly reaches
+        /// over the water, which is the whole read of a wetland treeline.</summary>
+        public void PlaceLeanbranchTree(
+            VoxelWorld world, BlockPosition basePos, int leanX, int leanZ, bool trackChange = false)
+        {
+            if (!TrunkClear(world, basePos, trunkHeight: 5)) return;
+            PlaceTrunk(world, basePos, trunkHeight: 5, trackChange: trackChange);
+
+            var canopyBase = new BlockPosition(basePos.X + leanX, basePos.Y + 5, basePos.Z + leanZ);
+            PlaceCanopyRound(world, canopyBase, radius: 3, layers: 2, trackChange: trackChange);
+            PlaceCanopyRound(
+                world, new BlockPosition(basePos.X + leanX, basePos.Y + 4, basePos.Z + leanZ),
+                radius: 2, layers: 1, trackChange: trackChange);
+        }
+
+        /// <summary>§9.7 Windbranch with an explicit bend. Same shape as the unbent form with the
+        /// crown displaced downwind, so an exposed highland ridge reads as weather-shaped rather
+        /// than as a row of identical trees.</summary>
+        public void PlaceWindbranchTree(
+            VoxelWorld world, BlockPosition basePos, int windX, int windZ, bool trackChange = false)
+        {
+            if (!TrunkClear(world, basePos, trunkHeight: 7)) return;
+            PlaceTrunk(world, basePos, trunkHeight: 7, trackChange: trackChange);
+            PlaceCanopyRound(
+                world, new BlockPosition(basePos.X + windX, basePos.Y + 7, basePos.Z + windZ),
+                radius: 1, layers: 2, trackChange: trackChange);
+        }
+
+        /// <summary>Direction from <paramref name="basePos"/> toward the nearest fluid within
+        /// <paramref name="searchRadius"/>, as a unit step on one axis, or (0,0) when there is none.
+        /// Deliberately axis-aligned: the canopy offset is a whole cell, so a diagonal would round
+        /// to one of these anyway.</summary>
+        public static bool TryGetLeanTowardFluid(
+            VoxelWorld world, BlockPosition basePos, int searchRadius, out int leanX, out int leanZ)
+        {
+            leanX = 0;
+            leanZ = 0;
+
+            int bestDistanceSquared = int.MaxValue;
+            for (int dx = -searchRadius; dx <= searchRadius; dx++)
+            {
+                for (int dz = -searchRadius; dz <= searchRadius; dz++)
+                {
+                    if (dx == 0 && dz == 0)
+                        continue;
+
+                    var probe = new BlockPosition(basePos.X + dx, basePos.Y - 1, basePos.Z + dz);
+                    if (!world.Bounds.Contains(probe) || !FluidBlocks.IsFluid(world.GetBlock(probe)))
+                        continue;
+
+                    int distanceSquared = dx * dx + dz * dz;
+                    if (distanceSquared >= bestDistanceSquared)
+                        continue;
+
+                    bestDistanceSquared = distanceSquared;
+                    leanX = System.Math.Sign(dx);
+                    leanZ = System.Math.Sign(dz);
+                }
+            }
+
+            return bestDistanceSquared != int.MaxValue;
+        }
+
+        /// <summary>Whether brine sits within <paramref name="searchRadius"/> — the oasis test that
+        /// gates Fanbranch (§9.5/§13.5).</summary>
+        public static bool IsNearBrine(VoxelWorld world, BlockPosition basePos, int searchRadius)
+        {
+            for (int dx = -searchRadius; dx <= searchRadius; dx++)
+            {
+                for (int dz = -searchRadius; dz <= searchRadius; dz++)
+                {
+                    var probe = new BlockPosition(basePos.X + dx, basePos.Y - 1, basePos.Z + dz);
+                    if (!world.Bounds.Contains(probe))
+                        continue;
+
+                    BlockId block = world.GetBlock(probe);
+                    if (block == BlockRegistry.Brine || block == BlockRegistry.BrineFlow)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>A world's prevailing wind, as one of the four axis directions, derived from the
+        /// seed. There is no wind in the weather model, and generation needs an answer that is the
+        /// same on every peer and every reload — a seed-derived constant is both.</summary>
+        public static void GetPrevailingWind(int seed, out int windX, out int windZ)
+        {
+            uint roll = DeterministicHash.Hash(seed, 0, 0, 0, salt: 4231) % 4u;
+            windX = roll == 0 ? 1 : roll == 1 ? -1 : 0;
+            windZ = roll == 2 ? 1 : roll == 3 ? -1 : 0;
+        }
+
         // ── Biome-aware tree dispatch ────────────────────────────────────────
 
-        void PlaceBiomeTree(VoxelWorld world, BlockPosition pos, TerrainBiome biome, bool trackChange = false)
+        // How far a Leanbranch looks for water, and a Fanbranch for brine. Both are per-tree scans
+        // over a small square, so the radius is the cost knob.
+        const int LeanSearchRadius = 4;
+        const int OasisSearchRadius = 5;
+
+        /// <summary>Which species a biome grows (ruleset §9/§13), including the three mechanics that
+        /// depend on surroundings: Leanbranch's lean toward water, Windbranch's downwind bend, and
+        /// Fanbranch's brine-oasis gate.
+        ///
+        /// ONE dispatch, deliberately. Worldgen and sapling maturation both ask this question, and
+        /// when they each answered it separately a player-grown tree could be a different species
+        /// from the wild ones around it — visible in play, and nothing would have reported it.</summary>
+        public void PlaceBiomeTree(VoxelWorld world, BlockPosition pos, TerrainBiome biome, bool trackChange = false)
         {
             switch (biome)
             {
-                case TerrainBiome.Pinewild:   PlaceConicalTree(world, pos, trackChange);  break;
-                case TerrainBiome.Wetland:    PlaceWillowTree(world, pos, trackChange);   break;
-                case TerrainBiome.Drybrush:   PlaceShrubTree(world, pos, trackChange);    break;
-                case TerrainBiome.Tundra:     PlaceSparseTree(world, pos, trackChange);   break;
-                case TerrainBiome.Highlands:  PlaceTallTree(world, pos, trackChange);     break;
-                case TerrainBiome.Dunes:      PlaceShrubTree(world, pos, trackChange);    break;
-                default:                      PlaceStandardTree(world, pos, trackChange); break;
+                case TerrainBiome.Pinewild:
+                    PlaceNeedlebranchTree(world, pos, trackChange);
+                    break;
+
+                case TerrainBiome.Wetland:
+                    // §9.3: lean toward water when there is any, otherwise stand straight.
+                    if (TryGetLeanTowardFluid(world, pos, LeanSearchRadius, out int leanX, out int leanZ))
+                        PlaceLeanbranchTree(world, pos, leanX, leanZ, trackChange);
+                    else
+                        PlaceLeanbranchTree(world, pos, trackChange: trackChange);
+                    break;
+
+                case TerrainBiome.Drybrush:
+                    PlaceScrubbranchTree(world, pos, trackChange);
+                    break;
+
+                case TerrainBiome.Tundra:
+                    PlaceFrostbranchTree(world, pos, trackChange);
+                    break;
+
+                case TerrainBiome.Highlands:
+                    // §9.7: bend downwind. The wind is seed-derived, so a ridge reads as
+                    // weather-shaped and every peer agrees on which way.
+                    GetPrevailingWind(worldSeed, out int windX, out int windZ);
+                    PlaceWindbranchTree(world, pos, windX, windZ, trackChange);
+                    break;
+
+                case TerrainBiome.Dunes:
+                    // §9.5/§13.5: Fanbranch only near brine; the rest of the dunes keep scrub.
+                    if (IsNearBrine(world, pos, OasisSearchRadius))
+                        PlaceFanbranchTree(world, pos, trackChange);
+                    else
+                        PlaceScrubbranchTree(world, pos, trackChange);
+                    break;
+
+                default:
+                    PlaceCrownbranchTree(world, pos, trackChange);
+                    break;
             }
         }
 
@@ -409,6 +590,12 @@ namespace Blockiverse.WorldGen
             foreach (BlockPosition pos in leafDecayScratch)
             {
                 if (world.GetBlock(pos) != BlockRegistry.Leafmoss)
+                    continue;
+
+                // Player-placed leaves never decay. Decay's whole premise is "this canopy lost its
+                // tree", which is true of a felled trunk and false of a hedge someone built by
+                // hand — that rots for no reason the player can see or prevent.
+                if (BlockState.IsPersistent(world.GetBlockState(pos)))
                     continue;
 
                 if (!HasNearbyLog(world, pos, LeafDecayMaxDistance))
