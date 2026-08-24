@@ -1,0 +1,25 @@
+/*
+ * Load World screen layout. Colour, spacing steps and type all resolve from Tokens/Base;
+ * this sheet only arranges the paging and command rows horizontally.
+ */
+
+.bv-paging-row {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.bv-page-label {
+    flex-grow: 1;
+    -unity-text-align: middle-center;
+}
+
+.bv-command-row {
+    flex-direction: row;
+    flex-shrink: 0;
+}
+
+.bv-command-row .hs-button {
+    flex-grow: 1;
+    margin-right: var(--hs-space-2);
+}

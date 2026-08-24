@@ -23,10 +23,29 @@ namespace Blockiverse.Gameplay
         // tenth of the gait cycle. Firing the cue that fraction of a step early reads as a real
         // step; landing it exactly on the low point reads as slightly late.
         public const float DefaultFootfallLeadPhase = 0.1f;
-        // Constant step length means cadence scales linearly with speed, and the max move-speed
-        // slider with sprint reaches 8.8 m/s — an 11 Hz cadence that would machine-gun the cue.
         // Crossings past this rate are swallowed (audio ruleset: never faster than 0.18s per step).
+        // This is a BACKSTOP, not the cadence model — see the stride scaling below. It only ever
+        // thins the audio; the head bob reads the phase directly and cannot be rate-limited, which
+        // is why a too-short stride was felt as much as heard.
         public const float MinFootfallIntervalSeconds = 0.18f;
+
+        // STRIDE GROWS WITH SPEED. Eric (2026-08-24): sprinting was "a jackhammer up and down
+        // really fast", bob and footsteps far too close together.
+        //
+        // The cause was a CONSTANT step length: cadence = speed / stride, so sprinting at 2.2x
+        // walking pace simply doubled the step rate to ~5 Hz. Real gait does not work that way —
+        // people cover ground by lengthening the stride as well as quickening it, which is exactly
+        // the cue that was missing. Scaling the stride toward SprintStrideScale over the walk ->
+        // sprint speed range puts sprint cadence at ~2.8 Hz (0.36 s/step) against walking's
+        // ~2.3 Hz: still visibly quicker, but reading as long running strides. It also lifts the
+        // interval clear of MinFootfallIntervalSeconds, so cues stop being swallowed.
+        //
+        // Anchors are duplicated from the locomotion speeds rather than referenced: this assembly
+        // sits BELOW Blockiverse.VR in the layering and cannot see BlockiverseInputRig. They only
+        // shape an interpolation curve, so drift degrades the feel rather than breaking anything.
+        public const float WalkSpeedMetersPerSecond = 1.8f;
+        public const float SprintSpeedMetersPerSecond = 3.96f;
+        public const float SprintStrideScale = 1.8f;
         // A frame that covers more ground than this is a teleport or a respawn, not a stride.
         public const float TeleportResetMeters = 2.0f;
         // A frame whose instantaneous speed exceeds this is a displacement, not locomotion: the
@@ -107,6 +126,38 @@ namespace Blockiverse.Gameplay
         /// <summary>True while the cycle is advancing: grounded, unsuppressed, and covering ground.</summary>
         public bool IsStepping => stepping;
 
+        /// <summary>
+        /// Stride length at a given speed: the configured base while walking, growing toward
+        /// <see cref="SprintStrideScale"/> times it at sprint speed and holding there.
+        /// </summary>
+        public static float ResolveStepLengthMeters(float baseStepLengthMeters, float speedMetersPerSecond)
+        {
+            float scale;
+
+            if (speedMetersPerSecond <= WalkSpeedMetersPerSecond)
+            {
+                scale = 1.0f;
+            }
+            else if (speedMetersPerSecond >= SprintSpeedMetersPerSecond)
+            {
+                // Above sprint the stride grows in PROPORTION to speed, which holds cadence flat
+                // at its sprint value however fast the player gets. Clamping the stride instead
+                // would let cadence climb again — the comfort move-speed slider at maximum plus
+                // sprint reaches 8.8 m/s, which on a fixed stride is a 6 Hz machine-gun and the
+                // very complaint this scaling exists to answer.
+                scale = SprintStrideScale * (speedMetersPerSecond / SprintSpeedMetersPerSecond);
+            }
+            else
+            {
+                scale = Mathf.Lerp(
+                    1.0f,
+                    SprintStrideScale,
+                    Mathf.InverseLerp(WalkSpeedMetersPerSecond, SprintSpeedMetersPerSecond, speedMetersPerSecond));
+            }
+
+            return Mathf.Max(MinStepLengthMeters, baseStepLengthMeters * scale);
+        }
+
         public float StepLengthMeters
         {
             get => stepLengthMeters;
@@ -186,7 +237,7 @@ namespace Blockiverse.Gameplay
                 return;
             }
 
-            stepPhase += horizontal / Mathf.Max(MinStepLengthMeters, stepLengthMeters);
+            stepPhase += horizontal / ResolveStepLengthMeters(stepLengthMeters, speed);
 
             float index = Mathf.Floor(stepPhase + footfallLeadPhase);
             if (index > footfallIndex)

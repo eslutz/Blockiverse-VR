@@ -1,0 +1,64 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Survival crafting screen (MenuActions.CraftingScreen, migration matrix row 16).
+        Structure only: presentation comes from Tokens.uss/Base.uss plus CraftingScreen.uss,
+        attached by the generated panel, never by a <Style> element (pre-import GUIDs do not exist).
+
+        The five recipe rows, the page label and the status line are dynamic text written by
+        CraftingScreenController (availability marker + recipe body, byte-parity with the uGUI
+        SurvivalCraftingPanel), so they deliberately carry no LocalizedString binding — a binding
+        would rewrite them behind the controller's back on locale change. The repair button label
+        is also runtime text (UiText) because its string has no table entry yet. The page buttons
+        are glyph-only. Recipe icons start hidden; the controller shows one only when the output
+        item has a sprite in the icon library.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-crafting-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-crafting-title" text="Crafting" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.survival.crafting" />
+                </Bindings>
+            </engine:Label>
+            <engine:Button name="bv-crafting-close" text="Close" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-crafting-content" class="hs-screen__content" mode="Vertical">
+            <engine:Button name="bv-recipe-1" class="hs-button crafting-recipe-row">
+                <engine:VisualElement name="bv-recipe-icon-1" class="crafting-recipe-icon" picking-mode="Ignore" style="visibility: hidden;" />
+                <engine:Label name="bv-recipe-label-1" class="crafting-recipe-label" picking-mode="Ignore" />
+            </engine:Button>
+            <engine:Button name="bv-recipe-2" class="hs-button crafting-recipe-row">
+                <engine:VisualElement name="bv-recipe-icon-2" class="crafting-recipe-icon" picking-mode="Ignore" style="visibility: hidden;" />
+                <engine:Label name="bv-recipe-label-2" class="crafting-recipe-label" picking-mode="Ignore" />
+            </engine:Button>
+            <engine:Button name="bv-recipe-3" class="hs-button crafting-recipe-row">
+                <engine:VisualElement name="bv-recipe-icon-3" class="crafting-recipe-icon" picking-mode="Ignore" style="visibility: hidden;" />
+                <engine:Label name="bv-recipe-label-3" class="crafting-recipe-label" picking-mode="Ignore" />
+            </engine:Button>
+            <engine:Button name="bv-recipe-4" class="hs-button crafting-recipe-row">
+                <engine:VisualElement name="bv-recipe-icon-4" class="crafting-recipe-icon" picking-mode="Ignore" style="visibility: hidden;" />
+                <engine:Label name="bv-recipe-label-4" class="crafting-recipe-label" picking-mode="Ignore" />
+            </engine:Button>
+            <engine:Button name="bv-recipe-5" class="hs-button crafting-recipe-row">
+                <engine:VisualElement name="bv-recipe-icon-5" class="crafting-recipe-icon" picking-mode="Ignore" style="visibility: hidden;" />
+                <engine:Label name="bv-recipe-label-5" class="crafting-recipe-label" picking-mode="Ignore" />
+            </engine:Button>
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-crafting-paging" class="crafting-paging-row" picking-mode="Ignore">
+            <engine:Button name="bv-page-previous" text="&lt;" class="hs-button crafting-page-button" />
+            <engine:Label name="bv-page-label" class="hs-body hs-figures crafting-page-label" picking-mode="Ignore" />
+            <engine:Button name="bv-page-next" text="&gt;" class="hs-button crafting-page-button" />
+        </engine:VisualElement>
+
+        <engine:Button name="bv-repair" class="hs-button" />
+
+        <engine:VisualElement name="bv-crafting-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-crafting-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

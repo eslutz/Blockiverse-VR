@@ -21,8 +21,21 @@ Shader "Blockiverse/Voxel Lit"
         // z = time speed (rad/s), w = normal amplification (visual slope multiplier).
         // x must never exceed VoxelWorldRenderer.MaxWaveDipMeters * 0.5, or troughs fall outside
         // the padded mesh bounds and pop at the edge of vision.
+        //
+        // WATER FAMILIES SHARE ONE WAVE. Freshwater and brine are both water, and Eric's ruling
+        // (2026-08-24) is that they may look different but must MOVE the same: two bodies meeting
+        // mid-surface with different frequency and speed read as a seam, because the eye tracks
+        // motion far more readily than tint. Brine previously ran at its own amplitude, frequency
+        // and speed (0.020 / 1.05 / 0.90), which also left its mean surface 5 mm proud of
+        // freshwater — the levelling bias in BlockiverseVoxelLitInput.hlsl was added to hide that,
+        // and with identical amplitudes it is now a no-op between these two. It stays, because it
+        // is what keeps ANY future family from stepping against the others.
+        //
+        // Emberflow deliberately does NOT join them. It is molten rock, not water; barely moving
+        // is the point, and it never shares a shoreline with a lake in a way that would show a
+        // seam. Per-family TINT (above) is untouched — the look was never the complaint.
         _WaveFreshwater("Freshwater Wave", Vector) = (0.025, 0.90, 1.10, 8.0)
-        _WaveBrine("Brine Wave", Vector) = (0.020, 1.05, 0.90, 7.0)
+        _WaveBrine("Brine Wave", Vector) = (0.025, 0.90, 1.10, 8.0)
         _WaveEmberflow("Emberflow Wave", Vector) = (0.012, 0.45, 0.22, 3.0)
         _WaterSpecularStrength("Water Specular Strength", Range(0, 2)) = 0.35
 

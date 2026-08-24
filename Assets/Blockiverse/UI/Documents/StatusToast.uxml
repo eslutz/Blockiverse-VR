@@ -1,0 +1,12 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Timed status toast (screen id gameplay_hud, matrix row 23). Ports the uGUI Survival
+        HUD's status label: harvest-rejection feedback shown for a bounded time and hidden
+        whenever the text is empty (StatusToastController owns the timer and the
+        SetStatusText semantics). All text is dynamic — no static strings, no bindings.
+        Entirely non-interactive: every element is picking-mode Ignore.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen" picking-mode="Ignore">
+        <engine:Label name="bv-toast-label" class="hs-status st-label" picking-mode="Ignore" />
+    </engine:VisualElement>
+</engine:UXML>

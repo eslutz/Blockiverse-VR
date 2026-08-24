@@ -137,6 +137,25 @@
     border-left-color: var(--hs-ember);
 }
 
+/* Button-list screens (title, pause, death, settings hub) centre their actions in
+   whatever space the panel has. A fixed-size panel cannot fit its list exactly: the
+   title menu carries six actions in the editor and five on device, because CanQuit()
+   is editor-only. Top-aligned, that difference pools as dead space under the last
+   button. Centred, it splits evenly and reads as deliberate at any count. */
+.hs-action-list .unity-scroll-view__content-container {
+    flex-grow: 1;
+    justify-content: center;
+}
+
+/* An empty status line still reserved its 56px, which is most of the dead band under
+   the last title-menu button. Collapsing it is done by the controllers rather than by
+   USS (there is no :empty selector), and only when the text is blank — a status that
+   is actually showing keeps its reserved height so arriving text never reflows the
+   buttons under the player's ray. */
+.hs-status--empty {
+    display: none;
+}
+
 /* ── Fields ─────────────────────────────────────────────────────────────── */
 
 .hs-field {
@@ -153,6 +172,73 @@
     border-left-color: var(--hs-edge-control-mid);
     border-right-color: var(--hs-edge-control-dark);
     border-bottom-color: var(--hs-edge-control-deep);
+}
+
+/* Focus on every control, not just buttons.
+   .hs-button:focus alone left toggles, sliders and text fields falling through to Unity's
+   default theme, which paints focus in its own blue — a colour outside this palette
+   entirely, and the one thing ADR 0010 §8 is most explicit about: focus is bone, it
+   outlines all four borders, and it changes nothing else. Seen leaking on the comfort
+   screen's toggle labels in the simulator. :focus alone would miss the toggles, whose
+   focus lands on an inner element, so the -within variant carries them. */
+/* A TextField is a composite, and the element you can see is NOT the one you style.
+   `.hs-field` above paints the OUTER field; the inner input draws its own background from the
+   default theme and owns the text. Styling only the outer one leaves the stock near-white input
+   sitting on top of our panel colour, and the text inherits --hs-ink (bone) — so the field reads
+   as a bright white rectangle with nothing in it. That is exactly what shipped to the headset.
+   Every EditMode test passed, because EditMode has no panel and resolves no styles at all: the
+   suite asserts structure and behaviour and can say nothing about appearance.
+   The toggle and slider inner elements below were styled from the start, only because someone
+   looked at those on screen and nobody had looked at a text field.
+   Both selectors are deliberate: UI Toolkit gives the input the NAME unity-text-input and the
+   CLASS unity-base-text-field__input, and matching either alone would fail silently if a Unity
+   version changed one. ToolkitTextFieldStyleEditModeTests asserts a real TextField still carries
+   both. */
+.hs-field #unity-text-input,
+.hs-field .unity-base-text-field__input {
+    background-color: var(--hs-control);
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    padding-left: var(--hs-control-horizontal-padding);
+    padding-right: var(--hs-control-horizontal-padding);
+    color: var(--hs-ink);
+    -unity-text-align: middle-left;
+}
+
+/* The caret and selection come from the theme too, and a dark-on-dark caret is invisible even
+   once the background is right. */
+.hs-field #unity-text-input {
+    /* --unity- prefixed VARIABLES, not plain properties. `cursor-color` and `selection-color`
+       parse as unknown and Unity logs "Unknown style property" at runtime, which a PlayMode test
+       turned into a failure — the styling silently did nothing while the sheet still loaded. The
+       engine's own deprecation text names these as the correct spelling. */
+    --unity-cursor-color: var(--hs-ink);
+    --unity-selection-color: var(--hs-focus);
+}
+
+/* Placeholder text must stay distinguishable from a real value, or an empty seed field looks
+   filled in. */
+.hs-field .unity-text-element--inner-input-field-component {
+    color: var(--hs-dim);
+}
+
+.hs-field:focus,
+.hs-field:focus-within {
+    border-top-color: var(--hs-focus);
+    border-left-color: var(--hs-focus);
+    border-right-color: var(--hs-focus);
+    border-bottom-color: var(--hs-focus);
+}
+
+/* Unity tints the focused label/checkmark of a composite control from its own theme
+   variables; re-assert the palette so focus never recolours type. */
+.hs-field:focus .unity-base-field__label,
+.hs-field:focus-within .unity-base-field__label,
+.hs-field:focus .unity-text-element,
+.hs-field:focus-within .unity-text-element {
+    color: var(--hs-ink);
 }
 
 /* Wells are inset: sliders, empty inventory slots, unselected halves of a segmented control.
@@ -187,6 +273,113 @@
    line up and digits cannot be mistaken for one another. */
 .hs-figures { -unity-font-style: normal; letter-spacing: 0.02px; }
 
+/* ── Toggles ────────────────────────────────────────────────────────────────
+   Until now nothing styled the checkmark, so Unity's default theme drew it: a
+   small light system checkbox sitting immediately after the label, in a palette
+   that is not ours. The box is a WELL — the same inverted 2px light an empty
+   inventory slot uses — so an unchecked control reads as a recess cut into the
+   slab, and checking it fills that recess with ember.
+
+   Fill rather than a tick glyph, deliberately: a thin checkmark is the first
+   thing to disappear at 0.95 m, and a filled ember square survives both distance
+   and the off-axis viewing a VR panel always gets. The label is the word that
+   carries the state alongside it (ADR 0010 §8: a signal is never colour alone).
+
+   The input is pushed to the trailing edge so every checkbox in a column lines
+   up on one axis instead of hanging off the end of ragged labels. */
+
+.hs-field .unity-toggle__input {
+    flex-grow: 1;
+    justify-content: flex-end;
+}
+
+.hs-field .unity-toggle__checkmark {
+    width: var(--hs-checkbox-size);
+    height: var(--hs-checkbox-size);
+    margin-left: var(--hs-space-3);
+    margin-right: 0;
+    flex-shrink: 0;
+    /* Kill the theme's tick outright — a half-overridden image is worse than none. */
+    background-image: none;
+    background-color: var(--hs-chip);
+    border-top-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
+}
+
+/* Checked draws a tick INSIDE the well rather than filling it. A solid ember square
+   read as a coloured block rather than a control — it said "something is here", not
+   "this is on". The box stays the same recess in both states so only the symbol
+   changes, and the ember edge quartet keeps the state legible at distance, where the
+   tick alone would be the first thing to go. The sprite is the one the bootstrapper
+   already generates for the uGUI checkboxes. */
+.hs-field.unity-toggle:checked .unity-toggle__checkmark {
+    background-image: url("/Assets/Blockiverse/Art/Sprites/UI/checkbox_check.png");
+    -unity-background-image-tint-color: var(--hs-ember-lit);
+    background-color: var(--hs-chip);
+    border-top-color: var(--hs-edge-ember-lit);
+    border-left-color: var(--hs-edge-ember-mid);
+    border-right-color: var(--hs-edge-ember-dark);
+    border-bottom-color: var(--hs-edge-ember-deep);
+}
+
+.hs-field.unity-toggle:disabled .unity-toggle__checkmark {
+    background-color: var(--hs-muted);
+    opacity: 1;
+}
+
+/* ── Sliders ────────────────────────────────────────────────────────────────
+   Also unstyled before this, which left the default hairline track: it collapsed
+   to whatever space the label did not take, so a long label left a stub of a
+   slider. The input now grows to fill its column and carries a floor, the track
+   is a well, and the dragger is a raised control face big enough to be a
+   controller-ray target rather than a desktop mouse target. */
+
+.hs-field .unity-base-slider__input {
+    flex-grow: 1;
+    min-width: var(--hs-slider-min-length);
+}
+
+.hs-field .unity-base-slider__tracker {
+    height: var(--hs-slider-track-height);
+    margin-top: var(--hs-slider-track-offset);
+    background-color: var(--hs-chip);
+    border-top-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
+}
+
+.hs-field .unity-base-slider__dragger {
+    width: var(--hs-slider-dragger-width);
+    height: var(--hs-slider-dragger-height);
+    margin-top: var(--hs-slider-dragger-offset);
+    background-color: var(--hs-control);
+    border-top-width: var(--hs-edge-width);
+    border-left-width: var(--hs-edge-width);
+    border-right-width: var(--hs-edge-width);
+    border-bottom-width: var(--hs-edge-width);
+    border-top-color: var(--hs-edge-control-lit);
+    border-left-color: var(--hs-edge-control-mid);
+    border-right-color: var(--hs-edge-control-dark);
+    border-bottom-color: var(--hs-edge-control-deep);
+}
+
+.hs-field .unity-base-slider__dragger:hover {
+    background-color: var(--hs-hover);
+    border-top-color: var(--hs-ember);
+    border-left-color: var(--hs-ember);
+}
+
 /* ── Status ─────────────────────────────────────────────────────────────── */
 
 .hs-status {
@@ -203,3 +396,39 @@
 .hs-status--confirmed { border-left-color: var(--hs-moss); color: var(--hs-moss-text); }
 .hs-status--refused   { border-left-color: var(--hs-ochre); color: var(--hs-ochre-text); }
 .hs-status--rejected  { border-left-color: var(--hs-oxide); color: var(--hs-oxide-text); }
+
+/* ── Type families (ADR 0010 §8) ────────────────────────────────────────────
+   Barlow for everything, Zilla Slab for anything WITH A NAME (titles, headings,
+   item/world names). Exactly two families — a third is a third thing to embed
+   in the font atlas. The .ttf files live beside their OFL licenses in
+   Assets/Blockiverse/UI/Fonts; url() paths resolve at import.
+
+   This section sits LAST so its -unity-font-style: normal wins over the bold
+   declared earlier on .hs-screen__title / .hs-button--primary: those rules
+   predate real typefaces, and synthesizing bold on top of an actual SemiBold
+   face double-bolds. Weight now comes from the face, not the style flag.
+
+   Non-Latin fallback remains the documented gap (migration matrix §3.2):
+   UI Toolkit does not read TMP's fallback list, so localized text beyond these
+   faces' coverage renders tofu until a PanelTextSettings fallback chain is
+   authored. Tabular figures for quantities (the ADR's Barlow rationale) are an
+   OpenType feature USS cannot enable; .hs-figures' letter-spacing remains the
+   only hook until measured in headset. */
+
+.hs-screen {
+    -unity-font-definition: url("/Assets/Blockiverse/UI/Fonts/Barlow-Regular.ttf");
+}
+
+.hs-screen__title,
+.hs-heading {
+    -unity-font-definition: url("/Assets/Blockiverse/UI/Fonts/ZillaSlab-SemiBold.ttf");
+    -unity-font-style: normal;
+}
+
+.hs-button {
+    -unity-font-definition: url("/Assets/Blockiverse/UI/Fonts/Barlow-SemiBold.ttf");
+}
+
+.hs-button--primary {
+    -unity-font-style: normal;
+}

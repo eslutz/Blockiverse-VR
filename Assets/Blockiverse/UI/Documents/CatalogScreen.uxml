@@ -1,0 +1,67 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Creative catalog browser (MenuActions.CatalogScreen, migration matrix row 17), UI Toolkit
+        port of BlockiverseCatalogBrowserPanel. Structure only: presentation comes from
+        Tokens.uss/Base.uss plus CatalogScreen.uss, attached by the generated panel, never by a
+        <Style> element (pre-import GUIDs do not exist).
+
+        Dynamic text carries no literal and no LocalizedString binding — a binding would rewrite
+        it behind the controller's back on locale change: the category value label (active
+        category name, or "Search" while a filter is typed), the page label, and the twelve
+        entry buttons (block display names). The search placeholder renders at runtime from
+        ui.generated.blocks.search_placeholder, following the LAN screen's field precedent.
+        The page back/next glyphs are non-lexical and need no binding.
+
+        The 3x4 entry grid keeps its geometry when a page has fewer than twelve entries: unused
+        buttons are visibility-hidden (not display-collapsed) so entries never reflow between
+        pages, matching the uGUI panel's fixed grid positions.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-catalog-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" text="Blocks" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.blocks.title" />
+                </Bindings>
+            </engine:Label>
+            <engine:Button name="bv-close" text="Close" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-catalog-content" class="hs-screen__content" picking-mode="Ignore">
+            <engine:VisualElement name="bv-category-row" class="cat-row" picking-mode="Ignore">
+                <engine:Button name="bv-category" text="Category" class="hs-button cat-category-button">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.blocks.category" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Label name="bv-category-value" picking-mode="Ignore" class="hs-body cat-category-value" />
+            </engine:VisualElement>
+
+            <engine:TextField name="bv-search" class="hs-field" />
+
+            <engine:VisualElement name="bv-entry-grid" class="cat-grid" picking-mode="Ignore">
+                <engine:Button name="bv-entry-1" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-2" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-3" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-4" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-5" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-6" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-7" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-8" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-9" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-10" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-11" class="hs-button cat-entry" />
+                <engine:Button name="bv-entry-12" class="hs-button cat-entry" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-page-row" class="cat-row" picking-mode="Ignore">
+                <engine:Button name="bv-page-previous" text="&lt;" class="hs-button cat-page-button" />
+                <engine:Label name="bv-page-label" picking-mode="Ignore" class="hs-body hs-figures cat-page-label" />
+                <engine:Button name="bv-page-next" text="&gt;" class="hs-button cat-page-button" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

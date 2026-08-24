@@ -25,6 +25,17 @@ namespace Blockiverse.VR
         const float DefaultContinuousMoveSpeed = 1.8f;
         const float SprintMoveMultiplier = 2.2f;
 
+        // FLIGHT CRUISE IS LAND SPRINT (Eric, 2026-08-24: "normal speed should be what land
+        // sprinting speed is and flying sprint speed should be faster than that").
+        //
+        // Horizontal flight is the ORDINARY move provider — flight only owns vertical — so before
+        // this, flying forward moved you at exactly walking pace. Expressed as a multiple of
+        // SprintMoveMultiplier rather than as a literal so the two cannot drift apart, and applied
+        // to the comfort-adjusted base speed so a player who slowed movement down for comfort has
+        // that respected in the air too.
+        const float FlightCruiseMoveMultiplier = SprintMoveMultiplier;
+        const float FlightSprintMoveMultiplier = SprintMoveMultiplier * 2.0f;
+
 
         const float CrouchCameraDropMetersPerSecond = 3.0f;
         const float DefaultSnapTurnDegrees = 45.0f;
@@ -102,6 +113,10 @@ namespace Blockiverse.VR
         bool lastTurnWithBothHands;
         bool lastSprintActive;
         bool lastSwimming;
+        // Flight now changes the resolved move speed (cruise = land sprint), so it has to take
+        // part in the change detection below. Without it the guard would skip the re-push and the
+        // new speed would never reach the provider — the change would fail by being ignored.
+        bool lastFlying;
         float lastSwimSpeedFactor = 1.0f;
         bool locomotionSuppressed;
         bool turnWithBothHands;
@@ -127,6 +142,19 @@ namespace Blockiverse.VR
         public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
         public bool SprintActive => ResolveModifierActive(SprintToggleEnabled, sprintHeld, sprintToggled);
         public bool CrouchActive => ResolveModifierActive(CrouchToggleEnabled, crouchHeld, crouchToggled);
+
+        /// <summary>
+        /// The crouch button as a raw hold, ignoring the crouch-toggle comfort setting.
+        /// </summary>
+        /// <remarks>
+        /// Vertical locomotion wants the button, not the modifier. `CrouchActive` answers "is the
+        /// player crouching", which under toggle mode is a latched state a tap flips — correct for
+        /// a body pose, wrong for "hold to descend". Eric reported swim descent as far weaker than
+        /// ascent even though the ruleset makes sink (1.2 m/s) FASTER than rise (1.0 m/s): the
+        /// speeds were never the problem, the input was, because rise reads its action raw
+        /// (`jumpAction.IsPressed()`) and sink went through the toggle-aware modifier.
+        /// </remarks>
+        public bool CrouchHeldRaw => crouchHeld;
 
         bool SprintToggleEnabled => comfortSettings != null && comfortSettings.SprintToggleEnabled;
         bool CrouchToggleEnabled => comfortSettings != null && comfortSettings.CrouchToggleEnabled;
@@ -395,6 +423,19 @@ namespace Blockiverse.VR
         public static float ResolveSprintMoveSpeed(float baseMoveSpeed, bool sprintActive) =>
             sprintActive ? baseMoveSpeed * SprintMoveMultiplier : baseMoveSpeed;
 
+        /// <summary>
+        /// Horizontal move speed for the frame. Flying cruises at the land sprint speed and
+        /// sprints to twice that; on the ground it is the ordinary walk/sprint pair.
+        /// </summary>
+        public static float ResolveHorizontalMoveSpeed(float baseMoveSpeed, bool sprintActive, bool flightActive)
+        {
+            if (!flightActive)
+                return ResolveSprintMoveSpeed(baseMoveSpeed, sprintActive);
+
+            return baseMoveSpeed
+                * (sprintActive ? FlightSprintMoveMultiplier : FlightCruiseMoveMultiplier);
+        }
+
         static void ConfigurePoseDriverActions(
             TrackedPoseDriver driver,
             string positionPath,
@@ -567,10 +608,23 @@ namespace Blockiverse.VR
         // Without this the crouch toggle changed only block-placement rules and looked broken.
         void ApplyCrouchState()
         {
-            // While swimming, crouch is the swim-down input and nothing else: shrinking the capsule
-            // and dropping the camera underwater would move the view for an input that is supposed
-            // to move the body.
-            bool crouching = CrouchActive && !SwimLocomotionActive;
+            // While swimming OR flying, crouch is the descend input and nothing else: shrinking the
+            // capsule and dropping the camera would move the VIEW for an input that is supposed to
+            // move the BODY.
+            //
+            // Flight was missing from this guard, and Eric found it on device — descending in
+            // creative flight also crouched him, so releasing the button stood him back up and
+            // shifted his view every time he stopped descending. The ruleset carve-out
+            // (voxel_survival_ruleset.md §5.6) names only swimming, but it states its reason:
+            // crouch's height change is suppressed "because its only meaning there is 'go down'".
+            // Airborne, that reason holds exactly as well, so this follows the rule's principle
+            // rather than contradicting its letter.
+            //
+            // Known trade, made deliberately: IsFlightActive is a persistent mode, not a descent,
+            // so this also removes crouch while merely hovering — you cannot shrink the capsule to
+            // fit a gap mid-flight. That costs a rare manoeuvre; leaving it in costs a view shift
+            // on every descent.
+            bool crouching = CrouchActive && !SwimLocomotionActive && !CreativeFlightLocomotionActive;
             bool realHeight = comfortSettings != null && comfortSettings.RealPlayerHeightEnabled;
 
             if (playerBodyManipulator != null)
@@ -1224,11 +1278,13 @@ namespace Blockiverse.VR
                 : DefaultContinuousMoveSpeed;
             bool sprintActive = SprintActive;
             bool swimming = SwimLocomotionActive;
+            bool flying = CreativeFlightLocomotionActive;
             float swimSpeedFactor = BlockiverseSwimMotion.HorizontalSpeedFactor(
                 swimProvider != null ? swimProvider.State : SwimState.Dry,
                 swimProvider != null ? swimProvider.Family : default,
                 comfortSettings != null ? comfortSettings.SwimSpeedFactor : BlockiverseSwimMotion.DefaultSwimSpeedFactor);
-            float resolvedMoveSpeed = ResolveSprintMoveSpeed(moveSpeed, sprintActive) * swimSpeedFactor;
+            float resolvedMoveSpeed =
+                ResolveHorizontalMoveSpeed(moveSpeed, sprintActive, flying) * swimSpeedFactor;
             float continuousTurnSpeed = comfortSettings != null
                 ? comfortSettings.ContinuousTurnSpeed
                 : DefaultContinuousTurnSpeed;
@@ -1253,6 +1309,7 @@ namespace Blockiverse.VR
                 snapTurnAroundEnabled == lastSnapTurnAroundEnabled &&
                 sprintActive == lastSprintActive &&
                 swimming == lastSwimming &&
+                flying == lastFlying &&
                 Mathf.Approximately(swimSpeedFactor, lastSwimSpeedFactor) &&
                 !controlHandChanged)
             {
@@ -1270,6 +1327,7 @@ namespace Blockiverse.VR
             lastTurnWithBothHands = turnWithBothHands;
             lastSprintActive = sprintActive;
             lastSwimming = swimming;
+            lastFlying = flying;
             lastSwimSpeedFactor = swimSpeedFactor;
 
             if (controlHandChanged)

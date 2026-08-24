@@ -4,7 +4,6 @@ using Blockiverse.VR;
 using Blockiverse.Core;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -116,60 +115,6 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void ComfortMenuSlidersUpdateMoveTurnAndUiScaleSettings()
-        {
-            BlockiverseComfortSettings settings = CreateSettings();
-            BlockiverseComfortMenu menu = CreateObject("Comfort Menu").AddComponent<BlockiverseComfortMenu>();
-            Slider moveSpeedSlider = CreateObject("Move Speed Slider").AddComponent<Slider>();
-            Slider smoothTurnSpeedSlider = CreateObject("Smooth Turn Speed Slider").AddComponent<Slider>();
-            Slider uiScaleSlider = CreateObject("UI Scale Slider").AddComponent<Slider>();
-            moveSpeedSlider.minValue = 0.5f;
-            moveSpeedSlider.maxValue = 4.0f;
-            smoothTurnSpeedSlider.minValue = 30.0f;
-            smoothTurnSpeedSlider.maxValue = 180.0f;
-            uiScaleSlider.minValue = 0.85f;
-            uiScaleSlider.maxValue = 1.35f;
-
-            menu.Configure(null, settings);
-            menu.ConfigureControls(
-                targetGlideToggle: null,
-                targetTeleportToggle: null,
-                targetSmoothTurnToggle: null,
-                targetSnapTurnSlider: null,
-                targetMoveSpeedSlider: moveSpeedSlider,
-                targetSmoothTurnSpeedSlider: smoothTurnSpeedSlider,
-                targetUiScaleSlider: uiScaleSlider);
-
-            moveSpeedSlider.value = 2.4f;
-            smoothTurnSpeedSlider.value = 95.0f;
-            uiScaleSlider.value = 1.2f;
-
-            Assert.That(settings.ContinuousMoveSpeed, Is.EqualTo(2.4f).Within(0.001f));
-            Assert.That(settings.ContinuousTurnSpeed, Is.EqualTo(95.0f).Within(0.001f));
-            Assert.That(settings.UiScale, Is.EqualTo(1.2f).Within(0.001f));
-        }
-
-        [Test]
-        public void ComfortMenuToggleToMineUpdatesMiningInputSetting()
-        {
-            BlockiverseComfortSettings settings = CreateSettings();
-            BlockiverseComfortMenu menu = CreateObject("Comfort Menu").AddComponent<BlockiverseComfortMenu>();
-            Toggle toggleToMine = CreateObject("Toggle To Mine").AddComponent<Toggle>();
-
-            menu.Configure(null, settings);
-            menu.ConfigureControls(
-                targetGlideToggle: null,
-                targetTeleportToggle: null,
-                targetSmoothTurnToggle: null,
-                targetSnapTurnSlider: null,
-                targetToggleToMineToggle: toggleToMine);
-
-            toggleToMine.isOn = true;
-
-            Assert.That(settings.ToggleToMineEnabled, Is.True);
-        }
-
-        [Test]
         public void SprintAndCrouchDefaultToClickAndHold()
         {
             BlockiverseComfortSettings settings = CreateSettings();
@@ -184,80 +129,43 @@ namespace Blockiverse.Tests.EditMode
                 "Crouch should default to click-and-hold.");
         }
 
+        // Was WorldSpacePresenterAppliesComfortUiScale, retargeted at the UI Toolkit panel
+        // placement component that inherited the presenter's scale job. Worth keeping rather
+        // than dropping: UiScale is the accessibility setting for players who cannot read a
+        // 1.0-scale panel, and a placement path that quietly ignores it fails only in a
+        // headset. WorldSpaceUiPlacementController had no test reference at all before this.
         [Test]
-        public void ComfortMenuSprintAndCrouchToggleModesAreIndependent()
-        {
-            BlockiverseComfortSettings settings = CreateSettings();
-            BlockiverseComfortMenu menu = CreateObject("Comfort Menu").AddComponent<BlockiverseComfortMenu>();
-            Toggle sprintToggle = CreateObject("Sprint Toggle").AddComponent<Toggle>();
-            Toggle crouchToggle = CreateObject("Crouch Toggle").AddComponent<Toggle>();
-
-            menu.Configure(null, settings);
-            menu.ConfigureControls(
-                targetGlideToggle: null,
-                targetTeleportToggle: null,
-                targetSmoothTurnToggle: null,
-                targetSnapTurnSlider: null,
-                targetSprintToggleToggle: sprintToggle,
-                targetCrouchToggleToggle: crouchToggle);
-
-            // The point of the pair: hold to sprint while crouch stays a click toggle.
-            crouchToggle.isOn = true;
-
-            Assert.That(settings.CrouchToggleEnabled, Is.True);
-            Assert.That(
-                settings.SprintToggleEnabled,
-                Is.False,
-                "Crouch and sprint control styles must be set independently.");
-
-            sprintToggle.isOn = true;
-
-            Assert.That(settings.SprintToggleEnabled, Is.True);
-            Assert.That(settings.CrouchToggleEnabled, Is.True);
-        }
-
-        [Test]
-        public void ComfortMenuTurnAroundToggleUpdatesSnapTurnSetting()
-        {
-            BlockiverseComfortSettings settings = CreateSettings();
-            BlockiverseComfortMenu menu = CreateObject("Comfort Menu").AddComponent<BlockiverseComfortMenu>();
-            Toggle turnAroundToggle = CreateObject("Turn Around Toggle").AddComponent<Toggle>();
-
-            menu.Configure(null, settings);
-            menu.ConfigureControls(
-                targetGlideToggle: null,
-                targetTeleportToggle: null,
-                targetSmoothTurnToggle: null,
-                targetSnapTurnSlider: null,
-                targetTurnAroundToggle: turnAroundToggle);
-
-            turnAroundToggle.isOn = false;
-
-            Assert.That(settings.SnapTurnAroundEnabled, Is.False);
-        }
-
-        [Test]
-        public void WorldSpacePresenterAppliesComfortUiScale()
+        public void WorldSpaceUiPlacementAppliesComfortUiScale()
         {
             BlockiverseComfortSettings settings = CreateSettings();
             settings.UiScale = 1.25f;
             Transform head = CreateObject("Head").transform;
-            BlockiverseWorldSpacePanelPresenter presenter =
-                CreateObject("World Space Panel").AddComponent<BlockiverseWorldSpacePanelPresenter>();
-            Canvas canvas = presenter.gameObject.AddComponent<Canvas>();
+            WorldSpaceUiPlacementController placement =
+                CreateObject("World Space Panel").AddComponent<WorldSpaceUiPlacementController>();
 
-            presenter.Configure(
-                canvas,
+            placement.Configure(
                 head,
                 distance: 1.0f,
                 horizontalOffset: 0.0f,
                 verticalOffset: 0.0f,
-                pitch: 0.0f,
-                scale: 0.002f);
-            presenter.ConfigureComfortSettings(settings);
-            presenter.Recenter();
+                pitch: 0.0f);
+            placement.ConfigureComfortSettings(settings);
+            placement.OnShown(recenter: true);
 
-            Assert.That(presenter.transform.localScale.x, Is.EqualTo(0.0025f).Within(0.00001f));
+            Assert.That(
+                placement.transform.localScale.x,
+                Is.EqualTo(WorldSpaceUiPlacementController.BasePanelScale * 1.25f).Within(0.00001f));
+
+            // Negative control: with no comfort settings attached the panel must still land on
+            // the base scale rather than on zero.
+            WorldSpaceUiPlacementController unconfigured =
+                CreateObject("Unscaled Panel").AddComponent<WorldSpaceUiPlacementController>();
+            unconfigured.Configure(head, 1.0f, 0.0f, 0.0f, 0.0f);
+            unconfigured.OnShown(recenter: true);
+
+            Assert.That(
+                unconfigured.transform.localScale.x,
+                Is.EqualTo(WorldSpaceUiPlacementController.BasePanelScale).Within(0.00001f));
         }
 
         BlockiverseComfortSettings CreateSettings()

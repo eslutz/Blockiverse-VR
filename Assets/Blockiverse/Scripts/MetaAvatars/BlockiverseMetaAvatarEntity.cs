@@ -119,6 +119,11 @@ namespace Blockiverse.MetaAvatars
             SetActiveView(visible
                 ? _creationInfo.renderFilters.viewFlags
                 : CAPI.ovrAvatar2EntityViewFlags.None);
+
+            // Becoming visible is the other moment new renderers can be in play — a view-flag
+            // change brings geometry back that may have been built while hidden.
+            if (visible)
+                ApplyShadowCasting();
         }
 
         public bool CreateConfiguredEntity(OvrAvatarInputManagerBehavior inputManager = null)
@@ -208,6 +213,40 @@ namespace Blockiverse.MetaAvatars
         {
             UserAvatarLoadInFlight = false;
             UserAvatarLoadFailed = false;
+            ApplyShadowCasting();
+        }
+
+        /// <summary>
+        /// Makes the avatar cast a shadow.
+        /// </summary>
+        /// <remarks>
+        /// Eric's call (2026-08-24): the player's body should cast a shadow. The proxy body's
+        /// renderers are set at creation in BlockiverseNetworkAvatarRig, but this entity's meshes
+        /// are built by the SDK and default to whatever it chooses — so fixing only the proxy fixed
+        /// the body a player with a working Meta avatar does not have, and Eric still saw no
+        /// shadow. That is the same reach mistake as the keyboard hand suppression, made twice in
+        /// one session: there are two bodies, and a change has to reach whichever one is on screen.
+        ///
+        /// Re-applied on every load rather than once, because the SDK swaps geometry underneath us
+        /// — a preset loads first and the real likeness replaces it later, and each swap brings new
+        /// renderers that never saw the original pass.
+        ///
+        /// KNOWN NO-OP, kept deliberately. Eric reported no avatar shadow even after this ran, and
+        /// the reason is in Meta's shaders rather than here: Avatar-Meta, Cel-Avatar-Meta and
+        /// Style-2-Avatar-Meta declare ZERO ShadowCaster passes (com.meta.xr.sdk.avatars@402f13fd),
+        /// so a renderer set to cast is submitted to the shadow pass with no pass to draw. Avatars
+        /// skin on the GPU via skin-to-texture, so a stock ShadowCaster would emit the bind pose
+        /// anyway — omitting it was almost certainly intentional on Meta's side.
+        ///
+        /// The body shadow a player actually sees is cast by the proxy body in shadow-only mode;
+        /// see BlockiverseNetworkAvatarRig.ApplyFallbackRendererVisibility. This method stays
+        /// because it is free, correct in principle, and starts working by itself the day Meta adds
+        /// a shadow pass — but do NOT read its presence as "avatar shadows are handled".
+        /// </remarks>
+        public void ApplyShadowCasting()
+        {
+            foreach (Renderer avatarRenderer in GetComponentsInChildren<Renderer>(includeInactive: true))
+                avatarRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         }
 
         void HandleLoadFailed(OvrAvatarEntity entity, CAPI.ovrAvatar2LoadRequestInfo requestInfo)

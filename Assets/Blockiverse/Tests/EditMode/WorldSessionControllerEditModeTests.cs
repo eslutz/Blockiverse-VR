@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -9,7 +11,6 @@ using Blockiverse.UI;
 using Blockiverse.Voxel;
 using Blockiverse.WorldGen;
 using NUnit.Framework;
-using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -106,14 +107,14 @@ namespace Blockiverse.Tests.EditMode
             string savePath = Path.Combine(tempRoot, "Pause Save.vxlworld");
 
             CreativeWorldManager worldManager = CreateWorldManager();
-            BlockiverseMenuController menuController = CreateMenuControllerWithPauseStatus(out TMP_Text pauseStatus);
+            BlockiverseMenuController menuController = CreateMenuControllerWithRecordedStatuses(out StatusRecordingFrontend frontend);
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
             SetPrivateField(controller, "currentSavePath", savePath);
             SetPrivateField(controller, "currentWorldName", "Pause Save");
 
             InvokePrivateMethod(controller, "HandleAction", MenuActions.PauseSaveGame);
 
-            Assert.That(pauseStatus.text, Is.EqualTo("Game saved."));
+            Assert.That(frontend.Statuses[MenuActions.PauseScreen], Is.EqualTo("Game saved."));
             Assert.That(Directory.Exists(savePath), Is.True);
         }
 
@@ -121,19 +122,19 @@ namespace Blockiverse.Tests.EditMode
         public void AutoSaveCompletionReportsStatusOnPauseMenu()
         {
             CreativeWorldManager worldManager = CreateWorldManager();
-            BlockiverseMenuController menuController = CreateMenuControllerWithPauseStatus(out TMP_Text pauseStatus);
+            BlockiverseMenuController menuController = CreateMenuControllerWithRecordedStatuses(out StatusRecordingFrontend frontend);
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
 
             SetPrivateField(controller, "autoSaveTask", Task.CompletedTask);
             SetPrivateField(controller, "autoSaveWorldName", "Autosave Success");
             InvokePrivateMethod(controller, "CompleteAutoSaveIfReady");
-            Assert.That(pauseStatus.text, Is.EqualTo("Autosaved."));
+            Assert.That(frontend.Statuses[MenuActions.PauseScreen], Is.EqualTo("Autosaved."));
 
             SetPrivateField(controller, "autoSaveTask", Task.FromException(new IOException("autosave failed")));
             SetPrivateField(controller, "autoSaveWorldName", "Autosave Failure");
             LogAssert.Expect(LogType.Error, "[Blockiverse][Persistence] Failed to autosave world session name=Autosave Failure exception=IOException");
             InvokePrivateMethod(controller, "CompleteAutoSaveIfReady");
-            Assert.That(pauseStatus.text, Is.EqualTo("Autosave failed."));
+            Assert.That(frontend.Statuses[MenuActions.PauseScreen], Is.EqualTo("Autosave failed."));
         }
 
         [Test]
@@ -261,14 +262,53 @@ namespace Blockiverse.Tests.EditMode
             string missingPath = Path.Combine(tempRoot, "Missing World.vxlworld");
 
             CreativeWorldManager worldManager = CreateWorldManager();
-            BlockiverseMenuController menuController = CreateMenuControllerWithLoadPanel(out TMP_Text loadWorldStatus);
+            BlockiverseMenuController menuController = CreateMenuControllerWithRecordedStatuses(out StatusRecordingFrontend frontend);
             BlockiverseWorldSessionController controller = CreateSessionController(worldManager, menuController);
             menuController.Router.PushScreen(new ScreenRoute(MenuActions.LoadWorldScreen, pauseGame: true));
 
             bool loaded = controller.LoadSave(missingPath);
 
             Assert.That(loaded, Is.False);
-            Assert.That(loadWorldStatus.text, Does.Contain("Failed to load:"));
+            Assert.That(frontend.Statuses[MenuActions.LoadWorldScreen], Does.Contain("Failed to load:"));
+            // The whole point of the branch: with the load screen routed, the failure must not
+            // be written to the title screen the player cannot see.
+            Assert.That(frontend.Statuses.ContainsKey(MenuActions.TitleScreen), Is.False);
+        }
+
+        // Re-homed from MenuRuntimeWiringEditModeTests.WorldDetailsMetadataFormatsDatesWithCurrentCulture.
+        // It never touched a uGUI object — it called a static that happened to live on the uGUI
+        // world-details panel and now lives in WorldSaveMetadataText. The property is that saved
+        // timestamps render in the player's locale rather than in the invariant round-trip form
+        // the manifest stores them in, which only a non-en culture can distinguish.
+        [Test]
+        public void WorldDetailsMetadataFormatsDatesWithCurrentCulture()
+        {
+            CultureInfo previousCulture = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+            try
+            {
+                System.DateTime created = new(2026, 6, 1, 12, 0, 0, System.DateTimeKind.Utc);
+                System.DateTime lastPlayed = new(2026, 6, 10, 12, 0, 0, System.DateTimeKind.Utc);
+                var save = new WorldSaveSummary(
+                    "Meadow Home",
+                    "1234",
+                    "survival",
+                    "normal",
+                    4,
+                    lastPlayed,
+                    created);
+
+                string metadata = WorldSaveMetadataText.Build(save);
+
+                Assert.That(metadata, Does.Contain(created.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)));
+                Assert.That(metadata, Does.Contain(lastPlayed.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)));
+                Assert.That(metadata, Does.Not.Contain("2026-06-01"));
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previousCulture;
+            }
         }
 
         [Test]
@@ -343,33 +383,69 @@ namespace Blockiverse.Tests.EditMode
             return controller;
         }
 
-        BlockiverseMenuController CreateMenuControllerWithPauseStatus(out TMP_Text pauseStatus)
+        // These three status tests used to read the text off a uGUI panel object wired through
+        // BlockiverseMenuController.Configure. Both are gone; the behaviour is not. What is
+        // actually under test is that the session layer's status reaches the SCREEN THE PLAYER
+        // IS LOOKING AT — a pause save reports on the pause screen, a load failure on the load
+        // screen — so the assertion moved to the push the controller makes, which is the only
+        // thing it ever controlled. Recording it here rather than through UiToolkitMenuHost
+        // keeps these tests about the session controller instead of about UXML binding.
+        sealed class StatusRecordingFrontend : IBlockiverseMenuFrontend
         {
-            menuObject = new GameObject("Menu Controller");
-            GameObject pauseObject = new("Pause Menu");
-            pauseObject.transform.SetParent(menuObject.transform, worldPositionStays: false);
-            BlockiverseActionMenu pauseMenu = pauseObject.AddComponent<BlockiverseActionMenu>();
-            pauseStatus = new GameObject("Status").AddComponent<TextMeshProUGUI>();
-            pauseStatus.transform.SetParent(pauseObject.transform, worldPositionStays: false);
-            pauseMenu.Configure(null, null, null, pauseStatus);
+            public readonly Dictionary<string, string> Statuses = new(System.StringComparer.Ordinal);
 
-            BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.Configure(null, null, pauseMenu, null, null, null, null, null);
-            return controller;
+            public void SetActionMenu(string screenId, string title, IReadOnlyList<MenuAction> actions)
+            {
+            }
+
+            public void SetScreenStatus(string screenId, string message) => Statuses[screenId] = message;
+
+            public void SetSaveList(IEnumerable<WorldSaveSummary> saves)
+            {
+            }
+
+            public void ShowWorldDetails(WorldSaveSummary save)
+            {
+            }
+
+            public void SetTitleMenuPose(Pose pose)
+            {
+            }
+
+            public void RefreshCreativeEnvironmentControls()
+            {
+            }
+
+            public void ToggleQuickBlockMenu()
+            {
+            }
+
+            public void HideQuickBlockMenu()
+            {
+            }
+
+            public void ResetNewWorldScreen()
+            {
+            }
+
+            public NewWorldConfig PendingNewWorldConfig => null;
+            public WorldSaveSummary? PendingLoadSave => null;
+            public WorldSaveSummary? PendingDetailsSave => null;
+            public string PendingDetailsRenameText => string.Empty;
+
+            public bool IsStationOpenAt(BlockPosition position) => false;
+
+            public void CloseStationView()
+            {
+            }
         }
 
-        BlockiverseMenuController CreateMenuControllerWithLoadPanel(out TMP_Text loadWorldStatus)
+        BlockiverseMenuController CreateMenuControllerWithRecordedStatuses(out StatusRecordingFrontend frontend)
         {
             menuObject = new GameObject("Menu Controller");
-            GameObject panelObject = new("Load World Panel");
-            panelObject.transform.SetParent(menuObject.transform, worldPositionStays: false);
-            BlockiverseLoadWorldPanel loadWorldPanel = panelObject.AddComponent<BlockiverseLoadWorldPanel>();
-            loadWorldStatus = new GameObject("Selection").AddComponent<TextMeshProUGUI>();
-            loadWorldStatus.transform.SetParent(panelObject.transform, worldPositionStays: false);
-            loadWorldPanel.Configure(null, null, null, null, loadWorldStatus);
-
             BlockiverseMenuController controller = menuObject.AddComponent<BlockiverseMenuController>();
-            controller.Configure(null, null, null, null, null, null, null, loadWorldPanel);
+            frontend = new StatusRecordingFrontend();
+            controller.RegisterFrontend(frontend);
             InvokeUnityMessage(controller, "Start");
             return controller;
         }

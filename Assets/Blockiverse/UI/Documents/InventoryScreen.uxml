@@ -1,0 +1,79 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Survival inventory screen (screen id inventory), UI Toolkit port of the generated
+        SurvivalInventoryPanel: ten paged slots (hotbar page first), hotbar selection, prev/next
+        paging, Close. Slot count labels, the hotbar readout and the page label are dynamic text
+        rendered by InventoryScreenController through UiText, so they carry no static literals.
+        Slot icons are plain VisualElements whose backgroundImage the controller sets from
+        BlockiverseItemIconLibrary sprites. The pager glyphs are non-lexical and need no
+        localization binding. Slot element names are 1-based to match the generated uGUI
+        panel's "Slot N" children.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" text="Inventory" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.survival.inventory" />
+                </Bindings>
+            </engine:Label>
+            <engine:Label name="bv-hotbar-label" picking-mode="Ignore" class="hs-secondary hs-figures" />
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-content" class="hs-screen__content inv-grid" picking-mode="Ignore">
+            <engine:Button name="bv-slot-1" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-1-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-1-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-2" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-2-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-2-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-3" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-3-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-3-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-4" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-4-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-4-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-5" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-5-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-5-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-6" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-6-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-6-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-7" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-7-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-7-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-8" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-8-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-8-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-9" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-9-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-9-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+            <engine:Button name="bv-slot-10" class="hs-button inv-slot">
+                <engine:VisualElement name="bv-slot-10-icon" picking-mode="Ignore" class="inv-slot__icon" />
+                <engine:Label name="bv-slot-10-label" picking-mode="Ignore" class="hs-figures inv-slot__count" />
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-pager" class="inv-pager" picking-mode="Ignore">
+            <engine:Button name="bv-prev-page" text="&lt;" class="hs-button inv-pager__cycle" />
+            <engine:Label name="bv-page-label" picking-mode="Ignore" class="hs-secondary hs-figures inv-pager__label" />
+            <engine:Button name="bv-next-page" text="&gt;" class="hs-button inv-pager__cycle" />
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Button name="bv-close" text="Close" class="hs-button inv-close">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

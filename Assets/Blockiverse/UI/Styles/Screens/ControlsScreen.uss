@@ -1,0 +1,10 @@
+/*
+ * ControlsScreen — screen-specific layout only; all look comes from Tokens/Base.
+ *
+ * Same wrapping opt-in as ControllerMappingScreen.uss: the runtime-assigned mapping copy has
+ * lines near the 760 px panel width at body size, and labels do not soft-wrap by default.
+ */
+
+#bv-controls-body {
+    white-space: normal;
+}

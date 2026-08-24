@@ -1,0 +1,34 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Controls reference screen (MenuActions.ControlsScreen), reached from the settings hub.
+        Ports the generated uGUI "Controls Panel" (BlockiverseProjectBootstrapper.GameMenus.cs
+        EnsureControlsMenuPanel): title, the same canonical mapping copy the first-run popup
+        shows (the uGUI source shares one ControllerMappingText constant), one Close button.
+
+        The body carries no static text here: the copy has no localization table entry yet, so
+        ControlsScreenController sets it at runtime via UiText. Close dispatches the canonical
+        controls.close action, matching the uGUI persistent listener onto
+        BlockiverseMenuController.CloseControlsScreen.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-controls-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-controls-title" text="Controls" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.controls.title" />
+                </Bindings>
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-controls-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-controls-body" picking-mode="Ignore" class="hs-body" />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-controls-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Button name="bv-controls-close" text="Close" class="hs-button hs-button--primary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

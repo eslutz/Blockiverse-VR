@@ -1,0 +1,14 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Settings hub (screen id settings). Title ("Settings") and the fixed hub actions
+        (Comfort / Audio / Controls / Close) are pushed at runtime through
+        IUiToolkitActionMenuScreen.SetActionMenu — no static text, no localization bindings,
+        and no status line. Buttons are created by SettingsHubScreenController.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" class="hs-screen__title" picking-mode="Ignore" />
+        </engine:VisualElement>
+        <engine:ScrollView name="bv-actions" class="hs-screen__content hs-action-list" mode="Vertical" />
+    </engine:VisualElement>
+</engine:UXML>

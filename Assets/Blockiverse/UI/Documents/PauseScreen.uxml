@@ -1,0 +1,17 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Pause menu (screen id pause_menu). Title ("Paused") and the permission-filtered action
+        list are pushed at runtime through IUiToolkitActionMenuScreen.SetActionMenu, and the
+        save/autosave status line through IUiToolkitStatusScreen.SetStatus — no static text,
+        no localization bindings. Buttons are created by PauseScreenController.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" class="hs-screen__title" picking-mode="Ignore" />
+        </engine:VisualElement>
+        <engine:ScrollView name="bv-actions" class="hs-screen__content hs-action-list" mode="Vertical" />
+        <engine:VisualElement name="bv-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

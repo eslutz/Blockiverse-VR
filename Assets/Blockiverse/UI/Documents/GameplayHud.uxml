@@ -1,0 +1,38 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Gameplay action bar (screen id gameplay_hud, matrix row 21). Rides the rig via the Hud
+        placement profile like the uGUI Survival HUD.
+
+        The four buttons open the routed inventory / crafting / shared-crate / block-catalog
+        screens through the menu controller's public verbs. They are the ONLY way into inventory
+        and crafting — neither has a controller binding, which is why this panel must stay
+        reachable by the ray while the stats readout beside it does not.
+
+        The health readout moved to GameplayStats.uxml so the two can sit at opposite edges of
+        vision instead of stacked in the middle of it.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-hud-actions" class="gh-actions" picking-mode="Ignore">
+            <engine:Button name="bv-hud-open-inventory" text="Inventory" class="hs-button gh-action">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.survival.inventory" />
+                </Bindings>
+            </engine:Button>
+            <engine:Button name="bv-hud-open-crafting" text="Crafting" class="hs-button gh-action">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.survival.crafting" />
+                </Bindings>
+            </engine:Button>
+            <engine:Button name="bv-hud-open-crate" text="Shared crate" class="hs-button gh-action">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.status.crate.shared" />
+                </Bindings>
+            </engine:Button>
+            <engine:Button name="bv-hud-open-catalog" text="Blocks" class="hs-button gh-action">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.blocks.title" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

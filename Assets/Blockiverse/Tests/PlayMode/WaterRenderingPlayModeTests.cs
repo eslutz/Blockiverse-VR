@@ -73,9 +73,15 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(RenderSettings.fog, Is.True,
                 "Fog must be forced on underwater even in clear weather -- clear weather is exactly when it would otherwise be off.");
             Assert.That(RenderSettings.fogMode, Is.EqualTo(FogMode.ExponentialSquared));
+            // Absolute arithmetic from the public constants — full density scaled to the
+            // fixture's known 2.5 m eye depth. This pins the whole chain: the probe finds the
+            // surface, the ramp scales the density, and the lighting controller applies it.
             Assert.That(RenderSettings.fogDensity,
-                Is.EqualTo(BlockiverseWaterView.FogDensityFor(FluidFamily.Freshwater)).Within(0.001f),
-                "A fully submerged eye gets the family's full density, not a partial blend.");
+                Is.EqualTo(ExpectedFreshwaterDensityAtFixtureDepth()).Within(0.001f),
+                "2.5 m under, the applied density must be the family constant scaled by the ramp.");
+            Assert.That(ExpectedFreshwaterDensityAtFixtureDepth(),
+                Is.LessThan(BlockiverseWaterView.FogDensityFor(FluidFamily.Freshwater)),
+                "Fixture guard: this depth must genuinely sit inside the ramp, not past its floor.");
 
             MoveEyeTo(AirCellCentre());
             yield return BlendTo(waterView, 0.0f);
@@ -99,7 +105,8 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(RenderSettings.fog, Is.True,
                 "Underwater fog must survive the clock/sun guard in BlockiverseLightingCycleController.");
             Assert.That(RenderSettings.fogDensity,
-                Is.EqualTo(BlockiverseWaterView.FogDensityFor(FluidFamily.Freshwater)).Within(0.001f));
+                Is.EqualTo(ExpectedFreshwaterDensityAtFixtureDepth()).Within(0.001f),
+                "The clockless path must apply the same depth-ramped density as the normal one.");
         }
 
         [UnityTest]
@@ -112,9 +119,12 @@ namespace Blockiverse.Tests.PlayMode
 
             Assert.That(waterView.SubmergedFamily, Is.EqualTo(FluidFamily.Emberflow),
                 "The sampled family comes from the cell the eye is in, not from whichever fluid was seen first.");
+            // FULL density, exactly — emberflow is exempt from the depth ramp. Every lava pool
+            // worldgen places is shallow, so ramping it made lava effectively transparent
+            // everywhere it exists; molten rock is opaque at any depth.
             Assert.That(RenderSettings.fogDensity,
-                Is.GreaterThan(BlockiverseWaterView.FogDensityFor(FluidFamily.Freshwater)),
-                "Being submerged in lava must not read like a clear swim.");
+                Is.EqualTo(BlockiverseWaterView.FogDensityFor(FluidFamily.Emberflow)).Within(0.001f),
+                "Being submerged in lava must be near-blinding at ANY depth — the ramp is a water model.");
             Assert.That(RenderSettings.fogColor.r, Is.GreaterThan(RenderSettings.fogColor.b));
         }
 
@@ -249,6 +259,22 @@ namespace Blockiverse.Tests.PlayMode
 
         // Cell centres, so a hysteresis nudge in either direction cannot land the probe in a
         // neighbouring cell and make the test depend on the hysteresis constant.
+
+        // The fixture's water column spans cells y = 1..5, so its surface (top face of cell 5)
+        // is at world y = 6.0 and the eye at WaterCellCentre (y = 3.5) sits exactly 2.5 m under.
+        // Computed from the PUBLIC ramp constants rather than read back from the view: an
+        // assertion that compares the view against itself cannot fail, and a review caught
+        // exactly that shape here once already.
+        static float ExpectedFreshwaterDensityAtFixtureDepth()
+        {
+            const float fixtureEyeDepth = 2.5f;
+            float rampScale = Mathf.Lerp(
+                BlockiverseWaterView.MinimumDepthDensityScale,
+                1.0f,
+                fixtureEyeDepth / BlockiverseWaterView.FogDepthRampMeters);
+            return BlockiverseWaterView.FogDensityFor(FluidFamily.Freshwater) * rampScale;
+        }
+
         static Vector3 WaterCellCentre() => new(1.5f, 3.5f, 1.5f);
 
         static Vector3 EmberflowCellCentre() => new(14.5f, 3.5f, 14.5f);

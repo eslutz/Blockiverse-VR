@@ -1,0 +1,48 @@
+/*
+ * NewWorldScreen — layout only. Colours, spacing steps, type sizes and control chrome all
+ * come from Tokens.uss/Base.uss classes; nothing here introduces a new value, only flex
+ * geometry for the selector rows and the create/cancel pair.
+ */
+
+.nw-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: var(--hs-space-2);
+    margin-bottom: var(--hs-space-2);
+}
+
+/* Fixed name column so the six value labels line up as one scannable column. */
+.nw-row__name {
+    width: 240px;
+    flex-shrink: 0;
+}
+
+/* Back/next glyph buttons: square-ish targets at the 64px control floor. */
+.nw-row__cycle {
+    width: 72px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+}
+
+.nw-row__value {
+    flex-grow: 1;
+    -unity-text-align: middle-center;
+    margin-left: var(--hs-space-2);
+    margin-right: var(--hs-space-2);
+}
+
+.nw-actions {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-top: var(--hs-space-3);
+}
+
+.nw-actions__create {
+    flex-grow: 1;
+    margin-right: var(--hs-space-3);
+}
+
+.nw-actions__cancel {
+    width: 220px;
+    flex-shrink: 0;
+}

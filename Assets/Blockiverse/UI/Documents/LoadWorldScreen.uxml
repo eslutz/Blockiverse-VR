@@ -1,0 +1,63 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Load World screen (voxel_survival_menus §6.4) — UI Toolkit port of BlockiverseLoadWorldPanel.
+        Six fixed save rows paged by SaveListModel; LoadWorldScreenController collapses unused rows
+        and formats every dynamic string (row labels, page counter, selection status) at runtime, so
+        only the fixed captions carry LocalizedString bindings. Stylesheets are assigned by the
+        bootstrapper from the [UiToolkitScreen] declaration, never referenced from here.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" text="Load World" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.load_world.title" />
+                </Bindings>
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-save-list" class="hs-screen__content" mode="Vertical">
+            <engine:Button name="bv-save-1" class="hs-button hs-figures" />
+            <engine:Button name="bv-save-2" class="hs-button hs-figures" />
+            <engine:Button name="bv-save-3" class="hs-button hs-figures" />
+            <engine:Button name="bv-save-4" class="hs-button hs-figures" />
+            <engine:Button name="bv-save-5" class="hs-button hs-figures" />
+            <engine:Button name="bv-save-6" class="hs-button hs-figures" />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-paging-row" class="bv-paging-row" picking-mode="Ignore">
+            <engine:Button name="bv-previous-page" text="Prev" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.load_world.previous_page" />
+                </Bindings>
+            </engine:Button>
+            <engine:Label name="bv-page-label" picking-mode="Ignore" class="hs-body hs-figures bv-page-label" />
+            <engine:Button name="bv-next-page" text="Next" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.load_world.next_page" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-command-row" class="bv-command-row" picking-mode="Ignore">
+            <engine:Button name="bv-load" text="Load World" class="hs-button hs-button--primary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.load_world.load" />
+                </Bindings>
+            </engine:Button>
+            <engine:Button name="bv-details" text="Details" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.load_world.details" />
+                </Bindings>
+            </engine:Button>
+            <engine:Button name="bv-cancel" text="Cancel" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.cancel" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

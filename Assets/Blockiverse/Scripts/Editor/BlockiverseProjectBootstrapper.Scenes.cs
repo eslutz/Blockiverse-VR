@@ -13,7 +13,6 @@ using Blockiverse.Survival;
 using Blockiverse.UI;
 using Blockiverse.VR;
 using Oculus.Avatar2;
-using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Editor.Configuration;
 using Unity.Netcode.Transports.UTP;
@@ -33,7 +32,6 @@ using UnityEngine.InputSystem.XR;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -72,6 +70,10 @@ namespace Blockiverse.Editor
             EnsureMetaPlatformCompliance(scene);
             EnsureBootSceneCreativeWorld(scene);
             EnsureBootSceneNetworkStack(scene);
+            // ADR 0010 Phases 2–5: the UI Toolkit menu backend. Boot-scene only — the rig
+            // prefab (and its uGUI menus, the dev fallback) is untouched. Must run after
+            // EnsureBootSceneRig so the host can wire the rig's BlockiverseMenuController.
+            EnsureUiToolkitMenus(scene);
             RemoveRootGameObject(scene, InteractionTestBlockName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.BootScenePath);
@@ -267,6 +269,13 @@ namespace Blockiverse.Editor
             EditorUtility.SetDirty(managerObject);
         }
 
+        // The MultiplayerTest scene is a headless network testbed, not a playable surface: a
+        // NetworkManager/session, a world, a camera and an EventSystem, and no menu at all.
+        // It used to carry a second, screen-space uGUI LAN menu (the only uGUI menu outside the
+        // rig prefab), which is what kept BlockiverseMultiplayerSessionMenu alive after the UI
+        // Toolkit cutover. The PlayMode tests that drove it now build a LanMultiplayerScreen-
+        // backed controller themselves, exactly as they already built the client-side menu, so
+        // the scene owes them only the network stack.
         static void EnsureMultiplayerTestScene(GameObject networkManagerPrefab)
         {
             bool sceneExists = AssetDatabase.LoadAssetAtPath<SceneAsset>(BlockiverseProject.MultiplayerTestScenePath) != null;
@@ -286,7 +295,11 @@ namespace Blockiverse.Editor
             EnsureMultiplayerTestCamera(scene);
             EnsureMultiplayerEventSystem(scene);
             EnsureOvrAvatarManager(scene);
-            EnsureMultiplayerSessionMenu(scene, managerObject);
+            // Explicit removal, not "stop generating it": the bootstrapper reuses whatever the
+            // committed scene already holds, so dropping the builder alone would leave the old
+            // menu subtree — and its now-scriptless components — serialized in a scene that ~35
+            // PlayMode tests load.
+            RemoveRootGameObject(scene, MultiplayerSessionMenuName);
 
             EditorSceneManager.SaveScene(scene, BlockiverseProject.MultiplayerTestScenePath);
         }
@@ -771,120 +784,6 @@ namespace Blockiverse.Editor
             managerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             EnsureComponent<XRInteractionManager>(managerObject);
             EditorUtility.SetDirty(managerObject);
-        }
-
-        static void EnsureMultiplayerSessionMenu(Scene scene, GameObject managerObject)
-        {
-            GameObject menuObject = FindRootGameObject(scene, MultiplayerSessionMenuName);
-
-            if (menuObject == null)
-            {
-                menuObject = new GameObject(MultiplayerSessionMenuName, typeof(RectTransform));
-                SceneManager.MoveGameObjectToScene(menuObject, scene);
-            }
-
-            menuObject.transform.SetPositionAndRotation(
-                new Vector3(0.0f, 1.4f, 1.8f),
-                Quaternion.Euler(0.0f, 180.0f, 0.0f));
-            menuObject.transform.localScale = Vector3.one * 0.003f;
-
-            RectTransform menuRect = menuObject.GetComponent<RectTransform>();
-            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, MultiplayerSessionMenuSize.x);
-            menuRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, MultiplayerSessionMenuSize.y);
-
-            Canvas canvas = EnsureComponent<Canvas>(menuObject);
-            canvas.renderMode = RenderMode.WorldSpace;
-            canvas.sortingOrder = 20;
-            canvas.enabled = true;
-
-            CanvasScaler scaler = EnsureComponent<CanvasScaler>(menuObject);
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            scaler.dynamicPixelsPerUnit = 10.0f;
-
-            EnsureTrackedDeviceRaycaster(menuObject);
-
-            GameObject panelObject = EnsureRectChild(menuObject.transform, "Panel");
-            RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-            panelRect.anchorMin = Vector2.zero;
-            panelRect.anchorMax = Vector2.one;
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-            Image panelImage = EnsureComponent<Image>(panelObject);
-            Sprite panelSprite = GetRoundedSprite();
-            if (panelSprite != null)
-            {
-                panelImage.sprite = panelSprite;
-                panelImage.type = Image.Type.Sliced;
-            }
-            panelImage.color = MultiplayerMenuPanelColor;
-
-            EnsureLabel(
-                panelObject.transform,
-                "Title",
-                "LAN Session",
-                36,
-                TextAnchor.MiddleLeft,
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(28.0f, -34.0f),
-                new Vector2(500.0f, 52.0f));
-
-            TMP_InputField addressInput = EnsureInputFieldControl(
-                panelObject.transform,
-                "Address Input",
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanJoinAddressPlaceholder),
-                string.Empty,
-                new Vector2(28.0f, -102.0f),
-                new Vector2(500.0f, 58.0f));
-
-            Button hostButton = EnsureButtonControl(
-                panelObject.transform,
-                "Host Button",
-                "Host",
-                new Vector2(28.0f, -182.0f),
-                new Vector2(148.0f, 54.0f));
-
-            Button joinButton = EnsureButtonControl(
-                panelObject.transform,
-                "Join Button",
-                "Join",
-                new Vector2(198.0f, -182.0f),
-                new Vector2(148.0f, 54.0f));
-
-            Button stopButton = EnsureButtonControl(
-                panelObject.transform,
-                "Stop Button",
-                "Stop",
-                new Vector2(368.0f, -182.0f),
-                new Vector2(148.0f, 54.0f));
-
-            TextMeshProUGUI statusText = EnsureLabel(
-                panelObject.transform,
-                "Status",
-                BlockiverseLocalization.Text(BlockiverseLocalization.Keys.LanStoppedWithDefault),
-                22,
-                TextAnchor.UpperLeft,
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(0.0f, 1.0f),
-                new Vector2(28.0f, -258.0f),
-                new Vector2(500.0f, 88.0f),
-                TextDimColor);
-
-            GameObject badgeObject = EnsureRectChild(panelObject.transform, "Status Badge");
-            ConfigureTopLeftRect(badgeObject.GetComponent<RectTransform>(), new Vector2(470.0f, -30.0f), new Vector2(32.0f, 32.0f));
-            Image statusBadge = EnsureComponent<Image>(badgeObject);
-            ApplySlicedSprite(statusBadge, GetUiSprite("multiplayer_status_badge"));
-            statusBadge.color = new Color(0.55f, 0.58f, 0.62f, 1.0f);
-
-            BlockiverseMultiplayerSessionMenu menu = EnsureComponent<BlockiverseMultiplayerSessionMenu>(menuObject);
-            menu.Configure(managerObject != null ? managerObject.GetComponent<BlockiverseNetworkSession>() : null);
-            menu.ConfigureControls(hostButton, joinButton, null, stopButton, addressInput, statusText);
-            menu.ConfigureStatusBadge(statusBadge);
-
-            EditorUtility.SetDirty(menu);
-            EditorUtility.SetDirty(menuObject);
         }
 
         static void EnsureBootSceneCreativeWorld(Scene scene)

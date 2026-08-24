@@ -1,0 +1,75 @@
+/*
+ * Smelting station screen — layout only. Every colour, spacing step, font size and focus
+ * treatment resolves from Tokens.uss through Base.uss; this sheet arranges the Hearthstone
+ * pieces for a 1000x760 panel and adds nothing to the design system.
+ */
+
+#bv-station-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#bv-station-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+#bv-station-close {
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}
+
+/* Caption on the left, slot wells filling the row — inputs stack three wells so the kiln (one
+   slot) and the forge (three) share one document. */
+.station-slot-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-top: var(--hs-space-2);
+    margin-bottom: var(--hs-space-2);
+}
+
+.station-slot-caption {
+    width: 25%;
+    flex-shrink: 0;
+    margin-top: var(--hs-space-2);
+}
+
+.station-slot-stack {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.station-slot-value {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: var(--hs-control-min-height);
+    padding-left: var(--hs-space-3);
+    padding-right: var(--hs-space-3);
+    margin-bottom: var(--hs-space-1);
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.station-progress {
+    margin-top: var(--hs-space-3);
+    margin-bottom: var(--hs-space-3);
+}
+
+.station-command-row {
+    flex-direction: row;
+}
+
+.station-command {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: var(--hs-space-3);
+}
+
+.station-command--last {
+    margin-right: 0;
+}
+
+#bv-station-status {
+    flex-grow: 1;
+}

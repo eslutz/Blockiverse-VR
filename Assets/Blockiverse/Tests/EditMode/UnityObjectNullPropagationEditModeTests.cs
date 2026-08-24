@@ -44,14 +44,33 @@ namespace Blockiverse.Tests.EditMode
                     @"ResolveNetworkManagerOrNull\(\)\s*\?\?",
                     @"\bchunkAuthoritySync\s*\?\?",
                 }),
+            // Was Scripts/UI/SurvivalHudController.cs, re-pointed at the UI Toolkit HUD that
+            // replaced it. Note the field list is deliberately short: this rule is about
+            // UnityEngine.Object lifetime, so it covers the MonoBehaviour references and the
+            // interface-typed one (an interface reference to a destroyed MonoBehaviour compares
+            // non-null, same trap as the CreativeWorldManager entry above) — NOT the Label /
+            // VisualElement fields, which are plain C# objects where `?.` is correct.
+            //
+            // Keep this list in sync by hand. Nothing about a UIDocument screen makes it immune;
+            // the HUD resolves a cue player and a vitals runtime exactly like its predecessor.
             (
-                "Assets/Blockiverse/Scripts/UI/SurvivalHudController.cs",
+                "Assets/Blockiverse/Scripts/UI/ToolkitScreens/Screens/GameplayHudController.cs",
                 new[]
                 {
-                    @"\b(panel|inventoryPanel|craftingPanel|healthPanel|cratePanel|worldManager)\s*\?\.",
-                    @"\b(inventoryPanel|craftingPanel|healthPanel|cratePanel|statusLabel|miningProgressSlider)\s*\?\?=",
+                    @"\b(audioCuePlayer|vitalsRuntime|interactionHaptics)\s*\?\.",
+                    @"\b(audioCuePlayer|vitalsRuntime|interactionHaptics)\s*\?\?=",
                 }),
         };
+
+        // File.ReadAllText below has no existence check, so a path that goes stale throws
+        // FileNotFoundException from the middle of a loop rather than failing an assertion —
+        // which reads as a broken test rather than a broken guard list. Fail on it deliberately.
+        [Test]
+        public void EveryGuardedSourceStillExists()
+        {
+            foreach ((string path, string[] _) in GuardedSources)
+                Assert.That(File.Exists(path), Is.True, $"Guarded source no longer exists: {path}");
+        }
 
         [Test]
         public void RuntimeUnityObjectReferencesUseExplicitUnityNullChecks()

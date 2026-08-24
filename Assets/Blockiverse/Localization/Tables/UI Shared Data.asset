@@ -1225,6 +1225,306 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 5195086314375217152
+  - m_Id: 204277116035072
+    m_Key: ui.action.lan.host
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254400
+  - m_Id: 204277124423680
+    m_Key: ui.action.lan.join
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254401
+  - m_Id: 204277124423681
+    m_Key: ui.action.lan.stop
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254402
+  - m_Id: 204277124423682
+    m_Key: ui.generated.audio_feedback.classic_block_sounds
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254403
+  - m_Id: 204277124423683
+    m_Key: ui.generated.audio_feedback.haptics
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254404
+  - m_Id: 204277124423684
+    m_Key: ui.generated.audio_feedback.mute_all
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254405
+  - m_Id: 204277124423685
+    m_Key: ui.generated.audio_feedback.reduced_flash
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254406
+  - m_Id: 204277124423686
+    m_Key: ui.generated.audio_feedback.reduced_particles
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254407
+  - m_Id: 204277124423687
+    m_Key: ui.generated.comfort.control_options
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254408
+  - m_Id: 204277124423688
+    m_Key: ui.generated.comfort.crouch_toggle
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254409
+  - m_Id: 204277124423689
+    m_Key: ui.generated.comfort.glide_motion
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254410
+  - m_Id: 204277124423690
+    m_Key: ui.generated.comfort.left_handed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254411
+  - m_Id: 204277124423691
+    m_Key: ui.generated.comfort.motion_vignette
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254412
+  - m_Id: 204277124423692
+    m_Key: ui.generated.comfort.move_speed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254413
+  - m_Id: 204277124423693
+    m_Key: ui.generated.comfort.movement_mode
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254414
+  - m_Id: 204277124423694
+    m_Key: ui.generated.comfort.player_view
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254415
+  - m_Id: 204277124423695
+    m_Key: ui.generated.comfort.real_player_height
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254416
+  - m_Id: 204277124423696
+    m_Key: ui.generated.comfort.reset_height
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254417
+  - m_Id: 204277124423697
+    m_Key: ui.generated.comfort.smooth_turn
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254418
+  - m_Id: 204277124423698
+    m_Key: ui.generated.comfort.smooth_turn_speed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254419
+  - m_Id: 204277124423699
+    m_Key: ui.generated.comfort.snap_turn
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254420
+  - m_Id: 204277124423700
+    m_Key: ui.generated.comfort.sprint_toggle
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254421
+  - m_Id: 204277124423701
+    m_Key: ui.generated.comfort.swim_climb_out
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254422
+  - m_Id: 204277124423702
+    m_Key: ui.generated.comfort.swim_sink
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254423
+  - m_Id: 204277124423703
+    m_Key: ui.generated.comfort.swim_speed
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254424
+  - m_Id: 204277124423704
+    m_Key: ui.generated.comfort.swim_vignette
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254425
+  - m_Id: 204277124423705
+    m_Key: ui.generated.comfort.teleport
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254426
+  - m_Id: 204277124423706
+    m_Key: ui.generated.comfort.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254427
+  - m_Id: 204277124423707
+    m_Key: ui.generated.comfort.toggle_to_mine
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254428
+  - m_Id: 204277124423708
+    m_Key: ui.generated.comfort.turn_around
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254429
+  - m_Id: 204277124423709
+    m_Key: ui.generated.comfort.turning
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254430
+  - m_Id: 204277124423710
+    m_Key: ui.generated.comfort.ui_scale
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254431
+  - m_Id: 204277124423711
+    m_Key: ui.generated.comfort.view_comfort
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254432
+  - m_Id: 204277124423712
+    m_Key: ui.generated.comfort.vignette_strength
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254433
+  - m_Id: 204277124423713
+    m_Key: ui.generated.comfort.walk_head_bob
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254434
+  - m_Id: 204277124423714
+    m_Key: ui.generated.crafting.repair
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254435
+  - m_Id: 204277124423715
+    m_Key: ui.generated.crate.deposit
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254436
+  - m_Id: 204277124423716
+    m_Key: ui.generated.crate.title
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254437
+  - m_Id: 204277124423717
+    m_Key: ui.generated.creative_tools.environment
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254438
+  - m_Id: 204277124423718
+    m_Key: ui.generated.creative_tools.region_operations
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254439
+  - m_Id: 204277124423719
+    m_Key: ui.generated.lan.encryption_toggle
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254440
+  - m_Id: 204277124423720
+    m_Key: ui.generated.lan.saved_servers
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254441
+  - m_Id: 204277124423721
+    m_Key: ui.status.blocks.none_selected
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254442
+  - m_Id: 204277124423722
+    m_Key: ui.toolkit.controller_map.body
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254443
+  - m_Id: 204277124423723
+    m_Key: ui.value.canonical.balanced
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254444
+  - m_Id: 204277124423724
+    m_Key: ui.value.canonical.creative
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254445
+  - m_Id: 204277124423725
+    m_Key: ui.value.canonical.drybrush
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254446
+  - m_Id: 204277124423726
+    m_Key: ui.value.canonical.dunes
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254447
+  - m_Id: 204277124423727
+    m_Key: ui.value.canonical.easy
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254448
+  - m_Id: 204277124423728
+    m_Key: ui.value.canonical.flat_builder
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254449
+  - m_Id: 204277124423729
+    m_Key: ui.value.canonical.hard
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254450
+  - m_Id: 204277124423730
+    m_Key: ui.value.canonical.highlands
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254451
+  - m_Id: 204277128617984
+    m_Key: ui.value.canonical.meadow
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254452
+  - m_Id: 204277128617985
+    m_Key: ui.value.canonical.normal
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254453
+  - m_Id: 204277128617986
+    m_Key: ui.value.canonical.pinewild
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254454
+  - m_Id: 204277128617987
+    m_Key: ui.value.canonical.survival
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254455
+  - m_Id: 204277128617988
+    m_Key: ui.value.canonical.survival_terrain
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254456
+  - m_Id: 204277128617989
+    m_Key: ui.value.canonical.tundra
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254457
+  - m_Id: 204277128617990
+    m_Key: ui.value.canonical.void_builder
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254458
+  - m_Id: 204277128617991
+    m_Key: ui.value.canonical.wetland
+    m_Metadata:
+      m_Items:
+      - rid: 5195086324721254459
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
@@ -2206,3 +2506,313 @@ MonoBehaviour:
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
         m_CommentText: Keys.LanJoinSecretPlaceholder.
+    - rid: 5195086324721254400
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'LAN multiplayer screen: button that starts hosting a LAN
+          session (verb, imperative). The uGUI panel hard-coded this label unlocalized.'
+    - rid: 5195086324721254401
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'LAN multiplayer screen: button that joins the LAN session
+          at the entered address (verb, imperative). The uGUI panel hard-coded this
+          label unlocalized.'
+    - rid: 5195086324721254402
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'LAN multiplayer screen: button that stops the current hosted
+          or joined LAN session (verb, imperative). The uGUI panel hard-coded this
+          label unlocalized.'
+    - rid: 5195086324721254403
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Easter-egg toggle label on the audio settings screen. Swaps
+          block break/place cues back to the original synthesized sounds; 'Classic'
+          as in retro/original.
+    - rid: 5195086324721254404
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Toggle label on the audio settings screen. Enables controller
+          vibration feedback; noun, the haptic system as a whole.
+    - rid: 5195086324721254405
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Toggle label on the audio settings screen. Silences every
+          audio bus while on. 'Mute' is a verb-phrase acting on all sound.
+    - rid: 5195086324721254406
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Accessibility toggle label on the audio settings screen. Softens
+          bright flashing effects such as lightning; adjective + noun describing
+          the resulting mode.
+    - rid: 5195086324721254407
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Accessibility/comfort toggle label on the audio settings screen.
+          Lowers particle effect density; adjective + noun describing the resulting
+          mode.
+    - rid: 5195086324721254408
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Group heading on the comfort screen for input-style options
+          (handedness, mining input, sprint/crouch toggle modes).
+    - rid: 5195086324721254409
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: stick-click toggles crouch on/off instead of
+          the default click-and-hold. Independent of the sprint setting.'
+    - rid: 5195086324721254410
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: smooth/continuous stick locomotion mode. One
+          half of a radio pair with Teleport.'
+    - rid: 5195086324721254411
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: makes the left controller the dominant hand.
+          Off = right-handed.'
+    - rid: 5195086324721254412
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: tunnel-vision vignette that narrows the view
+          during locomotion to reduce motion sickness.'
+    - rid: 5195086324721254413
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Slider label: continuous movement speed in metres per second
+          while gliding.'
+    - rid: 5195086324721254414
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Group heading on the comfort screen for the locomotion controls
+          (glide vs teleport, move speed, head-bob).
+    - rid: 5195086324721254415
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Group heading on the comfort screen for player height/body
+          options (height reset, real-height mode).
+    - rid: 5195086324721254416
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: player collision and view follow their real
+          tracked height instead of the fixed in-game player size.'
+    - rid: 5195086324721254417
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Button label: recalibrates the player''s standing height
+          to their current headset position. Imperative verb.'
+    - rid: 5195086324721254418
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: continuous turning instead of discrete snap
+          turns.'
+    - rid: 5195086324721254419
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Slider label: continuous turn speed in degrees per second
+          (30-180).'
+    - rid: 5195086324721254420
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Slider label: the angle in degrees of each discrete snap
+          turn (15-90).'
+    - rid: 5195086324721254421
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: stick-click toggles sprint on/off instead of
+          the default click-and-hold. Independent of the crouch setting.'
+    - rid: 5195086324721254422
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: automatic assist that lifts a swimmer over
+          a low shore edge instead of gravity pulling them back into the water.'
+    - rid: 5195086324721254423
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: while in water and not actively swimming the
+          player slowly sinks. Off = neutral buoyancy.'
+    - rid: 5195086324721254424
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Slider label: horizontal swim speed as a fraction of walking
+          speed (0.30-1.00).'
+    - rid: 5195086324721254425
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: the motion vignette also engages during passive
+          underwater descent, not only during driven movement.'
+    - rid: 5195086324721254426
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: teleport locomotion mode (point and blink).
+          One half of a radio pair with Glide Motion. Noun, the movement style.'
+    - rid: 5195086324721254427
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Comfort settings screen title. Noun phrase heading the VR
+          comfort/accessibility options panel.
+    - rid: 5195086324721254428
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: mining input becomes press-once-to-start /
+          press-again-to-stop instead of hold-to-mine.'
+    - rid: 5195086324721254429
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: enables a quick 180-degree turn gesture (stick
+          pulled back).'
+    - rid: 5195086324721254430
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Group heading on the comfort screen for the turn controls
+          (smooth turn, snap turn angle, turn-around).
+    - rid: 5195086324721254431
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Slider label: size multiplier for the world-space menu panels
+          (0.85-1.35).'
+    - rid: 5195086324721254432
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Group heading on the comfort screen for the anti-nausea view
+          aids (motion vignette and its strength, UI scale).
+    - rid: 5195086324721254433
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Slider label directly under the Motion Vignette toggle: how
+          strongly the vignette narrows the view (0 = open, 1 = strongest).'
+    - rid: 5195086324721254434
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Toggle label: adds a subtle vertical bobbing to glide movement
+          to mimic walking. Off = perfectly smooth glide.'
+    - rid: 5195086324721254435
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Crafting screen repair button label; byte-parity with the
+          uGUI crafting panel's bootstrapper-generated button text, which has no
+          table entry today.
+    - rid: 5195086324721254436
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: CrateScreen deposit button label (deposits the whole selected-hotbar
+          stack into the shared crate). The uGUI panel hardcoded this button text.
+    - rid: 5195086324721254437
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: CrateScreen (station_crate) header title. The generated uGUI
+          crate panel hardcoded this as scene text.
+    - rid: 5195086324721254438
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Section heading on the Creative Tools screen above the time-of-day/day-speed
+          sliders and cycle/weather controls.
+    - rid: 5195086324721254439
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Section heading on the Creative Tools screen above the fill/replace/delete/copy/paste/undo/redo
+          rows.
+    - rid: 5195086324721254440
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'LAN multiplayer screen: label on the transport-encryption
+          toggle. The parenthetical explains that the server must support TLS for
+          the option to work.'
+    - rid: 5195086324721254441
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'LAN multiplayer screen: heading above the bookmark rows (servers
+          previously joined, most recent first, rejoinable in one tap). The rows
+          themselves are addresses/nicknames and stay unlocalized.'
+    - rid: 5195086324721254442
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Empty-hotbar selected-block line on the creative hotbar. uGUI
+          hard-coded the literal 'No block'.
+    - rid: 5195086324721254443
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: 'Canonical 11-line controller mapping copy, byte-equal to
+          ControllerMappingText in the bootstrapper. Shared by the controller-mapping
+          and controls screens. Keep the line structure; each line is ''control:
+          action''.'
+    - rid: 5195086324721254444
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'balanced'.
+    - rid: 5195086324721254445
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World game-mode value label; humanize-fallback parity
+          for canonical id 'creative'.
+    - rid: 5195086324721254446
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'drybrush'.
+    - rid: 5195086324721254447
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'dunes'.
+    - rid: 5195086324721254448
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World difficulty value label; humanize-fallback parity
+          for canonical id 'easy'.
+    - rid: 5195086324721254449
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World world-preset value label; humanize-fallback parity
+          for canonical id 'flat_builder'.
+    - rid: 5195086324721254450
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World difficulty value label; humanize-fallback parity
+          for canonical id 'hard'.
+    - rid: 5195086324721254451
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'highlands'.
+    - rid: 5195086324721254452
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'meadow'.
+    - rid: 5195086324721254453
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World difficulty value label; humanize-fallback parity
+          for canonical id 'normal'.
+    - rid: 5195086324721254454
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'pinewild'.
+    - rid: 5195086324721254455
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World game-mode value label; humanize-fallback parity
+          for canonical id 'survival'.
+    - rid: 5195086324721254456
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World world-preset value label; humanize-fallback parity
+          for canonical id 'survival_terrain'.
+    - rid: 5195086324721254457
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'tundra'.
+    - rid: 5195086324721254458
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World world-preset value label; humanize-fallback parity
+          for canonical id 'void_builder'.
+    - rid: 5195086324721254459
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World starting-biome value label; humanize-fallback parity
+          for canonical id 'wetland'.

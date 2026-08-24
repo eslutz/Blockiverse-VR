@@ -22,14 +22,13 @@ namespace Blockiverse.Tests.EditMode
             return power;
         }
 
+        // Retired with the uGUI menus: selected_slot, health_pip, inventory_panel, crafting_panel
+        // and multiplayer_status_badge were drawn only by the panels UI Toolkit replaced. The
+        // Toolkit screens style themselves from USS tokens and borders — GameplayHud.uss has no
+        // background-image at all — so those five have no consumer and no longer generate.
         static readonly string[] UiSpriteNames =
         {
             "hotbar_frame",
-            "selected_slot",
-            "health_pip",
-            "inventory_panel",
-            "crafting_panel",
-            "multiplayer_status_badge",
             "settings_panel",
             "feedback_toast",
             "checkbox_check",
@@ -62,7 +61,8 @@ namespace Blockiverse.Tests.EditMode
                 Assert.That(importer, Is.Not.Null, path);
                 Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Point), path);
                 Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp), path);
-                Assert.That(importer.mipmapEnabled, Is.False, path);
+                Assert.That(importer.mipmapEnabled, Is.True, path);
+                Assert.That(importer.mipMapsPreserveCoverage, Is.True, path);
                 Assert.That(importer.anisoLevel, Is.EqualTo(1), path);
 
                 TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
@@ -106,6 +106,16 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void CutoutFoliageDoesNotOccludeItsOwnInterior()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+
+            Assert.That(registry.Get(BlockRegistry.Leafmoss).IsSolid, Is.True);
+            Assert.That(registry.Get(BlockRegistry.Leafmoss).Occludes, Is.False);
+            Assert.That(registry.Get(BlockRegistry.Graystone).Occludes, Is.True);
+        }
+
+        [Test]
         public void LaunchArtworkUsesCompressedFilteredMipmappedImportSettings()
         {
             Texture2D launchArtwork = AssetDatabase.LoadAssetAtPath<Texture2D>(BlockiverseProject.LaunchArtworkPath);
@@ -129,14 +139,30 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void GeneratedUiAndVfxSpritesAreReferencedByBootstrapperWiring()
         {
-            string[] bootstrapperFiles = Directory
+            // Two consumers now, not one. uGUI sprites were wired in bootstrapper C#; UI Toolkit
+            // reaches them from stylesheets instead (checkbox_check is a url() in Base.uss). A
+            // bootstrapper-only search would fail any sprite the Toolkit alone uses, which is the
+            // wrong answer for every sprite added from here on.
+            IEnumerable<string> wiringFiles = Directory
                 .GetFiles("Assets/Blockiverse/Scripts/Editor", "BlockiverseProjectBootstrapper*.cs")
-                .OrderBy(path => path)
-                .ToArray();
-            string bootstrapperSource = string.Join("\n", bootstrapperFiles.Select(File.ReadAllText));
+                .Concat(Directory.GetFiles("Assets/Blockiverse/UI", "*.uss", SearchOption.AllDirectories))
+                .Concat(Directory.GetFiles("Assets/Blockiverse/UI", "*.uxml", SearchOption.AllDirectories))
+                .OrderBy(path => path);
+            string wiringSource = string.Join("\n", wiringFiles.Select(File.ReadAllText));
 
-            foreach (string spriteName in UiSpriteNames.Concat(VfxSpriteNames))
-                Assert.That(bootstrapperSource, Does.Contain(spriteName), $"{spriteName} must be wired into generated runtime UI/VFX.");
+            // Collect every miss before failing. Asserting inside the loop aborts on the first one,
+            // which hid four dead sprites behind selected_slot during the uGUI removal — the report
+            // said "one sprite" when five had lost their consumer.
+            string[] unreferenced = UiSpriteNames
+                .Concat(VfxSpriteNames)
+                .Where(spriteName => !wiringSource.Contains(spriteName))
+                .ToArray();
+
+            Assert.That(
+                unreferenced,
+                Is.Empty,
+                $"Generated sprites with no consumer in bootstrapper wiring or USS/UXML: {string.Join(", ", unreferenced)}. " +
+                "Either wire them up or retire them from the generator and this list.");
         }
 
         [Test]

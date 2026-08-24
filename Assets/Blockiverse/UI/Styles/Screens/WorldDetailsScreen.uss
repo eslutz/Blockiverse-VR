@@ -1,0 +1,15 @@
+/*
+ * World Details screen. The metadata block is a multi-line dynamic string and must wrap;
+ * everything else inherits Tokens/Base.
+ */
+
+.bv-metadata {
+    white-space: normal;
+    flex-shrink: 0;
+    margin-bottom: var(--hs-space-3);
+}
+
+.bv-action-list {
+    flex-shrink: 0;
+    margin-top: var(--hs-space-3);
+}

@@ -560,34 +560,42 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CreativeToolsButtonsAreWiredExactlyOnce()
+        public void NoUguiCreativeToolsWiringSurvivesInGeneratedAssets()
         {
-            // Bare AddPersistentListener over an existing prefab stacked another copy of every
-            // handler on each bootstrap run; the prefab had reached 83 copies, so a single click
-            // ran each region operation 83 times. WireButton clears before it adds.
-            string prefab = File.ReadAllText(BlockiverseXrRigPrefabPath);
-
+            // This used to assert each handler was wired EXACTLY ONCE, guarding a real bug: bare
+            // AddPersistentListener over an existing prefab stacked another copy on every
+            // bootstrap run, and the prefab had reached 83 copies, so one click ran each region
+            // operation 83 times.
+            //
+            // UI Toolkit made that failure structurally impossible — there are no serialized
+            // UnityEvent listeners to stack, and the equivalent hazard (registering a callback
+            // twice without unregistering) is covered by CallbackRegistrationBalance, asserted for
+            // this very screen at CatalogCreativeScreensEditModeTests.cs:101.
+            //
+            // So the assertion inverts rather than retires. The bootstrapper only ever *ensures*
+            // objects, which means deleting EnsureCreativeToolsMenuPanel did NOT remove the panel
+            // from a prefab that already had it — only the explicit RetiredUguiMenuPanelNames
+            // removal pass does that. Zero here is what proves the removal pass actually ran, and
+            // it stays as a tripwire against a uGUI creative-tools panel returning by accident.
             string[] methods =
             {
                 "SetCornerA", "SetCornerB", "FillRegion", "ReplaceRegion", "DeleteRegion",
                 "CopyRegion", "PasteRegion", "UndoEdit", "RedoEdit", "CycleWeather",
             };
 
-            foreach (string method in methods)
+            foreach (string generatedAsset in new[] { BlockiverseXrRigPrefabPath, "Assets/Blockiverse/Scenes/Boot.unity" })
             {
-                int count = Regex.Matches(prefab, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count;
-                Assert.That(count, Is.EqualTo(1), $"{method} should be wired exactly once, found {count}.");
-            }
+                Assert.That(File.Exists(generatedAsset), Is.True, $"{generatedAsset} is missing.");
+                string contents = File.ReadAllText(generatedAsset);
 
-            // All wiring lives in the prefab: a duplicate landing as a prefab-instance override in
-            // the Boot scene would double-fire in the shipped build while the prefab count stays 1.
-            string bootScene = File.ReadAllText("Assets/Blockiverse/Scenes/Boot.unity");
-            foreach (string method in methods)
-            {
-                Assert.That(
-                    Regex.Matches(bootScene, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count,
-                    Is.Zero,
-                    $"{method} must not be wired as a Boot scene override.");
+                foreach (string method in methods)
+                {
+                    Assert.That(
+                        Regex.Matches(contents, $@"m_MethodName: {method}$", RegexOptions.Multiline).Count,
+                        Is.Zero,
+                        $"{method} is still wired in {generatedAsset}; the uGUI creative tools " +
+                        "panel was not removed from the generated asset.");
+                }
             }
         }
 

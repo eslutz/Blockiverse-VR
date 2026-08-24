@@ -1,31 +1,32 @@
 {
-  "name": "Blockiverse.VR",
-  "rootNamespace": "Blockiverse.VR",
-  "references": [
-    "Blockiverse.Core",
-    "Blockiverse.Gameplay",
-    "Blockiverse.Networking",
-    "Blockiverse.Survival.Health",
-    "Blockiverse.WorldRuntime",
-    "Blockiverse.Voxel",
-    "Unity.InputSystem",
-    "UnityEngine.UI",
-    "Unity.TextMeshPro",
-    "Unity.Netcode.Runtime",
-    "Unity.XR.CompositionLayers",
-    "Unity.XR.CoreUtils",
-    "Unity.XR.Interaction.Toolkit",
-    "Unity.XR.Management"
-  ],
-  "includePlatforms": [],
-  "excludePlatforms": [
-    "LinuxStandalone64"
-  ],
-  "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
-  "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
-  "noEngineReferences": false
+    "name": "Blockiverse.VR",
+    "rootNamespace": "Blockiverse.VR",
+    "references": [
+        "Blockiverse.Core",
+        "Blockiverse.Gameplay",
+        "Blockiverse.MetaAvatars",
+        "Blockiverse.Networking",
+        "Blockiverse.Survival.Health",
+        "Blockiverse.WorldRuntime",
+        "Blockiverse.Voxel",
+        "Unity.InputSystem",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro",
+        "Unity.Netcode.Runtime",
+        "Unity.XR.CompositionLayers",
+        "Unity.XR.CoreUtils",
+        "Unity.XR.Interaction.Toolkit",
+        "Unity.XR.Management"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

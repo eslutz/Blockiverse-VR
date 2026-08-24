@@ -6,7 +6,6 @@ using Blockiverse.VR;
 using NUnit.Framework;
 using UnityEngine;
 using TMPro;
-using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
 {
@@ -177,6 +176,11 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(BlockiverseHapticPattern.BlockBreak.Scale(settings.ResolveHapticIntensity()).Amplitude, Is.Zero);
         }
 
+        // The scene hotbar (Blockiverse.Gameplay's CreativeHotbar) survives the uGUI cutover —
+        // CreativeHotbarController mirrors Toolkit selection into it — and it owns these three
+        // cues itself. What went with the uGUI presenter is the haptic tick that used to ride
+        // alongside show/hide; the Toolkit quick menu plays its own through
+        // CreativeHotbarController.SetQuickMenuVisible, which no test covers.
         [Test]
         public void CreativeHotbarShowSelectionAndHidePlayInventoryFeedback()
         {
@@ -184,90 +188,31 @@ namespace Blockiverse.Tests.EditMode
             objectsToDestroy.Add(hotbarObject);
             Canvas canvas = hotbarObject.AddComponent<Canvas>();
             CreativeHotbar hotbar = hotbarObject.AddComponent<CreativeHotbar>();
-            BlockiverseWorldSpacePanelPresenter presenter = hotbarObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
             TMP_Text label = CreateText("Selected Block Label");
             BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
-            BlockiverseInteractionHaptics haptics = CreateHaptics();
             var playedCues = new List<BlockiverseAudioCue>();
-            int uiTicks = 0;
 
             audioCuePlayer.ConfigureClip(BlockiverseAudioCue.InventoryOpen, CreateClip("inventory_open"));
             audioCuePlayer.ConfigureClip(BlockiverseAudioCue.UiSelect, CreateClip("ui_select"));
             audioCuePlayer.ConfigureClip(BlockiverseAudioCue.InventoryClose, CreateClip("inventory_close"));
             audioCuePlayer.CuePlayed += (cue, _) => playedCues.Add(cue);
-            haptics.UiTickRequested += () => uiTicks++;
 
             hotbar.ConfigureDefault(label);
             hotbar.ConfigureCanvas(canvas);
             hotbar.ConfigureFeedback(audioCuePlayer);
-            presenter.Configure(
-                canvas,
-                targetHeadset: null,
-                distance: 1.0f,
-                horizontalOffset: 0.0f,
-                verticalOffset: 0.0f,
-                pitch: 0.0f,
-                recenterWhenShown: false);
-            presenter.ConfigureFeedback(
-                audioCuePlayer,
-                haptics,
-                BlockiverseAudioCue.InventoryOpen,
-                BlockiverseAudioCue.InventoryClose);
 
             hotbar.Show();
             hotbar.SelectNext();
             hotbar.Hide();
 
+            // Order matters, not just membership: a selection cue that fires before the open
+            // cue reads as a stutter in the headset.
             Assert.That(playedCues, Is.EqualTo(new[]
             {
                 BlockiverseAudioCue.InventoryOpen,
                 BlockiverseAudioCue.UiSelect,
                 BlockiverseAudioCue.InventoryClose
             }));
-            Assert.That(uiTicks, Is.EqualTo(1));
-        }
-
-        [Test]
-        public void WorldSpacePanelPresenterShowAndHidePlayConfiguredFeedback()
-        {
-            GameObject panelObject = new("World Space Panel");
-            objectsToDestroy.Add(panelObject);
-            Canvas canvas = panelObject.AddComponent<Canvas>();
-            BlockiverseWorldSpacePanelPresenter presenter = panelObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-            BlockiverseAudioCuePlayer audioCuePlayer = CreateCuePlayer();
-            BlockiverseInteractionHaptics haptics = CreateHaptics();
-            var playedCues = new List<BlockiverseAudioCue>();
-            int uiTicks = 0;
-
-            canvas.enabled = false;
-            audioCuePlayer.ConfigureClip(BlockiverseAudioCue.InventoryOpen, CreateClip("inventory_open"));
-            audioCuePlayer.ConfigureClip(BlockiverseAudioCue.InventoryClose, CreateClip("inventory_close"));
-            audioCuePlayer.CuePlayed += (cue, _) => playedCues.Add(cue);
-            haptics.UiTickRequested += () => uiTicks++;
-
-            presenter.Configure(
-                canvas,
-                targetHeadset: null,
-                distance: 1.0f,
-                horizontalOffset: 0.0f,
-                verticalOffset: 0.0f,
-                pitch: 0.0f,
-                recenterWhenShown: false);
-            presenter.ConfigureFeedback(
-                audioCuePlayer,
-                haptics,
-                BlockiverseAudioCue.InventoryOpen,
-                BlockiverseAudioCue.InventoryClose);
-
-            presenter.Show();
-            presenter.Hide();
-
-            Assert.That(playedCues, Is.EqualTo(new[]
-            {
-                BlockiverseAudioCue.InventoryOpen,
-                BlockiverseAudioCue.InventoryClose
-            }));
-            Assert.That(uiTicks, Is.EqualTo(2));
         }
 
         [Test]
@@ -311,13 +256,6 @@ namespace Blockiverse.Tests.EditMode
             objectsToDestroy.Add(gameObject);
             gameObject.AddComponent<AudioSource>();
             return gameObject.AddComponent<BlockiverseAudioCuePlayer>();
-        }
-
-        BlockiverseInteractionHaptics CreateHaptics()
-        {
-            var gameObject = new GameObject("Interaction Haptics");
-            objectsToDestroy.Add(gameObject);
-            return gameObject.AddComponent<BlockiverseInteractionHaptics>();
         }
 
         TextMeshProUGUI CreateText(string name)

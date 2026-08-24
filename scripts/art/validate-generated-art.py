@@ -38,7 +38,7 @@ class GeneratedArtAssetTests(unittest.TestCase):
         ui_names = [sprite[0] for sprite in self.generator.UI_SPRITES]
         vfx_names = [sprite[0] for sprite in self.generator.VFX_SPRITES]
 
-        self.assertEqual(len(block_names), 77)
+        self.assertEqual(len(block_names), 97)
         self.assertEqual(len(set(block_names)), len(block_names))
         self.assertIn("worldroot", block_names)
         self.assertIn("mend_bench", block_names)
@@ -100,11 +100,11 @@ class GeneratedArtAssetTests(unittest.TestCase):
         self.assertEqual((len(icon[0]), len(icon)), (64, 64))
         self.assertEqual((len(vfx[0]), len(vfx)), (32, 32))
 
-        self.assertEqual(self.generator.ATLAS_COLUMNS, 8)
+        self.assertEqual(self.generator.ATLAS_COLUMNS, 10)
         self.assertEqual(self.generator.ATLAS_ROWS, 10)
         self.assertEqual(self.generator.TILE_PIXELS, 32)
         self.assertEqual(self.generator.ATLAS_TILE_PADDING_PIXELS, 8)
-        self.assertEqual(self.generator.atlas_width(), 384)
+        self.assertEqual(self.generator.atlas_width(), 480)
         self.assertEqual(self.generator.atlas_height(), 480)
         self.assertLess(
             max(block[1] for block in self.generator.BLOCKS),
@@ -129,7 +129,8 @@ class GeneratedArtAssetTests(unittest.TestCase):
                 self.assertTrue(meta_path.exists(), f"Missing block atlas meta for {texture_set}")
                 meta = meta_path.read_text(encoding="utf-8")
                 self.assertIn("  mipmaps:\n", meta)
-                self.assertIn("    enableMipMap: 0\n", meta)
+                self.assertIn("    enableMipMap: 1\n", meta)
+                self.assertIn("    mipMapsPreserveCoverage: 1\n", meta)
                 self.assertIn("  filterMode: 0\n", meta)
                 self.assertIn("  aniso: 1\n", meta)
                 self.assertIn("    textureCompression: 0\n", meta)

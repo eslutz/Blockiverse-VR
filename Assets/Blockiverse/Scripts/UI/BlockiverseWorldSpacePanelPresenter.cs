@@ -8,7 +8,12 @@ namespace Blockiverse.UI
 {
     public sealed class BlockiverseWorldSpacePanelPresenter : MonoBehaviour
     {
-        public const string ControllerMappingPopupSeenPrefKey = "Blockiverse.ControllerMappingPopupSeen";
+        // The first-run flag is owned by BlockiverseMenuController now — the routed uGUI popup
+        // this presenter used to show-on-start is no longer generated. Aliased rather than
+        // re-declared so the two cannot drift: they are one PlayerPrefs key, and a divergence
+        // would show up only as the controller-mapping prompt reappearing on every launch.
+        public const string ControllerMappingPopupSeenPrefKey =
+            BlockiverseMenuController.ControllerMappingPopupSeenPrefKey;
 
         [SerializeField] Canvas targetCanvas;
         [SerializeField] GameObject targetRoot;

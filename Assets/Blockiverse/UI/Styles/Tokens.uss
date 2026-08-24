@@ -109,4 +109,26 @@
 
     --hs-control-min-height: 64px;
     --hs-control-horizontal-padding: 22px;
+
+    /* Checkbox and slider geometry. These are physical sizes, not screen-UI sizes:
+       at 100 ppu a pixel here is a millimetre on the panel, so the 44px box is a
+       44 mm target and the 40x52 dragger is roughly a fingertip. Unity's defaults
+       are sized for a mouse and shrink to illegibility at 0.95 m. The track is
+       deliberately chunky — a hairline rail shimmers under reprojection the same
+       way a 1px border does, which is why --hs-edge-width is 3px and not 1px. */
+    --hs-checkbox-size: 44px;
+    --hs-slider-track-height: 14px;
+    --hs-slider-dragger-width: 40px;
+    --hs-slider-dragger-height: 52px;
+    --hs-slider-min-length: 150px;
+
+    /* Half of the two heights above, negated. UI Toolkit positions a horizontal
+       slider's tracker and dragger absolutely at top: 50%, and relies on a negative
+       top margin to pull each back by half its own height — that is what centres them
+       on the rail. Overriding the heights without also overriding these margins leaves
+       both hanging half their height low, which is the offset dragger Eric spotted.
+       USS has no calc(), so these must be updated BY HAND whenever the heights above
+       change. They are pinned by a test for exactly that reason. */
+    --hs-slider-track-offset: -7px;
+    --hs-slider-dragger-offset: -26px;
 }

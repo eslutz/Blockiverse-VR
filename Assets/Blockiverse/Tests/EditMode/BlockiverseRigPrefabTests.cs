@@ -26,7 +26,6 @@ using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.UI;
-using TMPro;
 using UnityEngine.UI;
 
 namespace Blockiverse.Tests.EditMode
@@ -34,31 +33,6 @@ namespace Blockiverse.Tests.EditMode
     public sealed class BlockiverseRigPrefabTests
     {
         const string ControllerRayOriginName = "Ray Origin";
-
-        [Test]
-        public void GameplayMenusAreDirectWorldSpaceCanvasChildren()
-        {
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
-            Transform cameraOffset = prefab.transform.Find("Camera Offset");
-            Transform menuSurface = cameraOffset.Find("Blockiverse Menu Composition Surface");
-
-            Assert.That(menuSurface, Is.Null,
-                "Gameplay menus should render through the main eye camera instead of a shared composition layer.");
-
-            string[] menuPanels = {
-                BlockiverseMenuController.TitleMenuName,
-                BlockiverseMenuController.PauseMenuName,
-                BlockiverseMenuController.InventoryPanelName,
-                BlockiverseMenuController.SettingsPanelName
-            };
-
-            foreach (string panelName in menuPanels)
-            {
-                Transform panel = cameraOffset.Find(panelName);
-                Assert.That(panel, Is.Not.Null, $"Panel '{panelName}' should be a direct Camera Offset child.");
-                Assert.That(panel.GetComponent<Canvas>(), Is.Not.Null, $"Panel '{panelName}' should keep its world-space Canvas.");
-            }
-        }
 
         [Test]
         public void InteractionRaysAreOnMainCameraLayerPath()
@@ -213,8 +187,13 @@ namespace Blockiverse.Tests.EditMode
             }
         }
 
+        // Was XrRigPrefabIsWiredForComfortSettingsMenu. The uGUI Comfort Settings Menu object is
+        // no longer generated (ComfortSettingsScreenController owns that screen, and
+        // Toolkit/ComfortSettingsScreenEditModeTests covers its controls), but the half of this
+        // test that pins the RIG is untouched: the comfort-first defaults it ships with, the
+        // eye-height offset, and the rule that hardware Menu carries no persistent listener.
         [Test]
-        public void XrRigPrefabIsWiredForComfortSettingsMenu()
+        public void XrRigPrefabShipsComfortFirstDefaultsAndRoutesHardwareMenuAtRuntime()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
@@ -224,8 +203,6 @@ namespace Blockiverse.Tests.EditMode
             XROrigin origin = prefab.GetComponent<XROrigin>();
             BlockiverseComfortSettings settings = prefab.GetComponent<BlockiverseComfortSettings>();
             BlockiverseDominantHandResolver dominantHandResolver = prefab.GetComponent<BlockiverseDominantHandResolver>();
-            Transform menuTransform = prefab.transform.Find("Camera Offset/Comfort Settings Menu");
-            BlockiverseComfortMenu menu = menuTransform?.GetComponent<BlockiverseComfortMenu>();
 
             Assert.That(inputRig, Is.Not.Null);
             Assert.That(origin, Is.Not.Null);
@@ -234,41 +211,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(settings.VignetteEnabled, Is.True, "Generated rig should ship the comfort-first motion vignette on; it only renders during locomotion so the static title/menu stays readable.");
             Assert.That(settings.VignetteStrength, Is.GreaterThan(0f).And.LessThanOrEqualTo(0.35f), "Generated rig should start with a low, comfort-first vignette strength.");
             Assert.That(origin.CameraYOffset, Is.EqualTo(BlockiverseComfortSettings.FixedStandingEyeHeight).Within(0.01f));
-            Assert.That(menuTransform, Is.Not.Null);
-            Assert.That(menu, Is.Not.Null);
-            Assert.That(menu.IsVisible, Is.False);
             Assert.That(inputRig.MenuPressed.GetPersistentEventCount(), Is.EqualTo(0),
                 "Hardware Menu is routed by BlockiverseMenuController at runtime; persistent comfort toggles double-handle pause/back.");
-            BlockiverseWorldSpacePanelPresenter presenter = menuTransform.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(presenter, Is.Not.Null);
-            Assert.That(presenter.PlaysShowFeedback, Is.True);
-            Assert.That(presenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiConfirm));
-            Assert.That(presenter.PlaysHideFeedback, Is.True);
-            Assert.That(presenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.UiCancel));
-            Assert.That(presenter.UsesSharedCompositionRoot, Is.False);
-            Canvas menuCanvas = menuTransform.GetComponent<Canvas>();
-            Assert.That(presenter.TargetCanvas, Is.SameAs(menuCanvas));
-            Assert.That(menuTransform.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
-                "Comfort menu should receive XRI tracked-device UI raycasts directly as world-space UI.");
-
-            Image panelImage = menuTransform.Find("Panel")?.GetComponent<Image>();
-            TMP_Text title = menuTransform.Find("Panel/Title")?.GetComponent<TMP_Text>();
-
-            Assert.That(panelImage, Is.Not.Null);
-            Assert.That(panelImage.color.a, Is.GreaterThanOrEqualTo(0.98f), "Comfort menu panel should be effectively opaque over terrain.");
-            Assert.That(title, Is.Not.Null);
-            Assert.That(title.fontSize, Is.LessThanOrEqualTo(34.0f), "Comfort menu title should fit a compact VR panel.");
-
-            // Menu must contain Glide and Teleport selectors + vignette toggle.
-            Toggle glideToggle = menuTransform.Find("Panel/Glide Toggle")?.GetComponent<Toggle>();
-            Toggle teleportToggle = menuTransform.Find("Panel/Teleport Toggle")?.GetComponent<Toggle>();
-            Toggle vignetteToggle = menuTransform.Find("Panel/Vignette Toggle")?.GetComponent<Toggle>();
-            Slider vignetteSlider = menuTransform.Find("Panel/Vignette Slider/Slider")?.GetComponent<Slider>();
-
-            Assert.That(glideToggle, Is.Not.Null, "Comfort menu should have a Glide Motion toggle.");
-            Assert.That(teleportToggle, Is.Not.Null, "Comfort menu should have a Teleport toggle.");
-            Assert.That(vignetteToggle, Is.Not.Null, "Comfort menu should have a Motion Vignette toggle.");
-            Assert.That(vignetteSlider, Is.Not.Null, "Comfort menu should have a vignette strength slider.");
         }
 
         [Test]
@@ -611,7 +555,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void RigCarriesTheSwimProviderAndItsComfortRows()
+        public void RigCarriesTheSwimProviderAlongsideGravity()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
@@ -625,13 +569,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(gravityProvider, Is.Not.Null,
                 "The swim provider registers itself against this one; it has to exist on the same rig.");
 
-            Transform panel = prefab.transform.Find("Camera Offset/Comfort Settings Menu/Panel");
-
-            Assert.That(panel, Is.Not.Null);
-            Assert.That(panel.Find("Swim Sink Toggle")?.GetComponent<Toggle>(), Is.Not.Null,
-                "Passive sink is the one comfort default that opts INTO motion, so its off switch has to be in the menu.");
-            Assert.That(panel.Find("Swim Vignette Toggle")?.GetComponent<Toggle>(), Is.Not.Null);
-            Assert.That(panel.Find("Swim Speed Slider/Slider")?.GetComponent<Slider>(), Is.Not.Null);
+            // The three swim comfort rows moved to ComfortSettingsScreen.uxml with the rest of
+            // the menu; Toolkit/ComfortSettingsScreenEditModeTests binds them there. Passive
+            // sink is still the one comfort default that opts INTO motion, so its off switch
+            // has to stay reachable — that assertion just no longer lives in the prefab.
         }
 
         [Test]
@@ -857,7 +798,16 @@ namespace Blockiverse.Tests.EditMode
                 // useGravity, which GravityProvider re-asserts on every comfort change.
                 Assert.That(flight.GravityLockHeld, Is.True);
                 Assert.That(jump.enabled, Is.False, "Jump/A is the ascend verb while flying.");
-                Assert.That(inputRig.TurnWithBothHands, Is.True, "Both sticks should keep turning available while the player is in creative flight.");
+                // INVERTED 2026-08-24 on Eric's report. This used to assert True, and the earlier
+                // reasoning ("both sticks should keep turning available") was wrong in a way that
+                // was easy to miss: each hand's Move and Turn actions are bound to that hand's
+                // SAME physical thumbstick, so wiring the off hand's Turn action in as well as the
+                // dominant hand's meant the off hand's stick fed the move provider AND a turn
+                // provider from one input -- pushing it forward moved him and turned him at once.
+                // Flight keeps the ordinary split: dominant hand turns, the other hand only
+                // translates.
+                Assert.That(inputRig.TurnWithBothHands, Is.False,
+                    "The motion stick must only translate -- see BlockiverseCreativeFlightController.ApplyProviderState.");
 
                 flight.SetFlightActive(false);
 
@@ -1205,7 +1155,6 @@ namespace Blockiverse.Tests.EditMode
                 prefab.GetComponent<BlockiverseKeyboardHandVisibilityController>();
             CreativeHotbar hotbar = blockMenu?.GetComponent<CreativeHotbar>();
             Canvas blockMenuCanvas = blockMenu?.GetComponent<Canvas>();
-            BlockiverseWorldSpacePanelPresenter blockMenuPresenter = blockMenu?.GetComponent<BlockiverseWorldSpacePanelPresenter>();
 
             Assert.That(rightController, Is.Not.Null);
             Assert.That(prefab.transform.Find("Camera Offset/Left Controller"), Is.Not.Null);
@@ -1253,11 +1202,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
             Assert.That(blockMenuCanvas, Is.Not.Null);
-            Assert.That(blockMenuPresenter, Is.Not.Null);
-            Assert.That(blockMenuPresenter.PlaysShowFeedback, Is.True);
-            Assert.That(blockMenuPresenter.ShowFeedbackCue, Is.EqualTo(BlockiverseAudioCue.InventoryOpen));
-            Assert.That(blockMenuPresenter.PlaysHideFeedback, Is.True);
-            Assert.That(blockMenuPresenter.HideFeedbackCue, Is.EqualTo(BlockiverseAudioCue.InventoryClose));
+            // The scene hotbar starts hidden and is shown by CreativeHotbarController mirroring
+            // the Toolkit quick menu; a canvas that generates enabled shows blocks over the
+            // title menu on first frame. Its open/close cues live on CreativeHotbar itself now
+            // (BlockiverseAudioCuePlayerEditModeTests), not on the deleted uGUI presenter.
             Assert.That(blockMenuCanvas.enabled, Is.False);
 
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
@@ -1360,77 +1308,27 @@ namespace Blockiverse.Tests.EditMode
                 "The in-game world loading overlay draws a separate title treatment, so its background art must be the no-title variant.");
         }
 
+        // Was XrRigPrefabShowsControllerMappingPopupAndInteractiveSurvivalHud. The uGUI
+        // controller-mapping popup and Survival HUD are no longer generated — the canonical
+        // mapping copy is asserted by Toolkit/ControlsScreensEditModeTests, and the HUD by
+        // Toolkit/HudFamilyEditModeTests. The startup overlay is NOT a menu: it stays uGUI
+        // (WorldLoadingScreenController deliberately did not port the splash or its 2.25 s
+        // timer), so the asserts that keep it decorative are still the only ones there are.
         [Test]
-        public void XrRigPrefabShowsControllerMappingPopupAndInteractiveSurvivalHud()
+        public void XrRigStartupOverlayStaysHiddenAndDecorative()
         {
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
 
-            Transform popup = prefab.transform.Find("Camera Offset/Controller Mapping Popup");
             Transform startupOverlay = prefab.transform.Find("Camera Offset/Startup Loading Overlay");
-            Transform survivalHud = prefab.transform.Find("Camera Offset/Survival HUD");
-
-            Assert.That(popup, Is.Not.Null, "Controller Mapping Popup must be a direct world-space menu panel.");
-            BlockiverseWorldSpacePanelPresenter popupPresenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(popupPresenter, Is.Not.Null);
-            Assert.That(popupPresenter.ShowOnStart, Is.False,
-                "The title router must own first-frame menu visibility; controls stay available from Settings.");
-
-            Canvas popupCanvas = popup.GetComponent<Canvas>();
-            Assert.That(popupCanvas, Is.Not.Null);
-
-            var serializedPopupPresenter = new SerializedObject(popupPresenter);
-            Assert.That(serializedPopupPresenter.FindProperty("distanceMeters").floatValue, Is.EqualTo(0.95f).Within(0.001f));
-            Assert.That(serializedPopupPresenter.FindProperty("verticalOffsetMeters").floatValue, Is.EqualTo(-0.38f).Within(0.001f),
-                "The first-run controller mapping screen should be centered below eye height for reachable close-button interaction.");
-            Assert.That(serializedPopupPresenter.FindProperty("pitchDegrees").floatValue, Is.EqualTo(10.0f).Within(0.001f));
-            Assert.That(popup.GetComponent<CanvasGroup>(), Is.Not.Null,
-                "The menu router toggles per-panel input through the routed panel's CanvasGroup.");
-            Assert.That(popup.gameObject.activeSelf, Is.True,
-                "The routed popup GameObject must stay active so the menu controller can enable its Canvas at runtime.");
-            Assert.That(popup.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(1));
-            Button closeButton = popup.Find("Panel/Close Button")?.GetComponent<Button>();
-            BlockiverseMenuController menuController = prefab.GetComponent<BlockiverseMenuController>();
-            Assert.That(closeButton, Is.Not.Null);
-            Assert.That(menuController, Is.Not.Null);
-            Assert.That(closeButton.onClick.GetPersistentEventCount(), Is.EqualTo(1));
-            Assert.That(closeButton.onClick.GetPersistentTarget(0), Is.SameAs(menuController));
-            Assert.That(closeButton.onClick.GetPersistentMethodName(0),
-                Is.EqualTo(nameof(BlockiverseMenuController.CloseControllerMappingScreen)));
-            string popupText = string.Join("\n", popup.GetComponentsInChildren<TMP_Text>(includeInactive: true)
-                .Select(label => label.text));
-
-            // Canonical controller mapping (shared with the Settings → Controls screen).
-            Assert.That(popupText, Does.Contain("Dominant trigger: press UI / break"));
-            Assert.That(popupText, Does.Contain("Dominant grip: place / use"));
-            Assert.That(popupText, Does.Contain("Support grip: blocks menu"));
-            Assert.That(popupText, Does.Contain("Menu: pause"));
-            Assert.That(popupText, Does.Contain("Dominant stick: snap turn"));
-            Assert.That(popupText, Does.Contain("Dominant stick click: toggle block editing"));
-            Assert.That(popupText, Does.Contain("Dominant primary button: jump / swim up"));
-            Assert.That(popupText, Does.Contain("Dominant secondary button: crouch / swim down"));
-            Assert.That(popupText, Does.Contain("Support stick: move"));
-            Assert.That(popupText, Does.Contain("Support stick click: sprint"));
-            Assert.That(popupText, Does.Contain("Either stick hold up: teleport aim, release to land"));
-            Assert.That(popupText, Does.Not.Contain("Right A + trigger"));
-            Assert.That(popupText, Does.Not.Contain("Left X: jump"));
-            Assert.That(popupText, Does.Not.Contain("Left Y: undo"));
-            Assert.That(popupText, Does.Not.Contain("undo"));
 
             Assert.That(startupOverlay, Is.Not.Null);
-            BlockiverseWorldSpacePanelPresenter startupPresenter = startupOverlay.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(startupPresenter, Is.Not.Null);
-            Assert.That(startupPresenter.ShowOnStart, Is.False,
+            Assert.That(startupOverlay.GetComponent<Canvas>(), Is.Not.Null);
+            Assert.That(startupOverlay.GetComponent<Canvas>().enabled, Is.False,
                 "The loading artwork must not auto-render over the title menu after the app reaches the menu.");
-            Assert.That(startupOverlay.GetComponent<Canvas>()?.enabled, Is.False);
             Assert.That(startupOverlay.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Null,
                 "Startup artwork is decorative and must not intercept tracked-device UI rays.");
-
-            Canvas startupCanvas = startupOverlay.GetComponent<Canvas>();
-            Assert.That(startupCanvas, Is.Not.Null);
-            Assert.That(popupCanvas.sortingOrder, Is.GreaterThan(startupCanvas.sortingOrder),
-                "The first-run controller map must render in front of any startup artwork.");
 
             CanvasGroup startupInputGate = startupOverlay.GetComponent<CanvasGroup>();
             Assert.That(startupInputGate, Is.Not.Null);
@@ -1439,24 +1337,6 @@ namespace Blockiverse.Tests.EditMode
 
             foreach (Graphic graphic in startupOverlay.GetComponentsInChildren<Graphic>(includeInactive: true))
                 Assert.That(graphic.raycastTarget, Is.False, $"{graphic.name} must not receive UI raycasts.");
-
-            Assert.That(survivalHud, Is.Not.Null);
-            Assert.That(survivalHud.GetComponentsInChildren<Button>(includeInactive: true), Has.Length.GreaterThanOrEqualTo(11));
-            Assert.That(survivalHud.GetComponentInChildren<SurvivalCraftingPanel>(includeInactive: true), Is.Not.Null);
-            Assert.That(survivalHud.GetComponentInChildren<SurvivalInventoryPanel>(includeInactive: true), Is.Not.Null);
-
-            RectTransform survivalHudRect = survivalHud.GetComponent<RectTransform>();
-            Assert.That(survivalHudRect, Is.Not.Null);
-            Assert.That(survivalHudRect.rect.width, Is.LessThanOrEqualTo(600.0f),
-                "Gameplay HUD should be a compact overlay, not the full survival menu.");
-            Assert.That(survivalHudRect.rect.height, Is.LessThanOrEqualTo(220.0f),
-                "Gameplay HUD should not occupy the player's central field of view.");
-            Assert.That(survivalHud.Find("Panel/Inventory")?.gameObject.activeSelf, Is.False,
-                "The full inventory panel belongs behind an explicit inventory route, not always-visible gameplay HUD.");
-            Assert.That(survivalHud.Find("Panel/Crafting")?.gameObject.activeSelf, Is.False,
-                "The full crafting panel belongs behind an explicit crafting route, not always-visible gameplay HUD.");
-            Assert.That(survivalHud.Find("Panel/Shared Crate")?.gameObject.activeSelf, Is.False,
-                "The shared crate panel belongs behind an explicit crate route, not always-visible gameplay HUD.");
         }
 
         [Test]

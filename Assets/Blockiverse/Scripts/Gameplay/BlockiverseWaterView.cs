@@ -45,11 +45,48 @@ namespace Blockiverse.Gameplay
 
         public Color UnderwaterFogColor => FogColorFor(SubmergedFamily);
 
-        public float UnderwaterFogDensity => FogDensityFor(SubmergedFamily);
+        // Scaled by depth — see FogDepthRampMeters. Only at or past the ramp floor is this the
+        // family's full FogDensityFor value; nearer the surface it is a fraction of it, which is
+        // the whole point. The PlayMode fog assertions therefore compare against THIS property
+        // rather than the raw family constant, because the raw constant is no longer what a
+        // submerged eye gets at arbitrary depth.
+        public float UnderwaterFogDensity
+        {
+            get
+            {
+                float density = FogDensityFor(SubmergedFamily);
 
-        // At density 0.35 an exp-squared fog reaches 39% at 2 m and 95% at 5 m: a strong,
-        // distance-dependent underwater read that a flat tint cannot produce. Emberflow is dense
-        // enough to be near-opaque at arm's length, which is the point.
+                // The ramp is a WATER model — light failing with depth. Molten rock is opaque at
+                // any depth, and every emberflow pool that worldgen actually places is shallow,
+                // so ramping it made lava effectively transparent everywhere it exists. The
+                // "start almost clear at the surface" ruling was about swimming, not standing in
+                // lava.
+                if (SubmergedFamily == FluidFamily.Emberflow)
+                    return density;
+
+                return density * Mathf.Lerp(
+                    MinimumDepthDensityScale,
+                    1.0f,
+                    Mathf.Clamp01(EyeDepthMeters / FogDepthRampMeters));
+            }
+        }
+
+        // Exp-squared fog: opacity is 1 - exp(-(density * distance)^2), so halving the density
+        // roughly doubles the distance at which the water closes in.
+        //
+        // Freshwater was 0.35 (95% opaque at 5 m) and Brine 0.42 (95% at 4.1 m), which Eric found
+        // too restrictive on device. At 0.22 freshwater reaches 95% at about 7.9 m and brine at
+        // 0.28 reaches it at about 6.2 m — further, while keeping brine murkier than freshwater,
+        // which is the ordering the ruleset cares about. Emberflow is untouched: being near-opaque
+        // at arm's length is the entire point of standing in molten rock.
+        //
+        // Fog was only half the cause. The tunnelling vignette was engaged for the whole dive
+        // (see BlockiverseSwimProvider.UpdateVignette) and narrowed the field of view on top of
+        // this; changing density alone would have moved the number without fixing what was seen.
+        //
+        // These values are chosen from the opacity arithmetic, not measured in the headset. If
+        // they are still wrong, the arithmetic is not the thing to re-derive — look at it on
+        // device, the way the title menu's height was settled.
         public static Color FogColorFor(FluidFamily family) => family switch
         {
             FluidFamily.Brine => new Color(0.08f, 0.26f, 0.26f),
@@ -59,9 +96,9 @@ namespace Blockiverse.Gameplay
 
         public static float FogDensityFor(FluidFamily family) => family switch
         {
-            FluidFamily.Brine => 0.42f,
+            FluidFamily.Brine => 0.28f,
             FluidFamily.Emberflow => 1.20f,
-            _ => 0.35f
+            _ => 0.22f
         };
 
         // Null-tolerant on both arguments: the bootstrapper wires this at scene-generation time,
@@ -194,7 +231,77 @@ namespace Blockiverse.Gameplay
                 return 0.0f;
 
             SubmergedFamily = family;
+            EyeDepthMeters = EvaluateEyeDepth(headCamera.transform.position);
             return 1.0f;
+        }
+
+        /// <summary>
+        /// How far the eye sits below the water line, capped at <see cref="FogDepthRampMeters"/>.
+        /// </summary>
+        public float EyeDepthMeters { get; private set; }
+
+        // Depth at which the fog reaches its family's full density, and the probe granularity.
+        //
+        // Eric: "I can see much further out of the water looking down into it than I can from
+        // inside the water while swimming, which doesn't make sense logically." He is right, and
+        // the cause is that the two views were never one model. Looking IN from above, the surface
+        // is an alpha-blended quad with a constant tint and no distance term at all, so the bottom
+        // stays crisp. Looking OUT from under, fog was applied at full family density the instant
+        // the eye crossed the line — exponential in distance but BINARY in depth. Ducking your head
+        // ten centimetres under therefore swapped a perfectly clear view for a heavily fogged one.
+        //
+        // Ramping density with depth makes the two agree where they meet: at the surface the view
+        // is nearly as open as it looks from above, and it closes in as you actually descend, which
+        // is both what water does and what the player expects. It is not a substitute for the
+        // density tuning below — it fixes the DISCONTINUITY, not the reach.
+        public const float FogDepthRampMeters = 14.0f;
+        const float DepthProbeStepMeters = 1.0f;
+
+        // Near-clear at the line, and only closing in with real depth.
+        //
+        // Eric's ruling after trying the first version: the depth falloff is right and reads as
+        // light failing to reach the deep, but it started FAR too murky and reached full density
+        // over 1.5 m — so every swim was fogged from the first moment. Start almost clear at the
+        // surface and let the ramp run over a swimmable depth instead.
+        //
+        // 0.08 of freshwater's 0.22 is ~0.018, which puts 95% opacity near 100 m: effectively
+        // clear. At the 14 m floor it is the full 0.22, i.e. 95% at ~7.9 m.
+        public const float MinimumDepthDensityScale = 0.08f;
+
+        float EvaluateEyeDepth(Vector3 eye)
+        {
+            // Probes upward only as far as the ramp needs — a handful of samples, not a search
+            // for the real surface, which could be many metres up in a deep sea and is not worth
+            // finding.
+            //
+            // CONTINUOUS, deliberately: an earlier version returned the raw probe step count,
+            // which quantised depth to whole metres — density then jumped a visible notch each
+            // metre of descent. The probes still walk cell by cell, but the returned depth is
+            // measured to the TOP FACE of the topmost fluid cell found (cells sit on integer
+            // boundaries), so it tracks the eye smoothly between probes.
+            // The submersion decision uses a slightly BIASED sample (hysteresis against
+            // strobing at the line), so during the exit band the raw eye can sit in the air
+            // cell above the water. Seeding highestFluidY with that air position would make
+            // floor(eye.y)+1 the top of the AIR cell — depth would jump from ~0 to ~1 m at the
+            // exact moment of surfacing, the discontinuity this method exists to remove. An eye
+            // above the fluid is at depth zero, full stop.
+            if (!worldManager.TryGetFluidFamilyAt(eye, out _))
+                return 0.0f;
+
+            float highestFluidY = eye.y;
+
+            for (float step = DepthProbeStepMeters; step <= FogDepthRampMeters; step += DepthProbeStepMeters)
+            {
+                Vector3 probe = eye;
+                probe.y += step;
+
+                if (!worldManager.TryGetFluidFamilyAt(probe, out _))
+                    return Mathf.Min(Mathf.Floor(highestFluidY) + 1.0f - eye.y, FogDepthRampMeters);
+
+                highestFluidY = probe.y;
+            }
+
+            return FogDepthRampMeters;
         }
 
         void ApplyCameraClear()

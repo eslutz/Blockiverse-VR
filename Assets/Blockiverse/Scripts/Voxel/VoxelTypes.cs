@@ -77,7 +77,8 @@ namespace Blockiverse.Voxel
             int emissiveLight = 0,
             BlockHardnessClass hardnessClass = BlockHardnessClass.Soft,
             int harvestTierMin = 0,
-            float hardness = -1f)
+            float hardness = -1f,
+            bool? occludes = null)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -97,6 +98,7 @@ namespace Blockiverse.Voxel
             Category = category;
             IsSolid = isSolid;
             IsRenderable = isRenderable;
+            Occludes = occludes ?? isSolid;
             EmissiveLight = emissiveLight;
             HardnessClass = hardnessClass;
             HarvestTierMin = harvestTierMin;
@@ -123,6 +125,7 @@ namespace Blockiverse.Voxel
         public string Name { get; }
         public BlockCategory Category { get; }
         public bool IsSolid { get; }
+        public bool Occludes { get; }
         public bool IsRenderable { get; }
         public int EmissiveLight { get; }
         public BlockHardnessClass HardnessClass { get; }
@@ -264,7 +267,7 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(Graystone,           "graystone",          "Graystone",            BlockCategory.Terrain,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium, harvestTierMin: 1));
             registry.Register(new BlockDefinition(BranchwoodLog,       "branchwood_log",     "Branchwood Log",       BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
             registry.Register(new BlockDefinition(SmoothBranchwood,    "smooth_branchwood",  "Smooth Branchwood",    BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Medium));
-            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft));
+            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, occludes: false));
             // Natural cave light, emissive 7 (voxel_world_environment_effects.md §5.3, voxel_survival_ruleset.md §12.1).
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3, emissiveLight: 7));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));
