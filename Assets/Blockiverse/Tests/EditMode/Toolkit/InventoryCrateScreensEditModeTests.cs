@@ -690,5 +690,62 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(menu.Router.ActiveScreen.ScreenId, Is.Not.EqualTo(MenuActions.StationCrateScreen),
                 "Close must pop the crate route via MenuController.CloseStationCrateScreen.");
         }
+
+        [Test]
+        public void ElementCountMatchesTheAuthoritativeSharedCrateSlotCount()
+        {
+            // The regression this guards: CrateSlotElementCount was hard-coded to 4 while the
+            // real shared crate (MultiplayerSurvivalSync's authoritative SharedCrateInventory)
+            // has always had 12. Deposits into slots 4-11 were stored, valid, and permanently
+            // unreachable through the only crate UI (Codex review, PR #344). Tying the constant
+            // to the REAL inventory's SlotCount, rather than to a second hard-coded number, means
+            // this cannot silently drift out of sync again in either direction.
+            MultiplayerSurvivalSync sync = CreateSurvivalSync();
+
+            Assert.That(CrateScreenController.CrateSlotElementCount,
+                Is.EqualTo(sync.SharedCrateInventory.SlotCount));
+        }
+
+        [Test]
+        public void EveryDeclaredSlotButtonExistsInTheDocumentAndIsWired()
+        {
+            // Require<Button> fails allFound for any missing element, so this is what would have
+            // caught the mismatch immediately: CrateSlotElementCount at 12 against a UXML that
+            // still only declared bv-crate-slot-1..4 would fail attachment outright, loudly,
+            // rather than leaving slots quietly unreachable.
+            CrateScreenController controller = CreateAttachedController(out VisualElement root);
+
+            for (int i = 1; i <= CrateScreenController.CrateSlotElementCount; i++)
+            {
+                Assert.That(root.Q<Button>("bv-crate-slot-" + i), Is.Not.Null,
+                    $"bv-crate-slot-{i} is missing from CrateScreen.uxml.");
+            }
+
+            Assert.That(controller.IsBound, Is.True);
+        }
+
+        [Test]
+        public void AStackInTheLastSlotIsVisibleAndWithdrawable()
+        {
+            // The exact failure Codex described, reproduced end to end: something lands past
+            // slot 4 and the player needs to get it back. Slot index 11 is the crate's LAST slot
+            // (12 slots, zero-based) -- the one furthest from ever being reachable under the old
+            // 4-element limit.
+            MultiplayerSurvivalSync sync = CreateSurvivalSync();
+            var stack = new ItemStack(ItemId.BranchwoodLog, 3);
+            sync.SharedCrateInventory.SetSlot(11, stack);
+
+            CrateScreenController controller = CreateAttachedController(out VisualElement root);
+            controller.Bind(sync);
+
+            Assert.That(root.Q<Button>("bv-crate-slot-12").text, Is.EqualTo(StackText(ItemId.BranchwoodLog, 3)),
+                "Slot 12 must render the stack deposited there.");
+
+            SurvivalCommandResult result = controller.WithdrawSlot(11);
+
+            Assert.That(result.Accepted, Is.True, result.FailureReason.ToString());
+            Assert.That(sync.SharedCrateInventory.GetSlot(11).IsEmpty, Is.True);
+            Assert.That(sync.LocalInventory.CountOf(ItemId.BranchwoodLog), Is.EqualTo(3));
+        }
     }
 }

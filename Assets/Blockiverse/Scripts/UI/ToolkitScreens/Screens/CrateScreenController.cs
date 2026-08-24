@@ -20,11 +20,27 @@ namespace Blockiverse.UI
     // the success cue), but the CrateChanged event fires ONLY on Accepted; later client-side
     // resolution arrives as SharedCrateChanged/LocalInventoryChanged snapshots and the
     // screen simply repaints from the mirrors.
+    // Height is 760 (the prior measured fit for 4 slots, one grid row) plus 456 for the two
+    // extra rows twelve slots now wrap into: .crate-slot is a fixed 220px box with 4px top/bottom
+    // margins (CrateScreen.uss), so each additional row is exactly 228px — a genuine per-row
+    // constant, not the "counting rows" derivation this project's own sizing history warns is
+    // unreliable (that trap is about guessing the OTHER things a panel spends height on; here
+    // only the grid grew, and its row height comes straight from the CSS, not from an assumption).
+    // NOT yet re-verified with Blockiverse/UI Toolkit/Report Screen Content Fit (no live Play-mode
+    // Editor session was available while making this fix) -- if it reads with more than ~24px of
+    // slack or scrolls, run that pass and correct this constant to the measured value.
     [UiToolkitScreen(MenuActions.StationCrateScreen, "Assets/Blockiverse/UI/Documents/CrateScreen.uxml",
-        1000, 760, UiToolkitPlacementProfile.Menu)]
+        1000, 1216, UiToolkitPlacementProfile.Menu)]
     public sealed class CrateScreenController : UiToolkitScreenController
     {
-        public const int CrateSlotElementCount = 4;
+        // Must match MultiplayerSurvivalSync's authoritative shared-crate slot count (12). That
+        // constant is private to Networking and this UI never should have hard-coded a smaller
+        // number against it in the first place: this screen was ported from the uGUI panel at 4
+        // slots and no paging, so once deposits filled slots 0-3 anything landing in 4-11 was
+        // stored, valid, and permanently unreachable through the only crate UI (Codex review,
+        // PR #344). Refresh already renders defensively against the real crate.SlotCount, so a
+        // mismatch in either direction degrades gracefully -- but the two must agree in practice.
+        public const int CrateSlotElementCount = 12;
 
         // Table keys shared with the uGUI panel — the copy contract. Values must match
         // BlockiverseLocalization.Keys verbatim; duplicating the strings here keeps this

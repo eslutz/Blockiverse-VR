@@ -6,6 +6,13 @@
         through MultiplayerSurvivalSync.TrySubmitCrateDeposit/Withdraw — the crate is never
         mutated locally on a client.
 
+        Twelve slots, matching MultiplayerSurvivalSync.SharedCrateSlotCount exactly (Codex review,
+        PR #344 — the uGUI panel this was ported from also only exposed 4 with no paging, so
+        anything a deposit pushed into slots 4-11 was stored but permanently unreachable through
+        the only crate UI). The grid already wraps at four per row inside the ~946px content
+        width (CrateScreen.uss), so this is three rows instead of one; the screen sizes itself to
+        that measured content rather than needing a fixed height here.
+
         The title and deposit labels have no existing table keys ("Shared Crate" and
         "Deposit Held" were hardcoded scene text in the uGUI panel), so CrateScreenController
         renders them at runtime via UiText against the requested ui.generated.crate.* entries
@@ -22,6 +29,14 @@
                 <engine:Button name="bv-crate-slot-2" class="hs-button crate-slot" />
                 <engine:Button name="bv-crate-slot-3" class="hs-button crate-slot" />
                 <engine:Button name="bv-crate-slot-4" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-5" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-6" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-7" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-8" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-9" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-10" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-11" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-12" class="hs-button crate-slot" />
             </engine:VisualElement>
             <engine:Button name="bv-deposit" class="hs-button hs-button--primary crate-deposit" />
         </engine:VisualElement>
