@@ -154,13 +154,58 @@ Note that action-list menus are already safe: `MenuAction.Label` resolves lazily
 
 ### 3.2 UI Toolkit does not read `TMP_Settings.fallbackFontAssets`
 
+**STATUS (2026-08-24): discovered in Phase 6 anyway, and now live with no mitigation.** This
+section said the gap "must not be discovered in Phase 6" — Phase 6 (the uGUI deletion, `ac5468a7`)
+landed on `feature/ui-toolkit-migration` without it being resolved, and the uGUI fallback that used
+to render this text correctly no longer exists to fall back to. Flagged again on review of PR #344
+(Codex, 2026-08-24, P2) against `NewWorldScreenController`/`LanMultiplayerScreenController`: a
+world or LAN server name containing Arabic, CJK, Thai, or Devanagari characters renders as tofu on
+the only remaining menu backend, and nothing currently sanitizes or restricts that input — verified
+by grepping `NewWorldScreenController.cs`/`LanMultiplayerScreenController.cs` for validation and
+finding none. This is a real, currently-shipping regression versus the deleted uGUI screens, not a
+theoretical one.
+
 `BlockiverseTmpFontFallbackBootstrapper.cs` builds dynamic `TMP_FontAsset` fallbacks from OS fonts
 (Noto CJK, Arabic, Thai, Devanagari …) into `TMP_Settings.fallbackFontAssets`. UI Toolkit has its
 own font pipeline and does not consult that list, so a migrated screen renders non-Latin text as
-tofu even though the uGUI screen beside it renders it correctly.
+tofu even though the uGUI screen beside it used to render it correctly.
 
-This needs its own font-fallback story before any screen displaying user-generated or localized
-text ships. It is out of scope for Phase 1 and must not be discovered in Phase 6.
+**Why this was not fixed blind in the same PR (2026-08-24 investigation, no live Editor session
+available):**
+
+- `PanelSettings.textSettings` (type `PanelTextSettings`) is confirmed public and settable —
+  Unity's bundled 6000.5 ScriptReference documents it directly, and the project already has one
+  shared instance, `Assets/Blockiverse/UI/Settings/MenuWorldSpacePanelSettings.asset`.
+- The fallback-font list itself is **not** part of `PanelTextSettings`'s public scripting API in
+  6000.5. `UnityEngine.UIElementsModule.dll` contains a `get_fallbackOSFontAssets` accessor, but
+  the ScriptReference index for `UIElements.PanelTextSettings` lists no public property beyond
+  `hideFlags`/`name` inherited from `Object` — it is Inspector/serialization-layer surface, not a
+  documented runtime API. Wiring it therefore needs either `SerializedProperty` field-poking with
+  an exact underlying field name that could not be confirmed without a live Editor session to test
+  against, or hand-authoring a persisted `PanelTextSettings` asset through the Inspector.
+- The dynamic-OS-font trick `BlockiverseTmpFontFallbackBootstrapper` uses
+  (`Font.CreateDynamicFontFromOSFont`) cannot simply be reused for a *persisted* `PanelTextSettings`
+  asset even if the field name were confirmed: a dynamically created `Font` is a transient runtime
+  object with no asset path, and is not something `AssetDatabase.SaveAssets()` can serialize into
+  the `.asset` file. The TMP path only works because it runs fresh every session from a
+  `MonoBehaviour.Awake()`, never persisted.
+- That same OS-font-name list's coverage on **Quest's Android image is itself unverified.** The
+  existing TMP bootstrapper's own ordering comment — "Android/Quest families first; desktop
+  families help editor validation" — was written as an assumption, not something confirmed on
+  device. A UI Toolkit fix built on the same names would inherit that same unverified assumption,
+  which is a second thing to get wrong on top of the API uncertainty above.
+
+**What actually closing this needs**, in one pass with live Editor and device access: (1) confirm
+the real serialized field name and type for `PanelTextSettings`'s fallback list via
+`SerializedObject` inspection in a running Editor; (2) decide bundling real Noto subset `.ttf`
+files (adds binary weight and OFL licence tracking, alongside Barlow/Zilla Slab, but works
+regardless of what fonts ship on a given Quest OS image) versus the OS-dynamic-font approach (no
+new assets, but unverified device coverage) — bundling is very likely the more defensible choice
+given the device-coverage unknown; (3) build and verify on a real Quest that a world/server name
+containing each target script (Arabic, CJK, Thai, Devanagari) renders a glyph, not tofu.
+
+Out of scope for Phase 1. Was supposed to be in scope no later than Phase 6; is not, and is now a
+live gap rather than a theoretical one.
 
 ---
 
