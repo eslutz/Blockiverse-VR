@@ -32,6 +32,22 @@ namespace Blockiverse.UI.Toolkit
             return entry?.Value ?? key;
         }
 
+        // TRANSITIONAL (dies at the uGUI cutover): positional formatting over the migrated
+        // legacy entries, byte-parity with the uGUI shim's Format. The migrated ui.status.*
+        // entries are Smart-off positional patterns; re-authoring ~60 of them as named-Smart
+        // twins while both backends ship the same copy would double the table for the
+        // coexistence window. New entries still use named Smart arguments via Get(key, args);
+        // identifiers must be pre-stringified invariant by the caller, same as everywhere.
+        public static string Format(string key, params object[] args)
+        {
+            StringTableEntry entry = ResolveEntry(key);
+
+            if (entry == null)
+                return key;
+
+            return string.Format(System.Globalization.CultureInfo.InvariantCulture, entry.Value, args);
+        }
+
         public static string Get(string key, params (string name, object value)[] args)
         {
             StringTableEntry entry = ResolveEntry(key);

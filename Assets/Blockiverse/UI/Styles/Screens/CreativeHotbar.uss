@@ -1,0 +1,9 @@
+/*
+ * CreativeHotbar — layout only. The header stacks the bound "Blocks" title over the
+ * dynamic selected-block line; the slot list is a plain vertical ScrollView of hs-buttons
+ * rendered by the controller. No colour, spacing step or type size is introduced here.
+ */
+
+.ch-selected {
+    margin-top: var(--hs-space-1);
+}

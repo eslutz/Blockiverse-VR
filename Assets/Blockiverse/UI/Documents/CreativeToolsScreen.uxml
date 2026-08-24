@@ -1,0 +1,148 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Creative Tools screen (MenuActions.CreativeToolsScreen, migration matrix row 18;
+        voxel_creative_ruleset §12), UI Toolkit port of BlockiverseCreativeToolsPanel.
+        Structure only: presentation comes from Tokens.uss/Base.uss plus CreativeToolsScreen.uss.
+
+        Dynamic text carries no literal and no LocalizedString binding — a binding would rewrite
+        it behind the controller's back on locale change: the corners readout, the weather line,
+        the status footer (seeded at runtime from ui.generated.creative_tools.initial_status),
+        and the two section headings (their ui.generated.creative_tools.region_operations /
+        .environment keys do not exist yet, so CreativeToolsScreenController writes them at
+        runtime via UiText until the entries land centrally).
+
+        Button preview text tracks the English of the bound entries byte-for-byte — that is why
+        the undo/redo buttons read "Undo Edit"/"Redo Edit" rather than the uGUI panel's bare
+        authored labels: the key's English is the contract, the uGUI literal was bake-time text.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-tools-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" text="Creative Tools" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.title" />
+                </Bindings>
+            </engine:Label>
+            <engine:Button name="bv-close" text="Close" class="hs-button">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-tools-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-corners" picking-mode="Ignore" class="hs-body hs-figures" />
+
+            <engine:VisualElement name="bv-corner-row" class="ctl-row" picking-mode="Ignore">
+                <engine:Button name="bv-set-a" text="Set A" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.set_a" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-set-b" text="Set B" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.set_b" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-pick" text="Pick Block" class="hs-button ctl-command ctl-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.pick_block" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:Label name="bv-region-heading" picking-mode="Ignore" class="hs-heading" />
+
+            <engine:VisualElement name="bv-region-row" class="ctl-row" picking-mode="Ignore">
+                <engine:Button name="bv-fill" text="Fill" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.fill" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-replace" text="Replace" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.replace" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-delete" text="Delete" class="hs-button hs-button--danger ctl-command ctl-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.delete" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-clipboard-row" class="ctl-row" picking-mode="Ignore">
+                <engine:Button name="bv-copy" text="Copy" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.copy" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-paste" text="Paste" class="hs-button ctl-command ctl-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.paste" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-history-row" class="ctl-row" picking-mode="Ignore">
+                <engine:Button name="bv-undo" text="Undo Edit" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.undo" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-redo" text="Redo Edit" class="hs-button ctl-command ctl-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.redo" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-spawner-row" class="ctl-row" picking-mode="Ignore">
+                <engine:Button name="bv-spawn-tree" text="Spawn Tree" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.spawn_tree" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-spawn-ruin" text="Spawn Ruin" class="hs-button ctl-command ctl-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.spawn_ruin" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:Label name="bv-environment-heading" picking-mode="Ignore" class="hs-heading" />
+
+            <engine:Label name="bv-time-of-day-label" text="Time of Day" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.time_of_day" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-time-of-day" low-value="0" high-value="1" value="0.5" show-input-field="false" class="hs-field" />
+
+            <engine:Label name="bv-day-speed-label" text="Day Speed" picking-mode="Ignore" class="hs-secondary">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.day_speed" />
+                </Bindings>
+            </engine:Label>
+            <engine:Slider name="bv-day-speed" low-value="0" high-value="10" value="1" show-input-field="false" class="hs-field" />
+
+            <engine:VisualElement name="bv-cycle-row" class="ctl-row" picking-mode="Ignore">
+                <engine:Button name="bv-toggle-cycle" text="Pause / Resume Cycle" class="hs-button ctl-command">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.toggle_cycle" />
+                    </Bindings>
+                </engine:Button>
+                <engine:Button name="bv-cycle-weather" text="Cycle Weather" class="hs-button ctl-command ctl-command--last">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.creative_tools.cycle_weather" />
+                    </Bindings>
+                </engine:Button>
+            </engine:VisualElement>
+
+            <engine:Label name="bv-weather" picking-mode="Ignore" class="hs-secondary" />
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-tools-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

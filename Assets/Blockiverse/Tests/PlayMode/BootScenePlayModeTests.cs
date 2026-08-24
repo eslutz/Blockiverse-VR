@@ -4,12 +4,11 @@ using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.UI;
 using Blockiverse.VR;
-using TMPro;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.UI;
@@ -35,93 +34,100 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(rig.GetComponent(markerType), Is.Not.Null);
         }
 
+        // The only test anywhere that proves the GENERATED Boot scene's HUD family is bound and
+        // rendering real values end to end. Every UI Toolkit test under Tests/EditMode/Toolkit
+        // builds its VisualElement tree by hand, so a HUD that generates but never binds — which
+        // presents as a perfectly healthy blank panel — would ship green without this. Retargeted
+        // from the uGUI SurvivalInventoryPanel/SurvivalCraftingPanel/SurvivalHealthPanel version;
+        // the six text oracles are its oracles, unchanged.
         [UnityTest]
-        public IEnumerator BootSceneShowsBoundSurvivalHudPanels()
+        public IEnumerator BootSceneShowsBoundSurvivalHudScreens()
         {
             yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
+            yield return null;
 
-            // Bind through the shared Survival HUD root: the menu rework added routed
-            // per-panel "Inventory Panel"/"Crafting Panel" canvases, so a global
-            // FindFirstObjectByType can resolve panels from different canvases.
-            GameObject hudRoot = FindGameObjectIncludingInactive(BlockiverseMenuController.SurvivalHudName);
-            Assert.That(hudRoot, Is.Not.Null);
-            SurvivalInventoryPanel inventoryPanel = hudRoot.GetComponentInChildren<SurvivalInventoryPanel>(true);
-            SurvivalCraftingPanel craftingPanel = hudRoot.GetComponentInChildren<SurvivalCraftingPanel>(true);
-            SurvivalHealthPanel healthPanel = hudRoot.GetComponentInChildren<SurvivalHealthPanel>(true);
+            GameplayHudController hud = FindScreenIncludingInactive<GameplayHudController>();
+            // The stats readout is a separate panel since the HUD split (action bar low, stats
+            // top-right). It generates from its own [UiToolkitScreen] declaration, so a document
+            // that failed to generate or bind would otherwise go unnoticed — the action bar would
+            // still be there and the test would still pass.
+            GameplayStatsController stats = FindScreenIncludingInactive<GameplayStatsController>();
+            InventoryScreenController inventoryScreen = FindScreenIncludingInactive<InventoryScreenController>();
+            CraftingScreenController craftingScreen = FindScreenIncludingInactive<CraftingScreenController>();
 
-            Assert.That(inventoryPanel, Is.Not.Null);
-            Assert.That(craftingPanel, Is.Not.Null);
-            Assert.That(healthPanel, Is.Not.Null);
+            Assert.That(hud, Is.Not.Null);
+            Assert.That(stats, Is.Not.Null, "The gameplay stats panel was not generated into the Boot scene.");
+            Assert.That(inventoryScreen, Is.Not.Null);
+            Assert.That(craftingScreen, Is.Not.Null);
 
-            Canvas canvas = inventoryPanel.GetComponentInParent<Canvas>();
-            Assert.That(canvas, Is.Not.Null);
-            Assert.That(canvas.enabled, Is.False, "The gameplay HUD starts hidden while the title/menu route is active.");
-            Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
-            Assert.That(craftingPanel.GetComponentInParent<Canvas>(), Is.SameAs(canvas));
-            Assert.That(healthPanel.GetComponentInParent<Canvas>(), Is.SameAs(canvas));
+            Assert.That(hud.IsBound, Is.True, "The generated gameplay HUD did not find its elements.");
+            Assert.That(stats.IsBound, Is.True, "The generated gameplay stats panel did not find its elements.");
+            Assert.That(inventoryScreen.IsBound, Is.True, "The generated inventory screen did not find its elements.");
+            Assert.That(craftingScreen.IsBound, Is.True, "The generated crafting screen did not find its elements.");
 
-            AssertPanelContainsText(inventoryPanel.transform, "Hotbar 1 /");
-            AssertPanelContainsText(inventoryPanel.transform, "Empty");
-            AssertPanelContainsText(craftingPanel.transform, "Work Plank x6");
-            AssertPanelContainsText(craftingPanel.transform, "Ready");
-            AssertPanelContainsText(healthPanel.transform, "100 / 100");
-            AssertPanelContainsText(healthPanel.transform, "Stable");
+            Assert.That(hud.IsVisible, Is.False, "The gameplay HUD starts hidden while the title/menu route is active.");
+
+            // The inventory screen binds at the routed-visibility boundary, not in Awake: screens
+            // hide by collapsing their root rather than disabling the component, so OnEnable is
+            // not an "opened" signal. It therefore holds nothing until it is shown.
+            inventoryScreen.SetVisible(true, true);
+
+            AssertScreenRendersText(inventoryScreen, "Hotbar 1 /");
+            AssertScreenRendersText(inventoryScreen, "Empty");
+            AssertScreenRendersText(craftingScreen, "Work Plank x6");
+            AssertScreenRendersText(craftingScreen, "Ready");
+            // The ratio renders on the stats panel now, not the action bar.
+            AssertScreenRendersText(stats, "100 / 100");
+            AssertScreenRendersText(stats, "Stable");
         }
+
+        static T FindScreenIncludingInactive<T>() where T : UiToolkitScreenController =>
+            UnityEngine.Object.FindFirstObjectByType<T>(FindObjectsInactive.Include);
 
         [UnityTest]
         public IEnumerator BootSceneShowsDismissibleControllerMappingPopup()
         {
-            string key = BlockiverseWorldSpacePanelPresenter.ControllerMappingPopupSeenPrefKey;
+            string key = BlockiverseMenuController.ControllerMappingPopupSeenPrefKey;
             PlayerPrefs.DeleteKey(key);
 
             try
             {
                 yield return BlockiversePlayModeSceneTestUtility.LoadSceneSingle(BootSceneName);
 
-                GameObject popup = FindGameObjectIncludingInactive("Controller Mapping Popup");
-                Assert.That(popup, Is.Not.Null);
-                GameObject titleMenu = FindGameObjectIncludingInactive("Title Menu");
-                Assert.That(titleMenu, Is.Not.Null);
+                // The first-run prompt is the toolkit ControllerMappingScreen. This test carried
+                // a uGUI half through the coexistence window (the fallback popup had to exist and
+                // stay hidden); that half went with the uGUI menus.
+                BlockiverseMenuController menuController =
+                    UnityEngine.Object.FindFirstObjectByType<BlockiverseMenuController>(FindObjectsInactive.Include);
+                Assert.That(menuController, Is.Not.Null);
+                Assert.That(menuController.HasFrontend, Is.True,
+                    "The generated Boot scene must register the UI Toolkit host as the menu frontend.");
+                Assert.That(menuController.IsActiveScreen(MenuActions.ControllerMappingScreen), Is.True,
+                    "First run must route to the controller-mapping screen.");
 
-                BlockiverseWorldSpacePanelPresenter presenter = popup.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-                Assert.That(presenter, Is.Not.Null);
-                Assert.That(presenter.IsVisible, Is.True);
-                Assert.That(presenter.ShowOnStart, Is.False);
-                // Since the world-space menu pivot, routed menus hide by disabling
-                // their Canvas via the presenter; the GameObject stays active.
-                BlockiverseWorldSpacePanelPresenter titlePresenter =
-                    titleMenu.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-                Assert.That(titlePresenter, Is.Not.Null);
-                Assert.That(titlePresenter.IsVisible, Is.False,
-                    "The title menu must wait until the first-run controller map is dismissed.");
+                UiToolkitScreenController mappingScreen = null;
+                foreach (UiToolkitScreenController screen in UnityEngine.Object.FindObjectsByType<UiToolkitScreenController>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (screen.ScreenId == MenuActions.ControllerMappingScreen)
+                        mappingScreen = screen;
+                }
 
-                Button closeButton = popup.transform.Find("Panel/Close Button")?.GetComponent<Button>();
-                Assert.That(closeButton, Is.Not.Null);
+                Assert.That(mappingScreen, Is.Not.Null, "The toolkit controller-mapping screen is missing from the scene.");
+                Assert.That(mappingScreen.IsVisible, Is.True,
+                    "The toolkit controller-mapping screen must be the visible first-run surface.");
 
-                closeButton.onClick.Invoke();
+                menuController.CloseControllerMappingScreen();
                 yield return null;
 
-                Assert.That(presenter.IsVisible, Is.False);
-                Assert.That(titlePresenter.IsVisible, Is.True);
+                Assert.That(mappingScreen.IsVisible, Is.False);
+                Assert.That(menuController.IsActiveScreen(MenuActions.TitleScreen), Is.True);
                 Assert.That(PlayerPrefs.GetInt(key, 0), Is.EqualTo(1));
             }
             finally
             {
                 PlayerPrefs.DeleteKey(key);
             }
-        }
-
-        static GameObject FindGameObjectIncludingInactive(string name)
-        {
-            foreach (Transform transform in UnityEngine.Object.FindObjectsByType<Transform>(
-                FindObjectsInactive.Include,
-                FindObjectsSortMode.None))
-            {
-                if (transform.name == name)
-                    return transform.gameObject;
-            }
-
-            return null;
         }
 
         [UnityTest]
@@ -149,23 +155,17 @@ namespace Blockiverse.Tests.PlayMode
                 BlockiverseInputActionNames.UiScroll);
             // Submit and Navigate must stay unbound: the ray interactor already turns UI Press
             // into a pointer click, and routing the same action through Submit fired the
-            // auto-selected Button twice per trigger pull (selector arrows advanced two options).
+            // auto-selected button twice per trigger pull (selector arrows advanced two options).
+            // Found on uGUI, but the rule outlived it — UI Toolkit's panel event handler
+            // dispatches submit the same way, so a bound Submit still double-fires.
             Assert.That(uiInputModule.submitAction, Is.Null,
                 "UI Press must not also drive Submit or every click double-fires.");
             Assert.That(uiInputModule.navigateAction, Is.Null,
-                "UI Scroll must not move uGUI selection under the ray.");
+                "UI Scroll must not move focus-based selection under the ray.");
             EventSystem eventSystem = uiInputModule.GetComponent<EventSystem>();
             Assert.That(eventSystem, Is.Not.Null);
             Assert.That(eventSystem.sendNavigationEvents, Is.False,
                 "Ray-driven UI must not dispatch navigation/submit events.");
-
-            // World-space menus are raycast by the tracked-device raycaster, not the screen raycaster.
-            SurvivalInventoryPanel inventoryPanel =
-                UnityEngine.Object.FindFirstObjectByType<SurvivalInventoryPanel>(FindObjectsInactive.Include);
-            Assert.That(inventoryPanel, Is.Not.Null);
-            Canvas hudCanvas = inventoryPanel.GetComponentInParent<Canvas>();
-            Assert.That(hudCanvas.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null);
-            Assert.That(hudCanvas.GetComponent<GraphicRaycaster>(), Is.Null);
 
             // Both controllers carry UI/block rays; the active dominant/tool hand owns visibility.
             GameObject rig = GameObject.Find(BlockiverseProject.XrRigRootName);
@@ -197,16 +197,25 @@ namespace Blockiverse.Tests.PlayMode
             Assert.That(reference.action.name, Is.EqualTo(expectedAction));
         }
 
-        static void AssertPanelContainsText(Transform panel, string expectedText)
+        // Walks the screen's live element tree rather than its controller state, so a screen whose
+        // Refresh silently skipped a label cannot pass. Label and Button both derive from
+        // TextElement, which is why the query is on the base type.
+        static void AssertScreenRendersText(UiToolkitScreenController screen, string expectedText)
         {
-            Text[] labels = panel.GetComponentsInChildren<Text>(includeInactive: true);
-            TMP_Text[] tmpLabels = panel.GetComponentsInChildren<TMP_Text>(includeInactive: true);
+            Assert.That(screen.Root, Is.Not.Null, $"{screen.GetType().Name} has no attached element tree.");
 
-            Assert.That(
-                Array.Exists(labels, label => label != null && label.text.Contains(expectedText))
-                    || Array.Exists(tmpLabels, label => label != null && label.text.Contains(expectedText)),
-                Is.True,
-                $"Expected panel {panel.name} to contain text '{expectedText}'.");
+            bool found = false;
+            foreach (TextElement element in screen.Root.Query<TextElement>().ToList())
+            {
+                if (element.text != null && element.text.Contains(expectedText))
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            Assert.That(found, Is.True,
+                $"Expected {screen.GetType().Name} to render text '{expectedText}'.");
         }
 
         [UnityTearDown]

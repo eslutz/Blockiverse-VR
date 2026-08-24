@@ -1,0 +1,64 @@
+/*
+ * Catalog browser — layout only. Every colour, spacing step, font size and focus treatment
+ * resolves from Tokens.uss through Base.uss; this sheet arranges the Hearthstone pieces for a
+ * 1000x760 panel and adds nothing to the design system.
+ */
+
+#bv-catalog-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#bv-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+#bv-close {
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}
+
+.cat-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Fixed-width cycle button so the category name column stays put while its text changes. */
+.cat-category-button {
+    width: 260px;
+    flex-shrink: 0;
+}
+
+.cat-category-value {
+    flex-grow: 1;
+    margin-left: var(--hs-space-3);
+}
+
+/* 3x4 pick grid. Unused entries are visibility-hidden by the controller, never collapsed, so
+   the grid geometry is identical on every page (same fixed-position rationale as the uGUI
+   panel's absolute grid). */
+.cat-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    margin-top: var(--hs-space-2);
+}
+
+.cat-entry {
+    width: 32%;
+    -unity-text-align: middle-center;
+}
+
+/* Back/next glyph buttons: square-ish targets at the 64px control floor. */
+.cat-page-button {
+    width: 96px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+}
+
+#bv-page-label {
+    flex-grow: 1;
+    -unity-text-align: middle-center;
+}

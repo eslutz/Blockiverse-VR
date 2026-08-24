@@ -1,0 +1,43 @@
+/*
+ * GameplayHud — layout only. A 590×190 strip: health ratio + bar on one row, the vitals
+ * state line under it, and the four panel-open buttons sharing the bottom row. Colours,
+ * spacing steps and type sizes all resolve from Tokens/Base; the bar fill uses the moss
+ * signal token (confirmed/health) rather than introducing a colour.
+ */
+
+.gh-health-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.gh-health-ratio {
+    min-width: 130px;
+}
+
+.gh-health-bar {
+    flex-grow: 1;
+    height: 20px;
+    margin-left: var(--hs-space-3);
+}
+
+.gh-health-fill {
+    background-color: var(--hs-moss);
+    height: 100%;
+    width: 0%;
+}
+
+.gh-vitals-state {
+    margin-top: var(--hs-space-1);
+}
+
+.gh-actions {
+    flex-direction: row;
+    margin-top: var(--hs-space-1);
+}
+
+.gh-action {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-left: var(--hs-space-1);
+    margin-right: var(--hs-space-1);
+}

@@ -1,0 +1,59 @@
+/*
+ * LAN multiplayer screen — layout only. Every colour, spacing step, font size and focus
+ * treatment resolves from Tokens.uss through Base.uss; this sheet arranges the Hearthstone
+ * pieces for a 1100x900 panel and adds nothing to the design system.
+ */
+
+#bv-lan-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#bv-lan-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+#bv-lan-close {
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}
+
+.lan-row {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+/* Address grows, the optional server password keeps a fixed share of the row — one row keeps
+   the panel from reflowing for the common LAN case where the password stays empty (same
+   layout rationale as the uGUI panel). */
+.lan-address {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.lan-secret {
+    width: 30%;
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}
+
+.lan-command {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-right: var(--hs-space-3);
+}
+
+.lan-command--last {
+    margin-right: 0;
+}
+
+/* Discovery entries read as a list: host name, address:port and player counts line up left. */
+.lan-discovery-slot {
+    -unity-text-align: middle-left;
+}
+
+#bv-lan-status {
+    flex-grow: 1;
+}

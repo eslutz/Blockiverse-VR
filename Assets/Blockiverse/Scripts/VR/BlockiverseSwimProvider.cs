@@ -197,12 +197,26 @@ namespace Blockiverse.VR
             // Depth-based: one block of water is walkable whoever you are. See the remarks on the
             // overload -- the capsule-fraction body sample put every default-height player in
             // Surfaced while ankle deep, which locks gravity off in a puddle.
+            // Captured BEFORE SetState, because the plunge below needs the speed the player
+            // arrived with and this is the last frame gravity still owns them.
+            bool wasSwimming = IsSwimming;
+            float arrivalVerticalVelocity = ReadControllerVerticalVelocity();
+
             SetState(BlockiverseSwimMotion.ResolveState(Submersion, lastFeetCellY));
 
             if (!IsSwimming)
             {
                 ExitSwimming();
                 return;
+            }
+
+            // ENTRY PLUNGE, seeded once on the frame swimming takes over. verticalVelocity is reset
+            // on exit, so without this a fall ends in a standing start at the water line and the
+            // player stops dead on the surface -- see ResolveEntryPlungeVelocity.
+            if (!wasSwimming)
+            {
+                verticalVelocity = BlockiverseSwimMotion.ResolveEntryPlungeVelocity(
+                    arrivalVerticalVelocity, Submersion.Family);
             }
 
             AcquireGravityLock();
@@ -217,9 +231,30 @@ namespace Blockiverse.VR
                 riseHeld: ReadRiseHeld(),
                 sinkHeld: ReadSinkHeld(),
                 passiveSinkEnabled: PassiveSinkEnabled,
+                bodySubmerged: Submersion.BodySubmerged,
                 family: Submersion.Family);
 
-            verticalVelocity = BlockiverseSwimMotion.AdvanceVerticalVelocity(verticalVelocity, target, Time.deltaTime);
+            // Stop the rise at the water line rather than at the player's feet. Without this the
+            // ascent runs until the FEET clear the fluid, which leaves the head over a metre above
+            // the surface — see ClampRiseToSurface. Climb-out already returned above, so a player
+            // at a bank is unaffected.
+            if (TryGetBodySampleWorldY(out float bodySampleWorldY))
+            {
+                target = BlockiverseSwimMotion.ClampRiseToSurface(
+                    target,
+                    bodySampleWorldY,
+                    Submersion.SurfaceCellY + 1.0f,
+                    Time.deltaTime);
+            }
+
+            // Gravity while the body is still falling in, the swim ramp once buoyancy owns it.
+            // Without this the entry accelerated at the swim rate and read as being lowered
+            // rather than dropping — see EntryFallAccelerationMetersPerSecondSquared.
+            verticalVelocity = BlockiverseSwimMotion.AdvanceVerticalVelocity(
+                verticalVelocity,
+                target,
+                Time.deltaTime,
+                BlockiverseSwimMotion.VerticalAccelerationFor(Submersion.BodySubmerged));
 
             // Re-requested every frame, and deliberately NOT gated on the return value: the
             // mediator answers false once this provider is already Moving, so treating that as
@@ -244,6 +279,18 @@ namespace Blockiverse.VR
             if (locomotionState != LocomotionState.Moving)
                 return;
 
+            // Any vertical motion vignettes, INCLUDING passive sink — deliberately.
+            //
+            // I briefly changed this to player-driven motion only, on the theory that the vignette
+            // staying engaged for a whole dive was half of why Eric found underwater visibility too
+            // restrictive (the fog being the other half). PassiveDescentEngagesTheComfortVignette...
+            // caught it, and its reasoning is better than mine was: passive descent is motion the
+            // player did NOT ask for, which is precisely the case a comfort vignette exists for,
+            // and it is a large part of why defaulting to negative buoyancy is defensible at all.
+            //
+            // So the restricted view underwater is partly by design, and trading it away is a
+            // comfort decision rather than a bug fix. A player who wants the field of view back
+            // already has the switch: BlockiverseComfortSettings.SwimVignetteBoost.
             UpdateVignette(true);
             transformation.motion = new Vector3(0.0f, verticalVelocity * Time.deltaTime, 0.0f);
             TryQueueTransformation(transformation);
@@ -359,6 +406,16 @@ namespace Blockiverse.VR
             vignetteEngaged = wanted;
         }
 
+        /// <summary>
+        /// The character controller's vertical velocity from its last move, or zero when there is
+        /// no controller. This is the descent a falling player arrives at the water with.
+        /// </summary>
+        float ReadControllerVerticalVelocity()
+        {
+            CharacterController controller = inputRig != null ? inputRig.CharacterController : null;
+            return controller != null ? controller.velocity.y : 0.0f;
+        }
+
         void ExitSwimming()
         {
             if (State != SwimState.Dry && State != SwimState.Wading)
@@ -435,6 +492,23 @@ namespace Blockiverse.VR
             return ApplyHeadHysteresis(sampled, headTransform != null ? headTransform.position.y : float.MinValue);
         }
 
+        // World-space height of the mid-body submersion sample — the same point Sample() tests, so
+        // the rise clamp and the state machine cannot disagree about where the body is. Taken as a
+        // fraction of the LIVE capsule, because crouch and Use My Real Height both resize it.
+        bool TryGetBodySampleWorldY(out float bodySampleWorldY)
+        {
+            CharacterController controller = inputRig != null ? inputRig.CharacterController : null;
+
+            if (controller == null)
+            {
+                bodySampleWorldY = 0.0f;
+                return false;
+            }
+
+            bodySampleWorldY = controller.bounds.min.y + controller.height * BodySampleCapsuleFraction;
+            return true;
+        }
+
         // Reads the jump ACTION, not jumpProvider.enabled. Jump is gated by locomotion mode, so a
         // teleport-mode player who ends up submerged would otherwise be able to swim down and not
         // up while passive sink pulled them deeper -- an inescapable underwater state in the
@@ -452,7 +526,14 @@ namespace Blockiverse.VR
 
         // Crouch's only meaning underwater is "descend"; the rig skips the capsule shrink and the
         // camera drop while swimming.
-        bool ReadSinkHeld() => inputRig != null && inputRig.CrouchActive;
+        //
+        // Read the button RAW, symmetrically with ReadRiseHeld above. Going through CrouchActive
+        // meant that a player with the crouch-toggle comfort setting on got a latched state a tap
+        // flips, not a hold — so descent stuttered or stalled while ascent, which reads its action
+        // directly, ran continuously. That asymmetry is what Eric felt as "up is much faster than
+        // down", and it is NOT the speeds: the ruleset makes sink 1.2 m/s against rise 1.0 m/s, so
+        // the constants say descent should be the quicker of the two.
+        bool ReadSinkHeld() => inputRig != null && inputRig.CrouchHeldRaw;
 
         void ResolveDependencies()
         {

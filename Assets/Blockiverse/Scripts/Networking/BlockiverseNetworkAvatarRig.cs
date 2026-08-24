@@ -24,6 +24,21 @@ namespace Blockiverse.Networking
         const string CameraOffsetName = "Camera Offset";
         const string LeftControllerName = "Left Controller";
         const string RightControllerName = "Right Controller";
+
+        // The shadow body: a full articulated block body (head, torso, arms, hands, legs) that is
+        // never seen directly — every renderer under it is ShadowsOnly — and exists so the player
+        // casts a body-shaped shadow in BOTH avatar modes (Eric's design, 2026-08-24). The Meta
+        // avatar cannot cast (its shaders have no ShadowCaster pass), and the visible proxy is
+        // just hands in first person; this rig is the one silhouette both modes share.
+        const string ShadowBodyRootName = "Shadow Body";
+        const string ShadowHeadName = "Shadow Head";
+        const string ShadowTorsoName = "Shadow Torso";
+        const string ShadowLeftArmName = "Shadow Left Arm";
+        const string ShadowRightArmName = "Shadow Right Arm";
+        const string ShadowLeftHandName = "Shadow Left Hand";
+        const string ShadowRightHandName = "Shadow Right Hand";
+        const string ShadowLeftLegName = "Shadow Left Leg";
+        const string ShadowRightLegName = "Shadow Right Leg";
         const float TrackingFallbackSearchIntervalSeconds = 1.0f;
 
         static readonly Vector3 DefaultHeadLocalPosition = new(0.0f, 1.62f, 0.0f);
@@ -53,6 +68,22 @@ namespace Blockiverse.Networking
 
         Renderer[] fallbackRenderers = Array.Empty<Renderer>();
         Material fallbackMaterial;
+
+        // Runtime-ensured (found or created by name), like the proxy children — not serialized,
+        // so EXISTING prefabs pick the body up without an edit. A fresh bootstrapper regeneration
+        // does bake the parts into the prefab (its Configure* calls run the ensure at authoring
+        // time); that is fine — generated prefab, and the ensure path re-finds baked parts by
+        // name, re-asserting ShadowsOnly and the material rather than duplicating them.
+        Transform shadowBodyRoot;
+        Transform shadowHead;
+        Transform shadowTorso;
+        Transform shadowLeftArm;
+        Transform shadowRightArm;
+        Transform shadowLeftHand;
+        Transform shadowRightHand;
+        Transform shadowLeftLeg;
+        Transform shadowRightLeg;
+        Renderer[] shadowBodyRenderers = Array.Empty<Renderer>();
         uint nextPoseSequence = 1;
         uint lastAppliedPoseSequence;
         AvatarPose targetRemotePose = AvatarPose.Default;
@@ -72,6 +103,7 @@ namespace Blockiverse.Networking
         public Transform HeadAnchor => headAnchor;
         public Transform LeftHandAnchor => leftHandAnchor;
         public Transform RightHandAnchor => rightHandAnchor;
+        public Transform ShadowBodyRoot => shadowBodyRoot;
         public float LastRemotePoseTime { get; private set; }
         public bool IsPoseStale { get; private set; }
         public bool IsStreamStale { get; private set; }
@@ -339,6 +371,24 @@ namespace Blockiverse.Networking
                 fallbackRoot.gameObject.SetActive(fallbackVisible);
             }
 
+            // The SHADOW BODY is what casts the player's shadow, in every avatar mode — the
+            // visible proxy above and the Meta avatar both cast nothing (the proxy by renderer
+            // setting, the avatar because its shaders have no ShadowCaster pass). It stays active
+            // regardless of which body is on screen; only two things turn it off:
+            //  - a stale pose, because a shadow standing where a player no longer is, is worse
+            //    than none; and
+            //  - the OWNER'S OWN spawned network mirror. The local unspawned rig already casts
+            //    the local player's shadow, and the mirror would stack a second, fighting caster
+            //    on exactly the same spot (the relay hides the mirror's visuals for the same
+            //    reason — see MetaAvatarStreamRelay).
+            bool ownerMirror = IsSpawned && IsOwner && !IsSpawnedForTest;
+            bool shadowBodyActive = fallbackProxyEnabled && !IsPoseStale && !ownerMirror;
+
+            if (shadowBodyRoot != null)
+            {
+                shadowBodyRoot.gameObject.SetActive(shadowBodyActive);
+            }
+
             // The fallback proxy serves both the never-available and the stale-stream
             // cases; keep the renderer state in lockstep with the root, otherwise a
             // stale Meta stream activates a root whose renderers were disabled when
@@ -424,6 +474,12 @@ namespace Blockiverse.Networking
 
             if (rightHandAnchor != null)
                 rightHandAnchor.SetLocalPositionAndRotation(rightHandPose.position, rightHandPose.rotation);
+
+            // Every pose path — local tracking, test injection, relayed remote — ends here, so
+            // the shadow body follows whichever body is being driven. This is also what fixes the
+            // old single-capsule caster being pinned to the play-space origin: the layout is
+            // rebuilt from the head pose, roomscale offset included.
+            ApplyShadowBodyLayout(headPose, leftHandPose, rightHandPose);
         }
 
         void EnsureFallbackProxy()
@@ -437,13 +493,17 @@ namespace Blockiverse.Networking
             leftHandAnchor.SetLocalPositionAndRotation(DefaultLeftHandLocalPosition, Quaternion.identity);
             rightHandAnchor.SetLocalPositionAndRotation(DefaultRightHandLocalPosition, Quaternion.identity);
 
+            // VISIBLE parts never cast (ShadowCastingMode.Off): the shadow body below is the one
+            // and only shadow source, so both avatar modes throw the identical full-body
+            // silhouette and nothing can double-cast against it.
             EnsurePrimitive(
                 fallbackRoot,
                 BodyName,
                 PrimitiveType.Capsule,
                 new Vector3(0.0f, 0.85f, 0.0f),
                 Quaternion.identity,
-                new Vector3(0.36f, 0.72f, 0.36f));
+                new Vector3(0.36f, 0.72f, 0.36f),
+                ShadowCastingMode.Off);
 
             EnsurePrimitive(
                 headAnchor,
@@ -451,7 +511,8 @@ namespace Blockiverse.Networking
                 PrimitiveType.Cube,
                 Vector3.zero,
                 Quaternion.identity,
-                new Vector3(0.28f, 0.24f, 0.28f));
+                new Vector3(0.28f, 0.24f, 0.28f),
+                ShadowCastingMode.Off);
 
             EnsurePrimitive(
                 leftHandAnchor,
@@ -459,7 +520,8 @@ namespace Blockiverse.Networking
                 PrimitiveType.Cube,
                 Vector3.zero,
                 Quaternion.identity,
-                new Vector3(0.16f, 0.16f, 0.16f));
+                new Vector3(0.16f, 0.16f, 0.16f),
+                ShadowCastingMode.Off);
 
             EnsurePrimitive(
                 rightHandAnchor,
@@ -467,10 +529,80 @@ namespace Blockiverse.Networking
                 PrimitiveType.Cube,
                 Vector3.zero,
                 Quaternion.identity,
-                new Vector3(0.16f, 0.16f, 0.16f));
+                new Vector3(0.16f, 0.16f, 0.16f),
+                ShadowCastingMode.Off);
 
             fallbackRenderers = fallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            EnsureShadowBody();
             ApplyFallbackPalette();
+        }
+
+        // The shadow body's material is assigned in ApplyFallbackPalette, and that assignment is
+        // LOAD-BEARING: a ShadowsOnly renderer needs a shader with a ShadowCaster pass, and the
+        // palette's URP/Lit (via Shader.Find) is proven to survive Quest shader stripping because
+        // the visible hands ship on it. CreatePrimitive's default material is NOT safe to rely on
+        // — URP's pipeline defaultMaterial is editor-only, so a player build falls back to the
+        // built-in Standard shader, which a URP Android build strips: the shadow would vanish on
+        // device only, silently.
+        void EnsureShadowBody()
+        {
+            shadowBodyRoot = EnsureChild(transform, shadowBodyRoot, ShadowBodyRootName);
+
+            shadowHead = EnsureShadowPart(shadowHead, ShadowHeadName);
+            shadowTorso = EnsureShadowPart(shadowTorso, ShadowTorsoName);
+            shadowLeftArm = EnsureShadowPart(shadowLeftArm, ShadowLeftArmName);
+            shadowRightArm = EnsureShadowPart(shadowRightArm, ShadowRightArmName);
+            shadowLeftHand = EnsureShadowPart(shadowLeftHand, ShadowLeftHandName);
+            shadowRightHand = EnsureShadowPart(shadowRightHand, ShadowRightHandName);
+            shadowLeftLeg = EnsureShadowPart(shadowLeftLeg, ShadowLeftLegName);
+            shadowRightLeg = EnsureShadowPart(shadowRightLeg, ShadowRightLegName);
+
+            if (shadowBodyRenderers.Length == 0)
+                shadowBodyRenderers = shadowBodyRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+        }
+
+        Transform EnsureShadowPart(Transform current, string name)
+        {
+            if (current != null)
+                return current;
+
+            GameObject part = EnsurePrimitive(
+                shadowBodyRoot,
+                name,
+                PrimitiveType.Cube,
+                Vector3.zero,
+                Quaternion.identity,
+                Vector3.one,
+                ShadowCastingMode.ShadowsOnly);
+            return part.transform;
+        }
+
+        // Lays the block body out from the same three poses that drive the anchors — local
+        // tracking and relayed remote poses both funnel through ApplyLocalPose, so this is the
+        // single seam through which every mode's movement reaches the shadow.
+        void ApplyShadowBodyLayout(Pose headPose, Pose leftHandPose, Pose rightHandPose)
+        {
+            if (shadowBodyRoot == null)
+                return;
+
+            ShadowBodyLayout layout = BlockiverseShadowBodySolver.Solve(headPose, leftHandPose, rightHandPose);
+            ApplyShadowPart(shadowHead, layout.Head);
+            ApplyShadowPart(shadowTorso, layout.Torso);
+            ApplyShadowPart(shadowLeftArm, layout.LeftArm);
+            ApplyShadowPart(shadowRightArm, layout.RightArm);
+            ApplyShadowPart(shadowLeftHand, layout.LeftHand);
+            ApplyShadowPart(shadowRightHand, layout.RightHand);
+            ApplyShadowPart(shadowLeftLeg, layout.LeftLeg);
+            ApplyShadowPart(shadowRightLeg, layout.RightLeg);
+        }
+
+        static void ApplyShadowPart(Transform part, ShadowBodyPart layout)
+        {
+            if (part == null)
+                return;
+
+            part.SetLocalPositionAndRotation(layout.LocalPosition, layout.LocalRotation);
+            part.localScale = layout.LocalScale;
         }
 
         void ApplyFallbackPalette()
@@ -488,6 +620,19 @@ namespace Blockiverse.Networking
                     continue;
 
                 fallbackRenderer.sharedMaterial = fallbackMaterial;
+            }
+
+            // The shadow body gets the same material, and NOT because of its colour (a
+            // ShadowsOnly renderer is never seen): the material's shader is what supplies the
+            // ShadowCaster pass, and this one — URP/Lit via Shader.Find in
+            // CreateFallbackMaterial — is proven to survive Quest shader stripping because the
+            // visible hands ship on it. CreatePrimitive's default material carries no such
+            // guarantee on a stripped Android build, and a shadow body whose shader lost its
+            // caster pass would fail the way this codebase always fails: silently.
+            foreach (Renderer shadowRenderer in shadowBodyRenderers)
+            {
+                if (shadowRenderer != null)
+                    shadowRenderer.sharedMaterial = fallbackMaterial;
             }
 
             ApplyFallbackRendererVisibility();
@@ -512,6 +657,16 @@ namespace Blockiverse.Networking
                 bool visible = showThirdPersonProxy ||
                     (showFirstPersonHands && IsFirstPersonFallbackRenderer(fallbackRenderer));
                 fallbackRenderer.enabled = visible;
+
+                // Never casts — re-asserted here so a stray write elsewhere self-heals. The
+                // player's shadow comes from the dedicated Shadow Body rig instead (Eric's
+                // design, 2026-08-24): a full block body, ShadowsOnly, driven by the same poses,
+                // so BOTH avatar modes throw one identical full-body silhouette. This line has
+                // flip-flopped twice before (no-shadow when hands were all a player had, then
+                // cast-everything once full avatars worked); the shadow body is what ended the
+                // oscillation by splitting "what you see" from "what casts".
+                fallbackRenderer.shadowCastingMode = ShadowCastingMode.Off;
+
                 anyVisible |= visible;
             }
 
@@ -615,13 +770,18 @@ namespace Blockiverse.Networking
             return child.transform;
         }
 
+        // shadowCastingMode is a required argument on purpose: this method builds both the
+        // VISIBLE proxy parts (Off — they must never cast, the shadow body is the single caster)
+        // and the SHADOW BODY parts (ShadowsOnly — they must never be seen). A default here would
+        // be an invitation to add a part that silently does the wrong one.
         static GameObject EnsurePrimitive(
             Transform parent,
             string name,
             PrimitiveType primitiveType,
             Vector3 localPosition,
             Quaternion localRotation,
-            Vector3 localScale)
+            Vector3 localScale,
+            ShadowCastingMode shadowCastingMode)
         {
             Transform existing = parent.Find(name);
             GameObject primitive = existing != null ? existing.gameObject : GameObject.CreatePrimitive(primitiveType);
@@ -635,14 +795,10 @@ namespace Blockiverse.Networking
             if (collider != null)
                 DestroyUnityObject(collider);
 
-            // The player has hands and no body, so a cast shadow is two disembodied blobs on the
-            // ground beside them. Every other non-terrain renderer in the project already opts out
-            // (ray visual, placement preview, lightning bolt, chunk fluid); CreatePrimitive just
-            // defaults to On and nobody had turned it off here.
             Renderer primitiveRenderer = primitive.GetComponent<Renderer>();
 
             if (primitiveRenderer != null)
-                primitiveRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                primitiveRenderer.shadowCastingMode = shadowCastingMode;
 
             return primitive;
         }

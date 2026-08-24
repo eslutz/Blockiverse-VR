@@ -1,0 +1,27 @@
+/*
+ * WorldLoadingScreen — layout only. The overlay centres its title and a decorative strip
+ * of recessed block sockets (hs-well provides the inset chrome from Base.uss); no colour,
+ * spacing step or type size is introduced here.
+ */
+
+.wl-body {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.wl-title {
+    -unity-text-align: middle-center;
+}
+
+.wl-blocks {
+    flex-direction: row;
+    margin-top: var(--hs-space-5);
+}
+
+.wl-block {
+    width: 48px;
+    height: 48px;
+    margin-left: var(--hs-space-2);
+    margin-right: var(--hs-space-2);
+}

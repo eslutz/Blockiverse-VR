@@ -1,6 +1,5 @@
 using System.IO;
 using Blockiverse.Core;
-using Blockiverse.UI;
 using Blockiverse.VR;
 using NUnit.Framework;
 using Unity.XR.CompositionLayers;
@@ -8,9 +7,7 @@ using Unity.XR.CompositionLayers.Extensions;
 using Unity.XR.CompositionLayers.UIInteraction;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
-using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.OpenXR;
 
 namespace Blockiverse.Tests.EditMode
@@ -28,33 +25,6 @@ namespace Blockiverse.Tests.EditMode
         const string XrVisualProjectionRigName = "Blockiverse XR Visual Projection Rig";
         const string NamedLaunchArtworkPath = "Assets/Blockiverse/Art/Sprites/Branding/blockiverse_launch_landscape_named.png";
         const string CompositionRenderScaleScriptGuid = "7286615c28b0643b79b89c8fea0a07f5";
-        const float ExpectedMenuDistanceMeters = 0.95f;
-        const float ExpectedMenuVerticalOffsetMeters = -0.38f;
-        const float ExpectedMenuPitchDegrees = 10.0f;
-
-        static readonly string[] RoutedMenuPanels =
-        {
-            "Title Menu",
-            "Pause Menu",
-            "Death Screen",
-            "New World Panel",
-            "Load World Panel",
-            "Settings Panel",
-            "Comfort Settings Menu",
-            "Audio Settings Panel",
-            "Controls Panel",
-            "World Details Panel",
-            "LAN Multiplayer Panel",
-            "Creative Tools Panel",
-            "Station Panel",
-            "Controller Mapping Popup",
-            "Confirm Dialog",
-            "Error Dialog",
-            "Inventory Panel",
-            "Crafting Panel",
-            "Catalog Panel",
-            "Crate Panel",
-        };
 
         [SetUp]
         public void EnsureProjectLayersAvailable()
@@ -125,6 +95,12 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(runtimeSettings.EmulationInStandalone, Is.False);
         }
 
+        // Menus now render through UI Toolkit UIDocuments, so the per-panel Canvas/presenter
+        // sweep this test used to run over the 20 generated uGUI panels went with them. What
+        // it always guarded is still here and still specific to the rig: no compositor layer,
+        // no UI mirror, no texture extension anywhere under it. Gameplay UI submitting a
+        // composition layer over the eye buffer is a device-only regression — it looks correct
+        // in the editor and wrong on the headset — which is why the negative stays.
         [Test]
         public void GeneratedRigUsesWorldSpaceXrMenusWithoutCompositionMenuSurface()
         {
@@ -147,22 +123,6 @@ namespace Blockiverse.Tests.EditMode
 
             int interactionLayerIndex = LayerMask.NameToLayer(InteractionLayerName);
             Assert.That(interactionLayerIndex, Is.EqualTo(InteractionLayerIndex));
-
-            foreach (string name in RoutedMenuPanels)
-            {
-                Transform panel = cameraOffset.Find(name);
-                Assert.That(panel, Is.Not.Null, $"{name} should be a direct world-space child of Camera Offset.");
-                AssertWorldSpaceXrMenuPanel(panel, interactionLayerIndex, name);
-            }
-
-            Transform controllerMap = cameraOffset.Find("Controller Mapping Popup");
-            Button closeButton = controllerMap?.Find("Panel/Close Button")?.GetComponent<Button>();
-            Assert.That(closeButton, Is.Not.Null, "The Controller Map close button must be a real UGUI Button.");
-            Assert.That(closeButton.interactable, Is.True);
-            Image closeImage = closeButton.GetComponent<Image>();
-            Assert.That(closeImage, Is.Not.Null);
-            Assert.That(closeImage.raycastTarget, Is.True,
-                "The close button must be reachable by XRI tracked-device UI raycasts.");
         }
 
         [Test]
@@ -263,50 +223,5 @@ namespace Blockiverse.Tests.EditMode
         }
 
         static string ReadXrRigPrefabYaml() => File.ReadAllText(BlockiverseProject.XrRigPrefabPath);
-
-        static void AssertWorldSpaceXrMenuPanel(Transform panel, int expectedLayer, string panelName)
-        {
-            Assert.That(panel.gameObject.layer, Is.EqualTo(expectedLayer), $"{panelName} should render through the main eye camera.");
-            Assert.That(panel.gameObject.activeSelf, Is.True,
-                $"{panelName} should keep its GameObject active; routed visibility is controlled by Canvas.enabled.");
-            Canvas canvas = panel.GetComponent<Canvas>();
-            Assert.That(canvas, Is.Not.Null, $"{panelName} should retain its own world-space canvas.");
-            Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.WorldSpace));
-            Assert.That(canvas.enabled, Is.False,
-                $"{panelName} should start hidden by disabling its Canvas, not by deactivating the GameObject.");
-            Assert.That(panel.GetComponent<TrackedDeviceGraphicRaycaster>(), Is.Not.Null,
-                $"{panelName} should receive XRI tracked-device UI raycasts directly.");
-            Assert.That(panel.GetComponent<GraphicRaycaster>(), Is.Null,
-                $"{panelName} should not use the screen-space GraphicRaycaster.");
-
-            CanvasGroup inputGate = panel.GetComponent<CanvasGroup>();
-            Assert.That(inputGate, Is.Not.Null, $"{panelName} should expose a canvas input gate.");
-            Assert.That(inputGate.interactable, Is.True);
-            Assert.That(inputGate.blocksRaycasts, Is.True);
-
-            Assert.That(panel.GetComponent<CompositionLayer>(), Is.Null);
-            Assert.That(panel.GetComponent<TexturesExtension>(), Is.Null);
-            Assert.That(panel.GetComponent<InteractableUIMirror>(), Is.Null);
-            Assert.That(panel.Find("CanvasCamera"), Is.Null);
-
-            BlockiverseWorldSpacePanelPresenter presenter = panel.GetComponent<BlockiverseWorldSpacePanelPresenter>();
-            Assert.That(presenter, Is.Not.Null, $"{panelName} should keep presenter-based visibility.");
-            Assert.That(presenter.TargetCanvas, Is.SameAs(canvas));
-            Assert.That(presenter.TargetRoot, Is.SameAs(panel.gameObject));
-            Assert.That(presenter.PlacementRoot, Is.SameAs(panel));
-            Assert.That(presenter.UsesSharedCompositionRoot, Is.False);
-
-            var serializedPresenter = new SerializedObject(presenter);
-            Assert.That(serializedPresenter.FindProperty("distanceMeters").floatValue,
-                Is.EqualTo(ExpectedMenuDistanceMeters).Within(0.001f));
-            Assert.That(serializedPresenter.FindProperty("verticalOffsetMeters").floatValue,
-                Is.EqualTo(ExpectedMenuVerticalOffsetMeters).Within(0.001f));
-            Assert.That(serializedPresenter.FindProperty("pitchDegrees").floatValue,
-                Is.EqualTo(ExpectedMenuPitchDegrees).Within(0.001f));
-
-            foreach (Graphic graphic in panel.GetComponentsInChildren<Graphic>(includeInactive: true))
-                Assert.That(graphic.gameObject.layer, Is.EqualTo(expectedLayer),
-                    $"{panelName}/{graphic.name} should stay on the world-space interaction UI layer.");
-        }
     }
 }

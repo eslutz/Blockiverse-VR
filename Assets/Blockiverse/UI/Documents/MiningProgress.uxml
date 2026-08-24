@@ -1,0 +1,17 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Mining progress readout (screen id gameplay_hud, matrix row 22 — the HUD family is
+        co-visible under one routed id). Ports the uGUI Survival HUD's mining slider plus its
+        "Mining {0}%" status text; MiningProgressController shows the body only while the
+        input bridge reports an in-progress mine. Entirely non-interactive: every element is
+        picking-mode Ignore so a ray aimed at the world can never be swallowed here.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen" picking-mode="Ignore">
+        <engine:VisualElement name="bv-mining-body" class="mp-body" picking-mode="Ignore">
+            <engine:Label name="bv-mining-label" class="hs-caption hs-figures mp-label" picking-mode="Ignore" />
+            <engine:VisualElement name="bv-mining-bar" class="hs-well mp-bar" picking-mode="Ignore">
+                <engine:VisualElement name="bv-mining-fill" class="mp-fill" picking-mode="Ignore" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

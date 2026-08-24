@@ -1,0 +1,59 @@
+/*
+ * InventoryScreen — layout only. Colours, spacing steps, type sizes and control chrome all
+ * come from Tokens.uss/Base.uss classes; nothing here introduces a new value, only the slot
+ * grid geometry (5×2 in the 1000×760 panel) and the pager/footer rows.
+ */
+
+.inv-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+/* 5 slots per row inside the ~946px content width; the second row is the backpack half of
+   the visible page. Base hs-button margins are vertical-only, so all four are pinned here. */
+.inv-slot {
+    width: 178px;
+    height: 170px;
+    margin-top: var(--hs-space-1);
+    margin-bottom: var(--hs-space-1);
+    margin-left: var(--hs-space-1);
+    margin-right: var(--hs-space-1);
+    padding-left: var(--hs-space-2);
+    padding-right: var(--hs-space-2);
+}
+
+/* Icon area fills the slot above the count line; the controller sets backgroundImage and
+   toggles visibility (not display) so the count line never jumps when an icon disappears. */
+.inv-slot__icon {
+    flex-grow: 1;
+    background-size: contain;
+}
+
+.inv-slot__count {
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+    white-space: normal;
+}
+
+.inv-pager {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: var(--hs-space-2);
+}
+
+.inv-pager__cycle {
+    width: 96px;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
+}
+
+.inv-pager__label {
+    flex-grow: 1;
+    -unity-text-align: middle-center;
+}
+
+.inv-close {
+    flex-grow: 1;
+}

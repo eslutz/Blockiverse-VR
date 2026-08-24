@@ -61,23 +61,40 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
-        public void FallbackProxyRenderersNeverCastShadows()
+        public void OnlyTheShadowBodyCastsAndItCastsShadowsOnly()
         {
-            // The player is a pair of floating hands with no body, so a cast shadow reads as two
-            // disembodied blobs on the ground beside them. CreatePrimitive defaults shadow casting
-            // ON and nothing had turned it off, unlike every other non-terrain renderer in the
-            // project.
+            // Third and FINAL revision of the shadow contract, each for a reason that expired:
+            //   1. No shadow at all — a player was two floating hands, and a body shadow beside
+            //      disembodied hands read as a bug.
+            //   2. Everything casts (Eric, 2026-08-24, first ruling) — full-body Meta avatars
+            //      made a shadowless player the odd one out.
+            //   3. THIS: a dedicated articulated block body casts, and nothing else does (Eric,
+            //      2026-08-24, second ruling). The Meta avatar cannot cast (no ShadowCaster pass
+            //      in its shaders), so a visible-proxy shadow appeared and vanished with avatar
+            //      state; splitting "what you see" from "what casts" gives every mode the same
+            //      full-body silhouette, always.
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
             avatarRig.ConfigureFirstPersonFallbackVisuals(true);
             avatarRig.SetMetaAvatarAvailable(false);
 
-            Renderer[] renderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
-
-            Assert.That(renderers, Is.Not.Empty, "Fixture guard: the fallback proxy should have renderers.");
+            Renderer[] visualRenderers = avatarRig.FallbackRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            Assert.That(visualRenderers, Is.Not.Empty, "Fixture guard: the proxy should have renderers.");
             Assert.That(
-                renderers,
+                visualRenderers,
                 Has.All.Matches<Renderer>(renderer => renderer.shadowCastingMode == ShadowCastingMode.Off),
-                "No part of the bodiless player proxy may cast a shadow.");
+                "Visible proxy parts must never cast — a second caster over the shadow body would "
+                + "double the silhouette and re-tie the shadow to which body is on screen.");
+
+            Assert.That(avatarRig.ShadowBodyRoot, Is.Not.Null, "The shadow body must exist alongside the proxy.");
+            Renderer[] shadowRenderers = avatarRig.ShadowBodyRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            Assert.That(shadowRenderers, Has.Length.EqualTo(8),
+                "Head, torso, two arms, two hands, two legs.");
+            Assert.That(
+                shadowRenderers,
+                Has.All.Matches<Renderer>(renderer =>
+                    renderer.enabled && renderer.shadowCastingMode == ShadowCastingMode.ShadowsOnly),
+                "Every shadow part must be enabled and shadow-only: enabled so the engine reaches "
+                + "it, shadow-only so the player never sees the block body inside their avatar.");
         }
 
         [Test]
@@ -137,14 +154,26 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
-        public void AvailableMetaAvatarHidesFallbackProxy()
+        public void AvailableMetaAvatarHidesTheProxyWhileTheShadowBodyKeepsCasting()
         {
+            // The defect this guards: Eric watched his block hands' shadow vanish the moment his
+            // Meta avatar finished loading, because hiding the proxy removed the only caster and
+            // the avatar's shaders have no ShadowCaster pass to replace it. The shadow body is a
+            // separate rig, so the proxy can be FULLY deactivated again (its pre-shadow-work
+            // contract) without the player losing their shadow.
             BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
 
             avatarRig.SetMetaAvatarAvailable(true);
 
             Assert.That(avatarRig.IsUsingFallbackProxy, Is.False);
-            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.False);
+            Assert.That(avatarRig.FallbackRenderersVisible, Is.False);
+            Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.False,
+                "With a dedicated shadow rig there is no reason to keep the proxy alive.");
+
+            Assert.That(avatarRig.ShadowBodyRoot, Is.Not.Null);
+            Assert.That(avatarRig.ShadowBodyRoot.gameObject.activeSelf, Is.True,
+                "The shadow body must survive the avatar taking over — its whole purpose is to "
+                + "cast when the avatar cannot.");
         }
 
         [Test]
@@ -166,6 +195,8 @@ namespace Blockiverse.Tests.Networking.EditMode
 
             Assert.That(avatarRig.IsUsingFallbackProxy, Is.False);
             Assert.That(avatarRig.FallbackRoot.gameObject.activeSelf, Is.False);
+            Assert.That(avatarRig.ShadowBodyRoot.gameObject.activeSelf, Is.True,
+                "The shadow body rides through every proxy/avatar swap untouched.");
         }
 
         [Test]
@@ -543,6 +574,48 @@ namespace Blockiverse.Tests.Networking.EditMode
         static void AssertQuaternionYApproximately(Quaternion actual, Quaternion expected)
         {
             Assert.That(actual.eulerAngles.y, Is.EqualTo(expected.eulerAngles.y).Within(0.001f));
+        }
+
+        [Test]
+        public void TheShadowBodyFollowsTheHeadAcrossThePlaySpace()
+        {
+            // Regression for the pinned-capsule defect: the old single shadow caster sat at a
+            // fixed rig-local offset, so physically walking across the guardian left your shadow
+            // standing at the play-space origin — detached from the player, worse than no shadow.
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+
+            var head = new Pose(new Vector3(2.0f, 1.62f, -1.5f), Quaternion.identity);
+            var left = new Pose(new Vector3(1.7f, 1.1f, -1.3f), Quaternion.identity);
+            var right = new Pose(new Vector3(2.3f, 1.1f, -1.3f), Quaternion.identity);
+            avatarRig.SetLocalRigPose(head, left, right);
+
+            Transform torso = avatarRig.ShadowBodyRoot.Find("Shadow Torso");
+            Transform leftLeg = avatarRig.ShadowBodyRoot.Find("Shadow Left Leg");
+            Assert.That(torso, Is.Not.Null);
+            Assert.That(leftLeg, Is.Not.Null);
+
+            Assert.That(torso.localPosition.x, Is.EqualTo(2.0f).Within(0.001f));
+            Assert.That(torso.localPosition.z, Is.EqualTo(-1.5f).Within(0.001f));
+
+            float legBottom = leftLeg.localPosition.y - leftLeg.localScale.y * 0.5f;
+            Assert.That(legBottom, Is.EqualTo(0.0f).Within(0.01f),
+                "Feet stay on the floor wherever the head roams.");
+        }
+
+        [Test]
+        public void TheShadowBodyTracksAMovedHeadOnTheNextPose()
+        {
+            // Not just placed once: the layout must be rebuilt per pose, or walking would smear
+            // the shadow behind the player.
+            BlockiverseNetworkAvatarRig avatarRig = CreateAvatarRig();
+            var hands = new Pose(new Vector3(0.0f, 1.1f, 0.2f), Quaternion.identity);
+
+            avatarRig.SetLocalRigPose(new Pose(new Vector3(0.0f, 1.62f, 0.0f), Quaternion.identity), hands, hands);
+            avatarRig.SetLocalRigPose(new Pose(new Vector3(-3.0f, 1.62f, 4.0f), Quaternion.identity), hands, hands);
+
+            Transform torso = avatarRig.ShadowBodyRoot.Find("Shadow Torso");
+            Assert.That(torso.localPosition.x, Is.EqualTo(-3.0f).Within(0.001f));
+            Assert.That(torso.localPosition.z, Is.EqualTo(4.0f).Within(0.001f));
         }
     }
 }

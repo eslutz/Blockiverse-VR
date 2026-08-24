@@ -1,0 +1,53 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Shared crate screen (screen id station_crate), UI Toolkit port of the generated
+        SurvivalCratePanel: crate slot buttons that withdraw their stack on click, one deposit
+        button for the whole held hotbar stack, a status line, Close. Every transfer routes
+        through MultiplayerSurvivalSync.TrySubmitCrateDeposit/Withdraw — the crate is never
+        mutated locally on a client.
+
+        Twelve slots, matching MultiplayerSurvivalSync.SharedCrateSlotCount exactly (Codex review,
+        PR #344 — the uGUI panel this was ported from also only exposed 4 with no paging, so
+        anything a deposit pushed into slots 4-11 was stored but permanently unreachable through
+        the only crate UI). The grid already wraps at four per row inside the ~946px content
+        width (CrateScreen.uss), so this is three rows instead of one; the screen sizes itself to
+        that measured content rather than needing a fixed height here.
+
+        The title and deposit labels have no existing table keys ("Shared Crate" and
+        "Deposit Held" were hardcoded scene text in the uGUI panel), so CrateScreenController
+        renders them at runtime via UiText against the requested ui.generated.crate.* entries
+        rather than binding literals here. Crate slot text and the status line are dynamic.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" picking-mode="Ignore" class="hs-screen__title" />
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-content" class="hs-screen__content" picking-mode="Ignore">
+            <engine:VisualElement name="bv-crate-grid" class="crate-grid" picking-mode="Ignore">
+                <engine:Button name="bv-crate-slot-1" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-2" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-3" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-4" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-5" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-6" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-7" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-8" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-9" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-10" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-11" class="hs-button crate-slot" />
+                <engine:Button name="bv-crate-slot-12" class="hs-button crate-slot" />
+            </engine:VisualElement>
+            <engine:Button name="bv-deposit" class="hs-button hs-button--primary crate-deposit" />
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-status" picking-mode="Ignore" class="hs-status crate-status" />
+            <engine:Button name="bv-close" text="Close" class="hs-button crate-close">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.close" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

@@ -1,0 +1,121 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        New World config screen (voxel_survival_menus §6.3), UI Toolkit port of
+        BlockiverseNewWorldPanel. Selector rows mirror the uGUI panel's fixed row order:
+        Game Mode, Difficulty, World Size, World Preset, Starting Biome, Texture Set —
+        NewWorldScreenController indexes its cycle actions by that order, so the rows here
+        must not be reordered without changing the controller's selector tables with them.
+
+        Selector value labels carry no static text: the controller renders the canonical
+        option ids through UiText (ui.value.canonical.*) at runtime. The back/next glyphs
+        are non-lexical and need no localization binding.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" text="New World" picking-mode="Ignore" class="hs-screen__title">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.title" />
+                </Bindings>
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-name-label" text="World Name" picking-mode="Ignore" class="hs-heading">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.name" />
+                </Bindings>
+            </engine:Label>
+            <engine:TextField name="bv-name-field" class="hs-field" />
+
+            <engine:Label name="bv-seed-label" text="Seed" picking-mode="Ignore" class="hs-heading">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.seed" />
+                </Bindings>
+            </engine:Label>
+            <engine:TextField name="bv-seed-field" class="hs-field hs-figures" />
+
+            <engine:VisualElement name="bv-row-game-mode" class="nw-row" picking-mode="Ignore">
+                <engine:Label name="bv-game-mode-label" text="Game Mode" picking-mode="Ignore" class="hs-body nw-row__name">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.game_mode" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Button name="bv-game-mode-back" text="&lt;" class="hs-button nw-row__cycle" />
+                <engine:Label name="bv-game-mode-value" picking-mode="Ignore" class="hs-body nw-row__value" />
+                <engine:Button name="bv-game-mode-next" text="&gt;" class="hs-button nw-row__cycle" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-row-difficulty" class="nw-row" picking-mode="Ignore">
+                <engine:Label name="bv-difficulty-label" text="Difficulty" picking-mode="Ignore" class="hs-body nw-row__name">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.difficulty" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Button name="bv-difficulty-back" text="&lt;" class="hs-button nw-row__cycle" />
+                <engine:Label name="bv-difficulty-value" picking-mode="Ignore" class="hs-body nw-row__value" />
+                <engine:Button name="bv-difficulty-next" text="&gt;" class="hs-button nw-row__cycle" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-row-world-size" class="nw-row" picking-mode="Ignore">
+                <engine:Label name="bv-world-size-label" text="World Size" picking-mode="Ignore" class="hs-body nw-row__name">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.size" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Button name="bv-world-size-back" text="&lt;" class="hs-button nw-row__cycle" />
+                <engine:Label name="bv-world-size-value" picking-mode="Ignore" class="hs-body nw-row__value" />
+                <engine:Button name="bv-world-size-next" text="&gt;" class="hs-button nw-row__cycle" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-row-world-preset" class="nw-row" picking-mode="Ignore">
+                <engine:Label name="bv-world-preset-label" text="World Preset" picking-mode="Ignore" class="hs-body nw-row__name">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.preset" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Button name="bv-world-preset-back" text="&lt;" class="hs-button nw-row__cycle" />
+                <engine:Label name="bv-world-preset-value" picking-mode="Ignore" class="hs-body nw-row__value" />
+                <engine:Button name="bv-world-preset-next" text="&gt;" class="hs-button nw-row__cycle" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-row-starting-biome" class="nw-row" picking-mode="Ignore">
+                <engine:Label name="bv-starting-biome-label" text="Starting Biome" picking-mode="Ignore" class="hs-body nw-row__name">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.starting_biome" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Button name="bv-starting-biome-back" text="&lt;" class="hs-button nw-row__cycle" />
+                <engine:Label name="bv-starting-biome-value" picking-mode="Ignore" class="hs-body nw-row__value" />
+                <engine:Button name="bv-starting-biome-next" text="&gt;" class="hs-button nw-row__cycle" />
+            </engine:VisualElement>
+
+            <engine:VisualElement name="bv-row-texture-set" class="nw-row" picking-mode="Ignore">
+                <engine:Label name="bv-texture-set-label" text="Texture Set" picking-mode="Ignore" class="hs-body nw-row__name">
+                    <Bindings>
+                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.texture_set" />
+                    </Bindings>
+                </engine:Label>
+                <engine:Button name="bv-texture-set-back" text="&lt;" class="hs-button nw-row__cycle" />
+                <engine:Label name="bv-texture-set-value" picking-mode="Ignore" class="hs-body nw-row__value" />
+                <engine:Button name="bv-texture-set-next" text="&gt;" class="hs-button nw-row__cycle" />
+            </engine:VisualElement>
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-actions" class="nw-actions" picking-mode="Ignore">
+            <engine:Button name="bv-create" text="Create World" class="hs-button hs-button--primary nw-actions__create">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.create" />
+                </Bindings>
+            </engine:Button>
+            <engine:Button name="bv-cancel" text="Cancel" class="hs-button nw-actions__cancel">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.common.cancel" />
+                </Bindings>
+            </engine:Button>
+        </engine:VisualElement>
+
+        <engine:VisualElement name="bv-footer" class="hs-screen__footer" picking-mode="Ignore">
+            <engine:Label name="bv-status" class="hs-status" picking-mode="Ignore" />
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

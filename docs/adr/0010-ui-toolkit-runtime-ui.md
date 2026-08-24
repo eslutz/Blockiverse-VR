@@ -5,6 +5,81 @@
 Accepted 2026-08-22. Supersedes the framework half of [ADR 0006](0006-quest-openxr-rendering-and-asset-policy.md)'s
 2026-08-13 menu amendment; that amendment's *placement* findings survive intact and are restated below.
 
+**Amended 2026-08-23 — Phases 2–5 implemented.** All 25 screen documents, their controllers,
+and the host/coordinator seam shipped in one branch at Eric's direction (single batch gate
+rather than per-phase gates). The shape differs from the phase plan in three deliberate ways:
+
+- **The rig prefab is untouched.** UI Toolkit panels are generated into the Boot scene only
+  (`BlockiverseProjectBootstrapper.UiToolkitMenus.cs`, table-driven from `[UiToolkitScreen]`
+  attributes), so the #324 unreviewable-prefab-diff failure mode cannot recur. The uGUI menus
+  remain in the rig prefab as the development fallback.
+- **`BlockiverseMenuController` is not yet dismantled.** During coexistence it remains the
+  coordinator; a registered `IBlockiverseMenuFrontend` (implemented by `UiToolkitMenuHost`)
+  receives every outward push and answers every pending-state read, and its presence hides
+  every uGUI presenter. Disabling the host component is the whole fallback switch. The
+  §5 redistribution completes at cutover, when the uGUI half is deleted.
+- **Zilla Slab and Barlow are embedded** (OFL 1.1, license files beside the .ttfs in
+  `Assets/Blockiverse/UI/Fonts/`), wired in `Base.uss`; weight comes from the SemiBold faces,
+  not the bold style flag. Non-Latin fallback (matrix §3.2) remains open. Tabular figures are
+  an OpenType feature USS cannot enable — measured judgement deferred to headset.
+
+One validator exemption was added with the HUD family: a `NonInteractive` screen declaration
+generates **no collider at all** (mining bar, status toast — read-only strips sharing the
+routed gameplay screen; an enabled trigger collider would intercept the XRI ray all session).
+
+**Amended 2026-08-23 — the cutover happened, ahead of device validation, at Eric's direction.**
+
+The amendment above said the cutover "happens only after device validation." That condition was
+not met. Eric asked for the uGUI deletion on the migration branch as one revertible commit, was
+told the keyboard risk and the missing device evidence, and confirmed. Recording the contradiction
+rather than quietly restating the rule: the ordering this ADR argued for was overridden by the
+project owner, deliberately and with the trade-off stated.
+
+What that costs is specific. The fallback this ADR leaned on is gone. "Disable the host component"
+is no longer a switch back to a working menu stack, because there is no second stack — the revert
+path is `git revert` of one commit, which is coarser (it takes the whole removal, including the
+behaviour ports below) and only available before further work lands on top.
+
+What was removed: the 20 routed uGUI panels and the Survival HUD, their bootstrapper generators,
+17 panel classes, and the dual-backend mirroring inside `BlockiverseMenuController`. The rig prefab
+went 96,949 → 6,760 lines (3,519 → 179 serialized objects); `MultiplayerTest.unity` 3,020 → 1,031,
+verified as a clean deletion with every surviving fileID preserved, so no external reference into
+either file was invalidated.
+
+What deliberately survives, and why, because each looks like an oversight and is not:
+
+- **`IBlockiverseMenuFrontend`.** Not a shim. `UiToolkitMenuHost` implements it, and it is how the
+  router is initialised outside Play mode — nine Toolkit test fixtures depend on that. Only the
+  dual-backend *mirroring* died.
+- **`BlockiverseWorldSpacePanelPresenter`, `BlockiverseStartupOverlay`, `BlockiverseLocalizedText`,
+  `BlockiverseTmpFontFallbackBootstrapper`.** The boot splash and the Block Menu stay uGUI; the
+  Block Menu is not a menu at all despite the name, it carries the scene `CreativeHotbar` that
+  decides which block gets placed.
+- **`Blockiverse.UI.asmdef` keeps `UnityEngine.UI` and `Unity.TextMeshPro`** for exactly those.
+
+Three behaviours had to be ported *out* of the menus before the menus could go, because each was
+gameplay wiring that had lodged in a UI component and would have failed silently:
+
+- Container auto-loot. `SurvivalHudController.Bind` was the only caller in the repository of
+  `CreativeWorldManager.SetActivePlayerInventory`; without it, breaking a crate would have deleted
+  its contents with nothing going red. Now resolved on demand from the survival sync, and pinned by
+  `ContainerAutoLootEditModeTests`.
+- The item icon library, generated only by the uGUI survival-HUD builder but resolved by two
+  surviving Toolkit screens.
+- Keyboard hand-visibility, which read a static event on a uGUI component. It now reads
+  `TouchScreenKeyboard.visible`, which is what it always meant.
+
+One structural hazard is worth carrying forward because it bit twice: **the bootstrapper only ever
+*ensures*.** `EnsureXrRigPrefab` re-authors the existing prefab, so deleting a generator does not
+delete what it generated — the objects stay serialized forever. Removal has to be explicit
+(`RetiredUguiMenuPanelNames`), and for a component riding an object that *survives*, removal has to
+be by missing-script rather than by type, since the type is gone.
+
+**The Open section still stands: there is still no headset evidence.** Device validation is now the
+only thing between this and a shipped regression, and it must cover text entry first — naming a
+world, entering a seed, typing a LAN address — because UI Toolkit's `TouchScreenKeyboard` path over
+a world-space panel has never been exercised on a Quest in this project.
+
 ## Context
 
 Blockiverse VR's runtime menus, dialogs and HUD are uGUI: world-space `Canvas` +

@@ -614,8 +614,9 @@ namespace Blockiverse.Gameplay
             if (IsContainerBlock(change.PreviousBlock) && !IsContainerBlock(b) && containerStore != null)
             {
                 bool ownsWorld = authoritySync == null || authoritySync.CurrentBoundary.CanCommitMutations;
-                if (ownsWorld && !suppressContainerAutoLoot && activePlayerInventory != null)
-                    TryLootContainerInto(change.Position, activePlayerInventory);
+                Inventory lootDestination = ActivePlayerInventory;
+                if (ownsWorld && !suppressContainerAutoLoot && lootDestination != null)
+                    TryLootContainerInto(change.Position, lootDestination);
                 containerStore.Remove(change.Position);
             }
         }
@@ -669,8 +670,38 @@ namespace Blockiverse.Gameplay
 
         // The inventory that receives loot when a player breaks a container. Set by the survival
         // runtime (the active player's inventory). Null disables auto-loot.
-        public Inventory ActivePlayerInventory => activePlayerInventory;
+        // An explicitly set inventory wins; otherwise the local player's survival inventory is
+        // resolved on demand.
+        //
+        // The explicit registration used to be made by SurvivalHudController.Bind, because the
+        // survival HUD happened to hold the inventory reference. That put a gameplay rule —
+        // breaking a crate fills the breaker's inventory — inside a menu component, where it was
+        // the sole caller of SetActivePlayerInventory in the repository and would have vanished
+        // silently with the uGUI menus, leaving containers to delete their contents. Resolving it
+        // here makes the rule independent of which UI stack is present.
+        //
+        // Deliberately resolved per use rather than cached at bind time: LocalInventory is itself
+        // computed from the local client id, and the old code had to re-push it from a
+        // LocalInventoryChanged handler every time the sync swapped instances. Looking it up when
+        // a container actually breaks has no such staleness to repair. The search is skipped
+        // entirely once something sets the inventory explicitly, and only ever runs on a container
+        // break, so the cost does not sit on any hot path.
+        public Inventory ActivePlayerInventory =>
+            activePlayerInventory ?? ResolveLocalSurvivalInventory();
+
         public void SetActivePlayerInventory(Inventory inventory) => activePlayerInventory = inventory;
+
+        MultiplayerSurvivalSync survivalSyncForLoot;
+
+        Inventory ResolveLocalSurvivalInventory()
+        {
+            // Cached once found; retried while absent, because the sync is spawned by Netcode and
+            // may not exist yet the first time a container breaks in a session.
+            if (survivalSyncForLoot == null)
+                survivalSyncForLoot = FindFirstObjectByType<MultiplayerSurvivalSync>(FindObjectsInactive.Include);
+
+            return survivalSyncForLoot != null ? survivalSyncForLoot.LocalInventory : null;
+        }
 
         // Persistence sets this while applying a save so loaded crate-removal deltas don't dump loot
         // into the player; cleared once the saved container store has been restored.

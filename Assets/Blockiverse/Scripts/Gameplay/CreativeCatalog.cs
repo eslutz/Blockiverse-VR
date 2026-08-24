@@ -59,10 +59,10 @@ namespace Blockiverse.Gameplay
             {
                 // Terrain
                 new(BlockRegistry.MeadowTurf,     CreativeCatalogCategory.Terrain),
-                new(BlockRegistry.SnowBlock,       CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.LooseLoam,       CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.DryTurf,         CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.SnowcapTurf,     CreativeCatalogCategory.Terrain),
+                new(BlockRegistry.SnowBlock,       CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.Rootsoil,        CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.Claybed,         CreativeCatalogCategory.Terrain),
                 new(BlockRegistry.RiverSilt,       CreativeCatalogCategory.Terrain),

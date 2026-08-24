@@ -217,13 +217,13 @@ ITEMS = [
 ]
 
 
+# Retired with the uGUI menus (selected_slot, health_pip, inventory_panel, crafting_panel,
+# multiplayer_status_badge). UI Toolkit styles those surfaces from USS tokens and borders rather
+# than sprites, so regenerating them only re-created files nothing loaded. Removing them here is
+# what stops the next art run from resurrecting them; the .png/.meta pairs were deleted with the
+# panels. Re-add an entry here if a Toolkit screen ever wants a real bitmap for one of these.
 UI_SPRITES = [
     ("hotbar_frame", 128, 24, (34, 39, 48, 168), (104, 191, 147, 235), "frame"),
-    ("selected_slot", 24, 24, (42, 48, 58, 70), (255, 206, 83, 255), "selected"),
-    ("health_pip", 16, 16, (98, 38, 56, 0), (239, 84, 93, 255), "pip"),
-    ("inventory_panel", 96, 64, (35, 43, 54, 218), (105, 191, 148, 245), "panel"),
-    ("crafting_panel", 96, 64, (47, 41, 56, 218), (231, 183, 101, 245), "panel"),
-    ("multiplayer_status_badge", 48, 20, (33, 41, 52, 190), (93, 177, 222, 250), "badge"),
     ("settings_panel", 96, 64, (37, 42, 51, 218), (112, 178, 220, 245), "panel"),
     ("feedback_toast", 96, 32, (32, 38, 43, 216), (255, 206, 83, 245), "badge"),
 ]

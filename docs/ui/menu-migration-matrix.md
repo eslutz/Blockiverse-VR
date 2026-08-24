@@ -3,8 +3,30 @@
 Companion to [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md). This is the per-screen migration
 checklist: what exists, where it goes, and what must not be lost on the way.
 
-**Status: Phase 0 (baseline). No production screen has been migrated.** The tree contains zero
-`.uxml`/`.uss` outside the Phase 1 proof scaffolding.
+**Status: cut over (2026-08-23). UI Toolkit is the only menu frontend; device validation still
+pending.** All 25 documents in §2 exist with dedicated controllers under
+`Assets/Blockiverse/Scripts/UI/ToolkitScreens/`, and the Boot scene generates one world-space
+panel per `[UiToolkitScreen]` declaration. The LAN screen additionally gained the saved-servers
+bookmark rows (previously a dead API — see §2 note on row 14).
+
+The uGUI menus are **gone**: 20 routed panels and the Survival HUD removed from the rig prefab
+(96,949 → 6,760 lines), their bootstrapper generators deleted, 17 panel classes deleted, and the
+dual-backend mirroring taken out of `BlockiverseMenuController`. Eric directed this ahead of
+device validation; [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md) records the overridden
+ordering and what it costs.
+
+Two consequences that change how to read the rest of this document:
+
+- **There is no fallback switch any more.** "Disable `UiToolkitMenuHost`" used to hand the menus
+  back to uGUI. It does not; nothing else draws them. The way back is reverting the removal commit.
+- **`IBlockiverseMenuFrontend` stayed.** It is not the shim it looks like — `UiToolkitMenuHost`
+  implements it, and it is how the router is initialised outside Play mode, which nine Toolkit
+  test fixtures rely on. Only the *dual-backend mirroring* died with the panels.
+
+Some world-space uGUI deliberately survives and is not an oversight: the boot splash
+(`BlockiverseStartupOverlay`), and the Block Menu, which despite the name is not a menu — it
+carries the scene `CreativeHotbar` that decides which block gets placed. `Blockiverse.UI.asmdef`
+therefore still references `UnityEngine.UI` and `Unity.TextMeshPro`.
 
 Line references are against `main` at `4251dcca` and will drift; treat them as "look here", not as
 addresses.
@@ -132,13 +154,58 @@ Note that action-list menus are already safe: `MenuAction.Label` resolves lazily
 
 ### 3.2 UI Toolkit does not read `TMP_Settings.fallbackFontAssets`
 
+**STATUS (2026-08-24): discovered in Phase 6 anyway, and now live with no mitigation.** This
+section said the gap "must not be discovered in Phase 6" — Phase 6 (the uGUI deletion, `ac5468a7`)
+landed on `feature/ui-toolkit-migration` without it being resolved, and the uGUI fallback that used
+to render this text correctly no longer exists to fall back to. Flagged again on review of PR #344
+(Codex, 2026-08-24, P2) against `NewWorldScreenController`/`LanMultiplayerScreenController`: a
+world or LAN server name containing Arabic, CJK, Thai, or Devanagari characters renders as tofu on
+the only remaining menu backend, and nothing currently sanitizes or restricts that input — verified
+by grepping `NewWorldScreenController.cs`/`LanMultiplayerScreenController.cs` for validation and
+finding none. This is a real, currently-shipping regression versus the deleted uGUI screens, not a
+theoretical one.
+
 `BlockiverseTmpFontFallbackBootstrapper.cs` builds dynamic `TMP_FontAsset` fallbacks from OS fonts
 (Noto CJK, Arabic, Thai, Devanagari …) into `TMP_Settings.fallbackFontAssets`. UI Toolkit has its
 own font pipeline and does not consult that list, so a migrated screen renders non-Latin text as
-tofu even though the uGUI screen beside it renders it correctly.
+tofu even though the uGUI screen beside it used to render it correctly.
 
-This needs its own font-fallback story before any screen displaying user-generated or localized
-text ships. It is out of scope for Phase 1 and must not be discovered in Phase 6.
+**Why this was not fixed blind in the same PR (2026-08-24 investigation, no live Editor session
+available):**
+
+- `PanelSettings.textSettings` (type `PanelTextSettings`) is confirmed public and settable —
+  Unity's bundled 6000.5 ScriptReference documents it directly, and the project already has one
+  shared instance, `Assets/Blockiverse/UI/Settings/MenuWorldSpacePanelSettings.asset`.
+- The fallback-font list itself is **not** part of `PanelTextSettings`'s public scripting API in
+  6000.5. `UnityEngine.UIElementsModule.dll` contains a `get_fallbackOSFontAssets` accessor, but
+  the ScriptReference index for `UIElements.PanelTextSettings` lists no public property beyond
+  `hideFlags`/`name` inherited from `Object` — it is Inspector/serialization-layer surface, not a
+  documented runtime API. Wiring it therefore needs either `SerializedProperty` field-poking with
+  an exact underlying field name that could not be confirmed without a live Editor session to test
+  against, or hand-authoring a persisted `PanelTextSettings` asset through the Inspector.
+- The dynamic-OS-font trick `BlockiverseTmpFontFallbackBootstrapper` uses
+  (`Font.CreateDynamicFontFromOSFont`) cannot simply be reused for a *persisted* `PanelTextSettings`
+  asset even if the field name were confirmed: a dynamically created `Font` is a transient runtime
+  object with no asset path, and is not something `AssetDatabase.SaveAssets()` can serialize into
+  the `.asset` file. The TMP path only works because it runs fresh every session from a
+  `MonoBehaviour.Awake()`, never persisted.
+- That same OS-font-name list's coverage on **Quest's Android image is itself unverified.** The
+  existing TMP bootstrapper's own ordering comment — "Android/Quest families first; desktop
+  families help editor validation" — was written as an assumption, not something confirmed on
+  device. A UI Toolkit fix built on the same names would inherit that same unverified assumption,
+  which is a second thing to get wrong on top of the API uncertainty above.
+
+**What actually closing this needs**, in one pass with live Editor and device access: (1) confirm
+the real serialized field name and type for `PanelTextSettings`'s fallback list via
+`SerializedObject` inspection in a running Editor; (2) decide bundling real Noto subset `.ttf`
+files (adds binary weight and OFL licence tracking, alongside Barlow/Zilla Slab, but works
+regardless of what fonts ship on a given Quest OS image) versus the OS-dynamic-font approach (no
+new assets, but unverified device coverage) — bundling is very likely the more defensible choice
+given the device-coverage unknown; (3) build and verify on a real Quest that a world/server name
+containing each target script (Arabic, CJK, Thai, Devanagari) renders a glyph, not tofu.
+
+Out of scope for Phase 1. Was supposed to be in scope no later than Phase 6; is not, and is now a
+live gap rather than a theoretical one.
 
 ---
 
@@ -223,15 +290,30 @@ Ordered by consequence. Each is a rewrite hazard, not a style preference.
 
 ## 5. Existing tests as a rewrite oracle
 
-These pin current behaviour and are the parity contract. Framework-neutral ones must keep passing
-unchanged; uGUI-specific ones are rewritten, never deleted to make a phase pass.
+These pinned the pre-migration behaviour and were the parity contract. Framework-neutral ones kept
+passing unchanged; uGUI-specific ones were rewritten against the Toolkit screens, never deleted to
+make a phase pass. The uGUI oracles have now been consumed — each name below that no longer exists
+is followed by the file that inherited its assertions, and every one of those files carries a
+header comment naming the oracle it came from, so the trail stays walkable.
 
-`ActionMenuEditModeTests`, `UiScreenRouterEditModeTests`, `SaveListModelEditModeTests`,
+Still present and unchanged: `UiScreenRouterEditModeTests`, `SaveListModelEditModeTests`,
 `NewWorldConfigEditModeTests`, `BlockiversePanelPlacementEditModeTests`,
-`SurvivalCraftingPanelEditModeTests`, `SurvivalUiEditModeTests`, `SurvivalHudFeedbackEditModeTests`,
-`MenuRuntimeWiringEditModeTests`, `WorldSessionControllerEditModeTests`,
-`CompositionLayerUiEditModeTests`, `BlockiverseTmpFontFallbackEditModeTests` — all under
-`Assets/Blockiverse/Tests/EditMode/`.
+`WorldSessionControllerEditModeTests`, `CompositionLayerUiEditModeTests`,
+`BlockiverseTmpFontFallbackEditModeTests`.
+
+Consumed at the uGUI removal:
+
+| uGUI oracle | Inherited by |
+| --- | --- |
+| `ActionMenuEditModeTests` | `MenuActionsEditModeTests`, `Toolkit/ModalDialogsEditModeTests`, `Toolkit/ActionMenuScreensEditModeTests` |
+| `MenuRuntimeWiringEditModeTests` | `MenuControllerRoutingEditModeTests`, `BlockiverseKeyboardHandVisibilityEditModeTests`, `WorldSessionControllerEditModeTests`, `Toolkit/ControlsScreensEditModeTests`, `Toolkit/WorldManageScreensEditModeTests` |
+| `SurvivalUiEditModeTests` | `Toolkit/HudFamilyEditModeTests`, `Toolkit/InventoryCrateScreensEditModeTests`, `Toolkit/ToolkitScreenFeedbackEditModeTests` |
+| `SurvivalCraftingPanelEditModeTests` | `Toolkit/CraftingStationScreensEditModeTests` |
+| `SurvivalHudFeedbackEditModeTests` | `Toolkit/HudFamilyEditModeTests` |
+| `BlockiverseMultiplayerSessionMenuEditModeTests` | `Toolkit/LanMultiplayerScreenEditModeTests` |
+| `LocalizationPrefabCharacterizationEditModeTests` | retired with the rig prefab's uGUI menus (it counted `localizationKey:` lines in a subtree that no longer exists) |
+
+All under `Assets/Blockiverse/Tests/EditMode/`.
 
 ---
 

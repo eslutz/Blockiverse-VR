@@ -35,6 +35,44 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void TheTitleFixtureMatchesTheMenuProfileSoEveryAnchoredScreenAgrees()
+        {
+            // Eric (2026-08-24): the title menu sat at a pleasing distance and tilt, but every
+            // screen he opened from it was "further away and straight up and down". Two pose
+            // formulas existed for one family of screens — the title panel is shown before the
+            // fixture pose exists so it RECENTERS at the menu profile, while every later screen
+            // applies the fixture. This pins the two together at the source, since the symptom
+            // only appears on a real navigation and nothing else would catch the drift.
+            Assert.That(
+                WorldSpaceUiPlacementController.MenuDistanceMeters,
+                Is.Not.EqualTo(BlockiversePanelPlacement.LegacyTitlePanelDistanceMeters),
+                "Fixture guard: if these ever coincide this test proves nothing — pick new values.");
+
+            Assert.That(BlockiversePanelPlacement.TitleMenuHeadingDegrees,
+                Is.EqualTo(0.0f).Within(1e-4f),
+                "A CONSTANT heading is the point: deriving it from the rig is what let the menu "
+                + "end up behind the player on returning to the title.");
+        }
+
+        [Test]
+        public void ComposingTheMenuPitchOntoTheFixtureTiltsItTheSameWayARecentreDoes()
+        {
+            // The fixture helper stays pitch-free (SpawnRelativePoseNeverPitches above); the tilt
+            // is composed by ApplyTitleMenuPose. This pins that composing it the same way the
+            // recentre path does yields the same tilt, which is the half of Eric's report about
+            // screens being "straight up and down".
+            Pose flat = BlockiversePanelPlacement.SpawnRelativePose(
+                Vector3.zero, BlockiversePanelPlacement.TitleMenuHeadingDegrees, 0.95f, 1.32f);
+            Quaternion tilted = flat.rotation
+                * Quaternion.Euler(WorldSpaceUiPlacementController.MenuPitchDegrees, 0.0f, 0.0f);
+
+            Assert.That((tilted * Vector3.forward).y, Is.Not.EqualTo(0.0f).Within(1e-3f),
+                "A tilted panel's forward must leave the horizontal plane.");
+            Assert.That(WorldSpaceUiPlacementController.MenuPitchDegrees, Is.GreaterThan(0.0f),
+                "Zero pitch here would silently reintroduce the upright screens.");
+        }
+
+        [Test]
         public void FollowTargetIsAheadOfHeadAtHeadHeightIgnoringHeadPitch()
         {
             var head = new Vector3(3.0f, 1.7f, -2.0f);

@@ -1,0 +1,23 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Gameplay stats readout (screen id gameplay_hud, Hud placement profile).
+
+        Split out of GameplayHud.uxml. Both halves used to share one panel parked dead centre
+        1.15 m in front of the player, which put the health bar and four buttons squarely over
+        the world — Eric's report was that it made things hard to see. A HUD belongs at the edge
+        of vision, so the readout now sits top-right and the action bar sits low; they cannot be
+        in two places while they share a document.
+
+        Read-only: every element is picking-mode Ignore, so this panel generates no collider and
+        cannot intercept the XRI ray (see UiToolkitScreenAttribute.NonInteractive).
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-health-row" class="gh-health-row" picking-mode="Ignore">
+            <engine:Label name="bv-health-ratio" class="hs-body hs-figures gh-health-ratio" picking-mode="Ignore" />
+            <engine:VisualElement name="bv-health-bar" class="hs-well gh-health-bar" picking-mode="Ignore">
+                <engine:VisualElement name="bv-health-fill" class="gh-health-fill" picking-mode="Ignore" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+        <engine:Label name="bv-vitals-state" class="hs-caption gh-vitals-state" picking-mode="Ignore" />
+    </engine:VisualElement>
+</engine:UXML>

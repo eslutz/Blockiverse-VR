@@ -25,8 +25,28 @@ namespace Blockiverse.UI
         public const float DefaultFollowYawThresholdDegrees = 30.0f;
         public const float DefaultFollowDistanceThresholdMeters = 1.5f;
         public const float DefaultFollowSmoothingSeconds = 0.35f;
-        public const float DefaultTitlePanelDistanceMeters = 2.0f;
-        public const float DefaultTitlePanelHeightMeters = 1.4f;
+        // RETIRED as the title fixture's geometry (2.0 m out, 1.4 m up, no pitch). Eric reported
+        // (2026-08-24) that the title menu sat at a pleasing distance and tilt but every screen he
+        // navigated to was "further away and straight up and down" — because the title panel is
+        // shown BEFORE the fixture pose exists and so recenters at the menu profile (0.95 m, 10
+        // degrees of pitch), while every later screen applies this fixture instead. Two formulas
+        // for one family of screens. The fixture now derives from the SAME menu-profile constants
+        // the recenter path uses, so all anchored screens share one distance and one tilt.
+        //
+        // Kept only as the historical values; nothing should place a panel with them.
+        public const float LegacyTitlePanelDistanceMeters = 2.0f;
+        public const float LegacyTitlePanelHeightMeters = 1.4f;
+
+        /// <summary>
+        /// The heading the title mini-world's menu always faces along, in degrees.
+        /// </summary>
+        /// <remarks>
+        /// A CONSTANT, not the rig's current yaw. Deriving it from the rig meant the menu's world
+        /// bearing from spawn changed with however the player happened to be turned, so returning
+        /// to the title after a session could leave the menu behind them (Eric, 2026-08-24). The
+        /// player is oriented to face this heading instead — see BlockiverseRigPlacement.
+        /// </remarks>
+        public const float TitleMenuHeadingDegrees = 0.0f;
 
         // A world-fixed pose in front of a spawn block: `distance` metres out along the
         // spawn-facing yaw, `height` metres above the block's base, facing back toward

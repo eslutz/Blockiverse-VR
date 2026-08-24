@@ -182,12 +182,15 @@ namespace Blockiverse.Tests.PlayMode
             base.TearDown();
         }
 
+        // The subject is BlockiverseInputRig, not either menu: support-grip (QuickMenuPressed) and
+        // the menu button (MenuPressed) must reach two INDEPENDENT targets — the bug this guards
+        // was one press toggling both. The fixture used to be the uGUI comfort menu and the
+        // quick-menu presenter; plain toggles assert the same routing without pinning a VR input
+        // regression test to whichever menu backend happens to be current.
         [UnityTest]
         public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
         {
             GameObject rigObject = new("Test Input Rig");
-            GameObject comfortMenuObject = new("Comfort Menu");
-            GameObject blockMenuObject = new("Block Menu Placeholder");
             InputActionAsset actions = CreateTestActions();
             Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
 
@@ -195,40 +198,29 @@ namespace Blockiverse.Tests.PlayMode
             {
                 var inputRig = rigObject.AddComponent<BlockiverseInputRig>();
                 inputRig.Configure(actions);
+                rigObject.AddComponent<BlockiverseComfortSettings>();
 
-                var comfortSettings = rigObject.AddComponent<BlockiverseComfortSettings>();
-                var comfortCanvas = comfortMenuObject.AddComponent<Canvas>();
-                var comfortMenu = comfortMenuObject.AddComponent<BlockiverseComfortMenu>();
-                comfortMenu.Configure(comfortCanvas, comfortSettings);
-                inputRig.MenuPressed.AddListener(comfortMenu.ToggleVisible);
-
-                // Use the real quick-menu presenter (the component the bootstrapper wires to
-                // QuickMenuPressed) rather than a placeholder, starting hidden like the runtime menu.
-                var blockCanvas = blockMenuObject.AddComponent<Canvas>();
-                var blockMenu = blockMenuObject.AddComponent<BlockiverseWorldSpacePanelPresenter>();
-                blockMenu.Configure(blockCanvas, rigObject.transform, 1.12f, -0.34f, -0.18f, 0.0f);
-                blockCanvas.enabled = false;
-
-                inputRig.QuickMenuPressed.AddListener(blockMenu.ToggleVisible);
+                bool comfortMenuVisible = false;
+                bool blockMenuVisible = false;
+                inputRig.MenuPressed.AddListener(() => comfortMenuVisible = !comfortMenuVisible);
+                inputRig.QuickMenuPressed.AddListener(() => blockMenuVisible = !blockMenuVisible);
 
                 Press(gamepad.leftShoulder);
                 yield return null;
 
-                Assert.That(blockMenu.IsVisible, Is.True);
-                Assert.That(comfortMenu.IsVisible, Is.False);
+                Assert.That(blockMenuVisible, Is.True);
+                Assert.That(comfortMenuVisible, Is.False);
 
                 Release(gamepad.leftShoulder);
                 yield return null;
                 Press(gamepad.startButton);
                 yield return null;
 
-                Assert.That(blockMenu.IsVisible, Is.True);
-                Assert.That(comfortMenu.IsVisible, Is.True);
+                Assert.That(blockMenuVisible, Is.True);
+                Assert.That(comfortMenuVisible, Is.True);
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(blockMenuObject);
-                UnityEngine.Object.DestroyImmediate(comfortMenuObject);
                 UnityEngine.Object.DestroyImmediate(rigObject);
                 UnityEngine.Object.DestroyImmediate(actions);
             }

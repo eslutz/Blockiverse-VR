@@ -1,0 +1,25 @@
+/*
+ * MiningProgress — layout only. A 400×90 strip: percent label over a recessed bar whose
+ * fill width the controller drives. The body rests hidden (the controller also collapses
+ * it inline, mirroring the uGUI slider's inactive GameObject); the fill uses the ember
+ * action token rather than introducing a colour.
+ */
+
+.mp-body {
+    display: none;
+}
+
+.mp-label {
+    -unity-text-align: middle-left;
+}
+
+.mp-bar {
+    height: 12px;
+    margin-top: var(--hs-space-1);
+}
+
+.mp-fill {
+    background-color: var(--hs-ember);
+    height: 100%;
+    width: 0%;
+}

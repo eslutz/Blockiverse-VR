@@ -1,0 +1,38 @@
+/*
+ * CrateScreen — layout only. Colours, spacing steps, type sizes and control chrome all come
+ * from Tokens.uss/Base.uss classes; nothing here introduces a new value, only the crate slot
+ * row geometry and the status/close footer split.
+ */
+
+.crate-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+/* Four square withdraw targets in one row of the ~946px content width. Stack text renders
+   as the button's own label and may wrap. */
+.crate-slot {
+    width: 220px;
+    height: 220px;
+    margin-top: var(--hs-space-1);
+    margin-bottom: var(--hs-space-1);
+    margin-left: var(--hs-space-1);
+    margin-right: var(--hs-space-1);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.crate-deposit {
+    margin-top: var(--hs-space-3);
+}
+
+.crate-status {
+    flex-grow: 1;
+}
+
+.crate-close {
+    width: 220px;
+    flex-shrink: 0;
+    margin-left: var(--hs-space-3);
+}

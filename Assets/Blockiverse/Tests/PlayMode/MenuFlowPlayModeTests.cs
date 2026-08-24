@@ -169,7 +169,7 @@ namespace Blockiverse.Tests.PlayMode
         {
             Assert.That(menu.IsActiveScreen(MenuActions.TitleScreen), Is.True);
 
-            var lanMenu = UnityEngine.Object.FindAnyObjectByType<BlockiverseMultiplayerSessionMenu>();
+            var lanMenu = UnityEngine.Object.FindAnyObjectByType<LanMultiplayerScreenController>();
             Assert.That(lanMenu, Is.Not.Null);
 
             var sessionObj = lanMenu.Session;
@@ -184,7 +184,7 @@ namespace Blockiverse.Tests.PlayMode
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             currentStateProp.GetSetMethod(nonPublic: true).Invoke(sessionObj, new object[] { BlockiverseConnectionState.Disconnected });
 
-            var lastJoinProp = typeof(BlockiverseMultiplayerSessionMenu).GetProperty("LastJoinAddress", 
+            var lastJoinProp = typeof(LanMultiplayerScreenController).GetProperty("LastJoinAddress",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             lastJoinProp.GetSetMethod(nonPublic: true).Invoke(lanMenu, new object[] { "127.0.0.1" });
 
