@@ -77,12 +77,16 @@ namespace Blockiverse.Voxel
         // Two intersecting vertical quads, alpha-cut. Grasses, flowers, shrubs, reeds, saplings.
         Cross = 2,
 
-        // NOTE: the ruleset's fourth shape, `decal` (a single opaque quad just above the ground,
-        // for flat groundcover), is deliberately NOT declared yet. No block registers it — the
-        // species that want it (moss_carpet, fallen_leaves, snow_lichen) do not exist yet — and it
-        // needs a second, non-clipping submesh on the foliage mesh that the renderer does not have.
-        // Declaring the member early would ship a render shape that silently draws nothing, or
-        // draws through the alpha-test material its own spec says it must avoid.
+        // A single quad laid just above the cell floor, for flat groundcover that reads as ground
+        // texture rather than silhouette (moss, lichen, leaf litter).
+        //
+        // These draw through the same alpha-tested foliage material as Cross. §4a.2 asks for an
+        // opaque, un-clipped path, and the difference is real but purely a cost one: a decal tile
+        // is fully opaque, so clip(1 - 0.5) never discards and the output is already correct. The
+        // waste is the alpha test disabling early-Z for geometry that never needed it, which a
+        // second non-clipping submesh on the foliage mesh would recover. Deferred deliberately —
+        // it is an optimisation, not a correctness fix.
+        Decal = 3,
     }
 
     public sealed class BlockDefinition
@@ -304,6 +308,22 @@ namespace Blockiverse.Voxel
         // (issue #340), the chunk mesh renders the frame tile like any other block.
         public static readonly BlockId MirrorPane           = new(81);
 
+        // ── Canonical vegetation additions (voxel_biome_vegetation_ruleset §4) ───────────────
+        public static readonly BlockId DrygrassTuft         = new(82);
+        public static readonly BlockId MeadowTuft           = new(83);
+        public static readonly BlockId WildflowerCluster    = new(84);
+        public static readonly BlockId DuneSage             = new(85);
+        public static readonly BlockId SaltReed             = new(86);
+        public static readonly BlockId FrostFern            = new(87);
+        public static readonly BlockId WindrootShrub        = new(88);
+        public static readonly BlockId HangingReed          = new(89);
+        public static readonly BlockId MossCarpet           = new(90);
+        public static readonly BlockId SnowLichen           = new(91);
+        public static readonly BlockId FallenLeaves         = new(92);
+        // §3 lists these two as already-defined Survival blocks. They were not; they are added here.
+        public static readonly BlockId CharredLog           = new(93);
+        public static readonly BlockId SnowBlock            = new(94);
+
         public IReadOnlyCollection<BlockDefinition> All => definitionsById.Values;
         public static BlockRegistry Default { get; } = CreateDefault();
 
@@ -422,6 +442,27 @@ namespace Blockiverse.Voxel
             registry.Register(new BlockDefinition(FreshwaterFlow, "freshwater_flow", "Flowing Freshwater", BlockCategory.Fluid, isSolid: false, isRenderable: true));
             registry.Register(new BlockDefinition(BrineFlow,      "brine_flow",      "Flowing Brine",   BlockCategory.Fluid, isSolid: false, isRenderable: true));
             registry.Register(new BlockDefinition(EmberflowFlow,  "emberflow_flow",  "Flowing Emberflow", BlockCategory.Fluid, isSolid: false, isRenderable: true, emissiveLight: 9));
+
+            // ── Canonical vegetation additions (voxel_biome_vegetation_ruleset §4/§4a) ────────
+            // Cross-quad plants: rendered, walked through, harvested with a Sickle.
+            registry.Register(new BlockDefinition(DrygrassTuft,      "drygrass_tuft",      "Drygrass Tuft",      BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(MeadowTuft,        "meadow_tuft",        "Meadow Tuft",        BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(WildflowerCluster, "wildflower_cluster", "Wildflower Cluster", BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(DuneSage,          "dune_sage",          "Dune Sage",          BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.2f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(SaltReed,          "salt_reed",          "Salt Reed",          BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(FrostFern,         "frost_fern",         "Frost Fern",         BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(WindrootShrub,     "windroot_shrub",     "Windroot Shrub",     BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.2f, renderShape: BlockRenderShape.Cross, isPassable: true));
+            registry.Register(new BlockDefinition(HangingReed,       "hanging_reed",       "Hanging Reed",       BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Cross, isPassable: true));
+
+            // Flat groundcover: a single quad on the ground, not blades. Passable like the rest.
+            registry.Register(new BlockDefinition(MossCarpet,        "moss_carpet",        "Moss Carpet",        BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Decal, isPassable: true));
+            registry.Register(new BlockDefinition(SnowLichen,        "snow_lichen",        "Snow Lichen",        BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Decal, isPassable: true));
+            registry.Register(new BlockDefinition(FallenLeaves,      "fallen_leaves",      "Fallen Leaves",      BlockCategory.Organic, isSolid: false, isRenderable: true, hardness: 0.1f, renderShape: BlockRenderShape.Decal, isPassable: true));
+
+            // Ordinary solid cubes; no render-shape or passability override.
+            registry.Register(new BlockDefinition(CharredLog,        "charred_log",        "Charred Log",        BlockCategory.Organic, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Medium));
+            registry.Register(new BlockDefinition(SnowBlock,         "snow_block",         "Snow Block",         BlockCategory.Terrain, isSolid: true,  isRenderable: true, hardnessClass: BlockHardnessClass.Soft));
+
 
             return registry;
         }

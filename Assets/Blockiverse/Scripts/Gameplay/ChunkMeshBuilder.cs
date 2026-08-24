@@ -107,6 +107,10 @@ namespace Blockiverse.Gameplay
         // A cross block emits two quads, always. Named so the face-count arithmetic reads.
         public const int CrossQuadsPerBlock = 2;
 
+        // How far a ground decal floats above the cell floor: enough to beat depth precision at
+        // Quest's far plane, little enough that it never reads as hovering.
+        public const float DecalGroundOffset = 0.02f;
+
         static readonly Vector3[,] FaceVertices =
         {
             { new(1, 0, 0), new(1, 1, 0), new(1, 1, 1), new(1, 0, 1) },
@@ -237,7 +241,7 @@ namespace Blockiverse.Gameplay
                         // once per cell and skip the six-face loop entirely. Their light is sampled
                         // from their OWN cell, because the per-face bake below samples the NEIGHBOUR
                         // across a face direction and these have no face direction.
-                        if (shape == BlockRenderShape.Cross)
+                        if (shape == BlockRenderShape.Cross || shape == BlockRenderShape.Decal)
                         {
                             float ownSky = VoxelLightSampler.SampleSkyExposure(
                                 world, registry, position, skyLight: skyLight);
@@ -251,10 +255,21 @@ namespace Blockiverse.Gameplay
                                     world, registry, position, nearbyEmitters);
                             Color foliageColor = VoxelLightSampler.ToVertexColor(ownSky, ownReach, selfEmission);
 
-                            AddCrossQuads(
-                                foliageVertices, foliageTriangles, foliageUvs, foliageColors, foliageNormals,
-                                position, definition.Id, foliageColor);
-                            foliageFaceCount += CrossQuadsPerBlock;
+                            if (shape == BlockRenderShape.Cross)
+                            {
+                                AddCrossQuads(
+                                    foliageVertices, foliageTriangles, foliageUvs, foliageColors, foliageNormals,
+                                    position, definition.Id, foliageColor);
+                                foliageFaceCount += CrossQuadsPerBlock;
+                            }
+                            else
+                            {
+                                AddGroundDecal(
+                                    foliageVertices, foliageTriangles, foliageUvs, foliageColors, foliageNormals,
+                                    position, definition.Id, foliageColor);
+                                foliageFaceCount++;
+                            }
+
                             continue;
                         }
 
@@ -530,6 +545,30 @@ namespace Blockiverse.Gameplay
                 origin + new Vector3(0, 0, 1));
         }
 
+        // A single quad just above the cell floor, for flat groundcover (moss, lichen, leaf
+        // litter). Distinct name for the same reflection reason as AddCrossQuads.
+        static void AddGroundDecal(
+            List<Vector3> vertices,
+            List<int> triangles,
+            List<Vector2> uvs,
+            List<Color> colors,
+            List<Vector3> normals,
+            BlockPosition position,
+            BlockId blockId,
+            Color vertexColor)
+        {
+            Rect uvRect = BlockVisualAtlas.GetTileRect(blockId);
+            var origin = new Vector3(position.X, position.Y, position.Z);
+            float y = DecalGroundOffset;
+
+            // Same winding as the cube top face so it faces up.
+            AddFoliageQuad(vertices, triangles, uvs, colors, normals, uvRect, vertexColor,
+                origin + new Vector3(0, y, 1),
+                origin + new Vector3(1, y, 1),
+                origin + new Vector3(1, y, 0),
+                origin + new Vector3(0, y, 0));
+        }
+
         // Shared quad emitter for the foliage stream. Writes an explicit UP normal for every
         // vertex instead of leaving it to Mesh.RecalculateNormals: recalculated normals on two
         // intersecting vertical planes point sideways, so grass would light as a pair of walls and
@@ -587,7 +626,8 @@ namespace Blockiverse.Gameplay
             Color vertexColor)
         {
             int vertexStart = vertices.Count;
-            Rect uvRect = BlockVisualAtlas.GetTileRect(blockId);
+            // Face-aware: a turf block samples grass on top, dirt on the sides, loam underneath.
+            Rect uvRect = BlockVisualAtlas.GetTileRect(blockId, faceIndex);
             var origin = new Vector3(position.X, position.Y, position.Z);
 
             for (int i = 0; i < 4; i++)

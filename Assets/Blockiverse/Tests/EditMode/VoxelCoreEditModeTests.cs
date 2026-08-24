@@ -16,7 +16,10 @@ namespace Blockiverse.Tests.EditMode
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
 
-            Assert.That(registry.All.Count, Is.EqualTo(82));
+            // 82 before the vegetation pass, plus the 13 additions of ruleset §4. A bare count is a
+            // weak assertion on its own — it catches "a block vanished" but says nothing about
+            // WHICH — so the named checks below carry the real contract.
+            Assert.That(registry.All.Count, Is.EqualTo(95));
             Assert.That(registry.Get(BlockRegistry.MirrorPane).Category, Is.EqualTo(BlockCategory.Crafted));
             Assert.That(registry.Get(BlockRegistry.Air).Category, Is.EqualTo(BlockCategory.Air));
             Assert.That(registry.Get(BlockRegistry.MeadowTurf).Category, Is.EqualTo(BlockCategory.Terrain));
@@ -46,6 +49,30 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Smooth Branchwood"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Deep Locker"));
             Assert.That(registry.All.Select(b => b.Name), Has.Member("Bedroll"));
+
+            // Vegetation additions (§4). Named rather than counted, and asserting the properties
+            // that decide how each one behaves: a Cross plant is walked through, a Decal lies flat,
+            // and the two new cubes are ordinary solid blocks.
+            Assert.That(registry.Get(BlockRegistry.MeadowTuft).RenderShape, Is.EqualTo(BlockRenderShape.Cross));
+            Assert.That(registry.Get(BlockRegistry.MeadowTuft).IsPassable, Is.True);
+            Assert.That(registry.Get(BlockRegistry.MossCarpet).RenderShape, Is.EqualTo(BlockRenderShape.Decal));
+            Assert.That(registry.Get(BlockRegistry.MossCarpet).IsPassable, Is.True);
+            Assert.That(registry.Get(BlockRegistry.CharredLog).Category, Is.EqualTo(BlockCategory.Organic));
+            Assert.That(registry.Get(BlockRegistry.CharredLog).IsPassable, Is.False);
+            Assert.That(registry.Get(BlockRegistry.SnowBlock).Category, Is.EqualTo(BlockCategory.Terrain));
+            Assert.That(registry.Get(BlockRegistry.SnowBlock).IsSolid, Is.True);
+
+            // Every §4 addition must resolve by canonical id — that string is the save and wire
+            // vocabulary, so a typo here is a corrupt world rather than a missing block.
+            foreach (string canonicalId in new[]
+                     {
+                         "drygrass_tuft", "meadow_tuft", "wildflower_cluster", "dune_sage", "salt_reed",
+                         "frost_fern", "windroot_shrub", "hanging_reed", "moss_carpet", "snow_lichen",
+                         "fallen_leaves", "charred_log", "snow_block",
+                     })
+            {
+                Assert.That(registry.All.Select(b => b.CanonicalId), Has.Member(canonicalId));
+            }
         }
 
         [Test]

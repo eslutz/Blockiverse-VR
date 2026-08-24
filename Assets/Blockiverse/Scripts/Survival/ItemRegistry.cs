@@ -59,6 +59,11 @@ namespace Blockiverse.Survival
             registry.Register(new ItemDefinition(ItemId.Deepmantle, "Deepmantle", ItemKind.Resource, BlockStackSize, BlockRegistry.Deepmantle));
             registry.Register(new ItemDefinition(ItemId.Snowpack, "Snowpack", ItemKind.Resource, BlockStackSize, BlockRegistry.Snowpack));
             registry.Register(new ItemDefinition(ItemId.Frostglass, "Frostglass", ItemKind.Resource, BlockStackSize, BlockRegistry.Frostglass));
+            registry.Register(new ItemDefinition(ItemId.FrostShard, "Frost Shard", ItemKind.Resource, OreStackSize));
+            // Block items: the 2-arg RegisterForBlock overload resolves a block's drop through the
+            // item that carries its BlockId, so these are required by the harvest rules, not optional.
+            registry.Register(new ItemDefinition(ItemId.CharredLog, "Charred Log", ItemKind.Resource, BlockStackSize, BlockRegistry.CharredLog));
+            registry.Register(new ItemDefinition(ItemId.SnowBlock, "Snow Block", ItemKind.Resource, BlockStackSize, BlockRegistry.SnowBlock));
             // Tended soil reverts to loam when dug up (§11.1) — alias instead of a new item.
             registry.RegisterDropAlias(BlockRegistry.TendedSoil, ItemId.LooseLoam);
 

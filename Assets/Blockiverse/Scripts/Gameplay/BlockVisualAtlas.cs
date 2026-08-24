@@ -139,15 +139,98 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Emberflow.Value,           75 },
             { BlockRegistry.Bedroll.Value,             76 },
             { BlockRegistry.MirrorPane.Value,          77 },
+            // Vegetation additions. Indices mirror the BLOCKS list in generate-art-assets.py; the
+            // two lists are hand-maintained mirrors of each other, so they drift silently.
+            { BlockRegistry.DrygrassTuft.Value,        78 },
+            { BlockRegistry.MeadowTuft.Value,          79 },
+            { BlockRegistry.WildflowerCluster.Value,   80 },
+            { BlockRegistry.DuneSage.Value,            81 },
+            { BlockRegistry.SaltReed.Value,            82 },
+            { BlockRegistry.FrostFern.Value,           83 },
+            { BlockRegistry.WindrootShrub.Value,       84 },
+            { BlockRegistry.HangingReed.Value,         85 },
+            { BlockRegistry.MossCarpet.Value,          86 },
+            { BlockRegistry.SnowLichen.Value,          87 },
+            { BlockRegistry.FallenLeaves.Value,        88 },
+            { BlockRegistry.CharredLog.Value,          89 },
+            { BlockRegistry.SnowBlock.Value,           90 },
             // Flowing cells render with their family's source tile.
             { BlockRegistry.FreshwaterFlow.Value,      73 },
             { BlockRegistry.BrineFlow.Value,           74 },
             { BlockRegistry.EmberflowFlow.Value,       75 },
         };
 
-        public static Rect GetTileRect(BlockId blockId)
+        // Per-face tile overrides (vegetation ruleset §4a.5). Without these a turf block samples
+        // the same tile on all six faces and reads as uniformly green from every angle, which is a
+        // primary reason the world looks flat and over-clean — the classic voxel look is a grass
+        // top over dirt sides.
+        //
+        // Only the two axes that differ are stored. `Side` replaces the four vertical faces;
+        // `Bottom` replaces the downward face. A block absent from this map, or a face with no
+        // override, falls back to the block's single tile, so every other block is unaffected.
+        readonly struct BlockFaceTiles
+        {
+            public BlockFaceTiles(int side, int bottom)
+            {
+                Side = side;
+                Bottom = bottom;
+            }
+
+            public readonly int Side;
+            public readonly int Bottom;
+        }
+
+        // Indices mirror the BLOCKS list in generate-art-assets.py, same hand-maintained pairing as
+        // TileIndexByBlockId above.
+        static readonly Dictionary<int, BlockFaceTiles> FaceTilesByBlockId = new()
+        {
+            // Turf: grass on top (the block's own tile), dirt-with-fringe on the sides, plain loam
+            // underneath — reusing loose_loam's tile rather than authoring a fourth.
+            { BlockRegistry.MeadowTurf.Value,   new BlockFaceTiles(side: 91, bottom: 1) },
+            { BlockRegistry.DryTurf.Value,      new BlockFaceTiles(side: 92, bottom: 1) },
+            { BlockRegistry.SnowcapTurf.Value,  new BlockFaceTiles(side: 93, bottom: 1) },
+            { BlockRegistry.Rootsoil.Value,     new BlockFaceTiles(side: 94, bottom: 1) },
+
+            // Logs: bark around the sides, end grain on both cut ends. Bottom and top share it.
+            { BlockRegistry.BranchwoodLog.Value,    new BlockFaceTiles(side: -1, bottom: 95) },
+            { BlockRegistry.SmoothBranchwood.Value, new BlockFaceTiles(side: -1, bottom: 96) },
+        };
+
+        // Face-aware overload. `faceIndex` is a ChunkMeshBuilder face index; -1 means "no
+        // particular face", which is what cross quads and decals pass.
+        public static Rect GetTileRect(BlockId blockId, int faceIndex)
+        {
+            return BuildTileRect(ResolveTileIndex(blockId, faceIndex));
+        }
+
+        static int ResolveTileIndex(BlockId blockId, int faceIndex)
         {
             int tileIndex = GetTileIndex(blockId);
+
+            if (faceIndex < 0 || !FaceTilesByBlockId.TryGetValue(blockId.Value, out BlockFaceTiles faces))
+                return tileIndex;
+
+            // Logs want end grain on BOTH caps, so top uses the bottom override too. Turf leaves
+            // Side at -1 for neither cap, so its top keeps the block's own grass tile.
+            bool isTop = faceIndex == ChunkMeshBuilder.TopFaceIndex;
+            bool isBottom = faceIndex == ChunkMeshBuilder.BottomFaceIndex;
+
+            if (isBottom || (isTop && faces.Side < 0))
+                return faces.Bottom >= 0 ? faces.Bottom : tileIndex;
+
+            if (isTop)
+                return tileIndex;
+
+            return faces.Side >= 0 ? faces.Side : tileIndex;
+        }
+
+        public static Rect GetTileRect(BlockId blockId)
+        {
+            return BuildTileRect(GetTileIndex(blockId));
+        }
+
+        static Rect BuildTileRect(int tileIndex)
+        {
             int column = tileIndex % Columns;
             int row = tileIndex / Columns;
             float minX = column * TileStridePixels + TilePaddingPixels + UvInsetPixels;

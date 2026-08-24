@@ -142,6 +142,50 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void TurfSamplesGrassOnTopDirtOnTheSidesAndLoamUnderneath()
+        {
+            // The reason the world reads uniformly green: without per-face tiles a turf block
+            // samples one tile on all six faces, so a hillside is the same colour from every angle.
+            Rect top = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf, ChunkMeshBuilder.TopFaceIndex);
+            Rect bottom = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf, ChunkMeshBuilder.BottomFaceIndex);
+            Rect side = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf, 0);
+
+            Assert.That(top, Is.EqualTo(BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf)),
+                "Top keeps the block's own grass tile.");
+            Assert.That(side, Is.Not.EqualTo(top), "Sides must use the dirt-with-fringe tile.");
+            Assert.That(bottom, Is.Not.EqualTo(top), "The underside must not be grass.");
+            Assert.That(bottom, Is.EqualTo(BlockVisualAtlas.GetTileRect(BlockRegistry.LooseLoam)),
+                "The underside reuses loose_loam rather than authoring a fourth tile.");
+        }
+
+        [Test]
+        public void LogsShowEndGrainOnBothCapsAndBarkAroundTheSides()
+        {
+            Rect top = BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog, ChunkMeshBuilder.TopFaceIndex);
+            Rect bottom = BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog, ChunkMeshBuilder.BottomFaceIndex);
+            Rect side = BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog, 0);
+
+            // Both cut ends are end grain — unlike turf, whose top is its own tile.
+            Assert.That(top, Is.EqualTo(bottom), "Both log caps show end grain.");
+            Assert.That(side, Is.Not.EqualTo(top), "The sides are bark, not end grain.");
+            Assert.That(side, Is.EqualTo(BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog)),
+                "Bark is the block's own tile.");
+        }
+
+        [Test]
+        public void BlocksWithoutFaceOverridesSampleOneTileOnEveryFace()
+        {
+            // The fallback that keeps all ~90 other blocks unaffected.
+            Rect plain = BlockVisualAtlas.GetTileRect(BlockRegistry.Graystone);
+
+            for (int face = 0; face < 6; face++)
+            {
+                Assert.That(BlockVisualAtlas.GetTileRect(BlockRegistry.Graystone, face), Is.EqualTo(plain),
+                    $"Graystone declares no face overrides, so face {face} must fall back to its single tile.");
+            }
+        }
+
+        [Test]
         public void MeshBuilderEmitsOnlyExteriorFacesForSingleSolidBlock()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

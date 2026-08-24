@@ -142,6 +142,10 @@ BLOCK_SOURCE_ALIASES = [
 
 
 ITEMS = [
+    # Vegetation additions (voxel_biome_vegetation_ruleset §4).
+    ("frost_shard", (120, 176, 198), (226, 246, 252), "crystal"),
+    ("charred_log", (38, 32, 29), (92, 74, 62), "block"),
+    ("snow_block", (198, 214, 224), (245, 250, 253), "block"),
     ("meadow_turf", (57, 134, 68), (151, 211, 83), "block"),
     ("dry_turf", (136, 112, 47), (215, 174, 71), "block"),
     ("snowcap_turf", (98, 134, 124), (231, 242, 240), "block"),
