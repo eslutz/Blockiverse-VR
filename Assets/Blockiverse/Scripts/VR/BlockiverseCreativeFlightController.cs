@@ -461,7 +461,17 @@ namespace Blockiverse.VR
             bool providerStateChanged = !providerStateInitialized || lastProviderActive != active;
             providerStateInitialized = true;
             lastProviderActive = active;
-            inputRig.TurnWithBothHands = active;
+
+            // NOT TurnWithBothHands. This used to force it on for flight, which sounds harmless
+            // ("both sticks can turn") but is not what it does: each hand's Move and Turn actions
+            // are bound to that SAME physical thumbstick (BlockiverseInputActions.inputactions,
+            // XRI LeftHand/RightHand — both actions read <XRController>{hand}/thumbstick).
+            // TurnWithBothHands wires the OFF hand's Turn action in as well as the dominant
+            // hand's, so the off hand's stick fed BOTH the move provider and a turn provider from
+            // the same physical input — pushing it forward moved you AND turned you at once.
+            // Eric's report (2026-08-24): the flight motion stick was also turning him. Leaving
+            // this false keeps flight on the ordinary split — dominant hand turns, off hand only
+            // translates — which is what "old flight mapping" mixed together.
             inputRig.CreativeFlightLocomotionActive = active;
 
             // Flight moves the rig without walking, and its ground-skimming still reads as

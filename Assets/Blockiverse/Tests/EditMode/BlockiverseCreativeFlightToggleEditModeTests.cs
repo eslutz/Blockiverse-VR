@@ -44,5 +44,59 @@ namespace Blockiverse.Tests.EditMode
                 BlockiverseCreativeFlightController.CompletesDoubleTap(previousPressWasTap: false, secondsSincePreviousPress: 0.05f),
                 Is.False);
         }
+        [Test]
+        public void FlightCruisesAtTheLandSprintSpeedAndSprintsFasterStill()
+        {
+            // Eric's ruling (2026-08-24): "normal speed should be what land sprinting speed is and
+            // flying sprint speed should be faster than that."
+            //
+            // Horizontal flight is the ORDINARY move provider — the flight controller owns only
+            // vertical — so before this, flying forward moved at plain walking pace.
+            const float baseSpeed = 1.8f;
+
+            float landWalk = BlockiverseInputRig.ResolveHorizontalMoveSpeed(
+                baseSpeed, sprintActive: false, flightActive: false);
+            float landSprint = BlockiverseInputRig.ResolveHorizontalMoveSpeed(
+                baseSpeed, sprintActive: true, flightActive: false);
+            float flightCruise = BlockiverseInputRig.ResolveHorizontalMoveSpeed(
+                baseSpeed, sprintActive: false, flightActive: true);
+            float flightSprint = BlockiverseInputRig.ResolveHorizontalMoveSpeed(
+                baseSpeed, sprintActive: true, flightActive: true);
+
+            Assert.That(flightCruise, Is.EqualTo(landSprint).Within(1e-4f),
+                "Flight cruise IS land sprint — the literal ruling.");
+            Assert.That(flightSprint, Is.GreaterThan(flightCruise),
+                "Sprinting in the air must be faster than cruising in the air.");
+            Assert.That(flightCruise, Is.GreaterThan(landWalk),
+                "Guard against the regression: flying forward used to be plain walking pace.");
+        }
+
+        [Test]
+        public void GroundMovementIsUnchangedByTheFlightSpeedRule()
+        {
+            // The flight rule must not leak into walking, which Eric did not ask to change.
+            const float baseSpeed = 1.8f;
+
+            Assert.That(
+                BlockiverseInputRig.ResolveHorizontalMoveSpeed(baseSpeed, sprintActive: false, flightActive: false),
+                Is.EqualTo(baseSpeed).Within(1e-4f));
+            Assert.That(
+                BlockiverseInputRig.ResolveHorizontalMoveSpeed(baseSpeed, sprintActive: true, flightActive: false),
+                Is.EqualTo(BlockiverseInputRig.ResolveSprintMoveSpeed(baseSpeed, sprintActive: true)).Within(1e-4f));
+        }
+
+        [Test]
+        public void FlightSpeedScalesWithTheComfortMoveSpeedSetting()
+        {
+            // Derived from the comfort-adjusted base, so a player who slowed movement down for
+            // comfort keeps that in the air rather than being flung about by a fixed constant.
+            float slow = BlockiverseInputRig.ResolveHorizontalMoveSpeed(
+                1.0f, sprintActive: false, flightActive: true);
+            float fast = BlockiverseInputRig.ResolveHorizontalMoveSpeed(
+                2.0f, sprintActive: false, flightActive: true);
+
+            Assert.That(fast, Is.EqualTo(slow * 2.0f).Within(1e-4f));
+        }
+
     }
 }

@@ -798,7 +798,16 @@ namespace Blockiverse.Tests.EditMode
                 // useGravity, which GravityProvider re-asserts on every comfort change.
                 Assert.That(flight.GravityLockHeld, Is.True);
                 Assert.That(jump.enabled, Is.False, "Jump/A is the ascend verb while flying.");
-                Assert.That(inputRig.TurnWithBothHands, Is.True, "Both sticks should keep turning available while the player is in creative flight.");
+                // INVERTED 2026-08-24 on Eric's report. This used to assert True, and the earlier
+                // reasoning ("both sticks should keep turning available") was wrong in a way that
+                // was easy to miss: each hand's Move and Turn actions are bound to that hand's
+                // SAME physical thumbstick, so wiring the off hand's Turn action in as well as the
+                // dominant hand's meant the off hand's stick fed the move provider AND a turn
+                // provider from one input -- pushing it forward moved him and turned him at once.
+                // Flight keeps the ordinary split: dominant hand turns, the other hand only
+                // translates.
+                Assert.That(inputRig.TurnWithBothHands, Is.False,
+                    "The motion stick must only translate -- see BlockiverseCreativeFlightController.ApplyProviderState.");
 
                 flight.SetFlightActive(false);
 

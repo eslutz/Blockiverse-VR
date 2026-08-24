@@ -306,5 +306,78 @@ namespace Blockiverse.Tests.EditMode
                 gait.Advance(FrameSeconds);
             }
         }
+        [Test]
+        public void SprintLengthensTheStrideInsteadOfDoublingTheCadence()
+        {
+            // Eric (2026-08-24): sprinting was "a jackhammer up and down really fast". With a
+            // CONSTANT stride, cadence = speed / stride, so sprinting at 2.2x walking pace simply
+            // doubled the step rate to ~5 Hz. Real gait lengthens the stride as well.
+            float walkStride = BlockiverseGaitCycle.ResolveStepLengthMeters(
+                BlockiverseGaitCycle.DefaultStepLengthMeters,
+                BlockiverseGaitCycle.WalkSpeedMetersPerSecond);
+            float sprintStride = BlockiverseGaitCycle.ResolveStepLengthMeters(
+                BlockiverseGaitCycle.DefaultStepLengthMeters,
+                BlockiverseGaitCycle.SprintSpeedMetersPerSecond);
+
+            Assert.That(walkStride, Is.EqualTo(BlockiverseGaitCycle.DefaultStepLengthMeters).Within(1e-4f),
+                "Walking must be untouched — only the sprint end of the curve moves.");
+            Assert.That(sprintStride, Is.GreaterThan(walkStride * 1.5f),
+                "The stride has to grow substantially or the cadence problem remains.");
+
+            float walkCadence = BlockiverseGaitCycle.WalkSpeedMetersPerSecond / walkStride;
+            float sprintCadence = BlockiverseGaitCycle.SprintSpeedMetersPerSecond / sprintStride;
+
+            Assert.That(sprintCadence, Is.GreaterThan(walkCadence),
+                "Sprinting is still quicker than walking — the fix must not flatten it entirely.");
+            Assert.That(sprintCadence, Is.LessThan(walkCadence * 1.5f),
+                "...but nothing like the ~2.2x it was. That ratio IS the jackhammer.");
+        }
+
+        [Test]
+        public void FootfallsAtSprintClearTheAudioRateCeiling()
+        {
+            // The rate ceiling SWALLOWS crossings rather than deferring them, so a cadence past it
+            // silently drops footsteps while the bob keeps running — audio and bob drift apart.
+            float sprintStride = BlockiverseGaitCycle.ResolveStepLengthMeters(
+                BlockiverseGaitCycle.DefaultStepLengthMeters,
+                BlockiverseGaitCycle.SprintSpeedMetersPerSecond);
+            float secondsPerStep = sprintStride / BlockiverseGaitCycle.SprintSpeedMetersPerSecond;
+
+            Assert.That(secondsPerStep, Is.GreaterThan(BlockiverseGaitCycle.MinFootfallIntervalSeconds),
+                "Sprint cadence must sit clear of the ceiling so no footstep is swallowed.");
+        }
+
+        [Test]
+        public void CadenceStopsClimbingOnceThePlayerIsPastSprintSpeed()
+        {
+            // The comfort move-speed slider at maximum plus sprint reaches ~8.8 m/s. Clamping the
+            // stride at its sprint value would let cadence climb to ~6 Hz there — the same defect
+            // again, just further along the slider.
+            float sprintCadence = BlockiverseGaitCycle.SprintSpeedMetersPerSecond
+                / BlockiverseGaitCycle.ResolveStepLengthMeters(
+                    BlockiverseGaitCycle.DefaultStepLengthMeters,
+                    BlockiverseGaitCycle.SprintSpeedMetersPerSecond);
+            float fastCadence = 8.8f
+                / BlockiverseGaitCycle.ResolveStepLengthMeters(
+                    BlockiverseGaitCycle.DefaultStepLengthMeters, 8.8f);
+
+            Assert.That(fastCadence, Is.EqualTo(sprintCadence).Within(0.01f),
+                "Above sprint the stride grows in proportion to speed, holding cadence flat.");
+        }
+
+        [Test]
+        public void StrideScalingRespectsAConfiguredBaseStepLength()
+        {
+            // The base is a serialized field, so the curve must be relative to it, not absolute.
+            float half = BlockiverseGaitCycle.ResolveStepLengthMeters(
+                BlockiverseGaitCycle.DefaultStepLengthMeters * 0.5f,
+                BlockiverseGaitCycle.SprintSpeedMetersPerSecond);
+            float full = BlockiverseGaitCycle.ResolveStepLengthMeters(
+                BlockiverseGaitCycle.DefaultStepLengthMeters,
+                BlockiverseGaitCycle.SprintSpeedMetersPerSecond);
+
+            Assert.That(half, Is.EqualTo(full * 0.5f).Within(1e-4f));
+        }
+
     }
 }
