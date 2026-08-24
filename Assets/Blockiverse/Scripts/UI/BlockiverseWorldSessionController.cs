@@ -83,9 +83,23 @@ namespace Blockiverse.UI
             ApplyTitleMenuPose();
         }
 
-        // Title-state menus are fixtures of the mini-world: pinned at a spawn-relative pose
-        // (in front of spawn along the rig's spawn heading, at standing eye height) that never
-        // derives from the headset. Recomputed whenever the title world is (re)initialized.
+        // Title-state menus are fixtures of the mini-world: pinned at a spawn-relative pose that
+        // never derives from the headset. Recomputed whenever the title world is (re)initialized.
+        //
+        // Two things here were reported broken on device (Eric, 2026-08-24) and both are fixed by
+        // this method rather than by the placement layer:
+        //
+        // 1. GEOMETRY. The fixture used its own distance and height (2.0 m out, 1.4 m up, upright)
+        //    while every anchored panel is CONFIGURED for the menu profile (0.95 m out, 0.38 m
+        //    below eye, pitched 10 degrees). Whichever formula a screen got depended purely on
+        //    whether the fixture pose existed yet when that screen first became visible: the title
+        //    shows first and recenters at the menu profile (the pose Eric likes), every screen
+        //    after it applies the fixture — "further away and straight up and down". Deriving the
+        //    fixture FROM the menu-profile constants makes the two formulas one.
+        //
+        // 2. HEADING. It used the rig's current yaw, so the menu's bearing from spawn moved with
+        //    however the player happened to be turned, and returning to the title could leave the
+        //    menu behind them. It is a fixed heading now, and the rig is oriented to face it.
         public void ApplyTitleMenuPose()
         {
             if (menuController == null || worldManager == null)
@@ -93,12 +107,28 @@ namespace Blockiverse.UI
 
             BlockPosition spawn = worldManager.SpawnPosition;
             var spawnBase = new Vector3(spawn.X + 0.5f, spawn.Y, spawn.Z + 0.5f);
-            float yaw = BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig) ? rig.eulerAngles.y : 0.0f;
-            menuController.SetTitleMenuPose(BlockiversePanelPlacement.SpawnRelativePose(
+
+            Pose fixture = BlockiversePanelPlacement.SpawnRelativePose(
                 spawnBase,
-                yaw,
-                BlockiversePanelPlacement.DefaultTitlePanelDistanceMeters,
-                BlockiversePanelPlacement.DefaultTitlePanelHeightMeters));
+                BlockiversePanelPlacement.TitleMenuHeadingDegrees,
+                WorldSpaceUiPlacementController.MenuDistanceMeters,
+                BlockiverseComfortSettings.FixedStandingEyeHeight
+                    + WorldSpaceUiPlacementController.MenuVerticalOffsetMeters);
+
+            // SpawnRelativePose stays pitch-free on purpose (it is the generic spawn-relative
+            // helper); the menu profile's tilt is composed on here so the fixture matches what a
+            // recenter produces.
+            menuController.SetTitleMenuPose(new Pose(
+                fixture.position,
+                fixture.rotation * Quaternion.Euler(WorldSpaceUiPlacementController.MenuPitchDegrees, 0.0f, 0.0f)));
+
+            // Seat the player facing it. Both title entries — first load and returning from a
+            // session — come through here, which is why the orientation lives with the pose it
+            // has to agree with rather than at either call site. It runs behind the existing
+            // fade; see BlockiverseRigPlacement.PositionAtSpawnFacing for why a forced yaw is
+            // acceptable at this particular transition and would not be mid-session.
+            BlockiverseRigPlacement.PositionAtSpawnFacing(
+                spawn, BlockiversePanelPlacement.TitleMenuHeadingDegrees);
         }
 
         void OnDestroy()
