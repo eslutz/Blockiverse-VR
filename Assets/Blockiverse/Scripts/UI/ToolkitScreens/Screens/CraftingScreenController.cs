@@ -30,7 +30,7 @@ namespace Blockiverse.UI
     // the hidden uGUI panel's state — the uGUI panel exposes no station-set getter, and
     // duplicating the scan's inputs is the only coupling that cannot drift.
     [UiToolkitScreen(MenuActions.CraftingScreen, "Assets/Blockiverse/UI/Documents/CraftingScreen.uxml",
-        1000, 930, UiToolkitPlacementProfile.Menu)]
+        1000, 904, UiToolkitPlacementProfile.Menu)]
     public sealed class CraftingScreenController : UiToolkitScreenController
     {
         public const int RecipeRowCount = 5;

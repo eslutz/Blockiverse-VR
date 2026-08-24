@@ -24,7 +24,7 @@ namespace Blockiverse.UI
     // during a network session — a refused slider is reverted BEFORE the refusal is reported.
     // Like the uGUI panel, this screen plays no feedback cues of its own.
     [UiToolkitScreen(MenuActions.CreativeToolsScreen, "Assets/Blockiverse/UI/Documents/CreativeToolsScreen.uxml",
-        1000, 1290, UiToolkitPlacementProfile.Menu)]
+        1000, 1250, UiToolkitPlacementProfile.Menu)]
     public sealed class CreativeToolsScreenController : UiToolkitScreenController, IUiToolkitCreativeToolsScreen
     {
         const float DefaultCycleTimeScale = 1.0f;

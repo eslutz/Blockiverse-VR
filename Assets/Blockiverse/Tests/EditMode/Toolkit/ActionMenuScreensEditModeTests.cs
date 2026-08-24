@@ -134,15 +134,25 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(attribute.ScreenId, Is.EqualTo(expectedScreenId));
             Assert.That(attribute.WidthPixels, Is.EqualTo(570));
 
-            // Each of these is sized to its own worst-case action count rather than to a
-            // shared number. A button row is 64 px plus 8 px margins. Pause carries up to
-            // seven actions and needs 860; title carries six (five on device, where
-            // CanQuit() is false) and needs 740 — it was briefly 860, which fit but left
-            // dead space under the last button. Death (3) and the settings hub (4) fit in
-            // 700. The residual slack is centred rather than pooled, see .hs-action-list.
+            // Each of these is sized to its own worst-case action count. These numbers are
+            // MEASURED, not derived — that distinction is the whole reason they changed.
+            //
+            // They used to come from arithmetic: a button row is 64 px plus 8 px margins, so
+            // seven pause actions "need" 860 and the shorter lists "fit in" 700. That reasoning
+            // is plausible and was wrong, because it counts rows and ignores everything else the
+            // panel spends height on. A Play-mode layout sweep against worst-case action lists
+            // (Blockiverse/UI Toolkit/Report Screen Content Fit) put the real figures 46 px, 284 px
+            // and 204 px below the estimates. Title is the exception and the tell: it was
+            // hand-corrected from 860 to 740 after Eric saw the dead space, and measurement then
+            // agreed with it to within 6 px — the one value anybody had checked against a real
+            // screen was the one the arithmetic could not fault.
+            //
+            // Re-measure rather than re-derive if content changes. Residual slack at lower action
+            // counts is centred rather than pooled, see .hs-action-list.
             int expectedHeight =
-                controllerType == typeof(PauseScreenController) ? 860 :
-                controllerType == typeof(TitleScreenController) ? 740 : 700;
+                controllerType == typeof(PauseScreenController) ? 814 :
+                controllerType == typeof(TitleScreenController) ? 740 :
+                controllerType == typeof(DeathScreenController) ? 416 : 496;
             Assert.That(attribute.HeightPixels, Is.EqualTo(expectedHeight));
             Assert.That(attribute.PlacementProfile, Is.EqualTo(UiToolkitPlacementProfile.Menu));
 

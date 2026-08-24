@@ -19,7 +19,7 @@ namespace Blockiverse.UI
         MenuActions.LoadWorldScreen,
         "Assets/Blockiverse/UI/Documents/LoadWorldScreen.uxml",
         900,
-        940,
+        894,
         UiToolkitPlacementProfile.Menu)]
     public sealed class LoadWorldScreenController : UiToolkitScreenController, IUiToolkitSaveListScreen, IUiToolkitStatusScreen
     {

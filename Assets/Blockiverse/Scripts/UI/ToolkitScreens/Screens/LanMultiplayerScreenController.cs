@@ -34,7 +34,7 @@ namespace Blockiverse.UI
         MenuActions.LanMultiplayerScreen,
         "Assets/Blockiverse/UI/Documents/LanMultiplayerScreen.uxml",
         1100,
-        990,
+        946,
         UiToolkitPlacementProfile.Menu)]
     public sealed class LanMultiplayerScreenController : UiToolkitScreenController
     {

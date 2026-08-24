@@ -18,7 +18,7 @@ namespace Blockiverse.UI
     [UiToolkitScreen(
         MenuActions.AudioSettingsScreen,
         "Assets/Blockiverse/UI/Documents/AudioSettingsScreen.uxml",
-        800, 1470, UiToolkitPlacementProfile.Menu)]
+        800, 1428, UiToolkitPlacementProfile.Menu)]
     public sealed class AudioSettingsScreenController : UiToolkitScreenController
     {
         // Requested table entries (not yet in "UI"); UiText.Get falls back to the key string

@@ -114,9 +114,32 @@ namespace Blockiverse.UI
         // row of buttons laid out horizontally looks like N rows to a parser and is one row on
         // screen. Only a real layout pass knows, so this is Play-mode only — outside it, and
         // before the first layout, it returns 0 and reports false.
-        public bool TryMeasureContentOverflow(out float overflowPixels)
+        /// <summary>
+        /// Signed vertical fit for this screen's content. Positive means content spills past what
+        /// the panel shows; negative means unused space the panel could give back.
+        /// </summary>
+        /// <remarks>
+        /// The value was always signed — <c>content - viewport</c> goes negative when content is
+        /// short. What was missing was anyone acting on the negative half. The method was named for
+        /// overflow, the sweep was run to hunt overflow, and slack printed in the report and went
+        /// unread; several panels kept a third of their height as dead space through a pass
+        /// described as sizing every screen to its content. Naming a measurement after one of its
+        /// two directions is enough to make the other invisible.
+        ///
+        /// One genuine blind spot did exist and is fixed here. <c>.hs-action-list</c> scroll
+        /// containers carry <c>flex-grow: 1</c> so a short action list centres rather than pooling
+        /// dead space under the last button. A flex-grown container measures exactly its viewport
+        /// by construction, so on those screens slack really was unrepresentable, not merely
+        /// ignored. Sum the children's natural heights there instead of trusting the container.
+        ///
+        /// <paramref name="scrolls"/> matters to the caller because it decides the cost of being
+        /// wrong: shrinking a scrolling screen makes the player scroll, shrinking a
+        /// non-scrolling one silently clips content off the panel.
+        /// </remarks>
+        public bool TryMeasureContentFit(out float deltaPixels, out bool scrolls)
         {
-            overflowPixels = 0f;
+            deltaPixels = 0f;
+            scrolls = false;
 
             if (screenRoot == null || float.IsNaN(screenRoot.layout.height))
                 return false;
@@ -125,17 +148,38 @@ namespace Blockiverse.UI
 
             if (scroll != null)
             {
-                float content = scroll.contentContainer.layout.height;
+                scrolls = true;
                 float viewport = scroll.contentViewport.layout.height;
+                float content = scroll.contentContainer.layout.height;
 
                 if (float.IsNaN(content) || float.IsNaN(viewport))
                     return false;
 
-                overflowPixels = content - viewport;
+                // A flex-grown container is pinned to the viewport, so its own height carries no
+                // information. Ask the children what they actually need.
+                if (scroll.contentContainer.resolvedStyle.flexGrow > 0f)
+                {
+                    float natural = 0f;
+                    foreach (VisualElement child in scroll.contentContainer.Children())
+                    {
+                        if (float.IsNaN(child.layout.height))
+                            continue;
+
+                        natural += child.layout.height
+                            + child.resolvedStyle.marginTop
+                            + child.resolvedStyle.marginBottom;
+                    }
+
+                    if (natural > 0f)
+                        content = natural;
+                }
+
+                deltaPixels = content - viewport;
                 return true;
             }
 
-            // No ScrollView: content cannot scroll, so overflow is what spills past the root.
+            // No ScrollView: content cannot scroll, so a positive delta clips rather than scrolls
+            // and a negative one is dead space with no way for the player to reclaim it.
             float needed = 0f;
 
             foreach (VisualElement child in screenRoot.Children())
@@ -147,7 +191,7 @@ namespace Blockiverse.UI
             float available = screenRoot.layout.height
                 - screenRoot.resolvedStyle.paddingTop
                 - screenRoot.resolvedStyle.paddingBottom;
-            overflowPixels = needed - available;
+            deltaPixels = needed - available;
             return true;
         }
 

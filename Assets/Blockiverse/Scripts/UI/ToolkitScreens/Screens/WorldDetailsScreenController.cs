@@ -20,7 +20,7 @@ namespace Blockiverse.UI
         MenuActions.WorldDetailsScreen,
         "Assets/Blockiverse/UI/Documents/WorldDetailsScreen.uxml",
         700,
-        810,
+        766,
         UiToolkitPlacementProfile.Menu)]
     public sealed class WorldDetailsScreenController : UiToolkitScreenController, IUiToolkitWorldDetailsScreen, IUiToolkitActionMenuScreen
     {

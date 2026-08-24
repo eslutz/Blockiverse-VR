@@ -24,7 +24,7 @@ namespace Blockiverse.UI
         MenuActions.ComfortSettingsScreen,
         "Assets/Blockiverse/UI/Documents/ComfortSettingsScreen.uxml",
         1090,
-        1410,
+        1346,
         UiToolkitPlacementProfile.Menu)]
     public sealed class ComfortSettingsScreenController : UiToolkitScreenController
     {

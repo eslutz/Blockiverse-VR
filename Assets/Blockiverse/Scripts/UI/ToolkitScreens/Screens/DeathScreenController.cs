@@ -11,7 +11,7 @@ namespace Blockiverse.UI
     // options through SetActionMenu — the bedroll entry is present only when a bedroll spawn is
     // set. The uGUI death menu has no status line, so this screen is not a status screen.
     [UiToolkitScreen(MenuActions.DeathScreen, "Assets/Blockiverse/UI/Documents/DeathScreen.uxml",
-        570, 700, UiToolkitPlacementProfile.Menu)]
+        570, 416, UiToolkitPlacementProfile.Menu)]
     public sealed class DeathScreenController : UiToolkitScreenController, IUiToolkitActionMenuScreen
     {
         Label titleLabel;

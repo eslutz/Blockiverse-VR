@@ -25,8 +25,8 @@ namespace Blockiverse.Editor
         static int index;
         static int settle;
 
-        [MenuItem("Blockiverse/UI Toolkit/Report Screen Content Overflow")]
-        public static void ReportScreenOverflow()
+        [MenuItem("Blockiverse/UI Toolkit/Report Screen Content Fit")]
+        public static void ReportScreenFit()
         {
             if (!Application.isPlaying)
             {
@@ -46,7 +46,17 @@ namespace Blockiverse.Editor
             }
 
             queue = new List<(string, UiToolkitScreenController)>(host.Screens);
-            report = new StringBuilder("UI Toolkit screen content overflow (positive px = it scrolls)\n");
+
+            // Worst case, not observed case. An action-list screen shows between four and seven
+            // entries depending on save availability and CanQuit(), and a panel sized to whatever
+            // happened to be on screen during the sweep clips the day it shows one more. Push the
+            // richest list each screen can legally present before measuring anything.
+            FillActionScreensToWorstCase(host);
+
+            report = new StringBuilder(
+                "UI Toolkit screen content fit, measured at worst-case content\n" +
+                "  positive px = content spills (scrolls, or CLIPS where the screen has no ScrollView)\n" +
+                "  negative px = dead space the panel could give back\n");
             Restore.Clear();
 
             foreach (var (_, controller) in host.Screens)
@@ -56,6 +66,52 @@ namespace Blockiverse.Editor
             settle = 0;
             EditorApplication.update -= Step;
             EditorApplication.update += Step;
+        }
+
+        // Slack under this is not worth a resize: it is inside the noise of a single text line's
+        // leading, and chasing it would churn every panel size on every font tweak.
+        const float FitTolerancePixels = 24f;
+
+        static string Verdict(float delta, bool scrolls)
+        {
+            if (delta > FitTolerancePixels)
+                return scrolls ? $"GROW by {delta:0} (scrollbar showing)" : $"GROW by {delta:0} (CLIPPING)";
+
+            return delta < -FitTolerancePixels ? $"shrink by {-delta:0} (dead space)" : "fits";
+        }
+
+        // Drive every action-list screen to the largest list it can legally show.
+        //
+        // Sizing to observed content is how a panel ends up clipping later: the title menu shows
+        // five entries on device and six in the editor (CanQuit is editor-only), and the pause menu
+        // varies with world permissions. Measuring whichever happened to be loaded would bake in
+        // the smaller one.
+        static void FillActionScreensToWorstCase(UiToolkitMenuHost host)
+        {
+            foreach (var (screenId, controller) in host.Screens)
+            {
+                if (controller is not IUiToolkitActionMenuScreen actionScreen)
+                    continue;
+
+                IReadOnlyList<MenuAction> worst = screenId switch
+                {
+                    MenuActions.TitleScreen => MenuActions.Title(hasLatestSave: true, hasAnySave: true, canQuit: true),
+                    MenuActions.PauseScreen => MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true),
+                    MenuActions.DeathScreen => MenuActions.Death(hasBedrollSpawn: true),
+                    MenuActions.SettingsScreen => MenuActions.Settings,
+                    MenuActions.WorldDetailsScreen => MenuActions.WorldDetails,
+                    MenuActions.ConfirmModal => MenuActions.Confirm(),
+                    MenuActions.ErrorModal => MenuActions.Error(),
+                    _ => null,
+                };
+
+                // A representative title, NOT the type name. Real titles are short ("Paused",
+                // "Settings", the product name); "ComfortSettingsScreenController" is 31 characters
+                // and would wrap the header on the narrower panels, inflating every reading by a
+                // line the shipped screen never shows.
+                if (worst != null)
+                    actionScreen.SetActionMenu(BlockiverseProject.ProductName, worst);
+            }
         }
 
         static void Step()
@@ -88,9 +144,10 @@ namespace Blockiverse.Editor
                 return;
             }
 
-            bool measured = controller.TryMeasureContentOverflow(out float overflow);
+            bool measured = controller.TryMeasureContentFit(out float delta, out bool scrolls);
             report.AppendLine(measured
-                ? $"  {screenId,-20} {controller.GetType().Name,-34} {overflow,8:0} px"
+                ? $"  {screenId,-20} {controller.GetType().Name,-34} {delta,8:0} px  " +
+                  $"{(scrolls ? "scroll" : "fixed ")}  {Verdict(delta, scrolls)}"
                 : $"  {screenId,-20} {controller.GetType().Name,-34}   (no layout)");
 
             controller.SetVisible(false, false);

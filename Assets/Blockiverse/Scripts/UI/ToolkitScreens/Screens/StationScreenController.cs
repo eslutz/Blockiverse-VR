@@ -26,7 +26,7 @@ namespace Blockiverse.UI
     // is removed. Nothing routes TO station_menu yet (the uGUI stationPanel.Open has no runtime
     // caller either); the open surface is ported faithfully for the interaction wire-up to call.
     [UiToolkitScreen(MenuActions.StationMenuScreen, "Assets/Blockiverse/UI/Documents/StationScreen.uxml",
-        1000, 1060, UiToolkitPlacementProfile.Menu)]
+        1000, 1018, UiToolkitPlacementProfile.Menu)]
     public sealed class StationScreenController : UiToolkitScreenController, IUiToolkitStationScreen
     {
         const string StationTitleKey = "ui.generated.station.title";

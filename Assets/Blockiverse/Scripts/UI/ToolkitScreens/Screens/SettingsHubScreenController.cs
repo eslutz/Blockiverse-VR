@@ -11,7 +11,7 @@ namespace Blockiverse.UI
     // the title ("Settings") and the fixed MenuActions.Settings list through SetActionMenu.
     // The uGUI settings menu has no status line, so this screen is not a status screen.
     [UiToolkitScreen(MenuActions.SettingsScreen, "Assets/Blockiverse/UI/Documents/SettingsHubScreen.uxml",
-        570, 700, UiToolkitPlacementProfile.Menu)]
+        570, 496, UiToolkitPlacementProfile.Menu)]
     public sealed class SettingsHubScreenController : UiToolkitScreenController, IUiToolkitActionMenuScreen
     {
         Label titleLabel;

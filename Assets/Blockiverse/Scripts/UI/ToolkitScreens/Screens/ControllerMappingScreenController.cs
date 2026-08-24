@@ -18,7 +18,7 @@ namespace Blockiverse.UI
         MenuActions.ControllerMappingScreen,
         "Assets/Blockiverse/UI/Documents/ControllerMappingScreen.uxml",
         760,
-        860,
+        630,
         UiToolkitPlacementProfile.Menu)]
     public sealed class ControllerMappingScreenController : UiToolkitScreenController
     {
