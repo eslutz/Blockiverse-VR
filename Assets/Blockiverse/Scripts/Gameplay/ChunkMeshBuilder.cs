@@ -268,7 +268,7 @@ namespace Blockiverse.Gameplay
                         {
                             BlockPosition neighbor = position + NeighborOffsets[face];
 
-                            if (!ShouldRenderFace(world, registry, definition, neighbor))
+                            if (!ShouldRenderFace(world, registry, definition, neighbor, face))
                                 continue;
 
                             // The cell a face looks into is normally air, because a face was only
@@ -364,7 +364,8 @@ namespace Blockiverse.Gameplay
                    belowFamily == family;
         }
 
-        static bool ShouldRenderFace(VoxelWorld world, BlockRegistry registry, BlockDefinition current, BlockPosition neighbor)
+        static bool ShouldRenderFace(
+            VoxelWorld world, BlockRegistry registry, BlockDefinition current, BlockPosition neighbor, int faceIndex)
         {
             if (!world.Bounds.Contains(neighbor))
                 return true;
@@ -379,6 +380,28 @@ namespace Blockiverse.Gameplay
                 currentFamily == neighborFamily)
             {
                 return false;
+            }
+
+            // Same problem, different geometry: two adjacent non-occluding cells of the same block
+            // (a canopy interior) each want to emit the face on their shared plane, producing two
+            // COINCIDENT coplanar quads. Fluids merge them away entirely because a lake interior
+            // should not be drawn at all; leaves must NOT merge — the interior is exactly what the
+            // alpha gaps are meant to reveal — so emit the shared plane exactly ONCE instead.
+            //
+            // Left as a duplicate pair it is not merely wasted work: the two quads carry DIFFERENT
+            // vertex colours (each bakes light by walking outward in the opposite direction), both
+            // write depth, and the material is two-sided, so they z-fight at equal depth and
+            // flicker per eye in VR. Halving the interior face count is the secondary benefit.
+            //
+            // Emitting only on the positive-axis faces (indices 0, 2, 4 = +X, +Y, +Z) is what makes
+            // the choice deterministic and chunk-order independent: for any shared plane exactly
+            // one of the two cells sees it as a positive-direction face.
+            if (!current.OccludesFaces &&
+                neighborDefinition.IsRenderable &&
+                !neighborDefinition.OccludesFaces &&
+                current.Id.Equals(neighborDefinition.Id))
+            {
+                return (faceIndex & 1) == 0;
             }
 
             return !neighborDefinition.IsRenderable || !neighborDefinition.OccludesFaces;

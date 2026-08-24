@@ -36,11 +36,52 @@ namespace Blockiverse.Tests.EditMode
 
             ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
 
-            Assert.That(mesh.CutoutTriangleCount, Is.EqualTo(48 * 2),
+            // 24 exterior faces (each side of the 2x2x2 is four quads) + 12 interior boundaries
+            // (3 axes x 4 pairs), each emitted ONCE. A hollow shell would be 24; emitting every
+            // interior boundary from both sides would be 48.
+            Assert.That(mesh.CutoutTriangleCount, Is.EqualTo(36 * 2),
                 "Leaves must emit interior faces — a canopy read through its alpha gaps is a hollow " +
-                "shell otherwise. If the mesher starts culling on BlocksLight this drops to 24 faces.");
+                "shell otherwise (24). Emitting each shared plane twice (48) z-fights instead.");
             Assert.That(mesh.TriangleCount, Is.EqualTo(0),
                 "Leaf geometry belongs to the cutout submesh, never the opaque one.");
+        }
+
+        [Test]
+        public void CanopyInteriorEmitsEachSharedPlaneOnlyOnce()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+
+            for (int x = 0; x < 3; x++)
+            for (int y = 0; y < 3; y++)
+            for (int z = 0; z < 3; z++)
+                world.SetBlock(new BlockPosition(2 + x, 2 + y, 2 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // Two coincident coplanar quads at equal depth, both writing depth, both two-sided, and
+            // carrying different baked light (each walks outward the opposite way) do not merely
+            // waste fill — they z-fight and flicker per eye. This is the same defect the fluid
+            // same-family merge above ShouldRenderFace exists to prevent in lakes.
+            var centroids = new HashSet<Vector3>();
+            var duplicates = new List<Vector3>();
+
+            for (int i = 0; i + 5 < mesh.CutoutTriangles.Count; i += 6)
+            {
+                Vector3 centroid = Vector3.zero;
+                // A quad is two triangles over four unique vertices; indices 0,1,2 cover three of
+                // them and index 5 the fourth.
+                foreach (int corner in new[] { i, i + 1, i + 2, i + 5 })
+                    centroid += mesh.Vertices[mesh.CutoutTriangles[corner]];
+
+                centroid /= 4.0f;
+                if (!centroids.Add(centroid))
+                    duplicates.Add(centroid);
+            }
+
+            Assert.That(duplicates, Is.Empty,
+                $"{duplicates.Count} cutout quads are coincident with another; each shared plane " +
+                "between two leaf cells must be emitted exactly once or they z-fight.");
         }
 
         [Test]
