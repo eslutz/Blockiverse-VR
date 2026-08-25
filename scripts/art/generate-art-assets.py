@@ -525,10 +525,36 @@ def foliage_mask(pattern, seed, x, y):
         trunk = abs(dx) <= 1 and y >= 31 - height
         canopy = y < 21 and abs(dx) < (8 - y * 0.18) and y >= 5 and h % 5 > 0
         return trunk or canopy
-    if pattern in ("fern", "wildflowers"):
+    if pattern == "fern":
+        # Fronds that arch UP and OUTWARD from a base, each carrying leaflets.
+        #
+        # The previous mask was a vertical stem plus two straight diagonals spreading downward,
+        # which on a cross-quad reads as a four-legged spider rather than a plant -- a player
+        # looking at a frost fern in the headset asked what it was supposed to be.
+        if y < 3:
+            return False
+        base_y = 31
+        # (direction, lean, height) per frond: a tall centre, a tall pair, a short outer pair.
+        for k, (side, lean, height) in enumerate(
+                ((0, 0.0, 27), (-1, 1.0, 23), (1, 0.95, 22), (-1, 1.9, 16), (1, 1.85, 15))):
+            span = base_y - y
+            if span < 0 or span > height:
+                continue
+            t = span / float(height)                      # 0 at the base, 1 at the tip
+            rachis_x = 15.5 + side * lean * (t ** 1.3) * 11.0
+            d = abs(x - rachis_x)
+            if d <= 0.9:
+                return True                                # the frond's spine
+            # Leaflets: perpendicular ticks, longest low on the frond and tapering to the tip.
+            leaflet = (1.0 - t) * 4.2 + 0.8
+            if d <= leaflet and (span + k * 2) % 3 == 0:
+                return True
+        return False
+
+    if pattern == "wildflowers":
         stem = abs(dx) <= 1 and y >= 13
         frond = y >= 8 and abs(abs(dx) - (y - 8) * 0.34) <= 1.2
-        flower = pattern == "wildflowers" and y < 14 and ((x - 9) ** 2 + (y - 10) ** 2 < 8 or (x - 22) ** 2 + (y - 8) ** 2 < 8)
+        flower = y < 14 and ((x - 9) ** 2 + (y - 10) ** 2 < 8 or (x - 22) ** 2 + (y - 8) ** 2 < 8)
         return stem or frond or flower
     if pattern == "hanging_reeds":
         return y <= 25 and (abs(dx + 6 - math.sin(y * .35) * 2) <= 1 or abs(dx - 4 - math.sin(y * .31) * 2) <= 1)

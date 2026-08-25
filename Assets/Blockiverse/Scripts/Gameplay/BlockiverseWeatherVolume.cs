@@ -1,3 +1,4 @@
+using Blockiverse.Core;
 using Blockiverse.WorldGen;
 using UnityEngine;
 
@@ -58,16 +59,42 @@ namespace Blockiverse.Gameplay
         // live count is far higher than rain's despite a lower rate.
         public const int MaxLiveParticles = 3000;
 
+        // Ground effect: rain splashes, and snow that drifts along the surface. One emitter serves
+        // both because they are the same thing structurally — a flat disc of short-lived sprites
+        // on the ground the player is standing over.
+        //
+        // Deliberately NOT driven by per-particle collision. Collision on ~1900 live drops is far
+        // too expensive on a tile GPU even at Unity's lowest quality, and a statistical scatter
+        // over the same footprint is indistinguishable once drops are landing several times a
+        // second per square metre.
+        public const float GroundEffectRadiusMeters = 9.0f;
+        public const float MaxSplashesPerSecond = 260.0f;
+        public const float MaxGroundSnowPerSecond = 90.0f;
+        public const float SplashLifetimeSeconds = 0.35f;
+        public const int MaxLiveGroundParticles = 260;
+        // How far down to look for the surface the effect sits on.
+        public const float GroundProbeMeters = 40.0f;
+
+        // Sideways drive at full intensity. A blizzard that falls straight down is just heavy
+        // snow; the horizontal component is most of what reads as "blizzard".
+        public const float BlizzardWindMetersPerSecond = 5.5f;
+
         // Seconds to cross most of the way to a new emission rate. Weather changes should arrive
         // as a front, not as a switch being thrown.
         public const float RampSeconds = 2.5f;
 
         ParticleSystem particles;
         ParticleSystemRenderer particleRenderer;
+        ParticleSystem groundParticles;
+        ParticleSystemRenderer groundRenderer;
+        Transform groundTransform;
+        float groundY;
+        bool hasGroundY;
         Transform head;
         PrecipitationKind activeKind = PrecipitationKind.None;
         float activeIntensity = -1.0f;
         float targetRate;
+        float groundTargetRate;
         float currentRate;
 
         public PrecipitationKind ActiveKind => activeKind;
@@ -130,6 +157,24 @@ namespace Blockiverse.Gameplay
                 particles.Play();
             else if (!shouldPlay && particles.isPlaying)
                 particles.Stop(withChildren: true, ParticleSystemStopBehavior.StopEmitting);
+
+            UpdateGroundHeight();
+
+            if (groundParticles != null)
+            {
+                // Scaled by the SAME ramp fraction as the falling particles, so the ground effect
+                // arrives and leaves with the weather front instead of snapping on.
+                float rampFraction = targetRate > 0.01f ? Mathf.Clamp01(currentRate / targetRate) : 0.0f;
+                ParticleSystem.EmissionModule groundEmission = groundParticles.emission;
+                groundEmission.rateOverTime = groundTargetRate * rampFraction;
+
+                bool groundShouldPlay = groundTargetRate * rampFraction > 0.01f;
+
+                if (groundShouldPlay && !groundParticles.isPlaying)
+                    groundParticles.Play();
+                else if (!groundShouldPlay && groundParticles.isPlaying)
+                    groundParticles.Stop(withChildren: true, ParticleSystemStopBehavior.StopEmitting);
+            }
         }
 
         void ApplyKind(PrecipitationKind kind, float intensity)
@@ -158,8 +203,20 @@ namespace Blockiverse.Gameplay
             // Snow drifts; rain does not. Rain that wanders reads as ash.
             ParticleSystem.NoiseModule noise = particles.noise;
             noise.enabled = isSnow;
-            noise.strength = 0.55f;
+            noise.strength = isSnow ? Mathf.Lerp(0.55f, 1.6f, intensity) : 0.55f;
             noise.frequency = 0.25f;
+
+            // Horizontal drive, scaled by intensity. Snow that falls straight down is just heavy
+            // snow no matter how much of it there is -- the sideways component is most of what
+            // makes a blizzard read as a blizzard, and it costs one module.
+            ParticleSystem.VelocityOverLifetimeModule drift = particles.velocityOverLifetime;
+            drift.enabled = isSnow;
+            drift.space = ParticleSystemSimulationSpace.World;
+            float wind = isSnow ? BlizzardWindMetersPerSecond * intensity : 0.0f;
+            drift.x = new ParticleSystem.MinMaxCurve(wind * 0.55f, wind);
+            drift.z = new ParticleSystem.MinMaxCurve(-wind * 0.3f, wind * 0.3f);
+
+            groundTargetRate = ApplyGroundKind(kind, intensity);
 
             if (particleRenderer != null)
             {
@@ -254,8 +311,127 @@ namespace Blockiverse.Gameplay
                 particleRenderer.alignment = ParticleSystemRenderSpace.View;
             }
 
+            EnsureGroundParticles(particleMaterial);
             ApplyKind(activeKind, Mathf.Max(activeIntensity, 0.0f));
         }
+
+        // A flat disc of short-lived sprites sitting on whatever surface is under the player.
+        void EnsureGroundParticles(Material particleMaterial)
+        {
+            if (groundParticles == null)
+            {
+                Transform existing = transform.Find(GroundEffectObjectName);
+                GameObject host;
+
+                if (existing != null)
+                {
+                    host = existing.gameObject;
+                }
+                else
+                {
+                    host = new GameObject(GroundEffectObjectName);
+                    host.transform.SetParent(transform, worldPositionStays: false);
+                }
+
+                groundTransform = host.transform;
+                ParticleSystem found = host.GetComponent<ParticleSystem>();
+                groundParticles = found != null ? found : host.AddComponent<ParticleSystem>();
+            }
+
+            ParticleSystem.MainModule main = groundParticles.main;
+            main.playOnAwake = false;
+            main.loop = true;
+            // World space for the same reason the falling particles use it: a splash belongs to the
+            // ground it landed on, not to the player who walked away from it.
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = MaxLiveGroundParticles;
+            main.gravityModifier = 0.0f;
+            main.startLifetime = SplashLifetimeSeconds;
+
+            ParticleSystem.ShapeModule shape = groundParticles.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = GroundEffectRadiusMeters;
+            // Lay the disc flat. Circle emits in its local XY plane, so it needs the same +90 about
+            // X that the ceiling box needs — and unlike the box its scale is uniform, so there is
+            // no axis-order trap here.
+            shape.rotation = new Vector3(90.0f, 0.0f, 0.0f);
+
+            ParticleSystem.EmissionModule emission = groundParticles.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 0.0f;
+
+            groundRenderer = groundParticles.GetComponent<ParticleSystemRenderer>();
+
+            if (groundRenderer != null)
+            {
+                if (particleMaterial != null)
+                    groundRenderer.sharedMaterial = particleMaterial;
+
+                // Flat against the ground rather than facing the camera: a splash ring seen
+                // edge-on as a billboard reads as a floating tick mark.
+                groundRenderer.renderMode = ParticleSystemRenderMode.HorizontalBillboard;
+                groundRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                groundRenderer.receiveShadows = false;
+            }
+        }
+
+        // Sets the ground effect's kind-specific look and returns its emission rate.
+        float ApplyGroundKind(PrecipitationKind kind, float intensity)
+        {
+            if (groundParticles == null)
+                return 0.0f;
+
+            bool isSnow = kind == PrecipitationKind.Snow;
+
+            ParticleSystem.MainModule main = groundParticles.main;
+            main.startLifetime = isSnow ? SplashLifetimeSeconds * 3.0f : SplashLifetimeSeconds;
+            main.startSize = isSnow ? 0.16f : Mathf.Lerp(0.05f, 0.11f, intensity);
+            // Splashes pop upward a little; ground snow is blown sideways by the same wind that
+            // drives the falling flakes, so the two agree instead of looking like separate systems.
+            main.startSpeed = isSnow ? BlizzardWindMetersPerSecond * intensity : 0.5f;
+            main.startColor = isSnow
+                ? new Color(1.0f, 1.0f, 1.0f, 0.5f * intensity)
+                : new Color(0.78f, 0.88f, 1.0f, 0.5f);
+
+            ParticleSystem.ShapeModule shape = groundParticles.shape;
+            // Snow blows outward along the surface; splashes rise from where they land.
+            shape.rotation = isSnow ? new Vector3(0.0f, 0.0f, 0.0f) : new Vector3(90.0f, 0.0f, 0.0f);
+
+            return kind switch
+            {
+                PrecipitationKind.Rain => MaxSplashesPerSecond * intensity,
+                // Ground snow only reads once it is actually blowing, so it ramps in late.
+                PrecipitationKind.Snow => MaxGroundSnowPerSecond * Mathf.Max(0.0f, intensity - 0.35f) / 0.65f,
+                _ => 0.0f,
+            };
+        }
+
+        // Keeps the disc on the surface under the player. One raycast per frame, against the same
+        // mask gravity uses, so it lands on terrain and ignores fluid and passable vegetation.
+        void UpdateGroundHeight()
+        {
+            if (head == null || groundTransform == null)
+                return;
+
+            Vector3 origin = head.position;
+
+            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, GroundProbeMeters,
+                    BlockiverseProject.VoxelGroundLayerMask, QueryTriggerInteraction.Ignore))
+            {
+                groundY = hit.point.y;
+                hasGroundY = true;
+            }
+
+            // Keep the last known height when the probe misses (mid-air, over a void) rather than
+            // snapping the whole effect to the player's feet.
+            groundTransform.position = new Vector3(
+                origin.x, hasGroundY ? groundY + GroundEffectLiftMeters : origin.y, origin.z);
+        }
+
+        const string GroundEffectObjectName = "Weather Ground Effect";
+        // Just clear of the surface so the sprites are not z-fighting the block face they sit on.
+        const float GroundEffectLiftMeters = 0.03f;
 
         static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
         static readonly int MainTexId = Shader.PropertyToID("_MainTex");
