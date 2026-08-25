@@ -4353,6 +4353,7 @@ MonoBehaviour:
   swimVignetteBoost: 1
   swimClimbOutEnabled: 1
   sprintToggleEnabled: 0
+  placeModifierToggleEnabled: 0
   crouchToggleEnabled: 0
 --- !u!114 &2157709069665111210
 MonoBehaviour:
