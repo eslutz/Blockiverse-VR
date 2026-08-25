@@ -119,7 +119,67 @@ namespace Blockiverse.Gameplay
             ConfigureMirrorSurfaces();
             ConfigureVoidSafetyFloor();
             ConfigureInteractionController();
+            ConfigureCloudDeck(world, chunkMaterial, textureSetId);
         }
+
+        // The blocky cloud layer. Render-only: it is never a voxel, never saved, never collided
+        // with, and is a pure function of (seed, clock) so every peer draws the same sky with
+        // nothing on the wire.
+        void ConfigureCloudDeck(VoxelWorld world, Material chunkMaterial, string textureSetId)
+        {
+            if (world == null)
+                return;
+
+            BlockiverseLightingCycleController lighting = BlockiverseLightingRuntime.EnsureSceneLighting();
+
+            if (lighting == null)
+                return;
+
+            if (cloudDeck == null)
+            {
+                Transform existing = transform.Find(CloudDeckObjectName);
+                GameObject host;
+
+                if (existing != null)
+                {
+                    host = existing.gameObject;
+                }
+                else
+                {
+                    host = new GameObject(CloudDeckObjectName);
+                    host.transform.SetParent(transform, worldPositionStays: false);
+                }
+
+                cloudDeck = host.GetComponent<BlockiverseCloudDeck>();
+                if (cloudDeck == null)
+                    cloudDeck = host.AddComponent<BlockiverseCloudDeck>();
+            }
+
+            // Borrows the chunk material rather than minting a shader. GraphicsSettings'
+            // always-included list carries the voxel shader alone, so anything reached through
+            // Shader.Find is stripped from the Android player and renders magenta on device while
+            // looking correct in the editor. It also means the deck is fogged like everything
+            // else, which is what fades its finite edge into the sky.
+            Material deckMaterial = chunkMaterial != null
+                ? BlockVisualAtlas.CreateMaterial(chunkMaterial, ResolveSelectedBlockAtlas(textureSetId), textureSetId)
+                : null;
+
+            // Snowpack is the nearest thing to a flat white tile in the atlas, so the deck needs
+            // no slot of its own; vertex colour supplies the actual sky-driven tint.
+            Rect cloudTile = BlockVisualAtlas.GetTileRect(BlockRegistry.SnowBlock);
+
+            // Follows the head so the deck stays overhead wherever the player walks, the same
+            // window-that-travels-with-you pattern the precipitation volume uses. Falls back to
+            // this transform outside play mode, where there is no main camera.
+            Camera headCamera = Camera.main;
+            Transform followTransform = headCamera != null ? headCamera.transform : transform;
+
+            cloudDeck.Configure(followTransform, deckMaterial, cloudTile, world.Seed);
+            lighting.ConfigureCloudDeck(cloudDeck);
+        }
+
+        const string CloudDeckObjectName = "Blockiverse Cloud Deck";
+        BlockiverseCloudDeck cloudDeck;
 
         public void ConfigureAuthority(MultiplayerChunkAuthoritySync sync)
         {

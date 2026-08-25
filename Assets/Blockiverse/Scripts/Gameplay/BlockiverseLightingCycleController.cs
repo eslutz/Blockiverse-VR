@@ -40,6 +40,12 @@ namespace Blockiverse.Gameplay
         const float CloudScrollSpeed = 0.02f;
 
         [SerializeField] Material skyMaterial;
+
+        // What share of the coverage signal the skybox veil takes. The rest belongs to the
+        // geometry deck; see ApplySky.
+        public const float SkyVeilShare = 0.35f;
+
+        BlockiverseCloudDeck cloudDeck;
         Vector2 cloudScroll;
 
         // Sky-flash state lives HERE rather than on the bolt view, and is deliberately not pulled
@@ -214,6 +220,13 @@ namespace Blockiverse.Gameplay
         // clouds, which is why every weather state changed the light and left the sky untouched.
         //
         // Elevation comes from the CLOCK, never from the light's rotation, for exactly that reason.
+        /// <summary>Attaches the geometry cloud deck this controller drives. Optional: with no deck
+        /// the skybox simply keeps a larger share of the coverage, which is the pre-deck look.</summary>
+        public void ConfigureCloudDeck(BlockiverseCloudDeck deck)
+        {
+            cloudDeck = deck;
+        }
+
         void ApplySky(float normalizedTime, float cloudCoverage)
         {
             // ONLY ever writes a material this component minted for itself.
@@ -238,7 +251,23 @@ namespace Blockiverse.Gameplay
             skyMaterial.SetColor(GroundColorId, SkyGradientSolver.GroundColor(normalizedTime, cloudCoverage, moonPhaseScale));
             skyMaterial.SetColor(SunColorId, SkyGradientSolver.SunDiskColor(normalizedTime, moonPhaseScale));
             skyMaterial.SetColor(CloudColorId, SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage));
-            skyMaterial.SetFloat(CloudCoverageId, cloudCoverage);
+
+            // Coverage is SPLIT between the two layers, never applied twice. The geometry deck
+            // carries the weather; the skybox keeps a thin high veil that thickens only slightly.
+            // Driving both from the raw value would stack an opaque deck under an opaque veil and
+            // read as muddy soup rather than as overcast.
+            skyMaterial.SetFloat(CloudCoverageId, cloudCoverage * SkyVeilShare);
+
+            if (cloudDeck != null)
+            {
+                Color deckColor = SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage);
+                // Underside darker than the top, which is most of what gives a flat-bottomed deck
+                // its volume from below — the angle a player on the ground always sees it from.
+                cloudDeck.SetSky(
+                    cloudCoverage,
+                    deckColor,
+                    Color.Lerp(deckColor, SkyGradientSolver.HorizonColor(normalizedTime, cloudCoverage, moonPhaseScale), 0.55f));
+            }
 
             // The disk follows the shared light so it lines up with the shadows it casts, but it
             // is hidden below the horizon by the colour solver rather than by rotation.
