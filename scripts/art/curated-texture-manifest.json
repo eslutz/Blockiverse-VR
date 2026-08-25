@@ -1,0 +1,174 @@
+{
+  "$comment": "Source of truth for the curated_v1 block-texture pilot. Raw third-party packs are staged outside the repository; only processed tiles are committed. Candidate entries are not shipped until promoted to adopted after visual and Quest validation.",
+  "setId": "curated_v1",
+  "tilePixels": 32,
+  "licenses": {
+    "cc0": {
+      "name": "Creative Commons Zero 1.0 Universal",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attributionRequired": false,
+      "commercialUse": true,
+      "modification": true,
+      "redistribution": true
+    }
+  },
+  "packs": {
+    "cethiel_grass_1": {
+      "name": "Cethiel — Tileable Grass Textures - Set 1",
+      "author": "Cethiel",
+      "license": "cc0",
+      "sourcePage": "https://opengameart.org/content/tileable-grass-textures-set-1",
+      "stagingPath": "extract/cethiel_grass_1"
+    },
+    "cethiel_dirt": {
+      "name": "Cethiel — Tileable Dirt Textures",
+      "author": "Cethiel",
+      "license": "cc0",
+      "sourcePage": "https://opengameart.org/content/tileable-dirt-textures",
+      "stagingPath": "extract/cethiel_dirt"
+    },
+    "ancient_civ_rocks": {
+      "name": "DevEarley — Ancient Civ. in the Jungle / rocks-bricks-dirt-concrete-plaster-tiles",
+      "author": "DevEarley",
+      "license": "cc0",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "stagingPath": "extract/ancient_civ/rocks-bricks-dirt-concrete-plaster-tiles"
+    },
+    "ancient_civ_plants": {
+      "name": "DevEarley — Ancient Civ. in the Jungle / plants-grass-wood",
+      "author": "DevEarley",
+      "license": "cc0",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "stagingPath": "extract/ancient_civ/plants-grass-wood"
+    },
+    "ancient_civ_crystals": {
+      "name": "DevEarley — Ancient Civ. in the Jungle / snow-ice-crystals",
+      "author": "DevEarley",
+      "license": "cc0",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "stagingPath": "extract/ancient_civ/snow-ice-crystals"
+    }
+  },
+  "pilot": [
+    {
+      "id": "meadow_turf",
+      "status": "candidate",
+      "strategy": "direct",
+      "pack": "cethiel_grass_1",
+      "sourceFile": "grass_01.png",
+      "sourcePage": "https://opengameart.org/content/tileable-grass-textures-set-1-grass01png",
+      "transform": { "crop": "none", "scale": "lanczos", "size": 32 },
+      "notes": "First terrain audition. Compare against other four pack variants before adoption."
+    },
+    {
+      "id": "loose_loam",
+      "status": "candidate",
+      "strategy": "direct",
+      "pack": "cethiel_dirt",
+      "sourceFile": "dirt_01.png",
+      "sourcePage": "https://opengameart.org/content/tileable-dirt-textures-dirt01png",
+      "transform": { "crop": "none", "scale": "lanczos", "size": 32 },
+      "notes": "First soil audition. Compare against other four pack variants before adoption."
+    },
+    {
+      "id": "graystone",
+      "status": "candidate",
+      "strategy": "direct",
+      "pack": "ancient_civ_rocks",
+      "sourceFile": "cave-rock.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-cave-rockpng",
+      "transform": { "crop": "none", "scale": "lanczos", "size": 32 },
+      "notes": "Strong hand-painted 128x128 base candidate."
+    },
+    {
+      "id": "branchwood_log",
+      "status": "candidate",
+      "strategy": "direct",
+      "pack": "ancient_civ_plants",
+      "sourceFile": "jungle-wood.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-jungle-woodpng",
+      "transform": { "crop": "none", "scale": "lanczos", "size": 32 },
+      "notes": "Square bark/wood candidate; log end remains a separate later treatment."
+    },
+    {
+      "id": "leafmoss",
+      "status": "candidate",
+      "strategy": "direct",
+      "pack": "ancient_civ_plants",
+      "sourceFile": "jungle-hanging-leaves.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-jungle-hanging-leavespng",
+      "transform": { "crop": "none", "scale": "lanczos", "size": 32 },
+      "notes": "Hand-painted foliage candidate; verify repeat frequency and alpha-free readability in headset."
+    },
+    {
+      "id": "lumen_quartz_cluster",
+      "status": "researching",
+      "strategy": "composite",
+      "pack": "ancient_civ_crystals",
+      "sourceFile": null,
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "transform": null,
+      "notes": "Audition the seven snow/ice/crystal sources; likely combine a quiet stone base with restrained cyan crystal deposits."
+    },
+    {
+      "id": "embercoal_seam",
+      "status": "researching",
+      "strategy": "composite",
+      "pack": "ancient_civ_rocks",
+      "sourceFile": "cave-rock.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-cave-rockpng",
+      "transform": null,
+      "notes": "Use a coherent stone base and project-authored coal/ember overlay rather than a one-off procedural motif."
+    },
+    {
+      "id": "rosycopper_bloom",
+      "status": "researching",
+      "strategy": "composite",
+      "pack": "ancient_civ_rocks",
+      "sourceFile": "cave-rock.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-cave-rockpng",
+      "transform": null,
+      "notes": "Use the same stone family as other ores with project-authored copper/verdigris deposits."
+    },
+    {
+      "id": "rustcore_ore",
+      "status": "researching",
+      "strategy": "composite",
+      "pack": "ancient_civ_rocks",
+      "sourceFile": "cave-rock.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-cave-rockpng",
+      "transform": null,
+      "notes": "Use the same stone family as other ores with project-authored rust/iron deposits."
+    },
+    {
+      "id": "build_table",
+      "status": "researching",
+      "strategy": "composite",
+      "pack": "ancient_civ_plants",
+      "sourceFile": "jungle-wood.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-jungle-woodpng",
+      "transform": null,
+      "notes": "Use licensed wood as a material base, then add authored construction-table details at low visual frequency."
+    },
+    {
+      "id": "glowwick",
+      "status": "researching",
+      "strategy": "custom",
+      "pack": null,
+      "sourceFile": null,
+      "sourcePage": null,
+      "transform": null,
+      "notes": "Bespoke fantasy material; external texture may not improve it. Re-author only if it can stay consistent with the curated family."
+    },
+    {
+      "id": "storage_crate",
+      "status": "researching",
+      "strategy": "composite",
+      "pack": "ancient_civ_plants",
+      "sourceFile": "jungle-wood.png",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures-jungle-woodpng",
+      "transform": null,
+      "notes": "Use licensed wood as a material base and authored crate seams/reinforcement; avoid the current oversized X motif."
+    }
+  ]
+}
