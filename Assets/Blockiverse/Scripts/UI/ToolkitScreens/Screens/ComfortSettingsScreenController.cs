@@ -201,6 +201,16 @@ namespace Blockiverse.UI
             RegisterToggle(toggleToMineToggle, onToggleChanged);
             RegisterToggle(sprintToggleToggle, onToggleChanged);
             RegisterToggle(crouchToggleToggle, onToggleChanged);
+
+            // Registered 2026-08-25. This toggle shipped resolved, labelled and clickable but
+            // wired to nothing: its value is only written by ApplyOtherControlsWithFeedback, which
+            // fires when some OTHER control changes, and the Close button does not push settings.
+            // A player who opened Comfort, flipped only this, and closed lost the setting silently.
+            // Registered 2026-08-25. This toggle shipped resolved, labelled and clickable but
+            // wired to nothing: its value is only written by ApplyOtherControlsWithFeedback, which
+            // fires when some OTHER control changes, and the Close button does not push settings.
+            // A player who opened Comfort, flipped only this, and closed lost the setting silently.
+            RegisterToggle(placeModifierToggleToggle, onToggleChanged);
             RegisterToggle(vignetteToggle, onToggleChanged);
             RegisterToggle(viewAnchorToggle, onToggleChanged);
             RegisterToggle(realPlayerHeightToggle, onToggleChanged);
@@ -236,6 +246,7 @@ namespace Blockiverse.UI
             UnregisterToggle(toggleToMineToggle, onToggleChanged);
             UnregisterToggle(sprintToggleToggle, onToggleChanged);
             UnregisterToggle(crouchToggleToggle, onToggleChanged);
+            UnregisterToggle(placeModifierToggleToggle, onToggleChanged);
             UnregisterToggle(vignetteToggle, onToggleChanged);
             UnregisterToggle(viewAnchorToggle, onToggleChanged);
             UnregisterToggle(realPlayerHeightToggle, onToggleChanged);
