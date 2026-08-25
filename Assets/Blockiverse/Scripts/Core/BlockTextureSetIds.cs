@@ -6,6 +6,7 @@ namespace Blockiverse.Core
     {
         public const string Original = "original";
         public const string Enhanced = "enhanced";
+        public const string CuratedV1 = "curated_v1";
         public const string AiSimplified = "ai_simplified";
         public const string Ai = "ai";
 
@@ -14,6 +15,7 @@ namespace Blockiverse.Core
         public static readonly string[] MenuOptions =
         {
             Enhanced,
+            CuratedV1,
             AiSimplified,
             Ai,
             Original,
@@ -23,6 +25,7 @@ namespace Blockiverse.Core
         {
             Original,
             Enhanced,
+            CuratedV1,
             AiSimplified,
             Ai,
         };
