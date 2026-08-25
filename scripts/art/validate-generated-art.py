@@ -166,6 +166,24 @@ class GeneratedArtAssetTests(unittest.TestCase):
         self.assertEqual(patterns["berrybush"], "berries_cluster")
         self.assertEqual(patterns["grain_stalk"], "grain_heads")
 
+    def test_grass_blades_are_clustered_with_varied_height(self):
+        size = self.generator.TILE_PIXELS
+
+        def mask(pattern, seed):
+            return [[self.generator.foliage_mask(pattern, seed, x, y) for x in range(size)] for y in range(size)]
+
+        def opaque_tops(tile):
+            return {
+                min(y for y in range(size) if tile[y][x])
+                for x in range(size)
+                if any(tile[y][x] for y in range(size))
+            }
+
+        for pattern, seed in (("meadow_grass", 541), ("drygrass", 523)):
+            with self.subTest(pattern=pattern):
+                # At least 8 distinct blade-tip heights means the blades are not one uniform row.
+                self.assertGreaterEqual(len(opaque_tops(mask(pattern, seed))), 8)
+
     def test_generated_item_icon_importers_are_single_sprites(self):
         for name, *_ in self.generator.ITEMS:
             with self.subTest(name=name):

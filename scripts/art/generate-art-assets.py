@@ -492,6 +492,35 @@ ALPHA_FOLIAGE_PATTERNS = {
 }
 
 
+def grass_blade_mask(pattern, seed, x, y):
+    """Clustered hard-edge blades; y grows down from the pointed tips to the root."""
+    if pattern == "meadow_grass":
+        # Pairs and short gaps make clumps rather than an evenly spaced picket fence.
+        bases = (1, 3, 6, 7, 12, 14, 15, 20, 21, 25, 28, 30)
+        minimum_height, height_range = 12, 13
+    else:
+        # Dry tufts are visibly sparser and lower, with a few stubborn tall blades.
+        bases = (2, 5, 6, 11, 15, 19, 20, 25, 29)
+        minimum_height, height_range = 9, 14
+
+    for index, base_x in enumerate(bases):
+        value = hash_pixel(index, seed, 701 + len(pattern))
+        height = minimum_height + value % height_range
+        rise = TILE_PIXELS - 1 - y
+        if rise < 0 or rise > height:
+            continue
+
+        lean = (value // 7) % 5 - 2
+        centre = base_x + round(lean * rise / float(height))
+        # Broad lower blades taper to a one-pixel irregular tip.
+        width = 1 if rise < height * 0.38 and value % 3 == 0 else 0
+        if rise >= height - 2:
+            width = 0
+        if abs(x - centre) <= width:
+            return True
+    return False
+
+
 def foliage_mask(pattern, seed, x, y):
     """Returns hard alpha coverage for cutout/cross foliage (never partial alpha)."""
     dx = x - 15.5
@@ -562,8 +591,10 @@ def foliage_mask(pattern, seed, x, y):
         return y >= 9 and (abs(dx + (y - 20) * .22) <= 1 or abs(dx - (y - 20) * .18) <= 1 or (y > 18 and abs(dx) < 10 and h % 5 == 0))
     if pattern == "thorn":
         return y >= 5 and (abs(dx + math.sin(y * .6) * 5) <= 1 or abs(dx - math.sin(y * .5) * 4) <= 1)
-    if pattern in ("grain_heads", "crop_sprout", "crop_mid", "crop_full", "reed_sprout", "reeds", "drygrass", "meadow_grass", "salt_reeds"):
-        density = 4 if pattern in ("meadow_grass", "drygrass") else 6
+    if pattern in ("drygrass", "meadow_grass"):
+        return grass_blade_mask(pattern, seed, x, y)
+    if pattern in ("grain_heads", "crop_sprout", "crop_mid", "crop_full", "reed_sprout", "reeds", "salt_reeds"):
+        density = 6
         start = {"crop_sprout": 20, "crop_mid": 13, "crop_full": 6, "reed_sprout": 18}.get(pattern, 4)
         blade = (x + seed) % density <= 1 and y >= start - (x % 3)
         head = pattern in ("grain_heads", "crop_full") and y < 13 and x % 7 in (2, 3)
