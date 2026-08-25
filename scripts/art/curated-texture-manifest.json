@@ -18,6 +18,7 @@
       "author": "Cethiel",
       "license": "cc0",
       "sourcePage": "https://opengameart.org/content/tileable-grass-textures-set-1",
+      "downloadUrl": "https://opengameart.org/sites/default/files/Tileable%20Grass%20Textures%20-%20Set%201.zip",
       "stagingPath": "extract/cethiel_grass_1"
     },
     "cethiel_dirt": {
@@ -25,27 +26,31 @@
       "author": "Cethiel",
       "license": "cc0",
       "sourcePage": "https://opengameart.org/content/tileable-dirt-textures",
+      "downloadUrl": "https://opengameart.org/sites/default/files/Tileable%20Dirt%20Textures.zip",
       "stagingPath": "extract/cethiel_dirt"
     },
     "ancient_civ_rocks": {
       "name": "DevEarley — Ancient Civ. in the Jungle / rocks-bricks-dirt-concrete-plaster-tiles",
       "author": "DevEarley",
       "license": "cc0",
-      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures",
+      "downloadUrl": "https://opengameart.org/sites/default/files/rocks-bricks-dirt-concrete-plaster-tiles.zip",
       "stagingPath": "extract/ancient_civ/rocks-bricks-dirt-concrete-plaster-tiles"
     },
     "ancient_civ_plants": {
       "name": "DevEarley — Ancient Civ. in the Jungle / plants-grass-wood",
       "author": "DevEarley",
       "license": "cc0",
-      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures",
+      "downloadUrl": "https://opengameart.org/sites/default/files/plants-grass-wood.zip",
       "stagingPath": "extract/ancient_civ/plants-grass-wood"
     },
     "ancient_civ_crystals": {
       "name": "DevEarley — Ancient Civ. in the Jungle / snow-ice-crystals",
       "author": "DevEarley",
       "license": "cc0",
-      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures",
+      "downloadUrl": "https://opengameart.org/sites/default/files/snow-ice-crystals.zip",
       "stagingPath": "extract/ancient_civ/snow-ice-crystals"
     }
   },
@@ -106,7 +111,7 @@
       "strategy": "composite",
       "pack": "ancient_civ_crystals",
       "sourceFile": null,
-      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-200-seamless-textures",
+      "sourcePage": "https://opengameart.org/content/ancient-civ-in-the-jungle-seamless-textures",
       "transform": null,
       "notes": "Audition the seven snow/ice/crystal sources; likely combine a quiet stone base with restrained cyan crystal deposits."
     },
