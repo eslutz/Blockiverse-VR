@@ -62,11 +62,14 @@ jobs:
           --include-candidates
           --staging "$RUNNER_TEMP/Blockiverse-VR-texture-staging"
 
-      - name: Upload candidate preview
+      - name: Upload candidate preview and source library
         uses: actions/upload-artifact@v7
         with:
           name: curated-texture-candidate-preview
           path: |
             Assets/Blockiverse/Art/Textures/Blocks/TextureSets/curated_v1
+            Assets/Blockiverse/Art/Textures/Blocks/TextureSets/enhanced/Source
             ${{ runner.temp }}/Blockiverse-VR-texture-staging/SOURCES.json
+            ${{ runner.temp }}/Blockiverse-VR-texture-staging/extract
           if-no-files-found: error
+          retention-days: 7
